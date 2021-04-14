@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/casper"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -236,9 +236,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if merger == nil {
 		return engine
 	}
-	engine = casper.New(engine, merger.EnteredPoS())
+	engine = beacon.New(engine, merger.EnteredPoS())
 	merger.SubscribeEnterPoS(func() {
-		engine.(*casper.Casper).SetTransitioned()
+		engine.(*beacon.Beacon).SetTransitioned()
 	})
 	return engine
 }

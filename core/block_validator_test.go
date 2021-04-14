@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/casper"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -110,7 +110,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		copy(genspec.ExtraData[32:], addr[:])
 		genesis := genspec.MustCommit(testdb)
 
-		genEngine := casper.New(engine, false)
+		genEngine := beacon.New(engine, false)
 		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, testdb, 8, nil)
 		for i, block := range preBlocks {
 			header := block.Header()
@@ -127,18 +127,18 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		genEngine.SetTransitioned()
 		postBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
 		chainConfig = params.AllCliqueProtocolChanges
-		runEngine = casper.New(engine, false)
+		runEngine = beacon.New(engine, false)
 	} else {
 		gspec := &Genesis{Config: params.TestChainConfig}
 		genesis := gspec.MustCommit(testdb)
-		engine := casper.New(ethash.NewFaker(), false)
+		engine := beacon.New(ethash.NewFaker(), false)
 
 		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, engine, testdb, 8, nil)
 		engine.SetTransitioned()
 		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], engine, testdb, 8, nil)
 
 		chainConfig = params.TestChainConfig
-		runEngine = casper.New(ethash.NewFaker(), false)
+		runEngine = beacon.New(ethash.NewFaker(), false)
 	}
 
 	preHeaders := make([]*types.Header, len(preBlocks))
@@ -159,7 +159,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
 	merger := NewMerger(rawdb.NewMemoryDatabase())
 	merger.SubscribeEnterPoS(func() {
-		runEngine.(*casper.Casper).SetTransitioned()
+		runEngine.(*beacon.Beacon).SetTransitioned()
 	})
 	chain, _ := NewBlockChain(testdb, nil, chainConfig, runEngine, vm.Config{}, nil, nil, merger)
 	defer chain.Stop()

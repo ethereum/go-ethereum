@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package casper
+package beacon
 
 import (
 	"errors"
@@ -31,10 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// Casper proof-of-stake protocol constants.
+// Proof-of-stake protocol constants.
 var (
-	casperDifficulty = common.Big1          // The default block difficulty in the casper
-	casperNonce      = types.EncodeNonce(0) // The default block nonce in the casper
+	beaconDifficulty = common.Big1          // The default block difficulty in the beacon consensus
+	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -48,26 +48,26 @@ var (
 	errInvalidNonce      = errors.New("invalid nonce")
 )
 
-// Casper is a consensus engine combines the ethereum 1 consensus and proof-of-stake
-// implementing casper algorithm. There is a special flag inside to decide whether to
-// use classic consensus rules or capser rules. The transition rule is described in
-// the eth1/2 merge spec.
+// Beacon is a consensus engine combines the ethereum 1 consensus and proof-of-stake
+// algorithm. There is a special flag inside to decide whether to use classic consensus
+// rules or beacon rules. The transition rule is described in the eth1/2 merge spec.
 // https://hackmd.io/@n0ble/ethereum_consensus_upgrade_mainnet_perspective#Transition-process
-// The casper here is a tailored consensus engine with partial functions which is only
+//
+// The beacon here is a tailored consensus engine with partial functions which is only
 // used for necessary consensus checks. The classic consensus engine can be any engine
-// implements the consensus interface(except the casper itself).
-type Casper struct {
+// implements the consensus interface(except the beacon itself).
+type Beacon struct {
 	ethone consensus.Engine // Classic consensus engine used in the ethereum 1
 
-	// transitioned is the flag whether the chain has finished the ethash->casper
+	// transitioned is the flag whether the chain has finished the eth1->eth2
 	// transition. It's triggered by receiving the first "FinaliseBlock" message
 	// from the external consensus engine.
 	transitioned uint32
 }
 
-// New creates a casper consensus engine with the given embeded ethereum 1 engine.
-func New(ethone consensus.Engine, transitioned bool) *Casper {
-	engine := &Casper{ethone: ethone}
+// New creates a consensus engine with the given embedded ethereum 1 engine.
+func New(ethone consensus.Engine, transitioned bool) *Beacon {
+	engine := &Beacon{ethone: ethone}
 	if transitioned {
 		engine.SetTransitioned()
 	}
@@ -76,18 +76,18 @@ func New(ethone consensus.Engine, transitioned bool) *Casper {
 
 // Author implements consensus.Engine, returning the header's coinbase as the
 // verified author of the block.
-func (casper *Casper) Author(header *types.Header) (common.Address, error) {
-	if !casper.IsTransitioned() {
-		return casper.ethone.Author(header)
+func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.Author(header)
 	}
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum casper engine.
-func (casper *Casper) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	if !casper.IsTransitioned() {
-		return casper.ethone.VerifyHeader(chain, header, seal)
+// stock Ethereum consensus engine.
+func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
 	// Short circuit if the header is known, or its parent not
 	number := header.Number.Uint64()
@@ -99,15 +99,15 @@ func (casper *Casper) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return casper.verifyHeader(chain, header, parent)
+	return beacon.verifyHeader(chain, header, parent)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
-func (casper *Casper) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	if !casper.IsTransitioned() {
-		return casper.ethone.VerifyHeaders(chain, headers, seals)
+func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
 	var (
 		abort   = make(chan struct{})
@@ -129,7 +129,7 @@ func (casper *Casper) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 				}
 				continue
 			}
-			err := casper.verifyHeader(chain, header, parent)
+			err := beacon.verifyHeader(chain, header, parent)
 			select {
 			case <-abort:
 				return
@@ -141,12 +141,12 @@ func (casper *Casper) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Ethereum casper engine.
-func (casper *Casper) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	if !casper.IsTransitioned() {
-		return casper.ethone.VerifyUncles(chain, block)
+// rules of the stock Ethereum consensus engine.
+func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.VerifyUncles(chain, block)
 	}
-	// Verify that there is no uncle block. It's explicitly disabled in the casper
+	// Verify that there is no uncle block. It's explicitly disabled in the beacon
 	if len(block.Uncles()) > 0 {
 		return errTooManyUncles
 	}
@@ -154,18 +154,18 @@ func (casper *Casper) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum capser engine. The difference between the casper and ethash is
+// stock Ethereum consensus engine. The difference between the beacon and ethash is
 // (a) the difficulty, mixhash, nonce, extradata and unclehash are expected
 //     to be the desired constants
 // (b) the timestamp is not verified anymore
-func (casper *Casper) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
+func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
 	// Ensure that the header's extra-data section is of a reasonable size
 	if len(header.Extra) != 0 {
 		return fmt.Errorf("non-empty extra-data(%d)", len(header.Extra))
 	}
 	// Verify the block's difficulty to ensure it's the default constant
-	if casperDifficulty.Cmp(header.Difficulty) != 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, casperDifficulty)
+	if beaconDifficulty.Cmp(header.Difficulty) != 0 {
+		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
 	}
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
@@ -193,30 +193,30 @@ func (casper *Casper) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
 	}
-	if header.Nonce != casperNonce {
+	if header.Nonce != beaconNonce {
 		return errInvalidNonce
 	}
 	return nil
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
-// header to conform to the casper protocol. The changes are done inline.
-func (casper *Casper) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	if !casper.IsTransitioned() {
-		return casper.ethone.Prepare(chain, header)
+// header to conform to the beacon protocol. The changes are done inline.
+func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.Prepare(chain, header)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty = casperDifficulty
+	header.Difficulty = beaconDifficulty
 	return nil
 }
 
 // Finalize implements consensus.Engine, setting the final state on the header
-func (casper *Casper) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	if !casper.IsTransitioned() {
-		casper.ethone.Finalize(chain, header, state, txs, uncles)
+func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	if !beacon.IsTransitioned() {
+		beacon.ethone.Finalize(chain, header, state, txs, uncles)
 		return
 	}
 	// The block reward is no longer handled here. It's done by the
@@ -226,12 +226,12 @@ func (casper *Casper) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (casper *Casper) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	if !casper.IsTransitioned() {
-		return casper.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 	}
 	// Finalize and assemble the block
-	casper.Finalize(chain, header, state, txs, uncles)
+	beacon.Finalize(chain, header, state, txs, uncles)
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
@@ -240,49 +240,48 @@ func (casper *Casper) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 //
 // Note, the method returns immediately and will send the result async. More
 // than one result may also be returned depending on the consensus algorithm.
-func (casper *Casper) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	if !casper.IsTransitioned() {
-		return casper.ethone.Seal(chain, block, results, stop)
+func (beacon *Beacon) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.Seal(chain, block, results, stop)
 	}
 	// The seal verification is done by the external consensus engine,
 	// return directly without pushing any block back. In another word
-	// casper won't return any result by `results` channel which may
+	// beacon won't return any result by `results` channel which may
 	// blocks the receiver logic forever.
 	return nil
 }
 
-// SealHash returns the hash of a block prior to it being sealed. It's same in
-// both ethash and casper.
-func (casper *Casper) SealHash(header *types.Header) common.Hash {
-	return casper.ethone.SealHash(header)
+// SealHash returns the hash of a block prior to it being sealed.
+func (beacon *Beacon) SealHash(header *types.Header) common.Hash {
+	return beacon.ethone.SealHash(header)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (casper *Casper) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	if !casper.IsTransitioned() {
-		return casper.ethone.CalcDifficulty(chain, time, parent)
+func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+	if !beacon.IsTransitioned() {
+		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
-	return casperDifficulty
+	return beaconDifficulty
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
-func (casper *Casper) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	return casper.ethone.APIs(chain)
+func (beacon *Beacon) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	return beacon.ethone.APIs(chain)
 }
 
 // Close shutdowns the consensus engine
-func (casper *Casper) Close() error {
-	return casper.ethone.Close()
+func (beacon *Beacon) Close() error {
+	return beacon.ethone.Close()
 }
 
 // SetTransitioned marks the transition has been done.
-func (casper *Casper) SetTransitioned() {
-	atomic.StoreUint32(&casper.transitioned, 1)
+func (beacon *Beacon) SetTransitioned() {
+	atomic.StoreUint32(&beacon.transitioned, 1)
 }
 
 // IsTransitioned reports whether the transition has finished.
-func (casper *Casper) IsTransitioned() bool {
-	return atomic.LoadUint32(&casper.transitioned) == 1
+func (beacon *Beacon) IsTransitioned() bool {
+	return atomic.LoadUint32(&beacon.transitioned) == 1
 }
