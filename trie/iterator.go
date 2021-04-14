@@ -102,6 +102,8 @@ type NodeIterator interface {
 	// iterator is not positioned at a leaf. Callers must not retain references
 	// to the value after calling Next.
 	LeafProof() [][]byte
+
+	AddResolver(*Database)
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -115,10 +117,15 @@ type nodeIteratorState struct {
 }
 
 type nodeIterator struct {
-	trie  *Trie                // Trie being iterated
-	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
-	path  []byte               // Path to the current node
-	err   error                // Failure set in case of an internal error in the iterator
+	trie            *Trie                // Trie being iterated
+	stack           []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+	path            []byte               // Path to the current node
+	err             error                // Failure set in case of an internal error in the iterator
+	primaryResolver *Database
+}
+
+func (it *nodeIterator) AddResolver(db *Database) {
+	it.primaryResolver = db
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -264,7 +271,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		if root != emptyRoot {
 			state.hash = root
 		}
-		err := state.resolve(it.trie, nil)
+		err := state.resolve(it, nil)
 		return state, nil, nil, err
 	}
 	if !descend {
@@ -281,7 +288,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		}
 		state, path, ok := it.nextChild(parent, ancestor)
 		if ok {
-			if err := state.resolve(it.trie, path); err != nil {
+			if err := state.resolve(it, path); err != nil {
 				return parent, &parent.index, path, err
 			}
 			return state, &parent.index, path, nil
@@ -292,9 +299,19 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	return nil, nil, nil, errIteratorEnd
 }
 
-func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
+func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
+	if it.primaryResolver != nil {
+		if resolved := it.primaryResolver.node(common.BytesToHash(hash)); resolved != nil {
+			return resolved, nil
+		}
+	}
+	resolved, err := it.trie.resolveHash(hash, path)
+	return resolved, err
+}
+
+func (st *nodeIteratorState) resolve(it *nodeIterator, path []byte) error {
 	if hash, ok := st.node.(hashNode); ok {
-		resolved, err := tr.resolveHash(hash, path)
+		resolved, err := it.resolveHash(hash, path)
 		if err != nil {
 			return err
 		}
@@ -420,6 +437,10 @@ func (it *differenceIterator) Path() []byte {
 	return it.b.Path()
 }
 
+func (it *differenceIterator) AddResolver(db *Database) {
+	panic("Not implemented")
+}
+
 func (it *differenceIterator) Next(bool) bool {
 	// Invariants:
 	// - We always advance at least one element in b.
@@ -525,6 +546,10 @@ func (it *unionIterator) LeafProof() [][]byte {
 
 func (it *unionIterator) Path() []byte {
 	return (*it.items)[0].Path()
+}
+
+func (it *unionIterator) AddResolver(db *Database) {
+	panic("Not implemented")
 }
 
 // Next returns the next node in the union of tries being iterated over.
