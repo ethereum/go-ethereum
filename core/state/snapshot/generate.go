@@ -207,7 +207,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 }
 
 // proofResult contains the output of range proving which can be used
-// for further processing no matter it's successful or not.
+// for further processing regardless if it is successful or not.
 type proofResult struct {
 	keys     [][]byte   // The key set of all elements being iterated, even proving is failed
 	vals     [][]byte   // The val set of all elements being iterated, even proving is failed
@@ -222,7 +222,7 @@ func (result *proofResult) valid() bool {
 	return result.proofErr == nil
 }
 
-// last returns the last verified element key no matter the range proof is
+// last returns the last verified element key regardless of whether the range proof is
 // successful or not. Nil is returned if nothing involved in the proving.
 func (result *proofResult) last() []byte {
 	var last []byte
@@ -244,7 +244,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 	return nil
 }
 
-// proveRange proves the state segment with particular prefix is "valid".
+// proveRange proves the snapshot segment with particular prefix is "valid".
 // The iteration start point will be assigned if the iterator is restored from
 // the last interruption. Max will be assigned in order to limit the maximum
 // amount of data involved in each iteration.
@@ -346,7 +346,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 			return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: false, proofErr: err, tr: tr}, nil
 		}
 	}
-	// Verify the state segment with range prover, ensure that all flat states
+	// Verify the snapshot segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
 	_, _, _, cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
 	return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: cont, proofErr: err, tr: tr}, nil
