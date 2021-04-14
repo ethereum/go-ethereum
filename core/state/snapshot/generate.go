@@ -74,22 +74,22 @@ var (
 	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
 	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
 
-	// snapAccountProveTimer measures time spent on the account proving
-	snapAccountProveTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/prove", nil)
-	// snapAccountTrieReadTimer measures time spent on the account trie iteration
-	snapAccountTrieReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/trieread", nil)
-	// snapAccountSnapReadTimer measues time spent on the snapshot account iteration
-	snapAccountSnapReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/snapread", nil)
-	// snapAccountWriteTimer measures time spent on writing/updating/deleting accounts
-	snapAccountWriteTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/write", nil)
-	// snapStorageProveTimer measures time spent on storage proving
-	snapStorageProveTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/prove", nil)
-	// snapStorageTrieReadTimer measures time spent on the storage trie iteration
-	snapStorageTrieReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/trieread", nil)
-	// snapStorageSnapReadTimer measures time spent on the snapshot storage iteration
-	snapStorageSnapReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/snapread", nil)
-	// snapStorageWriteTimer measures time spent on writing/updating/deleting storages
-	snapStorageWriteTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/write", nil)
+	// snapAccountProveCounter measures time spent on the account proving
+	snapAccountProveCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/prove", nil)
+	// snapAccountTrieReadCounter measures time spent on the account trie iteration
+	snapAccountTrieReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/trieread", nil)
+	// snapAccountSnapReadCounter measues time spent on the snapshot account iteration
+	snapAccountSnapReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/snapread", nil)
+	// snapAccountWriteCounter measures time spent on writing/updating/deleting accounts
+	snapAccountWriteCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/write", nil)
+	// snapStorageProveCounter measures time spent on storage proving
+	snapStorageProveCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/prove", nil)
+	// snapStorageTrieReadCounter measures time spent on the storage trie iteration
+	snapStorageTrieReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/trieread", nil)
+	// snapStorageSnapReadCounter measures time spent on the snapshot storage iteration
+	snapStorageSnapReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/snapread", nil)
+	// snapStorageWriteCounter measures time spent on writing/updating/deleting storages
+	snapStorageWriteCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/write", nil)
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
@@ -301,15 +301,15 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	// Update metrics for database iteration and merkle proving
 	if kind == "storage" {
-		snapStorageSnapReadTimer.Update(time.Since(start))
+		snapStorageSnapReadCounter.Inc(time.Since(start).Nanoseconds())
 	} else {
-		snapAccountSnapReadTimer.Update(time.Since(start))
+		snapAccountSnapReadCounter.Inc(time.Since(start).Nanoseconds())
 	}
 	defer func(start time.Time) {
 		if kind == "storage" {
-			snapStorageProveTimer.Update(time.Since(start))
+			snapStorageProveCounter.Inc(time.Since(start).Nanoseconds())
 		} else {
-			snapAccountProveTimer.Update(time.Since(start))
+			snapAccountProveCounter.Inc(time.Since(start).Nanoseconds())
 		}
 	}(time.Now())
 
@@ -512,9 +512,9 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// Update metrics for counting trie iteration
 	if kind == "storage" {
-		snapStorageTrieReadTimer.Update(time.Since(start) - internal)
+		snapStorageTrieReadCounter.Inc((time.Since(start) - internal).Nanoseconds())
 	} else {
-		snapAccountTrieReadTimer.Update(time.Since(start) - internal)
+		snapAccountTrieReadCounter.Inc((time.Since(start) - internal).Nanoseconds())
 	}
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
@@ -593,7 +593,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
 				return err
 			}
-			snapAccountWriteTimer.Update(time.Since(start))
+			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
@@ -643,9 +643,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
 				return err
 			}
-			snapAccountWriteTimer.Update(time.Since(start))
+			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 		} else {
-			snapAccountWriteTimer.Update(time.Since(start))
+			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
@@ -653,7 +653,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			}
 			onStorage := func(key []byte, val []byte, write bool, delete bool) error {
 				defer func(start time.Time) {
-					snapStorageWriteTimer.Update(time.Since(start))
+					snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 				}(time.Now())
 
 				if delete {
