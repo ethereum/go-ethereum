@@ -209,12 +209,8 @@ type storageResponse struct {
 	hashes [][]common.Hash       // Storage slot hashes in the returned range
 	slots  [][][]byte            // Storage slot values in the returned range
 	nodes  []ethdb.KeyValueStore // Database containing the reconstructed trie nodes
-	tries  []*trie.Trie          // Reconstructed tries to reject overflown slots
 
-	// Fields relevant for the last account only
-	bounds   map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
-	overflow *light.NodeSet           // Overflow nodes to avoid persisting across chunk boundaries
-	cont     bool                     // Whether the last storage range has a continuation
+	cont bool // Whether the last storage range has a continuation
 }
 
 // trienodeHealRequest tracks a pending state trie request to ensure responses
@@ -359,7 +355,7 @@ type SyncPeer interface {
 	// trie, starting with the origin.
 	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
 
-	// RequestStorageRange fetches a batch of storage slots belonging to one or
+	// RequestStorageRanges fetches a batch of storage slots belonging to one or
 	// more accounts. If slots from only one accout is requested, an origin marker
 	// may also be used to retrieve from there.
 	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
@@ -792,12 +788,58 @@ func (s *Syncer) cleanStorageTasks() {
 			delete(task.SubTasks, account)
 			task.pend--
 
+			// Upon large account completion, generate the trie using whatever
+			// data we have. Most of the time it will the the complete perfect
+			// data. If the pivot moved during sync, we'll have some portions
+			// dirty that we'll fix during healing.
+			root := s.generateStorageTrie(account)
+			for j, hash := range task.res.hashes {
+				if hash == account && task.res.accounts[j].Root == root {
+					task.needHeal[j] = false
+				}
+			}
 			// If this was the last pending task, forward the account task
 			if task.pend == 0 {
 				s.forwardAccountTask(task)
 			}
 		}
 	}
+}
+
+// generateStorageTrie iterates the dirty snapshot of an account storage and
+// creates the state trie nodes for it with a stack trie.
+func (s *Syncer) generateStorageTrie(account common.Hash) common.Hash {
+	// Iterate over all the dirty storage slots of the account
+	it := s.db.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), nil)
+	defer it.Release()
+
+	// Pass all the slots through a stack trie, periodically flushing to disk
+	// when too much data accumulates.
+	batch := s.db.NewBatch()
+
+	t := trie.NewStackTrie(batch)
+	for it.Next() {
+		t.TryUpdate(it.Key(), common.CopyBytes(it.Value()))
+
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			s.storageBytes += common.StorageSize(batch.ValueSize())
+			if err := batch.Write(); err != nil {
+				log.Error("Failed to write storage trie data", "err", err)
+			}
+			batch.Reset()
+		}
+	}
+	// Finalize the trie to retrieve its root hash and bubble it up to decide if
+	// account healing is still needed or not any more
+	root, err := t.Commit()
+	if err != nil {
+		log.Error("Failed to commit storage trie", "err", err)
+	}
+	s.storageBytes += common.StorageSize(batch.ValueSize())
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to finalize storage trie", "err", err)
+	}
+	return root
 }
 
 // assignAccountTasks attempts to match idle peers to pending account range
@@ -1681,7 +1723,6 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 
 	var (
 		codes uint64
-		bytes common.StorageSize
 	)
 	for i, hash := range res.hashes {
 		code := res.codes[i]
@@ -1699,17 +1740,16 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 			}
 		}
 		// Push the bytecode into a database batch
-		s.bytecodeSynced++
-		s.bytecodeBytes += common.StorageSize(len(code))
-
 		codes++
-		bytes += common.StorageSize(len(code))
-
 		rawdb.WriteCode(batch, hash, code)
 	}
+	bytes := common.StorageSize(batch.ValueSize())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
 	}
+	s.bytecodeSynced += codes
+	s.bytecodeBytes += bytes
+
 	log.Debug("Persisted set of bytecodes", "count", codes, "bytes", bytes)
 
 	// If this delivery completed the last pending task, forward the account task
@@ -1735,7 +1775,6 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		slots   int
 		nodes   int
 		skipped int
-		bytes   common.StorageSize
 	)
 	// Iterate over all the accounts and reconstruct their storage tries from the
 	// delivered slots
@@ -1814,12 +1853,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						continue
 					}
 					if cmp > 0 {
-						// Chunk overflown, cut off excess, but also update the boundary
-						for l := k; l < len(res.hashes[i]); l++ {
-							if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
-								panic(err) // Account range was already proven, what happened
-							}
-						}
+						// Chunk overflown, cut off excess
 						res.hashes[i] = res.hashes[i][:k]
 						res.slots[i] = res.slots[i][:k]
 						res.cont = false // Mark range completed
@@ -1835,37 +1869,26 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 		}
 		// Iterate over all the reconstructed trie nodes and push them to disk
+		// if the contract is fully delivered. If it's chunked, the trie nodes
+		// will be reconstructed later.
 		slots += len(res.hashes[i])
 
-		it := res.nodes[i].NewIterator(nil, nil)
-		for it.Next() {
-			// Boundary nodes are not written for the last result, since they are incomplete
-			if i == len(res.hashes)-1 && res.subTask != nil {
-				if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
-					skipped++
-					continue
-				}
-				if _, err := res.overflow.Get(it.Key()); err == nil {
-					skipped++
-					continue
-				}
+		if i < len(res.hashes)-1 || res.subTask == nil {
+			it := res.nodes[i].NewIterator(nil, nil)
+			for it.Next() {
+				batch.Put(it.Key(), it.Value())
+				nodes++
 			}
-			// Node is not a boundary, persist to disk
-			batch.Put(it.Key(), it.Value())
-
-			bytes += common.StorageSize(common.HashLength + len(it.Value()))
-			nodes++
+			it.Release()
 		}
-		it.Release()
-
 		// Persist the received storage segements. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
-			bytes += common.StorageSize(1 + 2*common.HashLength + len(res.slots[i][j]))
 		}
 	}
+	bytes := common.StorageSize(batch.ValueSize())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
 	}
@@ -1995,7 +2018,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	var (
 		nodes   int
 		skipped int
-		bytes   common.StorageSize
 	)
 	it := res.nodes.NewIterator(nil, nil)
 	for it.Next() {
@@ -2016,8 +2038,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		}
 		// Node is neither a boundary, not an incomplete account, persist to disk
 		batch.Put(it.Key(), it.Value())
-
-		bytes += common.StorageSize(common.HashLength + len(it.Value()))
 		nodes++
 	}
 	it.Release()
@@ -2028,8 +2048,8 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	for i, hash := range res.hashes {
 		blob := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
 		rawdb.WriteAccountSnapshot(batch, hash, blob)
-		bytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
+	bytes := common.StorageSize(batch.ValueSize())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
@@ -2355,7 +2375,6 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 	// Reconstruct the partial tries from the response and verify them
 	var (
 		dbs    = make([]ethdb.KeyValueStore, len(hashes))
-		tries  = make([]*trie.Trie, len(hashes))
 		notary *trie.KeyValueNotary
 		cont   bool
 	)
@@ -2375,7 +2394,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		if len(nodes) == 0 {
 			// No proof has been attached, the response must cover the entire key
 			// space and hash to the origin root.
-			dbs[i], tries[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
+			dbs[i], _, _, _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
 			if err != nil {
 				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage slots failed proof", "err", err)
@@ -2390,7 +2409,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 			if len(keys) > 0 {
 				end = keys[len(keys)-1]
 			}
-			dbs[i], tries[i], notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
+			dbs[i], _, notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
 				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage range failed proof", "err", err)
@@ -2416,9 +2435,6 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		hashes:   hashes,
 		slots:    slots,
 		nodes:    dbs,
-		tries:    tries,
-		bounds:   bounds,
-		overflow: light.NewNodeSet(),
 		cont:     cont,
 	}
 	select {
