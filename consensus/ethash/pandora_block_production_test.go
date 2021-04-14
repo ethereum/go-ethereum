@@ -63,7 +63,60 @@ var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		SilesiaBlock:        big.NewInt(0),
-	}}
+	},
+}
+
+func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
+	server := testHTTPServer(t)
+	defer server.Close()
+
+	urls := []string{server.URL}
+	config := Config{
+		PowMode: ModePandora,
+		Log:     log.Root(),
+	}
+	var (
+		consensusInfo  []*params.MinimalEpochConsensusInfo
+		validatorsList [validatorListLen]common2.PublicKey
+	)
+
+	// Dummy genesis epoch
+	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorsList: validatorsList}
+	consensusInfo = append(consensusInfo, genesisEpoch)
+	ethash := NewPandora(config, urls, true, consensusInfo)
+	remoteSealerServer := StartRemotePandora(ethash, urls, true)
+	pandora := Pandora{remoteSealerServer}
+
+	t.Run("should fetch all epochs from genesis epoch until 3rd", func(t *testing.T) {
+		subscription, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
+		require.NoError(t, err)
+		defer subscription.Unsubscribe()
+		timesExpected := 5
+		currentTick := 0
+		timer := time.NewTimer(1 * time.Second)
+		defer timer.Stop()
+
+		select {
+		case err := <-errChannel:
+			require.NoError(t, err)
+		case <-timer.C:
+			currentTick++
+
+			if currentTick > timesExpected {
+				break
+			}
+		}
+
+		// Assert that epochs were filled until some time
+		timeNow := time.Now()
+		header := &types.Header{Time: uint64(timeNow.Unix())}
+		currentEpoch, err := ethash.getMinimalConsensus(header)
+		require.NoError(t, err)
+		// Assertion is that dummy response will fill minimalConsensusInfo data with 0,1,2,3
+		// and for current time it will be 3rd epoch
+		assert.Equal(t, uint64(3), currentEpoch.Epoch)
+	})
+}
 
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
@@ -633,4 +686,11 @@ func generatePandoraSealedHeaderByKey(
 	header.Extra = extraDataBytes
 
 	return
+}
+
+func testHTTPServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+
+	}))
 }
