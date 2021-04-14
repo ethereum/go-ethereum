@@ -662,8 +662,9 @@ func (t *Tree) Rebuild(root common.Hash) {
 		case *diskLayer:
 			// If the base layer is generating, abort it and save
 			if layer.genAbort != nil {
-				abort := make(chan *generatorStats, 1) // Discard the stats
+				abort := make(chan *generatorStats)
 				layer.genAbort <- abort
+				<-abort
 			}
 			// Layer should be inactive now, mark it as stale
 			layer.lock.Lock()
