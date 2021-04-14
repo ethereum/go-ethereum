@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
 	"github.com/silesiacoin/bls/testutil/require"
@@ -17,6 +18,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	mathRand "math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -67,21 +69,46 @@ var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 }
 
 func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
-	server := testHTTPServer(t)
-	defer server.Close()
+	timeNow := time.Now()
+	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
+	// Set genesis time in a past
+	epochsProgressed := 3
+	genesisTime := timeNow.Add(-epochDuration * time.Duration(epochsProgressed))
 
-	urls := []string{server.URL}
+	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
+
+	for index, _ := range validatorPublicList {
+		privKey, err := herumi.RandKey()
+		assert.Nil(t, err)
+		pubKey := privKey.PublicKey()
+		validatorPublicList[index] = pubKey
+	}
+
+	minimalConsensusInfos := make([]params.MinimalEpochConsensusInfo, epochsProgressed+1)
+
+	// Prepare epochs from the past
+	for index, _ := range minimalConsensusInfos {
+		genesisConsensus := NewMinimalConsensusInfo(uint64(index)).(*MinimalEpochConsensusInfo)
+		genesisConsensus.AssignEpochStartFromGenesis(genesisTime)
+		genesisConsensus.AssignValidators(validatorPublicList)
+	}
+
+	listener, server, location := makeOrchestratorServer(t, minimalConsensusInfos)
+	defer server.Stop()
+	require.Equal(t, location, listener.Addr().String())
+
+	urls := []string{location}
 	config := Config{
 		PowMode: ModePandora,
 		Log:     log.Root(),
 	}
+
 	var (
-		consensusInfo  []*params.MinimalEpochConsensusInfo
-		validatorsList [validatorListLen]common2.PublicKey
+		consensusInfo []*params.MinimalEpochConsensusInfo
 	)
 
 	// Dummy genesis epoch
-	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorsList: validatorsList}
+	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorsList: validatorPublicList}
 	consensusInfo = append(consensusInfo, genesisEpoch)
 	ethash := NewPandora(config, urls, true, consensusInfo)
 	remoteSealerServer := StartRemotePandora(ethash, urls, true)
@@ -688,9 +715,49 @@ func generatePandoraSealedHeaderByKey(
 	return
 }
 
-func testHTTPServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+type OrchestratorService struct {
+	consensusInfo []params.MinimalEpochConsensusInfo
+	tick          int
+}
 
-	}))
+// Try to spread it a lot of times.
+func (orchestratorService *OrchestratorService) MinimalConsensusInfo() (
+	consensusInfo params.MinimalEpochConsensusInfo,
+	err error,
+) {
+	if orchestratorService.tick > len(orchestratorService.consensusInfo) {
+		err = fmt.Errorf(
+			"out of consensus infos, wanted: %d, got: %d",
+			orchestratorService.tick,
+			len(orchestratorService.consensusInfo),
+		)
+
+		return
+	}
+
+	consensusInfo = orchestratorService.consensusInfo[orchestratorService.tick]
+
+	return
+}
+
+func makeOrchestratorServer(
+	t *testing.T,
+	minimalConsensusInfo []params.MinimalEpochConsensusInfo,
+) (listener net.Listener, server *rpc.Server, location string) {
+	location = "./test.ipc"
+	apis := make([]rpc.API, 0)
+	apis = append(apis, rpc.API{
+		Namespace: "orc",
+		Version:   "1.0",
+		Service: &OrchestratorService{
+			consensusInfo: minimalConsensusInfo,
+			tick:          0,
+		},
+		Public: true,
+	})
+
+	listener, server, err := rpc.StartIPCEndpoint(location, apis)
+	require.NoError(t, err)
+
+	return
 }

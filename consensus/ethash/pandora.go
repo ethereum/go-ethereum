@@ -3,6 +3,7 @@ package ethash
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -314,15 +315,22 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	params := make([]interface{}, 2)
 	params[0] = "minimalConsensusInfo"
 	params[1] = struct {
-		fromEpoch uint64
+		FromEpoch uint64 `json:"fromEpoch"`
 	}{
-		fromEpoch: epoch,
+		FromEpoch: epoch,
 	}
+
+	marshaled, err := json.Marshal(params)
+
+	if nil != err {
+		return
+	}
+
 	subscription, err = client.Subscribe(
 		ctx,
-		"van",
+		"orc",
 		channel,
-		params,
+		marshaled,
 	)
 
 	if nil != err {
