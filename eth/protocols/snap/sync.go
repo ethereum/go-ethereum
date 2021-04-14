@@ -2695,9 +2695,9 @@ func (s *Syncer) reportHealProgress(force bool) {
 	var (
 		trienode = fmt.Sprintf("%d@%v", s.trienodeHealSynced, s.trienodeHealBytes.TerminalString())
 		bytecode = fmt.Sprintf("%d@%v", s.bytecodeHealSynced, s.bytecodeHealBytes.TerminalString())
+		accounts = fmt.Sprintf("%d@%v", s.accountHealed, s.accountHealedBytes.TerminalString())
+		storage  = fmt.Sprintf("%d@%v", s.storageHealed, s.storageHealedBytes.TerminalString())
 	)
-	log.Info("State heal in progress", "nodes", trienode, "codes", bytecode,
-		"accounts", s.accountHealed, "account size", s.accountHealedBytes,
-		"storages", s.storageHealed, "storage size", s.storageHealedBytes,
-		"pending", s.healer.scheduler.Pending())
+	log.Info("State heal in progress", "accounts", accounts, "slots", storage,
+		"codes", bytecode, "nodes", trienode, "pending", s.healer.scheduler.Pending())
 }
