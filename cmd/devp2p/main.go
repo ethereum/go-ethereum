@@ -64,6 +64,7 @@ func init() {
 		dnsCommand,
 		nodesetCommand,
 		rlpxCommand,
+		crawlerCommand,
 	}
 }
 
