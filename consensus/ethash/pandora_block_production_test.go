@@ -1,6 +1,7 @@
 package ethash
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -721,8 +722,8 @@ type OrchestratorService struct {
 }
 
 // Try to spread it a lot of times.
-func (orchestratorService *OrchestratorService) MinimalConsensusInfo() (
-	consensusInfo params.MinimalEpochConsensusInfo,
+func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context) (
+	subscription rpc.Subscription,
 	err error,
 ) {
 	if orchestratorService.tick > len(orchestratorService.consensusInfo) {
@@ -735,7 +736,15 @@ func (orchestratorService *OrchestratorService) MinimalConsensusInfo() (
 		return
 	}
 
-	consensusInfo = orchestratorService.consensusInfo[orchestratorService.tick]
+	//rpcClient, ok := rpc.ClientFromContext(ctx)
+	//
+	//if !ok {
+	//	err = fmt.Errorf("could not create rpcClient from context")
+	//
+	//	return
+	//}
+
+	//consensusInfo = orchestratorService.consensusInfo[orchestratorService.tick]
 
 	return
 }
