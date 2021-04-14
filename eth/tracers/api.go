@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -720,7 +721,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 // created during the execution of EVM if the given transaction was added on
 // top of the provided block and returns them as a JSON object.
 // You can provide -2 as a block number to trace on top of the pending block.
-func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (interface{}, error) {
+func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig, overrides *map[common.Address]ethapi.Account) (interface{}, error) {
 	// Try to retrieve the specified block
 	var (
 		err   error
@@ -743,6 +744,39 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHa
 	if err != nil {
 		return nil, err
 	}
+	defer release()
+
+	if overrides != nil {
+		// Override the fields of specified contracts before execution.
+		for addr, account := range *overrides {
+			// Override account nonce.
+			if account.Nonce != nil {
+				statedb.SetNonce(addr, uint64(*account.Nonce))
+			}
+			// Override account(contract) code.
+			if account.Code != nil {
+				statedb.SetCode(addr, *account.Code)
+			}
+			// Override account balance.
+			if account.Balance != nil {
+				statedb.SetBalance(addr, (*big.Int)(*account.Balance))
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				statedb.SetStorage(addr, *account.State)
+			}
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				for key, value := range *account.StateDiff {
+					statedb.SetState(addr, key, value)
+				}
+			}
+		}
+	}
+
 	// Execute the trace
 	msg := args.ToMessage(api.backend.RPCGasCap())
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
