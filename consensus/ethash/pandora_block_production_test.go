@@ -722,11 +722,11 @@ type OrchestratorService struct {
 }
 
 // Try to spread it a lot of times.
-func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context) (
+func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context, payload MinimalConsensusInfoPayload) (
 	subscription rpc.Subscription,
 	err error,
 ) {
-	tick := 0
+	tick := int(payload.FromEpoch)
 	notifier, supported := rpc.NotifierFromContext(ctx)
 
 	if !supported {

@@ -40,6 +40,10 @@ type PandoraExtraDataSealed struct {
 	BlsSignatureBytes *BlsSignatureBytes
 }
 
+type MinimalConsensusInfoPayload struct {
+	FromEpoch uint64 `json:"fromEpoch"`
+}
+
 // This should be cached or retrieved in a handshake with vanguard
 type MinimalEpochConsensusInfo struct {
 	// Epoch number
@@ -312,9 +316,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	ctx := context.Background()
 	channel := make(chan *MinimalEpochConsensusInfo)
 
-	params := struct {
-		FromEpoch uint64 `json:"fromEpoch"`
-	}{
+	params := MinimalConsensusInfoPayload{
 		FromEpoch: epoch,
 	}
 
