@@ -19,6 +19,7 @@ package common
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -79,4 +80,28 @@ func (t PrettyAge) String() string {
 		}
 	}
 	return result
+}
+
+// PrettyNumber is a pretty printed version of a uint64 with thousand separators.
+type PrettyNumber uint64
+
+// String implements the Stringer interface, allowing pretty printing of integer
+// values with thousand separators.
+func (n PrettyNumber) String() string {
+	// Small numbers are fine as is
+	if n < 100000 {
+		return strconv.Itoa(int(n))
+	}
+	groups := make([]string, 0, 4) // random initial size to cover most cases
+	for n >= 1000 {
+		groups = append(groups, fmt.Sprintf("%03d", n%1000))
+		n /= 1000
+	}
+	groups = append(groups, strconv.Itoa(int(n)))
+
+	last := len(groups) - 1
+	for i := 0; i < len(groups)/2; i++ {
+		groups[i], groups[last-i] = groups[last-i], groups[i]
+	}
+	return strings.Join(groups, ",")
 }
