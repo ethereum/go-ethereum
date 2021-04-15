@@ -359,19 +359,22 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		return strconv.FormatFloat(float64(v), floatFormat, 3, 64)
 	case float64:
 		return strconv.FormatFloat(v, floatFormat, 3, 64)
-	case int8, uint8:
-		return fmt.Sprintf("%d", value)
-	case int:
-		return FormatLogfmtInt64(int64(v))
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+	case uint8:
+		return strconv.FormatInt(int64(v), 10)
 	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case uint16:
+		return strconv.FormatInt(int64(v), 10)
+	// Larger integers get thousands separators.
+	case int:
 		return FormatLogfmtInt64(int64(v))
 	case int32:
 		return FormatLogfmtInt64(int64(v))
 	case int64:
 		return FormatLogfmtInt64(v)
 	case uint:
-		return FormatLogfmtUint64(uint64(v))
-	case uint16:
 		return FormatLogfmtUint64(uint64(v))
 	case uint32:
 		return FormatLogfmtUint64(uint64(v))
