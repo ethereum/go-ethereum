@@ -187,7 +187,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 
 	// Make the transition
 	merger.LeavePoW()
-	merger.EnterPoS()
+	merger.EnterPoS(preBlocks[len(preBlocks)-1].Number())
 
 	// Verify the blocks after the merging
 	for i := 0; i < len(postBlocks); i++ {

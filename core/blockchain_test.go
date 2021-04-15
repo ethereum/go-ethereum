@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -2133,6 +2134,177 @@ func getLongAndShortChains() (*BlockChain, []*types.Block, []*types.Block, error
 		return nil, nil, nil, fmt.Errorf("Test is moot, heavyChain num (%v) must be lower than canon num (%v)", shorterNum, longerNum)
 	}
 	return chain, longChain, heavyChain, nil
+}
+
+func TestInsertKnownHeadersWithMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "headers", 0)
+}
+func TestInsertKnownReceiptChainWithMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "receipts", 0)
+}
+func TestInsertKnownBlocksWithMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "blocks", 0)
+}
+func TestInsertKnownHeadersAfterMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "headers", 1)
+}
+func TestInsertKnownReceiptChainAfterMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "receipts", 1)
+}
+func TestInsertKnownBlocksAfterMerging(t *testing.T) {
+	testInsertKnownChainDataWithMerging(t, "blocks", 1)
+}
+
+// mergeHeight can be assigned in these values:
+// 0: means the merging is applied since genesis
+// 1: means the merging is applied after the first segment
+func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight int) {
+	var (
+		db        = rawdb.NewMemoryDatabase()
+		genesis   = new(Genesis).MustCommit(db)
+		runEngine = beacon.New(ethash.NewFaker(), false)
+		genEngine = beacon.New(ethash.NewFaker(), false)
+	)
+	applyMerge := func(engine *beacon.Beacon, forker *ForkChoice) {
+		if engine != nil {
+			engine.SetTransitioned()
+		}
+		if forker != nil {
+			forker.SetTransitioned()
+		}
+	}
+
+	// Apply merging since genesis
+	if mergeHeight == 0 {
+		applyMerge(genEngine, nil)
+	}
+	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, genEngine, db, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	// Apply merging after the first segment
+	if mergeHeight == 1 {
+		applyMerge(genEngine, nil)
+	}
+	// Longer chain and shorter chain
+	blocks2, receipts2 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], genEngine, db, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks3, receipts3 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], genEngine, db, 64, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		b.OffsetTime(-9) // Time shifted, difficulty shouldn't be changed
+	})
+
+	// Import the shared chain and the original canonical one
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temp freezer dir: %v", err)
+	}
+	defer os.Remove(dir)
+	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), dir, "", false)
+	if err != nil {
+		t.Fatalf("failed to create temp freezer db: %v", err)
+	}
+	new(Genesis).MustCommit(chaindb)
+	defer os.RemoveAll(dir)
+
+	chain, err := NewBlockChain(chaindb, nil, params.TestChainConfig, runEngine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	var (
+		inserter func(blocks []*types.Block, receipts []types.Receipts) error
+		asserter func(t *testing.T, block *types.Block)
+	)
+	if typ == "headers" {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			headers := make([]*types.Header, 0, len(blocks))
+			for _, block := range blocks {
+				headers = append(headers, block.Header())
+			}
+			_, err := chain.InsertHeaderChain(headers, 1)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentHeader().Hash() != block.Hash() {
+				t.Fatalf("current head header mismatch, have %v, want %v", chain.CurrentHeader().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	} else if typ == "receipts" {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			headers := make([]*types.Header, 0, len(blocks))
+			for _, block := range blocks {
+				headers = append(headers, block.Header())
+			}
+			_, err := chain.InsertHeaderChain(headers, 1)
+			if err != nil {
+				return err
+			}
+			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentFastBlock().Hash() != block.Hash() {
+				t.Fatalf("current head fast block mismatch, have %v, want %v", chain.CurrentFastBlock().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	} else {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			_, err := chain.InsertChain(blocks)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentBlock().Hash() != block.Hash() {
+				t.Fatalf("current head block mismatch, have %v, want %v", chain.CurrentBlock().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	}
+
+	// Apply merging since genesis if required
+	if mergeHeight == 0 {
+		applyMerge(runEngine, chain.forker)
+	}
+	if err := inserter(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+
+	// Reimport the chain data again. All the imported
+	// chain data are regarded "known" data.
+	if err := inserter(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks[len(blocks)-1])
+
+	// Import a long canonical chain with some known data as prefix.
+	rollback := blocks[len(blocks)/2].NumberU64()
+	chain.SetHead(rollback - 1)
+	if err := inserter(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks[len(blocks)-1])
+
+	// Apply merging after the first segment
+	if mergeHeight == 1 {
+		applyMerge(runEngine, chain.forker)
+	}
+
+	// Import a longer chain with some known data as prefix.
+	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks2[len(blocks2)-1])
+
+	// Import a shorter chain with some known data as prefix.
+	// The reorg is expected since the fork choice rule is
+	// already changed.
+	if err := inserter(append(blocks, blocks3...), append(receipts, receipts3...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	// The head shouldn't change.
+	asserter(t, blocks3[len(blocks3)-1])
+
+	// Reimport the longer chain again, the reorg is still expected
+	chain.SetHead(rollback - 1)
+	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks2[len(blocks2)-1])
 }
 
 // TestReorgToShorterRemovesCanonMapping tests that if we

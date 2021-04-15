@@ -19,9 +19,6 @@ package beacon
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -29,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"math/big"
+	"sync"
 )
 
 // Proof-of-stake protocol constants.
@@ -59,25 +58,25 @@ var (
 type Beacon struct {
 	ethone consensus.Engine // Classic consensus engine used in the ethereum 1
 
-	// transitioned is the flag whether the chain has finished the eth1->eth2
-	// transition. It's triggered by receiving the first "FinaliseBlock" message
-	// from the external consensus engine.
-	transitioned uint32
+	// transitionBlock is the block number of the first received `FinaliseBlock`
+	// message from the external consensus engine. 0 means the verification rules
+	// are activated since the genesis. Nil means the transition won't happen.
+	transitionBlock *big.Int
+	lock            sync.RWMutex
 }
 
 // New creates a consensus engine with the given embedded ethereum 1 engine.
-func New(ethone consensus.Engine, transitioned bool) *Beacon {
-	engine := &Beacon{ethone: ethone}
-	if transitioned {
-		engine.SetTransitioned()
+func New(ethone consensus.Engine, transitionBlock *big.Int) *Beacon {
+	return &Beacon{
+		ethone:          ethone,
+		transitionBlock: transitionBlock,
 	}
-	return engine
 }
 
 // Author implements consensus.Engine, returning the header's coinbase as the
 // verified author of the block.
 func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(header.Number) {
 		return beacon.ethone.Author(header)
 	}
 	return header.Coinbase, nil
@@ -86,7 +85,7 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(header.Number) {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
 	// Short circuit if the header is known, or its parent not
@@ -106,9 +105,6 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	if !beacon.IsTransitioned() {
-		return beacon.ethone.VerifyHeaders(chain, headers, seals)
-	}
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
@@ -129,7 +125,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 				}
 				continue
 			}
-			err := beacon.verifyHeader(chain, header, parent)
+			err := beacon.VerifyHeader(chain, header, seals[i])
 			select {
 			case <-abort:
 				return
@@ -143,7 +139,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 // VerifyUncles verifies that the given block's uncles conform to the consensus
 // rules of the stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(block.Number()) {
 		return beacon.ethone.VerifyUncles(chain, block)
 	}
 	// Verify that there is no uncle block. It's explicitly disabled in the beacon
@@ -202,7 +198,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the beacon protocol. The changes are done inline.
 func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(header.Number) {
 		return beacon.ethone.Prepare(chain, header)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -215,7 +211,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 
 // Finalize implements consensus.Engine, setting the final state on the header
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(header.Number) {
 		beacon.ethone.Finalize(chain, header, state, txs, uncles)
 		return
 	}
@@ -227,7 +223,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
 func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(header.Number) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 	}
 	// Finalize and assemble the block
@@ -241,7 +237,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 // Note, the method returns immediately and will send the result async. More
 // than one result may also be returned depending on the consensus algorithm.
 func (beacon *Beacon) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(block.Number()) {
 		return beacon.ethone.Seal(chain, block, results, stop)
 	}
 	// The seal verification is done by the external consensus engine,
@@ -260,7 +256,7 @@ func (beacon *Beacon) SealHash(header *types.Header) common.Hash {
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	if !beacon.IsTransitioned() {
+	if !beacon.IsTransitioned(new(big.Int).Add(parent.Number, common.Big1)) {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
 	return beaconDifficulty
@@ -276,12 +272,23 @@ func (beacon *Beacon) Close() error {
 	return beacon.ethone.Close()
 }
 
-// SetTransitioned marks the transition has been done.
-func (beacon *Beacon) SetTransitioned() {
-	atomic.StoreUint32(&beacon.transitioned, 1)
+// SetTransitionBlock sets the transition block number. After that all the verification
+// rules are switched to the b
+func (beacon *Beacon) SetTransitionBlock(number *big.Int) {
+	beacon.lock.Lock()
+	defer beacon.lock.Unlock()
+
+	beacon.transitionBlock = number
 }
 
-// IsTransitioned reports whether the transition has finished.
-func (beacon *Beacon) IsTransitioned() bool {
-	return atomic.LoadUint32(&beacon.transitioned) == 1
+// IsTransitioned returns whether the transition scheduled at block `transitionBlock`
+// is active at the given head block. Note the block s is not included for the transition.
+func (beacon *Beacon) IsTransitioned(number *big.Int) bool {
+	beacon.lock.RLock()
+	defer beacon.lock.RUnlock()
+
+	if beacon.transitionBlock == nil || number == nil {
+		return false
+	}
+	return beacon.transitionBlock.Cmp(number) < 0
 }
