@@ -58,6 +58,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 		fork = n - 1
 	}
 	db := rawdb.NewMemoryDatabase()
+	//nolint:composites
 	config := &params.ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), new(params.EthashConfig), nil}
 	genesis := &core.Genesis{
 		Config:    config,
