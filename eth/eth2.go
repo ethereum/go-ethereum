@@ -296,15 +296,19 @@ func (api *Eth2API) addBlockTxs(block *types.Block) error {
 	return nil
 }
 
+type GenericResponse struct {
+	Success bool `json:"success"`
+}
+
 // FinalizeBlock is called to mark a block as synchronized, so
 // that data that is no longer needed can be removed.
-func (api *Eth2API) FinalizeBlock(blockHash common.Hash) error {
+func (api *Eth2API) FinalizeBlock(blockHash common.Hash) (*GenericResponse, error) {
 	// Stubbed for now, it's not critical
-	return nil
+	return &GenericResponse{false}, nil
 }
 
 // SetHead is called to perform a force choice.
-func (api *Eth2API) SetHead(newHead common.Hash) error {
+func (api *Eth2API) SetHead(newHead common.Hash) (*GenericResponse, error) {
 	//oldBlock := api.eth.BlockChain().CurrentBlock()
 
 	//if oldBlock.Hash() == newHead {
@@ -318,5 +322,5 @@ func (api *Eth2API) SetHead(newHead common.Hash) error {
 	//return err
 	//}
 	//api.head = newHead
-	return nil
+	return &GenericResponse{false}, nil
 }
