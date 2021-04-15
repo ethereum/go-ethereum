@@ -21,8 +21,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // PrettyDuration is a pretty printed version of a time.Duration value that cuts
@@ -81,13 +79,4 @@ func (t PrettyAge) String() string {
 		}
 	}
 	return result
-}
-
-// PrettyNumber is a pretty printed version of a uint64 with thousand separators.
-type PrettyNumber uint64
-
-// String implements the Stringer interface, allowing pretty printing of integer
-// values with thousand separators.
-func (n PrettyNumber) String() string {
-	return log.FormatLogfmtUint64(uint64(n))
 }
