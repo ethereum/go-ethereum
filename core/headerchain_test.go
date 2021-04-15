@@ -50,7 +50,7 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 	return nil
 }
 
-func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error, forker *ForkChoicer) {
+func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error, forker *ForkChoice) {
 	t.Helper()
 
 	status, err := hc.InsertHeaderChain(chain, time.Now(), forker)
@@ -83,7 +83,7 @@ func TestHeaderInsertion(t *testing.T) {
 	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
 	log.Root().SetHandler(log.StdoutHandler)
 
-	forker := NewForkChoicer(hc, false, nil)
+	forker := NewForkChoice(hc, false, nil)
 	// Inserting 64 headers on an empty chain, expecting
 	// 1 callbacks, 1 canon-status, 0 sidestatus,
 	testInsert(t, hc, chainA[:64], CanonStatTy, nil, forker)

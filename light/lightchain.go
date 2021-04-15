@@ -59,7 +59,7 @@ type LightChain struct {
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
-	forker        *core.ForkChoicer
+	forker        *core.ForkChoice
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -93,7 +93,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
-	bc.forker = core.NewForkChoicer(bc, merger.LeftPoW(), nil)
+	bc.forker = core.NewForkChoice(bc, merger.LeftPoW(), nil)
 	merger.SubscribeLeavePoW(func() {
 		bc.forker.SetTransitioned()
 	})

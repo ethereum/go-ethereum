@@ -204,7 +204,7 @@ type BlockChain struct {
 	validator  Validator // Block and state validator interface
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
-	forker     *ForkChoicer
+	forker     *ForkChoice
 	vmConfig   vm.Config
 
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
@@ -245,7 +245,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
-	bc.forker = NewForkChoicer(bc, merger.LeftPoW(), shouldPreserve)
+	bc.forker = NewForkChoice(bc, merger.LeftPoW(), shouldPreserve)
 	merger.SubscribeLeavePoW(func() {
 		bc.forker.SetTransitioned()
 	})

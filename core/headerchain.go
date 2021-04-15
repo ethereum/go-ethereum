@@ -233,7 +233,7 @@ func (hc *HeaderChain) Reorg(headHeader *types.Header, headers []*types.Header) 
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
-func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoicer) (result *headerWriteResult, err error) {
+func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoice) (result *headerWriteResult, err error) {
 	if len(headers) == 0 {
 		return &headerWriteResult{}, nil
 	}
@@ -386,7 +386,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 //
 // The returned 'write status' says if the inserted headers are part of the canonical chain
 // or a side chain.
-func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time, forker *ForkChoicer) (WriteStatus, error) {
+func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time, forker *ForkChoice) (WriteStatus, error) {
 	if hc.procInterrupt() {
 		return 0, errors.New("aborted")
 	}

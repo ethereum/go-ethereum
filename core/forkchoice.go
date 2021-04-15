@@ -40,12 +40,12 @@ type ChainReader interface {
 	GetTd(common.Hash, uint64) *big.Int
 }
 
-// ForkChoicer is the fork choicer based on the highest total difficulty of the
+// ForkChoice is the fork chooser based on the highest total difficulty of the
 // chain(the fork choice used in the eth1) and the external fork choice (the fork
-// choice used in the eth2). This main goal of this ForkChoicer is not only for
+// choice used in the eth2). This main goal of this ForkChoice is not only for
 // offering fork choice during the eth1/2 merge phase, but also keep the compatibility
 // for all other proof-of-work networks.
-type ForkChoicer struct {
+type ForkChoice struct {
 	chain ChainReader
 	rand  *mrand.Rand
 
@@ -61,13 +61,13 @@ type ForkChoicer struct {
 	preserve func(header *types.Header) bool
 }
 
-func NewForkChoicer(chainReader ChainReader, transitioned bool, preserve func(header *types.Header) bool) *ForkChoicer {
+func NewForkChoice(chainReader ChainReader, transitioned bool, preserve func(header *types.Header) bool) *ForkChoice {
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
 		log.Crit("Failed to initialize random seed", "err", err)
 	}
-	forker := &ForkChoicer{
+	forker := &ForkChoice{
 		chain:    chainReader,
 		rand:     mrand.New(mrand.NewSource(seed.Int64())),
 		preserve: preserve,
@@ -82,7 +82,7 @@ func NewForkChoicer(chainReader ChainReader, transitioned bool, preserve func(he
 // based on the given external header and local canonical chain.
 // In the td mode, the new head is chosen if the corresponding
 // total difficulty is higher.
-func (f *ForkChoicer) Reorg(header *types.Header) (bool, error) {
+func (f *ForkChoice) Reorg(header *types.Header) (bool, error) {
 	// If the chain is already transitioned into the casper phase,
 	// always return true because the head is already decided by
 	// the external fork choicer.
@@ -117,11 +117,11 @@ func (f *ForkChoicer) Reorg(header *types.Header) (bool, error) {
 }
 
 // SetTransitioned marks the transition has been done.
-func (f *ForkChoicer) SetTransitioned() {
+func (f *ForkChoice) SetTransitioned() {
 	atomic.StoreUint32(&f.transitioned, 1)
 }
 
 // IsTransitioned reports whether the transition has finished.
-func (f *ForkChoicer) IsTransitioned() bool {
+func (f *ForkChoice) IsTransitioned() bool {
 	return atomic.LoadUint32(&f.transitioned) == 1
 }
