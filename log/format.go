@@ -384,7 +384,7 @@ func formatLogfmtValue(value interface{}, term bool) string {
 	}
 }
 
-// FormatLogfmtInt64 formats a potentially big number in a friendlier split format.
+// FormatLogfmtInt64 formats n with thousand separators.
 func FormatLogfmtInt64(n int64) string {
 	if n < 0 {
 		return formatLogfmtUint64(uint64(-n), true)
@@ -392,7 +392,7 @@ func FormatLogfmtInt64(n int64) string {
 	return formatLogfmtUint64(uint64(n), false)
 }
 
-// FormatLogfmtUint64 formats a potentially big number in a friendlier split format.
+// FormatLogfmtUint64 formats n with thousand separators.
 func FormatLogfmtUint64(n uint64) string {
 	return formatLogfmtUint64(n, false)
 }
@@ -431,31 +431,32 @@ func formatLogfmtUint64(n uint64, neg bool) string {
 	return string(out[i+1:])
 }
 
-var big1000 = big.NewInt(1000)
-
-// formatLogfmtBigInt formats a potentially gigantic number in a friendlier split
-// format.
+// formatLogfmtBigInt formats n with thousand separators.
 func formatLogfmtBigInt(n *big.Int) string {
-	// Most number don't need fancy handling, just downcast
 	if n.IsUint64() {
 		return FormatLogfmtUint64(n.Uint64())
 	}
 	if n.IsInt64() {
 		return FormatLogfmtInt64(n.Int64())
 	}
-	// Ok, huge number needs huge effort
-	groups := make([]string, 0, 8) // random initial size to cover most cases
-	for n.Cmp(big1000) >= 0 {
-		_, mod := n.DivMod(n, big1000, nil)
-		groups = append(groups, fmt.Sprintf("%03d", mod))
-	}
-	groups = append(groups, n.String())
 
-	last := len(groups) - 1
-	for i := 0; i < len(groups)/2; i++ {
-		groups[i], groups[last-i] = groups[last-i], groups[i]
+	text := n.String()
+	buf := make([]byte, 0, len(text)+len(text)/3)
+	comma := 0
+	for _, c := range text {
+		switch {
+		case c == '-':
+			buf = append(buf, byte(c))
+		case comma == 3:
+			buf = append(buf, ',')
+			comma = 0
+			fallthrough
+		default:
+			buf = append(buf, byte(c))
+			comma++
+		}
 	}
-	return strings.Join(groups, ",")
+	return string(buf)
 }
 
 // escapeString checks if the provided string needs escaping/quoting, and
