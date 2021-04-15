@@ -85,7 +85,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		validatorPublicList[index] = pubKey
 	}
 
-	minimalConsensusInfos := make([]params.MinimalEpochConsensusInfo, epochsProgressed+1)
+	minimalConsensusInfos := make([]params.MinimalEpochConsensusInfo, 0)
 
 	// Prepare epochs from the past
 	for index, _ := range minimalConsensusInfos {
@@ -730,7 +730,7 @@ type OrchestratorService struct {
 }
 
 // Try to spread it a lot of times.
-func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context, payload MinimalConsensusInfoPayload) (
+func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context, payload *MinimalConsensusInfoPayload) (
 	subscription rpc.Subscription,
 	err error,
 ) {
