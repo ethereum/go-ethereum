@@ -179,24 +179,19 @@ func TestEth2NewBlock(t *testing.T) {
 
 	api := NewEth2API(ethservice)
 	for i := 5; i < 10; i++ {
-		p := NewBlockParams{
-			Slot:      blocks[i].NumberU64(),
-			Timestamp: blocks[i].Time(),
-			ExecutableData: ExecutableData{
-				ParentHash:   ethservice.BlockChain().CurrentBlock().Hash(),
-				Coinbase:     blocks[i].Coinbase(),
-				StateRoot:    blocks[i].Root(),
-				Difficulty:   blocks[i].Difficulty(),
-				GasLimit:     blocks[i].GasLimit(),
-				GasUsed:      blocks[i].GasUsed(),
-				Transactions: []*types.Transaction(blocks[i].Transactions()),
-				ReceiptRoot:  blocks[i].ReceiptHash(),
-				LogsBloom:    blocks[i].Bloom().Bytes(),
-				BlockHash:    blocks[i].Hash(),
-			},
+		p := ExecutableData{
+			ParentHash:   ethservice.BlockChain().CurrentBlock().Hash(),
+			Miner:        blocks[i].Coinbase(),
+			StateRoot:    blocks[i].Root(),
+			GasLimit:     blocks[i].GasLimit(),
+			GasUsed:      blocks[i].GasUsed(),
+			Transactions: []*types.Transaction(blocks[i].Transactions()),
+			ReceiptRoot:  blocks[i].ReceiptHash(),
+			LogsBloom:    blocks[i].Bloom().Bytes(),
+			BlockHash:    blocks[i].Hash(),
 		}
 		success, err := api.NewBlock(p)
-		if err != nil || !success {
+		if err != nil || !success.Valid {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 	}
@@ -206,27 +201,22 @@ func TestEth2NewBlock(t *testing.T) {
 	lastBlock := blocks[4]
 	for i := 0; i < 4; i++ {
 		lastBlockNum.Add(lastBlockNum, big.NewInt(1))
-		p := NewBlockParams{
-			Slot:      lastBlockNum.Uint64(),
-			Timestamp: forkedBlocks[i].Time(),
-			ExecutableData: ExecutableData{
-				ParentHash:   lastBlock.Hash(),
-				Coinbase:     forkedBlocks[i].Coinbase(),
-				StateRoot:    forkedBlocks[i].Root(),
-				Difficulty:   forkedBlocks[i].Difficulty(),
-				GasLimit:     forkedBlocks[i].GasLimit(),
-				GasUsed:      forkedBlocks[i].GasUsed(),
-				Transactions: []*types.Transaction(blocks[i].Transactions()),
-				ReceiptRoot:  forkedBlocks[i].ReceiptHash(),
-				LogsBloom:    forkedBlocks[i].Bloom().Bytes(),
-				BlockHash:    forkedBlocks[i].Hash(),
-			},
+		p := ExecutableData{
+			ParentHash:   lastBlock.Hash(),
+			Miner:        forkedBlocks[i].Coinbase(),
+			StateRoot:    forkedBlocks[i].Root(),
+			GasLimit:     forkedBlocks[i].GasLimit(),
+			GasUsed:      forkedBlocks[i].GasUsed(),
+			Transactions: []*types.Transaction(blocks[i].Transactions()),
+			ReceiptRoot:  forkedBlocks[i].ReceiptHash(),
+			LogsBloom:    forkedBlocks[i].Bloom().Bytes(),
+			BlockHash:    forkedBlocks[i].Hash(),
 		}
 		success, err := api.NewBlock(p)
-		if err != nil || !success {
+		if err != nil || !success.Valid {
 			t.Fatalf("Failed to insert forked block #%d: %v", i, err)
 		}
-		lastBlock = insertBlockParamsToBlock(p, lastBlockNum)
+		lastBlock = insertBlockParamsToBlock(p, lastBlockNum, forkedBlocks[i].Time())
 	}
 
 	exp := common.HexToHash("526db89301fc787799ef8c272fe512898b97ad96d0b69caee19dc5393b092110")

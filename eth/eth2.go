@@ -85,18 +85,19 @@ type AssembleBlockParams struct {
 	Timestamp  uint64      `json:"timestamp"`
 }
 
-// Structure described at https://ethresear.ch/t/executable-beacon-chain/8271
+// Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
 type ExecutableData struct {
-	Coinbase     common.Address       `json:"coinbase"`
-	StateRoot    common.Hash          `json:"state_root"`
-	GasLimit     uint64               `json:"gas_limit"`
-	GasUsed      uint64               `json:"gas_used"`
+	BlockHash    common.Hash          `json:"blockHash"`
+	ParentHash   common.Hash          `json:"parentHash"`
+	Miner        common.Address       `json:"miner"`
+	StateRoot    common.Hash          `json:"stateRoot"`
+	Number       uint64               `json:"number"`
+	GasLimit     uint64               `json:"gasLimit"`
+	GasUsed      uint64               `json:"gasUsed"`
+	Timestamp    uint64               `json:"timestamp"`
+	ReceiptRoot  common.Hash          `json:"receiptsRoot"`
+	LogsBloom    []byte               `json:"logsBloom"`
 	Transactions []*types.Transaction `json:"transactions"`
-	ReceiptRoot  common.Hash          `json:"receipt_root"`
-	LogsBloom    []byte               `json:"logs_bloom"`
-	BlockHash    common.Hash          `json:"block_hash"`
-	ParentHash   common.Hash          `json:"parent_hash"`
-	Difficulty   *big.Int             `json:"difficulty"`
 }
 
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
@@ -225,69 +226,65 @@ func (api *Eth2API) AssembleBlock(params AssembleBlockParams) (*ExecutableData, 
 	block.Header().ReceiptHash = types.DeriveSha(receipts, new(trie.Trie))
 
 	return &ExecutableData{
-		Coinbase:     block.Coinbase(),
+		BlockHash:    block.Hash(),
+		ParentHash:   block.ParentHash(),
+		Miner:        block.Coinbase(),
 		StateRoot:    block.Root(),
+		Number:       block.NumberU64(),
 		GasLimit:     block.GasLimit(),
 		GasUsed:      block.GasUsed(),
-		Transactions: []*types.Transaction(block.Transactions()),
+		Timestamp:    block.Time(),
 		ReceiptRoot:  block.ReceiptHash(),
 		LogsBloom:    block.Bloom().Bytes(),
-		BlockHash:    block.Hash(),
-		Difficulty:   block.Difficulty(),
-		ParentHash:   block.ParentHash(),
+		Transactions: []*types.Transaction(block.Transactions()),
 	}, nil
-}
-
-// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type NewBlockParams struct {
-	RandaoMix              common.Hash    `json:"randao_mix"`
-	Slot                   uint64         `json:"slot"`
-	Timestamp              uint64         `json:"timestamp"`
-	RecentBeaconBlockRoots []common.Hash  `json:"recent_beacon_block_roots"`
-	ExecutableData         ExecutableData `json:"executable_data"`
 }
 
 var zeroNonce [8]byte
 
-func insertBlockParamsToBlock(params NewBlockParams, number *big.Int) *types.Block {
+func insertBlockParamsToBlock(params ExecutableData, number *big.Int, parentTime uint64) *types.Block {
 	header := &types.Header{
-		ParentHash:  params.ExecutableData.ParentHash,
+		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.ExecutableData.Coinbase,
-		Root:        params.ExecutableData.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(params.ExecutableData.Transactions), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ExecutableData.ReceiptRoot,
-		Bloom:       types.BytesToBloom(params.ExecutableData.LogsBloom),
-		Difficulty:  params.ExecutableData.Difficulty,
+		Coinbase:    params.Miner,
+		Root:        params.StateRoot,
+		TxHash:      types.DeriveSha(types.Transactions(params.Transactions), trie.NewStackTrie(nil)),
+		ReceiptHash: params.ReceiptRoot,
+		Bloom:       types.BytesToBloom(params.LogsBloom),
+		Difficulty:  big.NewInt(1),
 		Number:      number,
-		GasLimit:    params.ExecutableData.GasLimit,
-		GasUsed:     params.ExecutableData.GasUsed,
-		Time:        params.Timestamp,
+		GasLimit:    params.GasLimit,
+		GasUsed:     params.GasUsed,
+		Time:        parentTime + 1,
 		Extra:       nil,
 		MixDigest:   common.Hash{},
 		Nonce:       zeroNonce,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(params.ExecutableData.Transactions, nil /* uncles */)
+	block := types.NewBlockWithHeader(header).WithBody(params.Transactions, nil /* uncles */)
 
 	return block
+}
+
+type NewBlockReturn struct {
+	Valid bool `json:"valid"`
 }
 
 // NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
-func (api *Eth2API) NewBlock(params NewBlockParams) (bool, error) {
+func (api *Eth2API) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
 	// compute block number as parent.number + 1
-	parent := api.eth.BlockChain().GetBlockByHash(params.ExecutableData.ParentHash)
+	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
-		return false, fmt.Errorf("could not find parent %x", params.ExecutableData.ParentHash)
+		return &NewBlockReturn{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
 	number := big.NewInt(0)
 	number.Add(parent.Number(), big.NewInt(1))
 
-	block := insertBlockParamsToBlock(params, number)
+	block := insertBlockParamsToBlock(params, number, parent.Time())
 	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{block}))
 
-	return (err == nil), err
+	return &NewBlockReturn{err == nil}, err
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
