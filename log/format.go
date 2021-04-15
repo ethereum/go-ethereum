@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
@@ -329,11 +330,20 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		return "nil"
 	}
 
-	if t, ok := value.(time.Time); ok {
+	switch v := value.(type) {
+	case time.Time:
 		// Performance optimization: No need for escaping since the provided
 		// timeFormat doesn't have any escape characters, and escaping is
 		// expensive.
-		return t.Format(timeFormat)
+		return v.Format(timeFormat)
+
+	case *big.Int:
+		// Big ints get consumed by the Stringer clause so we need to handle
+		// them earlier on.
+		if v == nil {
+			return "<nil>"
+		}
+		return formatLogfmtBigInt(v)
 	}
 	if term {
 		if s, ok := value.(TerminalStringer); ok {
@@ -349,13 +359,103 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		return strconv.FormatFloat(float64(v), floatFormat, 3, 64)
 	case float64:
 		return strconv.FormatFloat(v, floatFormat, 3, 64)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+	case int8, uint8:
 		return fmt.Sprintf("%d", value)
+	case int:
+		return FormatLogfmtInt64(int64(v))
+	case int16:
+		return FormatLogfmtInt64(int64(v))
+	case int32:
+		return FormatLogfmtInt64(int64(v))
+	case int64:
+		return FormatLogfmtInt64(v)
+	case uint:
+		return FormatLogfmtUint64(uint64(v))
+	case uint16:
+		return FormatLogfmtUint64(uint64(v))
+	case uint32:
+		return FormatLogfmtUint64(uint64(v))
+	case uint64:
+		return FormatLogfmtUint64(v)
 	case string:
 		return escapeString(v)
 	default:
 		return escapeString(fmt.Sprintf("%+v", value))
 	}
+}
+
+// FormatLogfmtInt64 formats a potentially big number in a friendlier split format.
+func FormatLogfmtInt64(n int64) string {
+	if n < 0 {
+		return formatLogfmtUint64(uint64(-n), true)
+	}
+	return formatLogfmtUint64(uint64(n), false)
+}
+
+// FormatLogfmtUint64 formats a potentially big number in a friendlier split format.
+func FormatLogfmtUint64(n uint64) string {
+	return formatLogfmtUint64(n, false)
+}
+
+func formatLogfmtUint64(n uint64, neg bool) string {
+	// Small numbers are fine as is
+	if n < 100000 {
+		if neg {
+			return strconv.Itoa(-int(n))
+		} else {
+			return strconv.Itoa(int(n))
+		}
+	}
+	// Large numbers should be split
+	const maxLength = 26
+
+	var (
+		out   = make([]byte, maxLength)
+		i     = maxLength - 1
+		comma = 0
+	)
+	for ; n > 0; i-- {
+		if comma == 3 {
+			comma = 0
+			out[i] = ','
+		} else {
+			comma++
+			out[i] = '0' + byte(n%10)
+			n /= 10
+		}
+	}
+	if neg {
+		out[i] = '-'
+		i--
+	}
+	return string(out[i+1:])
+}
+
+var big1000 = big.NewInt(1000)
+
+// formatLogfmtBigInt formats a potentially gigantic number in a friendlier split
+// format.
+func formatLogfmtBigInt(n *big.Int) string {
+	// Most number don't need fancy handling, just downcast
+	if n.IsUint64() {
+		return FormatLogfmtUint64(n.Uint64())
+	}
+	if n.IsInt64() {
+		return FormatLogfmtInt64(n.Int64())
+	}
+	// Ok, huge number needs huge effort
+	groups := make([]string, 0, 8) // random initial size to cover most cases
+	for n.Cmp(big1000) >= 0 {
+		_, mod := n.DivMod(n, big1000, nil)
+		groups = append(groups, fmt.Sprintf("%03d", mod))
+	}
+	groups = append(groups, n.String())
+
+	last := len(groups) - 1
+	for i := 0; i < len(groups)/2; i++ {
+		groups[i], groups[last-i] = groups[last-i], groups[i]
+	}
+	return strings.Join(groups, ",")
 }
 
 // escapeString checks if the provided string needs escaping/quoting, and
