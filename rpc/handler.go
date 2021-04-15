@@ -282,10 +282,26 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	}
 	op.err = json.Unmarshal(msg.Result, &op.sub.subid)
 
-	if nil != op.err {
+	if nil == op.err {
+		go op.sub.start()
+		h.clientSubs[op.sub.subid] = op.sub
+
 		return
 	}
 
+	// TODO: debug if this happens also on prod env.
+	// In tests I encounter one call with empty response that does not have any fallback
+	var fallbackStruct struct {
+		ID string `json:"ID"`
+	}
+
+	err := json.Unmarshal(msg.Result, &fallbackStruct)
+
+	if nil != err {
+		return
+	}
+
+	op.err = nil
 	go op.sub.start()
 	h.clientSubs[op.sub.subid] = op.sub
 }

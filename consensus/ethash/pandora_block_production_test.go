@@ -734,17 +734,17 @@ func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context
 	subscription rpc.Subscription,
 	err error,
 ) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
+	client, supported := rpc.NotifierFromContext(ctx)
 
 	if !supported {
 		return
 	}
-	rpcSub := notifier.CreateSubscription()
+	rpcSub := client.CreateSubscription()
 	consensusInfo := orchestratorService.consensusInfo
 	rpcSubId := rpcSub.ID
 
 	for minimalConsensus := range consensusInfo {
-		err = notifier.Notify(rpcSubId, minimalConsensus)
+		err = client.Notify(rpcSubId, minimalConsensus)
 
 		if nil != err {
 			return
