@@ -10,25 +10,31 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
 	"sync"
+	"time"
 )
 
 type dropNotification struct {
 	// TxHash common.Hash `json:"txhash"`
 	Tx          *ethapi.RPCTransaction `json:"tx"`
 	Reason      string                 `json:"reason"`
-	Replacement string                 `json:"replacedby,omitempty"`
+	Replacement *ethapi.RPCTransaction `json:"replacedby,omitempty"`
 	Peer interface{}                   `json:"peer,omitempty"`
+	Time        int64                  `json:"ts"`
 }
 
 type rejectNotification struct {
 	Tx     *ethapi.RPCTransaction `json:"tx"`
 	Reason string                 `json:"reason"`
 	Peer   interface{} `json:"peer,omitempty"`
+	Time   int64                  `json:"ts"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
+	if tx == nil {
+		return nil
+	}
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
 		signer = types.NewEIP155Signer(tx.ChainId())
@@ -81,11 +87,12 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 					notification := &dropNotification{
 						Tx: newRPCPendingTransaction(tx),
 						Reason: d.Reason,
-						Replacement: replacementHashString(d.Replacement),
+						Replacement: newRPCPendingTransaction(d.Replacement),
+						Time: time.Now().UnixNano(),
 					}
-					if d.Replacement != (common.Hash{}) {
+					if d.Replacement != nil {
 						peerid, _ := txPeerMap.Get(tx.Hash())
-						notification.Peer, _ = peerIDMap.Load(peerid) 
+						notification.Peer, _ = peerIDMap.Load(peerid)
 					}
 					notifier.Notify(rpcSub.ID, notification)
 				}
@@ -130,6 +137,7 @@ func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subs
 					Tx: newRPCPendingTransaction(d.Tx),
 					Reason: reason,
 					Peer: peer,
+					Time: time.Now().UnixNano(),
 				})
 			case <-rpcSub.Err():
 				rejectedSub.Unsubscribe()

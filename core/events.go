@@ -28,7 +28,7 @@ type NewTxsEvent struct{ Txs []*types.Transaction }
 type DropTxsEvent struct{
 	Txs []*types.Transaction
 	Reason string
-	Replacement common.Hash
+	Replacement *types.Transaction
 }
 
 // RejectedTxEvent is posted when a transaction is rejected from entering the transaction pool

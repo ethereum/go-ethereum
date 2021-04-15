@@ -664,7 +664,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.dropTxFeed.Send(DropTxsEvent{
 				Txs: []*types.Transaction{old},
 				Reason: dropReplaced,
-				Replacement: tx.Hash(),
+				Replacement: tx,
 			})
 		}
 		pool.all.Add(tx, isLocal)
