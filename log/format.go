@@ -340,6 +340,9 @@ func formatLogfmtValue(value interface{}, term bool) string {
 	case *big.Int:
 		// Big ints get consumed by the Stringer clause so we need to handle
 		// them earlier on.
+		if v == nil {
+			return "<nil>"
+		}
 		return formatLogfmtBigInt(v)
 	}
 	if term {
