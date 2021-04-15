@@ -19,9 +19,10 @@ package common
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // PrettyDuration is a pretty printed version of a time.Duration value that cuts
@@ -88,20 +89,5 @@ type PrettyNumber uint64
 // String implements the Stringer interface, allowing pretty printing of integer
 // values with thousand separators.
 func (n PrettyNumber) String() string {
-	// Small numbers are fine as is
-	if n < 100000 {
-		return strconv.Itoa(int(n))
-	}
-	groups := make([]string, 0, 4) // random initial size to cover most cases
-	for n >= 1000 {
-		groups = append(groups, fmt.Sprintf("%03d", n%1000))
-		n /= 1000
-	}
-	groups = append(groups, strconv.Itoa(int(n)))
-
-	last := len(groups) - 1
-	for i := 0; i < len(groups)/2; i++ {
-		groups[i], groups[last-i] = groups[last-i], groups[i]
-	}
-	return strings.Join(groups, ",")
+	return log.FormatLogfmtUint64(uint64(n))
 }

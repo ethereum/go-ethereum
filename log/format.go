@@ -359,21 +359,21 @@ func formatLogfmtValue(value interface{}, term bool) string {
 	case int8, uint8:
 		return fmt.Sprintf("%d", value)
 	case int:
-		return formatLogfmtInt64(int64(v))
+		return FormatLogfmtInt64(int64(v))
 	case int16:
-		return formatLogfmtInt64(int64(v))
+		return FormatLogfmtInt64(int64(v))
 	case int32:
-		return formatLogfmtInt64(int64(v))
+		return FormatLogfmtInt64(int64(v))
 	case int64:
-		return formatLogfmtInt64(v)
+		return FormatLogfmtInt64(v)
 	case uint:
-		return formatLogfmtUint64(uint64(v))
+		return FormatLogfmtUint64(uint64(v))
 	case uint16:
-		return formatLogfmtUint64(uint64(v))
+		return FormatLogfmtUint64(uint64(v))
 	case uint32:
-		return formatLogfmtUint64(uint64(v))
+		return FormatLogfmtUint64(uint64(v))
 	case uint64:
-		return formatLogfmtUint64(v)
+		return FormatLogfmtUint64(v)
 	case string:
 		return escapeString(v)
 	default:
@@ -381,32 +381,51 @@ func formatLogfmtValue(value interface{}, term bool) string {
 	}
 }
 
-// formatLogfmtInt64 formats a potentially big number in a friendlier split format.
-func formatLogfmtInt64(n int64) string {
+// FormatLogfmtInt64 formats a potentially big number in a friendlier split format.
+func FormatLogfmtInt64(n int64) string {
 	if n < 0 {
-		return "-" + formatLogfmtUint64(uint64(-n))
+		return formatLogfmtUint64(uint64(-n), true)
 	}
-	return formatLogfmtUint64(uint64(n))
+	return formatLogfmtUint64(uint64(n), false)
 }
 
-// formatLogfmtUint64 formats a potentially big number in a friendlier split format.
-func formatLogfmtUint64(n uint64) string {
+// FormatLogfmtUint64 formats a potentially big number in a friendlier split format.
+func FormatLogfmtUint64(n uint64) string {
+	return formatLogfmtUint64(n, false)
+}
+
+func formatLogfmtUint64(n uint64, neg bool) string {
 	// Small numbers are fine as is
 	if n < 100000 {
-		return strconv.Itoa(int(n))
+		if neg {
+			return strconv.Itoa(-int(n))
+		} else {
+			return strconv.Itoa(int(n))
+		}
 	}
-	groups := make([]string, 0, 4) // random initial size to cover most cases
-	for n >= 1000 {
-		groups = append(groups, fmt.Sprintf("%03d", n%1000))
-		n /= 1000
-	}
-	groups = append(groups, strconv.Itoa(int(n)))
+	// Large numbers should be split
+	const maxLength = 26
 
-	last := len(groups) - 1
-	for i := 0; i < len(groups)/2; i++ {
-		groups[i], groups[last-i] = groups[last-i], groups[i]
+	var (
+		out   = make([]byte, maxLength)
+		i     = maxLength - 1
+		comma = 0
+	)
+	for ; n > 0; i-- {
+		if comma == 3 {
+			comma = 0
+			out[i] = ','
+		} else {
+			comma++
+			out[i] = '0' + byte(n%10)
+			n /= 10
+		}
 	}
-	return strings.Join(groups, ",")
+	if neg {
+		out[i] = '-'
+		i--
+	}
+	return string(out[i+1:])
 }
 
 var big1000 = big.NewInt(1000)
@@ -416,7 +435,10 @@ var big1000 = big.NewInt(1000)
 func formatLogfmtBigInt(n *big.Int) string {
 	// Most number don't need fancy handling, just downcast
 	if n.IsUint64() {
-		return formatLogfmtUint64(n.Uint64())
+		return FormatLogfmtUint64(n.Uint64())
+	}
+	if n.IsInt64() {
+		return FormatLogfmtInt64(n.Int64())
 	}
 	// Ok, huge number needs huge effort
 	groups := make([]string, 0, 8) // random initial size to cover most cases
