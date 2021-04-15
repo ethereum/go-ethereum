@@ -89,9 +89,17 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 
 	// Prepare epochs from the past
 	for index, _ := range minimalConsensusInfos {
-		genesisConsensus := NewMinimalConsensusInfo(uint64(index)).(*MinimalEpochConsensusInfo)
-		genesisConsensus.AssignEpochStartFromGenesis(genesisTime)
-		genesisConsensus.AssignValidators(validatorPublicList)
+		consensusInfo := NewMinimalConsensusInfo(uint64(index)).(*MinimalEpochConsensusInfo)
+		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
+		consensusInfo.AssignValidators(validatorPublicList)
+		consensusInfoParam := params.MinimalEpochConsensusInfo{
+			Epoch:            consensusInfo.Epoch,
+			ValidatorsList:   consensusInfo.ValidatorsList,
+			EpochTimeStart:   consensusInfo.EpochTimeStartUnix,
+			SlotTimeDuration: consensusInfo.SlotTimeDuration,
+		}
+
+		minimalConsensusInfos = append(minimalConsensusInfos, consensusInfoParam)
 	}
 
 	listener, server, location := makeOrchestratorServer(t, minimalConsensusInfos)

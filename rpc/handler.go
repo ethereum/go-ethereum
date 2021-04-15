@@ -280,10 +280,14 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 		op.err = msg.Error
 		return
 	}
-	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
-		go op.sub.start()
-		h.clientSubs[op.sub.subid] = op.sub
+	op.err = json.Unmarshal(msg.Result, &op.sub.subid)
+
+	if nil != op.err {
+		return
 	}
+
+	go op.sub.start()
+	h.clientSubs[op.sub.subid] = op.sub
 }
 
 // handleCallMsg executes a call message and returns the answer.

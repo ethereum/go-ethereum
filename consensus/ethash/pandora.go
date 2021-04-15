@@ -329,6 +329,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	)
 
 	if nil != err {
+		// TODO: try to omit this check for now
 		return
 	}
 
