@@ -346,10 +346,10 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 				"validatorListLen", len(minimalConsensus.ValidatorsList),
 			)
 
-			err = ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, minimalConsensus)
+			currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, minimalConsensus)
 
-			if nil != err {
-				errChan <- err
+			if nil != currentErr {
+				errChan <- currentErr
 
 				return
 			}
