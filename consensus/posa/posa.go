@@ -521,11 +521,7 @@ func (c *POSA) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	header.Extra = header.Extra[:extraVanity]
 
 	if number%c.config.Epoch == 0 {
-		state, err := c.stateFn(header.Root)
-		if err != nil {
-			return err
-		}
-		newSortedValidators, err := c.getTopValidators(chain, header, state)
+		newSortedValidators, err := c.getTopValidators(chain, header)
 		if err != nil {
 			return err
 		}
@@ -693,7 +689,7 @@ func (c *POSA) tryPunishValidator(chain consensus.ChainHeaderReader, header *typ
 }
 
 func (c *POSA) doSomethingAtEpoch(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) ([]common.Address, error) {
-	newSortedValidators, err := c.getTopValidators(chain, header, state)
+	newSortedValidators, err := c.getTopValidators(chain, header)
 	if err != nil {
 		return []common.Address{}, err
 	}
@@ -751,8 +747,17 @@ func (c *POSA) initializeSystemContracts(chain consensus.ChainHeaderReader, head
 	return nil
 }
 
-// call this at epoch block to get top validators based on the state of epoch block
-func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) ([]common.Address, error) {
+// call this at epoch block to get top validators based on the state of epoch block - 1
+func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types.Header) ([]common.Address, error) {
+	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+	if parent == nil {
+		return []common.Address{}, consensus.ErrUnknownAncestor
+	}
+	stateDB, err := c.stateFn(parent.Root)
+	if err != nil {
+		return []common.Address{}, err
+	}
+
 	method := "getTopValidators"
 	data, err := c.abi[validatorsContractName].Pack(method)
 	if err != nil {
@@ -762,8 +767,8 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 
 	msg := types.NewMessage(header.Coinbase, &validatorsContractAddr, 0, new(big.Int), math.MaxUint64, new(big.Int), data, nil, false)
 
-	// use current epoch block
-	result, err := executeMsg(msg, state, header, newChainContext(chain, c), c.chainConfig)
+	// use parent
+	result, err := executeMsg(msg, stateDB, parent, newChainContext(chain, c), c.chainConfig)
 	if err != nil {
 		return []common.Address{}, err
 	}
