@@ -346,8 +346,7 @@ func (st *StackTrie) hash() {
 			panic(err)
 		}
 	case emptyNode:
-		st.val = st.val[:0]
-		st.val = append(st.val, emptyRoot[:]...)
+		st.val = emptyRoot.Bytes()
 		st.key = st.key[:0]
 		st.nodeType = hashedNode
 		return
@@ -357,17 +356,12 @@ func (st *StackTrie) hash() {
 	st.key = st.key[:0]
 	st.nodeType = hashedNode
 	if len(h.tmp) < 32 {
-		st.val = st.val[:0]
-		st.val = append(st.val, h.tmp...)
+		st.val = common.CopyBytes(h.tmp)
 		return
 	}
-	// Going to write the hash to the 'val'. Need to ensure it's properly sized first
-	// Typically, 'branchNode's will have no 'val', and require this allocation
-	if required := 32 - len(st.val); required > 0 {
-		buf := make([]byte, required)
-		st.val = append(st.val, buf...)
-	}
-	st.val = st.val[:32]
+	// Write the hash to the 'val'. We allocate a new val here to not mutate
+	// input values
+	st.val = make([]byte, 32)
 	h.sha.Reset()
 	h.sha.Write(h.tmp)
 	h.sha.Read(st.val)
