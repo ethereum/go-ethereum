@@ -647,8 +647,8 @@ func (c *POSA) trySendBlockReward(chain consensus.ChainHeaderReader, header *typ
 
 	// Miner will send tx to deposit block fees to contract, add to his balance first.
 	state.AddBalance(header.Coinbase, fee)
-	// reset fee
-	state.SetBalance(consensus.FeeRecoder, common.Big0)
+	// defer reset fee
+	defer state.SetBalance(consensus.FeeRecoder, common.Big0)
 
 	method := "distributeBlockReward"
 	data, err := c.abi[validatorsContractName].Pack(method)
