@@ -139,34 +139,15 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	}
 }
 
-// TransitionStatus describes the status of eth1/2 merging. This switch
-// between modes is a one-way action which is triggered by corresponding
-// consensus-layer message.
-type TransitionStatus struct {
-	LeafPoW    bool // The flag is set when the first NewHead message received
-	EnteredPoS bool // The flag is set when the first FinaliseBlock message received
-}
-
 // ReadTransitionStatus retrieves the eth2 transition status from the database
-func ReadTransitionStatus(db ethdb.KeyValueReader) *TransitionStatus {
+func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
 	data, _ := db.Get(transitionStatusKey)
-	if len(data) == 0 {
-		return nil
-	}
-	var status TransitionStatus
-	if err := rlp.DecodeBytes(data, &status); err != nil {
-		return nil
-	}
-	return &status
+	return data
 }
 
 // WriteTransitionStatus stores the eth2 transition status to the database
-func WriteTransitionStatus(db ethdb.KeyValueWriter, status *TransitionStatus) {
-	data, err := rlp.EncodeToBytes(status)
-	if err != nil {
-		log.Crit("Failed to encode the eth2 transition status", "err", err)
-	}
-	if err = db.Put(transitionStatusKey, data); err != nil {
+func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
+	if err := db.Put(transitionStatusKey, data); err != nil {
 		log.Crit("Failed to store the eth2 transition status", "err", err)
 	}
 }

@@ -21,28 +21,44 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Merger is an internal help structure used to tracking
-// the eth1/2 merging status. It's a common structure can
-// be used in both full node and light client.
+// transitionStatus describes the status of eth1/2 merging. This switch
+// between modes is a one-way action which is triggered by corresponding
+// consensus-layer message.
+type transitionStatus struct {
+	LeftPoW    bool // The flag is set when the first NewHead message received
+	EnteredPoS bool // The flag is set when the first FinaliseBlock message received
+}
+
+// Merger is an internal help structure used to track the eth1/2 merging status.
+// It's a common structure can be used in both full node and light client.
 type Merger struct {
 	db            ethdb.KeyValueStore
-	status        *rawdb.TransitionStatus
+	status        transitionStatus
 	leavePoWCalls []func()
 	enterPoSCalls []func()
 	lock          sync.Mutex
 }
 
 func NewMerger(db ethdb.KeyValueStore) *Merger {
+	var status transitionStatus
+	blob := rawdb.ReadTransitionStatus(db)
+	if len(blob) != 0 {
+		if err := rlp.DecodeBytes(blob, &status); err != nil {
+			log.Crit("Failed to decode the transition status", "err", err)
+		}
+	}
 	return &Merger{
 		db:     db,
-		status: rawdb.ReadTransitionStatus(db),
+		status: status,
 	}
 }
 
-// SubscribeLeavePoW registers callback so that if the chain transitions
-// from the PoW stage to 'transition' stage it can be invoked.
+// SubscribeLeavePoW registers callback so that if the chain leaves
+// from the PoW stage and enters to 'transition' stage it can be invoked.
 func (m *Merger) SubscribeLeavePoW(callback func()) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -50,8 +66,8 @@ func (m *Merger) SubscribeLeavePoW(callback func()) {
 	m.leavePoWCalls = append(m.leavePoWCalls, callback)
 }
 
-// SubscribeEnterPoS registers callback so that if the chain transitions
-// from the 'transition' stage to the PoS stage it can be invoked.
+// SubscribeEnterPoS registers callback so that if the chain leaves
+// from the 'transition' stage and enters the PoS stage it can be invoked.
 func (m *Merger) SubscribeEnterPoS(callback func()) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -65,11 +81,15 @@ func (m *Merger) LeavePoW() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.status != nil && m.status.LeafPoW {
+	if m.status.LeftPoW {
 		return
 	}
-	m.status = &rawdb.TransitionStatus{LeafPoW: true}
-	rawdb.WriteTransitionStatus(m.db, m.status)
+	m.status = transitionStatus{LeftPoW: true}
+	blob, err := rlp.EncodeToBytes(m.status)
+	if err != nil {
+		log.Crit("Failed to encode the transition status", "err", err)
+	}
+	rawdb.WriteTransitionStatus(m.db, blob)
 	for _, call := range m.leavePoWCalls {
 		call()
 	}
@@ -81,25 +101,26 @@ func (m *Merger) EnterPoS() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.status != nil && m.status.EnteredPoS {
+	if m.status.EnteredPoS {
 		return
 	}
-	m.status = &rawdb.TransitionStatus{LeafPoW: true, EnteredPoS: true}
-	rawdb.WriteTransitionStatus(m.db, m.status)
+	m.status = transitionStatus{LeftPoW: true, EnteredPoS: true}
+	blob, err := rlp.EncodeToBytes(m.status)
+	if err != nil {
+		log.Crit("Failed to encode the transition status", "err", err)
+	}
+	rawdb.WriteTransitionStatus(m.db, blob)
 	for _, call := range m.enterPoSCalls {
 		call()
 	}
 }
 
-// LeafPoW reports whether the chain has leaved the PoW stage.
-func (m *Merger) LeafPoW() bool {
+// LeftPoW reports whether the chain has left the PoW stage.
+func (m *Merger) LeftPoW() bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.status == nil {
-		return false
-	}
-	return m.status.LeafPoW
+	return m.status.LeftPoW
 }
 
 // EnteredPoS reports whether the chain has entered the PoS stage.
@@ -107,8 +128,5 @@ func (m *Merger) EnteredPoS() bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.status == nil {
-		return false
-	}
 	return m.status.EnteredPoS
 }

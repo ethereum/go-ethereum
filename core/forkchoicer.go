@@ -47,7 +47,7 @@ type ChainReader interface {
 // for all other proof-of-work networks.
 type ForkChoicer struct {
 	chain ChainReader
-	seed  *mrand.Rand
+	rand  *mrand.Rand
 
 	// transitioned is the flag whether the chain has finished the
 	// ethash -> transition. It's triggered by receiving the first
@@ -69,7 +69,7 @@ func NewForkChoicer(chainReader ChainReader, transitioned bool, preserve func(he
 	}
 	forker := &ForkChoicer{
 		chain:    chainReader,
-		seed:     mrand.New(mrand.NewSource(seed.Int64())),
+		rand:     mrand.New(mrand.NewSource(seed.Int64())),
 		preserve: preserve,
 	}
 	if transitioned {
@@ -110,7 +110,7 @@ func (f *ForkChoicer) Reorg(header *types.Header) (bool, error) {
 			if f.preserve != nil {
 				currentPreserve, externPreserve = f.preserve(headHeader), f.preserve(header)
 			}
-			reorg = !currentPreserve && (externPreserve || mrand.Float64() < 0.5)
+			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 		}
 	}
 	return reorg, nil

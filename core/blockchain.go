@@ -245,7 +245,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
-	bc.forker = NewForkChoicer(bc, merger.LeafPoW(), shouldPreserve)
+	bc.forker = NewForkChoicer(bc, merger.LeftPoW(), shouldPreserve)
 	merger.SubscribeLeavePoW(func() {
 		bc.forker.SetTransitioned()
 	})
@@ -1586,9 +1586,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
-	// If the total difficulty is higher than our known, add it to the canonical chain
-	// Second clause in the if statement reduces the vulnerability to selfish mining.
-	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg, err := bc.forker.Reorg(block.Header())
 	if err != nil {
 		return status, err
