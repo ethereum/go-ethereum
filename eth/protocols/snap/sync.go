@@ -850,7 +850,8 @@ func (s *Syncer) generateAccountTrie() {
 		}
 		// Account seems to be complete, insert it into the state trie
 		acchash := it.Key()[1:]
-		t.TryUpdate(acchash, common.CopyBytes(it.Value()))
+		accblob, _ := rlp.EncodeToBytes(account)
+		t.TryUpdate(acchash, accblob)
 
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			s.accountBytes += common.StorageSize(batch.ValueSize())
