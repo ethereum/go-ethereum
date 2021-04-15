@@ -744,12 +744,18 @@ func (s *Syncer) saveSyncStatus() {
 // cleanAccountTasks removes account range retrieval tasks that have already been
 // completed.
 func (s *Syncer) cleanAccountTasks() {
+	// If the sync was already done before, don't even bother
+	if len(s.tasks) == 0 {
+		return
+	}
+	// Sync wasn't finished previously, check for any task that can be finalized
 	for i := 0; i < len(s.tasks); i++ {
 		if s.tasks[i].done {
 			s.tasks = append(s.tasks[:i], s.tasks[i+1:]...)
 			i--
 		}
 	}
+	// If everything was just finalized just, generate the account trie and start heal
 	if len(s.tasks) == 0 {
 		s.lock.Lock()
 		s.snapped = true
