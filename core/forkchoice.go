@@ -33,9 +33,6 @@ import (
 // blockchain during header verification. It's implemented by both blockchain
 // and lightchain.
 type ChainReader interface {
-	// CurrentHeader retrieves the current header from the local chain.
-	CurrentHeader() *types.Header
-
 	// GetTd returns the total difficulty of a local block.
 	GetTd(common.Hash, uint64) *big.Int
 }
@@ -82,7 +79,7 @@ func NewForkChoice(chainReader ChainReader, transitioned bool, preserve func(hea
 // based on the given external header and local canonical chain.
 // In the td mode, the new head is chosen if the corresponding
 // total difficulty is higher.
-func (f *ForkChoice) Reorg(header *types.Header) (bool, error) {
+func (f *ForkChoice) Reorg(current *types.Header, header *types.Header) (bool, error) {
 	// If the chain is already transitioned into the casper phase,
 	// always return true because the head is already decided by
 	// the external fork choicer.
@@ -90,9 +87,8 @@ func (f *ForkChoice) Reorg(header *types.Header) (bool, error) {
 		return true, nil
 	}
 	var (
-		headHeader = f.chain.CurrentHeader()
-		localTD    = f.chain.GetTd(headHeader.Hash(), headHeader.Number.Uint64())
-		externTd   = f.chain.GetTd(header.Hash(), header.Number.Uint64())
+		localTD  = f.chain.GetTd(current.Hash(), current.Number.Uint64())
+		externTd = f.chain.GetTd(header.Hash(), header.Number.Uint64())
 	)
 	if localTD == nil || externTd == nil {
 		return false, errors.New("missing td")
@@ -102,13 +98,13 @@ func (f *ForkChoice) Reorg(header *types.Header) (bool, error) {
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := externTd.Cmp(localTD) > 0
 	if !reorg && externTd.Cmp(localTD) == 0 {
-		number, headNumber := header.Number.Uint64(), headHeader.Number.Uint64()
+		number, headNumber := header.Number.Uint64(), current.Number.Uint64()
 		if number < headNumber {
 			reorg = true
 		} else if number == headNumber {
 			var currentPreserve, externPreserve bool
 			if f.preserve != nil {
-				currentPreserve, externPreserve = f.preserve(headHeader), f.preserve(header)
+				currentPreserve, externPreserve = f.preserve(current), f.preserve(header)
 			}
 			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 		}

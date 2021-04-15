@@ -1169,19 +1169,19 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// and returns an indicator whether the inserted blocks are canonical.
 	updateHead := func(head *types.Block) bool {
 		bc.chainmu.Lock()
+		defer bc.chainmu.Unlock()
 
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number.Cmp(head.Number()) >= 0 {
-			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
-			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
-				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
-				bc.currentFastBlock.Store(head)
-				headFastBlockGauge.Update(int64(head.NumberU64()))
-				bc.chainmu.Unlock()
-				return true
+			reorg, err := bc.forker.Reorg(bc.CurrentFastBlock().Header(), head.Header())
+			if err != nil || !reorg {
+				return false
 			}
+			rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
+			bc.currentFastBlock.Store(head)
+			headFastBlockGauge.Update(int64(head.NumberU64()))
+			return true
 		}
-		bc.chainmu.Unlock()
 		return false
 	}
 	// writeAncient writes blockchain and corresponding receipt chain into ancient store.
@@ -1586,7 +1586,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
-	reorg, err := bc.forker.Reorg(block.Header())
+	reorg, err := bc.forker.Reorg(currentBlock.Header(), block.Header())
 	if err != nil {
 		return status, err
 	}
@@ -1750,7 +1750,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			current = bc.CurrentBlock()
 		)
 		for block != nil && err == ErrKnownBlock {
-			reorg, err = bc.forker.Reorg(block.Header())
+			reorg, err = bc.forker.Reorg(current.Header(), block.Header())
 			if err != nil {
 				return it.index, err
 			}
@@ -2080,7 +2080,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
-	reorg, err := bc.forker.Reorg(lastBlock.Header())
+	reorg, err := bc.forker.Reorg(current.Header(), lastBlock.Header())
 	if err != nil {
 		return it.index, err
 	}
