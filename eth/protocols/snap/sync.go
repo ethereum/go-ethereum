@@ -827,6 +827,10 @@ func (s *Syncer) generateStorageTrie(account common.Hash) common.Hash {
 				log.Error("Failed to write storage trie data", "err", err)
 			}
 			batch.Reset()
+
+			// Occasionally show a log messge since this path can take many minutes
+			// TODO(karalabe): Do we want to support interrupting this method?
+			s.reportSyncProgress(false)
 		}
 	}
 	// Finalize the trie to retrieve its root hash and bubble it up to decide if
@@ -2664,7 +2668,7 @@ func (s *Syncer) report(force bool) {
 // reportSyncProgress calculates various status reports and provides it to the user.
 func (s *Syncer) reportSyncProgress(force bool) {
 	// Don't report all the events, just occasionally
-	if !force && time.Since(s.logTime) < 3*time.Second {
+	if !force && time.Since(s.logTime) < 8*time.Second {
 		return
 	}
 	// Don't report anything until we have a meaningful progress
@@ -2703,7 +2707,7 @@ func (s *Syncer) reportSyncProgress(force bool) {
 // reportHealProgress calculates various status reports and provides it to the user.
 func (s *Syncer) reportHealProgress(force bool) {
 	// Don't report all the events, just occasionally
-	if !force && time.Since(s.logTime) < 3*time.Second {
+	if !force && time.Since(s.logTime) < 8*time.Second {
 		return
 	}
 	s.logTime = time.Now()
