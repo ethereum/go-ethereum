@@ -242,7 +242,7 @@ func (api *Eth2API) AssembleBlock(params AssembleBlockParams) (*ExecutableData, 
 
 var zeroNonce [8]byte
 
-func insertBlockParamsToBlock(params ExecutableData, number *big.Int, parentTime uint64) *types.Block {
+func insertBlockParamsToBlock(params ExecutableData, number *big.Int) *types.Block {
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
@@ -255,7 +255,7 @@ func insertBlockParamsToBlock(params ExecutableData, number *big.Int, parentTime
 		Number:      number,
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
-		Time:        parentTime + 1,
+		Time:        params.Timestamp,
 		Extra:       nil,
 		MixDigest:   common.Hash{},
 		Nonce:       zeroNonce,
@@ -281,7 +281,7 @@ func (api *Eth2API) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
 	number := big.NewInt(0)
 	number.Add(parent.Number(), big.NewInt(1))
 
-	block := insertBlockParamsToBlock(params, number, parent.Time())
+	block := insertBlockParamsToBlock(params, number)
 	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{block}))
 
 	return &NewBlockReturn{err == nil}, err

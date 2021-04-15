@@ -189,12 +189,15 @@ func TestEth2NewBlock(t *testing.T) {
 			ReceiptRoot:  blocks[i].ReceiptHash(),
 			LogsBloom:    blocks[i].Bloom().Bytes(),
 			BlockHash:    blocks[i].Hash(),
+			Timestamp:    blocks[i].Time(),
 		}
 		success, err := api.NewBlock(p)
 		if err != nil || !success.Valid {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 	}
+
+	exp := ethservice.BlockChain().CurrentBlock().Hash()
 
 	// Introduce the fork point
 	lastBlockNum := blocks[4].Number()
@@ -205,21 +208,22 @@ func TestEth2NewBlock(t *testing.T) {
 			ParentHash:   lastBlock.Hash(),
 			Miner:        forkedBlocks[i].Coinbase(),
 			StateRoot:    forkedBlocks[i].Root(),
+			Number:       lastBlockNum.Uint64(),
 			GasLimit:     forkedBlocks[i].GasLimit(),
 			GasUsed:      forkedBlocks[i].GasUsed(),
 			Transactions: []*types.Transaction(blocks[i].Transactions()),
 			ReceiptRoot:  forkedBlocks[i].ReceiptHash(),
 			LogsBloom:    forkedBlocks[i].Bloom().Bytes(),
 			BlockHash:    forkedBlocks[i].Hash(),
+			Timestamp:    forkedBlocks[i].Time(),
 		}
 		success, err := api.NewBlock(p)
 		if err != nil || !success.Valid {
 			t.Fatalf("Failed to insert forked block #%d: %v", i, err)
 		}
-		lastBlock = insertBlockParamsToBlock(p, lastBlockNum, forkedBlocks[i].Time())
+		lastBlock = insertBlockParamsToBlock(p, lastBlockNum)
 	}
 
-	exp := common.HexToHash("526db89301fc787799ef8c272fe512898b97ad96d0b69caee19dc5393b092110")
 	if ethservice.BlockChain().CurrentBlock().Hash() != exp {
 		t.Fatalf("Wrong head after inserting fork %x != %x", exp, ethservice.BlockChain().CurrentBlock().Hash())
 	}
