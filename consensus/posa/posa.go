@@ -74,8 +74,8 @@ var (
 	punishContractName     = "punish"
 	proposalContractName   = "proposal"
 	validatorsContractAddr = common.HexToAddress("0x000000000000000000000000000000000000f000")
-	punishContractAddr     = common.HexToAddress("0x000000000000000000000000000000000000f001")
-	proposalAddr           = common.HexToAddress("0x000000000000000000000000000000000000f002")
+	punishContractAddr     = common.HexToAddress("0x000000000000000000000000000000000000f111")
+	proposalAddr           = common.HexToAddress("0x000000000000000000000000000000000000f222")
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -183,9 +183,9 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // The proof-of-stake-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type POSA struct {
-	chainConfig *params.ChainConfig    // ChainConfig to execute evm
-	config      *params.POSAConfig // Consensus engine configuration parameters
-	db          ethdb.Database         // Database to store and retrieve snapshot checkpoints
+	chainConfig *params.ChainConfig // ChainConfig to execute evm
+	config      *params.POSAConfig  // Consensus engine configuration parameters
+	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -521,7 +521,11 @@ func (c *POSA) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	header.Extra = header.Extra[:extraVanity]
 
 	if number%c.config.Epoch == 0 {
-		newSortedValidators, err := c.getTopValidators(chain, header)
+		state, err := c.stateFn(header.Root)
+		if err != nil {
+			return err
+		}
+		newSortedValidators, err := c.getTopValidators(chain, header, state)
 		if err != nil {
 			return err
 		}
@@ -689,13 +693,13 @@ func (c *POSA) tryPunishValidator(chain consensus.ChainHeaderReader, header *typ
 }
 
 func (c *POSA) doSomethingAtEpoch(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) ([]common.Address, error) {
-	newSortedValidators, err := c.getTopValidators(chain, header)
+	newSortedValidators, err := c.getTopValidators(chain, header, state)
 	if err != nil {
 		return []common.Address{}, err
 	}
 
 	// update contract new validators if new set exists
-	if err := c.updateValidators(newSortedValidators, chain, header, state); err != nil {
+	if err := c.updateValidators(chain, header, state); err != nil {
 		return []common.Address{}, err
 	}
 	//  decrease validator missed blocks counter at epoch
@@ -747,17 +751,8 @@ func (c *POSA) initializeSystemContracts(chain consensus.ChainHeaderReader, head
 	return nil
 }
 
-// call this at epoch block to get top validators based on the state of epoch block - 1
-func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types.Header) ([]common.Address, error) {
-	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-	if parent == nil {
-		return []common.Address{}, consensus.ErrUnknownAncestor
-	}
-	statedb, err := c.stateFn(parent.Root)
-	if err != nil {
-		return []common.Address{}, err
-	}
-
+// call this at epoch block to get top validators based on the state of epoch block
+func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) ([]common.Address, error) {
 	method := "getTopValidators"
 	data, err := c.abi[validatorsContractName].Pack(method)
 	if err != nil {
@@ -765,10 +760,10 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 		return []common.Address{}, err
 	}
 
-	msg := types.NewMessage(header.Coinbase, &validatorsContractAddr, 0, new(big.Int), math.MaxUint64, new(big.Int), data,nil, false)
+	msg := types.NewMessage(header.Coinbase, &validatorsContractAddr, 0, new(big.Int), math.MaxUint64, new(big.Int), data, nil, false)
 
-	// use parent
-	result, err := executeMsg(msg, statedb, parent, newChainContext(chain, c), c.chainConfig)
+	// use current epoch block
+	result, err := executeMsg(msg, state, header, newChainContext(chain, c), c.chainConfig)
 	if err != nil {
 		return []common.Address{}, err
 	}
@@ -789,10 +784,10 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 	return validators, err
 }
 
-func (c *POSA) updateValidators(vals []common.Address, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
+func (c *POSA) updateValidators(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
 	// method
 	method := "updateActiveValidatorSet"
-	data, err := c.abi[validatorsContractName].Pack(method, vals, new(big.Int).SetUint64(c.config.Epoch))
+	data, err := c.abi[validatorsContractName].Pack(method, new(big.Int).SetUint64(c.config.Epoch))
 	if err != nil {
 		log.Error("Can't pack data for updateActiveValidatorSet", "error", err)
 		return err

@@ -39,11 +39,6 @@ const validatorsInteractiveABI = `
 	{
 		"inputs": [
 		  {
-			"internalType": "address[]",
-			"name": "newSet",
-			"type": "address[]"
-		  },
-		  {
 			"internalType": "uint256",
 			"name": "epoch",
 			"type": "uint256"

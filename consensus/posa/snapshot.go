@@ -32,7 +32,7 @@ import (
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.POSAConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache          // Cache of recent block signatures to speed up ecrecover
+	sigcache *lru.ARCCache      // Cache of recent block signatures to speed up ecrecover
 
 	Number     uint64                      `json:"number"`     // Block number where the snapshot was created
 	Hash       common.Hash                 `json:"hash"`       // Block hash where the snapshot was created
