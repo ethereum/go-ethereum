@@ -167,13 +167,15 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		if tx == nil {
 			break
 		}
-
-		from, _ := types.Sender(signer, tx)
-		// XXX replay protection check is missing
+		from, err := types.Sender(signer, tx)
+		if err != nil {
+			log.Warn("Discarding invalid transaction in block", "hash", tx.Hash(), "block", env.header.Number, "err", err)
+			continue
+		}
 
 		// Execute the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
-		err := env.commitTransaction(tx, coinbase)
+		err = env.commitTransaction(tx, coinbase)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
