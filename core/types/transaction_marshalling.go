@@ -81,7 +81,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
-	case *DynamicFeeTransaction:
+	case *DynamicFeeTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
@@ -207,7 +207,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 
 	case DynamicFeeTxType:
-		var itx DynamicFeeTransaction
+		var itx DynamicFeeTx
 		inner = &itx
 		// Access list is optional for now.
 		if dec.AccessList != nil {

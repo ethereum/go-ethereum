@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type DynamicFeeTransaction struct {
+type DynamicFeeTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
 	Tip        *big.Int
@@ -40,8 +40,8 @@ type DynamicFeeTransaction struct {
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
-func (tx *DynamicFeeTransaction) copy() TxData {
-	cpy := &DynamicFeeTransaction{
+func (tx *DynamicFeeTx) copy() TxData {
+	cpy := &DynamicFeeTx{
 		Nonce: tx.Nonce,
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
@@ -82,23 +82,23 @@ func (tx *DynamicFeeTransaction) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *DynamicFeeTransaction) txType() byte           { return DynamicFeeTxType }
-func (tx *DynamicFeeTransaction) chainID() *big.Int      { return tx.ChainID }
-func (tx *DynamicFeeTransaction) protected() bool        { return true }
-func (tx *DynamicFeeTransaction) accessList() AccessList { return tx.AccessList }
-func (tx *DynamicFeeTransaction) data() []byte           { return tx.Data }
-func (tx *DynamicFeeTransaction) gas() uint64            { return tx.Gas }
-func (tx *DynamicFeeTransaction) feeCap() *big.Int       { return tx.FeeCap }
-func (tx *DynamicFeeTransaction) tip() *big.Int          { return tx.Tip }
-func (tx *DynamicFeeTransaction) gasPrice() *big.Int     { return tx.Tip }
-func (tx *DynamicFeeTransaction) value() *big.Int        { return tx.Value }
-func (tx *DynamicFeeTransaction) nonce() uint64          { return tx.Nonce }
-func (tx *DynamicFeeTransaction) to() *common.Address    { return tx.To }
+func (tx *DynamicFeeTx) txType() byte           { return DynamicFeeTxType }
+func (tx *DynamicFeeTx) chainID() *big.Int      { return tx.ChainID }
+func (tx *DynamicFeeTx) protected() bool        { return true }
+func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
+func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
+func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
+func (tx *DynamicFeeTx) feeCap() *big.Int       { return tx.FeeCap }
+func (tx *DynamicFeeTx) tip() *big.Int          { return tx.Tip }
+func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.Tip }
+func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
+func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
+func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
 
-func (tx *DynamicFeeTransaction) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *DynamicFeeTransaction) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }

@@ -181,7 +181,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	case DynamicFeeTxType:
-		var inner DynamicFeeTransaction
+		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:

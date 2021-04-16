@@ -3170,7 +3170,7 @@ func TestEIP1559Transition(t *testing.T) {
 			StorageKeys: []common.Hash{{0}},
 		}}
 
-		txdata := &types.DynamicFeeTransaction{
+		txdata := &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      0,
 			To:         &aa,
