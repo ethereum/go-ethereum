@@ -206,32 +206,11 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		}
 	}
 
+	// Create the block.
 	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
 	if err != nil {
 		return nil, err
 	}
-
-	var logs []*types.Log
-	var receipts = make(types.Receipts, len(env.receipts))
-	hash := block.Hash()
-	for i, receipt := range env.receipts {
-		// add block location fields
-		receipt.BlockHash = hash
-		receipt.BlockNumber = block.Number()
-		receipt.TransactionIndex = uint(i)
-
-		receipts[i] = new(types.Receipt)
-		*receipts[i] = *receipt
-		// Update the block hash in all logs since it is now available and not when the
-		// receipt/log of individual transactions were created.
-		for _, log := range receipt.Logs {
-			log.BlockHash = hash
-		}
-		logs = append(logs, receipt.Logs...)
-	}
-
-	block.Header().ReceiptHash = types.DeriveSha(receipts, new(trie.Trie))
-
 	return &executableData{
 		BlockHash:    block.Hash(),
 		ParentHash:   block.ParentHash(),
