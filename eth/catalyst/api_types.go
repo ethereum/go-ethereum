@@ -25,8 +25,8 @@ import (
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
 type assembleBlockParams struct {
-	ParentHash common.Hash `json:"parentHash"`
-	Timestamp  uint64      `json:"timestamp"`
+	ParentHash common.Hash `json:"parentHash"    gencodec:"required"`
+	Timestamp  uint64      `json:"timestamp"     gencodec:"required"`
 }
 
 // JSON type overrides for assembleBlockParams.
@@ -38,17 +38,17 @@ type assembleBlockParamsMarshaling struct {
 
 // Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
 type executableData struct {
-	BlockHash    common.Hash    `json:"blockHash"`
-	ParentHash   common.Hash    `json:"parentHash"`
-	Miner        common.Address `json:"miner"`
-	StateRoot    common.Hash    `json:"stateRoot"`
-	Number       uint64         `json:"number"`
-	GasLimit     uint64         `json:"gasLimit"`
-	GasUsed      uint64         `json:"gasUsed"`
-	Timestamp    uint64         `json:"timestamp"`
-	ReceiptRoot  common.Hash    `json:"receiptsRoot"`
-	LogsBloom    []byte         `json:"logsBloom"`
-	Transactions [][]byte       `json:"transactions"`
+	BlockHash    common.Hash    `json:"blockHash"     gencodec:"required"`
+	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
+	Miner        common.Address `json:"miner"         gencodec:"required"`
+	StateRoot    common.Hash    `json:"stateRoot"     gencodec:"required"`
+	Number       uint64         `json:"number"        gencodec:"required"`
+	GasLimit     uint64         `json:"gasLimit"      gencodec:"required"`
+	GasUsed      uint64         `json:"gasUsed"       gencodec:"required"`
+	Timestamp    uint64         `json:"timestamp"     gencodec:"required"`
+	ReceiptRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom    []byte         `json:"logsBloom"     gencodec:"required"`
+	Transactions [][]byte       `json:"transactions"  gencodec:"required"`
 }
 
 // JSON type overrides for executableData.
