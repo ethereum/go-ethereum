@@ -152,17 +152,18 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	if err != nil {
 		return nil, err
 	}
-	signer := types.LatestSigner(bc.Config())
-	txs := types.NewTransactionsByPriceAndNonce(signer, pending)
 
-	var transactions []*types.Transaction
-
+	var (
+		signer       = types.MakeSigner(bc.Config(), header.Number)
+		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending)
+		transactions []*types.Transaction
+	)
 	for {
 		if api.env.gasPool.Gas() < chainParams.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", chainParams.TxGas)
 			break
 		}
-		tx := txs.Peek()
+		tx := txHeap.Peek()
 		if tx == nil {
 			break
 		}
@@ -177,29 +178,29 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
-			txs.Pop()
+			txHeap.Pop()
 
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Shift()
+			txHeap.Shift()
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Pop()
+			txHeap.Pop()
 
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			api.env.tcount++
-			txs.Shift()
+			txHeap.Shift()
 			transactions = append(transactions, tx)
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			txs.Shift()
+			txHeap.Shift()
 		}
 	}
 
