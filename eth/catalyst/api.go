@@ -37,8 +37,11 @@ import (
 
 // Register adds catalyst APIs to the node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	if backend.BlockChain().Config().CatalystBlock == nil {
-		return errors.New("can't enable catalyst service without catalyst fork block in chain config")
+	chainconfig := backend.BlockChain().Config()
+	if chainconfig.CatalystBlock == nil {
+		return errors.New("catalystBlock is not set in genesis config")
+	} else if chainconfig.CatalystBlock.Sign() != 0 {
+		return errors.New("catalystBlock of genesis config must be zero")
 	}
 
 	log.Warn("Catalyst mode enabled")
