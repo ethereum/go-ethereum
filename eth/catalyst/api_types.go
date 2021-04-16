@@ -25,7 +25,7 @@ import (
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
 type assembleBlockParams struct {
-	ParentHash common.Hash `json:"parent_hash"`
+	ParentHash common.Hash `json:"parentHash"`
 	Timestamp  uint64      `json:"timestamp"`
 }
 

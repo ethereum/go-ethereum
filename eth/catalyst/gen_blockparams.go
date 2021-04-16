@@ -14,7 +14,7 @@ var _ = (*assembleBlockParamsMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (a assembleBlockParams) MarshalJSON() ([]byte, error) {
 	type assembleBlockParams struct {
-		ParentHash common.Hash    `json:"parent_hash"`
+		ParentHash common.Hash    `json:"parentHash"`
 		Timestamp  hexutil.Uint64 `json:"timestamp"`
 	}
 	var enc assembleBlockParams
@@ -26,7 +26,7 @@ func (a assembleBlockParams) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (a *assembleBlockParams) UnmarshalJSON(input []byte) error {
 	type assembleBlockParams struct {
-		ParentHash *common.Hash    `json:"parent_hash"`
+		ParentHash *common.Hash    `json:"parentHash"`
 		Timestamp  *hexutil.Uint64 `json:"timestamp"`
 	}
 	var dec assembleBlockParams
