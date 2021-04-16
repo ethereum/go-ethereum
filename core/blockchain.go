@@ -1693,6 +1693,22 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
+// InsertChainWithoutSealVerification works exactly the same
+// except for seal verification, seal verification is omitted
+func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
+
+	// Pre-checks passed, start the full block imports
+	bc.wg.Add(1)
+	bc.chainmu.Lock()
+	n, err := bc.insertChain(types.Blocks([]*types.Block{block}), false)
+	bc.chainmu.Unlock()
+	bc.wg.Done()
+
+	return n, err
+}
+
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
