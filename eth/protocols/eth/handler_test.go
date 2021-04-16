@@ -108,9 +108,6 @@ func (b *testBackend) AcceptTxs() bool {
 func (b *testBackend) Handle(*Peer, Packet) error {
 	panic("data processing tests should be done in the handler package")
 }
-func (b *testBackend) Catalyst() bool {
-	return false
-}
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }

@@ -273,10 +273,6 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
-	if backend.Catalyst() {
-		return nil
-	}
-
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
 	if err := msg.Decode(ann); err != nil {
@@ -291,10 +287,6 @@ func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
-	if backend.Catalyst() {
-		return nil
-	}
-
 	// Retrieve and decode the propagated block
 	ann := new(NewBlockPacket)
 	if err := msg.Decode(ann); err != nil {

@@ -220,14 +220,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EventMux:   eth.eventMux,
 		Checkpoint: checkpoint,
 		Whitelist:  config.Whitelist,
-		Catalyst:   config.Catalyst,
 	}); err != nil {
 		return nil, err
 	}
-	if config.Catalyst {
-		// Activate transaction processing by default in catalyst mode
-		eth.handler.acceptTxs = 1
-	}
+
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 

@@ -1675,9 +1675,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
-	if ctx.GlobalIsSet(CatalystFlag.Name) {
-		cfg.Catalyst = true
-	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
