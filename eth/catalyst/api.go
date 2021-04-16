@@ -57,9 +57,7 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 }
 
 type consensusAPI struct {
-	eth  *eth.Ethereum
-	env  *blockExecutionEnv
-	head common.Hash
+	eth *eth.Ethereum
 }
 
 func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
@@ -69,6 +67,7 @@ func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
 // blockExecutionEnv gathers all the data required to execute
 // a block, either when assembling it or when inserting it.
 type blockExecutionEnv struct {
+	chain   *core.BlockChain
 	state   *state.StateDB
 	tcount  int
 	gasPool *core.GasPool
@@ -78,38 +77,39 @@ type blockExecutionEnv struct {
 	receipts []*types.Receipt
 }
 
-func (api *consensusAPI) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
+func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	//snap := eth2rpc.current.state.Snapshot()
 
-	chain := api.eth.BlockChain()
-	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig())
+	vmconfig := *env.chain.GetVMConfig()
+	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
 	if err != nil {
 		//w.current.state.RevertToSnapshot(snap)
 		return err
 	}
-	api.env.txs = append(api.env.txs, tx)
-	api.env.receipts = append(api.env.receipts, receipt)
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
 
 	return nil
 }
 
-func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) error {
+func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*blockExecutionEnv, error) {
 	state, err := api.eth.BlockChain().StateAt(parent.Root())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	api.env = &blockExecutionEnv{
+	env := &blockExecutionEnv{
+		chain:   api.eth.BlockChain(),
 		state:   state,
 		header:  header,
 		gasPool: new(core.GasPool).AddGas(header.GasLimit),
 	}
-	return nil
+	return env, nil
 }
 
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
-	log.Info("Produce block", "parentHash", params.ParentHash)
+	log.Info("Producing block", "parentHash", params.ParentHash)
 
 	bc := api.eth.BlockChain()
 	parent := bc.GetBlockByHash(params.ParentHash)
@@ -148,7 +148,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, err
 	}
 
-	err = api.makeEnv(parent, header)
+	env, err := api.makeEnv(parent, header)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +159,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		transactions []*types.Transaction
 	)
 	for {
-		if api.env.gasPool.Gas() < chainParams.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", chainParams.TxGas)
+		if env.gasPool.Gas() < chainParams.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", chainParams.TxGas)
 			break
 		}
 		tx := txHeap.Peek()
@@ -172,8 +172,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		// XXX replay protection check is missing
 
 		// Execute the transaction
-		api.env.state.Prepare(tx.Hash(), common.Hash{}, api.env.tcount)
-		err := api.commitTransaction(tx, coinbase)
+		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		err := env.commitTransaction(tx, coinbase)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -192,7 +192,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			api.env.tcount++
+			env.tcount++
 			txHeap.Shift()
 			transactions = append(transactions, tx)
 
@@ -204,15 +204,15 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		}
 	}
 
-	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, api.env.state, transactions, nil /* uncles */, api.env.receipts)
+	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
 	if err != nil {
 		return nil, err
 	}
 
 	var logs []*types.Log
-	var receipts = make(types.Receipts, len(api.env.receipts))
+	var receipts = make(types.Receipts, len(env.receipts))
 	hash := block.Hash()
-	for i, receipt := range api.env.receipts {
+	for i, receipt := range env.receipts {
 		// add block location fields
 		receipt.BlockHash = hash
 		receipt.BlockNumber = block.Number()
