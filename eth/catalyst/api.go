@@ -162,10 +162,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", chainParams.TxGas)
 			break
 		}
-
 		tx := txs.Peek()
 		if tx == nil {
-			fmt.Println("no tx")
 			break
 		}
 
