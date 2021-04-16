@@ -93,23 +93,8 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 
 func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generateTestChain()
-
-	n, err := node.New(&node.Config{})
-	if err != nil {
-		t.Fatalf("could not get node: %v", err)
-	}
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
-	ethservice, err := eth.New(n, ethcfg)
-	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
-	}
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:9]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
-	ethservice.SetEtherbase(testAddr)
+	n, ethservice := startEthService(t, genesis, blocks[1:9])
+	defer n.Close()
 
 	api := newConsensusAPI(ethservice)
 	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
@@ -135,23 +120,8 @@ func TestEth2AssembleBlock(t *testing.T) {
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	genesis, blocks := generateTestChain()
-
-	n, err := node.New(&node.Config{})
-	if err != nil {
-		t.Fatalf("could not get node: %v", err)
-	}
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
-	ethservice, err := eth.New(n, ethcfg)
-	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
-	}
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:9]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
-	ethservice.SetEtherbase(testAddr)
+	n, ethservice := startEthService(t, genesis, blocks[1:9])
+	defer n.Close()
 
 	api := newConsensusAPI(ethservice)
 
@@ -173,23 +143,8 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 func TestEth2NewBlock(t *testing.T) {
 	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 4)
-
-	n, err := node.New(&node.Config{})
-	if err != nil {
-		t.Fatalf("could not get node: %v", err)
-	}
-
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
-	ethservice, err := eth.New(n, ethcfg)
-	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
-	}
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:5]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
+	n, ethservice := startEthService(t, genesis, blocks[1:5])
+	defer n.Close()
 
 	api := newConsensusAPI(ethservice)
 	for i := 5; i < 10; i++ {
@@ -213,7 +168,7 @@ func TestEth2NewBlock(t *testing.T) {
 
 	exp := ethservice.BlockChain().CurrentBlock().Hash()
 
-	// Introduce the fork point
+	// Introduce the fork point.
 	lastBlockNum := blocks[4].Number()
 	lastBlock := blocks[4]
 	for i := 0; i < 4; i++ {
@@ -241,6 +196,32 @@ func TestEth2NewBlock(t *testing.T) {
 	if ethservice.BlockChain().CurrentBlock().Hash() != exp {
 		t.Fatalf("Wrong head after inserting fork %x != %x", exp, ethservice.BlockChain().CurrentBlock().Hash())
 	}
+}
+
+// startEthService creates a full node instance for testing.
+func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+	t.Helper()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatal("can't create node:", err)
+	}
+
+	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
+	ethservice, err := eth.New(n, ethcfg)
+	if err != nil {
+		t.Fatal("can't create eth service:", err)
+	}
+	if err := n.Start(); err != nil {
+		t.Fatal("can't start node:", err)
+	}
+	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
+		n.Close()
+		t.Fatal("can't import test blocks:", err)
+	}
+	ethservice.SetEtherbase(testAddr)
+
+	return n, ethservice
 }
 
 //func TestEth2SetHead(t *testing.T) {
