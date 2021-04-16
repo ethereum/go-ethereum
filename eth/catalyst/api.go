@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package catalyst implements the temporary eth1/eth2 RPC integration.
 package catalyst
 
 import (
