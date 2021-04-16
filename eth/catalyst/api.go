@@ -311,18 +311,5 @@ func (api *consensusAPI) FinalizeBlock(blockHash common.Hash) (*GenericResponse,
 
 // SetHead is called to perform a force choice.
 func (api *consensusAPI) SetHead(newHead common.Hash) (*GenericResponse, error) {
-	//oldBlock := api.eth.BlockChain().CurrentBlock()
-
-	//if oldBlock.Hash() == newHead {
-	//return nil
-	//}
-
-	//newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
-
-	//err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
-	//if err != nil {
-	//return err
-	//}
-	//api.head = newHead
 	return &GenericResponse{false}, nil
 }

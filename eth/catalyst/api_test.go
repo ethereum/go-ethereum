@@ -199,45 +199,6 @@ func TestEth2NewBlock(t *testing.T) {
 	}
 }
 
-// func TestEth2SetHead(t *testing.T) {
-// 	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 5)
-// 	n, ethservice := startEthService(t, genesis, blocks[1:5])
-// 	defer n.Close()
-//
-// 	api := newConsensusAPI(ethservice)
-// 	for i := 5; i < 10; i++ {
-// 		var blockRLP bytes.Buffer
-// 		rlp.Encode(&blockRLP, blocks[i])
-// 		err := api.NewBlock(blockRLP.Bytes())
-// 		if err != nil {
-// 			t.Fatalf("Failed to insert block: %v", err)
-// 		}
-// 	}
-// 	api.head = blocks[9].Hash()
-//
-// 	if ethservice.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
-// 		t.Fatalf("Wrong head")
-// 	}
-//
-// 	for i := 0; i < 3; i++ {
-// 		var blockRLP bytes.Buffer
-// 		rlp.Encode(&blockRLP, forkedBlocks[i])
-// 		err := api.NewBlock(blockRLP.Bytes())
-// 		if err != nil {
-// 			t.Fatalf("Failed to insert block: %v", err)
-// 		}
-// 	}
-//
-// 	api.SetHead(forkedBlocks[2].Hash())
-//
-// 	if ethservice.BlockChain().CurrentBlock().Hash() == forkedBlocks[2].Hash() {
-// 		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), ethservice.BlockChain().CurrentBlock().Hash())
-// 	}
-// 	if api.head != forkedBlocks[2].Hash() {
-// 		t.Fatalf("Registered wrong head")
-// 	}
-// }
-
 // startEthService creates a full node instance for testing.
 func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
 	t.Helper()
