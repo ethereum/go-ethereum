@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -83,32 +85,49 @@ func crawlNodes(ctx *cli.Context) error {
 	}
 
 	var influxdb *influx
-	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
-		influxdb = &influx{}
+	if true || ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
 		url := ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
 		database := ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
 		username := ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
 		password := ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
-		if err := influxdb.connect(url, database, username, password); err != nil {
+		var err error
+		if influxdb, err = NewInflux(url, database, username, password); err != nil {
 			exit(err)
 		}
 		log.Info("Connected to influxdb")
 	}
 
 	for {
-		inputSet = crawlRound(ctx, inputSet, nodesFile, influxdb, 1*time.Minute)
+		inputSet = crawlRound(ctx, inputSet, nodesFile, influxdb, 10*time.Second)
 	}
 	return nil
 }
 
-func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb *influx, timeout time.Duration) nodeSet {
-	var nodes []crawledNode
+func discv5(ctx *cli.Context, inputSet nodeSet, timeout time.Duration) nodeSet {
 	disc := startV5(ctx)
 	defer disc.Close()
 	// Crawl the DHT for some time
 	c := newCrawler(inputSet, disc, disc.RandomNodes())
 	c.revalidateInterval = 10 * time.Minute
-	output := c.run(timeout)
+	return c.run(timeout)
+}
+
+func discv4(ctx *cli.Context, inputSet nodeSet, timeout time.Duration) nodeSet {
+	disc := startV4(ctx)
+	defer disc.Close()
+	// Crawl the DHT for some time
+	c := newCrawler(inputSet, disc, disc.RandomNodes())
+	c.revalidateInterval = 10 * time.Minute
+	return c.run(timeout)
+}
+
+func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb *influx, timeout time.Duration) nodeSet {
+	var nodes []crawledNode
+	output := make(nodeSet)
+	v5 := discv5(ctx, nodeSet{}, timeout)
+	output.add(v5.nodes()...)
+	v4 := discv4(ctx, nodeSet{}, timeout)
+	output.add(v4.nodes()...)
 	// Try to connect and get the status of all nodes
 	for _, node := range output {
 		info, err := getClientInfo(node.N)
@@ -136,7 +155,8 @@ func getClientInfo(n *enode.Node) (*clientInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.SetDeadline(time.Now().Add(15 * time.Second))
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
 
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&sk.PublicKey)[1:]
@@ -163,6 +183,7 @@ func getClientInfo(n *enode.Node) (*clientInfo, error) {
 		info.Capabilities = msg.Caps
 		info.SoftwareVersion = msg.Version
 		info.ClientType = msg.Name
+		fmt.Printf("Caps: %v \n", msg.Caps)
 	case *ethtest.Disconnect:
 		return nil, fmt.Errorf("bad hello handshake: %v", msg.Reason.Error())
 	case *ethtest.Error:
@@ -170,13 +191,18 @@ func getClientInfo(n *enode.Node) (*clientInfo, error) {
 	default:
 		return nil, fmt.Errorf("bad hello handshake: %v", msg.Code())
 	}
+	highestEthVersion := uint32(negotiateEthProtocol(ourHandshake.Caps, info.Capabilities))
+	// If node provides no eth version, we can skip it.
+	if highestEthVersion == 0 {
+		return &info, nil
+	}
 	conn.SetDeadline(time.Now().Add(15 * time.Second))
 	// write status message
 	status, err := getCurrentStatus()
 	if err != nil {
 		return nil, err
 	}
-	status.ProtocolVersion = uint32(negotiateEthProtocol(ourHandshake.Caps, info.Capabilities))
+	status.ProtocolVersion = highestEthVersion
 	if err := conn.Write(status); err != nil {
 		return nil, err
 	}
@@ -222,10 +248,11 @@ func dial(n *enode.Node) (*ethtest.Conn, *ecdsa.PrivateKey, error) {
 }
 
 func getCurrentStatus() (*ethtest.Status, error) {
-	cl, err := ethclient.Dial("wss://mainnet.infura.io/ws/v3/2e5a3920f039435d9bb23729c7b65186")
+	raw, err := rpc.Dial("wss://mainnet.infura.io/ws/v3/2e5a3920f039435d9bb23729c7b65186")
 	if err != nil {
 		return nil, err
 	}
+	cl := ethclient.NewClient(raw)
 
 	nwid, err := cl.NetworkID(context.Background())
 	if err != nil {
@@ -240,11 +267,16 @@ func getCurrentStatus() (*ethtest.Status, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Retrieve total difficulty
+	var result types.Block
+	if err := raw.CallContext(context.Background(), &result, "eth_getBlockByNumber", "latest", false); err != nil {
+		return nil, err
+	}
 
 	status := &ethtest.Status{
 		ProtocolVersion: 66,
 		NetworkID:       nwid.Uint64(),
-		TD:              header.Difficulty,
+		TD:              result.DeprecatedTd(),
 		Head:            header.Hash(),
 		Genesis:         genesis.Hash(),
 		ForkID:          forkid.NewID(params.MainnetChainConfig, genesis.Hash(), header.Number.Uint64()),

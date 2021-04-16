@@ -27,24 +27,34 @@ import (
 )
 
 type influx struct {
-	client   *client.Client
+	_url     *url.URL
 	database string
+	username string
+	password string
 }
 
-func (i influx) connect(_url, database, username, password string) (err error) {
+func NewInflux(_url, database, username, password string) (*influx, error) {
+	_url = fmt.Sprintf("http://127.0.0.1:8086")
 	u, err := url.Parse(_url)
 	if err != nil {
 		log.Warn("Unable to parse InfluxDB", "url", _url, "err", err)
-		return
+		return nil, err
 	}
-	i.client, err = client.NewClient(client.Config{
-		URL:      *u,
-		Username: username,
-		Password: password,
-		Timeout:  10 * time.Second,
+	return &influx{
+		_url:     u,
+		database: database,
+		username: username,
+		password: password,
+	}, nil
+}
+
+func (i influx) connect() (*client.Client, error) {
+	return client.NewClient(client.Config{
+		URL:      *i._url,
+		Username: i.username,
+		Password: i.password,
+		Timeout:  10 * time.Minute,
 	})
-	i.database = database
-	return err
 }
 
 func (i influx) updateNodes(nodes []crawledNode) error {
@@ -53,7 +63,7 @@ func (i influx) updateNodes(nodes []crawledNode) error {
 	for _, node := range nodes {
 		n := node.node
 		info := &clientInfo{}
-		if node.info == nil {
+		if node.info != nil {
 			info = node.info
 		}
 		connType := ""
@@ -65,22 +75,31 @@ func (i influx) updateNodes(nodes []crawledNode) error {
 		if n.N.Load(&portTCP) == nil {
 			connType = "TCP"
 		}
+		var caps string
+		for _, c := range info.Capabilities {
+			caps = fmt.Sprintf("%v, %v", caps, c.String())
+		}
+		var pk string
+		if n.N.Pubkey() != nil {
+			pk = fmt.Sprintf("X: %v, Y: %v", n.N.Pubkey().X.String(), n.N.Pubkey().Y.String())
+		}
+		fid := fmt.Sprintf("Hash: %v, NExt %v", info.ForkID.Hash, info.ForkID.Next)
 		pts = append(pts, client.Point{
 			Measurement: fmt.Sprintf("nodes.%v", n.N.ID()),
 			Fields: map[string]interface{}{
 				"ClientType":      info.ClientType,
-				"ID":              n.N.ID(),
-				"PK":              n.N.Pubkey(),
+				"ID":              n.N.ID().GoString(),
+				"PK":              pk,
 				"SoftwareVersion": info.SoftwareVersion,
-				"Capabilities":    info.Capabilities,
+				"Capabilities":    caps,
 				"NetworkID":       info.NetworkID,
-				"ForkID":          info.ForkID,
+				"ForkID":          fid,
 				"Blockheight":     info.Blockheight,
-				"TotalDifficulty": info.TotalDifficulty,
-				"HeadHash":        info.HeadHash,
-				"IP":              n.N.IP(),
-				"FirstSeen":       n.FirstResponse,
-				"LastSeen":        n.LastResponse,
+				"TotalDifficulty": info.TotalDifficulty.String(),
+				"HeadHash":        info.HeadHash.String(),
+				"IP":              n.N.IP().String(),
+				"FirstSeen":       n.FirstResponse.String(),
+				"LastSeen":        n.LastResponse.String(),
 				"Seq":             n.Seq,
 				"Score":           n.Score,
 				"ConnType":        connType,
@@ -92,7 +111,11 @@ func (i influx) updateNodes(nodes []crawledNode) error {
 		Points:   pts,
 		Database: i.database,
 	}
+	cl, err := i.connect()
+	if err != nil {
+		return err
+	}
 	log.Info("Writing results to influx")
-	_, err := i.client.Write(bps)
+	_, err = cl.Write(bps)
 	return err
 }
