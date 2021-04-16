@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package catalyst implements the temporary eth1/eth2 RPC integration.
 package catalyst
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -27,9 +29,29 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	chainParams "github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
+
+// Register adds catalyst APIs to the node.
+func Register(stack *node.Node, backend *eth.Ethereum) error {
+	if backend.BlockChain().Config().CatalystBlock == nil {
+		return errors.New("can't enable catalyst service without catalyst fork block in chain config")
+	}
+
+	log.Warn("Catalyst mode enabled")
+	stack.RegisterAPIs([]rpc.API{
+		{
+			Namespace: "consensus",
+			Version:   "1.0",
+			Service:   newConsensusAPI(backend),
+			Public:    true,
+		},
+	})
+	return nil
+}
 
 type consensusAPI struct {
 	eth  *eth.Ethereum
