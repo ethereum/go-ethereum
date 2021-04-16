@@ -830,8 +830,8 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 				val = make([]byte, 1+prng.Intn(1024))
 			}
 			prng.Read(val)
-			trie.TryUpdate(key, common.CopyBytes(val))
-			stTrie.TryUpdate(key, common.CopyBytes(val))
+			trie.TryUpdate(key, val)
+			stTrie.TryUpdate(key, val)
 		}
 		// Flush trie -> database
 		root, _ := trie.Commit(nil)
