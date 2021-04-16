@@ -11,9 +11,15 @@
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+PWD = `pwd`
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+geth-linux:
+	docker run --rm -v "$(PWD)":/usr/src/go-ethereum -w /usr/src/go-ethereum golang:1.16.3 $(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
@@ -61,9 +67,9 @@ geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
 	@echo "Full cross compilation done:"
 	@ls -ld $(GOBIN)/geth-*
 
-geth-linux: geth-linux-386 geth-linux-amd64 geth-linux-arm geth-linux-mips64 geth-linux-mips64le
-	@echo "Linux cross compilation done:"
-	@ls -ld $(GOBIN)/geth-linux-*
+# geth-linux: geth-linux-386 geth-linux-amd64 geth-linux-arm geth-linux-mips64 geth-linux-mips64le
+#	@echo "Linux cross compilation done:"
+#	@ls -ld $(GOBIN)/geth-linux-*
 
 geth-linux-386:
 	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/geth
