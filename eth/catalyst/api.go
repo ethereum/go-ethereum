@@ -167,11 +167,10 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		if tx == nil {
 			break
 		}
-		from, err := types.Sender(signer, tx)
-		if err != nil {
-			log.Warn("Discarding invalid transaction in block", "hash", tx.Hash(), "block", env.header.Number, "err", err)
-			continue
-		}
+
+		// The sender is only for logging purposes, and it doesn't really matter if it's
+		// correct.
+		from, _ := types.Sender(signer, tx)
 
 		// Execute the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
