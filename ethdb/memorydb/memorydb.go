@@ -55,10 +55,14 @@ func New() *Database {
 
 // NewWithCap returns a wrapped map pre-allocated to the provided capcity with
 // all the required database interface methods implemented.
-func NewWithCap(size int) *Database {
-	return &Database{
-		db: make(map[string][]byte, size),
+func NewWithCap(size int) (database *Database) {
+	switch {
+	case size <= 0:
+		database.db = make(map[string][]byte)
+	default:
+		database.db = make(map[string][]byte, size)
 	}
+	return
 }
 
 // Close deallocates the internal map and ensures any consecutive data access op
