@@ -296,7 +296,6 @@ func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 // FinalizeBlock is called to mark a block as synchronized, so
 // that data that is no longer needed can be removed.
 func (api *consensusAPI) FinalizeBlock(blockHash common.Hash) (*genericResponse, error) {
-	// Stubbed for now, it's not critical
 	return &genericResponse{true}, nil
 }
 
