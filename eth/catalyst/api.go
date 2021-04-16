@@ -81,27 +81,6 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) erro
 	return nil
 }
 
-// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type assembleBlockParams struct {
-	ParentHash common.Hash `json:"parent_hash"`
-	Timestamp  uint64      `json:"timestamp"`
-}
-
-// Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
-type executableData struct {
-	BlockHash    common.Hash          `json:"blockHash"`
-	ParentHash   common.Hash          `json:"parentHash"`
-	Miner        common.Address       `json:"miner"`
-	StateRoot    common.Hash          `json:"stateRoot"`
-	Number       uint64               `json:"number"`
-	GasLimit     uint64               `json:"gasLimit"`
-	GasUsed      uint64               `json:"gasUsed"`
-	Timestamp    uint64               `json:"timestamp"`
-	ReceiptRoot  common.Hash          `json:"receiptsRoot"`
-	LogsBloom    []byte               `json:"logsBloom"`
-	Transactions []*types.Transaction `json:"transactions"`
-}
-
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
@@ -238,17 +217,44 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		Timestamp:    block.Time(),
 		ReceiptRoot:  block.ReceiptHash(),
 		LogsBloom:    block.Bloom().Bytes(),
-		Transactions: []*types.Transaction(block.Transactions()),
+		Transactions: encodeTransactions(block.Transactions()),
 	}, nil
 }
 
-func insertBlockParamsToBlock(params executableData, number *big.Int) *types.Block {
+func encodeTransactions(txs []*types.Transaction) [][]byte {
+	var enc = make([][]byte, len(txs))
+	for i, tx := range txs {
+		enc[i], _ = tx.MarshalBinary()
+	}
+	return enc
+}
+
+func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+	var txs = make([]*types.Transaction, len(enc))
+	for i, encTx := range enc {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(encTx); err != nil {
+			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+		}
+		txs[i] = &tx
+	}
+	return txs, nil
+}
+
+func insertBlockParamsToBlock(params executableData) (*types.Block, error) {
+	txs, err := decodeTransactions(params.Transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	number := big.NewInt(0)
+	number.SetUint64(params.Number)
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
 		Coinbase:    params.Miner,
 		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(params.Transactions), trie.NewStackTrie(nil)),
+		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
 		ReceiptHash: params.ReceiptRoot,
 		Bloom:       types.BytesToBloom(params.LogsBloom),
 		Difficulty:  big.NewInt(1),
@@ -256,16 +262,9 @@ func insertBlockParamsToBlock(params executableData, number *big.Int) *types.Blo
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
-		Extra:       nil,
-		MixDigest:   common.Hash{},
 	}
-	block := types.NewBlockWithHeader(header).WithBody(params.Transactions, nil /* uncles */)
-
-	return block
-}
-
-type newBlockResponse struct {
-	Valid bool `json:"valid"`
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	return block, nil
 }
 
 // NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
@@ -277,12 +276,12 @@ func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, err
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
+	block, err := insertBlockParamsToBlock(params)
+	if err != nil {
+		return nil, err
+	}
 
-	number := big.NewInt(0)
-	number.SetUint64(params.Number)
-	block := insertBlockParamsToBlock(params, number)
-	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(block)
-
+	_, err = api.eth.BlockChain().InsertChainWithoutSealVerification(block)
 	return &newBlockResponse{err == nil}, err
 }
 
@@ -291,12 +290,7 @@ func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
 		api.eth.TxPool().AddLocal(tx)
 	}
-
 	return nil
-}
-
-type genericResponse struct {
-	Success bool `json:"success"`
 }
 
 // FinalizeBlock is called to mark a block as synchronized, so

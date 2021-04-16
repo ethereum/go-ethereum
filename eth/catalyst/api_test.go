@@ -154,7 +154,7 @@ func TestEth2NewBlock(t *testing.T) {
 			StateRoot:    blocks[i].Root(),
 			GasLimit:     blocks[i].GasLimit(),
 			GasUsed:      blocks[i].GasUsed(),
-			Transactions: []*types.Transaction(blocks[i].Transactions()),
+			Transactions: encodeTransactions(blocks[i].Transactions()),
 			ReceiptRoot:  blocks[i].ReceiptHash(),
 			LogsBloom:    blocks[i].Bloom().Bytes(),
 			BlockHash:    blocks[i].Hash(),
@@ -181,7 +181,7 @@ func TestEth2NewBlock(t *testing.T) {
 			Number:       lastBlockNum.Uint64(),
 			GasLimit:     forkedBlocks[i].GasLimit(),
 			GasUsed:      forkedBlocks[i].GasUsed(),
-			Transactions: []*types.Transaction(blocks[i].Transactions()),
+			Transactions: encodeTransactions(blocks[i].Transactions()),
 			ReceiptRoot:  forkedBlocks[i].ReceiptHash(),
 			LogsBloom:    forkedBlocks[i].Bloom().Bytes(),
 			BlockHash:    forkedBlocks[i].Hash(),
@@ -191,7 +191,10 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil || !success.Valid {
 			t.Fatalf("Failed to insert forked block #%d: %v", i, err)
 		}
-		lastBlock = insertBlockParamsToBlock(p, lastBlockNum)
+		lastBlock, err = insertBlockParamsToBlock(p)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if ethservice.BlockChain().CurrentBlock().Hash() != exp {
