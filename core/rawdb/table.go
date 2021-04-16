@@ -176,6 +176,11 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
+// KeyCount retrieves the number of keys queued up for writing.
+func (b *tableBatch) KeyCount() int {
+	return b.batch.KeyCount()
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *tableBatch) ValueSize() int {
 	return b.batch.ValueSize()

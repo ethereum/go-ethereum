@@ -291,6 +291,9 @@ type accountTask struct {
 	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
 	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
 
+	genBatch ethdb.Batch     // Batch used by the node generator
+	genTrie  *trie.StackTrie // Node generator from storage slots
+
 	done bool // Flag whether the task can be removed
 }
 
@@ -302,7 +305,11 @@ type storageTask struct {
 	// These fields are internals used during runtime
 	root common.Hash     // Storage root hash for this instance
 	req  *storageRequest // Pending request to fill this task
-	done bool            // Flag whether the task can be removed
+
+	genBatch ethdb.Batch     // Batch used by the node generator
+	genTrie  *trie.StackTrie // Node generator from storage slots
+
+	done bool // Flag whether the task can be removed
 }
 
 // healTask represents the sync task for healing the snap-synced chunk boundaries.
@@ -670,6 +677,17 @@ func (s *Syncer) loadSyncStatus() {
 				log.Debug("Scheduled account sync task", "from", task.Next, "last", task.Last)
 			}
 			s.tasks = progress.Tasks
+			for _, task := range s.tasks {
+				task.genBatch = s.db.NewBatch()
+				task.genTrie = trie.NewStackTrie(task.genBatch)
+
+				for _, subtasks := range task.SubTasks {
+					for _, subtask := range subtasks {
+						subtask.genBatch = s.db.NewBatch()
+						subtask.genTrie = trie.NewStackTrie(task.genBatch)
+					}
+				}
+			}
 			s.snapped = len(s.tasks) == 0
 
 			s.accountSynced = progress.AccountSynced
@@ -709,10 +727,13 @@ func (s *Syncer) loadSyncStatus() {
 			// Make sure we don't overflow if the step is not a proper divisor
 			last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 		}
+		batch := s.db.NewBatch()
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
 			Last:     last,
 			SubTasks: make(map[common.Hash][]*storageTask),
+			genBatch: batch,
+			genTrie:  trie.NewStackTrie(batch),
 		})
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
@@ -721,6 +742,25 @@ func (s *Syncer) loadSyncStatus() {
 
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
 func (s *Syncer) saveSyncStatus() {
+	// Serialize any partial progress to disk before spinning down
+	for _, task := range s.tasks {
+		keys, bytes := task.genBatch.KeyCount(), task.genBatch.ValueSize()
+		if err := task.genBatch.Write(); err != nil {
+			log.Error("Failed to persist account slots", "err", err)
+		}
+		s.accountBytes += common.StorageSize(keys*common.HashLength + bytes)
+
+		for _, subtasks := range task.SubTasks {
+			for _, subtask := range subtasks {
+				keys, bytes := subtask.genBatch.KeyCount(), subtask.genBatch.ValueSize()
+				if err := subtask.genBatch.Write(); err != nil {
+					log.Error("Failed to persist storage slots", "err", err)
+				}
+				s.accountBytes += common.StorageSize(keys*common.HashLength + bytes)
+			}
+		}
+	}
+	// Store the actual progress markers
 	progress := &syncProgress{
 		Tasks:              s.tasks,
 		AccountSynced:      s.accountSynced,
@@ -760,8 +800,6 @@ func (s *Syncer) cleanAccountTasks() {
 		s.lock.Lock()
 		s.snapped = true
 		s.lock.Unlock()
-
-		s.generateAccountTrie() // TODO(karalabe): Do we need to dedup this somehow, interrupt?
 	}
 }
 
@@ -790,160 +828,12 @@ func (s *Syncer) cleanStorageTasks() {
 			delete(task.SubTasks, account)
 			task.pend--
 
-			// Upon large account completion, generate the trie using whatever
-			// data we have. Most of the time it will the the complete perfect
-			// data. If the pivot moved during sync, we'll have some portions
-			// dirty that we'll fix during healing.
-			root := s.generateStorageTrie(account)
-			for j, hash := range task.res.hashes {
-				if hash == account && task.res.accounts[j].Root == root {
-					task.needHeal[j] = false
-				}
-			}
 			// If this was the last pending task, forward the account task
 			if task.pend == 0 {
 				s.forwardAccountTask(task)
 			}
 		}
 	}
-}
-
-// generateAccountTrie iterates the dirty snapshot of the accounts and creates
-// the state trie nodes for it with a stack trie.
-func (s *Syncer) generateAccountTrie() {
-	// Iterate over all the dirty accounts
-	it := s.db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	defer it.Release()
-
-	// Pass all the accounts through a stack trie, periodically flushing to disk
-	// when too much data accumulates.
-	var (
-		triedb = trie.NewDatabase(s.db)
-		batch  = s.db.NewBatch()
-		t      = trie.NewStackTrie(batch)
-
-		start  = time.Now()
-		logged = time.Now()
-	)
-	for it.Next() {
-		// Skip anything that's not an account snapshot item
-		if len(it.Key()) != 1+common.HashLength {
-			continue
-		}
-		// Check the bytecode and storage of an account before dropping it into
-		// the trie. Gaps will hurt healing a lot, but we need to fix those gaps
-		// either way.
-		account, err := snapshot.FullAccount(it.Value())
-		if err != nil {
-			log.Error("Failed to decode account", "err", err)
-			continue
-		}
-		if codehash := common.BytesToHash(account.CodeHash); codehash != emptyCode {
-			if code := rawdb.ReadCode(s.db, codehash); len(code) == 0 {
-				continue // Leave gap for account with missing code
-			}
-		}
-		if roothash := common.BytesToHash(account.Root); roothash != emptyRoot {
-			if _, err := trie.New(roothash, triedb); err != nil {
-				continue // Leave gap for account with missing storage
-			}
-		}
-		// Account seems to be complete, insert it into the state trie
-		acchash := it.Key()[1:]
-		accblob, _ := rlp.EncodeToBytes(account)
-		t.TryUpdate(acchash, accblob)
-
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			s.accountBytes += common.StorageSize(batch.ValueSize())
-			if err := batch.Write(); err != nil {
-				log.Error("Failed to write account trie data", "err", err)
-			}
-			batch.Reset()
-
-			// Occasionally show a log message since this path can take many minutes
-			if time.Since(logged) > 8*time.Second {
-				var (
-					pos  = new(big.Int).SetBytes(acchash)
-					perc = float64(new(big.Int).Div(new(big.Int).Mul(pos, big10000), hashSpace).Uint64()) / 100
-					prog = fmt.Sprintf("%.2f%%", perc)
-					eta  = time.Duration(float64(time.Since(start)) * (100 - perc) / perc)
-				)
-				log.Info("Generating account state trie", "generated", prog, "eta", common.PrettyDuration(eta))
-				logged = time.Now()
-			}
-			s.reportSyncProgress(false)
-
-			// TODO(karalabe): Do we want to support interrupting this method?
-		}
-	}
-	// Finalize the trie
-	if _, err := t.Commit(); err != nil {
-		log.Error("Failed to commit account trie", "err", err)
-	}
-	s.accountBytes += common.StorageSize(batch.ValueSize())
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to finalize account trie", "err", err)
-	}
-}
-
-// generateStorageTrie iterates the dirty snapshot of an account storage and
-// creates the state trie nodes for it with a stack trie.
-func (s *Syncer) generateStorageTrie(account common.Hash) common.Hash {
-	// Iterate over all the dirty storage slots of the account
-	it := s.db.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), nil)
-	defer it.Release()
-
-	// Pass all the slots through a stack trie, periodically flushing to disk
-	// when too much data accumulates.
-	var (
-		batch = s.db.NewBatch()
-		t     = trie.NewStackTrie(batch)
-
-		start  = time.Now()
-		logged = time.Now()
-	)
-	for it.Next() {
-		// Skip anything that's not an storage snapshot item
-		if len(it.Key()) != 1+2*common.HashLength {
-			continue
-		}
-		slothash := it.Key()[1+common.HashLength:]
-		t.TryUpdate(slothash, common.CopyBytes(it.Value()))
-
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			s.storageBytes += common.StorageSize(batch.ValueSize())
-			if err := batch.Write(); err != nil {
-				log.Error("Failed to write storage trie data", "err", err)
-			}
-			batch.Reset()
-
-			// Occasionally show a log message since this path can take many minutes
-			if time.Since(logged) > 8*time.Second {
-				var (
-					pos  = new(big.Int).SetBytes(slothash)
-					perc = float64(new(big.Int).Div(new(big.Int).Mul(pos, big10000), hashSpace).Uint64()) / 100
-					prog = fmt.Sprintf("%.2f%%", perc)
-					eta  = time.Duration(float64(time.Since(start)) * (100 - perc) / perc)
-				)
-				log.Info("Generating contract state trie", "generated", prog, "eta", common.PrettyDuration(eta))
-				logged = time.Now()
-			}
-			s.reportSyncProgress(false)
-
-			// TODO(karalabe): Do we want to support interrupting this method?
-		}
-	}
-	// Finalize the trie to retrieve its root hash and bubble it up to decide if
-	// account healing is still needed or not any more
-	root, err := t.Commit()
-	if err != nil {
-		log.Error("Failed to commit storage trie", "err", err)
-	}
-	s.storageBytes += common.StorageSize(batch.ValueSize())
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to finalize storage trie", "err", err)
-	}
-	return root
 }
 
 // assignAccountTasks attempts to match idle peers to pending account range
@@ -1871,9 +1761,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	batch := s.db.NewBatch()
 
 	var (
-		slots   int
-		nodes   int
-		skipped int
+		slots int
+		nodes int
+		bytes common.StorageSize
 	)
 	// Iterate over all the accounts and reconstruct their storage tries from the
 	// delivered slots
@@ -1924,10 +1814,13 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							// Make sure we don't overflow if the step is not a proper divisor
 							last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 						}
+						batch := s.db.NewBatch()
 						tasks = append(tasks, &storageTask{
-							Next: next,
-							Last: last,
-							root: acc.Root,
+							Next:     next,
+							Last:     last,
+							root:     acc.Root,
+							genBatch: batch,
+							genTrie:  trie.NewStackTrie(batch),
 						})
 						log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", next, "last", last)
 						next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
@@ -1976,6 +1869,8 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			it := res.nodes[i].NewIterator(nil, nil)
 			for it.Next() {
 				batch.Put(it.Key(), it.Value())
+
+				bytes += common.StorageSize(common.HashLength + len(it.Value()))
 				nodes++
 			}
 			it.Release()
@@ -1985,16 +1880,41 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			bytes += common.StorageSize(1 + 2*common.HashLength + len(res.slots[i][j]))
+
+			// If we're storing large contracts, generate the trie nodes
+			// on the fly to not trash the gluing points
+			if i == len(res.hashes)-1 && res.subTask != nil {
+				res.subTask.genTrie.Update(res.hashes[i][j][:], res.slots[i][j])
+			}
 		}
 	}
-	bytes := common.StorageSize(batch.ValueSize())
+	// Large contracts could have generated new trie nodes, flush them to disk
+	if res.subTask != nil {
+		if res.subTask.done {
+			if _, err := res.subTask.genTrie.Commit(); err != nil {
+				log.Error("Failed to commit stack slots", "err", err)
+			}
+		}
+		if data := res.subTask.genBatch.ValueSize(); data > ethdb.IdealBatchSize || res.subTask.done {
+			keys := res.subTask.genBatch.KeyCount()
+			if err := res.subTask.genBatch.Write(); err != nil {
+				log.Error("Failed to persist stack slots", "err", err)
+			}
+			res.subTask.genBatch.Reset()
+
+			bytes += common.StorageSize(keys*common.HashLength + data)
+			nodes += keys
+		}
+	}
+	// Flush anything written just now abd update the stats
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
 	}
 	s.storageSynced += uint64(slots)
 	s.storageBytes += bytes
 
-	log.Debug("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "nodes", nodes, "skipped", skipped, "bytes", bytes)
+	log.Debug("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "nodes", nodes, "bytes", bytes)
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2092,22 +2012,53 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// Persist the received account segements. These flat state maybe
 	// outdated during the sync, but it can be fixed later during the
 	// snapshot generation.
+	var (
+		nodes int
+		bytes common.StorageSize
+	)
 	batch := s.db.NewBatch()
 	for i, hash := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
 			break
 		}
-		blob := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
-		rawdb.WriteAccountSnapshot(batch, hash, blob)
+		slim := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
+		rawdb.WriteAccountSnapshot(batch, hash, slim)
+		bytes += common.StorageSize(1 + common.HashLength + len(slim))
+
+		// If the task is complete, drop it into the stack trie to generate
+		// account trie nodes for it
+		if !task.needHeal[i] {
+			full, err := snapshot.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
+			if err != nil {
+				panic(err) // Really shouldn't ever happen
+			}
+			task.genTrie.Update(hash[:], full)
+		}
 	}
-	bytes := common.StorageSize(batch.ValueSize())
+	// Stack trie could have generated trie nodes, push them to disk
+	if task.done {
+		if _, err := task.genTrie.Commit(); err != nil {
+			log.Error("Failed to commit stack account", "err", err)
+		}
+	}
+	if data := task.genBatch.ValueSize(); data > ethdb.IdealBatchSize || task.done {
+		keys := task.genBatch.KeyCount()
+		if err := task.genBatch.Write(); err != nil {
+			log.Error("Failed to persist stack account", "err", err)
+		}
+		task.genBatch.Reset()
+
+		nodes += keys
+		bytes += common.StorageSize(keys*common.HashLength + data)
+	}
+	// Flush anything written just now abd update the stats
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
 	s.accountBytes += bytes
 	s.accountSynced += uint64(len(res.accounts))
 
-	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "bytes", bytes)
+	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
 
 	// Task filling persisted, push it the chunk marker forward to the first
 	// account still missing data.
@@ -2162,7 +2113,6 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		s.lock.Unlock()
 		return nil
 	}
-
 	// Response is valid, but check if peer is signalling that it does not have
 	// the requested data. For account range queries that means the state being
 	// retrieved was either already pruned remotely, or the peer is not yet
