@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -1881,21 +1882,50 @@ func TestLowDiffLongChain(t *testing.T) {
 // - C is canon chain, containing blocks [G..Cn..Cm]
 // - A common ancestor is placed at prune-point + blocksBetweenCommonAncestorAndPruneblock
 // - The sidechain S is prepended with numCanonBlocksInSidechain blocks from the canon chain
-func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommonAncestorAndPruneblock int) {
-
+//
+// The mergePoint can be these values:
+// -1: the transition won't happen
+// 0:  the transition happens since genesis
+// 1:  the transition happens after some chain segments
+func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommonAncestorAndPruneblock int, mergePoint int) {
 	// Generate a canonical chain to act as the main dataset
-	engine := ethash.NewFaker()
-	db := rawdb.NewMemoryDatabase()
-	genesis := new(Genesis).MustCommit(db)
+	var (
+		genEngine = beacon.New(ethash.NewFaker(), nil)
+		runEngine = beacon.New(ethash.NewFaker(), nil)
+		db        = rawdb.NewMemoryDatabase()
 
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		nonce  = uint64(0)
+
+		gspec = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+		}
+		signer     = types.LatestSigner(gspec.Config)
+		genesis, _ = gspec.Commit(db)
+	)
 	// Generate and import the canonical chain
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, nil)
 	diskdb := rawdb.NewMemoryDatabase()
-	new(Genesis).MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
+	gspec.MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, runEngine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	// Activate the transition since genesis if required
+	if mergePoint == 0 {
+		genEngine.SetTransitionBlock(big.NewInt(0))
+		runEngine.SetTransitionBlock(big.NewInt(0))
+		chain.forker.SetTransitioned()
+	}
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, genEngine, db, 2*TriesInMemory, func(i int, gen *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
+		if err != nil {
+			t.Fatalf("failed to create tx: %v", err)
+		}
+		gen.AddTx(tx)
+		nonce++
+	})
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
@@ -1912,6 +1942,14 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
 	}
+
+	// Activate the transition in the middle of the chain
+	if mergePoint == 1 {
+		genEngine.SetTransitionBlock(blocks[len(blocks)-1].Number())
+		runEngine.SetTransitionBlock(blocks[len(blocks)-1].Number())
+		chain.forker.SetTransitioned()
+	}
+
 	// Generate the sidechain
 	// First block should be a known block, block after should be a pruned block. So
 	// canon(pruned), side, side...
@@ -1919,7 +1957,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate fork chain, make it longer than canon
 	parentIndex := lastPrunedIndex + blocksBetweenCommonAncestorAndPruneblock
 	parent := blocks[parentIndex]
-	fork, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 2*TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(params.TestChainConfig, parent, genEngine, db, 2*TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 	})
 	// Prepend the parent(s)
@@ -1928,9 +1966,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		sidechain = append(sidechain, blocks[parentIndex+1-i])
 	}
 	sidechain = append(sidechain, fork...)
-	_, err = chain.InsertChain(sidechain)
+	n, err := chain.InsertChain(sidechain)
 	if err != nil {
-		t.Errorf("Got error, %v", err)
+		t.Errorf("Got error, %v number %d - %d", err, sidechain[n].NumberU64(), n)
 	}
 	head := chain.CurrentBlock()
 	if got := fork[len(fork)-1].Hash(); got != head.Hash() {
@@ -1951,11 +1989,28 @@ func TestPrunedImportSide(t *testing.T) {
 	//glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
 	//glogger.Verbosity(3)
 	//log.Root().SetHandler(log.Handler(glogger))
-	testSideImport(t, 3, 3)
-	testSideImport(t, 3, -3)
-	testSideImport(t, 10, 0)
-	testSideImport(t, 1, 10)
-	testSideImport(t, 1, -10)
+	testSideImport(t, 3, 3, -1)
+	testSideImport(t, 3, -3, -1)
+	testSideImport(t, 10, 0, -1)
+	testSideImport(t, 1, 10, -1)
+	testSideImport(t, 1, -10, -1)
+}
+
+func TestPrunedImportSideWithMerging(t *testing.T) {
+	//glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
+	//glogger.Verbosity(3)
+	//log.Root().SetHandler(log.Handler(glogger))
+	testSideImport(t, 3, 3, 0)
+	testSideImport(t, 3, -3, 0)
+	testSideImport(t, 10, 0, 0)
+	testSideImport(t, 1, 10, 0)
+	testSideImport(t, 1, -10, 0)
+
+	testSideImport(t, 3, 3, 1)
+	testSideImport(t, 3, -3, 1)
+	testSideImport(t, 10, 0, 1)
+	testSideImport(t, 1, 10, 1)
+	testSideImport(t, 1, -10, 1)
 }
 
 func TestInsertKnownHeaders(t *testing.T)      { testInsertKnownChainData(t, "headers") }
@@ -2083,59 +2138,6 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	asserter(t, blocks2[len(blocks2)-1])
 }
 
-// getLongAndShortChains returns two chains,
-// A is longer, B is heavier
-func getLongAndShortChains() (*BlockChain, []*types.Block, []*types.Block, error) {
-	// Generate a canonical chain to act as the main dataset
-	engine := ethash.NewFaker()
-	db := rawdb.NewMemoryDatabase()
-	genesis := new(Genesis).MustCommit(db)
-
-	// Generate and import the canonical chain,
-	// Offset the time, to keep the difficulty low
-	longChain, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 80, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{1})
-	})
-	diskdb := rawdb.NewMemoryDatabase()
-	new(Genesis).MustCommit(diskdb)
-
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create tester chain: %v", err)
-	}
-
-	// Generate fork chain, make it shorter than canon, with common ancestor pretty early
-	parentIndex := 3
-	parent := longChain[parentIndex]
-	heavyChain, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 75, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{2})
-		b.OffsetTime(-9)
-	})
-	// Verify that the test is sane
-	var (
-		longerTd  = new(big.Int)
-		shorterTd = new(big.Int)
-	)
-	for index, b := range longChain {
-		longerTd.Add(longerTd, b.Difficulty())
-		if index <= parentIndex {
-			shorterTd.Add(shorterTd, b.Difficulty())
-		}
-	}
-	for _, b := range heavyChain {
-		shorterTd.Add(shorterTd, b.Difficulty())
-	}
-	if shorterTd.Cmp(longerTd) <= 0 {
-		return nil, nil, nil, fmt.Errorf("Test is moot, heavyChain td (%v) must be larger than canon td (%v)", shorterTd, longerTd)
-	}
-	longerNum := longChain[len(longChain)-1].NumberU64()
-	shorterNum := heavyChain[len(heavyChain)-1].NumberU64()
-	if shorterNum >= longerNum {
-		return nil, nil, nil, fmt.Errorf("Test is moot, heavyChain num (%v) must be lower than canon num (%v)", shorterNum, longerNum)
-	}
-	return chain, longChain, heavyChain, nil
-}
-
 func TestInsertKnownHeadersWithMerging(t *testing.T) {
 	testInsertKnownChainDataWithMerging(t, "headers", 0)
 }
@@ -2162,12 +2164,12 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		genesis   = new(Genesis).MustCommit(db)
-		runEngine = beacon.New(ethash.NewFaker(), false)
-		genEngine = beacon.New(ethash.NewFaker(), false)
+		runEngine = beacon.New(ethash.NewFaker(), nil)
+		genEngine = beacon.New(ethash.NewFaker(), nil)
 	)
-	applyMerge := func(engine *beacon.Beacon, forker *ForkChoice) {
+	applyMerge := func(engine *beacon.Beacon, forker *ForkChoice, block *big.Int) {
 		if engine != nil {
-			engine.SetTransitioned()
+			engine.SetTransitionBlock(block)
 		}
 		if forker != nil {
 			forker.SetTransitioned()
@@ -2176,13 +2178,13 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 
 	// Apply merging since genesis
 	if mergeHeight == 0 {
-		applyMerge(genEngine, nil)
+		applyMerge(genEngine, nil, big.NewInt(0))
 	}
 	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, genEngine, db, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Apply merging after the first segment
 	if mergeHeight == 1 {
-		applyMerge(genEngine, nil)
+		applyMerge(genEngine, nil, blocks[len(blocks)-1].Number())
 	}
 	// Longer chain and shorter chain
 	blocks2, receipts2 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], genEngine, db, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
@@ -2258,7 +2260,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 
 	// Apply merging since genesis if required
 	if mergeHeight == 0 {
-		applyMerge(runEngine, chain.forker)
+		applyMerge(runEngine, chain.forker, big.NewInt(0))
 	}
 	if err := inserter(blocks, receipts); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
@@ -2281,7 +2283,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 
 	// Apply merging after the first segment
 	if mergeHeight == 1 {
-		applyMerge(runEngine, chain.forker)
+		applyMerge(runEngine, chain.forker, blocks[len(blocks)-1].Number())
 	}
 
 	// Import a longer chain with some known data as prefix.
@@ -2305,6 +2307,59 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks2[len(blocks2)-1])
+}
+
+// getLongAndShortChains returns two chains,
+// A is longer, B is heavier
+func getLongAndShortChains() (*BlockChain, []*types.Block, []*types.Block, error) {
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+	db := rawdb.NewMemoryDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	// Generate and import the canonical chain,
+	// Offset the time, to keep the difficulty low
+	longChain, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 80, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+	})
+	diskdb := rawdb.NewMemoryDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create tester chain: %v", err)
+	}
+
+	// Generate fork chain, make it shorter than canon, with common ancestor pretty early
+	parentIndex := 3
+	parent := longChain[parentIndex]
+	heavyChain, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 75, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{2})
+		b.OffsetTime(-9)
+	})
+	// Verify that the test is sane
+	var (
+		longerTd  = new(big.Int)
+		shorterTd = new(big.Int)
+	)
+	for index, b := range longChain {
+		longerTd.Add(longerTd, b.Difficulty())
+		if index <= parentIndex {
+			shorterTd.Add(shorterTd, b.Difficulty())
+		}
+	}
+	for _, b := range heavyChain {
+		shorterTd.Add(shorterTd, b.Difficulty())
+	}
+	if shorterTd.Cmp(longerTd) <= 0 {
+		return nil, nil, nil, fmt.Errorf("Test is moot, heavyChain td (%v) must be larger than canon td (%v)", shorterTd, longerTd)
+	}
+	longerNum := longChain[len(longChain)-1].NumberU64()
+	shorterNum := heavyChain[len(heavyChain)-1].NumberU64()
+	if shorterNum >= longerNum {
+		return nil, nil, nil, fmt.Errorf("Test is moot, heavyChain num (%v) must be lower than canon num (%v)", shorterNum, longerNum)
+	}
+	return chain, longChain, heavyChain, nil
 }
 
 // TestReorgToShorterRemovesCanonMapping tests that if we

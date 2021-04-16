@@ -19,6 +19,9 @@ package beacon
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -26,8 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"math/big"
-	"sync"
 )
 
 // Proof-of-stake protocol constants.
@@ -105,31 +106,59 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	// All the headers haven't passed the transition point, use old rules.
+	if !beacon.IsTransitioned(headers[len(headers)-1].Number) {
+		return beacon.ethone.VerifyHeaders(chain, headers, seals)
+	}
+	var (
+		preHeaders []*types.Header
+		posHeaders []*types.Header
+		preSeals   []bool
+	)
+	for index, header := range headers {
+		if beacon.IsTransitioned(header.Number) {
+			preHeaders = headers[:index]
+			posHeaders = headers[index:]
+			preSeals = seals[:index]
+			break
+		}
+	}
+	// All the headers have passed the transition point, use new rules.
+	if len(preHeaders) == 0 {
+		return beacon.verifyHeaders(chain, headers, nil)
+	}
+	// The transition point exists in the middle, separate the headers
+	// into two batches and apply different verification rules for them.
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
 	go func() {
-		for i, header := range headers {
-			var parent *types.Header
-			if i == 0 {
-				parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-			} else if headers[i-1].Hash() == headers[i].ParentHash {
-				parent = headers[i-1]
-			}
-			if parent == nil {
-				select {
-				case <-abort:
+		var (
+			old, new, out      = 0, len(preHeaders), 0
+			errors             = make([]error, len(headers))
+			done               = make([]bool, len(headers))
+			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
+			newDone, newResult = beacon.verifyHeaders(chain, posHeaders, preHeaders[len(preHeaders)-1])
+		)
+		for {
+			for ; done[out]; out++ {
+				results <- errors[out]
+				if out == len(headers)-1 {
 					return
-				case results <- consensus.ErrUnknownAncestor:
 				}
-				continue
 			}
-			err := beacon.VerifyHeader(chain, header, seals[i])
 			select {
+			case err := <-oldResult:
+				errors[old], done[old] = err, true
+				old++
+			case err := <-newResult:
+				errors[new], done[new] = err, true
+				new++
 			case <-abort:
+				close(oldDone)
+				close(newDone)
 				return
-			case results <- err:
 			}
 		}
 	}()
@@ -193,6 +222,46 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return errInvalidNonce
 	}
 	return nil
+}
+
+// verifyHeaders is similar to verifyHeader, but verifies a batch of headers
+// concurrently. The method returns a quit channel to abort the operations and
+// a results channel to retrieve the async verifications. An additional parent
+// header will be passed if the relevant header is not in the database yet.
+func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, ancestor *types.Header) (chan<- struct{}, <-chan error) {
+	var (
+		abort   = make(chan struct{})
+		results = make(chan error, len(headers))
+	)
+	go func() {
+		for i, header := range headers {
+			var parent *types.Header
+			if i == 0 {
+				if ancestor != nil {
+					parent = ancestor
+				} else {
+					parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+				}
+			} else if headers[i-1].Hash() == headers[i].ParentHash {
+				parent = headers[i-1]
+			}
+			if parent == nil {
+				select {
+				case <-abort:
+					return
+				case results <- consensus.ErrUnknownAncestor:
+				}
+				continue
+			}
+			err := beacon.verifyHeader(chain, header, parent)
+			select {
+			case <-abort:
+				return
+			case results <- err:
+			}
+		}
+	}()
+	return abort, results
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
