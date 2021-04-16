@@ -278,9 +278,9 @@ func (api *consensusAPI) NewBlock(params ExecutableData) (*NewBlockReturn, error
 	if parent == nil {
 		return &NewBlockReturn{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
-	number := big.NewInt(0)
-	number.Add(parent.Number(), big.NewInt(1))
 
+	number := big.NewInt(0)
+	number.SetUint64(params.Number)
 	block := insertBlockParamsToBlock(params, number)
 	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(block)
 

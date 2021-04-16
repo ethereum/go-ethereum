@@ -159,6 +159,7 @@ func TestEth2NewBlock(t *testing.T) {
 			LogsBloom:    blocks[i].Bloom().Bytes(),
 			BlockHash:    blocks[i].Hash(),
 			Timestamp:    blocks[i].Time(),
+			Number:       uint64(i),
 		}
 		success, err := api.NewBlock(p)
 		if err != nil || !success.Valid {
