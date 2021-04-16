@@ -338,11 +338,6 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   s.netRPCService,
 			Public:    true,
-		}, {
-			Namespace: "consensus",
-			Version:   "1.0",
-			Service:   NewEth2API(s),
-			Public:    true,
 		},
 	}...)
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package catalyst
 
 import (
 	"math/big"
@@ -25,11 +25,20 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
+	// testKey is a private key to use for funding a tester account.
+	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+
+	// testAddr is the Ethereum address of the tester account.
+	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
+
 	testBalance = big.NewInt(2e10)
 )
 
@@ -89,7 +98,8 @@ func TestEth2AssembleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
+	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
@@ -101,13 +111,13 @@ func TestEth2AssembleBlock(t *testing.T) {
 	}
 	ethservice.SetEtherbase(testAddr)
 
-	api := NewEth2API(ethservice)
+	api := newConsensusAPI(ethservice)
 	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
 	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
 	if err != nil {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
-	ethservice.txPool.AddLocal(tx)
+	ethservice.TxPool().AddLocal(tx)
 	blockParams := AssembleBlockParams{
 		ParentHash: blocks[8].ParentHash(),
 		Timestamp:  blocks[8].Time(),
@@ -130,7 +140,8 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
+	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
@@ -142,7 +153,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	}
 	ethservice.SetEtherbase(testAddr)
 
-	api := NewEth2API(ethservice)
+	api := newConsensusAPI(ethservice)
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.addBlockTxs(blocks[9])
@@ -167,7 +178,9 @@ func TestEth2NewBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+
+	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
+	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
@@ -178,7 +191,7 @@ func TestEth2NewBlock(t *testing.T) {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 
-	api := NewEth2API(ethservice)
+	api := newConsensusAPI(ethservice)
 	for i := 5; i < 10; i++ {
 		p := ExecutableData{
 			ParentHash:   ethservice.BlockChain().CurrentBlock().Hash(),

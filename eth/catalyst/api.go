@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+// Package catalyst implements the temporary eth1/eth2 RPC integration.
+package catalyst
 
 import (
 	"fmt"
@@ -25,20 +26,20 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	chainParams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-type Eth2API struct {
-	eth  *Ethereum
+type consensusAPI struct {
+	eth  *eth.Ethereum
 	env  *eth2bpenv
 	head common.Hash
 }
 
-// NewEth2API creates a new API definition for the eth2 prototype.
-func NewEth2API(eth *Ethereum) *Eth2API {
-	return &Eth2API{eth: eth}
+func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
+	return &consensusAPI{eth: eth}
 }
 
 type eth2bpenv struct {
@@ -51,7 +52,7 @@ type eth2bpenv struct {
 	receipts []*types.Receipt
 }
 
-func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
+func (api *consensusAPI) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	//snap := eth2rpc.current.state.Snapshot()
 
 	chain := api.eth.BlockChain()
@@ -66,7 +67,7 @@ func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Add
 	return nil
 }
 
-func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
+func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) error {
 	state, err := api.eth.BlockChain().StateAt(parent.Root())
 	if err != nil {
 		return err
@@ -102,7 +103,7 @@ type ExecutableData struct {
 
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
-func (api *Eth2API) AssembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
+func (api *consensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
 	log.Info("Produce block", "parentHash", params.ParentHash)
 
 	bc := api.eth.BlockChain()
@@ -272,7 +273,7 @@ type NewBlockReturn struct {
 // NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
-func (api *Eth2API) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
+func (api *consensusAPI) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
 	// compute block number as parent.number + 1
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
@@ -288,9 +289,9 @@ func (api *Eth2API) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
-func (api *Eth2API) addBlockTxs(block *types.Block) error {
+func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
-		api.eth.txPool.AddLocal(tx)
+		api.eth.TxPool().AddLocal(tx)
 	}
 
 	return nil
@@ -302,13 +303,13 @@ type GenericResponse struct {
 
 // FinalizeBlock is called to mark a block as synchronized, so
 // that data that is no longer needed can be removed.
-func (api *Eth2API) FinalizeBlock(blockHash common.Hash) (*GenericResponse, error) {
+func (api *consensusAPI) FinalizeBlock(blockHash common.Hash) (*GenericResponse, error) {
 	// Stubbed for now, it's not critical
 	return &GenericResponse{false}, nil
 }
 
 // SetHead is called to perform a force choice.
-func (api *Eth2API) SetHead(newHead common.Hash) (*GenericResponse, error) {
+func (api *consensusAPI) SetHead(newHead common.Hash) (*GenericResponse, error) {
 	//oldBlock := api.eth.BlockChain().CurrentBlock()
 
 	//if oldBlock.Hash() == newHead {
