@@ -443,23 +443,29 @@ func formatLogfmtBigInt(n *big.Int) string {
 		return FormatLogfmtInt64(n.Int64())
 	}
 
-	text := n.String()
-	buf := make([]byte, 0, len(text)+len(text)/3)
-	comma := 0
-	for _, c := range text {
+	var (
+		text  = n.String()
+		buf   = make([]byte, len(text)+len(text)/3)
+		comma = 0
+		i     = len(buf) - 1
+	)
+	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
+		c := text[j]
+
 		switch {
 		case c == '-':
-			buf = append(buf, byte(c))
+			buf[i] = c
 		case comma == 3:
-			buf = append(buf, ',')
+			buf[i] = ','
+			i--
 			comma = 0
 			fallthrough
 		default:
-			buf = append(buf, byte(c))
+			buf[i] = c
 			comma++
 		}
 	}
-	return string(buf)
+	return string(buf[i+1:])
 }
 
 // escapeString checks if the provided string needs escaping/quoting, and
