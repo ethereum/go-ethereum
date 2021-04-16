@@ -103,7 +103,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
 	ethservice.TxPool().AddLocal(tx)
-	blockParams := AssembleBlockParams{
+	blockParams := assembleBlockParams{
 		ParentHash: blocks[8].ParentHash(),
 		Timestamp:  blocks[8].Time(),
 	}
@@ -127,7 +127,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.addBlockTxs(blocks[9])
-	blockParams := AssembleBlockParams{
+	blockParams := assembleBlockParams{
 		ParentHash: blocks[9].ParentHash(),
 		Timestamp:  blocks[9].Time(),
 	}
@@ -148,7 +148,7 @@ func TestEth2NewBlock(t *testing.T) {
 
 	api := newConsensusAPI(ethservice)
 	for i := 5; i < 10; i++ {
-		p := ExecutableData{
+		p := executableData{
 			ParentHash:   ethservice.BlockChain().CurrentBlock().Hash(),
 			Miner:        blocks[i].Coinbase(),
 			StateRoot:    blocks[i].Root(),
@@ -174,7 +174,7 @@ func TestEth2NewBlock(t *testing.T) {
 	lastBlock := blocks[4]
 	for i := 0; i < 4; i++ {
 		lastBlockNum.Add(lastBlockNum, big.NewInt(1))
-		p := ExecutableData{
+		p := executableData{
 			ParentHash:   lastBlock.Hash(),
 			Miner:        forkedBlocks[i].Coinbase(),
 			StateRoot:    forkedBlocks[i].Root(),

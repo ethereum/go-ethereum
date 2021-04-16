@@ -82,13 +82,13 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) erro
 }
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type AssembleBlockParams struct {
+type assembleBlockParams struct {
 	ParentHash common.Hash `json:"parent_hash"`
 	Timestamp  uint64      `json:"timestamp"`
 }
 
 // Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
-type ExecutableData struct {
+type executableData struct {
 	BlockHash    common.Hash          `json:"blockHash"`
 	ParentHash   common.Hash          `json:"parentHash"`
 	Miner        common.Address       `json:"miner"`
@@ -104,7 +104,7 @@ type ExecutableData struct {
 
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
-func (api *consensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
+func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
 	log.Info("Produce block", "parentHash", params.ParentHash)
 
 	bc := api.eth.BlockChain()
@@ -227,7 +227,7 @@ func (api *consensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableD
 
 	block.Header().ReceiptHash = types.DeriveSha(receipts, new(trie.Trie))
 
-	return &ExecutableData{
+	return &executableData{
 		BlockHash:    block.Hash(),
 		ParentHash:   block.ParentHash(),
 		Miner:        block.Coinbase(),
@@ -242,7 +242,7 @@ func (api *consensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableD
 	}, nil
 }
 
-func insertBlockParamsToBlock(params ExecutableData, number *big.Int) *types.Block {
+func insertBlockParamsToBlock(params executableData, number *big.Int) *types.Block {
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
@@ -264,18 +264,18 @@ func insertBlockParamsToBlock(params ExecutableData, number *big.Int) *types.Blo
 	return block
 }
 
-type NewBlockReturn struct {
+type newBlockResponse struct {
 	Valid bool `json:"valid"`
 }
 
 // NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
-func (api *consensusAPI) NewBlock(params ExecutableData) (*NewBlockReturn, error) {
+func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
 	// compute block number as parent.number + 1
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
-		return &NewBlockReturn{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
+		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
 
 	number := big.NewInt(0)
@@ -283,7 +283,7 @@ func (api *consensusAPI) NewBlock(params ExecutableData) (*NewBlockReturn, error
 	block := insertBlockParamsToBlock(params, number)
 	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(block)
 
-	return &NewBlockReturn{err == nil}, err
+	return &newBlockResponse{err == nil}, err
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
@@ -295,18 +295,18 @@ func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	return nil
 }
 
-type GenericResponse struct {
+type genericResponse struct {
 	Success bool `json:"success"`
 }
 
 // FinalizeBlock is called to mark a block as synchronized, so
 // that data that is no longer needed can be removed.
-func (api *consensusAPI) FinalizeBlock(blockHash common.Hash) (*GenericResponse, error) {
+func (api *consensusAPI) FinalizeBlock(blockHash common.Hash) (*genericResponse, error) {
 	// Stubbed for now, it's not critical
-	return &GenericResponse{false}, nil
+	return &genericResponse{false}, nil
 }
 
 // SetHead is called to perform a force choice.
-func (api *consensusAPI) SetHead(newHead common.Hash) (*GenericResponse, error) {
-	return &GenericResponse{false}, nil
+func (api *consensusAPI) SetHead(newHead common.Hash) (*genericResponse, error) {
+	return &genericResponse{false}, nil
 }
