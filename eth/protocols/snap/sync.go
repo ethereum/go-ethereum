@@ -800,6 +800,9 @@ func (s *Syncer) cleanAccountTasks() {
 		s.lock.Lock()
 		s.snapped = true
 		s.lock.Unlock()
+
+		// Push the final sync report
+		s.reportSyncProgress(true)
 	}
 }
 
