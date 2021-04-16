@@ -744,7 +744,6 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHa
 	if err != nil {
 		return nil, err
 	}
-	defer release()
 
 	if overrides != nil {
 		// Override the fields of specified contracts before execution.
