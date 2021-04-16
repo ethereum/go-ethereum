@@ -33,7 +33,7 @@ import (
 
 type consensusAPI struct {
 	eth  *eth.Ethereum
-	env  *eth2bpenv
+	env  *blockExecutionEnv
 	head common.Hash
 }
 
@@ -41,7 +41,9 @@ func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
 	return &consensusAPI{eth: eth}
 }
 
-type eth2bpenv struct {
+// blockExecutionEnv gathers all the data required to execute
+// a block, either when assembling it or when inserting it.
+type blockExecutionEnv struct {
 	state   *state.StateDB
 	tcount  int
 	gasPool *core.GasPool
@@ -71,7 +73,7 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) erro
 	if err != nil {
 		return err
 	}
-	api.env = &eth2bpenv{
+	api.env = &blockExecutionEnv{
 		state:   state,
 		header:  header,
 		gasPool: new(core.GasPool).AddGas(header.GasLimit),
