@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -152,8 +151,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		if eth == nil {
 			utils.Fatalf("Catalyst does not work in light client mode.")
 		}
-		log.Warn("Catalyst mode enabled")
-		catalyst.New(stack, eth)
+		if err := catalyst.Register(stack, eth); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	}
 
 	// Configure GraphQL if requested

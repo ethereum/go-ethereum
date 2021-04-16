@@ -18,25 +18,28 @@
 package catalyst
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type Service struct {
-	api *consensusAPI
-}
+// Register adds catalyst APIs to the node.
+func Register(stack *node.Node, backend *eth.Ethereum) error {
+	if backend.BlockChain().Config().CatalystBlock == nil {
+		return errors.New("can't enable catalyst service without catalyst fork block in chain config")
+	}
 
-// New creates a catalyst service and registers it with the node.
-func New(stack *node.Node, backend *eth.Ethereum) *Service {
-	c := &Service{api: newConsensusAPI(backend)}
+	log.Warn("Catalyst mode enabled")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "consensus",
 			Version:   "1.0",
-			Service:   c.api,
+			Service:   newConsensusAPI(backend),
 			Public:    true,
 		},
 	})
-	return c
+	return nil
 }
