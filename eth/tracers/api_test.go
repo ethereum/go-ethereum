@@ -284,7 +284,7 @@ func TestTraceCall(t *testing.T) {
 		},
 	}
 	for _, testspec := range testSuite {
-		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
+		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config, nil)
 		if testspec.expectErr != nil {
 			if err == nil {
 				t.Errorf("Expect error %v, get nothing", testspec.expectErr)
