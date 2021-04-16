@@ -78,17 +78,13 @@ type blockExecutionEnv struct {
 }
 
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
-	//snap := eth2rpc.current.state.Snapshot()
-
 	vmconfig := *env.chain.GetVMConfig()
 	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
 	if err != nil {
-		//w.current.state.RevertToSnapshot(snap)
 		return err
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
-
 	return nil
 }
 
@@ -118,7 +114,6 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	if parent.Time() >= params.Timestamp {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
 	}
-	// this will ensure we're not going off too far in the future
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
 		wait := time.Duration(params.Timestamp-now) * time.Second
 		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
@@ -168,8 +163,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 			break
 		}
 
-		// The sender is only for logging purposes, and it doesn't really matter if it's
-		// correct.
+		// The sender is only for logging purposes, and it doesn't really matter if it's correct.
 		from, _ := types.Sender(signer, tx)
 
 		// Execute the transaction
@@ -275,7 +269,6 @@ func insertBlockParamsToBlock(params executableData) (*types.Block, error) {
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
 func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
-	// compute block number as parent.number + 1
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
