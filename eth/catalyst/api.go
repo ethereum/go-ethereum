@@ -282,7 +282,7 @@ func (api *consensusAPI) NewBlock(params ExecutableData) (*NewBlockReturn, error
 	number.Add(parent.Number(), big.NewInt(1))
 
 	block := insertBlockParamsToBlock(params, number)
-	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{block}))
+	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(block)
 
 	return &NewBlockReturn{err == nil}, err
 }
