@@ -242,8 +242,6 @@ func (api *consensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableD
 	}, nil
 }
 
-var zeroNonce [8]byte
-
 func insertBlockParamsToBlock(params ExecutableData, number *big.Int) *types.Block {
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
@@ -260,7 +258,6 @@ func insertBlockParamsToBlock(params ExecutableData, number *big.Int) *types.Blo
 		Time:        params.Timestamp,
 		Extra:       nil,
 		MixDigest:   common.Hash{},
-		Nonce:       zeroNonce,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(params.Transactions, nil /* uncles */)
 
