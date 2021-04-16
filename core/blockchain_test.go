@@ -73,6 +73,10 @@ func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *B
 	return db, blockchain, err
 }
 
+func newGwei(n int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(n), big.NewInt(params.GWei))
+}
+
 // Test fork of length N starting from block i
 func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
 	// Copy old chain up to #i into a new db
@@ -3133,7 +3137,7 @@ func TestEIP1559Transition(t *testing.T) {
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec   = &Genesis{
-			Config: params.AleutChainConfig,
+			Config: params.AllEthashProtocolChanges,
 			Alloc: GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
@@ -3150,9 +3154,12 @@ func TestEIP1559Transition(t *testing.T) {
 				},
 			},
 		}
-		genesis = gspec.MustCommit(db)
-		signer  = types.LatestSigner(gspec.Config)
 	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.AleutBlock = common.Big0
+	genesis := gspec.MustCommit(db)
+	signer := types.LatestSigner(gspec.Config)
 
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
@@ -3168,7 +3175,7 @@ func TestEIP1559Transition(t *testing.T) {
 			Nonce:      0,
 			To:         &aa,
 			Gas:        30000,
-			FeeCap:     new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
+			FeeCap:     newGwei(5),
 			Tip:        big.NewInt(2),
 			AccessList: accesses,
 			Data:       []byte{},
@@ -3178,7 +3185,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 		b.AddTx(tx)
 	})
-	// Import the canonical chain
+
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
@@ -3220,7 +3227,13 @@ func TestEIP1559Transition(t *testing.T) {
 	blocks, _ = GenerateChain(gspec.Config, block, engine, db, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 
-		tx := types.NewTransaction(0, aa, big.NewInt(0), 30000, new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)), nil)
+		txdata := &types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Gas:      30000,
+			GasPrice: newGwei(5),
+		}
+		tx := types.NewTx(txdata)
 		tx, _ = types.SignTx(tx, signer, key2)
 
 		b.AddTx(tx)

@@ -85,19 +85,24 @@ type Header struct {
 	BaseFee     *big.Int       `json:"baseFee"`
 }
 
+// EncodeRLP implements rlp.Encoder
 func (h *Header) EncodeRLP(w io.Writer) error {
 	if h.BaseFee == nil {
 		return rlp.Encode(w, extheader(*h))
-	} else {
-		return rlp.Encode(w, ext1559header(*h))
 	}
+	return rlp.Encode(w, ext1559header(*h))
 }
 
+// DecodeRLP implements rlp.Decoder
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
+	// Retrieve the entire header blob as we need to try multiple decoders
 	raw, err := s.Raw()
 	if err != nil {
 		return err
 	}
+	// Try decoding as a legacy header first, then the as an EIP-1559 one. Although
+	// EIP-1559 is the latest format, legacy headers are more likely to be decoded
+	// in bulk (during sync).
 	if err := decodeLegacyHeader(h, raw); err == nil {
 		return nil
 	}
@@ -138,7 +143,7 @@ type extheader struct {
 	Extra       []byte
 	MixDigest   common.Hash
 	Nonce       BlockNonce
-	BaseFee     *big.Int `rlp:"-"`
+	BaseFee     *big.Int `rlp:"-"` // BaseFee is ignored in legacy headers
 }
 
 type ext1559header struct {
@@ -307,8 +312,7 @@ func CopyHeader(h *Header) *Header {
 		cpy.Number.Set(h.Number)
 	}
 	if h.BaseFee != nil {
-		cpy.BaseFee = new(big.Int)
-		cpy.BaseFee.Set(h.BaseFee)
+		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
