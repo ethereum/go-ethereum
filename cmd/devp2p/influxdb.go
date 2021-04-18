@@ -34,7 +34,6 @@ type influx struct {
 }
 
 func NewInflux(_url, database, username, password string) (*influx, error) {
-	_url = fmt.Sprintf("http://127.0.0.1:8086")
 	u, err := url.Parse(_url)
 	if err != nil {
 		log.Warn("Unable to parse InfluxDB", "url", _url, "err", err)

@@ -27,10 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -48,7 +48,13 @@ var (
 		Action:    crawlNodes,
 		Flags: []cli.Flag{
 			bootnodesFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.NetworkIdFlag,
 			crawlTimeoutFlag,
+			nodeURLFlag,
 			utils.MetricsEnableInfluxDBFlag,
 			utils.MetricsInfluxDBEndpointFlag,
 			utils.MetricsInfluxDBDatabaseFlag,
@@ -56,6 +62,13 @@ var (
 			utils.MetricsInfluxDBPasswordFlag,
 		},
 	}
+	nodeURLFlag = cli.StringFlag{
+		Name:  "nodeURL",
+		Usage: "URL of the node you want to connect to",
+		Value: "http://localhost:8545",
+	}
+	status           *ethtest.Status
+	lastStatusUpdate time.Time
 )
 
 type crawledNode struct {
@@ -128,9 +141,13 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb 
 	output.add(v5.nodes()...)
 	v4 := discv4(ctx, nodeSet{}, timeout)
 	output.add(v4.nodes()...)
+
+	genesis := utils.MakeGenesis(ctx)
+	networkID := ctx.GlobalUint64(utils.NetworkIdFlag.Name)
+	nodeURL := ctx.GlobalString(nodeURLFlag.Name)
 	// Try to connect and get the status of all nodes
 	for _, node := range output {
-		info, err := getClientInfo(node.N)
+		info, err := getClientInfo(genesis, networkID, nodeURL, node.N)
 		if err != nil {
 			log.Warn("GetClientInfo failed", "error", err, "nodeID", node.N.ID())
 		} else {
@@ -149,7 +166,7 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb 
 	return output
 }
 
-func getClientInfo(n *enode.Node) (*clientInfo, error) {
+func getClientInfo(genesis *core.Genesis, networkID uint64, nodeURL string, n *enode.Node) (*clientInfo, error) {
 	var info clientInfo
 	conn, sk, err := dial(n)
 	if err != nil {
@@ -198,7 +215,7 @@ func getClientInfo(n *enode.Node) (*clientInfo, error) {
 	}
 	conn.SetDeadline(time.Now().Add(15 * time.Second))
 	// write status message
-	status, err := getCurrentStatus()
+	status, err := getStatus(genesis.Config, genesis.ToBlock(nil).Hash(), networkID, nodeURL)
 	if err != nil {
 		return nil, err
 	}
@@ -247,41 +264,44 @@ func dial(n *enode.Node) (*ethtest.Conn, *ecdsa.PrivateKey, error) {
 	return &conn, ourKey, nil
 }
 
-func getCurrentStatus() (*ethtest.Status, error) {
-	raw, err := rpc.Dial("wss://mainnet.infura.io/ws/v3/2e5a3920f039435d9bb23729c7b65186")
-	if err != nil {
-		return nil, err
+func getStatus(config *params.ChainConfig, genesis common.Hash, network uint64, nodeURL string) (*ethtest.Status, error) {
+	if status == nil {
+		status = &ethtest.Status{
+			ProtocolVersion: 66,
+			NetworkID:       network,
+			TD:              big.NewInt(0),
+			Head:            common.Hash{},
+			Genesis:         genesis,
+			ForkID:          forkid.NewID(config, genesis, 0),
+		}
+		lastStatusUpdate = time.Time{}
 	}
-	cl := ethclient.NewClient(raw)
 
-	nwid, err := cl.NetworkID(context.Background())
+	if time.Since(lastStatusUpdate) > 15*time.Second {
+		header, td, err := getBCState(nodeURL)
+		if err != nil {
+			return nil, err
+		}
+		status.Head = header.Hash()
+		status.TD = td
+		status.ForkID = forkid.NewID(config, genesis, header.Number.Uint64())
+	}
+	return status, nil
+}
+
+func getBCState(nodeURL string) (*types.Header, *big.Int, error) {
+	raw, err := rpc.Dial(nodeURL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	genesis, err := cl.HeaderByNumber(context.Background(), big.NewInt(0))
-	if err != nil {
-		return nil, err
-	}
-	header, err := cl.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		return nil, err
-	}
 	// Retrieve total difficulty
 	var result types.Block
 	if err := raw.CallContext(context.Background(), &result, "eth_getBlockByNumber", "latest", false); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	status := &ethtest.Status{
-		ProtocolVersion: 66,
-		NetworkID:       nwid.Uint64(),
-		TD:              result.DeprecatedTd(),
-		Head:            header.Hash(),
-		Genesis:         genesis.Hash(),
-		ForkID:          forkid.NewID(params.MainnetChainConfig, genesis.Hash(), header.Number.Uint64()),
-	}
-	return status, nil
+	return result.Header(), result.DeprecatedTd(), nil
 }
 
 // negotiateEthProtocol sets the Conn's eth protocol version
