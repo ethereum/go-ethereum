@@ -1625,8 +1625,9 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Logf("accounts: %d, slots: %d", accounts, slots)
 }
 
-// TestSync tests a basic sync with one peer
-func TestSyncAgain(t *testing.T) {
+// TestSyncAccountPerformance tests how efficient the snap algo is at minimizing
+// state healing
+func TestSyncAccountPerformance(t *testing.T) {
 	// Set the account concurrency to 1. This _should_ result in the
 	// range root to become correct, and there should be no healing needed
 	accountConcurrency = 1
@@ -1654,9 +1655,12 @@ func TestSyncAgain(t *testing.T) {
 		t.Fatalf("sync failed: %v", err)
 	}
 	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
-	fmt.Printf(src.Stats())
-	if have, want := src.nTrienodeRequests, 0; have != want{
+	// The trie root will always be requested, since it is added when the snap
+	// sync cycle starts. When popping the queue, we do not look it up again.
+	// Doing so would bring this number down to zero in this artificial testcase,
+	// but only add extra IO for no reason in practice.
+	if have, want := src.nTrienodeRequests, 1; have != want {
+		fmt.Printf(src.Stats())
 		t.Errorf("trie node heal requests wrong, want %d, have %d", want, have)
 	}
-
 }
