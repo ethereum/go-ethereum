@@ -317,7 +317,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	if origin == nil && !diskMore {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
-			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
+			stackTr.TryUpdate(key, vals[i])
 		}
 		if gotRoot := stackTr.Hash(); gotRoot != root {
 			return &proofResult{
