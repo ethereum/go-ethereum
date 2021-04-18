@@ -73,7 +73,9 @@ const (
 	// and waste round trip times. If it's too high, we're capping responses and
 	// waste bandwidth.
 	maxTrieRequestCount = 512
+)
 
+var (
 	// accountConcurrency is the number of chunks to split the account trie into
 	// to allow concurrent retrievals.
 	accountConcurrency = 16
@@ -81,9 +83,7 @@ const (
 	// storageConcurrency is the number of chunks to split the a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
-)
 
-var (
 	// requestTimeout is the maximum time a peer is allowed to spend on serving
 	// a single network request.
 	requestTimeout = 15 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
@@ -718,7 +718,7 @@ func (s *Syncer) loadSyncStatus() {
 	step := new(big.Int).Sub(
 		new(big.Int).Div(
 			new(big.Int).Exp(common.Big2, common.Big256, nil),
-			big.NewInt(accountConcurrency),
+			big.NewInt(int64(accountConcurrency)),
 		), common.Big1,
 	)
 	for i := 0; i < accountConcurrency; i++ {
@@ -1808,7 +1808,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					step := new(big.Int).Sub(
 						new(big.Int).Div(
 							new(big.Int).Exp(common.Big2, common.Big256, nil),
-							big.NewInt(storageConcurrency),
+							big.NewInt(int64(storageConcurrency)),
 						), common.Big1,
 					)
 					for k := 0; k < storageConcurrency; k++ {
@@ -2039,29 +2039,33 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		}
 	}
 	// Stack trie could have generated trie nodes, push them to disk
-	if task.done {
-		if _, err := task.genTrie.Commit(); err != nil {
-			log.Error("Failed to commit stack account", "err", err)
+	defer func(){
+		if task.done {
+			if root, err := task.genTrie.Commit(); err != nil {
+				log.Error("Failed to commit stack account", "err", err)
+			} else {
+				log.Debug("Range root", "root", root)
+			}
 		}
-	}
-	if data := task.genBatch.ValueSize(); data > ethdb.IdealBatchSize || task.done {
-		keys := task.genBatch.KeyCount()
-		if err := task.genBatch.Write(); err != nil {
-			log.Error("Failed to persist stack account", "err", err)
+		if data := task.genBatch.ValueSize(); data > ethdb.IdealBatchSize || task.done {
+			keys := task.genBatch.KeyCount()
+			if err := task.genBatch.Write(); err != nil {
+				log.Error("Failed to persist stack account", "err", err)
+			}
+			task.genBatch.Reset()
+
+			nodes += keys
+			bytes += common.StorageSize(keys*common.HashLength + data)
 		}
-		task.genBatch.Reset()
+		// Flush anything written just now abd update the stats
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to persist accounts", "err", err)
+		}
+		s.accountBytes += bytes
+		s.accountSynced += uint64(len(res.accounts))
 
-		nodes += keys
-		bytes += common.StorageSize(keys*common.HashLength + data)
-	}
-	// Flush anything written just now abd update the stats
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist accounts", "err", err)
-	}
-	s.accountBytes += bytes
-	s.accountSynced += uint64(len(res.accounts))
-
-	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
+		log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
+	}()
 
 	// Task filling persisted, push it the chunk marker forward to the first
 	// account still missing data.
