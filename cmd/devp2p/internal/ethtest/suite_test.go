@@ -220,7 +220,6 @@ func runEth66(t *testing.T) {
 	}
 }
 
-
 func runTest(t *testing.T, test string) {
 	geth, err := runGeth()
 	if err != nil {
