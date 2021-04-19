@@ -2038,34 +2038,14 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			task.genTrie.Update(hash[:], full)
 		}
 	}
-	// Stack trie could have generated trie nodes, push them to disk
-	defer func(){
-		if task.done {
-			if root, err := task.genTrie.Commit(); err != nil {
-				log.Error("Failed to commit stack account", "err", err)
-			} else {
-				log.Debug("Range root", "root", root)
-			}
-		}
-		if data := task.genBatch.ValueSize(); data > ethdb.IdealBatchSize || task.done {
-			keys := task.genBatch.KeyCount()
-			if err := task.genBatch.Write(); err != nil {
-				log.Error("Failed to persist stack account", "err", err)
-			}
-			task.genBatch.Reset()
+	// Flush anything written just now abd update the stats
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to persist accounts", "err", err)
+	}
+	s.accountBytes += bytes
+	s.accountSynced += uint64(len(res.accounts))
 
-			nodes += keys
-			bytes += common.StorageSize(keys*common.HashLength + data)
-		}
-		// Flush anything written just now abd update the stats
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed to persist accounts", "err", err)
-		}
-		s.accountBytes += bytes
-		s.accountSynced += uint64(len(res.accounts))
-
-		log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
-	}()
+	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
 
 	// Task filling persisted, push it the chunk marker forward to the first
 	// account still missing data.
@@ -2077,6 +2057,25 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	}
 	// All accounts marked as complete, track if the entire task is done
 	task.done = !res.cont
+
+	// Stack trie could have generated trie nodes, push them to disk (we need to
+	// flush after finalizing task.done. It's fine even if we crash and lose this
+	// write as it will only cause more data to be downloaded during heal.
+	if task.done {
+		if _, err := task.genTrie.Commit(); err != nil {
+			log.Error("Failed to commit stack account", "err", err)
+		}
+	}
+	if data := task.genBatch.ValueSize(); data > ethdb.IdealBatchSize || task.done {
+		keys := task.genBatch.KeyCount()
+		if err := task.genBatch.Write(); err != nil {
+			log.Error("Failed to persist stack account", "err", err)
+		}
+		task.genBatch.Reset()
+
+		nodes += keys
+		bytes += common.StorageSize(keys*common.HashLength + data)
+	}
 }
 
 // OnAccounts is a callback method to invoke when a range of accounts are

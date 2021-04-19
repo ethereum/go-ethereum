@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	"os"
 	"sort"
 	"sync"
 	"testing"
@@ -1630,8 +1629,9 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 func TestSyncAccountPerformance(t *testing.T) {
 	// Set the account concurrency to 1. This _should_ result in the
 	// range root to become correct, and there should be no healing needed
+	defer func(old int) { accountConcurrency = old }(accountConcurrency)
 	accountConcurrency = 1
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
