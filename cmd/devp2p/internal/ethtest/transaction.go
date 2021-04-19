@@ -30,6 +30,7 @@ var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c666
 
 func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection(t)
+	defer sendConn.Close()
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
@@ -67,6 +68,10 @@ func sendSuccessfulTxWithConn(t *utesting.T, s *Suite, tx *types.Transaction, se
 
 func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	defer func() {
+		sendConn.Close()
+		recvConn.Close()
+	}()
 	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
 }
 

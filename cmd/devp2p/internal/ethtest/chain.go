@@ -134,6 +134,16 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	}
 	gblock := gen.ToBlock(nil)
 
+	blocks, err := blocksFromFile(chainfile, gblock)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &Chain{blocks: blocks, chainConfig: gen.Config}
+	return c, nil
+}
+
+func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {
 	// Load chain.rlp.
 	fh, err := os.Open(chainfile)
 	if err != nil {
@@ -161,7 +171,5 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 		}
 		blocks = append(blocks, &b)
 	}
-
-	c := &Chain{blocks: blocks, chainConfig: gen.Config}
-	return c, nil
+	return blocks, nil
 }

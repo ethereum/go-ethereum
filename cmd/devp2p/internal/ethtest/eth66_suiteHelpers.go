@@ -238,11 +238,16 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 
 func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection66(t)
+	defer sendConn.Close()
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
 func sendFailingTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer func() {
+		sendConn.Close()
+		recvConn.Close()
+	}()
 	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
 }
 

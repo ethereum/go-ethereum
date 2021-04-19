@@ -41,6 +41,7 @@ func (s *Suite) Is_66(t *utesting.T) {
 // make sure the chain head is correct.
 func (s *Suite) TestStatus_66(t *utesting.T) {
 	conn := s.dial66(t)
+	defer conn.Close()
 	// get protoHandshake
 	conn.handshake(t)
 	// get status
@@ -60,6 +61,7 @@ func (s *Suite) TestStatus_66(t *utesting.T) {
 // an eth66 `GetBlockHeaders` request and that the response is accurate.
 func (s *Suite) TestGetBlockHeaders_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
+	defer conn.Close()
 	// get block headers
 	req := &eth.GetBlockHeadersPacket66{
 		RequestId: 3,
@@ -84,6 +86,10 @@ func (s *Suite) TestGetBlockHeaders_66(t *utesting.T) {
 func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 	// create two connections
 	conn1, conn2 := s.setupConnection66(t), s.setupConnection66(t)
+	defer func() {
+		conn1.Close()
+		conn2.Close()
+	}()
 	// create two requests
 	req1 := &eth.GetBlockHeadersPacket66{
 		RequestId: 111,
@@ -122,6 +128,11 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 // propagated to the given node's peer(s) on the eth66 protocol.
 func (s *Suite) TestBroadcast_66(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer func() {
+		sendConn.Close()
+		receiveConn.Close()
+	}()
+
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[nextBlock],
@@ -141,6 +152,7 @@ func (s *Suite) TestBroadcast_66(t *utesting.T) {
 // the eth66 protocol.
 func (s *Suite) TestGetBlockBodies_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
+	defer conn.Close()
 	// create block bodies request
 	id := uint64(55)
 	req := &eth.GetBlockBodiesPacket66{
@@ -202,10 +214,15 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 		default:
 			t.Fatalf("unexpected: %s wanted disconnect", pretty.Sdump(msg))
 		}
+		sendConn.Close()
 	}
 	// Test the last block as a valid block
-	sendConn := s.setupConnection66(t)
-	receiveConn := s.setupConnection66(t)
+	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer func() {
+		sendConn.Close()
+		receiveConn.Close()
+	}()
+
 	s.testAnnounce66(t, sendConn, receiveConn, blocks[3])
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
@@ -216,12 +233,18 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 }
 
 func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
-	s.oldAnnounce(t, s.setupConnection66(t), s.setupConnection66(t))
+	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer func() {
+		sendConn.Close()
+		recvConn.Close()
+	}()
+	s.oldAnnounce(t, sendConn, recvConn)
 }
 
 // TestMaliciousHandshake_66 tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
 	conn := s.dial66(t)
+	defer conn.Close()
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&conn.ourKey.PublicKey)[1:]
 	handshakes := []*Hello{
@@ -295,6 +318,7 @@ func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
 // TestMaliciousStatus_66 sends a status package with a large total difficulty.
 func (s *Suite) TestMaliciousStatus_66(t *utesting.T) {
 	conn := s.dial66(t)
+	defer conn.Close()
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
@@ -351,6 +375,8 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 // by the node.
 func (s *Suite) TestZeroRequestID_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
+	defer conn.Close()
+
 	req := &eth.GetBlockHeadersPacket66{
 		RequestId: 0,
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
@@ -367,6 +393,7 @@ func (s *Suite) TestZeroRequestID_66(t *utesting.T) {
 // concurrently to a single node.
 func (s *Suite) TestSameRequestID_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
+	defer conn.Close()
 	// create two separate requests with same ID
 	reqID := uint64(1234)
 	req1 := &eth.GetBlockHeadersPacket66{
