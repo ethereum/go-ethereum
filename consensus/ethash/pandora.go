@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
@@ -316,10 +317,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(5)*time.Second)
 	defer cancelFunc()
 
-	channel := make(chan *MinimalEpochConsensusInfo)
-	//params := MinimalConsensusInfoPayload{
-	//	FromEpoch: epoch,
-	//}
+	channel := make(chan *params.MinimalEpochConsensusInfo)
 
 	subscription, err = client.Subscribe(
 		ctx,
@@ -330,7 +328,6 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	)
 
 	if nil != err {
-		// TODO: try to omit this check for now
 		return
 	}
 
@@ -339,26 +336,34 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	logger := config.Log
 
 	go func() {
-		select {
-		case minimalConsensus := <-channel:
-			logger.Info(
-				"Received minimalConsensusInfo",
-				"epoch", minimalConsensus.Epoch,
-				"epochTimeStart", minimalConsensus.EpochTimeStartUnix,
-				"validatorListLen", len(minimalConsensus.ValidatorsList),
-			)
+		for {
+			select {
+			case minimalConsensus := <-channel:
+				logger.Info(
+					"Received minimalConsensusInfo",
+					"epoch", minimalConsensus.Epoch,
+					"epochTimeStart", minimalConsensus.EpochTimeStart,
+					"validatorListLen", len(minimalConsensus.ValidatorsList),
+				)
+				coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
+				coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
+				coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
+				coreMinimalConsensus.ValidatorsList = minimalConsensus.ValidatorsList
 
-			currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, minimalConsensus)
+				currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
 
-			if nil != currentErr {
-				errChan <- currentErr
+				if nil != currentErr {
+					errChan <- currentErr
 
-				return
+					return
+				}
+			case err = <-subscription.Err():
+				if nil != err {
+					errChan <- err
+
+					return
+				}
 			}
-		case err = <-subscription.Err():
-			errChan <- err
-
-			return
 		}
 	}()
 

@@ -367,15 +367,17 @@ func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 	rpcSub := notifier.CreateSubscription()
+	ticker := time.NewTimer(50 * time.Millisecond)
 
 	go func() {
-		for _, consensusInfo := range api.ConsensusInfo {
-			select {
-			case err := <-rpcSub.Err():
-				if nil != err {
-					panic(err)
-				}
-			default:
+		select {
+		case err := <-rpcSub.Err():
+			if nil != err {
+				panic(err)
+			}
+		case <-ticker.C:
+			// Send dummy bulk of consensusInfos
+			for _, consensusInfo := range api.ConsensusInfo {
 				err := notifier.Notify(rpcSub.ID, consensusInfo)
 
 				if nil != err {

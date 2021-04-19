@@ -81,7 +81,6 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	// Set genesis time in a past
 	epochsProgressed := 3
 	genesisTime := timeNow.Add(-epochDuration * time.Duration(epochsProgressed))
-
 	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
 
 	for index, _ := range validatorPublicList {
@@ -94,7 +93,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	minimalConsensusInfos := make([]*params.MinimalEpochConsensusInfo, 0)
 
 	// Prepare epochs from the past
-	for index := 0; index < 5; index++ {
+	for index := 0; index < epochsProgressed; index++ {
 		consensusInfo := NewMinimalConsensusInfo(uint64(index)).(*MinimalEpochConsensusInfo)
 		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
 		consensusInfo.AssignValidators(validatorPublicList)
@@ -726,36 +725,6 @@ func generatePandoraSealedHeaderByKey(
 	}
 
 	header.Extra = extraDataBytes
-
-	return
-}
-
-type OrchestratorService struct {
-	consensusInfo []params.MinimalEpochConsensusInfo
-	tick          int
-}
-
-// Try to spread it a lot of times.
-func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context.Context, payload *MinimalConsensusInfoPayload) (
-	subscription rpc.Subscription,
-	err error,
-) {
-	client, supported := rpc.NotifierFromContext(ctx)
-
-	if !supported {
-		return
-	}
-	rpcSub := client.CreateSubscription()
-	consensusInfo := orchestratorService.consensusInfo
-	rpcSubId := rpcSub.ID
-
-	for minimalConsensus := range consensusInfo {
-		err = client.Notify(rpcSubId, minimalConsensus)
-
-		if nil != err {
-			return
-		}
-	}
 
 	return
 }
