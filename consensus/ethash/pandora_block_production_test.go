@@ -80,7 +80,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
 	// Set genesis time in a past
 	epochsProgressed := 3
-	genesisTime := timeNow.Add(-epochDuration * time.Duration(epochsProgressed))
+	genesisTime := timeNow.Add(-epochDuration*time.Duration(epochsProgressed) + time.Duration(12)*time.Second)
 	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
 
 	for index, _ := range validatorPublicList {
@@ -132,21 +132,6 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		subscription, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
-		timesExpected := 5
-		currentTick := 0
-		timer := time.NewTimer(1 * time.Second)
-		defer timer.Stop()
-
-		select {
-		case err := <-errChannel:
-			require.NoError(t, err)
-		case <-timer.C:
-			currentTick++
-
-			if currentTick > timesExpected {
-				break
-			}
-		}
 
 		// Assert that epochs were filled until some time
 		timeNow := time.Now()
@@ -156,6 +141,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		// Assertion is that dummy response will fill minimalConsensusInfo data with 0,1,2,3
 		// and for current time it will be 3rd epoch
 		assert.Equal(t, uint64(3), currentEpoch.Epoch)
+		require.NoError(t, <-errChannel)
 	})
 }
 

@@ -376,7 +376,7 @@ func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint
 				panic(err)
 			}
 		case <-ticker.C:
-			// Send dummy bulk of consensusInfos
+			// Send consensusInfos one by one
 			for _, consensusInfo := range api.ConsensusInfo {
 				err := notifier.Notify(rpcSub.ID, consensusInfo)
 

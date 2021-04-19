@@ -314,9 +314,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		return
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(5)*time.Second)
-	defer cancelFunc()
-
+	ctx := context.Background()
 	channel := make(chan *params.MinimalEpochConsensusInfo)
 
 	subscription, err = client.Subscribe(
@@ -336,33 +334,31 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	logger := config.Log
 
 	go func() {
-		for {
-			select {
-			case minimalConsensus := <-channel:
-				logger.Info(
-					"Received minimalConsensusInfo",
-					"epoch", minimalConsensus.Epoch,
-					"epochTimeStart", minimalConsensus.EpochTimeStart,
-					"validatorListLen", len(minimalConsensus.ValidatorsList),
-				)
-				coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
-				coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
-				coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
-				coreMinimalConsensus.ValidatorsList = minimalConsensus.ValidatorsList
+		select {
+		case minimalConsensus := <-channel:
+			logger.Info(
+				"Received minimalConsensusInfo",
+				"epoch", minimalConsensus.Epoch,
+				"epochTimeStart", minimalConsensus.EpochTimeStart,
+				"validatorListLen", len(minimalConsensus.ValidatorsList),
+			)
+			coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
+			coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
+			coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
+			coreMinimalConsensus.ValidatorsList = minimalConsensus.ValidatorsList
 
-				currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
+			currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
 
-				if nil != currentErr {
-					errChan <- currentErr
+			if nil != currentErr {
+				errChan <- currentErr
 
-					return
-				}
-			case err = <-subscription.Err():
-				if nil != err {
-					errChan <- err
+				return
+			}
+		case err = <-subscription.Err():
+			if nil != err {
+				errChan <- err
 
-					return
-				}
+				return
 			}
 		}
 	}()
