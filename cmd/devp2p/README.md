@@ -48,6 +48,11 @@ set to standard output. The following filters are supported:
 - `-les-server` filters nodes by LES server support
 - `-snap` filters nodes by snap protocol support
 
+For example, given a node set in `nodes.json`, you could create a filtered set containing
+up to 20 eth mainnet nodes which also support snap sync using this command:
+
+    devp2p nodeset filter nodes.json -eth-network mainnet -snap -limit 20
+
 ### Discovery v4 Utilities
 
 The `devp2p discv4 ...` command family deals with the [Node Discovery v4][discv4]
