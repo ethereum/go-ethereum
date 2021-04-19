@@ -1910,7 +1910,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			nodes += keys
 		}
 	}
-	// Flush anything written just now abd update the stats
+	// Flush anything written just now and update the stats
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
 	}
@@ -2038,7 +2038,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			task.genTrie.Update(hash[:], full)
 		}
 	}
-	// Flush anything written just now abd update the stats
+	// Flush anything written just now and update the stats
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
