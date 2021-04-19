@@ -19,6 +19,8 @@ package main
 import (
 	"fmt"
 	"net"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -60,7 +62,36 @@ func nodesetInfo(ctx *cli.Context) error {
 
 	ns := loadNodesJSON(ctx.Args().First())
 	fmt.Printf("Set contains %d nodes.\n", len(ns))
+	showAttributeCounts(ns)
 	return nil
+}
+
+// showAttributeCounts prints the distribution of ENR attributes in a node set.
+func showAttributeCounts(ns nodeSet) {
+	attrcount := make(map[string]int)
+	var attrlist []interface{}
+	for _, n := range ns {
+		r := n.N.Record()
+		attrlist = r.AppendElements(attrlist[:0])[1:]
+		for i := 0; i < len(attrlist); i += 2 {
+			key := attrlist[i].(string)
+			attrcount[key]++
+		}
+	}
+
+	var keys []string
+	var maxlength int
+	for key := range attrcount {
+		keys = append(keys, key)
+		if len(key) > maxlength {
+			maxlength = len(key)
+		}
+	}
+	sort.Strings(keys)
+	fmt.Println("ENR attribute counts:")
+	for _, key := range keys {
+		fmt.Printf("%s%s: %d\n", strings.Repeat(" ", maxlength-len(key)+1), key, attrcount[key])
+	}
 }
 
 func nodesetFilter(ctx *cli.Context) error {
