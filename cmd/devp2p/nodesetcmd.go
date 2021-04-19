@@ -17,9 +17,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,12 +100,25 @@ func nodesetFilter(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
-	ns := loadNodesJSON(ctx.Args().First())
+
+	// Parse -limit.
+	limit, err := parseFilterLimit(ctx.Args().Tail())
+	if err != nil {
+		return err
+	}
+
+	// Parse the filters.
 	filter, err := andFilter(ctx.Args().Tail())
 	if err != nil {
 		return err
 	}
 
+	// Load nodes and apply filters.
+	// If -limit is set, get the top n nodes first.
+	ns := loadNodesJSON(ctx.Args().First())
+	if limit >= 0 {
+		ns = ns.topN(limit)
+	}
 	result := make(nodeSet)
 	for id, n := range ns {
 		if filter(n) {
@@ -122,6 +137,7 @@ type nodeFilterC struct {
 }
 
 var filterFlags = map[string]nodeFilterC{
+	"-limit":       {1, trueFilter}, // needed to skip over -limit
 	"-ip":          {1, ipFilter},
 	"-min-age":     {1, minAgeFilter},
 	"-eth-network": {1, ethFilter},
@@ -129,6 +145,7 @@ var filterFlags = map[string]nodeFilterC{
 	"-snap":        {0, snapFilter},
 }
 
+// parseFilters parses nodeFilters from args.
 func parseFilters(args []string) ([]nodeFilter, error) {
 	var filters []nodeFilter
 	for len(args) > 0 {
@@ -149,6 +166,26 @@ func parseFilters(args []string) ([]nodeFilter, error) {
 	return filters, nil
 }
 
+// parseFilterLimit parses the -limit option in args. It returns -1 if there is no limit.
+func parseFilterLimit(args []string) (int, error) {
+	limit := -1
+	for i, arg := range args {
+		if arg == "-limit" {
+			if i == len(args)-1 {
+				return -1, errors.New("-limit requires an argument")
+			}
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return -1, fmt.Errorf("invalid -limit %q", args[i+1])
+			}
+			limit = n
+		}
+	}
+	return limit, nil
+}
+
+// andFilter parses node filters in args and and returns a single filter that requires all
+// of them to match.
 func andFilter(args []string) (nodeFilter, error) {
 	checks, err := parseFilters(args)
 	if err != nil {
@@ -163,6 +200,10 @@ func andFilter(args []string) (nodeFilter, error) {
 		return true
 	}
 	return f, nil
+}
+
+func trueFilter(args []string) (nodeFilter, error) {
+	return func(n nodeJSON) bool { return true }, nil
 }
 
 func ipFilter(args []string) (nodeFilter, error) {
