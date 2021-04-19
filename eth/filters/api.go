@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"sync"
 	"time"
@@ -48,14 +49,15 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend   Backend
-	mux       *event.TypeMux
-	quit      chan struct{}
-	chainDb   ethdb.Database
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
-	timeout   time.Duration
+	ConsensusInfo []*params.MinimalEpochConsensusInfo
+	backend       Backend
+	mux           *event.TypeMux
+	quit          chan struct{}
+	chainDb       ethdb.Database
+	events        *EventSystem
+	filtersMu     sync.Mutex
+	filters       map[rpc.ID]*filter
+	timeout       time.Duration
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
@@ -354,6 +356,37 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, err
 	}
 	return returnLogs(logs), err
+}
+
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		for _, consensusInfo := range api.ConsensusInfo {
+			select {
+			case err := <-rpcSub.Err():
+				if nil != err {
+					panic(err)
+				}
+			default:
+				err := notifier.Notify(rpcSub.ID, consensusInfo)
+
+				if nil != err {
+					// For now only panic
+					panic(err)
+				}
+			}
+		}
+	}()
+
+	return rpcSub, nil
 }
 
 // UninstallFilter removes the filter with the given filter id.

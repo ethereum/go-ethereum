@@ -278,9 +278,9 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	epochNumber := pandoraMode.Epoch
 	genesisTimeUnix := uint64(genesisTime.Unix())
 	slotDuration := pandoraMode.SlotTimeDuration * time.Second
-	timePassed := epochNumber*uint64(slotDuration.Seconds()) + genesisTimeUnix
+	timePassed := epochNumber*uint64(slotDuration.Seconds())*uint64(validatorListLen) + genesisTimeUnix
 	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
-	pandoraMode.EpochTimeStartUnix = genesisTimeUnix
+	pandoraMode.EpochTimeStartUnix = uint64(pandoraMode.EpochTimeStart.Unix())
 }
 
 func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
@@ -313,19 +313,20 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		return
 	}
 
-	ctx := context.Background()
-	channel := make(chan *MinimalEpochConsensusInfo)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(5)*time.Second)
+	defer cancelFunc()
 
-	params := MinimalConsensusInfoPayload{
-		FromEpoch: epoch,
-	}
+	channel := make(chan *MinimalEpochConsensusInfo)
+	//params := MinimalConsensusInfoPayload{
+	//	FromEpoch: epoch,
+	//}
 
 	subscription, err = client.Subscribe(
 		ctx,
 		"orc",
 		channel,
 		"minimalConsensusInfo",
-		params,
+		epoch,
 	)
 
 	if nil != err {
