@@ -85,7 +85,7 @@ func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (
 	pandora := Pandora{sealer: sealer}
 	go pandora.Loop()
 
-	_, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0)
+	_, _, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0)
 
 	if nil != err {
 		panic(fmt.Sprintf("could not start remote pandora, err: %s", err.Error()))
@@ -313,6 +313,7 @@ func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
 // For the first iteration we use first of notify urls to reach orchestrator
 func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	subscription *rpc.ClientSubscription,
+	channel chan *params.MinimalEpochConsensusInfo,
 	err error,
 	errChan chan error,
 ) {
@@ -335,12 +336,13 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	}
 
 	ctx := context.Background()
-	channel := make(chan *params.MinimalEpochConsensusInfo)
+	genericChannel := make(chan interface{})
+	channel = make(chan *params.MinimalEpochConsensusInfo)
 
 	subscription, err = client.Subscribe(
 		ctx,
 		"orc",
-		channel,
+		genericChannel,
 		"minimalConsensusInfo",
 		epoch,
 	)
@@ -353,26 +355,100 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	config := ethashEngine.config
 	logger := config.Log
 
+	insertFunc := func(
+		minimalConsensus *params.MinimalEpochConsensusInfo,
+	) (currentErr error) {
+		logger.Info(
+			"Received minimalConsensusInfo",
+			"epoch", minimalConsensus.Epoch,
+			"epochTimeStart", minimalConsensus.EpochTimeStart,
+			"validatorListLen", len(minimalConsensus.ValidatorsList),
+		)
+		coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
+		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
+		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
+		coreMinimalConsensus.ValidatorsList = minimalConsensus.ValidatorsList
+		currentErr = ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
+
+		if nil == err {
+			channel <- minimalConsensus
+		}
+
+		return
+	}
+
 	go func() {
 		select {
-		case minimalConsensus := <-channel:
-			logger.Info(
-				"Received minimalConsensusInfo",
-				"epoch", minimalConsensus.Epoch,
-				"epochTimeStart", minimalConsensus.EpochTimeStart,
-				"validatorListLen", len(minimalConsensus.ValidatorsList),
-			)
-			coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
-			coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
-			coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
-			coreMinimalConsensus.ValidatorsList = minimalConsensus.ValidatorsList
+		case interfaceMsg := <-genericChannel:
+			switch msg := interfaceMsg.(type) {
+			// Its very weird, but subscription sends back something else than MinimalEpochConsensusInfo
+			// it is sending 4-len map[string]interface{}. I do this fallback to progress further
+			case map[string]interface{}:
+				expectedLen := 4
+				gotLen := len(msg)
 
-			currentErr := ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
+				if expectedLen != gotLen {
+					errMsg := "received not supported payload"
+					logger.Error(errMsg,
+						"expectedLen", expectedLen,
+						"gotLen", gotLen,
+					)
 
-			if nil != currentErr {
-				errChan <- currentErr
+					errChan <- fmt.Errorf(errMsg)
+				}
 
-				return
+				currentEpoch := msg["epoch"].(float64)
+				validatorList := msg["validatorList"].([]interface{})
+				epochTimeStart := msg["epochTimeStart"].(float64)
+				slotTimeDuration := msg["slotTimeDuration"].(float64)
+
+				var (
+					epochValidators [validatorListLen]common2.PublicKey
+				)
+
+				// TODO: debug if this happen only in test, or live
+				// If live works well than test is invalid and should be written better
+				for index, validator := range validatorList {
+					currentValidator, isOkValidator := validator.(common2.PublicKey)
+
+					// TODO: this fallback should be removed ASAP
+					if !isOkValidator {
+						logger.Error(
+							"Received invalid validators",
+							"epoch", validator,
+						)
+					}
+
+					if index > len(epochValidators)-1 {
+						currentErr := fmt.Errorf("invalidPayload")
+						errChan <- currentErr
+
+						return
+					}
+
+					epochValidators[index] = currentValidator
+				}
+
+				currentErr := insertFunc(
+					&params.MinimalEpochConsensusInfo{
+						Epoch:            uint64(currentEpoch),
+						ValidatorsList:   epochValidators,
+						EpochTimeStart:   uint64(epochTimeStart),
+						SlotTimeDuration: time.Duration(int64(slotTimeDuration)),
+					},
+				)
+
+				if nil != currentErr {
+					errChan <- currentErr
+				}
+			case *params.MinimalEpochConsensusInfo:
+				currentErr := insertFunc(msg)
+
+				if nil != currentErr {
+					errChan <- err
+
+					return
+				}
 			}
 		case err = <-subscription.Err():
 			if nil != err {

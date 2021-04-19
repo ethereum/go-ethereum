@@ -267,6 +267,7 @@ func makeMiner(
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second * 3,
+			Notify:   notify,
 		},
 	}
 

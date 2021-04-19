@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -271,6 +272,7 @@ func (sub *ClientSubscription) deliver(result json.RawMessage) (ok bool) {
 	case sub.in <- result:
 		return true
 	case <-sub.quit:
+		fmt.Printf("\n\n\n\n\n NOT DELIVERED A SUBSCRIPTION \n\n\n\n\n\n")
 		return false
 	}
 }

@@ -129,16 +129,28 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	pandora := Pandora{remoteSealerServer}
 
 	t.Run("should fetch all epochs from genesis epoch until 3rd", func(t *testing.T) {
-		subscription, err, _ := pandora.SubscribeToMinimalConsensusInformation(0)
+		t.Skip()
+		subscription, _, err, _ := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
 	})
 
 	t.Run("temporary skipped", func(t *testing.T) {
-		subscription, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
+		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
-		t.Skip()
+		gatheredInformations := make([]*params.MinimalEpochConsensusInfo, 0)
+
+		select {
+		case minimalConsensus := <-channel:
+			gatheredInformations = append(gatheredInformations, minimalConsensus)
+
+			if len(gatheredInformations) > epochsProgressed {
+				break
+			}
+		case err := <-errChannel:
+			require.NoError(t, err)
+		}
 		// Assert that epochs were filled until some time
 		header := &types.Header{Time: uint64(timeNow.Unix())}
 		currentEpoch, err := ethash.getMinimalConsensus(header)
