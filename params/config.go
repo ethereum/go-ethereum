@@ -240,7 +240,7 @@ var (
 
 	// AleutChainConfig contains the chain parameters to run a node on the Aleut test network.
 	AleutChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(133519467574834),
+		ChainID:             big.NewInt(7822),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
