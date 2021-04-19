@@ -176,11 +176,11 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, minTarget, maxTarget u
 		pp.lock.Unlock()
 		return 0
 	}
-	stepDiv := pp.fineStepDiv
-	if maxTarget <= c.capacity {
-		bias, stepDiv = 0, pp.capacityStepDiv
+	pp.setTempState(c)
+	if maxTarget > c.capacity {
+		pp.setTempStepDiv(c, pp.fineStepDiv)
+		pp.setTempBias(c, bias)
 	}
-	pp.setTempState(c, pp.minCap, stepDiv, bias)
 	pp.setTempCapacity(c, maxTarget)
 	c.minTarget = minTarget
 	pp.activeQueue.Remove(c.activeIndex)
@@ -317,7 +317,7 @@ func (pp *priorityPool) disconnectedNode(c *ppNodeInfo) {
 
 	var updates []capUpdate
 	if c.capacity != 0 {
-		pp.setTempState(c, pp.minCap, pp.capacityStepDiv, 0)
+		pp.setTempState(c)
 		pp.setTempCapacity(c, 0)
 		updates = pp.tryActivate(true)
 	}
@@ -329,7 +329,7 @@ func (pp *priorityPool) disconnectedNode(c *ppNodeInfo) {
 // or confirmed later. This temporary state allows changing the capacity of a node and
 // moving it between the active and inactive queue. activeFlag/inactiveFlag and
 // capacityField are not changed while the changes are still temporary.
-func (pp *priorityPool) setTempState(c *ppNodeInfo, minTarget uint64, stepDiv uint64, bias time.Duration) {
+func (pp *priorityPool) setTempState(c *ppNodeInfo) {
 	if c.tempState {
 		return
 	}
@@ -337,9 +337,10 @@ func (pp *priorityPool) setTempState(c *ppNodeInfo, minTarget uint64, stepDiv ui
 	if c.tempCapacity != c.capacity { // should never happen
 		log.Error("tempCapacity != capacity when entering tempState")
 	}
-	c.minTarget = minTarget
-	c.stepDiv = stepDiv
-	c.bias = bias
+	// Assign all the defaults to the temp state.
+	c.minTarget = pp.minCap
+	c.stepDiv = pp.capacityStepDiv
+	c.bias = 0
 	pp.tempState = append(pp.tempState, c)
 }
 
@@ -361,19 +362,37 @@ func (pp *priorityPool) unsetTempState(c *ppNodeInfo) {
 // setTempCapacity changes the capacity of a node in the temporary state and adjusts
 // activeCap and activeCount accordingly. Since this change is performed in the temporary
 // state it should be called after setTempState and before finalizeChanges.
-func (pp *priorityPool) setTempCapacity(n *ppNodeInfo, cap uint64) {
-	if !n.tempState { // should never happen
+func (pp *priorityPool) setTempCapacity(c *ppNodeInfo, cap uint64) {
+	if !c.tempState { // should never happen
 		log.Error("Node is not in temporary state")
 		return
 	}
-	pp.activeCap += cap - n.tempCapacity
-	if n.tempCapacity == 0 {
+	pp.activeCap += cap - c.tempCapacity
+	if c.tempCapacity == 0 {
 		pp.activeCount++
 	}
 	if cap == 0 {
 		pp.activeCount--
 	}
-	n.tempCapacity = cap
+	c.tempCapacity = cap
+}
+
+// setTempBias changes the connection bias of a node in the temporary state.
+func (pp *priorityPool) setTempBias(c *ppNodeInfo, bias time.Duration) {
+	if !c.tempState { // should never happen
+		log.Error("Node is not in temporary state")
+		return
+	}
+	c.bias = bias
+}
+
+// setTempStepDiv changes the capacity divisor of a node in the temporary state.
+func (pp *priorityPool) setTempStepDiv(c *ppNodeInfo, stepDiv uint64) {
+	if !c.tempState { // should never happen
+		log.Error("Node is not in temporary state")
+		return
+	}
+	c.stepDiv = stepDiv
 }
 
 // enforceLimits enforces active node count and total capacity limits. It returns the
@@ -389,7 +408,7 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 	)
 	pp.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
 		c = data.(*ppNodeInfo)
-		pp.setTempState(c, pp.minCap, pp.capacityStepDiv, 0)
+		pp.setTempState(c)
 		maxActivePriority = priority
 		if c.tempCapacity == c.minTarget || pp.activeCount > pp.maxCount {
 			pp.setTempCapacity(c, 0)
@@ -470,12 +489,14 @@ func (pp *priorityPool) updateFlags(updates []capUpdate) {
 func (pp *priorityPool) tryActivate(commit bool) []capUpdate {
 	for pp.inactiveQueue.Size() > 0 {
 		c := pp.inactiveQueue.PopItem().(*ppNodeInfo)
-		pp.setTempState(c, pp.minCap, pp.capacityStepDiv, pp.activeBias)
+		pp.setTempState(c)
+		pp.setTempBias(c, pp.activeBias)
 		pp.setTempCapacity(c, pp.minCap)
 		pp.activeQueue.Push(c)
 		pp.enforceLimits()
 		if c.tempCapacity > 0 {
 			commit = true
+			pp.setTempBias(c, 0)
 		} else {
 			break
 		}
