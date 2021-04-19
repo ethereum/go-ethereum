@@ -245,7 +245,7 @@ func (b *batch) Write() error {
 // Reset resets the batch for reuse.
 func (b *batch) Reset() {
 	b.writes = b.writes[:0]
-	b.size = 0
+	b.keys, b.size = 0, 0
 }
 
 // Replay replays the batch contents.
