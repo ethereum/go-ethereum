@@ -228,7 +228,7 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, strings.Join(set.values, "")))
+		log.Info(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
 		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
 
