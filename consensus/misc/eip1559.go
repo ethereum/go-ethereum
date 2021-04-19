@@ -23,7 +23,7 @@ func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
 		expectedBaseFee = CalcBaseFee(parent)
 	}
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
-		return fmt.Errorf("invalid baseFee: expected: %d, have %d", parent.BaseFee.Int64(), header.BaseFee.Int64())
+		return fmt.Errorf("invalid baseFee: expected: %d, have %d, parent: %v", expectedBaseFee, header.BaseFee.Int64(), parent.BaseFee.Int64())
 	}
 
 	return nil
