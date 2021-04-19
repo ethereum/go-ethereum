@@ -114,16 +114,15 @@ func nodesetFilter(ctx *cli.Context) error {
 	}
 
 	// Load nodes and apply filters.
-	// If -limit is set, get the top n nodes first.
 	ns := loadNodesJSON(ctx.Args().First())
-	if limit >= 0 {
-		ns = ns.topN(limit)
-	}
 	result := make(nodeSet)
 	for id, n := range ns {
 		if filter(n) {
 			result[id] = n
 		}
+	}
+	if limit >= 0 {
+		result = result.topN(limit)
 	}
 	writeNodesJSON("-", result)
 	return nil
