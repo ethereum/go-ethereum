@@ -85,6 +85,24 @@ func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (
 	pandora := Pandora{sealer: sealer}
 	go pandora.Loop()
 
+	_, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0)
+
+	if nil != err {
+		panic(fmt.Sprintf("could not start remote pandora, err: %s", err.Error()))
+	}
+
+	go func() {
+		select {
+		case err := <-errChan:
+			if nil != err {
+				panic(fmt.Sprintf(
+					"error during minimalConsensusInformation subscription, err: %s",
+					err.Error(),
+				))
+			}
+		}
+	}()
+
 	return
 }
 
@@ -304,6 +322,8 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 
 	if notifyURLsLen < 1 {
 		err = fmt.Errorf("there must be at least one in notifyURLs, got: %d", notifyURLsLen)
+
+		return
 	}
 
 	// We use only first
