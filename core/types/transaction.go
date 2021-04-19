@@ -493,7 +493,7 @@ type TransactionsByMinerFeeAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByMinerFeeAndNonce(signer Signer, txs map[common.Address]Transactions, baseFee *big.Int) *TransactionsByMinerFeeAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, baseFee *big.Int) *TransactionsByMinerFeeAndNonce {
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByMinerFeeAndTime, 0, len(txs))
 	for from, accTxs := range txs {

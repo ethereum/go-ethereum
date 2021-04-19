@@ -499,7 +499,7 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				txset := types.NewTransactionsByMinerFeeAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
 				w.commitTransactions(txset, coinbase, nil)
 				// Only update the snapshot if any new transactons were added
@@ -983,13 +983,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByMinerFeeAndNonce(w.current.signer, localTxs, header.BaseFee)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByMinerFeeAndNonce(w.current.signer, remoteTxs, header.BaseFee)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}
