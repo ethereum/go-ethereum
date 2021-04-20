@@ -151,7 +151,6 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 			return big.NewInt(int64(i)).Bytes()
 		}
 	}
-
 	for i := 0; i < 1000; i++ {
 		key := common.BigToHash(keyB)
 		value := getValue(i)
@@ -168,5 +167,51 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		if !bytes.Equal(have, want) {
 			t.Fatalf("item %d, have %#x want %#x", i, have, want)
 		}
+
+	}
+}
+
+// TestStacktrieSerialization tests that the stacktrie works well if we
+// serialize/unserialize it a lot
+func TestStacktrieSerialization(t *testing.T) {
+	var (
+		st       = NewStackTrie(nil)
+		nt, _    = New(common.Hash{}, NewDatabase(memorydb.New()))
+		keyB     = big.NewInt(1)
+		keyDelta = big.NewInt(1)
+		vals     [][]byte
+		keys     [][]byte
+	)
+	getValue := func(i int) []byte {
+		if i%2 == 0 { // large
+			return crypto.Keccak256(big.NewInt(int64(i)).Bytes())
+		} else { //small
+			return big.NewInt(int64(i)).Bytes()
+		}
+	}
+	for i := 0; i < 10; i++ {
+		vals = append(vals, getValue(i))
+		keys = append(keys, common.BigToHash(keyB).Bytes())
+		keyB = keyB.Add(keyB, keyDelta)
+		keyDelta.Add(keyDelta, common.Big1)
+	}
+	for i, k := range keys {
+		nt.TryUpdate(k, common.CopyBytes(vals[i]))
+	}
+
+	for i, k := range keys {
+		blob, err := st.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		newSt, err := NewFromBinary(blob, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st = newSt
+		st.TryUpdate(k, common.CopyBytes(vals[i]))
+	}
+	if have, want := st.Hash(), nt.Hash(); have != want {
+		t.Fatalf("have %#x want %#x", have, want)
 	}
 }
