@@ -57,6 +57,17 @@ func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
+type safeGatheredInfo struct {
+	mutex    sync.Mutex
+	gathered []*filters.MinimalEpochConsensusInfoPayload
+}
+
+func (info *safeGatheredInfo) appendNext(minimal *filters.MinimalEpochConsensusInfoPayload) {
+	info.mutex.Lock()
+	defer info.mutex.Unlock()
+	info.gathered = append(info.gathered, minimal)
+}
+
 var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 	chainConfig: &params.ChainConfig{
 		ChainID:             big.NewInt(256),
@@ -128,37 +139,56 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	remoteSealerServer := StartRemotePandora(ethash, urls, true)
 	pandora := Pandora{remoteSealerServer}
 
-	t.Run("should fetch all epochs from genesis epoch until 3rd", func(t *testing.T) {
-		t.Skip()
-		subscription, _, err, _ := pandora.SubscribeToMinimalConsensusInformation(0)
-		require.NoError(t, err)
-		defer subscription.Unsubscribe()
-	})
-
 	t.Run("temporary skipped", func(t *testing.T) {
 		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
-		gatheredInformations := make([]*params.MinimalEpochConsensusInfo, 0)
-
-		select {
-		case minimalConsensus := <-channel:
-			gatheredInformations = append(gatheredInformations, minimalConsensus)
-
-			if len(gatheredInformations) > epochsProgressed {
-				break
-			}
-		case err := <-errChannel:
-			require.NoError(t, err)
+		gatheredInformation := make([]*filters.MinimalEpochConsensusInfoPayload, 0)
+		mutex := sync.Mutex{}
+		gatherer := safeGatheredInfo{
+			mutex:    mutex,
+			gathered: gatheredInformation,
 		}
-		// Assert that epochs were filled until some time
-		header := &types.Header{Time: uint64(timeNow.Unix())}
-		currentEpoch, err := ethash.getMinimalConsensus(header)
-		require.NoError(t, err)
-		// Assertion is that dummy response will fill minimalConsensusInfo data with 0,1,2,3
-		// and for current time it will be 3rd epoch
-		assert.Equal(t, uint64(3), currentEpoch.Epoch)
-		require.NoError(t, <-errChannel)
+
+		for {
+			select {
+			case minimalConsensus := <-channel:
+				fmt.Printf("\n I have received consensus info \n")
+				gatherer.appendNext(minimalConsensus)
+			case err := <-errChannel:
+				require.NoError(t, err)
+			}
+
+			if len(gatherer.gathered) >= epochsProgressed {
+				assert.Equal(t, epochsProgressed, len(gatherer.gathered))
+				require.NoError(t, err)
+				testRetry := 5
+
+				header := &types.Header{Time: uint64(timeNow.Unix())}
+
+				var (
+					currentEpoch *MinimalEpochConsensusInfo
+				)
+
+				// Try to test cache filling with decent fallback mechanism
+				// cache propagation and networking could take some time
+				for index := 0; index < testRetry; index++ {
+					currentEpoch, err = ethash.getMinimalConsensus(header)
+
+					if nil != err {
+						time.Sleep(time.Millisecond * 50)
+
+						continue
+					}
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, epochsProgressed, currentEpoch)
+				fmt.Printf("\n I have it \n")
+
+				return
+			}
+		}
 	})
 }
 

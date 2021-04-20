@@ -60,6 +60,15 @@ type PublicFilterAPI struct {
 	timeout       time.Duration
 }
 
+type MinimalEpochConsensusInfoPayload struct {
+	// Epoch number
+	Epoch uint64 `json:"epoch"`
+	// Validators public key list for specific epoch
+	ValidatorList    [32]string    `json:"validatorList"`
+	EpochStartTime   uint64        `json:"epochTimeStart"`
+	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+}
+
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
 func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) *PublicFilterAPI {
 	api := &PublicFilterAPI{
@@ -378,7 +387,18 @@ func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint
 		case <-ticker.C:
 			// Send consensusInfos one by one
 			for _, consensusInfo := range api.ConsensusInfo {
-				err := notifier.Notify(rpcSub.ID, consensusInfo)
+				consensusPayload := MinimalEpochConsensusInfoPayload{
+					Epoch:            consensusInfo.Epoch,
+					ValidatorList:    [32]string{},
+					EpochStartTime:   consensusInfo.EpochTimeStart,
+					SlotTimeDuration: consensusInfo.SlotTimeDuration,
+				}
+
+				for index, validator := range consensusInfo.ValidatorsList {
+					consensusPayload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
+				}
+
+				err := notifier.Notify(rpcSub.ID, &consensusPayload)
 
 				if nil != err {
 					// For now only panic
