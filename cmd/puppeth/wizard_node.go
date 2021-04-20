@@ -77,6 +77,29 @@ func (w *wizard) deployNode(boot bool) {
 			infos.ethashdir = w.readDefaultString(infos.ethashdir)
 		}
 	}
+	// Potentially use custom version of geth
+	fmt.Println()
+	fmt.Println("Which geth should be used? (default = latest)")
+	fmt.Println(" 1. Use latest release")
+	fmt.Println(" 2. Specify git repository")
+	choice := w.read()
+	switch {
+	case choice == "" || choice == "1":
+		break
+	case choice == "2":
+		infos.gitRepo, infos.gitCommit, err = w.readRepository()
+		if err != nil {
+			log.Error("Couldn't read remote repository", "err", err)
+			return
+		}
+		if infos.gitCommit != w.gitCommit {
+			log.Warn("Local puppeth compiled at different commit. This could have unintended consequences.", "local", w.gitCommit, "remote", infos.gitCommit)
+		}
+	default:
+		log.Error("That's not something I can do")
+		return
+	}
+
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.port)

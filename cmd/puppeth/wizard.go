@@ -34,6 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/go-git/go-git/v5"
+	gitConfig "github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/storage/memory"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -70,8 +74,9 @@ func (c config) flush() {
 }
 
 type wizard struct {
-	network string // Network name to manage
-	conf    config // Configurations from previous runs
+	network   string // Network name to manage
+	gitCommit string // Commit hash of puppeth build env
+	conf      config // Configurations from previous runs
 
 	servers  map[string]*sshClient // SSH connections to servers to administer
 	services map[string][]string   // Ethereum services known to be running on servers
@@ -364,5 +369,59 @@ func (w *wizard) readIPAddress() string {
 			continue
 		}
 		return text
+	}
+}
+
+func (w *wizard) readRepository() (repo string, hash string, err error) {
+	for {
+		fmt.Println()
+		fmt.Println("Where's the git repository? (http/https url)")
+		url := w.readURL()
+
+		if url.Scheme != "http" && url.Scheme != "https" {
+			log.Error("Unsupported git repository URL scheme", "scheme", url.Scheme)
+			continue
+		}
+		repo = url.String()
+
+		fmt.Println()
+		fmt.Println("What branch? (default = HEAD)")
+		branch := w.readDefaultString("HEAD")
+
+		r := git.NewRemote(memory.NewStorage(), &gitConfig.RemoteConfig{
+			Name: "origin",
+			URLs: []string{repo},
+		})
+
+		var (
+			refs   []*plumbing.Reference
+			target plumbing.ReferenceName
+		)
+
+		refs, err = r.List(&git.ListOptions{})
+		if err != nil {
+			log.Error("Unable to access remote repository", "err", err)
+			continue
+		}
+		// Scan remote refs for desired branch. HEAD is a symbolic reference and does not
+		// return the actual HEAD hash, therefore the target is saved and the refs are
+		// rescaned to find the true ref which contains the hash.
+		for _, ref := range refs {
+			if ref.Name().Short() == branch {
+				if branch != "HEAD" {
+					hash = ref.Hash().String()
+					return
+				}
+				target = ref.Target()
+				break
+			}
+		}
+		for _, ref := range refs {
+			if ref.Name() == target {
+				hash = ref.Hash().String()
+				return
+			}
+		}
+		log.Error("Unable to access remote branch.")
 	}
 }

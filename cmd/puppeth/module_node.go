@@ -32,8 +32,28 @@ import (
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
-FROM ethereum/client-go:latest
+{{if .GitRepo}}
+	FROM golang:1.16-alpine as builder
 
+	RUN apk add --no-cache make gcc musl-dev linux-headers git
+
+	RUN mkdir /go-ethereum
+	WORKDIR /go-ethereum
+	RUN git init -b main
+	RUN git remote add origin {{.GitRepo}}
+	RUN git fetch --depth 1 origin {{.GitCommit}}
+	RUN git checkout -b tmp FETCH_HEAD
+	RUN make geth
+
+	FROM alpine:latest
+
+	RUN apk add --no-cache ca-certificates
+	COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+
+	EXPOSE 8545 8546 30303 30303/udp
+{{else}}
+	FROM ethereum/client-go:latest
+{{end}}
 ADD genesis.json /genesis.json
 {{if .Unlock}}
 	ADD signer.json /signer.json
@@ -110,6 +130,8 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 		"GasLimit":  uint64(1000000 * config.gasLimit),
 		"GasPrice":  uint64(1000000000 * config.gasPrice),
 		"Unlock":    config.keyJSON != "",
+		"GitRepo":   config.gitRepo,
+		"GitCommit": config.gitCommit,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -153,6 +175,8 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 // various configuration parameters.
 type nodeInfos struct {
 	genesis    []byte
+	gitRepo    string
+	gitCommit  string
 	network    int64
 	datadir    string
 	ethashdir  string
