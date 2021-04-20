@@ -154,6 +154,23 @@ func discv4(ctx *cli.Context, inputSet nodeSet, timeout time.Duration) nodeSet {
 	return c.run(timeout)
 }
 
+// makeGenesis is the pendant to utils.MakeGenesis
+// with local flags instead of global flags.
+func makeGenesis(ctx *cli.Context) *core.Genesis {
+	switch {
+	case ctx.Bool(utils.RopstenFlag.Name):
+		return core.DefaultRopstenGenesisBlock()
+	case ctx.Bool(utils.RinkebyFlag.Name):
+		return core.DefaultRinkebyGenesisBlock()
+	case ctx.Bool(utils.GoerliFlag.Name):
+		return core.DefaultGoerliGenesisBlock()
+	case ctx.Bool(utils.YoloV3Flag.Name):
+		return core.DefaultYoloV3GenesisBlock()
+	default:
+		return core.DefaultGenesisBlock()
+	}
+}
+
 func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb *influx, timeout time.Duration) nodeSet {
 	var nodes []crawledNode
 	output := make(nodeSet)
@@ -164,7 +181,7 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb 
 	v4 := discv4(ctx, nodeSet{}, timeout)
 	output.add(v4.nodes()...)
 
-	genesis := utils.MakeGenesis(ctx)
+	genesis := makeGenesis(ctx)
 	if genesis == nil {
 		genesis = core.DefaultGenesisBlock()
 	}
