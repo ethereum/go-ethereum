@@ -178,12 +178,14 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 		addr := common.Address(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
 		warmAccess := evm.StateDB.AddressInAccessList(addr)
+		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
+		// the cost to charge for cold access, if any, is Cold - Warm
+		coldCost := ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929
 		if !warmAccess {
 			evm.StateDB.AddAddressToAccessList(addr)
-			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost
-			// Temporarily charge the remaining difference here already, to correctly calculate available
+			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929) {
+			if !contract.UseGas(coldCost) {
 				return 0, ErrOutOfGas
 			}
 		}
@@ -196,14 +198,12 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 		if warmAccess || err != nil {
 			return gas, err
 		}
-		// In case of a cold access, add the already charged gas back and return the total sum
-		// as dynamic gas to be properly accounted for and charged on the outside
-		if gas, overflow := math.SafeAdd(gas, ColdAccountAccessCostEIP2929-WarmStorageReadCostEIP2929); overflow {
-			return 0, ErrGasUintOverflow
-		} else {
-			contract.Gas += ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929
-			return gas, nil
-		}
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		contract.Gas += coldCost
+		return gas + coldCost, nil
 	}
 }
 
