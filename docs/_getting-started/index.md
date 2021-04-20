@@ -71,7 +71,7 @@ For this tutorial, we use a `light` sync:
 Start Clef, setting the keystore and chain id (goerli is 5) for the network we want to connect to:
 
 ```shell
-clef --keystore <GETH_LOCATION>/keystore --chainid 5
+clef --keystore <GETH_DATA_DIR>/keystore --chainid 5
 ```
 
 To begin with, you see errors about a missing keystore, and we fix that soon.
