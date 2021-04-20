@@ -893,3 +893,15 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 		}
 	}
 }
+
+// Seed can be used to inject a single trie node into the clean cache. Its main
+// purpose is to allow operating on trie nodes that are known to be on disk, but
+// if they are available in RAM too (generated from snapshot), instead of loading
+// again from persistent storage (expensive), rather inject into the cache to be
+// loaded from there (cheap).
+func (db *Database) Seed(key common.Hash, val []byte) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	db.cleans.Set(key[:], val)
+}
