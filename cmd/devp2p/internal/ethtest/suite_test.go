@@ -49,15 +49,30 @@ func TestSetupGeth(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	runAll(t)
+	geth, err := setupGeth()
+	if err != nil {
+		t.Fatalf("could not set up geth: %v", err)
+	}
+	suite := newTestSuite(t, geth.Server().Self())
+	runTests(t, geth, suite, suite.AllEthTests())
 }
 
 func TestEth65(t *testing.T) {
-	runEth65(t)
+	geth, err := setupGeth()
+	if err != nil {
+		t.Fatalf("could not set up geth: %v", err)
+	}
+	suite := newTestSuite(t, geth.Server().Self())
+	runTests(t, geth, suite, suite.EthTests())
 }
 
 func TestEth66(t *testing.T) {
-	runEth66(t)
+	geth, err := setupGeth()
+	if err != nil {
+		t.Fatalf("could not set up geth: %v", err)
+	}
+	suite := newTestSuite(t, geth.Server().Self())
+	runTests(t, geth, suite, suite.Eth66Tests())
 }
 
 func TestStatus(t *testing.T) {
@@ -148,41 +163,15 @@ func TestMaliciousTx_66(t *testing.T) {
 	runTest(t, "TestMaliciousTx_66")
 }
 
-func runAll(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
+func runTests(t *testing.T, geth *node.Node, suite *Suite, tests []utesting.Test) {
+	if err := geth.Start(); err != nil {
+		t.Fatalf("could not start geth: %v", err)
 	}
 	// wait for geth to start up
 	time.Sleep(time.Second * 5)
 
-	suite := newTestSuite(t, geth.Server().Self())
 	failures := make(map[string]string)
-	for _, test := range suite.AllEthTests() {
-		failed, output := utesting.Run(test)
-		if failed {
-			failures[test.Name] = output
-		}
-	}
-	if len(failures) > 0 {
-		for name, failure := range failures {
-			t.Logf("%s FAILED: %s", name, failure)
-		}
-		t.Fatalf("%d out of %d tests failed", len(failures), len(suite.AllEthTests()))
-	}
-}
-
-func runEth65(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
-	}
-	// wait for geth to start up
-	time.Sleep(time.Second * 5)
-
-	suite := newTestSuite(t, geth.Server().Self())
-	failures := make(map[string]string)
-	for _, test := range suite.EthTests() {
+	for _, test := range tests {
 		failed, output := utesting.Run(test)
 		if failed {
 			failures[test.Name] = output
@@ -193,30 +182,6 @@ func runEth65(t *testing.T) {
 			t.Logf("%s FAILED: %s", name, failure)
 		}
 		t.Fatalf("%d out of %d tests failed", len(failures), len(suite.EthTests()))
-	}
-}
-
-func runEth66(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
-	}
-	// wait for geth to start up
-	time.Sleep(time.Second * 5)
-
-	suite := newTestSuite(t, geth.Server().Self())
-	failures := make(map[string]string)
-	for _, test := range suite.Eth66Tests() {
-		failed, output := utesting.Run(test)
-		if failed {
-			failures[test.Name] = output
-		}
-	}
-	if len(failures) > 0 {
-		for name, failure := range failures {
-			t.Logf("%s FAILED: %s", name, failure)
-		}
-		t.Fatalf("%d out of %d tests failed", len(failures), len(suite.Eth66Tests()))
 	}
 }
 
