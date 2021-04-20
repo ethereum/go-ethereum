@@ -386,6 +386,12 @@ func (s *remoteSealer) notifyWork() {
 func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []byte, work [4]string) {
 	defer s.reqWG.Done()
 
+	// TODO: enable this
+	// Vanguard now will pull the blocks, but it will be great to notify about new work
+	if s.ethash.IsPandoraModeEnabled() {
+		return
+	}
+
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {
 		s.ethash.config.Log.Warn("Can't create remote miner notification", "err", err)
