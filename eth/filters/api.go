@@ -370,13 +370,15 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 // MinimalConsensusInfo will notify and return about all consensus information
 // This iteration does not allow to fetch only desired range
 // It is entirely done to check if tests are having same problems with subscription
+// TODO: move this into test and do not modify already existing API
 func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
+
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
+
 	rpcSub := notifier.CreateSubscription()
-	ticker := time.NewTimer(50 * time.Millisecond)
 
 	go func() {
 		select {
@@ -384,10 +386,10 @@ func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint
 			if nil != err {
 				panic(err)
 			}
-		case <-ticker.C:
-			// Send consensusInfos one by one
-			for _, consensusInfo := range api.ConsensusInfo {
-				consensusPayload := MinimalEpochConsensusInfoPayload{
+		//	Send consensus one by one in a queue
+		default:
+			for infoIndex, consensusInfo := range api.ConsensusInfo {
+				consensusPayload := &MinimalEpochConsensusInfoPayload{
 					Epoch:            consensusInfo.Epoch,
 					ValidatorList:    [32]string{},
 					EpochStartTime:   consensusInfo.EpochTimeStart,
@@ -398,11 +400,16 @@ func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint
 					consensusPayload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
 				}
 
-				err := notifier.Notify(rpcSub.ID, &consensusPayload)
+				err := notifier.Notify(rpcSub.ID, consensusPayload)
 
 				if nil != err {
 					// For now only panic
 					panic(err)
+				}
+
+				// Keep routine warm, for tests purposes only
+				if infoIndex == len(api.ConsensusInfo)-1 {
+					time.Sleep(time.Millisecond * 150)
 				}
 			}
 		}

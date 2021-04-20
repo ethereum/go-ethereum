@@ -257,7 +257,7 @@ type sealWork struct {
 
 func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
 	if ModePandora == ethash.config.PowMode {
-		return StartRemotePandora(ethash, urls, noverify)
+		return StartRemotePandora(ethash, urls, noverify, true)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

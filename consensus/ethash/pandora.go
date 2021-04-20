@@ -63,7 +63,12 @@ type MinimalEpochConsensusInfo struct {
 // This is done only to have vanguard spec done in minimal codebase to exchange information with pandora.
 // In this approach you could have multiple execution engines connected via urls []string
 // In this approach you are also compatible with any current toolsets for mining because you use already defined api
-func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (sealer *remoteSealer) {
+func StartRemotePandora(
+	executionEngine *Ethash,
+	urls []string,
+	noverify bool,
+	orcSubscribe bool,
+) (sealer *remoteSealer) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sealer = &remoteSealer{
 		ethash:       executionEngine,
@@ -84,6 +89,11 @@ func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (
 
 	pandora := Pandora{sealer: sealer}
 	go pandora.Loop()
+
+	// Early return, do not subscribe to orchestrator client
+	if !orcSubscribe {
+		return
+	}
 
 	_, _, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0)
 
@@ -368,6 +378,15 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		coreMinimalConsensus.ValidatorsList = [32]common2.PublicKey{}
 
 		for index, validator := range minimalConsensus.ValidatorList {
+			// Create dummy key for genesis epoch slot 0
+			// This fallback is done because orchestrators sending only 0x instead of full public key
+			// for slot 0
+			if 0 == index && 0 == coreMinimalConsensus.Epoch {
+				secretKey, _ := herumi.RandKey()
+				pubKey := secretKey.PublicKey()
+				validator = hexutil.Encode(pubKey.Marshal())
+			}
+
 			publicKeyBytes, currentErr := hexutil.Decode(validator)
 
 			if nil != currentErr {
@@ -387,7 +406,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 
 		currentErr = ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
 
-		if nil == err {
+		if nil == currentErr {
 			channel <- minimalConsensus
 		}
 
@@ -401,6 +420,8 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 			currentErr := insertFunc(payload)
 
 			if nil != currentErr {
+				errChan <- err
+
 				return
 			}
 
