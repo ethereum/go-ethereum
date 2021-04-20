@@ -18,47 +18,37 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/influxdata/influxdb/client"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
 
 type influx struct {
-	_url     *url.URL
+	_url     string
+	org      string
 	database string
-	username string
-	password string
+	token    string
 }
 
-func NewInflux(_url, database, username, password string) (*influx, error) {
-	u, err := url.Parse(_url)
-	if err != nil {
-		log.Warn("Unable to parse InfluxDB", "url", _url, "err", err)
-		return nil, err
-	}
+func NewInflux(_url, database, org, token string) (*influx, error) {
 	return &influx{
-		_url:     u,
+		_url:     _url,
+		org:      org,
 		database: database,
-		username: username,
-		password: password,
+		token:    token,
 	}, nil
 }
 
-func (i influx) connect() (*client.Client, error) {
-	return client.NewClient(client.Config{
-		URL:      *i._url,
-		Username: i.username,
-		Password: i.password,
-		Timeout:  10 * time.Minute,
-	})
+func (i influx) connect() influxdb2.Client {
+	return influxdb2.NewClient(i._url, i.token)
 }
 
 func (i influx) updateNodes(nodes []crawledNode) error {
-	var pts []client.Point
 	now := time.Now()
+	cl := i.connect()
+	defer cl.Close()
+	writer := cl.WriteAPI(i.org, i.database)
 	for _, node := range nodes {
 		n := node.node
 		info := &clientInfo{}
@@ -83,9 +73,10 @@ func (i influx) updateNodes(nodes []crawledNode) error {
 			pk = fmt.Sprintf("X: %v, Y: %v", n.N.Pubkey().X.String(), n.N.Pubkey().Y.String())
 		}
 		fid := fmt.Sprintf("Hash: %v, NExt %v", info.ForkID.Hash, info.ForkID.Next)
-		pts = append(pts, client.Point{
-			Measurement: fmt.Sprintf("nodes.%v", n.N.ID()),
-			Fields: map[string]interface{}{
+		point := influxdb2.NewPoint(
+			fmt.Sprintf("nodes.%v", n.N.ID()),
+			nil,
+			map[string]interface{}{
 				"ClientType":      info.ClientType,
 				"ID":              n.N.ID().GoString(),
 				"PK":              pk,
@@ -103,18 +94,16 @@ func (i influx) updateNodes(nodes []crawledNode) error {
 				"Score":           n.Score,
 				"ConnType":        connType,
 			},
-			Time: now,
-		})
+			now,
+		)
+		writer.WritePoint(point)
 	}
-	bps := client.BatchPoints{
-		Points:   pts,
-		Database: i.database,
-	}
-	cl, err := i.connect()
-	if err != nil {
+
+	writer.Flush()
+	select {
+	case err := <-writer.Errors():
 		return err
+	default:
+		return nil
 	}
-	log.Info("Writing results to influx")
-	_, err = cl.Write(bps)
-	return err
 }

@@ -55,17 +55,37 @@ var (
 			utils.NetworkIdFlag,
 			crawlTimeoutFlag,
 			nodeURLFlag,
-			utils.MetricsEnableInfluxDBFlag,
-			utils.MetricsInfluxDBEndpointFlag,
-			utils.MetricsInfluxDBDatabaseFlag,
-			utils.MetricsInfluxDBUsernameFlag,
-			utils.MetricsInfluxDBPasswordFlag,
+			influxDBFlag,
+			influxDBURLFlag,
+			influxDBBucketFlag,
+			influxDBOrgFlag,
+			influxDBTokenFlag,
 		},
 	}
 	nodeURLFlag = cli.StringFlag{
 		Name:  "nodeURL",
 		Usage: "URL of the node you want to connect to",
 		Value: "http://localhost:8545",
+	}
+	influxDBFlag = cli.BoolFlag{
+		Name:  "influxdb",
+		Usage: "Store the crawled data in a influxdb",
+	}
+	influxDBURLFlag = cli.StringFlag{
+		Name:  "influxdb.url",
+		Usage: "URL where the influxdb is reachable",
+	}
+	influxDBBucketFlag = cli.StringFlag{
+		Name:  "influxdb.bucket",
+		Usage: "Bucket where the data should be stored",
+	}
+	influxDBOrgFlag = cli.StringFlag{
+		Name:  "influxdb.org",
+		Usage: "InfluxDB organization where data should be stored",
+	}
+	influxDBTokenFlag = cli.StringFlag{
+		Name:  "influxdb.token",
+		Usage: "Token used to authenticate with influxdb",
 	}
 	status           *ethtest.Status
 	lastStatusUpdate time.Time
@@ -98,13 +118,13 @@ func crawlNodes(ctx *cli.Context) error {
 	}
 
 	var influxdb *influx
-	if true || ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
-		url := ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
-		database := ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
-		username := ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
-		password := ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+	if ctx.IsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+		url := ctx.String(influxDBURLFlag.Name)
+		bucket := ctx.String(influxDBBucketFlag.Name)
+		org := ctx.String(influxDBOrgFlag.Name)
+		token := ctx.String(influxDBTokenFlag.Name)
 		var err error
-		if influxdb, err = NewInflux(url, database, username, password); err != nil {
+		if influxdb, err = NewInflux(url, bucket, org, token); err != nil {
 			exit(err)
 		}
 		log.Info("Connected to influxdb")
@@ -137,14 +157,19 @@ func discv4(ctx *cli.Context, inputSet nodeSet, timeout time.Duration) nodeSet {
 func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb *influx, timeout time.Duration) nodeSet {
 	var nodes []crawledNode
 	output := make(nodeSet)
+	log.Info("DiscV5")
 	v5 := discv5(ctx, nodeSet{}, timeout)
 	output.add(v5.nodes()...)
+	log.Info("DiscV4")
 	v4 := discv4(ctx, nodeSet{}, timeout)
 	output.add(v4.nodes()...)
 
 	genesis := utils.MakeGenesis(ctx)
-	networkID := ctx.GlobalUint64(utils.NetworkIdFlag.Name)
-	nodeURL := ctx.GlobalString(nodeURLFlag.Name)
+	if genesis == nil {
+		genesis = core.DefaultGenesisBlock()
+	}
+	networkID := ctx.Uint64(utils.NetworkIdFlag.Name)
+	nodeURL := ctx.String(nodeURLFlag.Name)
 	// Try to connect and get the status of all nodes
 	for _, node := range output {
 		info, err := getClientInfo(genesis, networkID, nodeURL, node.N)
@@ -214,15 +239,21 @@ func getClientInfo(genesis *core.Genesis, networkID uint64, nodeURL string, n *e
 		return &info, nil
 	}
 	conn.SetDeadline(time.Now().Add(15 * time.Second))
-	// write status message
-	status, err := getStatus(genesis.Config, genesis.ToBlock(nil).Hash(), networkID, nodeURL)
-	if err != nil {
-		return nil, err
+	// write status message, if we have a backing node
+	if len(nodeURL) > 0 {
+		// write status message
+		if status, err := getStatus(genesis.Config, genesis.ToBlock(nil).Hash(), networkID, nodeURL); err != nil {
+			log.Error("Local node failed to respond", "err", err)
+		} else {
+			status.ProtocolVersion = highestEthVersion
+			if err := conn.Write(status); err != nil {
+				return nil, err
+			}
+		}
 	}
-	status.ProtocolVersion = highestEthVersion
-	if err := conn.Write(status); err != nil {
-		return nil, err
-	}
+
+	// Regardless of whether we wrote a status message or not, the remote side
+	// might still send us one.
 
 	// read status message from client
 	switch msg := conn.Read().(type) {
