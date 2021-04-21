@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 var (
@@ -41,7 +40,10 @@ func TestEthSuite(t *testing.T) {
 	}
 	defer geth.Close()
 
-	suite := newTestSuite(t, geth.Server().Self())
+	suite, err := NewSuite(geth.Server().Self(), fullchainFile, genesisFile)
+	if err != nil {
+		t.Fatalf("could not create new test suite: %v", err)
+	}
 	for _, test := range suite.AllEthTests() {
 		t.Run(test.Name, func(t *testing.T) {
 			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
@@ -54,25 +56,6 @@ func TestEthSuite(t *testing.T) {
 
 // runGeth creates and starts a geth node
 func runGeth() (*node.Node, error) {
-	geth, err := setupGeth()
-	if err != nil {
-		return nil, err
-	}
-	if err := geth.Start(); err != nil {
-		return nil, err
-	}
-	return geth, nil
-}
-
-func newTestSuite(t *testing.T, enodeID *enode.Node) *Suite {
-	suite, err := NewSuite(enodeID, fullchainFile, genesisFile)
-	if err != nil {
-		t.Fatalf("could not create test suite: %v", err)
-	}
-	return suite
-}
-
-func setupGeth() (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:0",
@@ -84,9 +67,23 @@ func setupGeth() (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	err = setupGeth(stack)
+	if err != nil {
+		stack.Close()
+		return nil, err
+	}
+	if err = stack.Start(); err != nil {
+		stack.Close()
+		return nil, err
+	}
+	return stack, nil
+}
+
+func setupGeth(stack *node.Node) error {
 	chain, err := loadChain(halfchainFile, genesisFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	backend, err := eth.New(stack, &ethconfig.Config{
@@ -94,13 +91,9 @@ func setupGeth() (*node.Node, error) {
 		NetworkId: chain.genesis.Config.ChainID.Uint64(), // 19763
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
-	if err != nil {
-		return nil, err
-	}
-
-	return stack, nil
+	return err
 }
