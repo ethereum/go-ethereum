@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
@@ -45,6 +46,7 @@ func (i influx) connect() influxdb2.Client {
 }
 
 func (i influx) updateNodes(nodes []crawledNode) error {
+	log.Info("Writing nodes to influxdb", "nodes", len(nodes))
 	now := time.Now()
 	cl := i.connect()
 	defer cl.Close()

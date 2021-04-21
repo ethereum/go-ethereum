@@ -118,7 +118,7 @@ func crawlNodes(ctx *cli.Context) error {
 	}
 
 	var influxdb *influx
-	if ctx.IsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+	if ctx.IsSet(influxDBFlag.Name) {
 		url := ctx.String(influxDBURLFlag.Name)
 		bucket := ctx.String(influxDBBucketFlag.Name)
 		org := ctx.String(influxDBOrgFlag.Name)
