@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -198,7 +199,7 @@ func TestTraceCall(t *testing.T) {
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        ethapi.CallArgs
-		config      *TraceConfig
+		config      *TraceCallConfig
 		expectErr   error
 		expect      interface{}
 	}{
@@ -300,6 +301,147 @@ func TestTraceCall(t *testing.T) {
 			}
 			if !reflect.DeepEqual(result, testspec.expect) {
 				t.Errorf("Result mismatch, want %v, get %v", testspec.expect, result)
+			}
+		}
+	}
+}
+
+func TestOverridenTraceCall(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
+		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+	}}
+	genBlocks := 10
+	signer := types.HomesteadSigner{}
+	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		//    value: 1000 wei
+		//    fee:   0 wei
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, big.NewInt(0), nil), signer, accounts[0].key)
+		b.AddTx(tx)
+	}))
+	randomAccounts, tracer := newAccounts(3), "callTracer"
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		call        ethapi.CallArgs
+		config      *TraceCallConfig
+		expectErr   error
+		expect      *callTrace
+	}{
+		// Succcessful call with state overriding
+		{
+			blockNumber: rpc.PendingBlockNumber,
+			call: ethapi.CallArgs{
+				From:  &randomAccounts[0].addr,
+				To:    &randomAccounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			config: &TraceCallConfig{
+				Tracer: &tracer,
+				StateOverrides: &ethapi.StateOverride{
+					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				},
+			},
+			expectErr: nil,
+			expect: &callTrace{
+				Type:    "CALL",
+				From:    randomAccounts[0].addr,
+				To:      randomAccounts[1].addr,
+				Gas:     newRPCUint64(24979000),
+				GasUsed: newRPCUint64(0),
+				Value:   (*hexutil.Big)(big.NewInt(1000)),
+			},
+		},
+		// Invalid call without state overriding
+		{
+			blockNumber: rpc.PendingBlockNumber,
+			call: ethapi.CallArgs{
+				From:  &randomAccounts[0].addr,
+				To:    &randomAccounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			config: &TraceCallConfig{
+				Tracer: &tracer,
+			},
+			expectErr: core.ErrInsufficientFundsForTransfer,
+			expect:    nil,
+		},
+		// Sucessful simple contract call
+		//
+		// // SPDX-License-Identifier: GPL-3.0
+		//
+		//  pragma solidity >=0.7.0 <0.8.0;
+		//
+		//  /**
+		//   * @title Storage
+		//   * @dev Store & retrieve value in a variable
+		//   */
+		//  contract Storage {
+		//      uint256 public number;
+		//      constructor() {
+		//          number = block.number;
+		//      }
+		//  }
+		{
+			blockNumber: rpc.PendingBlockNumber,
+			call: ethapi.CallArgs{
+				From: &randomAccounts[0].addr,
+				To:   &randomAccounts[2].addr,
+				Data: newRPCBytes(common.Hex2Bytes("8381f58a")), // call number()
+			},
+			config: &TraceCallConfig{
+				Tracer: &tracer,
+				StateOverrides: &ethapi.StateOverride{
+					randomAccounts[2].addr: ethapi.OverrideAccount{
+						Code:      newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
+						StateDiff: newStates([]common.Hash{{}}, []common.Hash{common.BigToHash(big.NewInt(123))}),
+					},
+				},
+			},
+			expectErr: nil,
+			expect: &callTrace{
+				Type:    "CALL",
+				From:    randomAccounts[0].addr,
+				To:      randomAccounts[2].addr,
+				Input:   hexutil.Bytes(common.Hex2Bytes("8381f58a")),
+				Output:  hexutil.Bytes(common.BigToHash(big.NewInt(123)).Bytes()),
+				Gas:     newRPCUint64(24978936),
+				GasUsed: newRPCUint64(2283),
+				Value:   (*hexutil.Big)(big.NewInt(0)),
+			},
+		},
+	}
+	for _, testspec := range testSuite {
+		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("Expect error %v, get nothing", testspec.expectErr)
+				continue
+			}
+			if !errors.Is(err, testspec.expectErr) {
+				t.Errorf("Error mismatch, want %v, get %v", testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Expect no error, get %v", err)
+				continue
+			}
+			ret := new(callTrace)
+			if err := json.Unmarshal(result.(json.RawMessage), ret); err != nil {
+				t.Fatalf("failed to unmarshal trace result: %v", err)
+			}
+			if !jsonEqual(ret, testspec.expect) {
+				// uncomment this for easier debugging
+				//have, _ := json.MarshalIndent(ret, "", " ")
+				//want, _ := json.MarshalIndent(testspec.expect, "", " ")
+				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
+				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, testspec.expect)
 			}
 		}
 	}
@@ -468,4 +610,30 @@ func newAccounts(n int) (accounts Accounts) {
 	}
 	sort.Sort(accounts)
 	return accounts
+}
+
+func newRPCBalance(balance *big.Int) **hexutil.Big {
+	rpcBalance := (*hexutil.Big)(balance)
+	return &rpcBalance
+}
+
+func newRPCUint64(number uint64) *hexutil.Uint64 {
+	rpcUint64 := hexutil.Uint64(number)
+	return &rpcUint64
+}
+
+func newRPCBytes(bytes []byte) *hexutil.Bytes {
+	rpcBytes := hexutil.Bytes(bytes)
+	return &rpcBytes
+}
+
+func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.Hash {
+	if len(keys) != len(vals) {
+		panic("invalid input")
+	}
+	m := make(map[common.Hash]common.Hash)
+	for i := 0; i < len(keys); i++ {
+		m[keys[i]] = vals[i]
+	}
+	return &m
 }
