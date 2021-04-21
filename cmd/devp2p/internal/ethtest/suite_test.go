@@ -75,9 +75,9 @@ func newTestSuite(t *testing.T, enodeID *enode.Node) *Suite {
 func setupGeth() (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		P2P: p2p.Config{
-			ListenAddr:  "127.0.0.1:30303",
+			ListenAddr:  "127.0.0.1:0",
 			NoDiscovery: true,
-			MaxPeers:    10, // TODO arbitrary
+			MaxPeers:    10, // in case a test requires multiple connections, can be changed in the future
 			NoDial:      true,
 		},
 	})
