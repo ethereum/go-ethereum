@@ -43,147 +43,7 @@ func init() {
 	}
 }
 
-func TestSetupGeth(t *testing.T) {
-	if _, err := setupGeth(); err != nil {
-		t.Fatalf("could not create geth: %v", err)
-	}
-}
-
-func TestAll(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
-	}
-	time.Sleep(time.Second * 5)
-	suite := newTestSuite(t, geth.Server().Self())
-	runTests(t, suite.AllEthTests())
-}
-
-func TestEth65(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
-	}
-	time.Sleep(time.Second * 5)
-	suite := newTestSuite(t, geth.Server().Self())
-	runTests(t, suite.EthTests())
-}
-
-func TestEth66(t *testing.T) {
-	geth, err := runGeth()
-	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
-	}
-	time.Sleep(time.Second * 5)
-	suite := newTestSuite(t, geth.Server().Self())
-	runTests(t, suite.Eth66Tests())
-}
-
-func TestStatus(t *testing.T) {
-	runTest(t, "TestStatus")
-}
-
-func TestStatus_66(t *testing.T) {
-	runTest(t, "TestStatus_66")
-}
-
-func TestGetBlockHeaders(t *testing.T) {
-	runTest(t, "TestGetBlockHeaders")
-}
-
-func TestGetBlockHeaders_66(t *testing.T) {
-	runTest(t, "TestGetBlockHeaders_66")
-}
-
-func TestSimultaneousRequests_66(t *testing.T) {
-	runTest(t, "TestSimultaneousRequests_66")
-}
-
-func TestSameRequestID_66(t *testing.T) {
-	runTest(t, "TestSameRequestID_66")
-}
-
-func TestZeroRequestID_66(t *testing.T) {
-	runTest(t, "TestZeroRequestID_66")
-}
-
-func TestGetBlockBodies(t *testing.T) {
-	runTest(t, "TestGetBlockBodies")
-}
-
-func TestGetBlockBodies_66(t *testing.T) {
-	runTest(t, "TestGetBlockBodies_66")
-}
-
-func TestBroadcast(t *testing.T) {
-	runTest(t, "TestBroadcast")
-}
-
-func TestBroadcast_66(t *testing.T) {
-	runTest(t, "TestBroadcast_66")
-}
-
-func TestLargeAnnounce(t *testing.T) {
-	runTest(t, "TestLargeAnnounce")
-}
-
-func TestLargeAnnounce_66(t *testing.T) {
-	runTest(t, "TestLargeAnnounce_66")
-}
-
-func TestOldAnnounce(t *testing.T) {
-	runTest(t, "TestOldAnnounce")
-}
-
-func TestMaliciousHandshake(t *testing.T) {
-	runTest(t, "TestMaliciousHandshake")
-}
-
-func TestMaliciousStatus(t *testing.T) {
-	runTest(t, "TestMaliciousStatus")
-}
-
-func TestMaliciousHandshake_66(t *testing.T) {
-	runTest(t, "TestMaliciousHandshake_66")
-}
-
-func TestMaliciousStatus_66(t *testing.T) {
-	runTest(t, "TestMaliciousStatus_66")
-}
-
-func TestTransaction(t *testing.T) {
-	runTest(t, "TestTransaction")
-}
-
-func TestTransaction_66(t *testing.T) {
-	runTest(t, "TestTransaction_66")
-}
-
-func TestMaliciousTx(t *testing.T) {
-	runTest(t, "TestMaliciousTx")
-}
-
-func TestMaliciousTx_66(t *testing.T) {
-	runTest(t, "TestMaliciousTx_66")
-}
-
-func runTests(t *testing.T, tests []utesting.Test) {
-	failures := make(map[string]string)
-	results := utesting.RunTAP(tests, os.Stdout)
-	for _, result := range results {
-		if result.Failed {
-			failures[result.Name] = result.Output
-		}
-	}
-	if len(failures) > 0 {
-		for name, output := range failures {
-			t.Logf("%s FAILED: \n%s", name, output)
-		}
-		t.Fatalf("%d tests out of %d failed", len(failures), len(tests))
-	}
-}
-
-func runTest(t *testing.T, test string) {
+func TestEthSuite(t *testing.T) {
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
@@ -192,66 +52,15 @@ func runTest(t *testing.T, test string) {
 	time.Sleep(time.Second * 5)
 
 	suite := newTestSuite(t, geth.Server().Self())
-	fn := testFn(test, suite)
-	if fn == nil {
-		t.Fatalf("could not find test function for %s", test)
-	}
-	result := utesting.RunTAP([]utesting.Test{{Name: test, Fn: fn}}, os.Stdout)
-	if result[0].Failed {
-		t.Fatalf("test failed: \n%s", result[0].Output)
-	}
-}
 
-func testFn(name string, suite *Suite) func(t *utesting.T) {
-	switch name {
-	case "TestStatus":
-		return suite.TestStatus
-	case "TestStatus_66":
-		return suite.TestStatus_66
-	case "TestGetBlockHeaders":
-		return suite.TestGetBlockHeaders
-	case "TestGetBlockHeaders_66":
-		return suite.TestGetBlockHeaders_66
-	case "TestSimultaneousRequests_66":
-		return suite.TestSimultaneousRequests_66
-	case "TestSameRequestID_66":
-		return suite.TestSameRequestID_66
-	case "TestZeroRequestID_66":
-		return suite.TestZeroRequestID_66
-	case "TestGetBlockBodies":
-		return suite.TestGetBlockBodies
-	case "TestGetBlockBodies_66":
-		return suite.TestGetBlockBodies_66
-	case "TestBroadcast":
-		return suite.TestBroadcast
-	case "TestBroadcast_66":
-		return suite.TestBroadcast_66
-	case "TestLargeAnnounce":
-		return suite.TestLargeAnnounce
-	case "TestLargeAnnounce_66":
-		return suite.TestLargeAnnounce_66
-	case "TestOldAnnounce":
-		return suite.TestOldAnnounce
-	case "TestOldAnnounce_66":
-		return suite.TestOldAnnounce_66
-	case "TestMaliciousHandshake":
-		return suite.TestMaliciousHandshake
-	case "TestMaliciousStatus":
-		return suite.TestMaliciousStatus
-	case "TestMaliciousStatus_66":
-		return suite.TestMaliciousStatus_66
-	case "TestMaliciousHandshake_66":
-		return suite.TestMaliciousHandshake_66
-	case "TestTransaction":
-		return suite.TestTransaction
-	case "TestTransaction_66":
-		return suite.TestTransaction_66
-	case "TestMaliciousTx":
-		return suite.TestMaliciousTx
-	case "TestMaliciousTx_66":
-		return suite.TestMaliciousTx_66
+	for _, test := range suite.AllEthTests() {
+		t.Run(test.Name, func(t *testing.T) {
+			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
+			if result[0].Failed {
+				t.Fatal()
+			}
+		})
 	}
-	return nil
 }
 
 // runGeth creates and starts a geth node
@@ -301,7 +110,7 @@ func setupGeth() (*node.Node, error) {
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:30303",
 			NoDiscovery: true,
-			MaxPeers:    20, // TODO arbitrary
+			MaxPeers:    10, // TODO arbitrary
 			NoDial:      true,
 		},
 	})
