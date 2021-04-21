@@ -28,8 +28,8 @@ import (
 // API is a user facing RPC API to allow controlling the validator and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain    consensus.ChainHeaderReader
-	posa     *POSA
+	chain consensus.ChainHeaderReader
+	posa  *POSA
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.

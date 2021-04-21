@@ -74,8 +74,8 @@ var (
 	punishContractName     = "punish"
 	proposalContractName   = "proposal"
 	validatorsContractAddr = common.HexToAddress("0x000000000000000000000000000000000000f000")
-	punishContractAddr     = common.HexToAddress("0x000000000000000000000000000000000000f001")
-	proposalAddr           = common.HexToAddress("0x000000000000000000000000000000000000f002")
+	punishContractAddr     = common.HexToAddress("0x000000000000000000000000000000000000f111")
+	proposalAddr           = common.HexToAddress("0x000000000000000000000000000000000000f222")
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -102,14 +102,6 @@ var (
 	// errInvalidExtraValidators is returned if validator data in extra-data field is invalid.
 	errInvalidExtraValidators = errors.New("Invalid extra validators in extra data field")
 
-	// errInvalidCheckpointValidators is returned if a checkpoint block contains an
-	// invalid list of validators (i.e. non divisible by 20 bytes).
-	errInvalidCheckpointValidators = errors.New("invalid validator list on checkpoint block")
-
-	// errMismatchingCheckpointValidators is returned if a checkpoint block contains a
-	// list of validators different than the one the local node calculated.
-	errMismatchingCheckpointValidators = errors.New("mismatching validator list on checkpoint block")
-
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
@@ -122,10 +114,6 @@ var (
 	// errWrongDifficulty is returned if the difficulty of a block doesn't match the
 	// turn of the validator.
 	errWrongDifficulty = errors.New("wrong difficulty")
-
-	// errInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
-	errInvalidTimestamp = errors.New("invalid timestamp")
 
 	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
 	// the previous block's timestamp + the minimum block period.
@@ -183,9 +171,9 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // The proof-of-stake-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type POSA struct {
-	chainConfig *params.ChainConfig    // ChainConfig to execute evm
-	config      *params.POSAConfig // Consensus engine configuration parameters
-	db          ethdb.Database         // Database to store and retrieve snapshot checkpoints
+	chainConfig *params.ChainConfig // ChainConfig to execute evm
+	config      *params.POSAConfig  // Consensus engine configuration parameters
+	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -643,8 +631,8 @@ func (c *POSA) trySendBlockReward(chain consensus.ChainHeaderReader, header *typ
 
 	// Miner will send tx to deposit block fees to contract, add to his balance first.
 	state.AddBalance(header.Coinbase, fee)
-	// reset fee
-	state.SetBalance(consensus.FeeRecoder, common.Big0)
+	// defer reset fee
+	defer state.SetBalance(consensus.FeeRecoder, common.Big0)
 
 	method := "distributeBlockReward"
 	data, err := c.abi[validatorsContractName].Pack(method)
@@ -695,7 +683,7 @@ func (c *POSA) doSomethingAtEpoch(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	// update contract new validators if new set exists
-	if err := c.updateValidators(newSortedValidators, chain, header, state); err != nil {
+	if err := c.updateValidators(chain, header, state); err != nil {
 		return []common.Address{}, err
 	}
 	//  decrease validator missed blocks counter at epoch
@@ -753,7 +741,7 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 	if parent == nil {
 		return []common.Address{}, consensus.ErrUnknownAncestor
 	}
-	statedb, err := c.stateFn(parent.Root)
+	stateDB, err := c.stateFn(parent.Root)
 	if err != nil {
 		return []common.Address{}, err
 	}
@@ -765,10 +753,10 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 		return []common.Address{}, err
 	}
 
-	msg := types.NewMessage(header.Coinbase, &validatorsContractAddr, 0, new(big.Int), math.MaxUint64, new(big.Int), data,nil, false)
+	msg := types.NewMessage(header.Coinbase, &validatorsContractAddr, 0, new(big.Int), math.MaxUint64, new(big.Int), data, nil, false)
 
 	// use parent
-	result, err := executeMsg(msg, statedb, parent, newChainContext(chain, c), c.chainConfig)
+	result, err := executeMsg(msg, stateDB, parent, newChainContext(chain, c), c.chainConfig)
 	if err != nil {
 		return []common.Address{}, err
 	}
@@ -789,10 +777,10 @@ func (c *POSA) getTopValidators(chain consensus.ChainHeaderReader, header *types
 	return validators, err
 }
 
-func (c *POSA) updateValidators(vals []common.Address, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
+func (c *POSA) updateValidators(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
 	// method
 	method := "updateActiveValidatorSet"
-	data, err := c.abi[validatorsContractName].Pack(method, vals, new(big.Int).SetUint64(c.config.Epoch))
+	data, err := c.abi[validatorsContractName].Pack(method, new(big.Int).SetUint64(c.config.Epoch))
 	if err != nil {
 		log.Error("Can't pack data for updateActiveValidatorSet", "error", err)
 		return err

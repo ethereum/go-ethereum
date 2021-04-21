@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var FeeRecoder = common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+var FeeRecoder = common.HexToAddress("0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF")
 
 // ChainHeaderReader defines a small collection of methods needed to access the local
 // blockchain during header verification.
