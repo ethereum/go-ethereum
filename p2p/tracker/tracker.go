@@ -84,6 +84,9 @@ func New(protocol string, timeout time.Duration) *Tracker {
 // Track adds a network request to the tracker to wait for a response to arrive
 // or until the request it cancelled or times out.
 func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint64, id uint64) {
+	if !metrics.Enabled {
+		return
+	}
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -108,10 +111,9 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 		time:    time.Now(),
 		expire:  t.expire.PushBack(id),
 	}
-	if metrics.Enabled {
-		g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, version, reqCode)
-		metrics.GetOrRegisterGauge(g, nil).Inc(1)
-	}
+	g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, version, reqCode)
+	metrics.GetOrRegisterGauge(g, nil).Inc(1)
+
 	// If we've just inserted the first item, start the expiration timer
 	if t.wake == nil {
 		t.wake = time.AfterFunc(t.timeout, t.clean)
@@ -140,13 +142,11 @@ func (t *Tracker) clean() {
 		t.expire.Remove(head)
 		delete(t.pending, id)
 
-		if metrics.Enabled {
-			g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
-			metrics.GetOrRegisterGauge(g, nil).Dec(1)
+		g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
+		metrics.GetOrRegisterGauge(g, nil).Dec(1)
 
-			m := fmt.Sprintf("%s/%s/%d/%#02x", lostMeterName, t.protocol, req.version, req.reqCode)
-			metrics.GetOrRegisterMeter(m, nil).Mark(1)
-		}
+		m := fmt.Sprintf("%s/%s/%d/%#02x", lostMeterName, t.protocol, req.version, req.reqCode)
+		metrics.GetOrRegisterMeter(m, nil).Mark(1)
 	}
 	t.schedule()
 }
@@ -163,16 +163,17 @@ func (t *Tracker) schedule() {
 
 // Fulfil fills a pending request, if any is available, reporting on various metrics.
 func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
+	if !metrics.Enabled {
+		return
+	}
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// If it's a non existing request, track as stale response
 	req, ok := t.pending[id]
 	if !ok {
-		if metrics.Enabled {
-			m := fmt.Sprintf("%s/%s/%d/%#02x", staleMeterName, t.protocol, version, code)
-			metrics.GetOrRegisterMeter(m, nil).Mark(1)
-		}
+		m := fmt.Sprintf("%s/%s/%d/%#02x", staleMeterName, t.protocol, version, code)
+		metrics.GetOrRegisterMeter(m, nil).Mark(1)
 		return
 	}
 	// If the response is funky, it might be some active attack
@@ -189,16 +190,14 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 		t.wake.Stop()
 		t.schedule()
 	}
-	if metrics.Enabled {
-		g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
-		metrics.GetOrRegisterGauge(g, nil).Dec(1)
+	g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
+	metrics.GetOrRegisterGauge(g, nil).Dec(1)
 
-		h := fmt.Sprintf("%s/%s/%d/%#02x", waitHistName, t.protocol, req.version, req.reqCode)
-		sampler := func() metrics.Sample {
-			return metrics.ResettingSample(
-				metrics.NewExpDecaySample(1028, 0.015),
-			)
-		}
-		metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(req.time).Microseconds())
+	h := fmt.Sprintf("%s/%s/%d/%#02x", waitHistName, t.protocol, req.version, req.reqCode)
+	sampler := func() metrics.Sample {
+		return metrics.ResettingSample(
+			metrics.NewExpDecaySample(1028, 0.015),
+		)
 	}
+	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(req.time).Microseconds())
 }
