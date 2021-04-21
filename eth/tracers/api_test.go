@@ -372,7 +372,7 @@ func TestOverridenTraceCall(t *testing.T) {
 			expectErr: core.ErrInsufficientFundsForTransfer,
 			expect:    nil,
 		},
-		// Sucessful simple contract call
+		// Successful simple contract call
 		//
 		// // SPDX-License-Identifier: GPL-3.0
 		//

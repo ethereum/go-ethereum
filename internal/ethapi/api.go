@@ -817,7 +817,7 @@ type OverrideAccount struct {
 	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
-// StateOverride is the collection of overriden accounts.
+// StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
 
 // Apply overrides the fields of specified accounts into the given state.
