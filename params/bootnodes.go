@@ -20,8 +20,7 @@ import "github.com/ethereum/go-ethereum/common"
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
-var MainnetBootnodes = []string{
-}
+var MainnetBootnodes []string
 
 // TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the test network.
 var TestnetBootnodes = []string{
@@ -32,7 +31,7 @@ var TestnetBootnodes = []string{
 	"enode://71bea53f03654e1c9bfdf9488c88087492a207c30129e93b5b5c89d79fcd4cbd432eee55ed12ab2cacb7b84aa24bd03c1b76ca9d95164f33b1088d64756e17a7@15.152.3.151:53370",   // kcc-testnet-node-sync-01
 }
 
-var V5Bootnodes = []string{}
+var V5Bootnodes []string
 
 // KnownDNSNetwork returns the address of a public DNS-based node list for the given
 // genesis hash and protocol. See https://github.com/ethereum/discv4-dns-lists for more
