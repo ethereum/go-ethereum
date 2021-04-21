@@ -68,10 +68,8 @@ func sendSuccessfulTxWithConn(t *utesting.T, s *Suite, tx *types.Transaction, se
 
 func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	defer func() {
-		sendConn.Close()
-		recvConn.Close()
-	}()
+	defer sendConn.Close()
+	defer recvConn.Close()
 	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
 }
 

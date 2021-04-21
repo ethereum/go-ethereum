@@ -257,10 +257,9 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
-	defer func() {
-		sendConn.Close()
-		receiveConn.Close()
-	}()
+	defer sendConn.Close()
+	defer receiveConn.Close()
+
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[nextBlock],
@@ -393,10 +392,8 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	// Test the last block as a valid block
 	sendConn := s.setupConnection(t)
 	receiveConn := s.setupConnection(t)
-	defer func() {
-		sendConn.Close()
-		receiveConn.Close()
-	}()
+	defer sendConn.Close()
+	defer receiveConn.Close()
 
 	s.testAnnounce(t, sendConn, receiveConn, blocks[3])
 	// update test suite chain
@@ -409,10 +406,9 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 
 func (s *Suite) TestOldAnnounce(t *utesting.T) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	defer func() {
-		sendConn.Close()
-		recvConn.Close()
-	}()
+	defer sendConn.Close()
+	defer recvConn.Close()
+
 	s.oldAnnounce(t, sendConn, recvConn)
 }
 

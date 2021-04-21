@@ -86,10 +86,8 @@ func (s *Suite) TestGetBlockHeaders_66(t *utesting.T) {
 func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 	// create two connections
 	conn1, conn2 := s.setupConnection66(t), s.setupConnection66(t)
-	defer func() {
-		conn1.Close()
-		conn2.Close()
-	}()
+	defer conn1.Close()
+	defer conn2.Close()
 	// create two requests
 	req1 := &eth.GetBlockHeadersPacket66{
 		RequestId: 111,
@@ -128,10 +126,8 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 // propagated to the given node's peer(s) on the eth66 protocol.
 func (s *Suite) TestBroadcast_66(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
-	defer func() {
-		sendConn.Close()
-		receiveConn.Close()
-	}()
+	defer sendConn.Close()
+	defer receiveConn.Close()
 
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
@@ -218,10 +214,8 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 	}
 	// Test the last block as a valid block
 	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
-	defer func() {
-		sendConn.Close()
-		receiveConn.Close()
-	}()
+	defer sendConn.Close()
+	defer receiveConn.Close()
 
 	s.testAnnounce66(t, sendConn, receiveConn, blocks[3])
 	// update test suite chain
@@ -234,10 +228,9 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 
 func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
 	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
-	defer func() {
-		sendConn.Close()
-		recvConn.Close()
-	}()
+	defer sendConn.Close()
+	defer recvConn.Close()
+
 	s.oldAnnounce(t, sendConn, recvConn)
 }
 

@@ -17,14 +17,9 @@
 package ethtest
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -34,25 +29,19 @@ import (
 )
 
 var (
-	genesis, halfchain, fullchain, nodekey string
+	genesisFile   = "./testdata/genesis.json"
+	halfchainFile = "./testdata/halfchain.rlp"
+	fullchainFile = "./testdata/chain.rlp"
 )
-
-func init() {
-	if err := filepaths(); err != nil {
-		panic(err)
-	}
-}
 
 func TestEthSuite(t *testing.T) {
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
-	// wait for geth to start up
-	time.Sleep(time.Second * 5)
+	defer geth.Close()
 
 	suite := newTestSuite(t, geth.Server().Self())
-
 	for _, test := range suite.AllEthTests() {
 		t.Run(test.Name, func(t *testing.T) {
 			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
@@ -76,33 +65,11 @@ func runGeth() (*node.Node, error) {
 }
 
 func newTestSuite(t *testing.T, enodeID *enode.Node) *Suite {
-	suite, err := NewSuite(enodeID, fullchain, genesis)
+	suite, err := NewSuite(enodeID, fullchainFile, genesisFile)
 	if err != nil {
 		t.Fatalf("could not create test suite: %v", err)
 	}
 	return suite
-}
-
-func filepaths() error {
-	var err error
-
-	genesis, err = filepath.Abs("./testdata/genesis.json")
-	if err != nil {
-		return err
-	}
-
-	halfchain, err = filepath.Abs("./testdata/halfchain.rlp")
-	if err != nil {
-		return err
-	}
-
-	fullchain, err = filepath.Abs("./testdata/chain.rlp")
-	if err != nil {
-		return err
-	}
-
-	nodekey, err = filepath.Abs("./testdata/nodekey")
-	return err
 }
 
 func setupGeth() (*node.Node, error) {
@@ -117,42 +84,23 @@ func setupGeth() (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	// get genesis
-	gen, err := gen()
+	chain, err := loadChain(halfchainFile, genesisFile)
 	if err != nil {
 		return nil, err
 	}
-	genBlock := gen.ToBlock(nil)
 
 	backend, err := eth.New(stack, &ethconfig.Config{
-		Genesis:   gen,
-		NetworkId: gen.Config.ChainID.Uint64(), // 19763
+		Genesis:   &chain.genesis,
+		NetworkId: chain.genesis.Config.ChainID.Uint64(), // 19763
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	blocks, err := blocksFromFile(halfchain, genBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = backend.BlockChain().InsertChain(blocks[1:])
+	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
 	if err != nil {
 		return nil, err
 	}
 
 	return stack, nil
-}
-
-func gen() (*core.Genesis, error) {
-	chainConfig, err := ioutil.ReadFile(genesis)
-	if err != nil {
-		return nil, err
-	}
-	var gen core.Genesis
-	if err := json.Unmarshal(chainConfig, &gen); err != nil {
-		return nil, err
-	}
-	return &gen, nil
 }
