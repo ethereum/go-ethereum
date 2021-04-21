@@ -534,6 +534,14 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 			return nil, err
 		}
 	}
+	if args.ChainID != nil {
+		requestedChainId := (*big.Int)(args.ChainID)
+		if api.chainID.Cmp(requestedChainId) != 0 {
+			log.Error("Signing request with wrong chain id", "requested", requestedChainId, "configured", api.chainID)
+			return nil, fmt.Errorf("requested chainid %d does not match the configuration of the signer",
+				requestedChainId)
+		}
+	}
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
