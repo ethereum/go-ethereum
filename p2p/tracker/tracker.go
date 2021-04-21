@@ -45,7 +45,7 @@ const (
 	maxTrackedPackets = 100000
 )
 
-// request trackes sent network requests which have not yet received a response.
+// request tracks sent network requests which have not yet received a response.
 type request struct {
 	peer    string
 	version uint // Protocol version
