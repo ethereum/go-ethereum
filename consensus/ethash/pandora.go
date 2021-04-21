@@ -35,10 +35,6 @@ type PandoraExtraData struct {
 	Turn  uint64
 }
 
-type PandoraApi struct {
-	consensusInfo []*MinimalEpochConsensusInfoPayload
-}
-
 type MinimalEpochConsensusInfoPayload struct {
 	// Epoch number
 	Epoch uint64 `json:"epoch"`

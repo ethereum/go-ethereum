@@ -51,11 +51,14 @@ func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
+type OrchestratorApi struct {
+	consensusInfo []*MinimalEpochConsensusInfoPayload
+}
+
 // MinimalConsensusInfo will notify and return about all consensus information
 // This iteration does not allow to fetch only desired range
 // It is entirely done to check if tests are having same problems with subscription
-// TODO: move this into test and do not modify already existing API
-func (api *PandoraApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 
 	if !supported {
@@ -155,7 +158,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		consensusInfo.AssignValidators(validatorPublicList)
 		consensusInfoParam := &params.MinimalEpochConsensusInfo{
 			Epoch:            consensusInfo.Epoch,
-			ValidatorsList:   consensusInfo.ValidatorsList,
+			ValidatorList:    consensusInfo.ValidatorsList,
 			EpochTimeStart:   consensusInfo.EpochTimeStartUnix,
 			SlotTimeDuration: consensusInfo.SlotTimeDuration,
 		}
@@ -177,7 +180,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	)
 
 	// Dummy genesis epoch
-	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorsList: validatorPublicList}
+	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorList: validatorPublicList}
 	consensusInfo = append(consensusInfo, genesisEpoch)
 	ethash := NewPandora(config, urls, true, consensusInfo)
 	remoteSealerServer := StartRemotePandora(ethash, urls, true, false)
@@ -793,12 +796,12 @@ func makeOrchestratorServer(
 			SlotTimeDuration: info.SlotTimeDuration,
 		}
 
-		for turn, validator := range info.ValidatorsList {
+		for turn, validator := range info.ValidatorList {
 			infoPayload[index].ValidatorList[turn] = hexutil.Encode(validator.Marshal())
 		}
 	}
 
-	api := &PandoraApi{consensusInfo: infoPayload}
+	api := &OrchestratorApi{consensusInfo: infoPayload}
 
 	apis = append(apis, rpc.API{
 		Namespace: "orc",

@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -54,12 +54,66 @@ import (
 
 const (
 	numOfNodes              = 4
-	orchestratorIpcEndpoint = "./orchestrator"
+	orchestratorIpcEndpoint = "./orchestrator.ipc"
 )
 
 var (
 	consensusInfosList = [256]*params.MinimalEpochConsensusInfo{}
 )
+
+type OrchestratorApi struct {
+	consensusInfo []*ethash.MinimalEpochConsensusInfoPayload
+}
+
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		select {
+		case err := <-rpcSub.Err():
+			if nil != err {
+				panic(err)
+			}
+		//	Send consensus one by one in a queue
+		default:
+			for infoIndex, consensusInfo := range api.consensusInfo {
+				consensusPayload := &ethash.MinimalEpochConsensusInfoPayload{
+					Epoch:            consensusInfo.Epoch,
+					ValidatorList:    [32]string{},
+					EpochTimeStart:   consensusInfo.EpochTimeStart,
+					SlotTimeDuration: consensusInfo.SlotTimeDuration,
+				}
+
+				for index, validator := range consensusInfo.ValidatorList {
+					consensusPayload.ValidatorList[index] = validator
+				}
+
+				err := notifier.Notify(rpcSub.ID, consensusPayload)
+
+				if nil != err {
+					// For now only panic
+					panic(err)
+				}
+
+				// Keep routine warm, for tests purposes only
+				if infoIndex == len(api.consensusInfo)-1 {
+					time.Sleep(time.Millisecond * 150)
+				}
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
 
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
@@ -196,7 +250,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 
 		consensusInfo = &params.MinimalEpochConsensusInfo{
 			Epoch:            uint64(index),
-			ValidatorsList:   sealers,
+			ValidatorList:    sealers,
 			EpochTimeStart:   currentEpochStart,
 			SlotTimeDuration: 6,
 		}
@@ -316,7 +370,7 @@ func makeOrchestrator(
 		Ethash:          ethash.Config{PowMode: ethash.ModeFullFake, Log: log.Root()},
 	}
 
-	ethBackend, err := eth.New(stack, ethConfig)
+	_, err = eth.New(stack, ethConfig)
 
 	if err != nil {
 		return
@@ -324,12 +378,26 @@ func makeOrchestrator(
 
 	rpcApis := make([]rpc.API, 0)
 
-	publicFilterApi := filters.NewPublicFilterAPI(ethBackend.APIBackend, false, time.Minute)
-	publicFilterApi.ConsensusInfo = consensusInfosList[:]
+	consensusPayload := make([]*ethash.MinimalEpochConsensusInfoPayload, len(consensusInfosList))
+
+	for infoIndex, consensusInfo := range consensusInfosList {
+		consensusPayload[infoIndex] = &ethash.MinimalEpochConsensusInfoPayload{
+			Epoch:            consensusInfo.Epoch,
+			ValidatorList:    [32]string{},
+			EpochTimeStart:   consensusInfo.EpochTimeStart,
+			SlotTimeDuration: consensusInfo.SlotTimeDuration,
+		}
+
+		for index, validator := range consensusInfo.ValidatorList {
+			consensusPayload[infoIndex].ValidatorList[index] = hexutil.Encode(validator.Marshal())
+		}
+	}
+
+	orchestratorApi := &OrchestratorApi{consensusInfo: consensusPayload[:]}
 	api := rpc.API{
 		Namespace: "orc",
 		Version:   "1.0",
-		Service:   publicFilterApi,
+		Service:   orchestratorApi,
 		Public:    true,
 	}
 

@@ -490,7 +490,7 @@ func NewPandora(
 			int64(genesisConsensusTimeStart.EpochTimeStart),
 			0,
 		))
-		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
+		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorList)
 		ethash.mci.cache.Add(index, pandoraConsensusInfo)
 	}
 
