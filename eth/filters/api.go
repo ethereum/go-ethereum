@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"sync"
 	"time"
@@ -49,24 +48,14 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	ConsensusInfo []*params.MinimalEpochConsensusInfo
-	backend       Backend
-	mux           *event.TypeMux
-	quit          chan struct{}
-	chainDb       ethdb.Database
-	events        *EventSystem
-	filtersMu     sync.Mutex
-	filters       map[rpc.ID]*filter
-	timeout       time.Duration
-}
-
-type MinimalEpochConsensusInfoPayload struct {
-	// Epoch number
-	Epoch uint64 `json:"epoch"`
-	// Validators public key list for specific epoch
-	ValidatorList    [32]string    `json:"validatorList"`
-	EpochStartTime   uint64        `json:"epochTimeStart"`
-	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+	backend   Backend
+	mux       *event.TypeMux
+	quit      chan struct{}
+	chainDb   ethdb.Database
+	events    *EventSystem
+	filtersMu sync.Mutex
+	filters   map[rpc.ID]*filter
+	timeout   time.Duration
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
@@ -365,57 +354,6 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, err
 	}
 	return returnLogs(logs), err
-}
-
-// MinimalConsensusInfo will notify and return about all consensus information
-// This iteration does not allow to fetch only desired range
-// It is entirely done to check if tests are having same problems with subscription
-// TODO: move this into test and do not modify already existing API
-func (api *PublicFilterAPI) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		select {
-		case err := <-rpcSub.Err():
-			if nil != err {
-				panic(err)
-			}
-		//	Send consensus one by one in a queue
-		default:
-			for infoIndex, consensusInfo := range api.ConsensusInfo {
-				consensusPayload := &MinimalEpochConsensusInfoPayload{
-					Epoch:            consensusInfo.Epoch,
-					ValidatorList:    [32]string{},
-					EpochStartTime:   consensusInfo.EpochTimeStart,
-					SlotTimeDuration: consensusInfo.SlotTimeDuration,
-				}
-
-				for index, validator := range consensusInfo.ValidatorsList {
-					consensusPayload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
-				}
-
-				err := notifier.Notify(rpcSub.ID, consensusPayload)
-
-				if nil != err {
-					// For now only panic
-					panic(err)
-				}
-
-				// Keep routine warm, for tests purposes only
-				if infoIndex == len(api.ConsensusInfo)-1 {
-					time.Sleep(time.Millisecond * 150)
-				}
-			}
-		}
-	}()
-
-	return rpcSub, nil
 }
 
 // UninstallFilter removes the filter with the given filter id.

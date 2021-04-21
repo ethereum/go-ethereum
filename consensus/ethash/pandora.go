@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
@@ -36,13 +35,22 @@ type PandoraExtraData struct {
 	Turn  uint64
 }
 
+type PandoraApi struct {
+	consensusInfo []*MinimalEpochConsensusInfoPayload
+}
+
+type MinimalEpochConsensusInfoPayload struct {
+	// Epoch number
+	Epoch uint64 `json:"epoch"`
+	// Validators public key list for specific epoch
+	ValidatorList    [32]string    `json:"validatorList"`
+	EpochTimeStart   uint64        `json:"epochTimeStart"`
+	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+}
+
 type PandoraExtraDataSealed struct {
 	PandoraExtraData
 	BlsSignatureBytes *BlsSignatureBytes
-}
-
-type MinimalConsensusInfoPayload struct {
-	FromEpoch uint64 `json:"fromEpoch"`
 }
 
 // This should be cached or retrieved in a handshake with vanguard
@@ -323,7 +331,7 @@ func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
 // For the first iteration we use first of notify urls to reach orchestrator
 func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	subscription *rpc.ClientSubscription,
-	channel chan *filters.MinimalEpochConsensusInfoPayload,
+	channel chan *MinimalEpochConsensusInfoPayload,
 	err error,
 	errChan chan error,
 ) {
@@ -345,7 +353,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	}
 
 	ctx := context.Background()
-	channel = make(chan *filters.MinimalEpochConsensusInfoPayload)
+	channel = make(chan *MinimalEpochConsensusInfoPayload)
 
 	subscription, err = client.Subscribe(
 		ctx,
@@ -364,17 +372,17 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 	logger := config.Log
 
 	insertFunc := func(
-		minimalConsensus *filters.MinimalEpochConsensusInfoPayload,
+		minimalConsensus *MinimalEpochConsensusInfoPayload,
 	) (currentErr error) {
 		logger.Info(
 			"Received minimalConsensusInfo",
 			"epoch", minimalConsensus.Epoch,
-			"epochTimeStart", minimalConsensus.EpochStartTime,
+			"epochTimeStart", minimalConsensus.EpochTimeStart,
 			"validatorListLen", len(minimalConsensus.ValidatorList),
 		)
 		coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
-		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochStartTime), 0)
-		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochStartTime
+		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
+		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
 		coreMinimalConsensus.ValidatorsList = [32]common2.PublicKey{}
 
 		for index, validator := range minimalConsensus.ValidatorList {

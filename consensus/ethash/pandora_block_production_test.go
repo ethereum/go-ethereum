@@ -7,13 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -57,12 +51,63 @@ func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
-type safeGatheredInfo struct {
-	mutex    sync.Mutex
-	gathered []*filters.MinimalEpochConsensusInfoPayload
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+// TODO: move this into test and do not modify already existing API
+func (api *PandoraApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		select {
+		case err := <-rpcSub.Err():
+			if nil != err {
+				panic(err)
+			}
+		//	Send consensus one by one in a queue
+		default:
+			for infoIndex, consensusInfo := range api.consensusInfo {
+				consensusPayload := &MinimalEpochConsensusInfoPayload{
+					Epoch:            consensusInfo.Epoch,
+					ValidatorList:    [32]string{},
+					EpochTimeStart:   consensusInfo.EpochTimeStart,
+					SlotTimeDuration: consensusInfo.SlotTimeDuration,
+				}
+
+				for index, validator := range consensusInfo.ValidatorList {
+					consensusPayload.ValidatorList[index] = validator
+				}
+
+				err := notifier.Notify(rpcSub.ID, consensusPayload)
+
+				if nil != err {
+					// For now only panic
+					panic(err)
+				}
+
+				// Keep routine warm, for tests purposes only
+				if infoIndex == len(api.consensusInfo)-1 {
+					time.Sleep(time.Millisecond * 150)
+				}
+			}
+		}
+	}()
+
+	return rpcSub, nil
 }
 
-func (info *safeGatheredInfo) appendNext(minimal *filters.MinimalEpochConsensusInfoPayload) {
+type safeGatheredInfo struct {
+	mutex    sync.Mutex
+	gathered []*MinimalEpochConsensusInfoPayload
+}
+
+func (info *safeGatheredInfo) appendNext(minimal *MinimalEpochConsensusInfoPayload) {
 	info.mutex.Lock()
 	defer info.mutex.Unlock()
 	info.gathered = append(info.gathered, minimal)
@@ -142,7 +187,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
-		gatheredInformation := make([]*filters.MinimalEpochConsensusInfoPayload, 0)
+		gatheredInformation := make([]*MinimalEpochConsensusInfoPayload, 0)
 		mutex := sync.Mutex{}
 		gatherer := safeGatheredInfo{
 			mutex:    mutex,
@@ -732,129 +777,28 @@ func generatePandoraSealedHeaderByKey(
 	return
 }
 
-type testBackend struct {
-	mux             *event.TypeMux
-	db              ethdb.Database
-	sections        uint64
-	txFeed          event.Feed
-	logsFeed        event.Feed
-	rmLogsFeed      event.Feed
-	pendingLogsFeed event.Feed
-	chainFeed       event.Feed
-}
-
-func (b *testBackend) ChainDb() ethdb.Database {
-	return b.db
-}
-
-func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
-	var (
-		hash common.Hash
-		num  uint64
-	)
-	if blockNr == rpc.LatestBlockNumber {
-		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == nil {
-			return nil, nil
-		}
-		num = *number
-	} else {
-		num = uint64(blockNr)
-		hash = rawdb.ReadCanonicalHash(b.db, num)
-	}
-	return rawdb.ReadHeader(b.db, hash, num), nil
-}
-
-func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
-}
-
-func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
-	}
-	return nil, nil
-}
-
-func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-	receipts := rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig)
-
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs, nil
-}
-
-func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.txFeed.Subscribe(ch)
-}
-
-func (b *testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	return b.rmLogsFeed.Subscribe(ch)
-}
-
-func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.logsFeed.Subscribe(ch)
-}
-
-func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.pendingLogsFeed.Subscribe(ch)
-}
-
-func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.chainFeed.Subscribe(ch)
-}
-
-func (b *testBackend) BloomStatus() (uint64, uint64) {
-	return params.BloomBitsBlocks, b.sections
-}
-
-func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
-	requests := make(chan chan *bloombits.Retrieval)
-
-	go session.Multiplex(16, 0, requests)
-	go func() {
-		for {
-			// Wait for a service request or a shutdown
-			select {
-			case <-ctx.Done():
-				return
-
-			case request := <-requests:
-				task := <-request
-
-				task.Bitsets = make([][]byte, len(task.Sections))
-				//for i, section := range task.Sections {
-				//if rand.Int()%4 != 0 { // Handle occasional missing deliveries
-				//	head := rawdb.ReadCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
-				//	task.Bitsets[i], _ = rawdb.ReadBloomBits(b.db, task.Bit, section, head)
-				//}
-				//}
-				request <- task
-			}
-		}
-	}()
-}
-
 func makeOrchestratorServer(
 	t *testing.T,
 	minimalConsensusInfo []*params.MinimalEpochConsensusInfo,
 ) (listener net.Listener, server *rpc.Server, location string) {
 	location = "./test.ipc"
 	apis := make([]rpc.API, 0)
-	deadline := 5 * time.Minute
-	api := filters.NewPublicFilterAPI(&testBackend{}, false, deadline)
-	api.ConsensusInfo = minimalConsensusInfo
+	infoPayload := make([]*MinimalEpochConsensusInfoPayload, len(minimalConsensusInfo))
+
+	for index, info := range minimalConsensusInfo {
+		infoPayload[index] = &MinimalEpochConsensusInfoPayload{
+			Epoch:            info.Epoch,
+			ValidatorList:    [32]string{},
+			EpochTimeStart:   info.EpochTimeStart,
+			SlotTimeDuration: info.SlotTimeDuration,
+		}
+
+		for turn, validator := range info.ValidatorsList {
+			infoPayload[index].ValidatorList[turn] = hexutil.Encode(validator.Marshal())
+		}
+	}
+
+	api := &PandoraApi{consensusInfo: infoPayload}
 
 	apis = append(apis, rpc.API{
 		Namespace: "orc",
