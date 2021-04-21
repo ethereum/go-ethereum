@@ -20,7 +20,6 @@ package ethash
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"math/big"
 	"math/rand"
@@ -33,6 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/edsrzf/mmap-go"
 	"github.com/ethereum/go-ethereum/consensus"

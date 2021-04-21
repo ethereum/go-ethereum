@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -11,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
-	"time"
 )
 
 const (
@@ -106,14 +107,13 @@ func StartRemotePandora(
 	}
 
 	go func() {
-		select {
-		case err := <-errChan:
-			if nil != err {
-				panic(fmt.Sprintf(
-					"error during minimalConsensusInformation subscription, err: %s",
-					err.Error(),
-				))
-			}
+		err := <-errChan
+
+		if nil != err {
+			panic(fmt.Sprintf(
+				"error during minimalConsensusInformation subscription, err: %s",
+				err.Error(),
+			))
 		}
 	}()
 
@@ -214,8 +214,6 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	// Trace the seal work fetched by remote sealer.
 	sealer.currentBlock = block
 	sealer.works[hash] = block
-
-	return
 }
 
 // submitWork verifies the submitted pow solution, returning
@@ -303,7 +301,6 @@ func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 
 func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [validatorListLen]common2.PublicKey) {
 	pandoraMode.ValidatorsList = validatorsList
-	return
 }
 
 // This function should be used to extract epoch start from genesis

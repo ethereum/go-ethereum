@@ -4,6 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	mathRand "math/rand"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -16,15 +26,6 @@ import (
 	"github.com/silesiacoin/bls/herumi"
 	"github.com/silesiacoin/bls/testutil/require"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"math/big"
-	mathRand "math/rand"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"sync"
-	"testing"
-	"time"
 )
 
 type fakeReader struct {
@@ -142,7 +143,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	genesisTime := timeNow.Add(-epochDuration*time.Duration(epochsProgressed) + time.Duration(12)*time.Second)
 	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
 
-	for index, _ := range validatorPublicList {
+	for index := range validatorPublicList {
 		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 		pubKey := privKey.PublicKey()
@@ -191,9 +192,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		require.NoError(t, err)
 		defer subscription.Unsubscribe()
 		gatheredInformation := make([]*MinimalEpochConsensusInfoPayload, 0)
-		mutex := sync.Mutex{}
 		gatherer := safeGatheredInfo{
-			mutex:    mutex,
 			gathered: gatheredInformation,
 		}
 
@@ -491,7 +490,7 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	validatorPublicList := [validatorListLen]common2.PublicKey{}
 	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
-	for index, _ := range validatorPrivateList {
+	for index := range validatorPrivateList {
 		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 		pubKey := privKey.PublicKey()
@@ -600,7 +599,7 @@ func TestVerifySeal(t *testing.T) {
 	validatorPublicList := [validatorListLen]common2.PublicKey{}
 	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
-	for index, _ := range validatorPrivateList {
+	for index := range validatorPrivateList {
 		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 		pubKey := privKey.PublicKey()
@@ -693,7 +692,7 @@ func TestVerifySeal(t *testing.T) {
 		privateKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 
-		for index, _ := range validatorPrivateList {
+		for index := range validatorPrivateList {
 			headerTime := genesisEpoch.EpochTimeStart.Add(SlotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
