@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -388,7 +389,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	// TODO: enable this
 	// Vanguard now will pull the blocks, but it will be great to notify about new work
-	if s.ethash.IsPandoraModeEnabled() {
+	if s.ethash.IsPandoraModeEnabled() && strings.Contains(url, ".ipc") {
 		return
 	}
 
