@@ -38,6 +38,11 @@ const (
 
 	// waitHistName is the prefix of the per-packet (req only) waiting time histograms.
 	waitHistName = "p2p/wait"
+
+	// maxTrackedPackets is a huge number to act as a failsafe on the number of
+	// pending requests the node will track. It should never be hit unless an
+	// attacker figures out a way to spin requests.
+	maxTrackedPackets = 100000
 )
 
 // request trackes sent network requests which have not yet received a response.
@@ -87,6 +92,11 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 	// expecting ourselves to be buggy, so a noisy warning should be enough.
 	if _, ok := t.pending[id]; ok {
 		log.Error("Network request id collision", "protocol", t.protocol, "version", version, "code", reqCode, "id", id)
+		return
+	}
+	// If we have too many pending requests, bail out instead of leaking memory
+	if pending := len(t.pending); pending >= maxTrackedPackets {
+		log.Error("Request tracker exceeded allowance", "pending", pending, "peer", peer, "protocol", t.protocol, "version", version, "code", reqCode)
 		return
 	}
 	// Id doesn't exist yet, start tracking it
