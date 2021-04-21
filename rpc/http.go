@@ -131,20 +131,6 @@ func DialHTTP(endpoint string) (*Client, error) {
 	return DialHTTPWithClient(endpoint, new(http.Client))
 }
 
-type HTTPError struct {
-	StatusCode int
-	Status     string
-	Body       []byte
-}
-
-func (err HTTPError) Error() string {
-	if len(err.Body) == 0 {
-		return err.Status
-	}
-
-	return fmt.Sprintf("%v: %v", err.Status, string(err.Body))
-}
-
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
 	respBody, err := hc.doRequest(ctx, msg)
