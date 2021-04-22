@@ -102,33 +102,33 @@ func (s *Suite) AllEthTests() []utesting.Test {
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-		{Name: "Status", Fn: s.TestStatus},
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "Broadcast", Fn: s.TestBroadcast},
-		{Name: "LargeAnnounce", Fn: s.TestLargeAnnounce},
-		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		{Name: "MaliciousStatus", Fn: s.TestMaliciousStatus},
-		{Name: "MaliciousStatus_66", Fn: s.TestMaliciousStatus},
-		{Name: "Transactions", Fn: s.TestTransaction},
-		{Name: "MaliciousTransactions", Fn: s.TestMaliciousTx},
+		{Name: "TestStatus", Fn: s.TestStatus},
+		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
 	}
 }
 
 func (s *Suite) Eth66Tests() []utesting.Test {
 	return []utesting.Test{
 		// only proceed with eth66 test suite if node supports eth 66 protocol
-		{Name: "Status_66", Fn: s.TestStatus_66},
-		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
-		{Name: "SimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
-		{Name: "SameRequestID_66", Fn: s.TestSameRequestID_66},
-		{Name: "ZeroRequestID_66", Fn: s.TestZeroRequestID_66},
-		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
-		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
-		{Name: "LargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
-		{Name: "MaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
-		{Name: "Transactions_66", Fn: s.TestTransaction_66},
-		{Name: "MaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestStatus_66", Fn: s.TestStatus_66},
+		{Name: "TestGetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		{Name: "TestGetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		{Name: "TestBroadcast_66", Fn: s.TestBroadcast_66},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
+		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
+		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
 	}
 }
 
