@@ -360,6 +360,11 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 	}
 	sendConn := s.setupConnection66(t)
 	defer sendConn.Close()
+	// set up receiving connection before sending txs to make sure
+	// no announcements are missed
+	recvConn := s.setupConnection66(t)
+	defer recvConn.Close()
+
 	for i, tx := range badTxs {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
 		if err := sendConn.Write(&Transactions{tx}); err != nil {
@@ -367,8 +372,6 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 		}
 
 	}
-	recvConn := s.setupConnection66(t)
-	defer recvConn.Close()
 	// check to make sure bad txs aren't propagated
 	waitForTxPropagation(t, s, badTxs, recvConn)
 }
