@@ -69,34 +69,34 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 func (s *Suite) AllEthTests() []utesting.Test {
 	return []utesting.Test{
 		// status
-		{Name: "Status", Fn: s.TestStatus},
-		{Name: "Status_66", Fn: s.TestStatus_66},
+		{Name: "TestStatus", Fn: s.TestStatus},
+		{Name: "TestStatus_66", Fn: s.TestStatus_66},
 		// get block headers
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
-		{Name: "SimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
-		{Name: "SameRequestID_66", Fn: s.TestSameRequestID_66},
-		{Name: "ZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestGetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
 		// get block bodies
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestGetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
 		// broadcast
-		{Name: "Broadcast", Fn: s.TestBroadcast},
-		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
-		{Name: "LargeAnnounce", Fn: s.TestLargeAnnounce},
-		{Name: "LargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
-		{Name: "OldAnnounce", Fn: s.TestOldAnnounce},
-		{Name: "OldAnnounce_66", Fn: s.TestOldAnnounce_66},
+		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestBroadcast_66", Fn: s.TestBroadcast_66},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestOldAnnounce_66", Fn: s.TestOldAnnounce_66},
 		// malicious handshakes + status
-		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		{Name: "MaliciousStatus", Fn: s.TestMaliciousStatus},
-		{Name: "MaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
-		{Name: "MaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
 		// test transactions
-		{Name: "Transactions", Fn: s.TestTransaction},
-		{Name: "Transactions_66", Fn: s.TestTransaction_66},
-		{Name: "MaliciousTransactions", Fn: s.TestMaliciousTx},
-		{Name: "MaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
+		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
 	}
 }
 
