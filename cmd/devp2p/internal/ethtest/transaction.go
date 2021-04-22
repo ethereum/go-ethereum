@@ -80,7 +80,7 @@ func sendFailingTxsWithConns(t *utesting.T, s *Suite, txs []*types.Transaction, 
 		t.Fatal(err)
 	}
 	// Wait for another transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, time.Second * 8).(type) {
+	switch msg := recvConn.ReadAndServe(s.chain, time.Second*8).(type) {
 	case *Transactions:
 		// check to see if any of the failing txs were in the announcement
 		recvTxs := make([]common.Hash, len(*msg))
@@ -112,7 +112,7 @@ func sendFailingTxsWithConns(t *utesting.T, s *Suite, txs []*types.Transaction, 
 
 // containsTxs checks whether the hashes of the received transactions are present in
 // the given set of txs
-func containsTxs(recvTxs []common.Hash, txs []*types.Transaction, ) []common.Hash {
+func containsTxs(recvTxs []common.Hash, txs []*types.Transaction) []common.Hash {
 	containedTxs := make([]common.Hash, 0)
 	for _, recvTx := range recvTxs {
 		for _, tx := range txs {

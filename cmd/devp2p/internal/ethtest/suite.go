@@ -523,8 +523,10 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
-		hugeData(t, s),
 	}
-	t.Logf("Testing malicious tx propagation")
+	t.Logf("Testing malicious tx propagation: sending old tx, invalid nonce tx, huge amount tx, huge gas price tx")
 	sendFailingTxs(t, s, badTxs)
+	// send huge data tx on its own to prevent node from rejecting tx announcement that's too large
+	t.Logf("Testing malicious tx propagation: sending huge data tx")
+	sendFailingTxs(t, s, []*types.Transaction{hugeData(t, s)})
 }

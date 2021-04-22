@@ -356,10 +356,12 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
-		hugeData(t, s),
 	}
-	t.Logf("Testing malicious tx propagation")
+	t.Logf("Testing malicious tx propagation: sending old tx, invalid nonce tx, huge amount tx, huge gas price tx")
 	sendFailingTx66(t, s, badTxs)
+	// send huge data tx on its own to prevent node from rejecting tx announcement that's too large
+	t.Logf("Testing malicious tx propagation: sending huge data tx")
+	sendFailingTx66(t, s, []*types.Transaction{hugeData(t, s)})
 }
 
 // TestZeroRequestID_66 checks that a request ID of zero is still handled
