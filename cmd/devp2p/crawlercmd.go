@@ -131,7 +131,7 @@ func crawlNodes(ctx *cli.Context) error {
 	}
 
 	for {
-		inputSet = crawlRound(ctx, inputSet, nodesFile, influxdb, 10*time.Second)
+		inputSet = crawlRound(ctx, inputSet, influxdb, 10*time.Second)
 	}
 	return nil
 }
@@ -171,8 +171,7 @@ func makeGenesis(ctx *cli.Context) *core.Genesis {
 	}
 }
 
-func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb *influx, timeout time.Duration) nodeSet {
-	var nodes []crawledNode
+func crawlRound(ctx *cli.Context, inputSet nodeSet, influxdb *influx, timeout time.Duration) nodeSet {
 	output := make(nodeSet)
 	log.Info("DiscV5")
 	v5 := discv5(ctx, nodeSet{}, timeout)
@@ -187,18 +186,35 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, outputFile string, influxdb 
 	}
 	networkID := ctx.Uint64(utils.NetworkIdFlag.Name)
 	nodeURL := ctx.String(nodeURLFlag.Name)
+
+	reqChan := make(chan nodeJSON, len(output))
+	respChan := make(chan crawledNode, 10)
+	getNodeLoop := func(in <-chan nodeJSON, out chan<- crawledNode) {
+		for {
+			node := <-in
+			info, err := getClientInfo(genesis, networkID, nodeURL, node.N)
+			if err != nil {
+				log.Warn("GetClientInfo failed", "error", err, "nodeID", node.N.ID())
+			} else {
+				log.Info("GetClientInfo succeeded")
+			}
+			out <- crawledNode{node: node, info: info}
+		}
+	}
+	// Schedule 10 workers
+	for i := 0; i < 10; i++ {
+		go getNodeLoop(reqChan, respChan)
+	}
+
 	// Try to connect and get the status of all nodes
 	for _, node := range output {
-		info, err := getClientInfo(genesis, networkID, nodeURL, node.N)
-		if err != nil {
-			log.Warn("GetClientInfo failed", "error", err, "nodeID", node.N.ID())
-		} else {
-			log.Info("GetClientInfo succeeded")
-		}
-		nodes = append(nodes, crawledNode{node: node, info: info})
+		reqChan <- node
 	}
-	// Write the enodes to a file
-	writeNodesJSON(outputFile, output)
+	var nodes []crawledNode
+	for i := 0; i < len(output); i++ {
+		node := <-respChan
+		nodes = append(nodes, node)
+	}
 	// Write the node info to influx
 	if influxdb != nil {
 		if err := influxdb.updateNodes(nodes); err != nil {
@@ -242,7 +258,6 @@ func getClientInfo(genesis *core.Genesis, networkID uint64, nodeURL string, n *e
 		info.Capabilities = msg.Caps
 		info.SoftwareVersion = msg.Version
 		info.ClientType = msg.Name
-		fmt.Printf("Caps: %v \n", msg.Caps)
 	case *ethtest.Disconnect:
 		return nil, fmt.Errorf("bad hello handshake: %v", msg.Reason.Error())
 	case *ethtest.Error:
