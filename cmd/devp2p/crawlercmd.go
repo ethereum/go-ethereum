@@ -31,12 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -66,6 +66,15 @@ var (
 		Name:  "nodeURL",
 		Usage: "URL of the node you want to connect to",
 		Value: "http://localhost:8545",
+	}
+	nodeFileFlag = cli.StringFlag{
+		Name:  "nodefile",
+		Usage: "Path to a node file containing nodes to be crawled",
+	}
+	timeoutFlag = cli.DurationFlag{
+		Name:  "timeout",
+		Usage: "Timeout for the crawling in a round",
+		Value: 1 * time.Minute,
 	}
 	influxDBFlag = cli.BoolFlag{
 		Name:  "influxdb",
@@ -109,12 +118,11 @@ type clientInfo struct {
 
 func crawlNodes(ctx *cli.Context) error {
 	var inputSet nodeSet
-	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
-	}
-	nodesFile := ctx.Args().First()
-	if common.FileExist(nodesFile) {
-		inputSet = loadNodesJSON(nodesFile)
+
+	if nodesFile := ctx.String(nodeFileFlag.Name); nodesFile != "" {
+		if common.FileExist(nodesFile) {
+			inputSet = loadNodesJSON(nodesFile)
+		}
 	}
 
 	var influxdb *influx
@@ -129,9 +137,10 @@ func crawlNodes(ctx *cli.Context) error {
 		}
 		log.Info("Connected to influxdb")
 	}
+	timeout := ctx.Duration(timeoutFlag.Name)
 
 	for {
-		inputSet = crawlRound(ctx, inputSet, influxdb, 10*time.Second)
+		inputSet = crawlRound(ctx, inputSet, influxdb, timeout)
 	}
 	return nil
 }
@@ -295,6 +304,10 @@ func getClientInfo(genesis *core.Genesis, networkID uint64, nodeURL string, n *e
 		info.NetworkID = msg.NetworkID
 		// m.ProtocolVersion
 		info.TotalDifficulty = msg.TD
+		// Set correct TD if received TD is higher
+		if msg.TD.Cmp(status.TD) > 0 {
+			status.TD = msg.TD
+		}
 	case *ethtest.Disconnect:
 		return nil, fmt.Errorf("bad status handshake: %v", msg.Reason.Error())
 	case *ethtest.Error:
@@ -341,30 +354,23 @@ func getStatus(config *params.ChainConfig, genesis common.Hash, network uint64, 
 	}
 
 	if time.Since(lastStatusUpdate) > 15*time.Second {
-		header, td, err := getBCState(nodeURL)
+		header, err := getBCState(nodeURL)
 		if err != nil {
 			return nil, err
 		}
 		status.Head = header.Hash()
-		status.TD = td
 		status.ForkID = forkid.NewID(config, genesis, header.Number.Uint64())
 	}
 	return status, nil
 }
 
-func getBCState(nodeURL string) (*types.Header, *big.Int, error) {
-	raw, err := rpc.Dial(nodeURL)
+func getBCState(nodeURL string) (*types.Header, error) {
+	cl, err := ethclient.Dial(nodeURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	// Retrieve total difficulty
-	var result types.Block
-	if err := raw.CallContext(context.Background(), &result, "eth_getBlockByNumber", "latest", false); err != nil {
-		return nil, nil, err
-	}
-
-	return result.Header(), result.DeprecatedTd(), nil
+	return cl.HeaderByNumber(context.Background(), nil)
 }
 
 // negotiateEthProtocol sets the Conn's eth protocol version
