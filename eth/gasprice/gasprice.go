@@ -228,19 +228,21 @@ func removeOutliers(gasPrices []*big.Int) []*big.Int {
 
 	var (
 		mean       *big.Int
-		sd         *big.Int
+		sd         *big.Int // Standard deviation
 		variance   = big.NewInt(0)
 		sum        = big.NewInt(0)
-		sumsq      = big.NewInt(0)
+		sumsq      = big.NewInt(0) // The sums squared
 		length     = big.NewInt(int64(len(prices)))
 		deviations = big.NewInt(3) // The max number of std from the mean we will accept
 	)
 	for _, price := range prices {
+		// Calculate sum and sumsq
 		sum.Add(sum, price)
 		sumsq.Add(sum, big.NewInt(0).Mul(price, price))
 	}
 	mean = big.NewInt(0).Div(sum, length)
 	for _, price := range prices {
+		// Calculate the variance sum(x - mean)^2
 		x := big.NewInt(0).Sub(price, mean)
 		sqr := big.NewInt(0).Mul(x, x)
 		variance.Add(variance, sqr)
@@ -248,11 +250,11 @@ func removeOutliers(gasPrices []*big.Int) []*big.Int {
 	sd = variance.Sqrt(big.NewInt(0).Div(variance, length))
 	var filtered = make([]*big.Int, 0)
 	for _, price := range prices {
+		// Remove items that are not within the upper and lower bounds of the deviation
 		if price.Cmp(sd.Mul(sd, mean.Sub(mean, deviations))) == 1 && price.Cmp(sd.Mul(sd, mean.Add(mean, deviations))) == -1 {
 			filtered = append(filtered, price)
 		}
 	}
-	println(len(filtered))
 	return filtered
 }
 
