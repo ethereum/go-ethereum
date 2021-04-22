@@ -221,7 +221,11 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 // removeOutliers calculates the interquartile range of gas prices that are
 // significant outliers with the goal of removing edge cases where MEV skews
 // the gas prices
-func removeOutliers(prices []*big.Int) []*big.Int {
+func removeOutliers(gasPrices []*big.Int) []*big.Int {
+	prices := make([]*big.Int, len(gasPrices))
+	copy(prices, gasPrices)
+	sort.Sort(bigIntArray(prices))
+
 	var (
 		mean       *big.Int
 		variance   *big.Int
@@ -231,17 +235,17 @@ func removeOutliers(prices []*big.Int) []*big.Int {
 		length     = big.NewInt(int64(len(prices)))
 		deviations = big.NewInt(3) // The max number of std from the mean we will accept
 	)
-	sort.Sort(bigIntArray(prices))
 	for _, price := range prices {
 		sum.Add(sum, price)
 		sumsq.Add(sum, price.Mul(price, price))
 	}
-	mean = sum.Div(sum, length)
-	variance = sumsq.Sub(sumsq.Div(sumsq, length), mean.Mul(mean, mean))
+	mean = big.NewInt(0).Div(sum, length)
+	variance = big.NewInt(0).Abs(big.NewInt(0).Sub(big.NewInt(0).Div(sumsq, length), big.NewInt(0).Mul(mean, mean)))
 	sd = variance.Sqrt(variance)
 	var filtered = make([]*big.Int, 0)
-	for _, price := range prices {
+	for i, price := range prices {
 		if price.Cmp(sd.Mul(sd, mean.Sub(mean, deviations))) == 1 && price.Cmp(sd.Mul(sd, mean.Add(mean, deviations))) == -1 {
+			println("heer", i)
 			filtered = append(filtered, price)
 		}
 	}

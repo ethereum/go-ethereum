@@ -129,6 +129,7 @@ func TestRemoveOutliers(t *testing.T) {
 		gasPrices = append(gasPrices, big.NewInt(int64(randGasPrice)))
 	}
 	cpy := make([]*big.Int, len(gasPrices))
+	copy(cpy, gasPrices)
 	// add low gas prices
 	cpy = append(cpy, big.NewInt(5))
 	cpy = append(cpy, big.NewInt(10))
