@@ -422,7 +422,7 @@ func (s *Suite) oldAnnounce(t *utesting.T, sendConn, receiveConn *Conn) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := receiveConn.ReadAndServe(s.chain, timeout*2).(type) {
+	switch msg := receiveConn.ReadAndServe(s.chain, time.Second * 8).(type) {
 	case *NewBlock:
 		t.Fatalf("unexpected: block propagated: %s", pretty.Sdump(msg))
 	case *NewBlockHashes:
