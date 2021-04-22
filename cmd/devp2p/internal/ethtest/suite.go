@@ -380,7 +380,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		switch msg := sendConn.ReadAndServe(s.chain, timeout).(type) {
+		switch msg := sendConn.ReadAndServe(s.chain, time.Second * 8).(type) {
 		case *Disconnect:
 		case *Error:
 			break
@@ -523,10 +523,19 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
+		hugeData(t, s),
 	}
-	t.Logf("Testing malicious tx propagation: sending old tx, invalid nonce tx, huge amount tx, huge gas price tx")
-	sendFailingTxs(t, s, badTxs)
-	// send huge data tx on its own to prevent node from rejecting tx announcement that's too large
-	t.Logf("Testing malicious tx propagation: sending huge data tx")
-	sendFailingTxs(t, s, []*types.Transaction{hugeData(t, s)})
+	sendConn := s.setupConnection(t)
+	defer sendConn.Close()
+	for i, tx := range badTxs {
+		t.Logf("Testing malicious tx propagation: %v\n", i)
+		if err := sendConn.Write(&Transactions{tx}); err != nil {
+			t.Fatal(err)
+		}
+
+	}
+	recvConn := s.setupConnection(t)
+	defer recvConn.Close()
+	// check to make sure bad txs aren't propagated
+	waitForTxPropagation(t, s, badTxs, recvConn)
 }

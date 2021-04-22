@@ -66,19 +66,7 @@ func sendSuccessfulTxWithConn(t *utesting.T, s *Suite, tx *types.Transaction, se
 	}
 }
 
-func sendFailingTxs(t *utesting.T, s *Suite, txs []*types.Transaction) {
-	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	defer sendConn.Close()
-	defer recvConn.Close()
-	sendFailingTxsWithConns(t, s, txs, sendConn, recvConn)
-}
-
-func sendFailingTxsWithConns(t *utesting.T, s *Suite, txs []*types.Transaction, sendConn, recvConn *Conn) {
-	// Send the transaction
-	txMsg := Transactions(txs)
-	if err := sendConn.Write(&txMsg); err != nil {
-		t.Fatal(err)
-	}
+func waitForTxPropagation(t *utesting.T, s *Suite, txs []*types.Transaction, recvConn *Conn) {
 	// Wait for another transaction announcement
 	switch msg := recvConn.ReadAndServe(s.chain, time.Second*8).(type) {
 	case *Transactions:

@@ -242,13 +242,6 @@ func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
-func sendFailingTx66(t *utesting.T, s *Suite, txs []*types.Transaction) {
-	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
-	defer sendConn.Close()
-	defer recvConn.Close()
-	sendFailingTxsWithConns(t, s, txs, sendConn, recvConn)
-}
-
 func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, expectedID uint64) BlockHeaders {
 	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
