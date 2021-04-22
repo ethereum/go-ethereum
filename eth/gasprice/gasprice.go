@@ -228,8 +228,8 @@ func removeOutliers(gasPrices []*big.Int) []*big.Int {
 
 	var (
 		mean       *big.Int
-		variance   *big.Int
 		sd         *big.Int
+		variance   = big.NewInt(0)
 		sum        = big.NewInt(0)
 		sumsq      = big.NewInt(0)
 		length     = big.NewInt(int64(len(prices)))
@@ -237,18 +237,22 @@ func removeOutliers(gasPrices []*big.Int) []*big.Int {
 	)
 	for _, price := range prices {
 		sum.Add(sum, price)
-		sumsq.Add(sum, price.Mul(price, price))
+		sumsq.Add(sum, big.NewInt(0).Mul(price, price))
 	}
 	mean = big.NewInt(0).Div(sum, length)
-	variance = big.NewInt(0).Abs(big.NewInt(0).Sub(big.NewInt(0).Div(sumsq, length), big.NewInt(0).Mul(mean, mean)))
-	sd = variance.Sqrt(variance)
+	for _, price := range prices {
+		x := big.NewInt(0).Sub(price, mean)
+		sqr := big.NewInt(0).Mul(x, x)
+		variance.Add(variance, sqr)
+	}
+	sd = variance.Sqrt(big.NewInt(0).Div(variance, length))
 	var filtered = make([]*big.Int, 0)
-	for i, price := range prices {
+	for _, price := range prices {
 		if price.Cmp(sd.Mul(sd, mean.Sub(mean, deviations))) == 1 && price.Cmp(sd.Mul(sd, mean.Add(mean, deviations))) == -1 {
-			println("heer", i)
 			filtered = append(filtered, price)
 		}
 	}
+	println(len(filtered))
 	return filtered
 }
 
