@@ -436,8 +436,8 @@ github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAm
 github.com/shirou/gopsutil v2.20.5+incompatible h1:tYH07UPoQt0OCQdgWWMgYHy3/a9bcxNpBIysykNIP7I=
 github.com/shirou/gopsutil v2.20.5+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
-github.com/silesiacoin/bls v0.0.0-20210310202623-eb514747fd9f h1:Z0yaEs5yZbiVODpUyRNVcCZyDhUVttwou1sIuURop+U=
-github.com/silesiacoin/bls v0.0.0-20210310202623-eb514747fd9f/go.mod h1:lqEKPDHC+UX73d2YIHEkeZ8BKDc2wP08PMvW5LsyShE=
+github.com/silesiacoin/bls v0.0.0-20210308125319-fc6f239e7d3e h1:6tAz0rPeZQRR+gYz5e40DLQaBMxYJK0u9LxMpc1Wniw=
+github.com/silesiacoin/bls v0.0.0-20210308125319-fc6f239e7d3e/go.mod h1:Wi6J2Cu8EZbAUVhQXXIb+D8gLhBSIrpCylT8REYNfN4=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.8.0 h1:nfhvjKcUMhBMVqbKHJlk5RPrrfYr/NMo3692g0dwfWU=
 github.com/sirupsen/logrus v1.8.0/go.mod h1:4GuYW9TZmE769R5STWrRakJc4UqQ3+QQ95fyz7ENv1A=
@@ -727,4 +727,3 @@ honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWh
 honnef.co/go/tools v0.0.1-2019.2.3/go.mod h1:a3bituU0lyd329TUQxRnasdCoJDkEUEAqEt0JzvZhAg=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/pdf v0.1.1/go.mod h1:n8OzWcQ6Sp37PL01nO98y4iUCRdTGarVfzxY20ICaU4=
-vuvuzela.io/crypto v0.0.0-20190327123840-80a93a3ed1d6/go.mod h1:K9x2j50IChF9KMDGvo2hv/RIDuQsHrv2pifiwH9jApk=

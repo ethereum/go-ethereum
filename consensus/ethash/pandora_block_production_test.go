@@ -764,7 +764,7 @@ func generatePandoraSealedHeaderByKey(
 		panic("Signature should be valid")
 	}
 
-	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
+	compressedSignature := signature.Marshal()[:32]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
 	blsSignature = signature
 
