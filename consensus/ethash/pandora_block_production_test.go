@@ -130,7 +130,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	timeNow := time.Now()
 	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
 	// Set genesis time in a past
-	epochsProgressed := 20
+	epochsProgressed := 10
 	genesisTime := timeNow.Add(-epochDuration*time.Duration(epochsProgressed) + time.Duration(12)*time.Second)
 	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
 
@@ -200,7 +200,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 			gathered: gatheredInformation,
 		}
 
-		timeout := time.Second * 5
+		timeout := time.Second * 300
 		ticker := time.NewTimer(timeout)
 
 		// Have two wait groups as a routines
@@ -215,6 +215,7 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 			notificationWaitGroup.Wait()
 
 			for _, info := range minimalConsensusInfos {
+				// Try to not spam all at once
 				consensusChannel <- info
 			}
 

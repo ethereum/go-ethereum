@@ -732,7 +732,7 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	mci := ethash.mci
 	mciCache := mci.cache
 	mciCache.Add(int(epoch), pandoraConsensusInfo)
-
+	//
 	return
 }
 
