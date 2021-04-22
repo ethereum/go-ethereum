@@ -103,6 +103,17 @@ type NodeIterator interface {
 	// to the value after calling Next.
 	LeafProof() [][]byte
 
+	// AddResolver sets an intermediate database to use for looking up trie nodes
+	// before reaching into the real persistent layer.
+	//
+	// This is not required for normal operation, rather is an optimization for
+	// cases where trie nodes can be recovered from some external mechanism without
+	// reading from disk. In those cases, this resolver allows short circuiting
+	// accesses and returning them from memory.
+	//
+	// Before adding a similar mechanism to any other place in Geth, consider
+	// making trie.Database an interface and wrapping at that level. It's a huge
+	// refactor, but it could be worth it if another occurance arises.
 	AddResolver(*Database)
 }
 
@@ -117,15 +128,16 @@ type nodeIteratorState struct {
 }
 
 type nodeIterator struct {
-	trie            *Trie                // Trie being iterated
-	stack           []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
-	path            []byte               // Path to the current node
-	err             error                // Failure set in case of an internal error in the iterator
-	primaryResolver *Database
+	trie  *Trie                // Trie being iterated
+	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+	path  []byte               // Path to the current node
+	err   error                // Failure set in case of an internal error in the iterator
+
+	resolver *Database // Optional intermediate resolver above the disk layer
 }
 
-func (it *nodeIterator) AddResolver(db *Database) {
-	it.primaryResolver = db
+func (it *nodeIterator) AddResolver(resolver *Database) {
+	it.resolver = resolver
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -338,8 +350,8 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 }
 
 func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
-	if it.primaryResolver != nil {
-		if resolved := it.primaryResolver.node(common.BytesToHash(hash)); resolved != nil {
+	if it.resolver != nil {
+		if resolved := it.resolver.node(common.BytesToHash(hash)); resolved != nil {
 			return resolved, nil
 		}
 	}
@@ -535,7 +547,7 @@ func (it *differenceIterator) Path() []byte {
 }
 
 func (it *differenceIterator) AddResolver(db *Database) {
-	panic("Not implemented")
+	panic("not implemented")
 }
 
 func (it *differenceIterator) Next(bool) bool {
@@ -646,7 +658,7 @@ func (it *unionIterator) Path() []byte {
 }
 
 func (it *unionIterator) AddResolver(db *Database) {
-	panic("Not implemented")
+	panic("not implemented")
 }
 
 // Next returns the next node in the union of tries being iterated over.
