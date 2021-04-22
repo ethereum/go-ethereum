@@ -126,7 +126,7 @@ var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 	},
 }
 
-func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
+func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 	timeNow := time.Now()
 	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
 	// Set genesis time in a past
@@ -181,11 +181,11 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	// Dummy genesis epoch
 	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorList: validatorPublicList}
 	consensusInfo = append(consensusInfo, genesisEpoch)
-	ethash := NewPandora(config, urls, true, consensusInfo, false)
-	remoteSealerServer := ethash.remote
-	pandora := Pandora{remoteSealerServer}
 
 	t.Run("Should subscribe to MinimalConsensusInformation", func(t *testing.T) {
+		ethash := NewPandora(config, urls, true, consensusInfo, false)
+		remoteSealerServer := ethash.remote
+		pandora := Pandora{remoteSealerServer}
 		ctx := context.Background()
 		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
 		require.NoError(t, err)
@@ -283,6 +283,25 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 		}
 
 		assert.Len(t, validityMap, epochsProgressed)
+	})
+
+	t.Run("Should fill cache with MinimalConsensusInformation", func(t *testing.T) {
+		// TODO: consider how to test this scenario side effects.
+		// For now it fails. Handler of MinimalConsensus pub/sub dies randomly after few milliseconds
+		// It may be correlated with invalid liveliness of mocked server api within this test
+		t.Skip()
+		ethash := NewPandora(config, urls, true, consensusInfo, true)
+		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
+		assert.False(t, isPreviousPresent)
+		assert.Nil(t, previousInfo)
+
+		for _, info := range minimalConsensusInfos {
+			consensusChannel <- info
+		}
+
+		currentConsensusInfo, isPresent := ethash.mci.cache.Get(1)
+		assert.True(t, isPresent)
+		assert.NotNil(t, currentConsensusInfo)
 	})
 }
 
@@ -385,7 +404,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	}()
 	urls := make([]string, 0)
 	urls = append(urls, vanguardServer.URL)
-	// TODO: consider turning orcSubscribe to true
 	remoteSealerServer := StartRemotePandora(&ethash, urls, true, false)
 	ethash.remote = remoteSealerServer
 	ethashAPI := API{ethash: &ethash}
