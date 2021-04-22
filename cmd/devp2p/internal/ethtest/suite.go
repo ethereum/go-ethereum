@@ -380,7 +380,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		switch msg := sendConn.ReadAndServe(s.chain, time.Second * 8).(type) {
+		switch msg := sendConn.ReadAndServe(s.chain, time.Second*8).(type) {
 		case *Disconnect:
 		case *Error:
 			break
@@ -422,7 +422,7 @@ func (s *Suite) oldAnnounce(t *utesting.T, sendConn, receiveConn *Conn) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := receiveConn.ReadAndServe(s.chain, time.Second * 8).(type) {
+	switch msg := receiveConn.ReadAndServe(s.chain, time.Second*8).(type) {
 	case *NewBlock:
 		t.Fatalf("unexpected: block propagated: %s", pretty.Sdump(msg))
 	case *NewBlockHashes:

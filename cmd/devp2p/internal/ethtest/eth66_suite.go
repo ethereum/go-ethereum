@@ -203,7 +203,7 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		switch msg := sendConn.ReadAndServe(s.chain, time.Second * 8).(type) {
+		switch msg := sendConn.ReadAndServe(s.chain, time.Second*8).(type) {
 		case *Disconnect:
 		case *Error:
 			break
