@@ -29,7 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const sampleNumber = 3 // Number of transactions sampled in a block
+// Number of transactions sampled in a block
+// Roughly the last 5 minutes
+const sampleNumber = 20
 
 var DefaultMaxPrice = big.NewInt(500 * params.GWei)
 
@@ -207,10 +209,42 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 			}
 		}
 	}
+	if len(prices) > 0 {
+		prices = removeOutliers(prices)
+	}
 	select {
 	case result <- getBlockPricesResult{prices, nil}:
 	case <-quit:
 	}
+}
+
+// removeOutliers calculates the IQR to gasPrices that are significant outliers
+// This helps remove edgecases where MEV skew the gasPrices
+// Assumes len(prices) != 0, and prices are sorted
+func removeOutliers(prices []*big.Int) []*big.Int {
+	var (
+		mean       *big.Int
+		variance   *big.Int
+		sd         *big.Int
+		sum        = big.NewInt(0)
+		sumsq      = big.NewInt(0)
+		length     = big.NewInt(int64(len(prices)))
+		deviations = big.NewInt(3) // The max number of std from the mean we will accept
+	)
+	for _, price := range prices {
+		sum.Add(sum, price)
+		sumsq.Add(sum, price.Mul(price, price))
+	}
+	mean = sum.Div(sum, length)
+	variance = sumsq.Sub(sumsq.Div(sumsq, length), mean.Mul(mean, mean))
+	sd = variance.Sqrt(variance)
+	var filtered = make([]*big.Int, 0)
+	for _, price := range prices {
+		if price.Cmp(sd.Mul(sd, mean.Sub(mean, deviations))) == 1 && price.Cmp(sd.Mul(sd, mean.Add(mean, deviations))) == -1 {
+			filtered = append(filtered, price)
+		}
+	}
+	return filtered
 }
 
 type bigIntArray []*big.Int
