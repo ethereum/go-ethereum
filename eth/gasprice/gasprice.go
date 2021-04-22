@@ -235,19 +235,25 @@ func removeOutliers(prices []*big.Int) []*big.Int {
 		sum.Add(sum, price)
 	}
 	mean = big.NewInt(0).Div(sum, length)
+	// Calculate variance (sum(x - mean)^2 )/ length
 	for _, price := range prices {
-		// Calculate the variance sum(x - mean)^2
+		// Calculate the summation
 		x := big.NewInt(0).Sub(price, mean)
-		sqr := big.NewInt(0).Mul(x, x)
-		variance.Add(variance, sqr)
+		square := big.NewInt(0).Mul(x, x)
+		variance.Add(variance, square)
 	}
-	sd = variance.Sqrt(big.NewInt(0).Div(variance, length))
+	variance.Div(variance, length)
+	// Calculate standard deviation from the variance
+	sd = big.NewInt(0).Sqrt(variance)
+
 	filtered := []*big.Int{}
-	upperBound := big.NewInt(0).Sub(mean, deviations)
-	lowerBound := big.NewInt(0).Add(mean, deviations)
+	deviation := big.NewInt(0).Mul(deviations, sd)
+	lowerBound := big.NewInt(0).Sub(mean, deviation)
+	upperBound := big.NewInt(0).Add(mean, deviation)
+
 	for _, price := range prices {
 		// Remove items that are not within the upper and lower bounds of the deviation
-		if price.Cmp(sd.Mul(sd, lowerBound)) == 1 && price.Cmp(sd.Mul(sd, upperBound)) == -1 {
+		if price.Cmp(lowerBound) == 1 && price.Cmp(upperBound) == -1 {
 			filtered = append(filtered, price)
 		}
 	}

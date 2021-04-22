@@ -119,24 +119,82 @@ func TestSuggestPrice(t *testing.T) {
 	}
 }
 
-func TestRemoveOutliers(t *testing.T) {
+func generateFakeGasPrices(min, max int) []*big.Int {
 	rand.Seed(time.Now().UnixNano())
-	min := 180
-	max := 220
 	gasPrices := make([]*big.Int, 0)
 	for i := 0; i < 300; i++ {
 		randGasPrice := rand.Intn(max-min+1) + min
 		gasPrices = append(gasPrices, big.NewInt(int64(randGasPrice)))
 	}
+	return gasPrices
+}
+
+func TestRemoveLowOutliers(t *testing.T) {
+	gasPrices := generateFakeGasPrices(180, 220)
 	cpy := make([]*big.Int, len(gasPrices))
 	copy(cpy, gasPrices)
 	// add low gas prices
 	cpy = append(cpy, big.NewInt(5))
 	cpy = append(cpy, big.NewInt(10))
+	cpy = append(cpy, big.NewInt(10))
+	cpy = append(cpy, big.NewInt(10))
+	cpy = append(cpy, big.NewInt(15))
+	cpy = append(cpy, big.NewInt(15))
+	cpy = append(cpy, big.NewInt(15))
 	cpy = append(cpy, big.NewInt(15))
 
 	res := removeOutliers(cpy)
-	if len(gasPrices) < len(res) && len(res) == 0 {
+	// It should remove all the lower  gasPrices in the extreme case
+	if len(gasPrices) != len(res) {
+		t.Fatalf("Low gas prices not removed, want length less than %d, got %d", len(gasPrices), len(res))
+	}
+}
+
+func TestRemoveHighOutliars(t *testing.T) {
+	gasPrices := generateFakeGasPrices(180, 220)
+	cpy := make([]*big.Int, len(gasPrices))
+	copy(cpy, gasPrices)
+	// add low gas prices
+	cpy = append(cpy, big.NewInt(300))
+	cpy = append(cpy, big.NewInt(310))
+	cpy = append(cpy, big.NewInt(350))
+	cpy = append(cpy, big.NewInt(250))
+	cpy = append(cpy, big.NewInt(251))
+	cpy = append(cpy, big.NewInt(245))
+	cpy = append(cpy, big.NewInt(255))
+	cpy = append(cpy, big.NewInt(256))
+
+	res := removeOutliers(cpy)
+	// It should remove most of the higher values
+	if len(cpy) < len(res) {
+		t.Fatalf("Low gas prices not removed, want length less than %d, got %d", len(gasPrices), len(res))
+	}
+}
+
+func TestRemoveHighAndLowOutliars(t *testing.T) {
+	gasPrices := generateFakeGasPrices(180, 220)
+	cpy := make([]*big.Int, len(gasPrices))
+	copy(cpy, gasPrices)
+	// add low gas prices
+	cpy = append(cpy, big.NewInt(300))
+	cpy = append(cpy, big.NewInt(310))
+	cpy = append(cpy, big.NewInt(350))
+	cpy = append(cpy, big.NewInt(250))
+	cpy = append(cpy, big.NewInt(251))
+	cpy = append(cpy, big.NewInt(245))
+	cpy = append(cpy, big.NewInt(255))
+	cpy = append(cpy, big.NewInt(256))
+	cpy = append(cpy, big.NewInt(50))
+	cpy = append(cpy, big.NewInt(100))
+	cpy = append(cpy, big.NewInt(70))
+	cpy = append(cpy, big.NewInt(75))
+	cpy = append(cpy, big.NewInt(5))
+	cpy = append(cpy, big.NewInt(0))
+	cpy = append(cpy, big.NewInt(4))
+	cpy = append(cpy, big.NewInt(2))
+	res := removeOutliers(cpy)
+	// It should remove most of the higher values
+	if len(cpy) < len(res) {
 		t.Fatalf("Low gas prices not removed, want length less than %d, got %d", len(gasPrices), len(res))
 	}
 }
