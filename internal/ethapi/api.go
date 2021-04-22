@@ -2114,12 +2114,13 @@ func (s *PrivateTxBundleAPI) SendBundle(ctx context.Context, args SendBundleArgs
 
 // BundleAPI offers an API for accepting bundled transactions
 type BundleAPI struct {
-	b Backend
+	b     Backend
+	chain *core.BlockChain
 }
 
 // NewBundleAPI creates a new Tx Bundle API instance.
-func NewBundleAPI(b Backend) *BundleAPI {
-	return &BundleAPI{b}
+func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
+	return &BundleAPI{b, chain}
 }
 
 // CallBundle will simulate a bundle of transactions at the top of a given block
@@ -2183,69 +2184,31 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
-	// Get a new instance of the EVM
-	signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
-	firstMsg, err := txs[0].AsMessage(signer)
-	if err != nil {
-		return nil, err
-	}
-	evm, _, err := s.b.GetEVM(ctx, firstMsg, state, header)
-	if err != nil {
-		return nil, err
-	}
-	// Wait for the context to be done and cancel the evm. Even if the
-	// EVM has finished, cancelling may be done (repeatedly)
-	go func() {
-		<-ctx.Done()
-		evm.Cancel()
-	}()
+	vmconfig := vm.Config{}
 
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 
 	results := []map[string]interface{}{}
-	coinbaseBalanceBefore := evm.StateDB.GetBalance(coinbase)
+	coinbaseBalanceBefore := state.GetBalance(coinbase)
 
 	bundleHash := sha3.NewLegacyKeccak256()
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
 	for _, tx := range txs {
-		msg, err := tx.AsMessage(signer)
+		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, tx, &header.GasUsed, vmconfig)
 		if err != nil {
-			return nil, err
-		}
-
-		evm, vmError, err := s.b.GetEVM(ctx, msg, state, header)
-		if err != nil {
-			return nil, err
-		}
-		// Wait for the context to be done and cancel the evm. Even if the
-		// EVM has finished, cancelling may be done (repeatedly)
-		go func() {
-			<-ctx.Done()
-			evm.Cancel()
-		}()
-
-		result, err := core.ApplyMessage(evm, msg, gp)
-		if err := vmError(); err != nil {
-			return nil, err
-		}
-		// If the timer caused an abort, return an appropriate error message
-		if evm.Cancelled() {
-			return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("err: %w; supplied gas %d; txhash %s", err, msg.Gas(), tx.Hash())
+			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())
 		}
 
 		txHash := tx.Hash().String()
 		jsonResult := map[string]interface{}{
 			"txHash":  txHash,
-			"gasUsed": result.UsedGas,
+			"gasUsed": receipt.GasUsed,
 		}
-		totalGasUsed += result.UsedGas
-		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(result.UsedGas)), tx.GasPrice()))
+		totalGasUsed += receipt.GasUsed
+		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice()))
 		bundleHash.Write(tx.Hash().Bytes())
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
@@ -2258,13 +2221,12 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 			hex.Encode(dst, result.Return())
 			jsonResult["value"] = "0x" + string(dst)
 		}
-
 		results = append(results, jsonResult)
 	}
 
 	ret := map[string]interface{}{}
 	ret["results"] = results
-	coinbaseDiff := new(big.Int).Sub(evm.StateDB.GetBalance(coinbase), coinbaseBalanceBefore)
+	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
 	ret["coinbaseDiff"] = coinbaseDiff.String()
 	ret["gasFees"] = gasFees.String()
 	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
