@@ -518,15 +518,13 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 }
 
 func (s *Suite) TestMaliciousTx(t *utesting.T) {
-	tests := []*types.Transaction{
+	badTxs := []*types.Transaction{
 		getOldTxFromChain(t, s),
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
 		hugeData(t, s),
 	}
-	for i, tx := range tests {
-		t.Logf("Testing malicious tx propagation: %v\n", i)
-		sendFailingTx(t, s, tx)
-	}
+	t.Logf("Testing malicious tx propagation")
+	sendFailingTxs(t, s, badTxs)
 }

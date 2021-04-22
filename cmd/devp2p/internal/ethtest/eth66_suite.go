@@ -351,17 +351,15 @@ func (s *Suite) TestTransaction_66(t *utesting.T) {
 }
 
 func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
-	tests := []*types.Transaction{
+	badTxs := []*types.Transaction{
 		getOldTxFromChain(t, s),
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
 		hugeData(t, s),
 	}
-	for i, tx := range tests {
-		t.Logf("Testing malicious tx propagation: %v\n", i)
-		sendFailingTx66(t, s, tx)
-	}
+	t.Logf("Testing malicious tx propagation")
+	sendFailingTx66(t, s, badTxs)
 }
 
 // TestZeroRequestID_66 checks that a request ID of zero is still handled
