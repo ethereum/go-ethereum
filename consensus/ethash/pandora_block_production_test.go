@@ -71,25 +71,23 @@ func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint
 
 	go func() {
 		for {
-			select {
-			case info := <-api.consensusChannel:
-				payload := &MinimalEpochConsensusInfoPayload{
-					Epoch:            info.Epoch,
-					ValidatorList:    [32]string{},
-					EpochTimeStart:   info.EpochTimeStart,
-					SlotTimeDuration: info.SlotTimeDuration,
-				}
+			info := <-api.consensusChannel
+			payload := &MinimalEpochConsensusInfoPayload{
+				Epoch:            info.Epoch,
+				ValidatorList:    [32]string{},
+				EpochTimeStart:   info.EpochTimeStart,
+				SlotTimeDuration: info.SlotTimeDuration,
+			}
 
-				for index, validator := range info.ValidatorList {
-					payload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
-				}
+			for index, validator := range info.ValidatorList {
+				payload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
+			}
 
-				currentErr := notifier.Notify(rpcSub.ID, payload)
+			currentErr := notifier.Notify(rpcSub.ID, payload)
 
-				if nil != currentErr {
-					// For now only panic
-					panic(currentErr)
-				}
+			if nil != currentErr {
+				// For now only panic
+				panic(currentErr)
 			}
 		}
 	}()
@@ -220,14 +218,13 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 			}
 
 			for {
-				select {
-				case err := <-subscription.Err():
-					if nil != err {
-						assert.NoError(t, err)
-						dieChannel <- true
+				err := <-subscription.Err()
 
-						return
-					}
+				if nil != err {
+					assert.NoError(t, err)
+					dieChannel <- true
+
+					return
 				}
 			}
 		}()
