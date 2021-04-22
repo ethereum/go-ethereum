@@ -393,7 +393,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 			if nil != currentErr {
 				errChan <- currentErr
 
-				return currentErr
+				continue
 			}
 
 			coreMinimalConsensus.ValidatorsList[index], currentErr = herumi.PublicKeyFromBytes(publicKeyBytes)
@@ -401,7 +401,7 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 			if nil != currentErr {
 				errChan <- currentErr
 
-				return currentErr
+				continue
 			}
 		}
 
@@ -414,23 +414,28 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		return
 	}
 
-	// TODO: consider if early returns are good approach
 	go func() {
-		select {
-		case payload := <-channel:
-			currentErr := insertFunc(payload)
+		for {
+			select {
+			case payload := <-channel:
+				currentErr := insertFunc(payload)
 
-			if nil != currentErr {
-				errChan <- err
+				if nil != currentErr {
+					errChan <- err
 
-				return
-			}
+					return
+				}
+			// Prematurely end this routine
+			case err = <-errChan:
+				if nil != err {
+					return
+				}
+			case err = <-subscription.Err():
+				if nil != err {
+					errChan <- err
 
-		case err = <-subscription.Err():
-			if nil != err {
-				errChan <- err
-
-				return
+					return
+				}
 			}
 		}
 	}()
@@ -701,9 +706,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	return
 }
 
-// THIS IS DANGEROUS
-// If it will be exposed to anyone or used in malicious manner it will break whole ethereum engine
-// We need to find a better way to fill this data or be more secure
+// This should be used only by trusted orchestrator
 func (ethash *Ethash) InsertMinimalConsensusInfo(
 	epoch uint64,
 	consensusInfo *MinimalEpochConsensusInfo,
