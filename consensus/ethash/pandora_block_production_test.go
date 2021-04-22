@@ -84,11 +84,11 @@ func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint
 					payload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
 				}
 
-				err := notifier.Notify(rpcSub.ID, payload)
+				currentErr := notifier.Notify(rpcSub.ID, payload)
 
-				if nil != err {
+				if nil != currentErr {
 					// For now only panic
-					panic(err)
+					panic(currentErr)
 				}
 			}
 		}
@@ -181,8 +181,8 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	// Dummy genesis epoch
 	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorList: validatorPublicList}
 	consensusInfo = append(consensusInfo, genesisEpoch)
-	ethash := NewPandora(config, urls, true, consensusInfo)
-	remoteSealerServer := StartRemotePandora(ethash, urls, true, false)
+	ethash := NewPandora(config, urls, true, consensusInfo, false)
+	remoteSealerServer := ethash.remote
 	pandora := Pandora{remoteSealerServer}
 
 	t.Run("should fill all epochs", func(t *testing.T) {

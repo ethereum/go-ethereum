@@ -243,6 +243,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			notify,
 			noverify,
 			chainConfig.PandoraConfig.ConsensusInfo,
+			true,
 		)
 		engine.SetThreads(-1) // Disable CPU mining
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -63,6 +64,37 @@ type MinimalEpochConsensusInfo struct {
 
 	// Slot time duration
 	SlotTimeDuration time.Duration `json:"SlotTimeDuration"`
+}
+
+func NewPandora(
+	config Config,
+	notify []string,
+	noverify bool,
+	minimalConsensusInfo interface{},
+	orcSubscribe bool,
+) *Ethash {
+	config.PowMode = ModePandora
+	ethash := New(config, notify, noverify)
+	ethash.mci = newlru("epochSet", 2^7, NewMinimalConsensusInfo)
+
+	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
+	genesisConsensusTimeStart := consensusInfo[0]
+
+	// Fill cache with minimal consensus info
+	for index, consensusInfo := range consensusInfo {
+		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
+		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
+		pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
+			int64(genesisConsensusTimeStart.EpochTimeStart),
+			0,
+		))
+		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorList)
+		ethash.mci.cache.Add(index, pandoraConsensusInfo)
+	}
+
+	ethash.remote = StartRemotePandora(ethash, notify, noverify, orcSubscribe)
+
+	return ethash
 }
 
 // This is done only to have vanguard spec done in minimal codebase to exchange information with pandora.
@@ -732,7 +764,7 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	mci := ethash.mci
 	mciCache := mci.cache
 	mciCache.Add(int(epoch), pandoraConsensusInfo)
-	//
+
 	return
 }
 
