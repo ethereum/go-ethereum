@@ -218,9 +218,9 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 	}
 }
 
-// removeOutliers calculates the IQR to gasPrices that are significant outliers
-// This helps remove edgecases where MEV skew the gasPrices
-// Assumes len(prices) != 0
+// removeOutliers calculates the interquartile range of gas prices that are
+// significant outliers with the goal of removing edge cases where MEV skews
+// the gas prices
 func removeOutliers(prices []*big.Int) []*big.Int {
 	var (
 		mean       *big.Int
