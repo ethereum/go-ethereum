@@ -132,7 +132,7 @@ func StartRemotePandora(
 		return
 	}
 
-	_, _, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0)
+	_, _, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
 
 	if nil != err {
 		panic(fmt.Sprintf("could not start remote pandora, err: %s", err.Error()))
@@ -354,7 +354,7 @@ func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
 // we should start receiving subscriptions.
 // This process should be infinite.
 // For the first iteration we use first of notify urls to reach orchestrator
-func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
+func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64, ctx context.Context) (
 	subscription *rpc.ClientSubscription,
 	channel chan *MinimalEpochConsensusInfoPayload,
 	err error,
@@ -377,7 +377,6 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		return
 	}
 
-	ctx := context.Background()
 	channel = make(chan *MinimalEpochConsensusInfoPayload)
 
 	subscription, err = client.Subscribe(

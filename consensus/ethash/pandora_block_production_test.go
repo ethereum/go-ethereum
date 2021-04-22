@@ -186,7 +186,8 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	pandora := Pandora{remoteSealerServer}
 
 	t.Run("should fill all epochs", func(t *testing.T) {
-		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
+		ctx := context.Background()
+		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
 		require.NoError(t, err)
 		defer func() {
 			if recovery := recover(); recovery != nil {
@@ -215,7 +216,6 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 			notificationWaitGroup.Wait()
 
 			for _, info := range minimalConsensusInfos {
-				// Try to not spam all at once
 				consensusChannel <- info
 			}
 
@@ -275,10 +275,16 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 
 		// Verify logic validity of received epochs
 		// Epoch should not be received twice
+		// Also verify that minimalConsensus is in cache
 		for index, currentConsensusInfo := range gatherer.gathered {
 			item, isPresent := validityMap[currentConsensusInfo.Epoch]
 			assert.False(t, isPresent, "index", index, "item", item, "epoch", currentConsensusInfo.Epoch)
 			validityMap[currentConsensusInfo.Epoch] = currentConsensusInfo
+
+			// TODO: Check why epochs are not present in cache
+			minimalConsensus, minimalConsensusPresent := ethash.mci.cache.Get(index)
+			assert.True(t, minimalConsensusPresent)
+			assert.NotNil(t, minimalConsensus)
 		}
 
 		assert.Len(t, validityMap, epochsProgressed)
