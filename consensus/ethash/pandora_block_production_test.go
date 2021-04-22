@@ -72,11 +72,6 @@ func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint
 	go func() {
 		for {
 			select {
-			case err := <-rpcSub.Err():
-				if nil != err {
-					panic(err)
-				}
-
 			case info := <-api.consensusChannel:
 				payload := &MinimalEpochConsensusInfoPayload{
 					Epoch:            info.Epoch,
@@ -165,7 +160,12 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 
 	consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
 	listener, server, location := makeOrchestratorServer(t, consensusChannel)
-	defer server.Stop()
+	defer func() {
+		if recovery := recover(); recovery != nil {
+			t.Log("Recovered in server stop", recovery)
+		}
+		server.Stop()
+	}()
 	require.Equal(t, location, listener.Addr().String())
 
 	urls := []string{location}
@@ -188,20 +188,27 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 	t.Run("should fill all epochs", func(t *testing.T) {
 		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0)
 		require.NoError(t, err)
-		defer subscription.Unsubscribe()
+		defer func() {
+			if recovery := recover(); recovery != nil {
+				t.Log("Recovered in server stop", recovery)
+			}
+
+			subscription.Unsubscribe()
+		}()
 		gatheredInformation := make([]*MinimalEpochConsensusInfoPayload, 0)
 		gatherer := safeGatheredInfo{
 			gathered: gatheredInformation,
 		}
 
-		timeout := time.Second * 50
+		timeout := time.Second * 5
 		ticker := time.NewTimer(timeout)
+
 		// Have two wait groups as a routines
 		notificationWaitGroup := sync.WaitGroup{}
 		notificationWaitGroup.Add(1)
 
-		assertionWaitGroup := sync.WaitGroup{}
-		assertionWaitGroup.Add(2)
+		dieChannel := make(chan bool)
+		progressChannel := make(chan bool)
 
 		// Start sending right after notification channels will be ready to receive
 		go func() {
@@ -211,7 +218,17 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 				consensusChannel <- info
 			}
 
-			assertionWaitGroup.Done()
+			for {
+				select {
+				case err := <-subscription.Err():
+					if nil != err {
+						assert.NoError(t, err)
+						dieChannel <- true
+
+						return
+					}
+				}
+			}
 		}()
 
 		// Notify WaitGroup when ready receiving information
@@ -231,18 +248,27 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 						"passed",
 						timeout.Seconds(),
 					)
+					dieChannel <- true
+
+					return
 				}
 
 				if len(gatherer.gathered) == epochsProgressed {
 					t.Log("got enough epochs, progressing")
-					assertionWaitGroup.Done()
+					progressChannel <- true
+
 					return
 				}
 			}
 		}()
 
-		// Wait until ready
-		assertionWaitGroup.Wait()
+		// Block until we receive proper signal from routines
+		select {
+		case <-dieChannel:
+			t.FailNow()
+		case shouldProgress := <-progressChannel:
+			assert.True(t, shouldProgress)
+		}
 
 		validityMap := map[uint64]*MinimalEpochConsensusInfoPayload{}
 
@@ -253,6 +279,8 @@ func TestPandora_SubscribeToMinimalConsensusInformation(t *testing.T) {
 			assert.False(t, isPresent, "index", index, "item", item, "epoch", currentConsensusInfo.Epoch)
 			validityMap[currentConsensusInfo.Epoch] = currentConsensusInfo
 		}
+
+		assert.Len(t, validityMap, epochsProgressed)
 	})
 }
 
