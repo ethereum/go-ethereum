@@ -20,7 +20,9 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -115,4 +117,23 @@ func TestSuggestPrice(t *testing.T) {
 	if got.Cmp(expect) != 0 {
 		t.Fatalf("Gas price mismatch, want %d, got %d", expect, got)
 	}
+}
+
+func TestRemoveOutliers(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	min := 180
+	max := 220
+	gasPrices := make([]*big.Int, 0)
+	for i := 0; i < 300; i++ {
+		randGasPrice := rand.Intn(max-min+1) + min
+		gasPrices = append(gasPrices, big.NewInt(int64(randGasPrice)))
+	}
+	cpy := make([]*big.Int, len(gasPrices))
+	// add low gas prices
+	cpy = append(cpy, big.NewInt(5))
+	cpy = append(cpy, big.NewInt(10))
+	cpy = append(cpy, big.NewInt(15))
+
+	res := removeOutliers(cpy)
+	t.Fatalf("Low gas prices not removed, want %d, got %d", gasPrices, res)
 }

@@ -220,7 +220,7 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 
 // removeOutliers calculates the IQR to gasPrices that are significant outliers
 // This helps remove edgecases where MEV skew the gasPrices
-// Assumes len(prices) != 0, and prices are sorted
+// Assumes len(prices) != 0
 func removeOutliers(prices []*big.Int) []*big.Int {
 	var (
 		mean       *big.Int
@@ -231,6 +231,7 @@ func removeOutliers(prices []*big.Int) []*big.Int {
 		length     = big.NewInt(int64(len(prices)))
 		deviations = big.NewInt(3) // The max number of std from the mean we will accept
 	)
+	sort.Sort(bigIntArray(prices))
 	for _, price := range prices {
 		sum.Add(sum, price)
 		sumsq.Add(sum, price.Mul(price, price))
