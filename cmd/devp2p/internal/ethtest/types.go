@@ -241,7 +241,6 @@ func (c *Conn) handshake(t *utesting.T) Message {
 		}
 		return msg
 	default:
-		t.Logf("dump: %s", pretty.Sdump(msg))
 		t.Fatalf("bad handshake: %#v", msg)
 		return nil
 	}

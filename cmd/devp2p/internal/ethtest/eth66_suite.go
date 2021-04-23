@@ -368,7 +368,7 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 	for i, tx := range badTxs {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
 		if err := sendConn.Write(&Transactions{tx}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("could not write to connection: %v", err)
 		}
 
 	}
