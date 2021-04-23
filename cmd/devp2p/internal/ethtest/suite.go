@@ -140,7 +140,6 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 // a status message with it, and then check to make sure
 // the chain head is correct.
 func (s *Suite) TestStatus(t *utesting.T) {
-	t.Log()
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
