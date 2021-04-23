@@ -30,6 +30,7 @@ var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c666
 
 func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection(t)
+	defer sendConn.Close()
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
@@ -65,35 +66,50 @@ func sendSuccessfulTxWithConn(t *utesting.T, s *Suite, tx *types.Transaction, se
 	}
 }
 
-func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
-	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
-}
-
-func sendFailingTxWithConns(t *utesting.T, s *Suite, tx *types.Transaction, sendConn, recvConn *Conn) {
-	// Wait for a transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-	case *NewPooledTransactionHashes:
-		break
-	default:
-		t.Logf("unexpected message, logging: %v", pretty.Sdump(msg))
-	}
-	// Send the transaction
-	if err := sendConn.Write(&Transactions{tx}); err != nil {
-		t.Fatal(err)
-	}
+func waitForTxPropagation(t *utesting.T, s *Suite, txs []*types.Transaction, recvConn *Conn) {
 	// Wait for another transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+	switch msg := recvConn.ReadAndServe(s.chain, time.Second*8).(type) {
 	case *Transactions:
-		t.Fatalf("Received unexpected transaction announcement: %v", msg)
+		// check to see if any of the failing txs were in the announcement
+		recvTxs := make([]common.Hash, len(*msg))
+		for i, recvTx := range *msg {
+			recvTxs[i] = recvTx.Hash()
+		}
+		badTxs := containsTxs(recvTxs, txs)
+		if len(badTxs) > 0 {
+			for _, tx := range badTxs {
+				t.Logf("received bad tx: %v", tx)
+			}
+			t.Fatalf("received %d bad txs", len(badTxs))
+		}
 	case *NewPooledTransactionHashes:
-		t.Fatalf("Received unexpected pooledTx announcement: %v", msg)
+		badTxs := containsTxs(*msg, txs)
+		if len(badTxs) > 0 {
+			for _, tx := range badTxs {
+				t.Logf("received bad tx: %v", tx)
+			}
+			t.Fatalf("received %d bad txs", len(badTxs))
+		}
 	case *Error:
 		// Transaction should not be announced -> wait for timeout
 		return
 	default:
 		t.Fatalf("unexpected message in sendFailingTx: %s", pretty.Sdump(msg))
 	}
+}
+
+// containsTxs checks whether the hashes of the received transactions are present in
+// the given set of txs
+func containsTxs(recvTxs []common.Hash, txs []*types.Transaction) []common.Hash {
+	containedTxs := make([]common.Hash, 0)
+	for _, recvTx := range recvTxs {
+		for _, tx := range txs {
+			if recvTx == tx.Hash() {
+				containedTxs = append(containedTxs, recvTx)
+			}
+		}
+	}
+	return containedTxs
 }
 
 func unknownTx(t *utesting.T, s *Suite) *types.Transaction {

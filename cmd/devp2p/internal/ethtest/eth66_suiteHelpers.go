@@ -238,12 +238,8 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 
 func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection66(t)
+	defer sendConn.Close()
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
-}
-
-func sendFailingTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
-	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
-	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
 }
 
 func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, expectedID uint64) BlockHeaders {

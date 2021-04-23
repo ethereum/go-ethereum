@@ -178,8 +178,7 @@ func (c *Conn) Read() Message {
 func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
 	for time.Since(start) < timeout {
-		timeout := time.Now().Add(10 * time.Second)
-		c.SetReadDeadline(timeout)
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
 		switch msg := c.Read().(type) {
 		case *Ping:
 			c.Write(&Pong{})
