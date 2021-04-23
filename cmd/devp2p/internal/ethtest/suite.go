@@ -97,6 +97,8 @@ func (s *Suite) AllEthTests() []utesting.Test {
 		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
 		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestLargeTxRequest_66", Fn: s.TestLargeTxRequest_66},
+		{Name: "TestNewPooledTxs_66", Fn: s.TestNewPooledTxs_66},
 	}
 }
 
@@ -129,6 +131,8 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
 		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestLargeTxRequest_66", Fn: s.TestLargeTxRequest_66},
+		{Name: "TestNewPooledTxs_66", Fn: s.TestNewPooledTxs_66},
 	}
 }
 
@@ -455,7 +459,6 @@ func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAn
 }
 
 func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
-	timeout := 20 * time.Second
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
 		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
