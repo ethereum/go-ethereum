@@ -438,15 +438,16 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// We use the snap data to build up a cache which can be used by the
 	// main account trie as a primary lookup when resolving hashes
-	var snapTrieDb *trie.Database
+	var snapNodeCache ethdb.KeyValueStore
 	if len(result.keys) > 0 {
-		snapNodeCache := memorydb.New()
-		snapTrieDb = trie.NewDatabase(snapNodeCache)
+		snapNodeCache = memorydb.New()
+		snapTrieDb := trie.NewDatabase(snapNodeCache)
 		snapTrie, _ := trie.New(common.Hash{}, snapTrieDb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		snapTrie.Commit(nil)
+		root, _ := snapTrie.Commit(nil)
+		snapTrieDb.Commit(root, false, nil)
 	}
 	tr := result.tr
 	if tr == nil {
@@ -474,7 +475,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		start    = time.Now()
 		internal time.Duration
 	)
-	nodeIt.AddResolver(snapTrieDb)
+	nodeIt.AddResolver(snapNodeCache)
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
 			trieMore = true

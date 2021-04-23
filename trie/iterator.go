@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -114,7 +115,7 @@ type NodeIterator interface {
 	// Before adding a similar mechanism to any other place in Geth, consider
 	// making trie.Database an interface and wrapping at that level. It's a huge
 	// refactor, but it could be worth it if another occurance arises.
-	AddResolver(*Database)
+	AddResolver(ethdb.KeyValueStore)
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -133,11 +134,7 @@ type nodeIterator struct {
 	path  []byte               // Path to the current node
 	err   error                // Failure set in case of an internal error in the iterator
 
-	resolver *Database // Optional intermediate resolver above the disk layer
-}
-
-func (it *nodeIterator) AddResolver(resolver *Database) {
-	it.resolver = resolver
+	resolver ethdb.KeyValueStore // Optional intermediate resolver above the disk layer
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -160,6 +157,10 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 	it := &nodeIterator{trie: trie}
 	it.err = it.seek(start)
 	return it
+}
+
+func (it *nodeIterator) AddResolver(resolver ethdb.KeyValueStore) {
+	it.resolver = resolver
 }
 
 func (it *nodeIterator) Hash() common.Hash {
@@ -351,8 +352,10 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 
 func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 	if it.resolver != nil {
-		if resolved := it.resolver.node(common.BytesToHash(hash)); resolved != nil {
-			return resolved, nil
+		if blob, err := it.resolver.Get(hash); err == nil && len(blob) > 0 {
+			if resolved, err := decodeNode(hash, blob); err == nil {
+				return resolved, nil
+			}
 		}
 	}
 	resolved, err := it.trie.resolveHash(hash, path)
@@ -546,7 +549,7 @@ func (it *differenceIterator) Path() []byte {
 	return it.b.Path()
 }
 
-func (it *differenceIterator) AddResolver(db *Database) {
+func (it *differenceIterator) AddResolver(resolver ethdb.KeyValueStore) {
 	panic("not implemented")
 }
 
@@ -657,7 +660,7 @@ func (it *unionIterator) Path() []byte {
 	return (*it.items)[0].Path()
 }
 
-func (it *unionIterator) AddResolver(db *Database) {
+func (it *unionIterator) AddResolver(resolver ethdb.KeyValueStore) {
 	panic("not implemented")
 }
 
