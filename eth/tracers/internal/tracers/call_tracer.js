@@ -32,6 +32,15 @@
 			this.fault(log, db);
 			return;
 		}
+		if (log.getDepth() > 950){
+			// See https://github.com/ethereum/go-ethereum/issues/21879
+			// and https://github.com/ethereum/go-ethereum/issues/16426
+			// This is a workaround to prevent building a too deeply nested
+			// structure which later causes a crash during json marshalling
+			// This will unfortunately lead to an incorrect trace for certain
+			// transactions, but it's preferrable over a node crash
+			return
+		}
 		// We only care about system opcodes, faster if we pre-check once
 		var syscall = (log.op.toNumber() & 0xf0) == 0xf0;
 		if (syscall) {
