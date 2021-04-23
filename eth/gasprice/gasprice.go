@@ -203,7 +203,10 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 	for _, tx := range txs {
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			prices = append(prices, tx.GasPrice())
+			// Remove transactions with a gasPrice of 0
+			if tx.GasPrice() != big.NewInt(0) {
+				prices = append(prices, tx.GasPrice())
+			}
 			if len(prices) >= limit {
 				break
 			}

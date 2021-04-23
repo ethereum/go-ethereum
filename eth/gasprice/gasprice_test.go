@@ -144,7 +144,7 @@ func TestRemoveLowOutliers(t *testing.T) {
 	cpy = append(cpy, big.NewInt(15))
 
 	res := removeOutliers(cpy)
-	// It should remove all the lower  gasPrices in the extreme case
+	// It should remove all the lower gasPrices in the extreme case
 	if len(gasPrices) != len(res) {
 		t.Fatalf("Low gas prices not removed, want length less than %d, got %d", len(gasPrices), len(res))
 	}
@@ -154,7 +154,7 @@ func TestRemoveHighOutliars(t *testing.T) {
 	gasPrices := generateFakeGasPrices(180, 220)
 	cpy := make([]*big.Int, len(gasPrices))
 	copy(cpy, gasPrices)
-	// add low gas prices
+	// add high gas prices
 	cpy = append(cpy, big.NewInt(300))
 	cpy = append(cpy, big.NewInt(310))
 	cpy = append(cpy, big.NewInt(350))
@@ -175,7 +175,7 @@ func TestRemoveHighAndLowOutliars(t *testing.T) {
 	gasPrices := generateFakeGasPrices(180, 220)
 	cpy := make([]*big.Int, len(gasPrices))
 	copy(cpy, gasPrices)
-	// add low gas prices
+	// add high gas prices
 	cpy = append(cpy, big.NewInt(300))
 	cpy = append(cpy, big.NewInt(310))
 	cpy = append(cpy, big.NewInt(350))
@@ -184,6 +184,7 @@ func TestRemoveHighAndLowOutliars(t *testing.T) {
 	cpy = append(cpy, big.NewInt(245))
 	cpy = append(cpy, big.NewInt(255))
 	cpy = append(cpy, big.NewInt(256))
+	// add low gas prices
 	cpy = append(cpy, big.NewInt(50))
 	cpy = append(cpy, big.NewInt(100))
 	cpy = append(cpy, big.NewInt(70))
@@ -193,7 +194,7 @@ func TestRemoveHighAndLowOutliars(t *testing.T) {
 	cpy = append(cpy, big.NewInt(4))
 	cpy = append(cpy, big.NewInt(2))
 	res := removeOutliers(cpy)
-	// It should remove most of the higher values
+	// It should remove most of the high and low values
 	if len(cpy) < len(res) {
 		t.Fatalf("Low gas prices not removed, want length less than %d, got %d", len(gasPrices), len(res))
 	}
