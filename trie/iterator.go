@@ -114,7 +114,7 @@ type NodeIterator interface {
 	//
 	// Before adding a similar mechanism to any other place in Geth, consider
 	// making trie.Database an interface and wrapping at that level. It's a huge
-	// refactor, but it could be worth it if another occurance arises.
+	// refactor, but it could be worth it if another occurrence arises.
 	AddResolver(ethdb.KeyValueStore)
 }
 
