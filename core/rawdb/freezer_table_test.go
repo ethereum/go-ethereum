@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
@@ -640,3 +641,31 @@ func TestOffset(t *testing.T) {
 // However, all 'normal' failure modes arising due to failing to sync() or save a file should be
 // handled already, and the case described above can only (?) happen if an external process/user
 // deletes files from the filesystem.
+
+func TestAppendTruncateParallel(t *testing.T) {
+	f, err := newCustomTable("./freezer", "tmp", metrics.NilMeter{},
+		metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	fill := func(mark uint64) []byte {
+		data := make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, mark)
+		return data
+	}
+
+	for {
+		f.truncate(0)
+		data0 := fill(0)
+		f.Append(0, data0)
+		data1 := fill(1)
+		go f.truncate(0)
+		go f.Append(1, data1)
+		if have, err := f.Retrieve(0); err == nil {
+			if !bytes.Equal(have, data0) {
+				t.Fatalf("have %x want %x", have, data0)
+			}
+		}
+	}
+}
