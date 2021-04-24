@@ -642,7 +642,13 @@ func TestOffset(t *testing.T) {
 // handled already, and the case described above can only (?) happen if an external process/user
 // deletes files from the filesystem.
 
+// TestAppendTruncateParallel is a test to check if the Append/truncate operations
+// are racy. It's disabled, since it's a long-running test which does not fit well
+// in CI.
+// The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is
+// dependent on timing rather than 'clever' input -- there's no determinism.
 func TestAppendTruncateParallel(t *testing.T) {
+	t.Skip()
 	f, err := newCustomTable("./freezer", "tmp", metrics.NilMeter{},
 		metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
 
