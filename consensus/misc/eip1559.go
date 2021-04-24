@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -60,23 +61,23 @@ func CalcBaseFee(parent *types.Header) *big.Int {
 		// If the parent block used more gas than its target, the baseFee should increase.
 		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - parent.GasLimit)
 		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := new(big.Int).Div(x, gasLimit)
+		y := x.Div(x, gasLimit)
 		baseFeeDelta := math.BigMax(
-			new(big.Int).Div(y, baseFeeChangeDenominator),
-			big.NewInt(1),
+			x.Div(y, baseFeeChangeDenominator),
+			common.Big1,
 		)
 
-		return new(big.Int).Add(parent.BaseFee, baseFeeDelta)
+		return x.Add(parent.BaseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
 		gasUsedDelta := new(big.Int).SetUint64(parent.GasLimit - parent.GasUsed)
 		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := new(big.Int).Div(x, gasLimit)
-		baseFeeDelta := new(big.Int).Div(y, baseFeeChangeDenominator)
+		y := x.Div(x, gasLimit)
+		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
 		return math.BigMax(
-			new(big.Int).Sub(parent.BaseFee, baseFeeDelta),
-			big.NewInt(0),
+			x.Sub(parent.BaseFee, baseFeeDelta),
+			common.Big0,
 		)
 	}
 }
