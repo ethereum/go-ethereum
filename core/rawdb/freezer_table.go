@@ -465,35 +465,53 @@ func (t *freezerTable) releaseFilesAfter(num uint32, remove bool) {
 // Note, this method will *not* flush any data to disk so be sure to explicitly
 // fsync before irreversibly deleting data from the database.
 func (t *freezerTable) Append(item uint64, blob []byte) error {
-	// Read lock prevents competition with truncate
-	t.lock.RLock()
-	// Ensure the table is still accessible
-	if t.index == nil || t.head == nil {
-		t.lock.RUnlock()
-		return errClosed
-	}
-	// Ensure only the next item can be written, nothing else
-	if atomic.LoadUint64(&t.items) != item {
-		t.lock.RUnlock()
-		return fmt.Errorf("appending unexpected item: want %d, have %d", t.items, item)
-	}
-	// Encode the blob and write it into the data file
+	// Encode the blob before the lock portion
 	if !t.noCompression {
 		blob = snappy.Encode(nil, blob)
 	}
-	bLen := uint32(len(blob))
+	// Read lock prevents competition with truncate
+	retry, err := t.append(item, blob, false)
+	if err != nil {
+		return err
+	}
+	if retry {
+		// Read lock was insufficient, retry with a writelock
+		_, err = t.append(item, blob, true)
+	}
+	return err
+}
+func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool, error) {
+	if wlock {
+		t.lock.Lock()
+		defer t.lock.Unlock()
+	} else {
+		t.lock.RLock()
+		defer t.lock.RUnlock()
+	}
+	// Ensure the table is still accessible
+	if t.index == nil || t.head == nil {
+		return false, errClosed
+	}
+	// Ensure only the next item can be written, nothing else
+	if atomic.LoadUint64(&t.items) != item {
+		return false, fmt.Errorf("appending unexpected item: want %d, have %d", t.items, item)
+	}
+	bLen := uint32(len(encodedBlob))
 	if t.headBytes+bLen < bLen ||
 		t.headBytes+bLen > t.maxFileSize {
 		// we need a new file, writing would overflow
-		t.lock.RUnlock()
-		t.lock.Lock()
+		// try again with a writelock. We need a writelock here, but if we
+		// release the readlock, there's a chance that a truncation happens, so
+		// we need to redo all the checks above
+		if !wlock {
+			return true, nil
+		}
 		nextID := atomic.LoadUint32(&t.headId) + 1
 		// We open the next file in truncated mode -- if this file already
 		// exists, we need to start over from scratch on it
 		newHead, err := t.openFile(nextID, openFreezerFileTruncated)
 		if err != nil {
-			t.lock.Unlock()
-			return err
+			return false, err
 		}
 		// Close old file, and reopen in RDONLY mode
 		t.releaseFile(t.headId)
@@ -503,13 +521,9 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 		t.head = newHead
 		atomic.StoreUint32(&t.headBytes, 0)
 		atomic.StoreUint32(&t.headId, nextID)
-		t.lock.Unlock()
-		t.lock.RLock()
 	}
-
-	defer t.lock.RUnlock()
-	if _, err := t.head.Write(blob); err != nil {
-		return err
+	if _, err := t.head.Write(encodedBlob); err != nil {
+		return false, err
 	}
 	newOffset := atomic.AddUint32(&t.headBytes, bLen)
 	idx := indexEntry{
@@ -523,7 +537,7 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 	t.sizeGauge.Inc(int64(bLen + indexEntrySize))
 
 	atomic.AddUint64(&t.items, 1)
-	return nil
+	return false, nil
 }
 
 // getBounds returns the indexes for the item
