@@ -2137,7 +2137,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 
 	for _, encodedTx := range encodedTxs {
 		tx := new(types.Transaction)
-		if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+		if err := tx.UnmarshalBinary(encodedTx); err != nil {
 			return nil, err
 		}
 		txs = append(txs, tx)
