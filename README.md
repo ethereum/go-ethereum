@@ -5,7 +5,7 @@ Official KuCoin Community Chain Golang Client based on the go-ethereum.
 ## Features
 - Ethereum compatible,but low gas fee.
 - high performance, about 500TPS with block/3s.
-- Proof of Staked Authority(PoSA) consensus algorithm with maximum 21 validators.
+- Proof of Staked Authority(PoSA) consensus algorithm with maximum 29 validators.
 - `KCS` run as `native token` and `gas` on KCC network.
 
 ## Building the source
