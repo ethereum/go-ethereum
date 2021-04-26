@@ -23,6 +23,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Install dependencies
+        run: |
+          go get -v -t -d ./...
+
       - name: Lint
         run: go run ./build/ci.go lint
 
@@ -33,6 +37,7 @@ jobs:
     strategy:
       matrix:
         go-version: [ 1.16 ]
+#         Add additional platforms here if we need more
         platform: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.platform }}
@@ -61,4 +66,4 @@ jobs:
           go get -v -t -d ./...
 
       - name: Run build
-        run: go build -v ./...
+        run: go run ./build/ci.go install
