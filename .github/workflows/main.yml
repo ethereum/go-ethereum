@@ -38,6 +38,7 @@ jobs:
       matrix:
         go-version: [ 1.16 ]
 #         Add additional platforms here if we need more
+#        This should assure that we have buildable artifact
         platform: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.platform }}
