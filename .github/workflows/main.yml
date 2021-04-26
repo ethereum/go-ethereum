@@ -15,6 +15,12 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Setup go env
+        run: |
+          echo "::set-env name=GOPATH::$(go env GOPATH)"
+          echo "::add-path::$(go env GOPATH)/bin"
+        shell: bash
+
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -22,9 +28,12 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          path: src/github.com/${{ github.repository }}
 
-      - name: Debug $GOPATH
-        run: echo "$GOPATH"
+      - name: Debug gopath
+        run: echo "$GOPATH UND $GOBIN"
 
       - name: Install dependencies
         run: |
