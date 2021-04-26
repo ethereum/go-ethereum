@@ -40,7 +40,7 @@ jobs:
         uses: goreleaser/goreleaser-action@master
         with:
           version: latest
-          workdir: ./
+          workdir: ./cmd/geth
           args: release --rm-dist --snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
