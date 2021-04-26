@@ -153,7 +153,8 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		return
 	}
 
-	subscription, channel, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
+	lastKnownEpoch := uint64(0)
+	subscription, channel, err, errChan := pandora.SubscribeToMinimalConsensusInformation(lastKnownEpoch, ctx)
 
 	// This will create loop
 	if nil != err {
@@ -172,7 +173,7 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		subscription.Unsubscribe()
 	}()
 
-	ticker := time.NewTimer(time.Second * 24)
+	ticker := time.NewTimer(time.Second * 5)
 
 	insertFunc := func(
 		minimalConsensus *MinimalEpochConsensusInfoPayload,
@@ -187,6 +188,7 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
 		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
 		coreMinimalConsensus.ValidatorsList = [32]common2.PublicKey{}
+		lastKnownEpoch = minimalConsensus.Epoch
 
 		for index, validator := range minimalConsensus.ValidatorList {
 			// Create dummy key for genesis epoch slot 0
@@ -227,7 +229,13 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 	for {
 		select {
 		case <-ticker.C:
-			logger.Info("awaiting for orchestrator information")
+			epochFromCache, exists := ethashEngine.mci.cache.Get(int(lastKnownEpoch))
+			logger.Info(
+				"awaiting for orchestrator information",
+				"epoch", lastKnownEpoch,
+				"exists", exists,
+				"epochFromCache", epochFromCache,
+			)
 		case payload := <-channel:
 			currentErr := insertFunc(payload)
 
