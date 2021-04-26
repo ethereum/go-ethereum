@@ -387,9 +387,11 @@ func (s *remoteSealer) notifyWork() {
 func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []byte, work [4]string) {
 	defer s.reqWG.Done()
 
-	// TODO: enable this
+	// TODO: enable this or move to another flag to provide orchestrator url
 	// Vanguard now will pull the blocks, but it will be great to notify about new work
-	if s.ethash.IsPandoraModeEnabled() && strings.Contains(url, ".ipc") {
+	notHttp := !strings.Contains(url, "http://") || strings.Contains(url, "https://")
+
+	if s.ethash.IsPandoraModeEnabled() && notHttp {
 		return
 	}
 
