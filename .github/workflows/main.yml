@@ -23,6 +23,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Debug $PATH
+        run: echo "$PATH"
+
       - name: Install dependencies
         run: |
           go get -v -t -d ./...
