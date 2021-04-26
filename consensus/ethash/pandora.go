@@ -172,6 +172,8 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		subscription.Unsubscribe()
 	}()
 
+	ticker := time.NewTimer(time.Second * 24)
+
 	insertFunc := func(
 		minimalConsensus *MinimalEpochConsensusInfoPayload,
 	) (currentErr error) {
@@ -224,17 +226,14 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 
 	for {
 		select {
+		case <-ticker.C:
+			logger.Info("awaiting for orchestrator information")
 		case payload := <-channel:
 			currentErr := insertFunc(payload)
 
 			if nil != currentErr {
 				errChan <- err
 
-				return
-			}
-		// Prematurely end this routine
-		case err = <-errChan:
-			if nil != err {
 				return
 			}
 		case err = <-subscription.Err():
