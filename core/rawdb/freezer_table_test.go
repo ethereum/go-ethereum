@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -638,36 +640,51 @@ func TestOffset(t *testing.T) {
 // 1. have data files d0, d1, d2, d3
 // 2. remove d2,d3
 //
-// However, all 'normal' failure modes arising due to failing to sync() or save a file should be
-// handled already, and the case described above can only (?) happen if an external process/user
-// deletes files from the filesystem.
+// However, all 'normal' failure modes arising due to failing to sync() or save a file
+// should be handled already, and the case described above can only (?) happen if an
+// external process/user deletes files from the filesystem.
 
-// TestAppendTruncateParallel is a test to check if the Append/truncate operations
-// are racy. It's disabled, since it's a long-running test which does not fit well
-// in CI.
-// The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is
-// dependent on timing rather than 'clever' input -- there's no determinism.
+// TestAppendTruncateParallel is a test to check if the Append/truncate operations are
+// racy.
+//
+// The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is dependent
+// on timing rather than 'clever' input -- there's no determinism.
 func TestAppendTruncateParallel(t *testing.T) {
-	t.Skip()
-	f, err := newCustomTable("./freezer", "tmp", metrics.NilMeter{},
-		metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
-
+	dir, err := ioutil.TempDir("", "freezer")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	fill := func(mark uint64) []byte {
 		data := make([]byte, 8)
 		binary.LittleEndian.PutUint64(data, mark)
 		return data
 	}
 
-	for {
+	for i := 0; i < 5000; i++ {
 		f.truncate(0)
 		data0 := fill(0)
 		f.Append(0, data0)
 		data1 := fill(1)
-		go f.truncate(0)
-		go f.Append(1, data1)
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			f.truncate(0)
+			wg.Done()
+		}()
+		go func() {
+			f.Append(1, data1)
+			wg.Done()
+		}()
+		wg.Wait()
+
 		if have, err := f.Retrieve(0); err == nil {
 			if !bytes.Equal(have, data0) {
 				t.Fatalf("have %x want %x", have, data0)
