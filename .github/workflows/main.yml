@@ -18,7 +18,7 @@ jobs:
       - name: Setup go env
         run: |
           echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-          echo "PATH=$(go env GOPATH)/bin:$PATH" >> $GITHUB_ENV
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           echo "Added GOPATH: $GOPATH to PATH: $PATH"
         shell: bash
 
