@@ -29,7 +29,6 @@ var _ TxPoolIf = (*TxPool)(nil)
 type TxPoolIf interface {
 	Stop()
 	SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription
-	GasPrice() *big.Int
 	SetGasPrice(price *big.Int)
 	Nonce(addr common.Address) uint64
 	Stats() (int, int)
