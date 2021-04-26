@@ -18,8 +18,8 @@ jobs:
       - name: Setup go env
         run: |
           echo "GOPATH=/home/runner/work" >> $GITHUB_ENV
-          echo "GOBIN=${{ env.gopath }}/bin" >> $GITHUB_ENV
-          echo "${{ env.gobin }}" >> $GITHUB_PATH
+          echo "GOBIN=/home/runner/work/bin" >> $GITHUB_ENV
+          echo "/home/runner/work/bin" >> $GITHUB_PATH
         shell: bash
 
       - name: Install Go
