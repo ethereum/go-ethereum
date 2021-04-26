@@ -33,7 +33,6 @@ jobs:
       - name: Install dependencies
         run: |
           go get -v -t -d ./...
-#           Maybe try just simply install it to perform a test?
           go install golang.org/x/mobile/cmd/gomobile
           echo "$(which gomobile)"
 
