@@ -2,6 +2,8 @@
 
 Official KuCoin Community Chain Golang Client based on the go-ethereum.
 
+![logo](KuCoin-Community-Chain_Green.png)
+
 ## Features
 - Ethereum compatible,but low gas fee.
 - high performance, about 500TPS with block/3s.
@@ -130,7 +132,7 @@ Thank you for considering to help out with the source code! We welcome contribut
 from anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to KCC, please fork, fix, commit and send a pull request
-for the maintainers to review and merge into the main code base. 
+for the maintainers to review and merge into the main code base.
 
 Please make sure your contributions adhere to our coding guidelines:
 
