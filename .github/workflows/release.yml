@@ -44,6 +44,6 @@ jobs:
         with:
           version: latest
           workdir: ./build/bin
-          args: release --rm-dist
+          args: release --rm-dist --snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
