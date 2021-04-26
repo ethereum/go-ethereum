@@ -23,8 +23,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Debug $PATH
-        run: echo "$PATH" "$GOPATH" "$GOBIN"
+      - name: Debug $GOPATH
+        run: echo "$GOPATH"
 
       - name: Install dependencies
         run: |
