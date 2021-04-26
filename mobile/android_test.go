@@ -159,6 +159,11 @@ func TestAndroid(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("cannot test Android bindings on Windows, skipping")
 	}
+
+	if "true" == os.Getenv("SKIP_ANDROID") {
+		t.Skip("I am skipping Android test suite due to os SKIP_ANDROID flag")
+	}
+
 	// Make sure all the Android tools are installed
 	if _, err := exec.Command("which", "gradle").CombinedOutput(); err != nil {
 		t.Skip("command gradle not found, skipping")
