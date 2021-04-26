@@ -36,7 +36,7 @@ type serverBackend interface {
 	ArchiveMode() bool
 	AddTxsSync() bool
 	BlockChain() *core.BlockChain
-	TxPool() *core.TxPool
+	TxPool() core.TxPoolIf
 	GetHelperTrie(typ uint, index uint64) *trie.Trie
 }
 

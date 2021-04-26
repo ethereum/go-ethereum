@@ -271,7 +271,7 @@ func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactio
 	return b.eth.TxPool().ContentFrom(addr)
 }
 
-func (b *EthAPIBackend) TxPool() *core.TxPool {
+func (b *EthAPIBackend) TxPool() core.TxPoolIf {
 	return b.eth.TxPool()
 }
 
