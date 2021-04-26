@@ -17,8 +17,9 @@ jobs:
     steps:
       - name: Setup go env
         run: |
-          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          echo "GOPATH=/home/runner/work" >> $GITHUB_ENV
+          echo "GOBIN=${{ env.gopath }}/bin" >> $GITHUB_ENV
+          echo "${{ env.gobin }}" >> $GITHUB_PATH
         shell: bash
 
       - name: Install Go
@@ -28,21 +29,16 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-          path: src/github.com/${{ github.repository }}
 
       - name: Install dependencies
         run: |
-          echo "$PWD"
-          echo "$(go env GOPATH)"
           go get -v -t -d ./...
 
       - name: Lint
         run: go run ./build/ci.go lint
 
       - name: Test
-        run: go run ./build/ci.go test
+        run: GOBIN=${{ env.gobin }} go run ./build/ci.go test
 
   build:
     strategy:
