@@ -36,14 +36,11 @@ jobs:
         run: |
           go get -v -t -d ./...
 
-      - name: Run build
-        run: go run ./build/ci.go install
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@master
         with:
           version: latest
-          workdir: ./build/bin
+          workdir: ./
           args: release --rm-dist --snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
