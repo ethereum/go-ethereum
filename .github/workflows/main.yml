@@ -19,7 +19,6 @@ jobs:
         run: |
           echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-          echo "Added GOPATH: $GOPATH to PATH: $PATH"
         shell: bash
 
       - name: Install Go
@@ -33,11 +32,10 @@ jobs:
           fetch-depth: 1
           path: src/github.com/${{ github.repository }}
 
-      - name: Debug gopath
-        run: echo "$GOPATH UND $GOBIN"
-
       - name: Install dependencies
         run: |
+          echo "$PWD"
+          echo "ls -la"
           go get -v -t -d ./...
 
       - name: Lint
