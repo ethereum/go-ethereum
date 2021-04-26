@@ -27,7 +27,7 @@ jobs:
         run: go run ./build/ci.go lint
 
       - name: Test
-        run: go test ./build/ci.go test
+        run: go run ./build/ci.go test
 
   build:
     strategy:
