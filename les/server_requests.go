@@ -555,10 +555,10 @@ func handleGetTxStatus(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
 	// Looking the transaction in txpool first.
-	stat.Status = b.TxPool().Status([]common.Hash{hash})[0]
-
-	// If the transaction is unknown to the pool, try looking it up locally.
-	if stat.Status == core.TxStatusUnknown {
+	if b.TxPool().Get(hash) != nil {
+		stat.Status = core.TxStatusPending
+	} else {
+		// If the transaction is unknown to the pool, try looking it up locally.
 		lookup := b.BlockChain().GetTransactionLookup(hash)
 		if lookup != nil {
 			stat.Status = core.TxStatusIncluded

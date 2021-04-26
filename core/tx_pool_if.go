@@ -39,6 +39,5 @@ type TxPoolIf interface {
 	AddLocal(tx *types.Transaction) error
 	AddRemotes(txs []*types.Transaction) []error
 	AddRemotesSync(txs []*types.Transaction) []error
-	Status(hashes []common.Hash) []TxStatus
 	Get(hash common.Hash) *types.Transaction
 }
