@@ -926,9 +926,9 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 	return errs, dirty
 }
 
-// Status returns the status (unknown/pending/queued) of a batch of transactions
+// status returns the status (unknown/pending/queued) of a batch of transactions
 // identified by their hashes.
-func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
+func (pool *TxPool) status(hashes []common.Hash) []TxStatus {
 	status := make([]TxStatus, len(hashes))
 	for i, hash := range hashes {
 		tx := pool.Get(hash)

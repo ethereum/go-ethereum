@@ -2394,7 +2394,7 @@ func TestTransactionStatusCheck(t *testing.T) {
 	}
 	hashes = append(hashes, common.Hash{})
 
-	statuses := pool.Status(hashes)
+	statuses := pool.status(hashes)
 	expect := []TxStatus{TxStatusPending, TxStatusPending, TxStatusQueued, TxStatusQueued, TxStatusUnknown}
 
 	for i := 0; i < len(statuses); i++ {

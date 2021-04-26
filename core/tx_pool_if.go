@@ -40,6 +40,5 @@ type TxPoolIf interface {
 	AddRemotes(txs []*types.Transaction) []error
 	AddRemotesSync(txs []*types.Transaction) []error
 	ContentFrom(common.Address) (types.Transactions, types.Transactions)
-	Status(hashes []common.Hash) []TxStatus
 	Get(hash common.Hash) *types.Transaction
 }

@@ -633,8 +633,8 @@ func testTransactionStatus(t *testing.T, protocol int) {
 
 	tx2, _ := types.SignTx(types.NewTransaction(1, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	tx3, _ := types.SignTx(types.NewTransaction(2, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
-	// send transactions in the wrong order, tx3 should be queued
-	test(tx3, true, light.TxStatus{Status: core.TxStatusQueued})
+	// send transactions in the wrong order, but they are available to the pool
+	test(tx3, true, light.TxStatus{Status: core.TxStatusPending})
 	test(tx2, true, light.TxStatus{Status: core.TxStatusPending})
 	// query again, now tx3 should be pending too
 	test(tx3, false, light.TxStatus{Status: core.TxStatusPending})
