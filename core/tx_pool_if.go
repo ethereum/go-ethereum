@@ -36,12 +36,9 @@ type TxPoolIf interface {
 	Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
 	Pending() (map[common.Address]types.Transactions, error)
 	Locals() []common.Address
-	AddLocals(txs []*types.Transaction) []error
 	AddLocal(tx *types.Transaction) error
 	AddRemotes(txs []*types.Transaction) []error
 	AddRemotesSync(txs []*types.Transaction) []error
-	AddRemote(tx *types.Transaction) error
 	Status(hashes []common.Hash) []TxStatus
 	Get(hash common.Hash) *types.Transaction
-	Has(hash common.Hash) bool
 }

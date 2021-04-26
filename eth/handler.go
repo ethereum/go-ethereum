@@ -53,10 +53,6 @@ var (
 // txPool defines the methods needed from a transaction pool implementation to
 // support all the operations needed by the Ethereum chain protocols.
 type txPool interface {
-	// Has returns an indicator whether txpool has a transaction
-	// cached with the given hash.
-	Has(hash common.Hash) bool
-
 	// Get retrieves the transaction from local txpool with given
 	// tx hash.
 	Get(hash common.Hash) *types.Transaction
@@ -228,7 +224,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx)
+	has := func(hash common.Hash) bool {
+		return h.txpool.Get(hash) != nil
+	}
+	h.txFetcher = fetcher.NewTxFetcher(has, h.txpool.AddRemotes, fetchTx)
 	h.chainSync = newChainSyncer(h)
 	return h, nil
 }
