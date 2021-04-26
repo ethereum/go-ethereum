@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           echo "$PWD"
-          echo "ls -la"
+          echo "$(ls -la)"
           go get -v -t -d ./...
 
       - name: Lint
