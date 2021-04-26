@@ -17,8 +17,9 @@ jobs:
     steps:
       - name: Setup go env
         run: |
-          echo "::set-env name=GOPATH::$(go env GOPATH)"
-          echo "::add-path::$(go env GOPATH)/bin"
+          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+          echo "PATH=$(go env GOPATH)/bin:$PATH" >> $GITHUB_ENV
+          echo "Added GOPATH: $GOPATH to PATH: $PATH"
         shell: bash
 
       - name: Install Go
