@@ -29,9 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Number of transactions sampled in a block
-// Roughly the last 5 minutes
-const sampleNumber = 20
+const sampleNumber = 15 // Number of transactions sampled in a block
 
 var DefaultMaxPrice = big.NewInt(500 * params.GWei)
 
@@ -201,66 +199,21 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 
 	var prices []*big.Int
 	for _, tx := range txs {
+		if tx.GasPriceIntCmp(common.Big1) <= 0 {
+			continue
+		}
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			// Remove transactions with a gasPrice of 0
-			if tx.GasPrice() != big.NewInt(0) {
-				prices = append(prices, tx.GasPrice())
-			}
+			prices = append(prices, tx.GasPrice())
 			if len(prices) >= limit {
 				break
 			}
 		}
 	}
-	if len(prices) > 0 {
-		prices = removeOutliers(prices)
-	}
 	select {
 	case result <- getBlockPricesResult{prices, nil}:
 	case <-quit:
 	}
-}
-
-// removeOutliers calculates the interquartile range of gas prices that are
-// significant outliers with the goal of removing edge cases where MEV skews
-// the gas prices
-func removeOutliers(prices []*big.Int) []*big.Int {
-	var (
-		mean       *big.Int
-		sd         *big.Int // Standard deviation
-		variance   = big.NewInt(0)
-		sum        = big.NewInt(0)
-		length     = big.NewInt(int64(len(prices)))
-		deviations = big.NewInt(3) // The max acceptable std, anything outsid will be removed from the set
-	)
-	for _, price := range prices {
-		// Calculate sum
-		sum.Add(sum, price)
-	}
-	mean = big.NewInt(0).Div(sum, length)
-	// Calculate variance (sum(x - mean)^2 )/ length
-	for _, price := range prices {
-		// Calculate the summation
-		x := big.NewInt(0).Sub(price, mean)
-		square := big.NewInt(0).Mul(x, x)
-		variance.Add(variance, square)
-	}
-	variance.Div(variance, length)
-	// Calculate standard deviation from the variance
-	sd = big.NewInt(0).Sqrt(variance)
-
-	filtered := []*big.Int{}
-	deviation := big.NewInt(0).Mul(deviations, sd)
-	lowerBound := big.NewInt(0).Sub(mean, deviation)
-	upperBound := big.NewInt(0).Add(mean, deviation)
-
-	for _, price := range prices {
-		// Remove items that are not within the upper and lower bounds of the deviation
-		if price.Cmp(lowerBound) == 1 && price.Cmp(upperBound) == -1 {
-			filtered = append(filtered, price)
-		}
-	}
-	return filtered
 }
 
 type bigIntArray []*big.Int
