@@ -62,7 +62,7 @@ type serverHandler struct {
 	forkFilter forkid.Filter
 	blockchain *core.BlockChain
 	chainDb    ethdb.Database
-	txpool     *core.TxPool
+	txpool     core.TxPoolIf
 	server     *LesServer
 
 	closeCh chan struct{}  // Channel used to exit all background routines of handler.
@@ -73,7 +73,7 @@ type serverHandler struct {
 	addTxsSync bool
 }
 
-func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
+func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool core.TxPoolIf, synced func() bool) *serverHandler {
 	handler := &serverHandler{
 		forkFilter: forkid.NewFilter(blockchain),
 		server:     server,
@@ -347,7 +347,7 @@ func (h *serverHandler) BlockChain() *core.BlockChain {
 }
 
 // TxPool implements serverBackend
-func (h *serverHandler) TxPool() *core.TxPool {
+func (h *serverHandler) TxPool() core.TxPoolIf {
 	return h.txpool
 }
 
