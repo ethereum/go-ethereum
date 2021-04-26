@@ -127,12 +127,12 @@ func StartRemotePandora(
 
 	pandora := Pandora{sealer: sealer}
 	go pandora.Loop()
-	go pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx)
+	go pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx, 0)
 
 	return
 }
 
-func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx context.Context) {
+func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx context.Context, retry int) {
 	sealer := pandora.sealer
 	ethashEngine := sealer.ethash
 	config := ethashEngine.config
@@ -143,10 +143,25 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		return
 	}
 
+	retryTimeout := time.Second * 5
+	maxRetries := 2 ^ 32
+	retry++
+
+	if retry > maxRetries {
+		logger.Crit("Orchestrator is offline for too long. Please check your connection")
+
+		return
+	}
+
 	subscription, channel, err, errChan := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
 
+	// This will create loop
 	if nil != err {
 		logger.Error("could not start remote pandora", "err", err.Error())
+		time.Sleep(retryTimeout)
+		pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx, retry)
+
+		return
 	}
 
 	defer func() {
