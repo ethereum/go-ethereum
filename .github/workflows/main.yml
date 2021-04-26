@@ -23,8 +23,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Lint
+        run: go run ./build/ci.go lint
+
       - name: Test
-        run: go test ./...
+        run: go test ./build/ci.go test
 
   build:
     strategy:

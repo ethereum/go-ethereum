@@ -3,7 +3,7 @@ name: Deploy
 on:
   create:
     tags:
-      - v*
+      - p-v*
 
 jobs:
   goreleaser:
