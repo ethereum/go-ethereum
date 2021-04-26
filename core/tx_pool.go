@@ -302,7 +302,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	if !config.NoLocals && config.Journal != "" {
 		pool.journal = newTxJournal(config.Journal)
 
-		if err := pool.journal.load(pool.AddLocals); err != nil {
+		if err := pool.journal.load(pool.addLocals); err != nil {
 			log.Warn("Failed to load transaction journal", "err", err)
 		}
 		if err := pool.journal.rotate(pool.local()); err != nil {
@@ -814,19 +814,19 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	return true
 }
 
-// AddLocals enqueues a batch of transactions into the pool if they are valid, marking the
+// addLocals enqueues a batch of transactions into the pool if they are valid, marking the
 // senders as a local ones, ensuring they go around the local pricing constraints.
 //
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
-func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
+func (pool *TxPool) addLocals(txs []*types.Transaction) []error {
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper aroundd AddLocals.
 func (pool *TxPool) AddLocal(tx *types.Transaction) error {
-	errs := pool.AddLocals([]*types.Transaction{tx})
+	errs := pool.addLocals([]*types.Transaction{tx})
 	return errs[0]
 }
 
@@ -850,11 +850,11 @@ func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
 	return errs[0]
 }
 
-// AddRemote enqueues a single transaction into the pool if it is valid. This is a convenience
+// addRemote enqueues a single transaction into the pool if it is valid. This is a convenience
 // wrapper around AddRemotes.
 //
 // Deprecated: use AddRemotes
-func (pool *TxPool) AddRemote(tx *types.Transaction) error {
+func (pool *TxPool) addRemote(tx *types.Transaction) error {
 	errs := pool.AddRemotes([]*types.Transaction{tx})
 	return errs[0]
 }
@@ -952,12 +952,6 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 // Get returns a transaction if it is contained in the pool and nil otherwise.
 func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
-}
-
-// Has returns an indicator whether txpool has a transaction cached with the
-// given hash.
-func (pool *TxPool) Has(hash common.Hash) bool {
-	return pool.all.Get(hash) != nil
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent

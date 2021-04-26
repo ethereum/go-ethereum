@@ -194,7 +194,9 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-	backend.txPool.AddLocals(pendingTxs)
+	for _, tx := range pendingTxs {
+		backend.txPool.AddLocal(tx)
+	}
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
@@ -416,7 +418,9 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			t.Error("new task timeout")
 		}
 	}
-	b.txPool.AddLocals(newTxs)
+	for _, tx := range newTxs {
+		b.txPool.AddLocal(tx)
+	}
 	time.Sleep(time.Second)
 
 	select {
