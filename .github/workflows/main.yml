@@ -15,13 +15,6 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Setup go env
-        run: |
-          echo "GOPATH=/home/runner/work" >> $GITHUB_ENV
-          echo "GOBIN=${{ env.gopath }}/bin" >> $GITHUB_ENV
-          echo "${{ env.gobin }}" >> $GITHUB_PATH
-        shell: bash
-
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -32,18 +25,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          GOBIN=${{ env.gobin }} go get -v -t -d ./...
-          GOBIN=${{ env.gobin }} go get -v golang.org/x/mobile/cmd/gomobile
-          GOBIN=${{ env.gobin }} go install golang.org/x/mobile/cmd/gomobile
-          echo "$(which gomobile)"
+          go get -v -t -d ./...
 
       - name: Lint
         run: go run ./build/ci.go lint
 
       - name: Test
-        run: SKIP_ANDROID=true GOBIN=${{ env.gobin }} go run ./build/ci.go test
-#        Remove this when gomobile issue is resolved
-        continue-on-error: true
+        run: SKIP_ANDROID=true go run ./build/ci.go test
 
   build:
     strategy:

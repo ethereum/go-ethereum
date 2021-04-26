@@ -157,7 +157,10 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 
 	// This will create loop
 	if nil != err {
-		logger.Error("could not start remote pandora", "err", err.Error())
+		logger.Error("could not start remote pandora",
+			"err", err.Error(),
+			"addr", pandora.sealer.notifyURLs[0],
+		)
 		time.Sleep(retryTimeout)
 		pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx, retry)
 
