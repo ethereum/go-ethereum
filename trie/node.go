@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -36,11 +37,13 @@ type (
 	fullNode struct {
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
 		flags    nodeFlag
+		locks    [17]sync.Mutex
 	}
 	shortNode struct {
 		Key   []byte
 		Val   node
 		flags nodeFlag
+		lock  sync.Mutex
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -64,8 +67,21 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, nodes)
 }
 
-func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
-func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
+func (n *fullNode) copy() *fullNode {
+	return &fullNode{
+		n.Children,
+		n.flags,
+		[17]sync.Mutex{},
+	}
+}
+func (n *shortNode) copy() *shortNode {
+	return &shortNode{
+		n.Key,
+		n.Val,
+		n.flags,
+		sync.Mutex{},
+	}
+}
 
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
@@ -147,13 +163,13 @@ func decodeShort(hash, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, append(valueNode{}, val...), flag}, nil
+		return &shortNode{key, append(valueNode{}, val...), flag, sync.Mutex{}}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
-	return &shortNode{key, r, flag}, nil
+	return &shortNode{key, r, flag, sync.Mutex{}}, nil
 }
 
 func decodeFull(hash, elems []byte) (*fullNode, error) {

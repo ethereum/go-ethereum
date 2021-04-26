@@ -56,7 +56,8 @@ type LeafCallback func(paths [][]byte, hexpath []byte, leaf []byte, parent commo
 // The zero value is an empty trie with no database.
 // Use New to create a trie that sits on top of a database.
 //
-// Trie is not safe for concurrent use.
+// Trie is not safe for concurrent use, except for concurrently
+// calling the Get/TryGet methods.
 type Trie struct {
 	db   *Database
 	root node
@@ -114,44 +115,59 @@ func (t *Trie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
-	if err == nil && didResolve {
-		t.root = newroot
+	switch n := (t.root).(type) {
+	case hashNode:
+		res, err := t.resolveHash(n, key[:0])
+		if err != nil {
+			return nil, err
+		}
+		t.root = res
+	default:
 	}
-	return value, err
+	// We will never call tryGet with a hashNode
+	return t.tryGet(t.root, keybytesToHex(key), 0)
 }
 
-func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, err error) {
 	switch n := (origNode).(type) {
 	case nil:
-		return nil, nil, false, nil
+		return nil, nil
 	case valueNode:
-		return n, n, false, nil
+		return n, nil
 	case *shortNode:
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
-			return nil, n, false, nil
+			return nil, nil
 		}
-		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
-		if err == nil && didResolve {
-			n = n.copy()
-			n.Val = newnode
+		switch nChild := n.Val.(type) {
+		// resolve the hashNode
+		case hashNode:
+			n.lock.Lock()
+			child, err := t.resolveHash(nChild, key[:pos])
+			if err != nil {
+				n.lock.Unlock()
+				return nil, err
+			}
+			n.Val = child
+			n.lock.Unlock()
+		default:
 		}
-		return value, n, didResolve, err
+		return t.tryGet(n.Val, key, pos+len(n.Key))
 	case *fullNode:
-		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
-		if err == nil && didResolve {
-			n = n.copy()
-			n.Children[key[pos]] = newnode
+		switch nChild := n.Children[key[pos]].(type) {
+		// resolve the hashNode
+		case hashNode:
+			n.locks[key[pos]].Lock()
+			child, err := t.resolveHash(nChild, key[:pos])
+			if err != nil {
+				n.locks[key[pos]].Unlock()
+				return nil, err
+			}
+			n.Children[key[pos]] = child
+			n.locks[key[pos]].Unlock()
+		default:
 		}
-		return value, n, didResolve, err
-	case hashNode:
-		child, err := t.resolveHash(n, key[:pos])
-		if err != nil {
-			return nil, n, true, err
-		}
-		value, newnode, _, err := t.tryGet(child, key, pos)
-		return value, newnode, true, err
+		return t.tryGet(n.Children[key[pos]], key, pos+1)
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
@@ -290,7 +306,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			if !dirty || err != nil {
 				return false, n, err
 			}
-			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
+			return true, &shortNode{n.Key, nn, t.newFlag(), sync.Mutex{}}, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		branch := &fullNode{flags: t.newFlag()}
@@ -308,7 +324,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
-		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
+		return true, &shortNode{key[:matchlen], branch, t.newFlag(), sync.Mutex{}}, nil
 
 	case *fullNode:
 		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
@@ -321,7 +337,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, n, nil
 
 	case nil:
-		return true, &shortNode{key, value, t.newFlag()}, nil
+		return true, &shortNode{key, value, t.newFlag(), sync.Mutex{}}, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
@@ -391,9 +407,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
+			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag(), sync.Mutex{}}, nil
 		default:
-			return true, &shortNode{n.Key, child, t.newFlag()}, nil
+			return true, &shortNode{n.Key, child, t.newFlag(), sync.Mutex{}}, nil
 		}
 
 	case *fullNode:
@@ -439,12 +455,12 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				}
 				if cnode, ok := cnode.(*shortNode); ok {
 					k := append([]byte{byte(pos)}, cnode.Key...)
-					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
+					return true, &shortNode{k, cnode.Val, t.newFlag(), sync.Mutex{}}, nil
 				}
 			}
 			// Otherwise, n is replaced by a one-nibble short node
 			// containing the child.
-			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag()}, nil
+			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag(), sync.Mutex{}}, nil
 		}
 		// n still contains at least two values and cannot be reduced.
 		return true, n, nil

@@ -296,10 +296,13 @@ func (sf *subfetcher) loop() {
 			sf.tasks = nil
 			sf.lock.Unlock()
 
+			var wg sync.WaitGroup
+
 			// Prefetch any tasks until the loop is interrupted
 			for i, task := range tasks {
 				select {
 				case <-sf.stop:
+					wg.Wait()
 					// If termination is requested, add any leftover back and return
 					sf.lock.Lock()
 					sf.tasks = append(sf.tasks, tasks[i:]...)
@@ -307,6 +310,7 @@ func (sf *subfetcher) loop() {
 					return
 
 				case ch := <-sf.copy:
+					wg.Wait()
 					// Somebody wants a copy of the current trie, grant them
 					ch <- sf.db.CopyTrie(sf.trie)
 
@@ -316,7 +320,11 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[taskid]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						wg.Add(1)
+						go func() {
+							sf.trie.TryGet(task)
+							wg.Done()
+						}()
 						sf.seen[taskid] = struct{}{}
 					}
 				}
