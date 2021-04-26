@@ -240,13 +240,22 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 			currentErr := insertFunc(payload)
 
 			if nil != currentErr {
-				errChan <- err
-
+				errChan <- currentErr
+				logger.Error(
+					"error during payload consumption",
+					"err",
+					currentErr.Error(),
+				)
 				return
 			}
 		case err = <-subscription.Err():
 			if nil != err {
 				errChan <- err
+				logger.Error(
+					"error during pandora subscription pipe",
+					"err",
+					err.Error(),
+				)
 
 				return
 			}
