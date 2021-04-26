@@ -35,7 +35,7 @@ jobs:
           GOBIN=${{ env.gobin }} go get -v -t -d ./...
           GOBIN=${{ env.gobin }} go get -v golang.org/x/mobile/cmd/gomobile
           GOBIN=${{ env.gobin }} go install golang.org/x/mobile/cmd/gomobile
-          gomobile init
+          GOBIN=${{ env.gobin }} gomobile init
           echo "$(which gomobile)"
 
       - name: Lint
