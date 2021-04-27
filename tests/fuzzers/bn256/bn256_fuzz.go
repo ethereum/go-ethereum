@@ -12,7 +12,7 @@ import (
 	"io"
 	"math/big"
 
-	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
 	cloudflare "github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
 	google "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
@@ -136,17 +136,19 @@ func FuzzPair(data []byte) int {
 	if tc == nil {
 		return 0
 	}
+
 	// Pair the two points and ensure they result in the same output
-	clPair := cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc})
-	if clPair != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
+	clPair := cloudflare.Pair(pc, tc).Marshal()
+	gPair := google.Pair(pg, tg).Marshal()
+	if !bytes.Equal(clPair, gPair) {
 		panic("pairing mismatch: cloudflare/google")
 	}
 
-	coPair, err := bn254.PairingCheck([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
+	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
 	if err != nil {
-		panic(fmt.Sprintf("bn254 encountered error: %v", err))
+		panic(fmt.Sprintf("consensys/bn254 encountered error: %v", err))
 	}
-	if clPair != coPair {
+	if !bytes.Equal(clPair, cPair.Marshal()) {
 		panic("pairing mismatch: cloudflare/consensys")
 	}
 
