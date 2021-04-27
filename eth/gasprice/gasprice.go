@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const sampleNumber = 15 // Number of transactions sampled in a block
+const sampleNumber = 3 // Number of transactions sampled in a block
 
 var DefaultMaxPrice = big.NewInt(500 * params.GWei)
 
