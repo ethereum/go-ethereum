@@ -25,11 +25,11 @@ func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *bn254.G1Affine) 
 	}
 	xg := new(google.G1)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	xs := new(bn254.G1Affine)
 	if err := xs.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> consensys:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> gnark: %v", err))
 	}
 	return xc, xg, xs
 }
@@ -42,11 +42,11 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *bn254.G2Affine) 
 	}
 	xg := new(google.G2)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	xs := new(bn254.G2Affine)
 	if err := xs.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> consensys:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> gnark: %v", err))
 	}
 	return xc, xg, xs
 }
@@ -79,7 +79,7 @@ func FuzzAdd(data []byte) int {
 	}
 
 	if !bytes.Equal(rc.Marshal(), rs.Marshal()) {
-		panic("add mismatch: cloudflare/consensys")
+		panic("add mismatch: cloudflare/gnark")
 	}
 	return 1
 }
@@ -121,7 +121,7 @@ func FuzzMul(data []byte) int {
 		panic("scalar mul mismatch: cloudflare/google")
 	}
 	if !bytes.Equal(rc.Marshal(), rsAffine.Marshal()) {
-		panic("scalar mul mismatch: cloudflare/consensys")
+		panic("scalar mul mismatch: cloudflare/gnark")
 	}
 	return 1
 }
@@ -146,10 +146,10 @@ func FuzzPair(data []byte) int {
 
 	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
 	if err != nil {
-		panic(fmt.Sprintf("consensys/bn254 encountered error: %v", err))
+		panic(fmt.Sprintf("gnark/bn254 encountered error: %v", err))
 	}
 	if !bytes.Equal(clPair, cPair.Marshal()) {
-		panic("pairing mismatch: cloudflare/consensys")
+		panic("pairing mismatch: cloudflare/gnark")
 	}
 
 	return 1
