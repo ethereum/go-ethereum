@@ -357,7 +357,7 @@ func doTest(cmdline []string) {
 		// installed version is too old and cannot be upgraded easily.
 		cachedir := filepath.Join("build", "cache")
 		goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
-		gotest = localGoTool(goroot, "build", buildFlags(env)...)
+		gotest = localGoTool(goroot, "test", buildFlags(env)...)
 	}
 
 	// Test a single package at a time. CI builders are slow
