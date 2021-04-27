@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"reflect"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
@@ -287,10 +289,13 @@ var eip8HandshakeRespTests = []handshakeAckTest{
 	},
 }
 
+var (
+	keyA, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	keyB, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+)
+
 func TestHandshakeForwardCompatibility(t *testing.T) {
 	var (
-		keyA, _       = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-		keyB, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		pubA          = crypto.FromECDSAPub(&keyA.PublicKey)[1:]
 		pubB          = crypto.FromECDSAPub(&keyB.PublicKey)[1:]
 		ephA, _       = crypto.HexToECDSA("869d6ecf5211f1cc60418a13b9d870b22959d0c16f02bec714c960dd2298a32d")
@@ -385,6 +390,71 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	fooIngressHash := derived.IngressMAC.Sum(nil)
 	if !bytes.Equal(fooIngressHash, wantFooIngressHash) {
 		t.Errorf("ingress-mac('foo') mismatch:\ngot %x\nwant %x", fooIngressHash, wantFooIngressHash)
+	}
+}
+
+func BenchmarkHandshakeRead(b *testing.B) {
+	input := unhex(eip8HandshakeAuthTests[1].input)
+
+	for i := 0; i < b.N; i++ {
+		r := bytes.NewReader(input)
+		msg := new(authMsgV4)
+		if _, err := readHandshakeMsg(msg, encAuthMsgLen, keyB, r); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkThroughput(b *testing.B) {
+	pipe1, pipe2, err := pipes.TCPPipe()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var (
+		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
+		handshakeDone = make(chan error, 1)
+		msgdata       = make([]byte, 1024)
+		rand          = rand.New(rand.NewSource(1337))
+	)
+	rand.Read(msgdata)
+
+	// Server side.
+	go func() {
+		defer conn1.Close()
+		// Perform handshake.
+		_, err := conn1.Handshake(keyA)
+		handshakeDone <- err
+		if err != nil {
+			return
+		}
+		conn1.SetSnappy(true)
+		// Keep sending messages until connection closed.
+		for {
+			if _, err := conn1.Write(0, msgdata); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Set up client side.
+	defer conn2.Close()
+	if _, err := conn2.Handshake(keyB); err != nil {
+		b.Fatal("client handshake error:", err)
+	}
+	conn2.SetSnappy(true)
+	if err := <-handshakeDone; err != nil {
+		b.Fatal("server hanshake error:", err)
+	}
+
+	// Read N messages.
+	b.SetBytes(int64(len(msgdata)))
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _, _, err := conn2.Read()
+		if err != nil {
+			b.Fatal("read error:", err)
+		}
 	}
 }
 
