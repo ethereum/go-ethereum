@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -1803,30 +1805,49 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				// the subtasks for it within the main account task
 				if tasks, ok := res.mainTask.SubTasks[account]; !ok {
 					var (
-						next common.Hash
+						keys    = res.hashes[i]
+						chunks  = uint64(storageConcurrency)
+						lastKey common.Hash
 					)
-					step := new(big.Int).Sub(
-						new(big.Int).Div(
-							new(big.Int).Exp(common.Big2, common.Big256, nil),
-							big.NewInt(int64(storageConcurrency)),
-						), common.Big1,
-					)
-					for k := 0; k < storageConcurrency; k++ {
-						last := common.BigToHash(new(big.Int).Add(next.Big(), step))
-						if k == storageConcurrency-1 {
-							// Make sure we don't overflow if the step is not a proper divisor
-							last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+					if len(keys) > 0 {
+						lastKey = keys[len(keys)-1]
+					}
+					// If the number of slots remaining is low, decrease the
+					// number of chunks. Somewhere on the order of 10-15K slots
+					// fit into a packet of 500KB. A key/slot pair is maximum 64
+					// bytes, so pessimistically maxRequestSize/64 = 8K.
+					//
+					// Chunk so that at least 2 packets are needed to fill a task.
+					if estimate, err := estimateRemainingSlots(len(keys), lastKey); err == nil {
+						if n := estimate / (2 * (maxRequestSize / 64)); n+1 < chunks {
+							chunks = n + 1
 						}
+						log.Debug("Chunked large contract", "initiators", len(keys), "tail", lastKey, "remaining", estimate, "chunks", chunks)
+					} else {
+						log.Debug("Chunked large contract", "initiators", len(keys), "tail", lastKey, "chunks", chunks)
+					}
+					r := newHashRange(lastKey, chunks)
+
+					// Our first task is the one that was just filled by this response.
+					tasks = append(tasks, &storageTask{
+						Next:     common.Hash{},
+						Last:     r.End(),
+						root:     acc.Root,
+						genBatch: batch,
+						genTrie:  trie.NewStackTrie(batch),
+					})
+					for r.Next() {
 						batch := s.db.NewBatch()
 						tasks = append(tasks, &storageTask{
-							Next:     next,
-							Last:     last,
+							Next:     r.Start(),
+							Last:     r.End(),
 							root:     acc.Root,
 							genBatch: batch,
 							genTrie:  trie.NewStackTrie(batch),
 						})
-						log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", next, "last", last)
-						next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
+					}
+					for _, task := range tasks {
+						log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", task.Next, "last", task.Last)
 					}
 					res.mainTask.SubTasks[account] = tasks
 
@@ -1839,25 +1860,23 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			if res.subTask != nil {
 				// Ensure the response doesn't overflow into the subsequent task
 				last := res.subTask.Last.Big()
-				for k, hash := range res.hashes[i] {
-					// Mark the range complete if the last is already included.
-					// Keep iteration to delete the extra states if exists.
-					cmp := hash.Big().Cmp(last)
-					if cmp == 0 {
+				// Find the first overflowing key. While at it, mark res as complete
+				// if we find the range to include or pass the 'last'
+				index := sort.Search(len(res.hashes[i]), func(k int) bool {
+					cmp := res.hashes[i][k].Big().Cmp(last)
+					if cmp >= 0 {
 						res.cont = false
-						continue
 					}
-					if cmp > 0 {
-						// Chunk overflown, cut off excess
-						res.hashes[i] = res.hashes[i][:k]
-						res.slots[i] = res.slots[i][:k]
-						res.cont = false // Mark range completed
-						break
-					}
+					return cmp > 0
+				})
+				if index >= 0 {
+					// cut off excess
+					res.hashes[i] = res.hashes[i][:index]
+					res.slots[i] = res.slots[i][:index]
 				}
 				// Forward the relevant storage chunk (even if created just now)
 				if res.cont {
-					res.subTask.Next = common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
+					res.subTask.Next = incHash(res.hashes[i][len(res.hashes[i])-1])
 				} else {
 					res.subTask.done = true
 				}
@@ -1895,8 +1914,15 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			if _, err := res.subTask.genTrie.Commit(); err != nil {
+			if root, err := res.subTask.genTrie.Commit(); err != nil {
 				log.Error("Failed to commit stack slots", "err", err)
+			} else if root == res.subTask.root {
+				// If the chunk's root is an overflown but full delivery, clear the heal request
+				for i, account := range res.mainTask.res.hashes {
+					if account == res.accounts[len(res.accounts)-1] {
+						res.mainTask.needHeal[i] = false
+					}
+				}
 			}
 		}
 		if data := res.subTask.genBatch.ValueSize(); data > ethdb.IdealBatchSize || res.subTask.done {
@@ -2053,7 +2079,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		if task.needCode[i] || task.needState[i] {
 			return
 		}
-		task.Next = common.BigToHash(new(big.Int).Add(hash.Big(), big.NewInt(1)))
+		task.Next = incHash(hash)
 	}
 	// All accounts marked as complete, track if the entire task is done
 	task.done = !res.cont
@@ -2714,4 +2740,20 @@ func (s *Syncer) reportHealProgress(force bool) {
 	)
 	log.Info("State heal in progress", "accounts", accounts, "slots", storage,
 		"codes", bytecode, "nodes", trienode, "pending", s.healer.scheduler.Pending())
+}
+
+// estimateRemainingSlots tries to determine roughly how many slots are left in
+// a contract storage, based on the number of keys and the last hash. This method
+// assumes that the hashes are lexicographically ordered and evenly distributed.
+func estimateRemainingSlots(hashes int, last common.Hash) (uint64, error) {
+	if last == (common.Hash{}) {
+		return 0, errors.New("last hash empty")
+	}
+	space := new(big.Int).Mul(math.MaxBig256, big.NewInt(int64(hashes)))
+	space.Div(space, last.Big())
+	if !space.IsUint64() {
+		// Gigantic address space probably due to too few or malicious slots
+		return 0, errors.New("too few slots for estimation")
+	}
+	return space.Uint64() - uint64(hashes), nil
 }

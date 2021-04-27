@@ -1664,3 +1664,53 @@ func TestSyncAccountPerformance(t *testing.T) {
 		t.Errorf("trie node heal requests wrong, want %d, have %d", want, have)
 	}
 }
+
+func TestSlotEstimation(t *testing.T) {
+	for i, tc := range []struct {
+		last  common.Hash
+		count int
+		want  uint64
+	}{
+		{
+			// Half the space
+			common.HexToHash("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			100,
+			100,
+		},
+		{
+			// 1 / 16th
+			common.HexToHash("0x0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			100,
+			1500,
+		},
+		{
+			// Bit more than 1 / 16th
+			common.HexToHash("0x1000000000000000000000000000000000000000000000000000000000000000"),
+			100,
+			1499,
+		},
+		{
+			// Almost everything
+			common.HexToHash("0xF000000000000000000000000000000000000000000000000000000000000000"),
+			100,
+			6,
+		},
+		{
+			// Almost nothing -- should lead to error
+			common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+			1,
+			0,
+		},
+		{
+			// Nothing -- should lead to error
+			common.Hash{},
+			100,
+			0,
+		},
+	} {
+		have, _ := estimateRemainingSlots(tc.count, tc.last)
+		if want := tc.want; have != want {
+			t.Errorf("test %d: have %d want %d", i, have, want)
+		}
+	}
+}
