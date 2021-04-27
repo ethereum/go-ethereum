@@ -283,10 +283,6 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 	})
 
 	t.Run("Should fill cache with MinimalConsensusInformation", func(t *testing.T) {
-		// TODO: consider how to test this scenario side effects.
-		// For now it fails. Handler of MinimalConsensus pub/sub dies randomly after few milliseconds
-		// It may be correlated with invalid liveliness of mocked server api within this test
-		//t.Skip()
 		ethash := NewPandora(config, urls, true, consensusInfo, true)
 		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
 		assert.False(t, isPreviousPresent)
@@ -296,6 +292,7 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 			consensusChannel <- info
 		}
 
+		time.Sleep(time.Millisecond * 50)
 		currentConsensusInfo, isPresent := ethash.mci.cache.Get(1)
 		assert.True(t, isPresent)
 		assert.NotNil(t, currentConsensusInfo)

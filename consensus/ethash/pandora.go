@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -76,7 +77,7 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", 2^7, NewMinimalConsensusInfo)
+	ethash.mci = newlru("epochSet", int(math.Pow(2, 7)), NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
@@ -218,10 +219,6 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 		}
 
 		currentErr = ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
-
-		if nil == currentErr {
-			channel <- minimalConsensus
-		}
 
 		return
 	}
