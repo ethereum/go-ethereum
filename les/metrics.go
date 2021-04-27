@@ -71,7 +71,6 @@ var (
 
 	connectionTimer       = metrics.NewRegisteredTimer("les/connection/duration", nil)
 	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
-	clientConnectionGauge = metrics.NewRegisteredGauge("les/connection/client", nil)
 
 	totalCapacityGauge   = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
 	totalRechargeGauge   = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
