@@ -609,6 +609,15 @@ func downloadGoSources(cachedir string) string {
 // downloadGo downloads the Go binary distribution and unpacks it into a temporary
 // directory. It returns the GOROOT of the unpacked toolchain.
 func downloadGo(goarch, goos, cachedir string) string {
+	// Shortcut: if the Go version that runs this script matches the
+	// requested version exactly, there is no need to download anything.
+	activeGo := strings.TrimPrefix(runtime.Version(), "go")
+	if activeGo == dlgoVersion && goos == runtime.GOOS && goarch == runtime.GOARCH {
+		fmt.Printf("-dlgo version matches active Go version %s, skipping download.\n", activeGo)
+		return runtime.GOROOT()
+	}
+
+	// For Arm architecture, GOARCH includes ISA version.
 	if goarch == "arm" {
 		goarch = "armv6l"
 	}
