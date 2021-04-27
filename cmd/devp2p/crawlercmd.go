@@ -142,7 +142,6 @@ func crawlNodes(ctx *cli.Context) error {
 	for {
 		inputSet = crawlRound(ctx, inputSet, influxdb, timeout)
 	}
-	return nil
 }
 
 func discv5(ctx *cli.Context, inputSet nodeSet, timeout time.Duration) nodeSet {
