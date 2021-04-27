@@ -448,6 +448,7 @@ func (db *Database) meter(refresh time.Duration) {
 type batch struct {
 	db   *leveldb.DB
 	b    *leveldb.Batch
+	keys int
 	size int
 }
 
@@ -461,8 +462,14 @@ func (b *batch) Put(key, value []byte) error {
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
+	b.keys++
 	b.size += len(key)
 	return nil
+}
+
+// KeyCount retrieves the number of keys queued up for writing.
+func (b *batch) KeyCount() int {
+	return b.keys
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -478,7 +485,7 @@ func (b *batch) Write() error {
 // Reset resets the batch for reuse.
 func (b *batch) Reset() {
 	b.b.Reset()
-	b.size = 0
+	b.keys, b.size = 0, 0
 }
 
 // Replay replays the batch contents.

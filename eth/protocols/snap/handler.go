@@ -354,7 +354,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		// Ensure the ranges ae monotonically increasing
+		// Ensure the ranges are monotonically increasing
 		for i, slots := range res.Slots {
 			for j := 1; j < len(slots); j++ {
 				if bytes.Compare(slots[j-1].Hash[:], slots[j].Hash[:]) >= 0 {

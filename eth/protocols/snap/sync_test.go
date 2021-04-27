@@ -135,6 +135,12 @@ type testPeer struct {
 	trieRequestHandler    trieHandlerFunc
 	codeRequestHandler    codeHandlerFunc
 	term                  func()
+
+	// counters
+	nAccountRequests  int
+	nStorageRequests  int
+	nBytecodeRequests int
+	nTrienodeRequests int
 }
 
 func newTestPeer(id string, t *testing.T, term func()) *testPeer {
@@ -156,19 +162,30 @@ func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 func (t *testPeer) ID() string      { return t.id }
 func (t *testPeer) Log() log.Logger { return t.logger }
 
+func (t *testPeer) Stats() string {
+	return fmt.Sprintf(`Account requests: %d
+Storage requests: %d
+Bytecode requests: %d
+Trienode requests: %d
+`, t.nAccountRequests, t.nStorageRequests, t.nBytecodeRequests, t.nTrienodeRequests)
+}
+
 func (t *testPeer) RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error {
 	t.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
+	t.nAccountRequests++
 	go t.accountRequestHandler(t, id, root, origin, limit, bytes)
 	return nil
 }
 
 func (t *testPeer) RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error {
 	t.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
+	t.nTrienodeRequests++
 	go t.trieRequestHandler(t, id, root, paths, bytes)
 	return nil
 }
 
 func (t *testPeer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {
+	t.nStorageRequests++
 	if len(accounts) == 1 && origin != nil {
 		t.logger.Trace("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
 	} else {
@@ -179,6 +196,7 @@ func (t *testPeer) RequestStorageRanges(id uint64, root common.Hash, accounts []
 }
 
 func (t *testPeer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
+	t.nBytecodeRequests++
 	t.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 	go t.codeRequestHandler(t, id, hashes, bytes)
 	return nil
@@ -1365,7 +1383,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	step := new(big.Int).Sub(
 		new(big.Int).Div(
 			new(big.Int).Exp(common.Big2, common.Big256, nil),
-			big.NewInt(accountConcurrency),
+			big.NewInt(int64(accountConcurrency)),
 		), common.Big1,
 	)
 	for i := 0; i < accountConcurrency; i++ {
@@ -1529,7 +1547,7 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 	step := new(big.Int).Sub(
 		new(big.Int).Div(
 			new(big.Int).Exp(common.Big2, common.Big256, nil),
-			big.NewInt(accountConcurrency),
+			big.NewInt(int64(accountConcurrency)),
 		), common.Big1,
 	)
 	for i := 0; i < accountConcurrency; i++ {
@@ -1604,4 +1622,95 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("accounts: %d, slots: %d", accounts, slots)
+}
+
+// TestSyncAccountPerformance tests how efficient the snap algo is at minimizing
+// state healing
+func TestSyncAccountPerformance(t *testing.T) {
+	// Set the account concurrency to 1. This _should_ result in the
+	// range root to become correct, and there should be no healing needed
+	defer func(old int) { accountConcurrency = old }(accountConcurrency)
+	accountConcurrency = 1
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
+
+	mkSource := func(name string) *testPeer {
+		source := newTestPeer(name, t, term)
+		source.accountTrie = sourceAccountTrie
+		source.accountValues = elems
+		return source
+	}
+	src := mkSource("source")
+	syncer := setupSyncer(src)
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
+	// The trie root will always be requested, since it is added when the snap
+	// sync cycle starts. When popping the queue, we do not look it up again.
+	// Doing so would bring this number down to zero in this artificial testcase,
+	// but only add extra IO for no reason in practice.
+	if have, want := src.nTrienodeRequests, 1; have != want {
+		fmt.Printf(src.Stats())
+		t.Errorf("trie node heal requests wrong, want %d, have %d", want, have)
+	}
+}
+
+func TestSlotEstimation(t *testing.T) {
+	for i, tc := range []struct {
+		last  common.Hash
+		count int
+		want  uint64
+	}{
+		{
+			// Half the space
+			common.HexToHash("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			100,
+			100,
+		},
+		{
+			// 1 / 16th
+			common.HexToHash("0x0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			100,
+			1500,
+		},
+		{
+			// Bit more than 1 / 16th
+			common.HexToHash("0x1000000000000000000000000000000000000000000000000000000000000000"),
+			100,
+			1499,
+		},
+		{
+			// Almost everything
+			common.HexToHash("0xF000000000000000000000000000000000000000000000000000000000000000"),
+			100,
+			6,
+		},
+		{
+			// Almost nothing -- should lead to error
+			common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+			1,
+			0,
+		},
+		{
+			// Nothing -- should lead to error
+			common.Hash{},
+			100,
+			0,
+		},
+	} {
+		have, _ := estimateRemainingSlots(tc.count, tc.last)
+		if want := tc.want; have != want {
+			t.Errorf("test %d: have %d want %d", i, have, want)
+		}
+	}
 }

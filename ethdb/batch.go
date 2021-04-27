@@ -25,6 +25,9 @@ const IdealBatchSize = 100 * 1024
 type Batch interface {
 	KeyValueWriter
 
+	// KeyCount retrieves the number of keys queued up for writing.
+	KeyCount() int
+
 	// ValueSize retrieves the amount of data queued up for writing.
 	ValueSize() int
 
