@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 )
 
@@ -34,15 +33,11 @@ type hashRange struct {
 // newHashRange creates a new hashRange, initiated at the start position,
 // and with the step set to fill the desired 'num' chunks
 func newHashRange(start common.Hash, num uint64) *hashRange {
-	left := new(big.Int).Sub(
-		new(big.Int).Add(math.MaxBig256, common.Big1),
-		start.Big(),
-	)
+	left := new(big.Int).Sub(hashSpace, start.Big())
 	step := new(big.Int).Div(
 		new(big.Int).Add(left, new(big.Int).SetUint64(num-1)),
 		new(big.Int).SetUint64(num),
 	)
-
 	step256 := new(uint256.Int)
 	step256.SetFromBig(step)
 

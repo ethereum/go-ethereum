@@ -2071,8 +2071,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	s.accountBytes += bytes
 	s.accountSynced += uint64(len(res.accounts))
 
-	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
-
 	// Task filling persisted, push it the chunk marker forward to the first
 	// account still missing data.
 	for i, hash := range res.hashes {
@@ -2102,6 +2100,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		nodes += keys
 		bytes += common.StorageSize(keys*common.HashLength + data)
 	}
+	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "nodes", nodes, "bytes", bytes)
 }
 
 // OnAccounts is a callback method to invoke when a range of accounts are
@@ -2671,9 +2670,6 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 
 // hashSpace is the total size of the 256 bit hash space for accounts.
 var hashSpace = new(big.Int).Exp(common.Big2, common.Big256, nil)
-
-// big10000 is used to generate 2 digit precision percentages.
-var big10000 = big.NewInt(10000)
 
 // report calculates various status reports and provides it to the user.
 func (s *Syncer) report(force bool) {
