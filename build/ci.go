@@ -334,20 +334,34 @@ func goToolSetEnv(cmd *exec.Cmd) {
 // "tests" also includes static analysis tools such as vet.
 
 func doTest(cmdline []string) {
-	coverage := flag.Bool("coverage", false, "Whether to record code coverage")
-	verbose := flag.Bool("v", false, "Whether to log verbosely")
+	var (
+		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
+		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
+		verbose  = flag.Bool("v", false, "Whether to log verbosely")
+	)
 	flag.CommandLine.Parse(cmdline)
-	env := build.Env()
 
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
 
-	// Run the actual tests.
+	// Find the go tool.
+	env := build.Env()
+	var gotest *exec.Cmd
+	if !*dlgo {
+		// Default behavior: use the go version which runs ci.go right now.
+		gotest = goTool("test", buildFlags(env)...)
+	} else {
+		// Download of Go requested. This is for build environments where the
+		// installed version is too old and cannot be upgraded easily.
+		cachedir := filepath.Join("build", "cache")
+		goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
+		gotest = localGoTool(goroot, "build", buildFlags(env)...)
+	}
+
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
-	gotest := goTool("test", buildFlags(env)...)
 	gotest.Args = append(gotest.Args, "-p", "1")
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
