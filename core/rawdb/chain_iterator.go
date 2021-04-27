@@ -50,8 +50,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// freezerdb return N items (e.g up to 1000 items per go)
 		// That would require an API change in Ancients though
 		if h, err := db.Ancient(freezerHashTable, i); err != nil {
-			log.Error("Failed to init database from freezer", "err", err)
-			return
+			log.Crit("Failed to init database from freezer", "err", err)
 		} else {
 			hash = common.BytesToHash(h)
 		}
