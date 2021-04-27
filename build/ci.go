@@ -366,6 +366,9 @@ func doTest(cmdline []string) {
 		gotest.Env = append(gotest.Env, "CGO_ENABLED=1")
 		gotest.Env = append(gotest.Env, "GOARCH="+*arch)
 	}
+	if os.Getenv("CC") != "" {
+		gotest.Env = append(gotest.Env, "CC="+os.Getenv("CC"))
+	}
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
