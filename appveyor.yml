@@ -24,17 +24,14 @@ environment:
 install:
   - git submodule update --init
   - go version
-  - dir C:\msys64\mingw32\bin
-  - dir C:\msys64\mingw64\bin
   - gcc --version
 
 build_script:
-  # - go run build\ci.go install -dlgo
+  - go run build\ci.go install -dlgo -arch %GETH_ARCH%
 
 after_build:
-  # - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  # - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
 test_script:
-  # - set CGO_ENABLED=1
-  # - go run build\ci.go test -dlgo -coverage
+  - go run build\ci.go test -dlgo -arch %GETH_ARCH% -coverage
