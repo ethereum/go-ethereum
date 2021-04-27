@@ -188,8 +188,9 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 	t.expire.Remove(req.expire)
 	delete(t.pending, id)
 	if req.expire.Prev() == nil {
-		t.wake.Stop()
-		t.schedule()
+		if t.wake.Stop() {
+			t.schedule()
+		}
 	}
 	g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
 	metrics.GetOrRegisterGauge(g, nil).Dec(1)
