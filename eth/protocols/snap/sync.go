@@ -1829,6 +1829,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					r := newHashRange(lastKey, chunks)
 
 					// Our first task is the one that was just filled by this response.
+					batch := s.db.NewBatch()
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
 						Last:     r.End(),
