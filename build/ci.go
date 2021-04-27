@@ -336,6 +336,7 @@ func goToolSetEnv(cmd *exec.Cmd) {
 func doTest(cmdline []string) {
 	var (
 		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch     = flag.String("arch", "", "Run tests for given architecture")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 		verbose  = flag.Bool("v", false, "Whether to log verbosely")
 	)
@@ -358,6 +359,12 @@ func doTest(cmdline []string) {
 		cachedir := filepath.Join("build", "cache")
 		goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
 		gotest = localGoTool(goroot, "test", buildFlags(env)...)
+	}
+
+	// Configure environment for cross build.
+	if *arch != "" || *arch != runtime.GOARCH {
+		gotest.Env = append(gotest.Env, "CGO_ENABLED=1")
+		gotest.Env = append(gotest.Env, "GOARCH="+*arch)
 	}
 
 	// Test a single package at a time. CI builders are slow
