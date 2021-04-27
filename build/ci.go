@@ -613,7 +613,7 @@ func downloadGo(goarch, goos, cachedir string) string {
 	// requested version exactly, there is no need to download anything.
 	activeGo := strings.TrimPrefix(runtime.Version(), "go")
 	if activeGo == dlgoVersion && goos == runtime.GOOS && goarch == runtime.GOARCH {
-		fmt.Printf("-dlgo version matches active Go version %s, skipping download.\n", activeGo)
+		log.Printf("-dlgo version matches active Go version %s, skipping download.", activeGo)
 		return runtime.GOROOT()
 	}
 
