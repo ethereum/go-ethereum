@@ -292,10 +292,35 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 			consensusChannel <- info
 		}
 
-		time.Sleep(time.Millisecond * 50)
-		currentConsensusInfo, isPresent := ethash.mci.cache.Get(1)
-		assert.True(t, isPresent)
-		assert.NotNil(t, currentConsensusInfo)
+		failChannel := make(chan bool)
+
+		// Fail after 5s if cache data was not present
+		time.AfterFunc(time.Second*5, func() {
+			failChannel <- true
+		})
+
+		indexToCheck := 0
+
+		for {
+			select {
+			case shouldFail := <-failChannel:
+				if shouldFail {
+					t.FailNow()
+				}
+			default:
+				currentConsensusInfo, isPresent := ethash.mci.cache.Get(indexToCheck)
+				time.Sleep(time.Millisecond * 50)
+
+				if isPresent {
+					assert.NotNil(t, currentConsensusInfo)
+					indexToCheck++
+				}
+
+				if indexToCheck == epochsProgressed {
+					return
+				}
+			}
+		}
 	})
 }
 
