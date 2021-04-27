@@ -292,6 +292,9 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	if err := ann.sanityCheck(); err != nil {
+		return err
+	}
 	if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
 		log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
@@ -299,9 +302,6 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
 		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
-	if err := ann.sanityCheck(); err != nil {
-		return err
 	}
 	ann.Block.ReceivedAt = msg.Time()
 	ann.Block.ReceivedFrom = peer

@@ -483,8 +483,8 @@ func (s *Suite) TestNewPooledTxs_66(t *utesting.T) {
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg))
 			}
 			return
-		case *NewPooledTransactionHashes:
-			// ignore propagated txs from old tests
+		case *NewPooledTransactionHashes, *NewBlock, *NewBlockHashes:
+			// ignore propagated txs and blocks from old tests
 			continue
 		default:
 			t.Fatalf("unexpected %s", pretty.Sdump(msg))
