@@ -239,7 +239,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			maxTarget = curve.maxCapacity(func(capacity uint64) int64 {
 				return balance.estimatePriority(capacity, 0, 0, bias, false)
 			})
-			if maxTarget <= capacity {
+			if maxTarget <= capacity || maxTarget < reqCap {
 				return
 			}
 			if maxTarget > reqCap {
