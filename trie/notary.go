@@ -21,17 +21,17 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
-// KeyValueNotary tracks which keys have been accessed through a key-value reader
+// keyValueNotary tracks which keys have been accessed through a key-value reader
 // with te scope of verifying if certain proof datasets are maliciously bloated.
-type KeyValueNotary struct {
+type keyValueNotary struct {
 	ethdb.KeyValueReader
 	reads map[string]struct{}
 }
 
-// NewKeyValueNotary wraps a key-value database with an access notary to track
+// newKeyValueNotary wraps a key-value database with an access notary to track
 // which items have bene accessed.
-func NewKeyValueNotary(db ethdb.KeyValueReader) *KeyValueNotary {
-	return &KeyValueNotary{
+func newKeyValueNotary(db ethdb.KeyValueReader) *keyValueNotary {
+	return &keyValueNotary{
 		KeyValueReader: db,
 		reads:          make(map[string]struct{}),
 	}
@@ -39,14 +39,14 @@ func NewKeyValueNotary(db ethdb.KeyValueReader) *KeyValueNotary {
 
 // Get retrieves an item from the underlying database, but also tracks it as an
 // accessed slot for bloat checks.
-func (k *KeyValueNotary) Get(key []byte) ([]byte, error) {
+func (k *keyValueNotary) Get(key []byte) ([]byte, error) {
 	k.reads[string(key)] = struct{}{}
 	return k.KeyValueReader.Get(key)
 }
 
 // Accessed returns s snapshot of the original key-value store containing only the
 // data accessed through the notary.
-func (k *KeyValueNotary) Accessed() ethdb.KeyValueStore {
+func (k *keyValueNotary) Accessed() ethdb.KeyValueStore {
 	db := memorydb.New()
 	for keystr := range k.reads {
 		key := []byte(keystr)
