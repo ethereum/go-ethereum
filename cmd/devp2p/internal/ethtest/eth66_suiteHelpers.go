@@ -18,6 +18,7 @@ package ethtest
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -150,8 +151,7 @@ func (c *Conn) waitForResponse(chain *Chain, timeout time.Duration, requestID ui
 func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Message) {
 	start := time.Now()
 	for time.Since(start) < timeout {
-		timeout := time.Now().Add(10 * time.Second)
-		c.SetReadDeadline(timeout)
+		c.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 		reqID, msg := c.read66()
 
@@ -257,6 +257,9 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 				return nil
 			}
 			time.Sleep(100 * time.Millisecond)
+		case *NewPooledTransactionHashes:
+			// ignore old announcements
+			continue
 		default:
 			return fmt.Errorf("invalid message: %s", pretty.Sdump(msg))
 		}
@@ -269,31 +272,38 @@ func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
-func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, expectedID uint64) BlockHeaders {
-	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	// check block headers response
+// waitForBlockHeadersResponse66 waits for a BlockHeaders message with the given expected request ID
+func (s *Suite) waitForBlockHeadersResponse66(conn *Conn, expectedID uint64) (BlockHeaders, error) {
 	reqID, msg := conn.readAndServe66(s.chain, timeout)
-
 	switch msg := msg.(type) {
 	case BlockHeaders:
 		if reqID != expectedID {
-			t.Fatalf("request ID mismatch: wanted %d, got %d", expectedID, reqID)
+			return nil, fmt.Errorf("request ID mismatch: wanted %d, got %d", expectedID, reqID)
 		}
-		return msg
+		return msg, nil
 	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
-		return nil
+		return nil, fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
-func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) {
+func (s *Suite) getBlockHeaders66(conn *Conn, req eth.Packet, expectedID uint64) (BlockHeaders, error) {
+	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
+		return nil, fmt.Errorf("could not write to connection: %v", err)
+	}
+	return s.waitForBlockHeadersResponse66(conn, expectedID)
+}
+
+func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) bool {
+	mismatched := 0
 	for _, header := range headers {
 		num := header.Number.Uint64()
 		t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
-		assert.Equal(t, chain.blocks[int(num)].Header(), header)
+		if !reflect.DeepEqual(chain.blocks[int(num)].Header(), header) {
+			mismatched += 1
+			t.Logf("received wrong header: %v", pretty.Sdump(header))
+		}
 	}
+	return mismatched == 0
 }
 
 func (s *Suite) sendNextBlock66(t *utesting.T) {
