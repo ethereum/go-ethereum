@@ -28,7 +28,7 @@ install:
   - gcc --version
 
 build_script:
-  - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc C:\msys64\mingw32\bin\gcc.exe
+  - go run build\ci.go install -dlgo -arch %GETH_ARCH%
 
 after_build:
   - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
