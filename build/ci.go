@@ -250,6 +250,11 @@ func doInstall(cmdline []string) {
 		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
 	}
 
+	// Configure MinGW.
+	if runtime.GOOS == "windows" {
+		gobuild.Env = append(gobuild.Env, "MSYS2_ARCH=i686", "MSYS2_BITS=32", "MSYSTEM=mingw32")
+	}
+
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
