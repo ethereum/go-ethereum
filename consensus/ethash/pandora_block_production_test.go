@@ -284,13 +284,6 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 	})
 
 	t.Run("Should fill cache with MinimalConsensusInformation", func(t *testing.T) {
-		// We are having some problems in CI/CD pipeline.
-		// TODO: check why CI/CD is having problem with networking or cache.
-		if "true" == os.Getenv("SKIP_CACHE_FILL") {
-			assert.True(t, true)
-			return
-		}
-
 		ethash := NewPandora(config, urls, true, consensusInfo, true)
 		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
 		assert.False(t, isPreviousPresent)
@@ -311,6 +304,14 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 		for {
 			select {
 			case shouldFail := <-failChannel:
+				// We are having some problems in CI/CD pipeline.
+				// TODO: check why CI/CD is having problem with networking or cache.
+				if "true" == os.Getenv("SKIP_CACHE_FILL") {
+					t.Log("Skipping test due to the flag SKIP_CACHE_FILL")
+					assert.True(t, true)
+					return
+				}
+
 				if shouldFail {
 					t.FailNow()
 				}
