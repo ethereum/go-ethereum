@@ -67,17 +67,20 @@ func (e ExpirationFactor) Value(base float64, exp uint64) float64 {
 	return base / e.Factor * math.Pow(2, float64(int64(exp-e.Exp)))
 }
 
-// value calculates the value at the given moment.
+// Value calculates the value at the given moment.
 func (e ExpiredValue) Value(logOffset Fixed64) uint64 {
 	offset := Uint64ToFixed64(e.Exp) - logOffset
-	return uint64(float64(e.Base) * offset.Pow2())
+	if v := float64(e.Base) * offset.Pow2(); v < math.MaxUint64 {
+		// Note: check is necessary because uint64(float64(math.MaxUint64)) causes an overflow
+		return uint64(v)
+	}
+	return math.MaxUint64
 }
 
-// add adds a signed value at the given moment
-func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
+// Add adds a signed value at the given moment and returns true if an overflow happens.
+func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) bool {
 	integer, frac := logOffset.ToUint64(), logOffset.Fraction()
-	factor := frac.Pow2()
-	base := factor * float64(amount)
+	base := frac.Pow2() * float64(amount)
 	if integer < e.Exp {
 		base /= math.Pow(2, float64(e.Exp-integer))
 	}
@@ -85,25 +88,30 @@ func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 		e.Base >>= (integer - e.Exp)
 		e.Exp = integer
 	}
-	if base >= 0 || uint64(-base) <= e.Base {
-		// The conversion from negative float64 to
-		// uint64 is undefined in golang, and doesn't
-		// work with ARMv8. More details at:
-		// https://github.com/golang/go/issues/43047
-		if base >= 0 {
-			e.Base += uint64(base)
-		} else {
-			e.Base -= uint64(-base)
+
+	if base >= 0 {
+		if base < math.MaxUint64 {
+			if u := uint64(base); u <= math.MaxUint64-e.Base {
+				e.Base += u
+				return false
+			}
 		}
-		return amount
+		e.Base = math.MaxUint64
+		return true
 	}
-	net := int64(-float64(e.Base) / factor)
+	base = -base
+	if base < math.MaxUint64 {
+		if u := uint64(base); u <= e.Base {
+			e.Base -= u
+			return false
+		}
+	}
 	e.Base = 0
-	return net
+	return true
 }
 
-// addExp adds another ExpiredValue
-func (e *ExpiredValue) AddExp(a ExpiredValue) {
+// AddExp adds another ExpiredValue and returns true if an overflow happens.
+func (e *ExpiredValue) AddExp(a ExpiredValue) bool {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
 	}
@@ -111,11 +119,16 @@ func (e *ExpiredValue) AddExp(a ExpiredValue) {
 		e.Base >>= (a.Exp - e.Exp)
 		e.Exp = a.Exp
 	}
-	e.Base += a.Base
+	if e.Base <= math.MaxUint64-a.Base {
+		e.Base += a.Base
+		return false
+	}
+	e.Base = math.MaxUint64
+	return true
 }
 
-// subExp subtracts another ExpiredValue
-func (e *ExpiredValue) SubExp(a ExpiredValue) {
+// SubExp subtracts another ExpiredValue and returns true if an overflow happens.
+func (e *ExpiredValue) SubExp(a ExpiredValue) bool {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
 	}
@@ -125,9 +138,10 @@ func (e *ExpiredValue) SubExp(a ExpiredValue) {
 	}
 	if e.Base > a.Base {
 		e.Base -= a.Base
-	} else {
-		e.Base = 0
+		return false
 	}
+	e.Base = 0
+	return true
 }
 
 // IsZero returns true if the value is zero

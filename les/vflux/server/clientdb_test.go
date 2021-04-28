@@ -48,26 +48,26 @@ func TestNodeDB(t *testing.T) {
 	}
 	for _, c := range cases {
 		if c.positive {
-			ndb.setBalance(c.id.Bytes(), false, c.balance)
-			if pb := ndb.getOrNewBalance(c.id.Bytes(), false); !reflect.DeepEqual(pb, c.balance) {
+			ndb.setPosBalance(nil, c.id.Bytes(), c.balance, 0)
+			if pb, _ := ndb.getOrNewPosBalance(c.id.Bytes()); !reflect.DeepEqual(pb, c.balance) {
 				t.Fatalf("Positive balance mismatch, want %v, got %v", c.balance, pb)
 			}
 		} else {
-			ndb.setBalance([]byte(c.ip), true, c.balance)
-			if nb := ndb.getOrNewBalance([]byte(c.ip), true); !reflect.DeepEqual(nb, c.balance) {
+			ndb.setNegBalance(nil, []byte(c.ip), c.balance)
+			if nb := ndb.getOrNewNegBalance([]byte(c.ip)); !reflect.DeepEqual(nb, c.balance) {
 				t.Fatalf("Negative balance mismatch, want %v, got %v", c.balance, nb)
 			}
 		}
 	}
 	for _, c := range cases {
 		if c.positive {
-			ndb.delBalance(c.id.Bytes(), false)
-			if pb := ndb.getOrNewBalance(c.id.Bytes(), false); !reflect.DeepEqual(pb, utils.ExpiredValue{}) {
+			ndb.delPosBalance(nil, c.id.Bytes())
+			if pb, _ := ndb.getOrNewPosBalance(c.id.Bytes()); !reflect.DeepEqual(pb, utils.ExpiredValue{}) {
 				t.Fatalf("Positive balance mismatch, want %v, got %v", utils.ExpiredValue{}, pb)
 			}
 		} else {
-			ndb.delBalance([]byte(c.ip), true)
-			if nb := ndb.getOrNewBalance([]byte(c.ip), true); !reflect.DeepEqual(nb, utils.ExpiredValue{}) {
+			ndb.delNegBalance(nil, []byte(c.ip))
+			if nb := ndb.getOrNewNegBalance([]byte(c.ip)); !reflect.DeepEqual(nb, utils.ExpiredValue{}) {
 				t.Fatalf("Negative balance mismatch, want %v, got %v", utils.ExpiredValue{}, nb)
 			}
 		}
@@ -115,7 +115,11 @@ func TestNodeDBExpiration(t *testing.T) {
 		{[]byte("127.0.0.4"), true, expval(1)},
 	}
 	for _, c := range cases {
-		ndb.setBalance(c.id, c.neg, c.balance)
+		if c.neg {
+			ndb.setNegBalance(nil, c.id, c.balance)
+		} else {
+			ndb.setPosBalance(nil, c.id, c.balance, 0)
+		}
 	}
 	clock.WaitForTimers(1)
 	clock.Run(time.Hour + time.Minute)
@@ -129,7 +133,11 @@ func TestNodeDBExpiration(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		ndb.setBalance(c.id, c.neg, c.balance)
+		if c.neg {
+			ndb.setNegBalance(nil, c.id, c.balance)
+		} else {
+			ndb.setPosBalance(nil, c.id, c.balance, 0)
+		}
 	}
 	clock.WaitForTimers(1)
 	clock.Run(time.Hour + time.Minute)

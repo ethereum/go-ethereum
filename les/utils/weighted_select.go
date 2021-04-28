@@ -122,7 +122,8 @@ func (n *wrsNode) insert(item WrsItem, weight uint64) int {
 	for n.items[branch] != nil && (n.level == 0 || n.items[branch].(*wrsNode).itemCnt == n.items[branch].(*wrsNode).maxItems) {
 		branch++
 		if branch == wrsBranches {
-			panic(nil)
+			Error("wrsNode.insert failed")
+			return 0
 		}
 	}
 	n.itemCnt++
@@ -179,5 +180,6 @@ func (n *wrsNode) choose(val uint64) (WrsItem, uint64) {
 		}
 		val -= w
 	}
-	panic(nil)
+	Error("wrsNode.choose failed")
+	return nil, 0
 }

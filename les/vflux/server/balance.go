@@ -30,7 +30,7 @@ import (
 
 var errBalanceOverflow = errors.New("balance overflow")
 
-const maxBalance = math.MaxInt64 // maximum allowed balance value
+const maxBalance = math.MaxInt64 // maximum allowed individual or total balance value
 
 const (
 	balanceCallbackUpdate = iota // called when priority drops below the last minimum estimate
@@ -86,6 +86,8 @@ type (
 		ReadOnlyBalance
 		AddBalance(amount int64) (uint64, uint64, error)
 		SetBalance(pos, neg uint64) error
+		SerialNumber() uint64
+		SetSerialNumber(sn uint64)
 	}
 )
 
@@ -100,6 +102,7 @@ type nodeBalance struct {
 	active, hasPriority, setFlags    bool
 	capacity                         uint64
 	balance                          balance
+	serialNumber                     uint64
 	posFactor, negFactor             PriceFactors
 	sumReqCost                       uint64
 	lastUpdate, nextUpdate, initTime mclock.AbsTime
@@ -120,18 +123,26 @@ type balance struct {
 
 // posValue returns the value of positive balance at a given timestamp.
 func (b balance) posValue(now mclock.AbsTime) uint64 {
-	return b.pos.Value(b.posExp.LogOffset(now))
+	if v := b.pos.Value(b.posExp.LogOffset(now)); v <= maxBalance {
+		// make sure that rounding errors won't cause an overflow
+		return v
+	}
+	return maxBalance
 }
 
 // negValue returns the value of negative balance at a given timestamp.
 func (b balance) negValue(now mclock.AbsTime) uint64 {
-	return b.neg.Value(b.negExp.LogOffset(now))
+	if v := b.neg.Value(b.negExp.LogOffset(now)); v <= maxBalance {
+		// make sure that rounding errors won't cause an overflow
+		return v
+	}
+	return maxBalance
 }
 
 // addValue adds the value of a given amount to the balance. The original value and
 // updated value will also be returned if the addition is successful.
 // Returns the error if the given value is too large and the value overflows.
-func (b *balance) addValue(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
+func (b *balance) addValue(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, error) {
 	var (
 		val    utils.ExpiredValue
 		offset utils.Fixed64
@@ -142,20 +153,31 @@ func (b *balance) addValue(now mclock.AbsTime, amount int64, pos bool, force boo
 		offset, val = b.negExp.LogOffset(now), b.neg
 	}
 	old := val.Value(offset)
+	if old > maxBalance {
+		// make sure that rounding errors won't cause an overflow
+		old = maxBalance
+	}
+	var new uint64
 	if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
+		// adding the specified amount would cause a positive overflow
 		if !force {
-			return old, 0, 0, errBalanceOverflow
+			return old, old, errBalanceOverflow
 		}
 		val = utils.ExpiredValue{}
-		amount = maxBalance
+		val.Add(maxBalance, offset)
+		new = maxBalance
+	} else {
+		val.Add(amount, offset)
+		if n := int64(old) + amount; n > 0 {
+			new = uint64(n)
+		}
 	}
-	net := val.Add(amount, offset)
 	if pos {
 		b.pos = val
 	} else {
 		b.neg = val
 	}
-	return old, val.Value(offset), net, nil
+	return old, new, nil
 }
 
 // setValue sets the internal balance amount to the given values. Returns the
@@ -217,7 +239,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
 		n.updateBalance(now)
-		if old, new, _, err = n.balance.addValue(now, amount, true, false); err != nil {
+		if old, new, err = n.balance.addValue(now, amount, true, false); err != nil {
 			return false
 		}
 		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
@@ -289,8 +311,9 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 			fcost = 0
 			newBalance = n.balance.posValue(now)
 		} else {
-			var net int64
-			_, newBalance, net, _ = n.balance.addValue(now, posCost, true, false)
+			var oldBalance uint64
+			oldBalance, newBalance, _ = n.balance.addValue(now, posCost, true, false)
+			net := int64(newBalance - oldBalance)
 			if posCost == net {
 				fcost = 0
 			} else {
@@ -400,6 +423,7 @@ func (n *nodeBalance) GetPriceFactors() (posFactor, negFactor PriceFactors) {
 }
 
 // activate starts time/capacity cost deduction.
+// Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) activate() {
 	n.bt.updateTotalBalance(n, func() bool {
 		if n.active {
@@ -412,6 +436,7 @@ func (n *nodeBalance) activate() {
 }
 
 // deactivate stops time/capacity cost deduction and saves the balances in the database
+// Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) deactivate() {
 	n.bt.updateTotalBalance(n, func() bool {
 		if !n.active {
@@ -437,12 +462,13 @@ func (n *nodeBalance) updateBalance(now mclock.AbsTime) {
 }
 
 // storeBalance stores the positive and/or negative balance of the node in the database
+// Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) storeBalance(pos, neg bool) {
 	if pos {
-		n.bt.storeBalance(n.node.ID().Bytes(), false, n.balance.pos)
+		n.bt.storePosBalance(n.node.ID(), n.balance.pos, n.serialNumber)
 	}
 	if neg {
-		n.bt.storeBalance([]byte(n.connAddress), true, n.balance.neg)
+		n.bt.storeNegBalance([]byte(n.connAddress), n.balance.neg)
 	}
 }
 
@@ -635,7 +661,8 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 	if !b.pos.IsZero() {
 		factor := n.posFactor.connectionPrice(capacity, avgReqCost)
 		diff := -int64(dtf * factor)
-		_, _, net, _ := b.addValue(at, diff, true, false)
+		oldBalance, newBalance, _ := b.addValue(at, diff, true, false)
+		net := int64(newBalance - oldBalance)
 		if net == diff {
 			dtf = 0
 		} else {
@@ -690,4 +717,12 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		diffTime += float64(targetNeg-neg) / timePrice
 	}
 	return time.Duration(diffTime), true
+}
+
+func (n *nodeBalance) SerialNumber() uint64 {
+	return n.serialNumber
+}
+
+func (n *nodeBalance) SetSerialNumber(sn uint64) {
+	n.serialNumber = sn
 }

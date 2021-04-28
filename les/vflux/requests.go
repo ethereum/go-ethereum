@@ -17,10 +17,16 @@
 package vflux
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -30,6 +36,16 @@ const (
 	MaxRequestLength    = 16 // max number of individual requests in a batch
 	CapacityQueryName   = "cq"
 	CapacityQueryMaxLen = 16
+	PriceQueryName      = "pq"
+	PriceQueryMaxLen    = 16
+	GetBalanceName      = "get"
+	DepositName         = "dep"
+	ExchangeName        = "ex"
+)
+
+var (
+	getBalanceSigPrefix = []byte("vfx.get:")
+	exchangeSigPrefix   = []byte("vfx.ex:")
 )
 
 type (
@@ -45,13 +61,55 @@ type (
 	// Replies are the replies to a batch of requests
 	Replies [][]byte
 
-	// CapacityQueryReq is the encoding format of the capacity query
-	CapacityQueryReq struct {
+	// CapacityQueryRequest is the encoding format of the capacity query
+	CapacityQueryRequest struct {
 		Bias      uint64 // seconds
 		AddTokens []IntOrInf
 	}
-	// CapacityQueryReq is the encoding format of the response to the capacity query
+	// CapacityQueryRequest is the encoding format of the response to the capacity query
 	CapacityQueryReply []uint64
+
+	PriceQueryRequest struct {
+		CurrencyId   string
+		TokenAmounts []IntOrInf
+	}
+	PriceQueryReply []IntOrInf
+
+	GetBalanceRequest struct {
+		// if only token balance is needed then all field can be left empty
+		CurrencyId     string
+		PaymentAddress []byte
+		SignatureType  string
+		SignatureData  []byte
+	}
+	GetBalanceReply struct {
+		// if currency type is unknown or signature verification fails then CurrencyBalance == -Inf
+		TokenBalance, CurrencyBalance IntOrInf
+		LastSerial                    uint64
+	}
+
+	DepositRequest struct {
+		CurrencyId, PaymentReceiver string
+		PaymentData                 []byte // proof of payment; format defined by payment module
+		PaymentAddress              []byte
+	}
+	DepositReply struct {
+		Balance         IntOrInf
+		PaymentResponse []byte // optional response data; format defined by payment module
+	}
+
+	ExchangeRequest struct {
+		SerialNumber                      uint64
+		CurrencyId                        string
+		MinTokens, MaxTokens, MaxCurrency IntOrInf
+		PaymentAddress                    []byte
+		SignatureType                     string
+		SignatureData                     []byte
+	}
+	ExchangeReply struct {
+		TokenBalance, CurrencyBalance, TokensEx, CurrencyEx IntOrInf
+		LastSerial                                          uint64
+	}
 )
 
 // Add encodes and adds a new request to the batch
@@ -98,9 +156,9 @@ func (i *IntOrInf) BigInt() *big.Int {
 	case IntNegative:
 		return new(big.Int).Neg(&i.Value)
 	case IntPlusInf:
-		panic(nil) // caller should check Inf() before trying to convert to big.Int
+		utils.Error("IntOrInf.BigInt: type is IntPlusInf")
 	case IntMinusInf:
-		panic(nil)
+		utils.Error("IntOrInf.BigInt: type is IntMinusInf")
 	}
 	return &big.Int{} // invalid type decodes to 0 value
 }
@@ -177,4 +235,68 @@ func (i *IntOrInf) SetInf(sign int) {
 	} else {
 		i.Type = IntMinusInf
 	}
+}
+
+func (r *ExchangeRequest) signHash(sender enode.ID) []byte {
+	type signedReq struct {
+		SenderId                          enode.ID
+		SerialNumber                      uint64
+		CurrencyId                        string
+		MinTokens, MaxTokens, MaxCurrency IntOrInf
+	}
+	rlp, err := rlp.EncodeToBytes(&signedReq{
+		SenderId:     sender,
+		SerialNumber: r.SerialNumber,
+		CurrencyId:   r.CurrencyId,
+		MinTokens:    r.MinTokens,
+		MaxTokens:    r.MaxTokens,
+		MaxCurrency:  r.MaxCurrency,
+	})
+	if err != nil {
+		log.Error("Failed to encode exchange request", "err", err)
+	}
+	return crypto.Keccak256(append(exchangeSigPrefix, rlp...))
+}
+
+func (r *ExchangeRequest) Sign(sender enode.ID, privateKey *ecdsa.PrivateKey) {
+	sig, _ := crypto.Sign(r.signHash(sender), privateKey)
+	r.SignatureType, r.SignatureData = "ecdsa", sig
+}
+
+func (r *ExchangeRequest) VerifySignature(sender enode.ID) bool {
+	if r.SignatureType != "ecdsa" {
+		log.Debug("Unknown signature type", "type", r.SignatureType)
+		return false
+	}
+	pubkey, err := crypto.SigToPub(r.signHash(sender), r.SignatureData)
+	return err == nil && bytes.Equal(crypto.PubkeyToAddress(*pubkey).Bytes(), r.PaymentAddress)
+}
+
+func (r *GetBalanceRequest) signHash(sender enode.ID) []byte {
+	type signedReq struct {
+		SenderId   enode.ID
+		CurrencyId string
+	}
+	rlp, err := rlp.EncodeToBytes(&signedReq{
+		SenderId:   sender,
+		CurrencyId: r.CurrencyId,
+	})
+	if err != nil {
+		log.Error("Failed to encode exchange request", "err", err)
+	}
+	return crypto.Keccak256(append(getBalanceSigPrefix, rlp...))
+}
+
+func (r *GetBalanceRequest) Sign(sender enode.ID, privateKey *ecdsa.PrivateKey) {
+	sig, _ := crypto.Sign(r.signHash(sender), privateKey)
+	r.SignatureType, r.SignatureData = "ecdsa", sig
+}
+
+func (r *GetBalanceRequest) VerifySignature(sender enode.ID) bool {
+	if r.SignatureType != "ecdsa" {
+		log.Debug("Unknown signature type", "type", r.SignatureType)
+		return false
+	}
+	pubkey, err := crypto.SigToPub(r.signHash(sender), r.SignatureData)
+	return err == nil && bytes.Equal(crypto.PubkeyToAddress(*pubkey).Bytes(), r.PaymentAddress)
 }

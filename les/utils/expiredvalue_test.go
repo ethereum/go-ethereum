@@ -43,35 +43,35 @@ func TestValueExpiration(t *testing.T) {
 
 func TestValueAddition(t *testing.T) {
 	var cases = []struct {
-		input      ExpiredValue
-		addend     int64
-		timeOffset Fixed64
-		expect     uint64
-		expectNet  int64
+		input          ExpiredValue
+		addend         int64
+		timeOffset     Fixed64
+		expect         uint64
+		expectOverflow bool
 	}{
 		// Addition
-		{ExpiredValue{Base: 128, Exp: 0}, 128, Uint64ToFixed64(0), 256, 128},
-		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(0), 640, 128},
+		{ExpiredValue{Base: 128, Exp: 0}, 128, Uint64ToFixed64(0), 256, false},
+		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(0), 640, false},
 
 		// Addition with offset
-		{ExpiredValue{Base: 128, Exp: 0}, 128, Uint64ToFixed64(1), 192, 128},
-		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(1), 384, 128},
-		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(3), 192, 128},
+		{ExpiredValue{Base: 128, Exp: 0}, 128, Uint64ToFixed64(1), 192, false},
+		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(1), 384, false},
+		{ExpiredValue{Base: 128, Exp: 2}, 128, Uint64ToFixed64(3), 192, false},
 
 		// Subtraction
-		{ExpiredValue{Base: 128, Exp: 0}, -64, Uint64ToFixed64(0), 64, -64},
-		{ExpiredValue{Base: 128, Exp: 0}, -128, Uint64ToFixed64(0), 0, -128},
-		{ExpiredValue{Base: 128, Exp: 0}, -192, Uint64ToFixed64(0), 0, -128},
+		{ExpiredValue{Base: 128, Exp: 0}, -64, Uint64ToFixed64(0), 64, false},
+		{ExpiredValue{Base: 128, Exp: 0}, -128, Uint64ToFixed64(0), 0, false},
+		{ExpiredValue{Base: 128, Exp: 0}, -192, Uint64ToFixed64(0), 0, true},
 
 		// Subtraction with offset
-		{ExpiredValue{Base: 128, Exp: 0}, -64, Uint64ToFixed64(1), 0, -64},
-		{ExpiredValue{Base: 128, Exp: 0}, -128, Uint64ToFixed64(1), 0, -64},
-		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(1), 128, -128},
-		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(2), 0, -128},
+		{ExpiredValue{Base: 128, Exp: 0}, -64, Uint64ToFixed64(1), 0, false},
+		{ExpiredValue{Base: 128, Exp: 0}, -128, Uint64ToFixed64(1), 0, true},
+		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(1), 128, false},
+		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(2), 0, false},
 	}
 	for _, c := range cases {
-		if net := c.input.Add(c.addend, c.timeOffset); net != c.expectNet {
-			t.Fatalf("Net amount mismatch, want=%d, got=%d", c.expectNet, net)
+		if overflow := c.input.Add(c.addend, c.timeOffset); overflow != c.expectOverflow {
+			t.Fatalf("Overflow flag mismatch, want=%v, got=%v", c.expectOverflow, overflow)
 		}
 		if got := c.input.Value(c.timeOffset); got != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, got)

@@ -37,6 +37,13 @@ var (
 	ErrCantFindMaximum = errors.New("Unable to find maximum allowed capacity")
 )
 
+const (
+	tokenSaleTC     = time.Hour / 2
+	tokenLimitTC    = time.Hour * 2
+	basePriceTC     = time.Hour * 4
+	targetFreeRatio = 0.1
+)
+
 // ClientPool implements a client database that assigns a priority to each client
 // based on a positive and negative balance. Positive balance is externally assigned
 // to prioritized clients and is decreased with connection time and processed
@@ -63,9 +70,15 @@ type ClientPool struct {
 	clock  mclock.Clock
 	closed bool
 	ns     *nodestate.NodeStateMachine
+	ndb    *nodeDB
 	synced func() bool
 
-	lock          sync.RWMutex
+	tokenSale                       *tokenSale
+	tokenLock                       sync.Mutex
+	capacityLimit, priorityCapacity uint64
+	capacityFactor                  float64
+
+	biasLock      sync.RWMutex
 	connectedBias time.Duration
 
 	minCap     uint64      // the minimal capacity value allowed for any client
@@ -85,11 +98,13 @@ type clientPeer interface {
 func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
 	setup := newServerSetup()
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
+	ndb := newNodeDB(balanceDb, clock)
 	cp := &ClientPool{
 		priorityPool:   newPriorityPool(ns, setup, clock, minCap, connectedBias, 4, 100),
-		balanceTracker: newBalanceTracker(ns, setup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
+		balanceTracker: newBalanceTracker(ns, setup, ndb, clock, &utils.Expirer{}, &utils.Expirer{}),
 		setup:          setup,
 		ns:             ns,
+		ndb:            ndb,
 		clock:          clock,
 		minCap:         minCap,
 		connectedBias:  connectedBias,
@@ -97,16 +112,37 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 	}
 
 	ns.SubscribeState(nodestate.MergeFlags(setup.activeFlag, setup.inactiveFlag, setup.priorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+		c, _ := ns.GetField(node, setup.clientField).(*clientInfo)
 		if newState.Equals(setup.inactiveFlag) {
 			// set timeout for non-priority inactive client
 			var timeout time.Duration
-			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
+			if c != nil {
 				timeout = c.InactiveAllowance()
 			}
 			ns.AddTimeout(node, setup.inactiveFlag, timeout)
 		}
 		if oldState.Equals(setup.inactiveFlag) && newState.Equals(setup.inactiveFlag.Or(setup.priorityFlag)) {
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
+		}
+		if c != nil {
+			// update priorityCapacity and token limit
+			oldPri, newPri := oldState.HasAll(setup.priorityFlag), newState.HasAll(setup.priorityFlag)
+			if oldPri != newPri {
+				cp.tokenLock.Lock()
+				if cp.priorityCapacity < c.lastPriorityCap {
+					utils.Error("ClientPool state sub: negative priorityCapacity")
+				}
+				cp.priorityCapacity -= c.lastPriorityCap
+				if newPri {
+					cap, _ := ns.GetField(node, setup.capacityField).(uint64)
+					cp.priorityCapacity += cap
+					c.lastPriorityCap = cap
+				} else {
+					c.lastPriorityCap = 0
+				}
+				cp.updateTokenLimit()
+				cp.tokenLock.Unlock()
+			}
 		}
 		if newState.Equals(setup.activeFlag) {
 			// active with no priority; limit capacity to minCap
@@ -115,17 +151,26 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 				cp.requestCapacity(node, minCap, minCap, 0)
 			}
 		}
-		if newState.Equals(nodestate.Flags{}) {
-			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
-				c.Disconnect()
-			}
+		if c != nil && newState.Equals(nodestate.Flags{}) {
+			c.Disconnect()
 		}
 	})
 
 	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
+		if c, ok := ns.GetField(node, setup.clientField).(*clientInfo); ok {
 			newCap, _ := newValue.(uint64)
 			c.UpdateCapacity(newCap, node == cp.capReqNode)
+			if state.HasAll(setup.priorityFlag) {
+				// update priorityCapacity and token limit
+				cp.tokenLock.Lock()
+				if cp.priorityCapacity < c.lastPriorityCap {
+					utils.Error("ClientPool capacityField sub: negative priorityCapacity")
+				}
+				cp.priorityCapacity += newCap - c.lastPriorityCap
+				c.lastPriorityCap = newCap
+				cp.updateTokenLimit()
+				cp.tokenLock.Unlock()
+			}
 		}
 	})
 
@@ -149,6 +194,15 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 	return cp
 }
 
+func (cp *ClientPool) AddTokenSale(currencyID string, minBasePrice float64) {
+	cp.tokenSale = newTokenSale(cp.balanceTracker, cp.ndb, cp.clock, currencyID, minBasePrice)
+	cp.tokenSale.setBasePriceAdjustFactor(1 / float64(basePriceTC))
+}
+
+func (cp *ClientPool) AddPaymentReceiver(id string, pm paymentReceiver) {
+	cp.tokenSale.addPaymentReceiver(id, pm)
+}
+
 // Start starts the client pool. Should be called before Register/Unregister.
 func (cp *ClientPool) Start() {
 	cp.ns.Start()
@@ -165,33 +219,84 @@ func (cp *ClientPool) Stop() {
 // priority and remains inactive for longer than the allowed timeout then it will be
 // disconnected by calling the Disconnect function of the clientPeer interface.
 func (cp *ClientPool) Register(peer clientPeer) ConnectedBalance {
-	cp.ns.SetField(peer.Node(), cp.setup.clientField, peerWrapper{peer})
+	var fail bool
+	cp.ns.Operation(func() {
+		if cp.ns.GetField(peer.Node(), cp.setup.clientField) != nil {
+			fail = true
+			return
+		}
+		cp.ns.SetFieldSub(peer.Node(), cp.setup.clientField, &clientInfo{peer, 0})
+	})
+	if fail {
+		return nil
+	}
 	balance, _ := cp.ns.GetField(peer.Node(), cp.setup.balanceField).(*nodeBalance)
 	return balance
 }
 
 // Unregister removes the peer from the client pool
 func (cp *ClientPool) Unregister(peer clientPeer) {
-	cp.ns.SetField(peer.Node(), cp.setup.clientField, nil)
+	cp.ns.Operation(func() {
+		if c, ok := cp.ns.GetField(peer.Node(), cp.setup.clientField).(*clientInfo); ok {
+			cp.tokenLock.Lock()
+			if cp.priorityCapacity < c.lastPriorityCap {
+				utils.Error("ClientPool.Unregister: negative priorityCapacity")
+			}
+			cp.priorityCapacity -= c.lastPriorityCap
+			cp.updateTokenLimit()
+			cp.tokenLock.Unlock()
+			cp.ns.SetFieldSub(peer.Node(), cp.setup.clientField, nil)
+		}
+	})
 }
 
 // setConnectedBias sets the connection bias, which is applied to already connected clients
 // So that already connected client won't be kicked out very soon and we can ensure all
 // connected clients can have enough time to request or sync some data.
 func (cp *ClientPool) SetConnectedBias(bias time.Duration) {
-	cp.lock.Lock()
+	cp.biasLock.Lock()
 	cp.connectedBias = bias
 	cp.setActiveBias(bias)
-	cp.lock.Unlock()
+	cp.biasLock.Unlock()
+}
+
+// SetLimits sets the maximum number and total capacity of simultaneously active nodes
+func (cp *ClientPool) SetLimits(maxCount, maxCap uint64) {
+	cp.setLimits(maxCount, maxCap)
+	cp.tokenLock.Lock()
+	cp.capacityLimit = maxCap
+	if cp.priorityCapacity > cp.capacityLimit {
+		utils.Error("ClientPool.SetLimits: priorityCapacity > capacityLimit")
+	}
+	cp.updateTokenLimit()
+	cp.tokenLock.Unlock()
+}
+
+// SetDefaultFactors sets the default price factors applied to subsequently connected clients
+func (cp *ClientPool) SetDefaultFactors(posFactors, negFactors PriceFactors) {
+	cp.setDefaultFactors(posFactors, negFactors)
+	cp.tokenLock.Lock()
+	cp.capacityFactor = posFactors.CapacityFactor
+	cp.updateTokenLimit()
+	cp.tokenLock.Unlock()
+}
+
+func (cp *ClientPool) updateTokenLimit() {
+	if cp.tokenSale == nil {
+		return
+	}
+	maxTokenLimit := float64(tokenSaleTC) * cp.capacityFactor * float64(cp.capacityLimit)
+	freeRatio := 1 - float64(cp.priorityCapacity)/float64(cp.capacityLimit)
+	cp.tokenSale.setLimitAdjustRate(int64(maxTokenLimit), (freeRatio-targetFreeRatio)*maxTokenLimit/float64(tokenLimitTC))
 }
 
 // SetCapacity sets the assigned capacity of a connected client
 func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Duration, requested bool) (capacity uint64, err error) {
-	cp.lock.RLock()
+	cp.biasLock.RLock()
 	if cp.connectedBias > bias {
 		bias = cp.connectedBias
 	}
-	cp.lock.RUnlock()
+	cp.biasLock.RUnlock()
 
 	cp.ns.Operation(func() {
 		balance, _ := cp.ns.GetField(node, cp.setup.balanceField).(*nodeBalance)
@@ -269,7 +374,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 // and a bias time value. For each given token amount it calculates the maximum achievable
 // capacity in case the amount is added to the balance.
 func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []byte {
-	var req vflux.CapacityQueryReq
+	var req vflux.CapacityQueryRequest
 	if rlp.DecodeBytes(data, &req) != nil {
 		return nil
 	}
@@ -284,15 +389,15 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	}
 
 	bias := time.Second * time.Duration(req.Bias)
-	cp.lock.RLock()
+	cp.biasLock.RLock()
 	if cp.connectedBias > bias {
 		bias = cp.connectedBias
 	}
-	cp.lock.RUnlock()
+	cp.biasLock.RUnlock()
 
 	// use capacityCurve to answer request for multiple newly bought token amounts
 	curve := cp.getCapacityCurve().exclude(id)
-	cp.BalanceOperation(id, freeID, func(balance AtomicBalanceOperator) {
+	cp.BalanceOperation(id, freeID, nil, func(balance AtomicBalanceOperator) {
 		pb, _ := balance.GetBalance()
 		for i, addTokens := range req.AddTokens {
 			add := addTokens.Int64()
@@ -323,6 +428,9 @@ func (cp *ClientPool) Handle(id enode.ID, address string, name string, data []by
 	case vflux.CapacityQueryName:
 		return cp.serveCapQuery(id, address, data)
 	default:
+		if cp.tokenSale != nil {
+			return cp.tokenSale.handle(id, address, name, data)
+		}
 		return nil
 	}
 }

@@ -193,8 +193,8 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, minTarget, maxTarget u
 	return c.capacity
 }
 
-// SetLimits sets the maximum number and total capacity of simultaneously active nodes
-func (pp *priorityPool) SetLimits(maxCount, maxCap uint64) {
+// setLimits sets the maximum number and total capacity of simultaneously active nodes
+func (pp *priorityPool) setLimits(maxCount, maxCap uint64) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	inc := (maxCount > pp.maxCount) || (maxCap > pp.maxCap)

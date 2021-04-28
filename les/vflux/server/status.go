@@ -22,7 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-type peerWrapper struct{ clientPeer } // the NodeStateMachine type system needs this wrapper
+type clientInfo struct {
+	clientPeer
+	lastPriorityCap uint64
+}
 
 // serverSetup is a wrapper of the node state machine setup, which contains
 // all the created flags and fields used in the vflux server side.
@@ -47,7 +50,7 @@ type serverSetup struct {
 // newServerSetup initializes the setup for state machine and returns the flags/fields group.
 func newServerSetup() *serverSetup {
 	setup := &serverSetup{setup: &nodestate.Setup{}}
-	setup.clientField = setup.setup.NewField("client", reflect.TypeOf(peerWrapper{}))
+	setup.clientField = setup.setup.NewField("client", reflect.TypeOf(&clientInfo{}))
 	setup.priorityFlag = setup.setup.NewFlag("priority")
 	setup.updateFlag = setup.setup.NewFlag("update")
 	setup.balanceField = setup.setup.NewField("balance", reflect.TypeOf(&nodeBalance{}))

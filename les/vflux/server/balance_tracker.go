@@ -43,24 +43,24 @@ const (
 // The two balances are translated into a single priority value that also depends
 // on the actual capacity.
 type balanceTracker struct {
-	setup          *serverSetup
-	clock          mclock.Clock
-	lock           sync.Mutex
-	ns             *nodestate.NodeStateMachine
-	ndb            *nodeDB
-	posExp, negExp utils.ValueExpirer
+	setup *serverSetup
+	clock mclock.Clock
+	lock  sync.Mutex
+	ns    *nodestate.NodeStateMachine
+	ndb   *nodeDB
+	quit  chan struct{}
 
+	posExp, negExp                       utils.ValueExpirer
 	posExpTC, negExpTC                   uint64
 	defaultPosFactors, defaultNegFactors PriceFactors
 
+	operationBatch   ethdb.KeyValueWriter
 	active, inactive utils.ExpiredValue
 	balanceTimer     *utils.UpdateTimer
-	quit             chan struct{}
 }
 
 // newBalanceTracker creates a new balanceTracker
-func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
-	ndb := newNodeDB(db, clock)
+func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, ndb *nodeDB, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
 	bt := &balanceTracker{
 		ns:           ns,
 		setup:        setup,
@@ -143,13 +143,15 @@ func (bt *balanceTracker) stop() {
 	now := bt.clock.Now()
 	bt.ndb.setExpiration(bt.posExp.LogOffset(now), bt.negExp.LogOffset(now))
 	close(bt.quit)
-	bt.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		if n, ok := bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance); ok {
-			n.lock.Lock()
-			n.storeBalance(true, true)
-			n.lock.Unlock()
-			bt.ns.SetField(node, bt.setup.balanceField, nil)
-		}
+	bt.ns.Operation(func() { // storeBalance should only be called in an operation
+		bt.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+			if n, ok := bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance); ok {
+				n.lock.Lock()
+				n.storeBalance(true, true)
+				n.lock.Unlock()
+				bt.ns.SetFieldSub(node, bt.setup.balanceField, nil)
+			}
+		})
 	})
 	bt.ndb.close()
 }
@@ -171,7 +173,11 @@ func (bt *balanceTracker) TotalTokenAmount() uint64 {
 	})
 	total := bt.active
 	total.AddExp(bt.inactive)
-	return total.Value(bt.posExp.LogOffset(bt.clock.Now()))
+	if t := total.Value(bt.posExp.LogOffset(bt.clock.Now())); t < maxBalance {
+		// make sure that rounding errors won't cause an overflow
+		return t
+	}
+	return maxBalance
 }
 
 // GetPosBalanceIDs lists node IDs with an associated positive balance
@@ -179,8 +185,8 @@ func (bt *balanceTracker) GetPosBalanceIDs(start, stop enode.ID, maxCount int) (
 	return bt.ndb.getPosBalanceIDs(start, stop, maxCount)
 }
 
-// SetDefaultFactors sets the default price factors applied to subsequently connected clients
-func (bt *balanceTracker) SetDefaultFactors(posFactors, negFactors PriceFactors) {
+// setDefaultFactors sets the default price factors applied to subsequently connected clients
+func (bt *balanceTracker) setDefaultFactors(posFactors, negFactors PriceFactors) {
 	bt.lock.Lock()
 	bt.defaultPosFactors = posFactors
 	bt.defaultNegFactors = negFactors
@@ -218,8 +224,9 @@ func (bt *balanceTracker) GetExpirationTCs() (pos, neg uint64) {
 
 // BalanceOperation allows atomic operations on the balance of a node regardless of whether
 // it is currently connected or not
-func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb func(AtomicBalanceOperator)) {
+func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, batch ethdb.KeyValueWriter, cb func(AtomicBalanceOperator)) {
 	bt.ns.Operation(func() {
+		bt.operationBatch = batch
 		var nb *nodeBalance
 		if node := bt.ns.GetNode(id); node != nil {
 			nb, _ = bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
@@ -228,6 +235,7 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb f
 			nb = bt.newNodeBalance(node, connAddress, false)
 		}
 		cb(nb)
+		bt.operationBatch = nil
 	})
 }
 
@@ -236,16 +244,17 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb f
 // the node has a positive balance.
 // Note: this function should run inside a NodeStateMachine operation
 func (bt *balanceTracker) newNodeBalance(node *enode.Node, connAddress string, setFlags bool) *nodeBalance {
-	pb := bt.ndb.getOrNewBalance(node.ID().Bytes(), false)
-	nb := bt.ndb.getOrNewBalance([]byte(connAddress), true)
+	pb, sn := bt.ndb.getOrNewPosBalance(node.ID().Bytes())
+	nb := bt.ndb.getOrNewNegBalance([]byte(connAddress))
 	n := &nodeBalance{
-		bt:          bt,
-		node:        node,
-		setFlags:    setFlags,
-		connAddress: connAddress,
-		balance:     balance{pos: pb, neg: nb, posExp: bt.posExp, negExp: bt.negExp},
-		initTime:    bt.clock.Now(),
-		lastUpdate:  bt.clock.Now(),
+		bt:           bt,
+		node:         node,
+		setFlags:     setFlags,
+		connAddress:  connAddress,
+		balance:      balance{pos: pb, neg: nb, posExp: bt.posExp, negExp: bt.negExp},
+		serialNumber: sn,
+		initTime:     bt.clock.Now(),
+		lastUpdate:   bt.clock.Now(),
 	}
 	for i := range n.callbackIndex {
 		n.callbackIndex[i] = -1
@@ -257,11 +266,23 @@ func (bt *balanceTracker) newNodeBalance(node *enode.Node, connAddress string, s
 }
 
 // storeBalance stores either a positive or a negative balance in the database
-func (bt *balanceTracker) storeBalance(id []byte, neg bool, value utils.ExpiredValue) {
-	if bt.canDropBalance(bt.clock.Now(), neg, value) {
-		bt.ndb.delBalance(id, neg) // balance is small enough, drop it directly.
+// TODO comment
+// Note: this function should run inside a NodeStateMachine operation
+func (bt *balanceTracker) storePosBalance(id enode.ID, value utils.ExpiredValue, serialNumber uint64) {
+	if bt.canDropBalance(bt.clock.Now(), false, value) {
+		bt.ndb.delPosBalance(bt.operationBatch, id[:]) // balance is small enough, drop it directly.
 	} else {
-		bt.ndb.setBalance(id, neg, value)
+		bt.ndb.setPosBalance(bt.operationBatch, id[:], value, serialNumber)
+	}
+}
+
+// storeBalance stores either a positive or a negative balance in the database
+// Note: this function should run inside a NodeStateMachine operation
+func (bt *balanceTracker) storeNegBalance(id []byte, value utils.ExpiredValue) {
+	if bt.canDropBalance(bt.clock.Now(), true, value) {
+		bt.ndb.delNegBalance(bt.operationBatch, id) // balance is small enough, drop it directly.
+	} else {
+		bt.ndb.setNegBalance(bt.operationBatch, id, value)
 	}
 }
 

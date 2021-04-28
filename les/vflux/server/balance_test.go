@@ -54,7 +54,7 @@ func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpir
 	// Initialize and customize the setup for the balance testing
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()
-	setup.clientField = setup.setup.NewField("balancTestClient", reflect.TypeOf(balanceTestClient{}))
+	setup.clientField = setup.setup.NewField("balanceTestClient", reflect.TypeOf(balanceTestClient{}))
 
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	if posExp == nil {
@@ -66,7 +66,8 @@ func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpir
 	if db == nil {
 		db = memorydb.New()
 	}
-	bt := newBalanceTracker(ns, setup, db, clock, posExp, negExp)
+	ndb := newNodeDB(db, clock)
+	bt := newBalanceTracker(ns, setup, ndb, clock, posExp, negExp)
 	ns.Start()
 	return &balanceTestSetup{
 		clock: clock,
@@ -88,14 +89,14 @@ func (b *balanceTestSetup) newNode(capacity uint64) *nodeBalance {
 }
 
 func (b *balanceTestSetup) setBalance(node *nodeBalance, pos, neg uint64) (err error) {
-	b.bt.BalanceOperation(node.node.ID(), node.connAddress, func(balance AtomicBalanceOperator) {
+	b.bt.BalanceOperation(node.node.ID(), node.connAddress, nil, func(balance AtomicBalanceOperator) {
 		err = balance.SetBalance(pos, neg)
 	})
 	return
 }
 
 func (b *balanceTestSetup) addBalance(node *nodeBalance, add int64) (old, new uint64, err error) {
-	b.bt.BalanceOperation(node.node.ID(), node.connAddress, func(balance AtomicBalanceOperator) {
+	b.bt.BalanceOperation(node.node.ID(), node.connAddress, nil, func(balance AtomicBalanceOperator) {
 		old, new, err = balance.AddBalance(add)
 	})
 	return
