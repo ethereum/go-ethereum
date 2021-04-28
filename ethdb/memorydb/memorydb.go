@@ -198,7 +198,6 @@ type keyvalue struct {
 type batch struct {
 	db     *Database
 	writes []keyvalue
-	keys   int
 	size   int
 }
 
@@ -212,14 +211,8 @@ func (b *batch) Put(key, value []byte) error {
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
-	b.keys++
 	b.size += len(key)
 	return nil
-}
-
-// KeyCount retrieves the number of keys queued up for writing.
-func (b *batch) KeyCount() int {
-	return b.keys
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -245,7 +238,7 @@ func (b *batch) Write() error {
 // Reset resets the batch for reuse.
 func (b *batch) Reset() {
 	b.writes = b.writes[:0]
-	b.keys, b.size = 0, 0
+	b.size = 0
 }
 
 // Replay replays the batch contents.

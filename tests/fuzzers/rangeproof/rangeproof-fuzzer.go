@@ -170,17 +170,10 @@ func (f *fuzzer) fuzz() int {
 		}
 		ok = 1
 		//nodes, subtrie
-		nodes, hasMore, err := trie.VerifyRangeProof(tr.Hash(), first, last, keys, vals, proof)
+		hasMore, err := trie.VerifyRangeProof(tr.Hash(), first, last, keys, vals, proof)
 		if err != nil {
-			if nodes != nil {
-				panic("err != nil && nodes != nil")
-			}
 			if hasMore {
 				panic("err != nil && hasMore == true")
-			}
-		} else {
-			if nodes == nil {
-				panic("err == nil && nodes == nil")
 			}
 		}
 	}
