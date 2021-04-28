@@ -132,53 +132,47 @@ func FuzzCrossG2Add(data []byte) int {
 }
 
 func FuzzCrossG1MultiExp(data []byte) int {
-	// result = multiExp(bases, scalars)
-	// n random scalars
-
-	// we take the first byte to derive n (max = 17)
-	if len(data) < 1 {
-		return 0
-	}
-	n := (uint8(data[0]) % 16) + 1
-
-	input := bytes.NewReader(data[1:])
-
-	// n random scalars
-	scalars := make([]*big.Int, n)
-	_scalars := make([]fr.Element, n)
-	for i := 0; i < int(n); i++ {
+	var (
+		input        = bytes.NewReader(data)
+		gethScalars  []*big.Int
+		gnarkScalars []fr.Element
+		gethPoints   []*bls12381.PointG1
+		gnarkPoints  []gnark.G1Affine
+	)
+	// n random scalars (max 17)
+	for i := 0; i < 17; i++ {
 		// note that geth/crypto/bls12381 works only with scalars <= 32bytes
 		s, err := randomScalar(input, fr.Modulus())
 		if err != nil {
-			return 0
+			break
 		}
-		scalars[i] = s
-		_scalars[i].SetBigInt(scalars[i]).FromMont()
-	}
+		// get a random G1 point as basis
+		kp1, cp1, err := getG1Points(input)
+		if err != nil {
+			break
+		}
+		gethScalars = append(gethScalars, s)
+		var gnarkScalar = &fr.Element{}
+		gnarkScalar = gnarkScalar.SetBigInt(s).FromMont()
+		gnarkScalars = append(gnarkScalars, *gnarkScalar)
 
-	// get a random G1 point as basis
-	kp1, cp1, err := getG1Points(input)
-	if err != nil {
+		gethPoints = append(gethPoints, new(bls12381.PointG1).Set(kp1))
+		gnarkPoints = append(gnarkPoints, *cp1)
+	}
+	if len(gethScalars) == 0{
 		return 0
 	}
-	kps := make([]*bls12381.PointG1, n)
-	cps := make([]gnark.G1Affine, n)
-	for i := 0; i < int(n); i++ {
-		kps[i] = new(bls12381.PointG1).Set(kp1)
-		cps[i].Set(cp1)
-	}
-
 	// compute multi exponentiation
 	g1 := bls12381.NewG1()
 	kp := bls12381.PointG1{}
-	if _, err := g1.MultiExp(&kp, kps, scalars); err != nil {
+	if _, err := g1.MultiExp(&kp, gethPoints, gethScalars); err != nil {
 		panic(fmt.Sprintf("G1 multi exponentiation errored (geth): %v", err))
 	}
 	// note that geth/crypto/bls12381.MultiExp mutates the scalars slice (and sets all the scalars to zero)
 
 	// gnark multi exp
 	cp := new(gnark.G1Affine)
-	cp.MultiExp(cps, _scalars)
+	cp.MultiExp(gnarkPoints, gnarkScalars)
 
 	// compare result
 	if !(bytes.Equal(cp.Marshal(), g1.ToBytes(&kp))) {
