@@ -50,7 +50,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -271,21 +270,24 @@ func doInstall(cmdline []string) {
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
 
-	// Now we choose what we're even building.
-	// Default: collect all 'main' packages in cmd/ and build those.
-	packages := flag.Args()
-	if len(packages) == 0 {
-		packages = build.FindMainPackages("./cmd")
-	}
+	gobuild.Args = append(gobuild.Args, "-x", "runtime/cgo")
+	build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: gobuild.Args, Env: gobuild.Env})
 
-	// Do the build!
-	for _, pkg := range packages {
-		args := make([]string, len(gobuild.Args))
-		copy(args, gobuild.Args)
-		args = append(args, "-o", executablePath(path.Base(pkg)))
-		args = append(args, pkg)
-		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
-	}
+	// // Now we choose what we're even building.
+	// // Default: collect all 'main' packages in cmd/ and build those.
+	// packages := flag.Args()
+	// if len(packages) == 0 {
+	// 	packages = build.FindMainPackages("./cmd")
+	// }
+	//
+	// // Do the build!
+	// for _, pkg := range packages {
+	// 	args := make([]string, len(gobuild.Args))
+	// 	copy(args, gobuild.Args)
+	// 	args = append(args, "-o", executablePath(path.Base(pkg)))
+	// 	args = append(args, pkg)
+	// 	build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+	// }
 }
 
 // buildFlags returns the go tool flags for building.
