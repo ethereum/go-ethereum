@@ -20,8 +20,8 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,25 +41,79 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"time"
 )
 
 const (
-	numOfNodes = 4
+	numOfNodes              = 4
+	orchestratorIpcEndpoint = "./orchestrator.ipc"
 )
 
 var (
 	consensusInfosList = [256]*params.MinimalEpochConsensusInfo{}
 )
+
+type OrchestratorApi struct {
+	consensusInfo []*ethash.MinimalEpochConsensusInfoPayload
+}
+
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		select {
+		case err := <-rpcSub.Err():
+			if nil != err {
+				panic(err)
+			}
+		//	Send consensus one by one in a queue
+		default:
+			for infoIndex, consensusInfo := range api.consensusInfo {
+				consensusPayload := &ethash.MinimalEpochConsensusInfoPayload{
+					Epoch:            consensusInfo.Epoch,
+					ValidatorList:    [32]string{},
+					EpochTimeStart:   consensusInfo.EpochTimeStart,
+					SlotTimeDuration: consensusInfo.SlotTimeDuration,
+				}
+
+				for index, validator := range consensusInfo.ValidatorList {
+					consensusPayload.ValidatorList[index] = validator
+				}
+
+				err := notifier.Notify(rpcSub.ID, consensusPayload)
+
+				if nil != err {
+					// For now only panic
+					panic(err)
+				}
+
+				// Keep routine warm, for tests purposes only
+				if infoIndex == len(api.consensusInfo)-1 {
+					time.Sleep(time.Millisecond * 150)
+				}
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
 
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
@@ -96,7 +150,7 @@ func main() {
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets, sealers)
 
-	notifyUrl, err := makeSealerServer(genesis, sealers, validatorPrivateList)
+	notifyUrl, err := makeOrchestrator(genesis, sealers, validatorPrivateList)
 	notifyUrls := make([]string, 0)
 	notifyUrls = append(notifyUrls, notifyUrl)
 
@@ -196,7 +250,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 
 		consensusInfo = &params.MinimalEpochConsensusInfo{
 			Epoch:            uint64(index),
-			ValidatorsList:   sealers,
+			ValidatorList:    sealers,
 			EpochTimeStart:   currentEpochStart,
 			SlotTimeDuration: 6,
 		}
@@ -267,6 +321,7 @@ func makeMiner(
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second * 3,
+			Notify:   notify,
 		},
 	}
 
@@ -280,34 +335,81 @@ func makeMiner(
 	return stack, ethBackend, err
 }
 
-func makeSealerServer(
+func makeOrchestrator(
 	genesis *core.Genesis,
 	validators [32]common2.PublicKey,
 	privateKeys [32]common2.SecretKey,
 ) (url string, err error) {
-	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		blob, err := ioutil.ReadAll(req.Body)
-		if err != nil {
-			panic(fmt.Sprintf("failed to read miner notification: %v", err))
+	datadir, _ := ioutil.TempDir("", "")
+
+	config := &node.Config{
+		Name:    "orchestrator",
+		Version: params.Version,
+		DataDir: datadir,
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		},
+		IPCPath:           orchestratorIpcEndpoint,
+		UseLightweightKDF: true,
+	}
+
+	stack, err := node.New(config)
+
+	if err != nil {
+		return
+	}
+
+	ethConfig := &ethconfig.Config{
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		Ethash:          ethash.Config{PowMode: ethash.ModeFullFake, Log: log.Root()},
+	}
+
+	_, err = eth.New(stack, ethConfig)
+
+	if err != nil {
+		return
+	}
+
+	rpcApis := make([]rpc.API, 0)
+
+	consensusPayload := make([]*ethash.MinimalEpochConsensusInfoPayload, len(consensusInfosList))
+
+	for infoIndex, consensusInfo := range consensusInfosList {
+		consensusPayload[infoIndex] = &ethash.MinimalEpochConsensusInfoPayload{
+			Epoch:            consensusInfo.Epoch,
+			ValidatorList:    [32]string{},
+			EpochTimeStart:   consensusInfo.EpochTimeStart,
+			SlotTimeDuration: consensusInfo.SlotTimeDuration,
 		}
 
-		var work [4]string
-
-		if err := json.Unmarshal(blob, &work); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal miner notification: %v", err))
+		for index, validator := range consensusInfo.ValidatorList {
+			consensusPayload[infoIndex].ValidatorList[index] = hexutil.Encode(validator.Marshal())
 		}
+	}
 
-		rlpHexHeader := work[2]
-		rlpHeader, err := hexutil.Decode(rlpHexHeader)
+	orchestratorApi := &OrchestratorApi{consensusInfo: consensusPayload[:]}
+	api := rpc.API{
+		Namespace: "orc",
+		Version:   "1.0",
+		Service:   orchestratorApi,
+		Public:    true,
+	}
 
-		if nil != err {
-			panic(fmt.Sprintf("failed to encode hex header %v", rlpHexHeader))
-		}
+	rpcApis = append(rpcApis, api)
+	stack.RegisterAPIs(rpcApis)
+	err = stack.Start()
 
-		log.Info("hex header sent", "rlpHeader", rlpHeader)
-	}))
+	if nil != err {
+		return
+	}
 
-	url = vanguardServer.URL
+	url = stack.IPCEndpoint()
 
 	return
 }
@@ -409,35 +511,6 @@ func makeRemoteSealer(
 		}
 	}
 
-	insertFunc := func(epoch int) {
-		minimalConsensusInfo := &params.MinimalEpochConsensusInfo{
-			Epoch:            uint64(epoch),
-			ValidatorsList:   consensusInfosList[epoch+1].ValidatorsList,
-			EpochTimeStart:   consensusInfosList[epoch+1].EpochTimeStart,
-			SlotTimeDuration: consensusInfosList[epoch+1].SlotTimeDuration,
-		}
-
-		var response bool
-
-		validatorsListPayload := [32]string{}
-
-		for index, validator := range validators {
-			validatorsListPayload[index] = hexutil.Encode(validator.Marshal())
-		}
-
-		err = rpcClient.Call(
-			&response,
-			"eth_insertMinimalConsensusInfo",
-			uint64(epoch+1),
-			validatorsListPayload,
-			minimalConsensusInfo.EpochTimeStart,
-		)
-
-		if nil != err {
-			panic(fmt.Sprintf("could not submit work, %v", err.Error()))
-		}
-	}
-
 	timeout := time.Duration(6 * time.Second)
 
 	go func() {
@@ -447,20 +520,11 @@ func makeRemoteSealer(
 		epoch := 0
 
 		time.Sleep(time.Second)
-		insertFunc(-1)
 
 		for {
 			<-ticker.C
 			var workInfo [4]string
 			err = rpcClient.Call(&workInfo, "eth_getWork")
-
-			// Fill cache with new epoch (n+1). We already know one epoch in advance
-			// so we should mimic vanguard behaviour
-			// They were created on makeGenesis function
-			// This will panic when out consensusInfos
-			if 0 == turn%32 {
-				insertFunc(epoch)
-			}
 
 			// Increase the epoch
 			if 0 != turn && 0 == turn%32 {

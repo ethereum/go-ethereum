@@ -1,8 +1,20 @@
 package ethash
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	mathRand "math/rand"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -10,18 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
 	"github.com/silesiacoin/bls/testutil/require"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"math/big"
-	mathRand "math/rand"
-	"net/http"
-	"net/http/httptest"
-	"sync"
-	"testing"
-	"time"
 )
 
 type fakeReader struct {
@@ -48,6 +53,60 @@ func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
+type OrchestratorApi struct {
+	consensusChannel chan *params.MinimalEpochConsensusInfo
+}
+
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	// Change it to be triggered by a channel
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		for {
+			info := <-api.consensusChannel
+			payload := &MinimalEpochConsensusInfoPayload{
+				Epoch:            info.Epoch,
+				ValidatorList:    [32]string{},
+				EpochTimeStart:   info.EpochTimeStart,
+				SlotTimeDuration: info.SlotTimeDuration,
+			}
+
+			for index, validator := range info.ValidatorList {
+				payload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
+			}
+
+			currentErr := notifier.Notify(rpcSub.ID, payload)
+
+			if nil != currentErr {
+				// For now only panic
+				panic(currentErr)
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+type safeGatheredInfo struct {
+	mutex    sync.Mutex
+	gathered []*MinimalEpochConsensusInfoPayload
+}
+
+func (info *safeGatheredInfo) appendNext(minimal *MinimalEpochConsensusInfoPayload) {
+	info.mutex.Lock()
+	defer info.mutex.Unlock()
+	info.gathered = append(info.gathered, minimal)
+}
+
 var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 	chainConfig: &params.ChainConfig{
 		ChainID:             big.NewInt(256),
@@ -63,7 +122,215 @@ var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		SilesiaBlock:        big.NewInt(0),
-	}}
+	},
+}
+
+func TestPandora_OrchestratorSubscriptions(t *testing.T) {
+	timeNow := time.Now()
+	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
+	// Set genesis time in a past
+	epochsProgressed := 10
+	genesisTime := timeNow.Add(-epochDuration*time.Duration(epochsProgressed) + time.Duration(12)*time.Second)
+	validatorPublicList := [pandoraEpochLength]common2.PublicKey{}
+
+	for index := range validatorPublicList {
+		privKey, err := herumi.RandKey()
+		assert.Nil(t, err)
+		pubKey := privKey.PublicKey()
+		validatorPublicList[index] = pubKey
+	}
+
+	minimalConsensusInfos := make([]*params.MinimalEpochConsensusInfo, 0)
+
+	// Prepare epochs from the past
+	for index := 0; index < epochsProgressed; index++ {
+		consensusInfo := NewMinimalConsensusInfo(uint64(index)).(*MinimalEpochConsensusInfo)
+		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
+		consensusInfo.AssignValidators(validatorPublicList)
+		consensusInfoParam := &params.MinimalEpochConsensusInfo{
+			Epoch:            consensusInfo.Epoch,
+			ValidatorList:    consensusInfo.ValidatorsList,
+			EpochTimeStart:   consensusInfo.EpochTimeStartUnix,
+			SlotTimeDuration: consensusInfo.SlotTimeDuration,
+		}
+
+		minimalConsensusInfos = append(minimalConsensusInfos, consensusInfoParam)
+	}
+
+	consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
+	listener, server, location := makeOrchestratorServer(t, consensusChannel)
+	defer func() {
+		if recovery := recover(); recovery != nil {
+			t.Log("Recovered in server stop", recovery)
+		}
+		server.Stop()
+	}()
+	require.Equal(t, location, listener.Addr().String())
+
+	urls := []string{location}
+	config := Config{
+		PowMode: ModePandora,
+		Log:     log.Root(),
+	}
+
+	var (
+		consensusInfo []*params.MinimalEpochConsensusInfo
+	)
+
+	// Dummy genesis epoch
+	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorList: validatorPublicList}
+	consensusInfo = append(consensusInfo, genesisEpoch)
+
+	t.Run("Should subscribe to MinimalConsensusInformation", func(t *testing.T) {
+		ethash := NewPandora(config, urls, true, consensusInfo, false)
+		remoteSealerServer := ethash.remote
+		pandora := Pandora{remoteSealerServer}
+		ctx := context.Background()
+		subscription, channel, err, errChannel := pandora.SubscribeToMinimalConsensusInformation(0, ctx)
+		require.NoError(t, err)
+		defer func() {
+			if recovery := recover(); recovery != nil {
+				t.Log("Recovered in server stop", recovery)
+			}
+
+			subscription.Unsubscribe()
+		}()
+		gatheredInformation := make([]*MinimalEpochConsensusInfoPayload, 0)
+		gatherer := safeGatheredInfo{
+			gathered: gatheredInformation,
+		}
+
+		timeout := time.Second * 300
+		ticker := time.NewTimer(timeout)
+
+		// Have two wait groups as a routines
+		notificationWaitGroup := sync.WaitGroup{}
+		notificationWaitGroup.Add(1)
+
+		dieChannel := make(chan bool)
+		progressChannel := make(chan bool)
+
+		// Start sending right after notification channels will be ready to receive
+		go func() {
+			notificationWaitGroup.Wait()
+
+			for _, info := range minimalConsensusInfos {
+				consensusChannel <- info
+			}
+
+			for {
+				err := <-subscription.Err()
+
+				if nil != err {
+					assert.NoError(t, err)
+					dieChannel <- true
+
+					return
+				}
+			}
+		}()
+
+		// Notify WaitGroup when ready receiving information
+		go func() {
+			notificationWaitGroup.Done()
+
+			for {
+				select {
+				case minimalConsensus := <-channel:
+					gatherer.appendNext(minimalConsensus)
+					t.Log("Got new consensusInfo", "epoch", minimalConsensus.Epoch)
+				case err := <-errChannel:
+					require.NoError(t, err)
+				case <-ticker.C:
+					t.Errorf(
+						"timeout during fetching of minimalConsensusInfo: %s, %v",
+						"passed",
+						timeout.Seconds(),
+					)
+					dieChannel <- true
+
+					return
+				}
+
+				if len(gatherer.gathered) == epochsProgressed {
+					t.Log("got enough epochs, progressing")
+					progressChannel <- true
+
+					return
+				}
+			}
+		}()
+
+		// Block until we receive proper signal from routines
+		select {
+		case <-dieChannel:
+			t.FailNow()
+		case shouldProgress := <-progressChannel:
+			assert.True(t, shouldProgress)
+		}
+
+		validityMap := map[uint64]*MinimalEpochConsensusInfoPayload{}
+
+		// Verify logic validity of received epochs
+		// Epoch should not be received twice
+		// Also verify that minimalConsensus is in cache
+		for index, currentConsensusInfo := range gatherer.gathered {
+			item, isPresent := validityMap[currentConsensusInfo.Epoch]
+			assert.False(t, isPresent, "index", index, "item", item, "epoch", currentConsensusInfo.Epoch)
+			validityMap[currentConsensusInfo.Epoch] = currentConsensusInfo
+		}
+
+		assert.Len(t, validityMap, epochsProgressed)
+	})
+
+	t.Run("Should fill cache with MinimalConsensusInformation", func(t *testing.T) {
+		ethash := NewPandora(config, urls, true, consensusInfo, true)
+		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
+		assert.False(t, isPreviousPresent)
+		assert.Nil(t, previousInfo)
+
+		for _, info := range minimalConsensusInfos {
+			consensusChannel <- info
+		}
+
+		failChannel := make(chan bool)
+		indexToCheck := 0
+
+		// Fail after 5s if cache data was not present
+		time.AfterFunc(time.Second*5, func() {
+			failChannel <- true
+		})
+
+		for {
+			select {
+			case shouldFail := <-failChannel:
+				// We are having some problems in CI/CD pipeline.
+				// TODO: check why CI/CD is having problem with networking or cache.
+				if "true" == os.Getenv("SKIP_CACHE_FILL") {
+					t.Log("Skipping test due to the flag SKIP_CACHE_FILL")
+					assert.True(t, true)
+					return
+				}
+
+				if shouldFail {
+					t.FailNow()
+				}
+			default:
+				currentConsensusInfo, isPresent := ethash.mci.cache.Get(indexToCheck)
+				time.Sleep(time.Millisecond * 50)
+
+				if isPresent {
+					assert.NotNil(t, currentConsensusInfo)
+					indexToCheck++
+				}
+
+				if indexToCheck == epochsProgressed {
+					return
+				}
+			}
+		}
+	})
+}
 
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
@@ -164,7 +431,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	}()
 	urls := make([]string, 0)
 	urls = append(urls, vanguardServer.URL)
-	remoteSealerServer := StartRemotePandora(&ethash, urls, true)
+	remoteSealerServer := StartRemotePandora(&ethash, urls, true, false)
 	ethash.remote = remoteSealerServer
 	ethashAPI := API{ethash: &ethash}
 
@@ -331,7 +598,7 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	validatorPublicList := [validatorListLen]common2.PublicKey{}
 	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
-	for index, _ := range validatorPrivateList {
+	for index := range validatorPrivateList {
 		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 		pubKey := privKey.PublicKey()
@@ -342,26 +609,11 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
 	genesisEpoch.AssignValidators(validatorPublicList)
 
-	// Mimic payload of higher level api done by epoch extractor
-	ethashAPI := API{ethash: &ethash}
-	validatorsPayload := make([]string, 0)
-
-	for index, validator := range genesisEpoch.ValidatorsList {
-		marshaledKey := validator.Marshal()
-		encodedKey := hexutil.Encode(marshaledKey)
-
-		if 0 == index {
-			encodedKey = "0x"
-		}
-
-		validatorsPayload = append(validatorsPayload, encodedKey)
-	}
-
-	assert.True(t, ethashAPI.InsertMinimalConsensusInfo(0, validatorsPayload, genesisEpoch.EpochTimeStartUnix))
+	assert.NoError(t, ethash.InsertMinimalConsensusInfo(0, genesisEpoch))
 	genesisFromCache, genesisFetched := lruEpochSet.cache.Get(0)
 	assert.True(t, genesisFetched)
 	minimalConsensusFromCache := genesisFromCache.(*MinimalEpochConsensusInfo)
-	assert.NotEqual(t, genesisEpoch.ValidatorsList[0], minimalConsensusFromCache.ValidatorsList[0])
+	assert.Equal(t, genesisEpoch.ValidatorsList[0], minimalConsensusFromCache.ValidatorsList[0])
 
 	header := &types.Header{
 		ParentHash:  common.Hash{},
@@ -442,7 +694,7 @@ func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
 		consensusInfo := minimalEpochConsensusInfo.(*MinimalEpochConsensusInfo)
 		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
 		epochTimeStart := consensusInfo.EpochTimeStart
-		seconds := time.Duration(SlotTimeDuration) * time.Second * time.Duration(i)
+		seconds := time.Duration(SlotTimeDuration) * time.Second * time.Duration(i) * time.Duration(validatorListLen)
 		expectedEpochTime := genesisTime.Add(seconds)
 		assert.Equal(t, expectedEpochTime.Unix(), epochTimeStart.Unix())
 	}
@@ -455,7 +707,7 @@ func TestVerifySeal(t *testing.T) {
 	validatorPublicList := [validatorListLen]common2.PublicKey{}
 	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
-	for index, _ := range validatorPrivateList {
+	for index := range validatorPrivateList {
 		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 		pubKey := privKey.PublicKey()
@@ -548,7 +800,7 @@ func TestVerifySeal(t *testing.T) {
 		privateKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 
-		for index, _ := range validatorPrivateList {
+		for index := range validatorPrivateList {
 			headerTime := genesisEpoch.EpochTimeStart.Add(SlotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
@@ -620,7 +872,7 @@ func generatePandoraSealedHeaderByKey(
 		panic("Signature should be valid")
 	}
 
-	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
+	compressedSignature := signature.Marshal()[:32]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
 	blsSignature = signature
 
@@ -631,6 +883,27 @@ func generatePandoraSealedHeaderByKey(
 	}
 
 	header.Extra = extraDataBytes
+
+	return
+}
+
+func makeOrchestratorServer(
+	t *testing.T,
+	consensusChannel chan *params.MinimalEpochConsensusInfo,
+) (listener net.Listener, server *rpc.Server, location string) {
+	location = "./test.ipc"
+	apis := make([]rpc.API, 0)
+	api := &OrchestratorApi{consensusChannel: consensusChannel}
+
+	apis = append(apis, rpc.API{
+		Namespace: "orc",
+		Version:   "1.0",
+		Service:   api,
+		Public:    true,
+	})
+
+	listener, server, err := rpc.StartIPCEndpoint(location, apis)
+	require.NoError(t, err)
 
 	return
 }

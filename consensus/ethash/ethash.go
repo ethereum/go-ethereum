@@ -20,7 +20,6 @@ package ethash
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"math/big"
 	"math/rand"
@@ -466,34 +465,6 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 		hashrate: metrics.NewMeterForced(),
 	}
 	ethash.remote = startRemoteSealer(ethash, notify, noverify)
-	return ethash
-}
-
-func NewPandora(
-	config Config,
-	notify []string,
-	noverify bool,
-	minimalConsensusInfo interface{},
-) *Ethash {
-	config.PowMode = ModePandora
-	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", 2^7, NewMinimalConsensusInfo)
-
-	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
-	genesisConsensusTimeStart := consensusInfo[0]
-
-	// Fill cache with minimal consensus info
-	for index, consensusInfo := range consensusInfo {
-		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
-		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
-		pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
-			int64(genesisConsensusTimeStart.EpochTimeStart),
-			0,
-		))
-		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
-		ethash.mci.cache.Add(index, pandoraConsensusInfo)
-	}
-
 	return ethash
 }
 

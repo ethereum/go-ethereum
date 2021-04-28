@@ -19,11 +19,12 @@ package params
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	common2 "github.com/silesiacoin/bls/common"
-	"math/big"
-	"time"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -361,7 +362,7 @@ type MinimalEpochConsensusInfo struct {
 	// Epoch number
 	Epoch uint64 `json:"epoch"`
 	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
-	ValidatorsList [32]common2.PublicKey `json:"validatorList"`
+	ValidatorList [32]common2.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
 	EpochTimeStart uint64 `json:"epochTimeStart"`
 	// Slot time duration

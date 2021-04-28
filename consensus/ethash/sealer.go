@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -257,7 +258,7 @@ type sealWork struct {
 
 func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
 	if ModePandora == ethash.config.PowMode {
-		return StartRemotePandora(ethash, urls, noverify)
+		return nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -385,6 +386,14 @@ func (s *remoteSealer) notifyWork() {
 
 func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []byte, work [4]string) {
 	defer s.reqWG.Done()
+
+	// TODO: enable this or move to another flag to provide orchestrator url
+	// Vanguard now will pull the blocks, but it will be great to notify about new work
+	notHttp := !strings.Contains(url, "http://") || strings.Contains(url, "https://")
+
+	if s.ethash.IsPandoraModeEnabled() && notHttp {
+		return
+	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {

@@ -1,0 +1,22 @@
+name: Deploy
+
+on:
+  create:
+    tags:
+      - p-v*
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy
+        uses: deliverybot/helm@master
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          chart: app
+          namespace: test
+          release: eth20
+          dry-run: true
+        env:
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG }}

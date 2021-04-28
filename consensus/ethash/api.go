@@ -18,12 +18,10 @@ package ethash
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	common2 "github.com/silesiacoin/bls/common"
-	"github.com/silesiacoin/bls/herumi"
-	"time"
 )
 
 var errEthashStopped = errors.New("ethash stopped")
@@ -116,88 +114,6 @@ func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSigna
 	}
 	err := <-errc
 	return err == nil
-}
-
-// InsertMinimalConsensusInfo can be used for remote miners to fill MinimalConsensusInfo.
-// It accepts the MinimalEpochConsensusInfo that should be calculated on Consensus side
-// For now lets pass it as rlp-encoded hex string
-// WARN: THIS SOLUTION IS TEMPORARY. THIS MUST BE SECURED. ONLY TRUSTED CONSENSUS NODE SHOULD BE ABLE TO PERFORM THIS.
-func (api *API) InsertMinimalConsensusInfo(
-	epoch uint64,
-	validatorsList []string,
-	epochTimeStartUnix uint64,
-) bool {
-	// Works only in pandora mode
-	ethash := api.ethash
-	consensusInfo := NewMinimalConsensusInfo(epoch).(*MinimalEpochConsensusInfo)
-	consensusInfo.EpochTimeStartUnix = epochTimeStartUnix
-	consensusInfo.EpochTimeStart = time.Unix(int64(epochTimeStartUnix), 0)
-	consensusInfo.ValidatorsList = [validatorListLen]common2.PublicKey{}
-
-	// Invalid payload
-	if len(validatorsList) != validatorListLen {
-		ethash.config.Log.Error(
-			"Invalid validators list for epoch",
-			"epoch",
-			epoch,
-			"validatorLen",
-			len(validatorsList),
-		)
-		return false
-	}
-
-	for index, validator := range validatorsList {
-		// For genesis slot 0 there is no validator, so we should just simply insert something
-		genesisCheck := index == 0 && epoch == 0
-
-		if genesisCheck {
-			secretKey, _ := herumi.RandKey()
-			consensusInfo.ValidatorsList[index] = secretKey.PublicKey()
-
-			continue
-		}
-
-		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
-
-		if nil != err {
-			ethash.config.Log.Error(
-				"Could not cast public key from bytes",
-				"epoch",
-				epoch,
-				"index",
-				index,
-				"validator",
-				validator,
-				"err",
-				err.Error(),
-			)
-			return false
-		}
-
-		consensusInfo.ValidatorsList[index] = pubKey
-	}
-
-	ethash.config.Log.Info(
-		"Inserting minimal consensus info for epoch",
-		"epoch",
-		epoch,
-		"timeStartUnix",
-		consensusInfo.EpochTimeStartUnix,
-	)
-
-	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
-
-	if nil != err {
-		ethash.config.Log.Error(
-			"Could not insert minimal consensus info",
-			"epoch",
-			epoch,
-			"err",
-			err.Error(),
-		)
-	}
-
-	return nil == err
 }
 
 // SubmitHashrate can be used for remote miners to submit their hash rate.

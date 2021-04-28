@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
+	"time"
+
+	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
-	"time"
 )
 
 const (
@@ -34,6 +39,15 @@ type PandoraExtraData struct {
 	Turn  uint64
 }
 
+type MinimalEpochConsensusInfoPayload struct {
+	// Epoch number
+	Epoch uint64 `json:"epoch"`
+	// Validators public key list for specific epoch
+	ValidatorList    [32]string    `json:"validatorList"`
+	EpochTimeStart   uint64        `json:"epochTimeStart"`
+	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+}
+
 type PandoraExtraDataSealed struct {
 	PandoraExtraData
 	BlsSignatureBytes *BlsSignatureBytes
@@ -54,10 +68,46 @@ type MinimalEpochConsensusInfo struct {
 	SlotTimeDuration time.Duration `json:"SlotTimeDuration"`
 }
 
-// This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
+func NewPandora(
+	config Config,
+	notify []string,
+	noverify bool,
+	minimalConsensusInfo interface{},
+	orcSubscribe bool,
+) *Ethash {
+	config.PowMode = ModePandora
+	ethash := New(config, notify, noverify)
+	ethash.mci = newlru("epochSet", int(math.Pow(2, 7)), NewMinimalConsensusInfo)
+
+	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
+	genesisConsensusTimeStart := consensusInfo[0]
+
+	// Fill cache with minimal consensus info
+	for index, consensusInfo := range consensusInfo {
+		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
+		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
+		pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
+			int64(genesisConsensusTimeStart.EpochTimeStart),
+			0,
+		))
+		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorList)
+		ethash.mci.cache.Add(index, pandoraConsensusInfo)
+	}
+
+	ethash.remote = StartRemotePandora(ethash, notify, noverify, orcSubscribe)
+
+	return ethash
+}
+
+// This is done only to have vanguard spec done in minimal codebase to exchange information with pandora.
 // In this approach you could have multiple execution engines connected via urls []string
 // In this approach you are also compatible with any current toolsets for mining because you use already defined api
-func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (sealer *remoteSealer) {
+func StartRemotePandora(
+	executionEngine *Ethash,
+	urls []string,
+	noverify bool,
+	orcSubscribe bool,
+) (sealer *remoteSealer) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sealer = &remoteSealer{
 		ethash:       executionEngine,
@@ -78,8 +128,142 @@ func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (
 
 	pandora := Pandora{sealer: sealer}
 	go pandora.Loop()
+	go pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx, 0)
 
 	return
+}
+
+func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx context.Context, retry int) {
+	sealer := pandora.sealer
+	ethashEngine := sealer.ethash
+	config := ethashEngine.config
+	logger := config.Log
+
+	// Early return, do not subscribe to orchestrator client
+	if !orcSubscribe {
+		return
+	}
+
+	retryTimeout := time.Second * 5
+	maxRetries := 2 ^ 32
+	retry++
+
+	if retry > maxRetries {
+		logger.Crit("Orchestrator is offline for too long. Please check your connection")
+
+		return
+	}
+
+	lastKnownEpoch := uint64(0)
+	subscription, channel, err, errChan := pandora.SubscribeToMinimalConsensusInformation(lastKnownEpoch, ctx)
+
+	// This will create loop
+	if nil != err {
+		logger.Error("could not start remote pandora",
+			"err", err.Error(),
+			"addr", pandora.sealer.notifyURLs[0],
+		)
+		time.Sleep(retryTimeout)
+		pandora.HandleOrchestratorSubscriptions(orcSubscribe, ctx, retry)
+
+		return
+	}
+
+	defer func() {
+		logger.Trace("Pandora is closing Orchestrator subscriptions")
+		subscription.Unsubscribe()
+	}()
+
+	ticker := time.NewTimer(time.Second * 5)
+
+	insertFunc := func(
+		minimalConsensus *MinimalEpochConsensusInfoPayload,
+	) (currentErr error) {
+		logger.Info(
+			"Received minimalConsensusInfo",
+			"epoch", minimalConsensus.Epoch,
+			"epochTimeStart", minimalConsensus.EpochTimeStart,
+			"validatorListLen", len(minimalConsensus.ValidatorList),
+		)
+		coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
+		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
+		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
+		coreMinimalConsensus.ValidatorsList = [32]common2.PublicKey{}
+		lastKnownEpoch = minimalConsensus.Epoch
+
+		for index, validator := range minimalConsensus.ValidatorList {
+			// Create dummy key for genesis epoch slot 0
+			// This fallback is done because orchestrators sending only 0x instead of full public key
+			// for slot 0
+			if 0 == index && 0 == coreMinimalConsensus.Epoch {
+				secretKey, _ := herumi.RandKey()
+				pubKey := secretKey.PublicKey()
+				validator = hexutil.Encode(pubKey.Marshal())
+			}
+
+			publicKeyBytes, currentErr := hexutil.Decode(validator)
+
+			if nil != currentErr {
+				errChan <- currentErr
+
+				continue
+			}
+
+			coreMinimalConsensus.ValidatorsList[index], currentErr = herumi.PublicKeyFromBytes(publicKeyBytes)
+
+			if nil != currentErr {
+				errChan <- currentErr
+
+				continue
+			}
+		}
+
+		currentErr = ethashEngine.InsertMinimalConsensusInfo(minimalConsensus.Epoch, coreMinimalConsensus)
+
+		return
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			epochFromCache, exists := ethashEngine.mci.cache.Get(int(lastKnownEpoch))
+			logger.Info(
+				"awaiting for orchestrator information",
+				"epoch", lastKnownEpoch,
+				"exists", exists,
+				"epochFromCache", epochFromCache,
+			)
+		case payload := <-channel:
+			currentErr := insertFunc(payload)
+
+			if nil != currentErr {
+				errChan <- currentErr
+				logger.Error(
+					"error during payload consumption",
+					"err",
+					currentErr.Error(),
+				)
+				return
+			}
+		case err = <-subscription.Err():
+			if nil != err {
+				errChan <- err
+				logger.Error(
+					"error during pandora subscription pipe",
+					"err",
+					err.Error(),
+				)
+
+				return
+			}
+		case err = <-errChan:
+			logger.Error(
+				"error during pandora subscription",
+				"err",
+				err.Error(),
+			)
+		}
+	}
 }
 
 func (pandora *Pandora) Loop() {
@@ -176,8 +360,6 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	// Trace the seal work fetched by remote sealer.
 	sealer.currentBlock = block
 	sealer.works[hash] = block
-
-	return
 }
 
 // submitWork verifies the submitted pow solution, returning
@@ -265,7 +447,6 @@ func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 
 func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [validatorListLen]common2.PublicKey) {
 	pandoraMode.ValidatorsList = validatorsList
-	return
 }
 
 // This function should be used to extract epoch start from genesis
@@ -273,13 +454,136 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	epochNumber := pandoraMode.Epoch
 	genesisTimeUnix := uint64(genesisTime.Unix())
 	slotDuration := pandoraMode.SlotTimeDuration * time.Second
-	timePassed := epochNumber*uint64(slotDuration.Seconds()) + genesisTimeUnix
+	timePassed := epochNumber*uint64(slotDuration.Seconds())*uint64(validatorListLen) + genesisTimeUnix
 	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
-	pandoraMode.EpochTimeStartUnix = genesisTimeUnix
+	pandoraMode.EpochTimeStartUnix = uint64(pandoraMode.EpochTimeStart.Unix())
 }
 
 func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
 	return ModePandora == ethash.config.PowMode
+}
+
+// In subscription design we should listen to any minimal consensus information that was passed
+// from vanguard to orchestrator. As a param we pass epoch number which will be used to determine from which point
+// we should start receiving subscriptions.
+// This process should be infinite.
+// For the first iteration we use first of notify urls to reach orchestrator
+func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64, ctx context.Context) (
+	subscription *rpc.ClientSubscription,
+	channel chan *MinimalEpochConsensusInfoPayload,
+	err error,
+	errChan chan error,
+) {
+	orchestratorEndpoints := pandora.sealer.notifyURLs
+	notifyURLsLen := len(pandora.sealer.notifyURLs)
+
+	if notifyURLsLen < 1 {
+		err = fmt.Errorf("there must be at least one in notifyURLs, got: %d", notifyURLsLen)
+
+		return
+	}
+
+	// We use only first
+	orchestratorEndpoint := orchestratorEndpoints[0]
+	client, err := rpc.Dial(orchestratorEndpoint)
+
+	if nil != err {
+		return
+	}
+
+	channel = make(chan *MinimalEpochConsensusInfoPayload)
+	subscription, err = client.Subscribe(
+		ctx,
+		"orc",
+		channel,
+		"minimalConsensusInfo",
+		epoch,
+	)
+
+	if nil != err {
+		return
+	}
+
+	return
+}
+
+func (pandora *Pandora) InsertMinimalConsensusInfo(
+	epoch uint64,
+	validatorsList []string,
+	epochTimeStartUnix uint64,
+) bool {
+	// Works only in pandora mode
+	sealer := pandora.sealer
+	ethash := sealer.ethash
+	consensusInfo := NewMinimalConsensusInfo(epoch).(*MinimalEpochConsensusInfo)
+	consensusInfo.EpochTimeStartUnix = epochTimeStartUnix
+	consensusInfo.EpochTimeStart = time.Unix(int64(epochTimeStartUnix), 0)
+	consensusInfo.ValidatorsList = [validatorListLen]common2.PublicKey{}
+
+	// Invalid payload
+	if len(validatorsList) != validatorListLen {
+		ethash.config.Log.Error(
+			"Invalid validators list for epoch",
+			"epoch",
+			epoch,
+			"validatorLen",
+			len(validatorsList),
+		)
+		return false
+	}
+
+	for index, validator := range validatorsList {
+		// For genesis slot 0 there is no validator, so we should just simply insert something
+		genesisCheck := index == 0 && epoch == 0
+
+		if genesisCheck {
+			secretKey, _ := herumi.RandKey()
+			consensusInfo.ValidatorsList[index] = secretKey.PublicKey()
+
+			continue
+		}
+
+		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
+
+		if nil != err {
+			ethash.config.Log.Error(
+				"Could not cast public key from bytes",
+				"epoch",
+				epoch,
+				"index",
+				index,
+				"validator",
+				validator,
+				"err",
+				err.Error(),
+			)
+			return false
+		}
+
+		consensusInfo.ValidatorsList[index] = pubKey
+	}
+
+	ethash.config.Log.Info(
+		"Inserting minimal consensus info for epoch",
+		"epoch",
+		epoch,
+		"timeStartUnix",
+		consensusInfo.EpochTimeStartUnix,
+	)
+
+	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
+
+	if nil != err {
+		ethash.config.Log.Error(
+			"Could not insert minimal consensus info",
+			"epoch",
+			epoch,
+			"err",
+			err.Error(),
+		)
+	}
+
+	return nil == err
 }
 
 func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
@@ -466,9 +770,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	return
 }
 
-// THIS IS DANGEROUS
-// If it will be exposed to anyone or used in malicious manner it will break whole ethereum engine
-// We need to find a better way to fill this data or be more secure
+// This should be used only by trusted orchestrator
 func (ethash *Ethash) InsertMinimalConsensusInfo(
 	epoch uint64,
 	consensusInfo *MinimalEpochConsensusInfo,
