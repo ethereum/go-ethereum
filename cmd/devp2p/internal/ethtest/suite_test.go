@@ -19,6 +19,7 @@ package ethtest
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -87,8 +88,15 @@ func setupGeth(stack *node.Node) error {
 	}
 
 	backend, err := eth.New(stack, &ethconfig.Config{
-		Genesis:   &chain.genesis,
-		NetworkId: chain.genesis.Config.ChainID.Uint64(), // 19763
+		Genesis:                 &chain.genesis,
+		NetworkId:               chain.genesis.Config.ChainID.Uint64(), // 19763
+		DatabaseCache:           10,
+		TrieCleanCache:          10,
+		TrieCleanCacheJournal:   "",
+		TrieCleanCacheRejournal: 60 * time.Minute,
+		TrieDirtyCache:          16,
+		TrieTimeout:             60 * time.Minute,
+		SnapshotCache:           10,
 	})
 	if err != nil {
 		return err
