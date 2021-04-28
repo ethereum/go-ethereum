@@ -30,17 +30,19 @@ type txJSON struct {
 	Type hexutil.Uint64 `json:"type"`
 
 	// Common transaction fields:
-	Nonce    *hexutil.Uint64 `json:"nonce"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	FeeCap   *hexutil.Big    `json:"feeCap"`
-	Tip      *hexutil.Big    `json:"tip"`
-	Gas      *hexutil.Uint64 `json:"gas"`
-	Value    *hexutil.Big    `json:"value"`
-	Data     *hexutil.Bytes  `json:"input"`
-	V        *hexutil.Big    `json:"v"`
-	R        *hexutil.Big    `json:"r"`
-	S        *hexutil.Big    `json:"s"`
-	To       *common.Address `json:"to"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	FeeCap               *hexutil.Big    `json:"feeCap"`
+	Tip                  *hexutil.Big    `json:"tip"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	Value                *hexutil.Big    `json:"value"`
+	Data                 *hexutil.Bytes  `json:"input"`
+	V                    *hexutil.Big    `json:"v"`
+	R                    *hexutil.Big    `json:"r"`
+	S                    *hexutil.Big    `json:"s"`
+	To                   *common.Address `json:"to"`
 
 	// Access list transaction fields:
 	ChainID    *hexutil.Big `json:"chainId,omitempty"`
@@ -224,14 +226,26 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
 		itx.Nonce = uint64(*dec.Nonce)
-		if dec.Tip == nil {
-			return errors.New("missing required field 'tip' in transaction")
+		switch {
+		case dec.Tip == nil && dec.MaxPriorityFeePerGas == nil:
+			return errors.New("at least one of 'tip' or 'maxPriorityFeePerGas' must be defined")
+		case dec.Tip != nil && dec.MaxPriorityFeePerGas != nil:
+			return errors.New("only one of 'tip' or 'maxPriorityFeePerGas' may be defined")
+		case dec.Tip != nil && dec.MaxPriorityFeePerGas == nil:
+			itx.Tip = (*big.Int)(dec.Tip)
+		case dec.Tip == nil && dec.MaxPriorityFeePerGas != nil:
+			itx.Tip = (*big.Int)(dec.MaxPriorityFeePerGas)
 		}
-		itx.Tip = (*big.Int)(dec.FeeCap)
-		if dec.FeeCap == nil {
-			return errors.New("missing required field 'feecap' in transaction")
+		switch {
+		case dec.FeeCap == nil && dec.MaxFeePerGas == nil:
+			return errors.New("at least one of 'feeCap' or 'maxFeePerGas' must be defined")
+		case dec.FeeCap != nil && dec.MaxFeePerGas != nil:
+			return errors.New("only one of 'feeCap' or 'maxFeePerGas' may be defined")
+		case dec.FeeCap != nil && dec.MaxFeePerGas == nil:
+			itx.FeeCap = (*big.Int)(dec.FeeCap)
+		case dec.FeeCap == nil && dec.MaxFeePerGas != nil:
+			itx.FeeCap = (*big.Int)(dec.MaxFeePerGas)
 		}
-		itx.FeeCap = (*big.Int)(dec.FeeCap)
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}
