@@ -250,9 +250,6 @@ func doInstall(cmdline []string) {
 		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
 	}
 
-	// Show commands.
-	gobuild.Args = append(gobuild.Args, "-x")
-
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
