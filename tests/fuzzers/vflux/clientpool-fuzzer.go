@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	debugMode = true
+	debugMode = false
 	doLog     = func(msg string, ctx ...interface{}) {
 		if !debugMode {
 			return
