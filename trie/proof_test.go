@@ -929,6 +929,33 @@ func benchmarkVerifyRangeProof(b *testing.B, size int) {
 	}
 }
 
+func BenchmarkVerifyRangeNoProof10(b *testing.B)   { benchmarkVerifyRangeNoProof(b, 100) }
+func BenchmarkVerifyRangeNoProof500(b *testing.B)  { benchmarkVerifyRangeNoProof(b, 500) }
+func BenchmarkVerifyRangeNoProof1000(b *testing.B) { benchmarkVerifyRangeNoProof(b, 1000) }
+
+func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
+	trie, vals := randomTrie(size)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	var keys [][]byte
+	var values [][]byte
+	for _, entry := range entries {
+		keys = append(keys, entry.k)
+		values = append(values, entry.v)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _, _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, values, nil)
+		if err != nil {
+			b.Fatalf("Expected no error, got %v", err)
+		}
+	}
+}
+
 func randomTrie(n int) (*Trie, map[string]*kv) {
 	trie := new(Trie)
 	vals := make(map[string]*kv)
