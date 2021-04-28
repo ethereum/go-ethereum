@@ -28,9 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/les/vflux"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	debugMode = false
+	doLog     = func(msg string, ctx ...interface{}) {
+		if !debugMode {
+			return
+		}
+		log.Info(msg, ctx...)
+	}
 )
 
 type fuzzer struct {
@@ -65,6 +76,7 @@ func (p *clientPeer) InactiveAllowance() time.Duration {
 }
 
 func (p *clientPeer) UpdateCapacity(newCap uint64, requested bool) {
+	origin, originTotal := p.capacity, p.fuzzer.activeCap
 	p.fuzzer.activeCap -= p.capacity
 	if p.capacity != 0 {
 		p.fuzzer.activeCount--
@@ -74,9 +86,11 @@ func (p *clientPeer) UpdateCapacity(newCap uint64, requested bool) {
 	if p.capacity != 0 {
 		p.fuzzer.activeCount++
 	}
+	doLog("Update capacity", "peer", p.node.ID(), "origin", origin, "cap", newCap, "origintotal", originTotal, "total", p.fuzzer.activeCap, "requested", requested)
 }
 
 func (p *clientPeer) Disconnect() {
+	origin, originTotal := p.capacity, p.fuzzer.activeCap
 	p.fuzzer.disconnectList = append(p.fuzzer.disconnectList, p)
 	p.fuzzer.activeCap -= p.capacity
 	if p.capacity != 0 {
@@ -84,6 +98,7 @@ func (p *clientPeer) Disconnect() {
 	}
 	p.capacity = 0
 	p.balance = nil
+	doLog("Disconnect", "peer", p.node.ID(), "origin", origin, "origintotal", originTotal, "total", p.fuzzer.activeCap)
 }
 
 func newFuzzer(input []byte) *fuzzer {
@@ -165,12 +180,16 @@ func (f *fuzzer) randomFactors() vfs.PriceFactors {
 	}
 }
 
-func (f *fuzzer) connectedBalanceOp(balance vfs.ConnectedBalance) {
+func (f *fuzzer) connectedBalanceOp(balance vfs.ConnectedBalance, id enode.ID) {
 	switch f.randomInt(3) {
 	case 0:
-		balance.RequestServed(uint64(f.randomTokenAmount(false)))
+		cost := uint64(f.randomTokenAmount(false))
+		balance.RequestServed(cost)
+		doLog("Serve request cost", "id", id, "amount", cost)
 	case 1:
-		balance.SetPriceFactors(f.randomFactors(), f.randomFactors())
+		posFactor, negFactor := f.randomFactors(), f.randomFactors()
+		balance.SetPriceFactors(posFactor, negFactor)
+		doLog("Set price factor", "pos", posFactor, "neg", negFactor)
 	case 2:
 		balance.GetBalance()
 		balance.GetRawBalance()
@@ -178,12 +197,16 @@ func (f *fuzzer) connectedBalanceOp(balance vfs.ConnectedBalance) {
 	}
 }
 
-func (f *fuzzer) atomicBalanceOp(balance vfs.AtomicBalanceOperator) {
+func (f *fuzzer) atomicBalanceOp(balance vfs.AtomicBalanceOperator, id enode.ID) {
 	switch f.randomInt(3) {
 	case 0:
-		balance.AddBalance(f.randomTokenAmount(true))
+		amount := f.randomTokenAmount(true)
+		balance.AddBalance(amount)
+		doLog("Add balance", "id", id, "amount", amount)
 	case 1:
-		balance.SetBalance(uint64(f.randomTokenAmount(false)), uint64(f.randomTokenAmount(false)))
+		pos, neg := uint64(f.randomTokenAmount(false)), uint64(f.randomTokenAmount(false))
+		balance.SetBalance(pos, neg)
+		doLog("Set balance", "id", id, "pos", pos, "neg", neg)
 	case 2:
 		balance.GetBalance()
 		balance.GetRawBalance()
@@ -212,33 +235,53 @@ func FuzzClientPool(input []byte) int {
 		case 0:
 			i := int(f.randomByte())
 			f.peers[i].balance = pool.Register(f.peers[i])
+			doLog("Register peer", "id", f.peers[i].node.ID())
 		case 1:
 			i := int(f.randomByte())
 			f.peers[i].Disconnect()
+			doLog("Disconnect peer", "id", f.peers[i].node.ID())
 		case 2:
 			f.maxCount = uint64(f.randomByte())
 			f.maxCap = uint64(f.randomByte())
 			f.maxCap *= f.maxCap
+
+			count, cap := pool.Limits()
 			pool.SetLimits(f.maxCount, f.maxCap)
+			doLog("Set limits", "maxcount", f.maxCount, "maxcap", f.maxCap, "origincount", count, "oricap", cap)
 		case 3:
+			bias := f.randomDelay()
 			pool.SetConnectedBias(f.randomDelay())
+			doLog("Set connection bias", "bias", bias)
 		case 4:
-			pool.SetDefaultFactors(f.randomFactors(), f.randomFactors())
+			pos, neg := f.randomFactors(), f.randomFactors()
+			pool.SetDefaultFactors(pos, neg)
+			doLog("Set default factors", "pos", pos, "neg", neg)
 		case 5:
-			pool.SetExpirationTCs(uint64(f.randomInt(50000)), uint64(f.randomInt(50000)))
+			pos, neg := uint64(f.randomInt(50000)), uint64(f.randomInt(50000))
+			pool.SetExpirationTCs(pos, neg)
+			doLog("Set expiration constants", "pos", pos, "neg", neg)
 		case 6:
-			if _, err := pool.SetCapacity(f.peers[f.randomByte()].node, uint64(f.randomByte()), f.randomDelay(), f.randomBool()); err == vfs.ErrCantFindMaximum {
+			var (
+				index     = f.randomByte()
+				reqCap    = uint64(f.randomByte())
+				bias      = f.randomDelay()
+				requested = f.randomBool()
+			)
+			if _, err := pool.SetCapacity(f.peers[index].node, reqCap, bias, requested); err == vfs.ErrCantFindMaximum {
 				panic(nil)
 			}
+			doLog("Set capacity", "id", f.peers[index].node.ID(), "reqcap", reqCap, "bias", bias, "requested", requested)
 		case 7:
-			if balance := f.peers[f.randomByte()].balance; balance != nil {
-				f.connectedBalanceOp(balance)
+			index := f.randomByte()
+			if balance := f.peers[index].balance; balance != nil {
+				f.connectedBalanceOp(balance, f.peers[index].node.ID())
 			}
 		case 8:
-			pool.BalanceOperation(f.peers[f.randomByte()].node.ID(), f.peers[f.randomByte()].freeID, func(balance vfs.AtomicBalanceOperator) {
+			index := f.randomByte()
+			pool.BalanceOperation(f.peers[index].node.ID(), f.peers[index].freeID, func(balance vfs.AtomicBalanceOperator) {
 				count := f.randomInt(4)
 				for i := 0; i < count; i++ {
-					f.atomicBalanceOp(balance)
+					f.atomicBalanceOp(balance, f.peers[index].node.ID())
 				}
 			})
 		case 9:
@@ -272,13 +315,16 @@ func FuzzClientPool(input []byte) int {
 
 		for _, peer := range f.disconnectList {
 			pool.Unregister(peer)
+			doLog("Unregister peer", "id", peer.node.ID())
 		}
 		f.disconnectList = nil
 		if d := f.randomDelay(); d > 0 {
 			clock.Run(d)
 		}
-		//fmt.Println(f.activeCount, f.maxCount, f.activeCap, f.maxCap)
-		if activeCount, activeCap := pool.Active(); activeCount != f.activeCount || activeCap != f.activeCap {
+		doLog("Clientpool stats in fuzzer", "count", f.activeCap, "maxcount", f.maxCount, "cap", f.activeCap, "maxcap", f.maxCap)
+		activeCount, activeCap := pool.Active()
+		doLog("Clientpool stats in pool", "count", activeCount, "cap", activeCap)
+		if activeCount != f.activeCount || activeCap != f.activeCap {
 			panic(nil)
 		}
 		if f.activeCount > f.maxCount || f.activeCap > f.maxCap {
