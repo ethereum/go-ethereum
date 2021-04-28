@@ -319,10 +319,10 @@ func (s *Suite) sendNextBlock66(t *utesting.T) {
 	}
 	// send announcement and wait for node to request the header
 	s.testAnnounce66(t, sendConn, receiveConn, blockAnnouncement)
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock66(s.chain.Head()); err != nil {
 		t.Fatal(err)
 	}
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }
