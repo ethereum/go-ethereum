@@ -315,15 +315,22 @@ func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
 	return tx.inner.gasPrice().Cmp(other)
 }
 
+// FeeCapCmp compares the fee cap of two transactions.
 func (tx *Transaction) FeeCapCmp(other *Transaction) int {
 	return tx.inner.feeCap().Cmp(other.inner.feeCap())
 }
+
+// FeeCapIntCmp compares the fee cap of the transaction against the given fee cap.
 func (tx *Transaction) FeeCapIntCmp(other *big.Int) int {
 	return tx.inner.feeCap().Cmp(other)
 }
+
+// TipCmp compares the tip of two transactions.
 func (tx *Transaction) TipCmp(other *Transaction) int {
 	return tx.inner.tip().Cmp(other.inner.tip())
 }
+
+// TipIntCmp compares the tip of the transaction against the given tip.
 func (tx *Transaction) TipIntCmp(other *big.Int) int {
 	return tx.inner.tip().Cmp(other)
 }
