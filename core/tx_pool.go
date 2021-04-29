@@ -443,7 +443,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 		pool.priced.Removed(len(drop))
 	}
 
-	log.Info("Transaction pool miner fee threshold updated", "fee", price)
+	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable

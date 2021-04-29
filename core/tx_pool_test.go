@@ -113,6 +113,16 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	return pool, key
 }
 
+func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateKey) {
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
+
+	key, _ := crypto.GenerateKey()
+	pool := NewTxPool(testTxPoolConfig, config, blockchain)
+
+	return pool, key
+}
+
 // validateTxPoolInternals checks various consistency invariants within the pool.
 func validateTxPoolInternals(pool *TxPool) error {
 	pool.mu.RLock()
@@ -360,16 +370,10 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
-
-	key, _ := crypto.GenerateKey()
-	pool := NewTxPool(testTxPoolConfig, params.AleutChainConfig, blockchain)
+	pool, key := setupTxPoolWithConfig(params.AleutChainConfig)
 	defer pool.Stop()
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
-	from, _ := types.Sender(types.LatestSignerForChainID(pool.chainconfig.ChainID), tx)
-	pool.currentState.AddBalance(from, big.NewInt(1))
 
 	if err := pool.AddRemote(tx); err != ErrTipAboveFeeCap {
 		t.Error("expected", ErrTipAboveFeeCap, "got", err)
