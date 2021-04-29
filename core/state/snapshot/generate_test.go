@@ -382,7 +382,10 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
 	)
-	tr, _ := trie.NewSecure(common.Hash{}, triedb)
+	tr, err := trie.NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	acc := &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
 	val, _ := rlp.EncodeToBytes(acc)
 	tr.Update([]byte("acc-1"), val) // 0xc7a30f39aff471c95d8a837497ad0e49b65be475cc0953540f80cfcdbdcd9074
@@ -426,13 +429,19 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
 	)
-	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	stTrie, err := trie.NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	stTrie.Update([]byte("key-1"), []byte("val-1")) // 0x1314700b81afc49f94db3623ef1df38f3ed18b73a1b7ea2f6c095118cf6118a0
 	stTrie.Update([]byte("key-2"), []byte("val-2")) // 0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371
 	stTrie.Update([]byte("key-3"), []byte("val-3")) // 0x51c71a47af0695957647fb68766d0becee77e953df17c29b3c2f25436f055c78
 	stTrie.Commit(nil)                              // Root: 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
 
-	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	accTrie, err := trie.NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 	val, _ := rlp.EncodeToBytes(acc)
 	accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
@@ -485,13 +494,19 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
 	)
-	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	stTrie, err := trie.NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	stTrie.Update([]byte("key-1"), []byte("val-1")) // 0x1314700b81afc49f94db3623ef1df38f3ed18b73a1b7ea2f6c095118cf6118a0
 	stTrie.Update([]byte("key-2"), []byte("val-2")) // 0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371
 	stTrie.Update([]byte("key-3"), []byte("val-3")) // 0x51c71a47af0695957647fb68766d0becee77e953df17c29b3c2f25436f055c78
 	stTrie.Commit(nil)                              // Root: 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
 
-	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	accTrie, err := trie.NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 	val, _ := rlp.EncodeToBytes(acc)
 	accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e

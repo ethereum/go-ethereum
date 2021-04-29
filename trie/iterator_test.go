@@ -101,7 +101,7 @@ func TestIteratorLargeData(t *testing.T) {
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie()
+	db, trie, _ := makeTestTrie(t)
 
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})

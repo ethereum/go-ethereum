@@ -27,16 +27,22 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
-func newEmptySecure() *SecureTrie {
-	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+func newEmptySecure(t *testing.T) *SecureTrie {
+	trie, err := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 	return trie
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
-func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
+func makeTestSecureTrie(t *testing.T) (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewSecure(common.Hash{}, triedb)
+	trie, err := NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -64,7 +70,7 @@ func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 }
 
 func TestSecureDelete(t *testing.T) {
-	trie := newEmptySecure()
+	trie := newEmptySecure(t)
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -90,7 +96,7 @@ func TestSecureDelete(t *testing.T) {
 }
 
 func TestSecureGetKey(t *testing.T) {
-	trie := newEmptySecure()
+	trie := newEmptySecure(t)
 	trie.Update([]byte("foo"), []byte("bar"))
 
 	key := []byte("foo")
@@ -107,7 +113,7 @@ func TestSecureGetKey(t *testing.T) {
 
 func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
-	_, trie, _ := makeTestSecureTrie()
+	_, trie, _ := makeTestSecureTrie(t)
 
 	threads := runtime.NumCPU()
 	tries := make([]*SecureTrie, threads)

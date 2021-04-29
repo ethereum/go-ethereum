@@ -26,10 +26,13 @@ import (
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
-func makeTestTrie() (*Database, *SecureTrie, map[string][]byte) {
+func makeTestTrie(t *testing.T) (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewSecure(common.Hash{}, triedb)
+	trie, err := NewSecure(common.Hash{}, triedb)
+	if err != nil {
+		t.Errorf("Failed to create new secure trie due to %s", err)
+	}
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -111,7 +114,7 @@ func TestIterativeSyncBatchedByPath(t *testing.T)    { testIterativeSync(t, 100,
 
 func testIterativeSync(t *testing.T, count int, bypath bool) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -172,7 +175,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool) {
 // partial results are returned, and the others sent only later.
 func TestIterativeDelayedSync(t *testing.T) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -218,7 +221,7 @@ func TestIterativeRandomSyncBatched(t *testing.T)    { testIterativeRandomSync(t
 
 func testIterativeRandomSync(t *testing.T, count int) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -266,7 +269,7 @@ func testIterativeRandomSync(t *testing.T, count int) {
 // partial results are returned (Even those randomly), others sent only later.
 func TestIterativeRandomDelayedSync(t *testing.T) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -319,7 +322,7 @@ func TestIterativeRandomDelayedSync(t *testing.T) {
 // have such references.
 func TestDuplicateAvoidanceSync(t *testing.T) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -366,7 +369,7 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 // the database.
 func TestIncompleteSync(t *testing.T) {
 	// Create a random trie to copy
-	srcDb, srcTrie, _ := makeTestTrie()
+	srcDb, srcTrie, _ := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := memorydb.New()
@@ -426,7 +429,7 @@ func TestIncompleteSync(t *testing.T) {
 // depth.
 func TestSyncOrdering(t *testing.T) {
 	// Create a random trie to copy
-	srcDb, srcTrie, srcData := makeTestTrie()
+	srcDb, srcTrie, srcData := makeTestTrie(t)
 
 	// Create a destination trie and sync with the scheduler, tracking the requests
 	diskdb := memorydb.New()
