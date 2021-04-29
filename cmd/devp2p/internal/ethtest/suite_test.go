@@ -52,7 +52,6 @@ func TestEthSuite(t *testing.T) {
 				t.Fatal()
 			}
 		})
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
