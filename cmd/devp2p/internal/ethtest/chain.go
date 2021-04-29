@@ -34,7 +34,6 @@ import (
 )
 
 type Chain struct {
-	genesis     core.Genesis
 	blocks      []*types.Block
 	chainConfig *params.ChainConfig
 }
@@ -129,7 +128,10 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock := gen.ToBlock(nil)
+	gblock, err := gen.ToBlock(nil)
+	if err != nil {
+		return nil, err
+	}
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {
@@ -147,10 +149,9 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 	}
 	var gen core.Genesis
 	if err := json.Unmarshal(chainConfig, &gen); err != nil {
-		return core.Genesis{}, err
+		return nil, err
 	}
-	return gen, nil
-}
+	gblock := gen.ToBlock(nil)
 
 func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {
 	// Load chain.rlp.
@@ -180,5 +181,7 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 		}
 		blocks = append(blocks, &b)
 	}
-	return blocks, nil
+
+	c := &Chain{blocks: blocks, chainConfig: gen.Config}
+	return c, nil
 }
