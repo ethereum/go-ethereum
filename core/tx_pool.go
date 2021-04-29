@@ -435,18 +435,12 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.gasPrice = price
 	// if the min miner fee increased, remove transactions below the new threshold
 	if price.Cmp(old) > 0 {
-		if !pool.eip1559 {
-			for _, tx := range pool.priced.Cap(price) {
-				pool.removeTx(tx.Hash(), false)
-			}
-		} else {
-			// pool.priced is sorted by FeeCap, so we have to iterate through pool.all instead
-			drop := pool.all.RemotesBelowTip(price)
-			for _, tx := range drop {
-				pool.removeTx(tx.Hash(), false)
-			}
-			pool.priced.Removed(len(drop))
+		// pool.priced is sorted by FeeCap, so we have to iterate through pool.all instead
+		drop := pool.all.RemotesBelowTip(price)
+		for _, tx := range drop {
+			pool.removeTx(tx.Hash(), false)
 		}
+		pool.priced.Removed(len(drop))
 	}
 
 	log.Info("Transaction pool miner fee threshold updated", "fee", price)
