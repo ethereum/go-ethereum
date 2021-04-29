@@ -18,7 +18,7 @@ environment:
 install:
   - git submodule update --init
   - go version
-  - %CC% --version
+  - "%CC% --version"
 
 build_script:
   - go run build\ci.go install -dlgo -arch %GETH_ARCH%
