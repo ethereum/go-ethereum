@@ -343,7 +343,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
 			for _, header := range *msg {
-				if header.Number.Uint64() == block.Header().Number.Uint64() {
+				if header.Number.Uint64() == block.NumberU64() {
 					return nil
 				}
 			}
