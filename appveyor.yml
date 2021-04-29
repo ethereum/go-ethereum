@@ -9,10 +9,10 @@ environment:
     GO111MODULE: on
   matrix:
     - GETH_ARCH: amd64
-      CC: C:\msys64\mingw64\bin\gcc.exe
+      CC: C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\bin\gcc.exe
       PATH: C:\Program Files (x86)\NSIS\;%PATH%
     - GETH_ARCH: 386
-      CC: C:\msys64\mingw64\bin\gcc.exe
+      CC: C:\msys64\mingw32\bin\gcc.exe
       PATH: C:\Program Files (x86)\NSIS\;%PATH%
 
 install:
