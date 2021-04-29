@@ -29,6 +29,7 @@ var activators = map[int]func(*JumpTable){
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
+	3541: enable3541,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -143,4 +144,8 @@ func enable2929(jt *JumpTable) {
 	// factor here
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
+}
+
+func enable3541(jt *JumpTable) {
+	// Do nothing.
 }
