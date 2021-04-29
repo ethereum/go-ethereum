@@ -7,24 +7,21 @@ version: "{branch}.{build}"
 environment:
   global:
     GO111MODULE: on
-    GOPATH: C:\gopath
-    CC: C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin\gcc.exe
   matrix:
-    # - GETH_ARCH: amd64
-    #   MSYS2_ARCH: x86_64
-    #   MSYS2_BITS: 64
-    #   MSYSTEM: MINGW64
-    #   PATH: C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+    - GETH_ARCH: amd64
+      CC: C:\msys64\mingw64\bin\gcc.exe
+      PATH: C:\Program Files (x86)\NSIS\;%PATH%
     - GETH_ARCH: 386
+      CC: C:\msys64\mingw64\bin\gcc.exe
       PATH: C:\Program Files (x86)\NSIS\;%PATH%
 
 install:
   - git submodule update --init
   - go version
-  - C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin\gcc.exe --version
+  - %CC% --version
 
 build_script:
-  - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc C:\mingw-w64\i686-8.1.0-posix-dwarf-rt_v6-rev0\mingw32\bin\gcc.exe
+  - go run build\ci.go install -dlgo -arch %GETH_ARCH%
 
 after_build:
   - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
