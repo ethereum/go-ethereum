@@ -489,31 +489,6 @@ func (l *txPricedList) Removed(count int) {
 	l.Reheap()
 }
 
-// Cap finds all the transactions below the given price threshold, drops them
-// from the priced list and returns them for further removal from the entire pool.
-//
-// Note: only remote transactions will be considered for eviction.
-// This function should only be used pre-EIP-1559 - it can only cap by fee cap, not tip
-func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
-	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
-	for len(*l.remotes) > 0 {
-		// Discard stale transactions if found during cleanup
-		cheapest := (*l.remotes)[0]
-		if l.all.GetRemote(cheapest.Hash()) == nil { // Removed or migrated
-			heap.Pop(l.remotes)
-			l.stales--
-			continue
-		}
-		// Stop the discards if we've reached the threshold
-		if cheapest.FeeCapIntCmp(threshold) >= 0 {
-			break
-		}
-		heap.Pop(l.remotes)
-		drop = append(drop, cheapest)
-	}
-	return drop
-}
-
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
 func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
