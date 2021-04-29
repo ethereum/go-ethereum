@@ -39,7 +39,7 @@ type ChainContext interface {
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
-		baseFee     = new(big.Int)
+		baseFee     *big.Int
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
