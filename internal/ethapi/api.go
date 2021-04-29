@@ -2210,7 +2210,9 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	bundleHash := sha3.NewLegacyKeccak256()
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
-	for _, tx := range txs {
+	for i, tx := range txs {
+		state.Prepare(tx.Hash(), common.Hash{}, i)
+
 		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, tx, &header.GasUsed, vmconfig)
 		if err != nil {
 			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())
