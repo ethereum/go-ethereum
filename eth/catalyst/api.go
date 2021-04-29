@@ -109,6 +109,11 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 	bc := api.eth.BlockChain()
 	parent := bc.GetBlockByHash(params.ParentHash)
+	if parent == nil {
+		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
+		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
+	}
+
 	pool := api.eth.TxPool()
 
 	if parent.Time() >= params.Timestamp {
