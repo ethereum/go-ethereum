@@ -50,6 +50,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -249,11 +250,6 @@ func doInstall(cmdline []string) {
 		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
 	}
 
-	// Configure MinGW.
-	if runtime.GOOS == "windows" {
-		gobuild.Env = append(gobuild.Env, "MSYS2_ARCH=i686", "MSYS2_BITS=32", "MSYSTEM=mingw32")
-	}
-
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
@@ -270,24 +266,21 @@ func doInstall(cmdline []string) {
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
 
-	gobuild.Args = append(gobuild.Args, "-x", "runtime/cgo")
-	build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: gobuild.Args, Env: gobuild.Env})
+	// Now we choose what we're even building.
+	// Default: collect all 'main' packages in cmd/ and build those.
+	packages := flag.Args()
+	if len(packages) == 0 {
+		packages = build.FindMainPackages("./cmd")
+	}
 
-	// // Now we choose what we're even building.
-	// // Default: collect all 'main' packages in cmd/ and build those.
-	// packages := flag.Args()
-	// if len(packages) == 0 {
-	// 	packages = build.FindMainPackages("./cmd")
-	// }
-	//
-	// // Do the build!
-	// for _, pkg := range packages {
-	// 	args := make([]string, len(gobuild.Args))
-	// 	copy(args, gobuild.Args)
-	// 	args = append(args, "-o", executablePath(path.Base(pkg)))
-	// 	args = append(args, pkg)
-	// 	build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
-	// }
+	// Do the build!
+	for _, pkg := range packages {
+		args := make([]string, len(gobuild.Args))
+		copy(args, gobuild.Args)
+		args = append(args, "-o", executablePath(path.Base(pkg)))
+		args = append(args, pkg)
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+	}
 }
 
 // buildFlags returns the go tool flags for building.
