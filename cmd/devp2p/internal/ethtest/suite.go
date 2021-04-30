@@ -400,18 +400,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		sendConn.Close()
 	}
 	// Test the last block as a valid block
-	sendConn := s.setupConnection(t)
-	receiveConn := s.setupConnection(t)
-	defer sendConn.Close()
-	defer receiveConn.Close()
-
-	s.testAnnounce(t, sendConn, receiveConn, blocks[3])
-	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
-		t.Fatal(err)
-	}
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
+	s.sendNextBlock(t)
 }
 
 func (s *Suite) TestOldAnnounce(t *utesting.T) {
