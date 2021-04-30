@@ -256,8 +256,10 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 			if reqID != req.RequestId {
 				return fmt.Errorf("request ID mismatch: wanted %d, got %d", req.RequestId, reqID)
 			}
-			if len(msg) > 0 {
-				return nil
+			for _, header := range msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
 		case *NewPooledTransactionHashes:
