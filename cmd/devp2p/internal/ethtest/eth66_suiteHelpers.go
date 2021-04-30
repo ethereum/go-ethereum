@@ -229,8 +229,11 @@ func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *New
 func (c *Conn) waitForBlock66(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := eth.GetBlockHeadersPacket66{
 			RequestId: 54,
@@ -253,8 +256,10 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 			if reqID != req.RequestId {
 				return fmt.Errorf("request ID mismatch: wanted %d, got %d", req.RequestId, reqID)
 			}
-			if len(msg) > 0 {
-				return nil
+			for _, header := range msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
 		case *NewPooledTransactionHashes:
@@ -319,10 +324,10 @@ func (s *Suite) sendNextBlock66(t *utesting.T) {
 	}
 	// send announcement and wait for node to request the header
 	s.testAnnounce66(t, sendConn, receiveConn, blockAnnouncement)
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock66(s.chain.Head()); err != nil {
+	if err := receiveConn.waitForBlock66(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }

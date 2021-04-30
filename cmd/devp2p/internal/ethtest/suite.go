@@ -260,22 +260,28 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // TestBroadcast tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
+	s.sendNextBlock(t)
+}
+
+func (s *Suite) sendNextBlock(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
 	defer sendConn.Close()
 	defer receiveConn.Close()
 
+	// create new block announcement
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[nextBlock],
 		TD:    s.fullChain.TD(nextBlock + 1),
 	}
+	// send announcement and wait for node to request the header
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
+	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }
 
 // TestMaliciousHandshake tries to send malicious data during the handshake.
@@ -394,18 +400,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		sendConn.Close()
 	}
 	// Test the last block as a valid block
-	sendConn := s.setupConnection(t)
-	receiveConn := s.setupConnection(t)
-	defer sendConn.Close()
-	defer receiveConn.Close()
-
-	s.testAnnounce(t, sendConn, receiveConn, blocks[3])
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
-	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
-		t.Fatal(err)
-	}
+	s.sendNextBlock(t)
 }
 
 func (s *Suite) TestOldAnnounce(t *utesting.T) {

@@ -334,8 +334,11 @@ loop:
 func (c *Conn) waitForBlock(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
@@ -343,8 +346,10 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 		}
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
-			if len(*msg) > 0 {
-				return nil
+			for _, header := range *msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
 		default:
