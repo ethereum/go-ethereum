@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -241,10 +242,20 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.snapDialCandidates, err = setupDiscovery(eth.config.SnapDiscoveryURLs)
-	if err != nil {
+	if snapDialCandidates, err := setupDiscovery(eth.config.SnapDiscoveryURLs); err != nil {
 		return nil, err
+	} else {
+		eth.snapDialCandidates = enode.Filter(snapDialCandidates, func(n *enode.Node) bool {
+			var snap struct {
+				Tail []rlp.RawValue `rlp:"tail"`
+			}
+			if record := n.Record(); record != nil {
+				return record.Load(enr.WithEntry("snap", &snap)) == nil
+			}
+			return false
+		})
 	}
+
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
 

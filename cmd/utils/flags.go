@@ -1692,7 +1692,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 		cfg.EthDiscoveryURLs = []string{url}
 	}
 	if cfg.SyncMode == downloader.SnapSync {
-		if url := params.KnownDNSNetwork(genesis, "snap"); url != "" {
+		if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 			cfg.SnapDiscoveryURLs = []string{url}
 		}
 	}
