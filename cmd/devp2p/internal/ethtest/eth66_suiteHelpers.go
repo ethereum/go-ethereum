@@ -230,6 +230,10 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
 	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := eth.GetBlockHeadersPacket66{
 			RequestId: 54,
