@@ -253,7 +253,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	cfg.Genesis = genesis
 	gblock, err := genesis.ToBlock(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	utils.SetDNSDiscoveryDefaults(&cfg, gblock.Hash())
 
