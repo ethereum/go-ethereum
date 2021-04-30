@@ -30,7 +30,7 @@ const (
 	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
 )
 
-// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929"
+// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 //
 // When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
 // If it is not, charge an additional COLD_SLOAD_COST gas, and add the pair to accessed_storage_keys.
