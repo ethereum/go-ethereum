@@ -879,7 +879,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, nil)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vmCfg)
 	if err != nil {
 		return nil, err
 	}
