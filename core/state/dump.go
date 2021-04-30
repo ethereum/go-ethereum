@@ -19,6 +19,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -112,11 +113,16 @@ func (d iterativeDump) OnRoot(root common.Hash) {
 }
 
 func (s *StateDB) DumpToCollector(c DumpCollector, excludeCode, excludeStorage, excludeMissingPreimages bool, start []byte, maxResults int) (nextKey []byte) {
-	missingPreimages := 0
 	c.OnRoot(s.trie.Hash())
 
-	var count int
-	it := trie.NewIterator(s.trie.NodeIterator(start))
+	var (
+		missingPreimages = 0
+		count            int
+		it               = trie.NewIterator(s.trie.NodeIterator(start))
+		logged           = time.Now()
+		startTime        = time.Now()
+	)
+
 	for it.Next() {
 		var data Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
@@ -129,6 +135,12 @@ func (s *StateDB) DumpToCollector(c DumpCollector, excludeCode, excludeStorage, 
 			CodeHash: common.Bytes2Hex(data.CodeHash),
 		}
 		addrBytes := s.trie.GetKey(it.Key)
+		if time.Since(logged) > 10*time.Second {
+			logged = time.Now()
+			log.Info("State iteration in progress",
+				"at", fmt.Sprintf("%x", addrBytes),
+				"elapsed", common.PrettyDuration(time.Since(startTime)))
+		}
 		if addrBytes == nil {
 			// Preimage missing
 			missingPreimages++
