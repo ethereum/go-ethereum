@@ -229,8 +229,7 @@ func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *New
 func (c *Conn) waitForBlock66(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
 	for {
 		req := eth.GetBlockHeadersPacket66{
 			RequestId: 54,
