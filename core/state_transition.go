@@ -187,12 +187,7 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	price := st.gasPrice
-	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
-		// price = min(tip, feeCap - baseFee) + baseFee
-		price = cmath.BigMin(new(big.Int).Add(st.tip, st.evm.Context.BaseFee), st.feeCap)
-	}
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), price)
+	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
 	if have, want := st.state.GetBalance(st.msg.From()), mgval; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
@@ -301,11 +296,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.refundGas()
 
-	price := st.gasPrice
+	effectiveTip := st.gasPrice
 	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
-		price = cmath.BigMin(st.tip, new(big.Int).Sub(st.feeCap, st.evm.Context.BaseFee))
+		effectiveTip = cmath.BigMin(st.tip, new(big.Int).Sub(st.feeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), price))
+	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -323,11 +318,7 @@ func (st *StateTransition) refundGas() {
 	st.gas += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	price := st.gasPrice
-	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
-		price = cmath.BigMin(new(big.Int).Add(st.tip, st.evm.Context.BaseFee), st.feeCap)
-	}
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), price)
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
 	st.state.AddBalance(st.msg.From(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is

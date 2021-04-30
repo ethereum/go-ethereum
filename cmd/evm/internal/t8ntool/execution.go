@@ -125,7 +125,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 
 	for i, tx := range txs {
-		msg, err := tx.AsMessage(signer)
+		msg, err := tx.AsMessage(signer, pre.Env.BaseFee)
 		if err != nil {
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, i)
