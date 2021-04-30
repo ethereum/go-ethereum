@@ -482,7 +482,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 
 // SetHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. This method is meant to be
-// used when rewiding with snapshots enabled to ensure that we go back further than
+// used when rewinding with snapshots enabled to ensure that we go back further than
 // persistent disk layer. Depending on whether the node was fast synced or full, and
 // in which state, the method will try to delete minimal data from disk whilst
 // retaining chain consistency.
