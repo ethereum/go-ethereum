@@ -141,16 +141,6 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 	log.Info(msg, ctx...)
 }
 
-// ClearSnapshotMarker sets the snapshot marker to zero, meaning that snapshots
-// are not usable.
-func ClearSnapshotMarker(diskdb ethdb.KeyValueStore) {
-	batch := diskdb.NewBatch()
-	journalProgress(batch, []byte{}, nil)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write initialized state marker", "err", err)
-	}
-}
-
 // generateSnapshot regenerates a brand new snapshot based on an existing state
 // database and head block asynchronously. The snapshot is returned immediately
 // and generation is continued in the background until done.

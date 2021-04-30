@@ -551,11 +551,6 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		log.Debug("Snapshot sync already completed")
 		return nil
 	}
-	// If sync is still not finished, we need to ensure that any marker is wiped.
-	// Otherwise, it may happen that requests for e.g. genesis-data is delivered
-	// from the snapshot data, instead of from the trie
-	snapshot.ClearSnapshotMarker(s.db)
-
 	defer func() { // Persist any progress, independent of failure
 		for _, task := range s.tasks {
 			s.forwardAccountTask(task)
