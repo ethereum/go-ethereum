@@ -690,7 +690,7 @@ func (s *Syncer) loadSyncStatus() {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
 							},
 						}
-						subtask.genTrie = trie.NewStackTrie(task.genBatch)
+						subtask.genTrie = trie.NewStackTrie(subtask.genBatch)
 					}
 				}
 			}
