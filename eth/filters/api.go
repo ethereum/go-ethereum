@@ -72,9 +72,8 @@ func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) 
 	return api
 }
 
-// timeoutLoop runs at the interval set by [timeout] and deletes filters
-// that have not been recently used.
-// It is started when the api is created.
+// timeoutLoop runs at the interval set by 'timeout' and deletes filters
+// that have not been recently used. It is started when the API is created.
 func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 	var toUninstall []*Subscription
 	ticker := time.NewTicker(timeout)
