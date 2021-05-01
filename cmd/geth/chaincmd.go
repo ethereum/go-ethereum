@@ -18,7 +18,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"os"
 	"runtime"
 	"strconv"
@@ -31,8 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -152,20 +156,20 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Action:    utils.MigrateFlags(dump),
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
-		ArgsUsage: "[<blockHash> | <blockNum>]...",
+		ArgsUsage: "[? <blockHash> | <blockNum>]",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
-			utils.SyncModeFlag,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
 			utils.ExcludeStorageFlag,
 			utils.IncludeIncompletesFlag,
+			utils.StartKeyFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.`,
+This command dumps out the state for a given block (or latest, if none provided).
+`,
 	}
 )
 
@@ -373,47 +377,73 @@ func exportPreimages(ctx *cli.Context) error {
 	return nil
 }
 
+func parseDumpOptions(ctx *cli.Context, stack *node.Node) (*state.DumpOptions, ethdb.Database, common.Hash, error) {
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	var header *types.Header
+	if ctx.NArg() > 1 {
+		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
+	} else if ctx.NArg() == 1 {
+		arg := ctx.Args().First()
+		if hashish(arg) {
+			hash := common.HexToHash(arg)
+			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
+				header = rawdb.ReadHeader(db, hash, *number)
+			} else {
+				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
+			}
+		} else {
+			number, err := strconv.Atoi(arg)
+			if err != nil {
+				return nil, nil, common.Hash{}, err
+			}
+			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash, uint64(number))
+			} else {
+				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
+			}
+		}
+	} else {
+		// Use latest
+		header = rawdb.ReadHeadHeader(db)
+	}
+	if header == nil {
+		return nil, nil, common.Hash{}, errors.New("no head block found")
+	}
+	var opts = &state.DumpOptions{
+		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
+		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
+		OnlyWithAddresses: !ctx.Bool(utils.IncludeIncompletesFlag.Name),
+		Start:             common.FromHex(ctx.String(utils.StartKeyFlag.Name)),
+	}
+	log.Info("Dump options", "block", header.Number,
+		"hash", header.Hash().Hex(),
+		"code", !opts.SkipCode,
+		"storage", !opts.SkipStorage,
+		"start", hexutil.Encode(opts.Start))
+	return opts, db, header.Root, nil
+}
+
 func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack, true)
-	for _, arg := range ctx.Args() {
-		var header *types.Header
-		if hashish(arg) {
-			hash := common.HexToHash(arg)
-			number := rawdb.ReadHeaderNumber(db, hash)
-			if number != nil {
-				header = rawdb.ReadHeader(db, hash, *number)
-			}
-		} else {
-			number, _ := strconv.Atoi(arg)
-			hash := rawdb.ReadCanonicalHash(db, uint64(number))
-			if hash != (common.Hash{}) {
-				header = rawdb.ReadHeader(db, hash, uint64(number))
-			}
+	opts, db, root, err := parseDumpOptions(ctx, stack)
+	if err != nil {
+		return err
+	}
+	state, err := state.New(root, state.NewDatabase(db), nil)
+	if err != nil {
+		return err
+	}
+	if ctx.Bool(utils.IterativeOutputFlag.Name) {
+		state.IterativeDump(opts, json.NewEncoder(os.Stdout))
+	} else {
+		if opts.OnlyWithAddresses {
+			fmt.Fprintf(os.Stderr, "If you want to include accounts with missing preimages, you need iterative output, since"+
+				" otherwise the accounts will overwrite each other in the resulting mapping.")
+			return fmt.Errorf("incompatible options")
 		}
-		if header == nil {
-			fmt.Println("{}")
-			utils.Fatalf("block not found")
-		} else {
-			state, err := state.New(header.Root, state.NewDatabase(db), nil)
-			if err != nil {
-				utils.Fatalf("could not create new state: %v", err)
-			}
-			excludeCode := ctx.Bool(utils.ExcludeCodeFlag.Name)
-			excludeStorage := ctx.Bool(utils.ExcludeStorageFlag.Name)
-			includeMissing := ctx.Bool(utils.IncludeIncompletesFlag.Name)
-			if ctx.Bool(utils.IterativeOutputFlag.Name) {
-				state.IterativeDump(excludeCode, excludeStorage, !includeMissing, json.NewEncoder(os.Stdout))
-			} else {
-				if includeMissing {
-					fmt.Printf("If you want to include accounts with missing preimages, you need iterative output, since" +
-						" otherwise the accounts will overwrite each other in the resulting mapping.")
-				}
-				fmt.Printf("%v %s\n", includeMissing, state.Dump(excludeCode, excludeStorage, false))
-			}
-		}
+		fmt.Println(string(state.Dump(opts)))
 	}
 	return nil
 }
