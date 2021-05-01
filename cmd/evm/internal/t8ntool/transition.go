@@ -212,14 +212,14 @@ func Main(ctx *cli.Context) error {
 	// Iterate over all the tests, run them and aggregate the results
 
 	// Run the test and aggregate the result
-	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}
 	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
-	state.DumpToCollector(collector, false, false, false, nil, -1)
+	s.DumpToCollector(collector, &state.DumpOptions{})
 	return dispatchOutput(ctx, baseDir, result, collector, body)
 
 }
