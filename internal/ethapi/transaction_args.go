@@ -37,6 +37,8 @@ type TransactionArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
+	FeeCap   *hexutil.Big    `json:"feeCap"`
+	Tip      *hexutil.Big    `json:"tip"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 
@@ -72,12 +74,29 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice == nil {
-		price, err := b.SuggestPrice(ctx)
-		if err != nil {
-			return err
+	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
+		if args.FeeCap == nil {
+			feeCap, err := b.SuggestFeeCap(ctx)
+			if err != nil {
+				return err
+			}
+			args.FeeCap = (*hexutil.Big)(feeCap)
 		}
-		args.GasPrice = (*hexutil.Big)(price)
+		if args.Tip == nil {
+			tip, err := b.SuggestTip(ctx)
+			if err != nil {
+				return err
+			}
+			args.Tip = (*hexutil.Big)(tip)
+		}
+	} else {
+		if args.GasPrice == nil {
+			price, err := b.SuggestPrice(ctx)
+			if err != nil {
+				return err
+			}
+			args.GasPrice = (*hexutil.Big)(price)
+		}
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -103,6 +122,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			From:       args.From,
 			To:         args.To,
 			GasPrice:   args.GasPrice,
+			FeeCap:     args.FeeCap,
+			Tip:        args.Tip,
 			Value:      args.Value,
 			Data:       args.Data,
 			AccessList: args.AccessList,
@@ -139,10 +160,31 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
-	gasPrice := new(big.Int)
+	var gasPrice *big.Int
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
 	}
+	var feeCap *big.Int
+	if args.FeeCap != nil {
+		feeCap = args.FeeCap.ToInt()
+	}
+	var tip *big.Int
+	if args.Tip != nil {
+		tip = args.Tip.ToInt()
+	}
+	if gasPrice == nil && feeCap == nil && tip == nil {
+		log.Warn("At least one of gasPrice, feeCap, tip should be set. Defaulting to 0 gas price.")
+		gasPrice = new(big.Int)
+	}
+	if gasPrice != nil && feeCap != nil && tip != nil {
+		log.Warn("Only one of gasPrice, feeCap, tip should be set. Defaulting to feeCap+tip")
+		gasPrice = nil
+	}
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
+	}
+
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -152,7 +194,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, feeCap, tip, data, accessList, false)
 	return msg
 }
 
@@ -160,7 +202,24 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
-	if args.AccessList == nil {
+	switch {
+	case args.FeeCap != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			FeeCap:     (*big.Int)(args.FeeCap),
+			Tip:        (*big.Int)(args.Tip),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.data(),
+			AccessList: al,
+		}
+	case args.AccessList == nil:
 		data = &types.LegacyTx{
 			To:       args.To,
 			Nonce:    uint64(*args.Nonce),
@@ -169,7 +228,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:    (*big.Int)(args.Value),
 			Data:     args.data(),
 		}
-	} else {
+	default:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),

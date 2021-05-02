@@ -829,7 +829,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg := args.ToMessage(globalGasCap)
+	msg := args.ToMessage(globalGasCap, header.BaseFee)
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, nil)
 	if err != nil {
 		return nil, err
