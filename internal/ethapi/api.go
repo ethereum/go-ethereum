@@ -757,13 +757,15 @@ type CallArgs struct {
 	To         *common.Address   `json:"to"`
 	Gas        *hexutil.Uint64   `json:"gas"`
 	GasPrice   *hexutil.Big      `json:"gasPrice"`
+	FeeCap     *hexutil.Big      `json:"feeCap"`
+	Tip        *hexutil.Big      `json:"tip"`
 	Value      *hexutil.Big      `json:"value"`
 	Data       *hexutil.Bytes    `json:"data"`
 	AccessList *types.AccessList `json:"accessList"`
 }
 
 // ToMessage converts CallArgs to the Message type used by the core evm
-func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
+func (args *CallArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) types.Message {
 	// Set sender address or use zero address if none specified.
 	var addr common.Address
 	if args.From != nil {
@@ -782,9 +784,29 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
-	gasPrice := new(big.Int)
+	var gasPrice *big.Int
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
+	}
+	var feeCap *big.Int
+	if args.FeeCap != nil {
+		feeCap = args.FeeCap.ToInt()
+	}
+	var tip *big.Int
+	if args.Tip != nil {
+		tip = args.Tip.ToInt()
+	}
+	if gasPrice == nil && feeCap == nil && tip == nil {
+		log.Warn("At least one of gasPrice, feeCap, tip should be set. Defaulting to 0 gas price.")
+		gasPrice = new(big.Int)
+	}
+	if gasPrice != nil && feeCap != nil && tip != nil {
+		log.Warn("Only one of gasPrice, feeCap, tip should be set. Defaulting to feeCap+tip")
+		gasPrice = nil
+	}
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
 	}
 	value := new(big.Int)
 	if args.Value != nil {
@@ -799,7 +821,7 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 		accessList = *args.AccessList
 	}
 
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, feeCap, tip, data, accessList, false)
 	return msg
 }
 
@@ -878,7 +900,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg := args.ToMessage(globalGasCap)
+	msg := args.ToMessage(globalGasCap, header.BaseFee)
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, nil)
 	if err != nil {
 		return nil, err
@@ -1630,6 +1652,8 @@ type SendTxArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
+	FeeCap   *hexutil.Big    `json:"feeCap"`
+	Tip      *hexutil.Big    `json:"tip"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons. "input" is the
@@ -1644,12 +1668,29 @@ type SendTxArgs struct {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice == nil {
-		price, err := b.SuggestPrice(ctx)
-		if err != nil {
-			return err
+	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
+		if args.FeeCap == nil {
+			feeCap, err := b.SuggestFeeCap(ctx)
+			if err != nil {
+				return err
+			}
+			args.FeeCap = (*hexutil.Big)(feeCap)
 		}
-		args.GasPrice = (*hexutil.Big)(price)
+		if args.Tip == nil {
+			tip, err := b.SuggestTip(ctx)
+			if err != nil {
+				return err
+			}
+			args.Tip = (*hexutil.Big)(tip)
+		}
+	} else {
+		if args.GasPrice == nil {
+			price, err := b.SuggestPrice(ctx)
+			if err != nil {
+				return err
+			}
+			args.GasPrice = (*hexutil.Big)(price)
+		}
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -1688,6 +1729,8 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			From:       &args.From, // From shouldn't be nil
 			To:         args.To,
 			GasPrice:   args.GasPrice,
+			FeeCap:     args.FeeCap,
+			Tip:        args.Tip,
 			Value:      args.Value,
 			Data:       input,
 			AccessList: args.AccessList,
@@ -1717,7 +1760,24 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 		input = *args.Data
 	}
 	var data types.TxData
-	if args.AccessList == nil {
+	switch {
+	case args.FeeCap != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			FeeCap:     (*big.Int)(args.FeeCap),
+			Tip:        (*big.Int)(args.Tip),
+			Value:      (*big.Int)(args.Value),
+			Data:       input,
+			AccessList: al,
+		}
+	case args.AccessList == nil:
 		data = &types.LegacyTx{
 			To:       args.To,
 			Nonce:    uint64(*args.Nonce),
@@ -1726,7 +1786,7 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 			Value:    (*big.Int)(args.Value),
 			Data:     input,
 		}
-	} else {
+	default:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),

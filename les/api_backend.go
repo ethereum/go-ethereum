@@ -252,7 +252,15 @@ func (b *LesApiBackend) ProtocolVersion() int {
 }
 
 func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
+	return b.gpo.SuggestPrice(ctx, false)
+}
+
+func (b *LesApiBackend) SuggestTip(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestPrice(ctx, true)
+}
+
+func (b *LesApiBackend) SuggestFeeCap(ctx context.Context) (*big.Int, error) {
+	return new(big.Int).Mul(b.CurrentBlock().BaseFee(), common.Big2), nil
 }
 
 func (b *LesApiBackend) ChainDb() ethdb.Database {
