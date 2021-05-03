@@ -38,6 +38,7 @@ var (
 
 // Environment contains metadata provided by the build environment.
 type Environment struct {
+	CI                        bool
 	Name                      string // name of the environment
 	Repo                      string // name of GitHub repo
 	Commit, Date, Branch, Tag string // Git info
@@ -61,6 +62,7 @@ func Env() Environment {
 			commit = os.Getenv("TRAVIS_COMMIT")
 		}
 		return Environment{
+			CI:            true,
 			Name:          "travis",
 			Repo:          os.Getenv("TRAVIS_REPO_SLUG"),
 			Commit:        commit,
@@ -77,6 +79,7 @@ func Env() Environment {
 			commit = os.Getenv("APPVEYOR_REPO_COMMIT")
 		}
 		return Environment{
+			CI:            true,
 			Name:          "appveyor",
 			Repo:          os.Getenv("APPVEYOR_REPO_NAME"),
 			Commit:        commit,
