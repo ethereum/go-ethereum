@@ -283,6 +283,7 @@ func (c *TrustedCheckpoint) Hash() common.Hash {
 
 	w := sha3.NewLegacyKeccak256()
 	w.Write(sectionIndex[:])
+	w.Write(c.SectionHead[:])
 	w.Write(c.CHTRoot[:])
 	w.Write(c.BloomRoot[:])
 
