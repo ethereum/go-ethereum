@@ -86,9 +86,10 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 	}
 	tool := exec.Command(filepath.Join(g.Root, "bin", "go"), command)
 	tool.Args = append(tool.Args, args...)
+	tool.Env = append(tool.Env, "GOROOT="+g.Root)
 
 	// Forward environment variables to the tool, but skip compiler target settings.
-	skip := map[string]struct{}{"GOARCH": {}, "GOOS": {}, "GOBIN": {}, "CC": {}}
+	skip := map[string]struct{}{"GOROOT": {}, "GOARCH": {}, "GOOS": {}, "GOBIN": {}, "CC": {}}
 	for _, e := range os.Environ() {
 		if i := strings.IndexByte(e, '='); i >= 0 {
 			if _, ok := skip[e[:i]]; ok {
