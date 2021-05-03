@@ -91,9 +91,8 @@ func (s *Suite) TestGetBlockHeaders_66(t *utesting.T) {
 // headers per request.
 func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 	// create two connections
-	conn1, conn2 := s.setupConnection66(t), s.setupConnection66(t)
-	defer conn1.Close()
-	defer conn2.Close()
+	conn := s.setupConnection66(t)
+	defer conn.Close()
 	// create two requests
 	req1 := &eth.GetBlockHeadersPacket66{
 		RequestId: 111,
@@ -117,27 +116,29 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 			Reverse: false,
 		},
 	}
-	// wait for headers for first request
-	headerChan := make(chan BlockHeaders, 1)
-	go func(headers chan BlockHeaders) {
-		recvHeaders, err := s.getBlockHeaders66(conn1, req1, req1.RequestId)
-		if err != nil {
-			t.Fatalf("could not get block headers: %v", err)
-			return
-		}
-		headers <- recvHeaders
-	}(headerChan)
-	// check headers of second request
-	headers1, err := s.getBlockHeaders66(conn2, req2, req2.RequestId)
+	// write first request
+	if err := conn.write66(req1, GetBlockHeaders{}.Code()); err != nil {
+		t.Fatalf("failed to write to connection: %v", err)
+	}
+	// write second request
+	if err := conn.write66(req2, GetBlockHeaders{}.Code()); err != nil {
+		t.Fatalf("failed to write to connection: %v", err)
+	}
+	// wait for responses
+	headers1, err := s.waitForBlockHeadersResponse66(conn, req1.RequestId)
 	if err != nil {
-		t.Fatalf("could not get block headers: %v", err)
+		t.Fatalf("error while waiting for block headers: %v", err)
 	}
+	headers2, err := s.waitForBlockHeadersResponse66(conn, req2.RequestId)
+	if err != nil {
+		t.Fatalf("error while waiting for block headers: %v", err)
+	}
+	// check headers of both responses
 	if !headersMatch(t, s.chain, headers1) {
-		t.Fatal("wrong header(s) in response to req2")
+		t.Fatalf("wrong header(s) in response to req1: got %v", headers1)
 	}
-	// check headers of first request
-	if !headersMatch(t, s.chain, <-headerChan) {
-		t.Fatal("wrong header(s) in response to req1")
+	if !headersMatch(t, s.chain, headers2) {
+		t.Fatalf("wrong header(s) in response to req2: got %v", headers2)
 	}
 }
 
