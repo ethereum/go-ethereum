@@ -34,9 +34,9 @@ import (
 var (
 	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
 	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
-	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	errNegativeEffectiveTip = errors.New("negative effective miner tip")
 )
 
 // Transaction types.
@@ -299,6 +299,23 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
+// EffectiveTip returns the effective miner tip for the given base fee.
+// Returns error in case of a negative effective miner tip.
+func (tx *Transaction) EffectiveTip(baseFee *big.Int) (*big.Int, error) {
+	if baseFee == nil {
+		return tx.Tip(), nil
+	}
+	remainingFee := (&big.Int{}).Sub(tx.FeeCap(), baseFee)
+	if remainingFee.Sign() < 0 {
+		return nil, errNegativeEffectiveTip
+	}
+	minerFee := tx.Tip()
+	if remainingFee.Cmp(minerFee) < 0 {
+		minerFee = remainingFee
+	}
+	return minerFee, nil
+}
+
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
@@ -428,26 +445,16 @@ type TxWithMinerFee struct {
 
 // NewTxWithMinerFee creates a wrapped transaction, calculating the effective
 // miner tip if a base fee is provided.
-// Returns nil in the case of a negative effective miner tip.
-func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) *TxWithMinerFee {
-	if baseFee == nil {
-		return &TxWithMinerFee{
-			tx:       tx,
-			minerFee: tx.GasPrice(),
-		}
-	}
-	remainingFee := (&big.Int{}).Sub(tx.FeeCap(), baseFee)
-	if remainingFee.Sign() < 0 {
-		return nil
-	}
-	minerFee := tx.Tip()
-	if remainingFee.Cmp(minerFee) < 0 {
-		minerFee = remainingFee
+// Returns error in case of a negative effective miner tip.
+func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) (*TxWithMinerFee, error) {
+	minerFee, err := tx.EffectiveTip(baseFee)
+	if err != nil {
+		return nil, err
 	}
 	return &TxWithMinerFee{
 		tx:       tx,
 		minerFee: minerFee,
-	}
+	}, nil
 }
 
 // TxByMinerFeeAndTime implements both the sort and the heap interface, making it useful
@@ -488,7 +495,7 @@ type TransactionsByMinerFeeAndNonce struct {
 	baseFee *big.Int                        // Current base fee
 }
 
-// NewTransactionsByMinerFeeAndNonce creates a transaction set that can retrieve
+// NewTransactionsByPriceAndNonce creates a transaction set that can retrieve
 // price sorted transactions in a nonce-honouring way.
 //
 // Note, the input map is reowned so the caller should not interact any more with
@@ -497,8 +504,8 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByMinerFeeAndTime, 0, len(txs))
 	for from, accTxs := range txs {
-		wrapped := NewTxWithMinerFee(accTxs[0], baseFee)
-		if wrapped == nil {
+		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee)
+		if err != nil {
 			delete(txs, from)
 			continue
 		}
@@ -528,7 +535,7 @@ func (t *TransactionsByMinerFeeAndNonce) Peek() *Transaction {
 func (t *TransactionsByMinerFeeAndNonce) Shift() {
 	acc, _ := Sender(t.signer, t.heads[0].tx)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		if wrapped := NewTxWithMinerFee(txs[0], t.baseFee); wrapped != nil {
+		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			heap.Fix(&t.heads, 0)
 			return
