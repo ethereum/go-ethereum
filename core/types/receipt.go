@@ -41,9 +41,6 @@ var (
 // This error is returned when a typed receipt is decoded, but the string is empty.
 var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
 
-// This error is returned when a typed receipt has an unsupported type
-var errRctTypeNotSupported = errors.New("receipt type not supported")
-
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
 	ReceiptStatusFailed = uint64(0)
@@ -126,16 +123,19 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(r.Type)
-	if err := rlp.Encode(buf, data); err != nil {
+	if err := r.encodeTyped(data, buf); err != nil {
 		return err
 	}
 	return rlp.Encode(w, buf.Bytes())
 }
 
-// MarshalBinary returns the canonical encoding of the receipt.
-// For legacy receipts, it returns the RLP encoding. For EIP-2718 typed
-// receipts, it returns the `type || RLP encoding`.
+// encodeTyped writes the canonical encoding of a typed receipt to w.
+func (r *Receipt) encodeTyped(data *receiptRLP, w *bytes.Buffer) error {
+	w.WriteByte(r.Type)
+	return rlp.Encode(w, data)
+}
+
+// MarshalBinary returns the consensus encoding of the receipt.
 func (r *Receipt) MarshalBinary() ([]byte, error) {
 	if r.Type == LegacyTxType {
 		return rlp.EncodeToBytes(r)
@@ -144,11 +144,8 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(r.Type)
-	if err := rlp.Encode(buf, data); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	err := r.encodeTyped(data, buf)
+	return buf.Bytes(), err
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
@@ -189,7 +186,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	}
 }
 
-// UnmarshalBinary decodes the canonical encoding of receipts.
+// UnmarshalBinary decodes the consensus encoding of receipts.
 // It supports legacy RLP receipts and EIP-2718 typed receipts.
 func (r *Receipt) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
