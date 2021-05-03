@@ -59,19 +59,20 @@ func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 // Install creates an invocation of 'go install'. The command is configured to output
 // executables to the given 'gobin' directory.
 //
-// Note: This can be used to install auxiliary build tools without modifying the local
-// go.mod, go.sum files. To do so, ensure that all module paths in 'args' contain a module
-// version suffix (e.g. "...@latest").
+// This can be used to install auxiliary build tools without modifying the local go.mod and
+// go.sum files. To install tools which are not required by go.mod, ensure that all module
+// paths in 'args' contain a module version suffix (e.g. "...@latest").
 func (g *GoToolchain) Install(gobin string, args ...string) *exec.Cmd {
 	if !filepath.IsAbs(gobin) {
 		panic("GOBIN must be an absolute path")
 	}
 	tool := g.goTool("install")
 	tool.Env = append(tool.Env, "GOBIN="+gobin)
+	tool.Args = append(tool.Args, "-mod=readonly")
 	tool.Args = append(tool.Args, args...)
 
-	// Ensure GOPATH is set, because ways of using go install require it. Use cmd/go to
-	// resolve the path because it provides the default value even if it is not set in
+	// Ensure GOPATH is set because go install seems to absolutely require it. This uses
+	// 'go env' because it resolves the default value when GOPATH is not set in the
 	// environment. Ignore errors running go env and leave any complaining about GOPATH to
 	// the install command.
 	pathTool := g.goTool("env", "GOPATH")
@@ -89,6 +90,7 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 	tool.Env = append(tool.Env, "GOROOT="+g.Root)
 
 	// Forward environment variables to the tool, but skip compiler target settings.
+	// TODO: what about GOARM?
 	skip := map[string]struct{}{"GOROOT": {}, "GOARCH": {}, "GOOS": {}, "GOBIN": {}, "CC": {}}
 	for _, e := range os.Environ() {
 		if i := strings.IndexByte(e, '='); i >= 0 {
