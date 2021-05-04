@@ -341,6 +341,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
+func (tx *Transaction) Before(other *Transaction) bool {
+	return tx.time.Before(other.time)
+}
+
 // Transactions implements DerivableList for transactions.
 type Transactions []*Transaction
 

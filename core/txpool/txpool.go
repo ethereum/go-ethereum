@@ -14,18 +14,33 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package txpool
 
 import (
 	"errors"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+)
+
+const (
+	// txSlotSize is used to calculate how many data slots a single transaction
+	// takes up based on its size. The slots are used as DoS protection, ensuring
+	// that validating a new transaction remains a constant operation (in reality
+	// O(maxslots), where max slots are 4 currently).
+	txSlotSize = 32 * 1024
+	// txMaxSize is the maximum size a single transaction can have. This field has
+	// non-trivial consequences: larger transactions are significantly harder and
+	// more expensive to propagate; larger transactions also take more resources
+	// to validate whether they fit into the pool or not.
+	txMaxSize = 4 * txSlotSize // 128KB
 )
 
 var (
@@ -72,13 +87,342 @@ type blockChain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
 
+var _ core.TxPoolIf = (*TxPool)(nil)
+
+type TxPoolConfig struct {
+	istanbul bool // Fork indicator whether we are in the istanbul stage.
+	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
+
+	PriceBump  int
+	MaxTxCount int
+}
+
 type TxPool struct {
 	// Collect data from the chain
-	chainconfig *params.ChainConfig
-	chain       blockChain
+	chainconfig   *params.ChainConfig
+	chain         blockChain
+	currentState  *state.StateDB // Current state in the blockchain head
+	pendingNonces *txNoncer      // Pending state tracking virtual nonces
+
+	config *TxPoolConfig
+	// maximal gas in block
+	maxGasPerBlock uint64
 	// minimal gas price
 	minGasPrice *big.Int
 	// feed for notifying about new tx
 	txFeed event.Feed
 	scope  event.SubscriptionScope
+	// subscription for new head events
+	chainHeadSub event.Subscription
+	// all transactions
+	all          *txLookup
+	localSenders *senderSet
+	signer       types.Signer
+	localTxs     *txList
+	remoteTxs    *txList
+	// global txpool mutex
+	mu *sync.Mutex
+}
+
+// Stop stops the transaction pool, closes all registered subscriptions,
+// unsubscribes from the blockchain, write all pending transactions to disk.
+func (pool *TxPool) Stop() {
+	// Unsubscribe all subscriptions registered from txpool
+	pool.scope.Close()
+	// Unsubscribe subscriptions registered from blockchain
+	pool.chainHeadSub.Unsubscribe()
+	// TODO: wait for the main loop to shutdown
+	// TODO: Write all missing transactions to disk
+}
+
+// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+}
+
+// SetGasPrice updates the minimum price required by the transaction pool for a
+// new transaction, and drops all transactions below this threshold.
+func (pool *TxPool) SetGasPrice(price *big.Int) { panic("not implemented") }
+
+// Nonce returns the next nonce of an account, with all transactions executable
+// by the pool already applied on top. This is the pending nonce of the account.
+func (pool *TxPool) Nonce(addr common.Address) uint64 { panic("not implemented") }
+
+// Stats retrieves the current pool stats, namely the number of pending and the
+// number of queued (non-executable) transactions.
+func (pool *TxPool) Stats() (int, int) { panic("not implemented") }
+
+// Content retrieves the data content of the transaction pool, returning all the
+// pending as well as queued transactions, grouped by account and sorted by nonce.
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+	panic("not implemented")
+}
+
+// Pending retrieves all currently processable transactions, grouped by origin
+// account and sorted by nonce.
+func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
+	panic("not implemented")
+}
+
+// PendingBlock retrieves the best currently available and executable transactions.
+// The PendingTransactions are in two classes: local and remote transactions.
+func (pool *TxPool) PendingBlock() (types.Transactions, types.Transactions, error) {
+	panic("not implemented")
+}
+
+// Locals retrieves the accounts currently considered local by the pool.
+func (pool *TxPool) Locals() []common.Address { panic("not implemented") }
+
+// AddLocal enqueues a single local transaction into the pool if it is valid.
+// It marks the sending account as local, meaning all further transactions are considered local.
+func (pool *TxPool) AddLocal(tx *types.Transaction) error { panic("not implemented") }
+
+// AddRemotes enqueues a batch of transactions into the pool if they are valid. If the
+// senders are not among the locally tracked ones, full pricing constraints will apply.
+//
+// This method is used to add transactions from the p2p network and does not wait for pool
+// reorganization and internal event propagation.
+func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error { panic("not implemented") }
+
+// This is like AddRemotes, but waits for pool reorganization. Tests use this method.
+func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error { panic("not implemented") }
+
+// Get returns a transaction if it is contained in the pool and nil otherwise.
+func (pool *TxPool) Get(hash common.Hash) *types.Transaction { panic("not implemented") }
+
+func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
+	// Filter out known ones without obtaining the pool lock or recovering signatures
+	var (
+		errs = make([]error, len(txs))
+		news = make([]*txEntry, 0, len(txs))
+	)
+	for i, tx := range txs {
+		// If the transaction is known, pre-set the error slot
+		if pool.all.Get(tx.Hash()) != nil {
+			errs[i] = ErrAlreadyKnown
+			continue
+		}
+		// Exclude transactions with invalid signatures as soon as
+		// possible and cache senders in transactions before
+		// obtaining lock
+		sender, err := types.Sender(pool.signer, tx)
+		if err != nil {
+			errs[i] = ErrInvalidSender
+			continue
+		}
+		// Accumulate all unknown transactions for deeper processing
+		news = append(news, &txEntry{tx: tx, sender: sender, price: tx.GasPrice()})
+	}
+	if len(news) == 0 {
+		return errs
+	}
+	// Process all the new transaction and merge any errors into the original slice
+	pool.mu.Lock()
+	newErrs := pool.addTxsLocked(news, local)
+	pool.mu.Unlock()
+
+	var nilSlot = 0
+	for _, err := range newErrs {
+		for errs[nilSlot] != nil {
+			nilSlot++
+		}
+		errs[nilSlot] = err
+		nilSlot++
+	}
+	return errs
+}
+
+// addTxsLocked attempts to queue a batch of transactions if they are valid.
+// The transaction pool lock must be held.
+func (pool *TxPool) addTxsLocked(txs []*txEntry, local bool) []error {
+	errs := make([]error, len(txs))
+	for i, tx := range txs {
+		_, err := pool.add(tx, local)
+		errs[i] = err
+	}
+	return errs
+}
+
+// add validates a transaction and inserts it into the non-executable queue for later
+// pending promotion and execution. If the transaction is a replacement for an already
+// pending or queued one, it overwrites the previous transaction if its price is higher.
+//
+// If a newly added transaction is marked as local, its sending account will be
+// whitelisted, preventing any associated transaction from being dropped out of the pool
+// due to pricing constraints.
+func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
+	// If the transaction is already known, discard it
+	hash := tx.tx.Hash()
+	if pool.all.Get(hash) != nil {
+		log.Trace("Discarding already known transaction", "hash", hash)
+		return false, ErrAlreadyKnown
+	}
+	// Make the local flag. If it's from local source or it's from the network but
+	// the sender is marked as local previously, treat it as the local transaction.
+	isLocal := local || pool.localSenders.contains(tx.sender)
+	isReplacement := pool.pendingNonces.get(tx.sender) < tx.tx.Nonce()
+	isGapped := pool.pendingNonces.get(tx.sender)+1 < tx.tx.Nonce()
+	// If the transaction fails basic validation, discard it
+	if err := pool.validateTx(tx.tx, isLocal); err != nil {
+		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
+		return false, err
+	}
+
+	// If the sender was not in the local senders,
+	// we need to add all transactions of this sender to the local txs
+	// even if the tx is not valid in the end.
+	if !pool.localSenders.contains(tx.sender) {
+		defer func() {
+			for {
+				if entry := pool.remoteTxs.Delete(func(e *txEntry) bool {
+					return e.sender == tx.sender
+				}); entry != nil {
+					pool.localTxs.Add(entry)
+					pool.all.Remove(entry.tx.Hash())
+					pool.all.Add(entry.tx, true)
+				} else {
+					break
+				}
+			}
+		}()
+	}
+
+	// If this is a replacement transaction, we have to replace it
+	if isReplacement {
+		return pool.addReplacementTx(tx, isLocal)
+	}
+	// If it is a queued transaction, we can write it to disk
+	if isGapped {
+		return false, pool.addGapped(tx, isLocal)
+	}
+	// If it is the transaction with pendingNonce + 1,
+	// we need to insert it and maybe add some now valid transactions
+	// from the queued list into the pool
+	return false, pool.addContinuousTx(tx, isLocal)
+}
+
+func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
+	// If the transaction is local, insert it into the local pool
+	if isLocal {
+		replaced := false
+		entry := pool.localTxs.Delete(func(e *txEntry) bool {
+			return e.sender == tx.sender && e.tx.Nonce() == tx.tx.Nonce()
+		})
+		if entry != nil {
+			if ableToReplace(tx, entry, pool.config.PriceBump) {
+				log.Info("Replacing tx: %v with %v", entry.tx.Hash(), tx.tx.Hash())
+				pool.all.Remove(entry.tx.Hash())
+				replaced = true
+			} else {
+				// Re-add the deleted tx to the pool
+				pool.localTxs.Add(entry)
+				log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
+				return false, ErrUnderpriced
+			}
+		}
+		pool.localTxs.Add(tx)
+		pool.all.Add(tx.tx, true)
+
+		return replaced, nil
+	}
+	// If the tx pays less than what we have in memory
+	// we can directly replace it on disk.
+	if pool.remoteTxs.Len() > pool.config.MaxTxCount && tx.Less(pool.remoteTxs.LastEntry()) {
+		// TODO write directly to disk
+	}
+	replaced := false
+	entry := pool.remoteTxs.Delete(func(e *txEntry) bool {
+		return e.sender == tx.sender && e.tx.Nonce() == tx.tx.Nonce()
+	})
+	if entry != nil {
+		if ableToReplace(tx, entry, pool.config.PriceBump) {
+			log.Info("Replacing tx: %v with %v", entry.tx.Hash(), tx.tx.Hash())
+			pool.all.Remove(entry.tx.Hash())
+			replaced = true
+		} else {
+			// Re-add the deleted tx to the pool
+			pool.remoteTxs.Add(entry)
+			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
+			return false, ErrUnderpriced
+		}
+	}
+	shouldPrune := pool.remoteTxs.Add(tx)
+	pool.all.Add(tx.tx, false)
+	if shouldPrune {
+		// TODO prune in memory list to disk
+	}
+	return replaced, nil
+}
+
+func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
+	panic("not implemented")
+}
+
+func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
+	panic("not implemented")
+}
+
+// validateTx checks whether a transaction is valid according to the consensus
+// rules and adheres to some heuristic limits of the local node (price and size).
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// Accept only legacy transactions until EIP-2718/2930 activates.
+	if !pool.config.eip2718 && tx.Type() != types.LegacyTxType {
+		return core.ErrTxTypeNotSupported
+	}
+	// Reject transactions over defined size to prevent DOS attacks
+	if uint64(tx.Size()) > txMaxSize {
+		return ErrOversizedData
+	}
+	// Transactions can't be negative. This may never happen using RLP decoded
+	// transactions but may occur if you create a transaction using the RPC.
+	if tx.Value().Sign() < 0 {
+		return ErrNegativeValue
+	}
+	// Ensure the transaction doesn't exceed the current block limit gas.
+	if pool.maxGasPerBlock < tx.Gas() {
+		return ErrGasLimit
+	}
+	// Make sure the transaction is signed properly.
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
+	// Drop non-local transactions under our own minimal accepted gas price
+	if !local && tx.GasPriceIntCmp(pool.minGasPrice) < 0 {
+		return ErrUnderpriced
+	}
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return core.ErrNonceTooLow
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		return core.ErrInsufficientFunds
+	}
+	// Ensure the transaction has more gas than the basic tx fee.
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.config.istanbul)
+	if err != nil {
+		return err
+	}
+	if tx.Gas() < intrGas {
+		return core.ErrIntrinsicGas
+	}
+	return nil
+}
+
+func ableToReplace(new, old *txEntry, priceBump int) bool {
+	// threshold = oldGP * (100 + priceBump) / 100
+	a := big.NewInt(100 + int64(priceBump))
+	a = a.Mul(a, old.price)
+	b := big.NewInt(100)
+	threshold := a.Div(a, b)
+	// Have to ensure that the new gas price is higher than the old gas
+	// price as well as checking the percentage threshold to ensure that
+	// this is accurate for low (Wei-level) gas price replacements
+	if old.price.Cmp(new.price) < 0 && new.price.Cmp(threshold) >= 0 {
+		return true
+	}
+	return false
 }
