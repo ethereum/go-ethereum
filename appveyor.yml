@@ -1,41 +1,29 @@
-os: Visual Studio 2015
-
-# Clone directly into GOPATH.
-clone_folder: C:\gopath\src\github.com\ethereum\go-ethereum
+os: Visual Studio 2019
 clone_depth: 5
 version: "{branch}.{build}"
 environment:
-  global:
-    GO111MODULE: on
-    GOPATH: C:\gopath
-    CC: gcc.exe
   matrix:
+    # We use gcc from MSYS2 because it is the most recent compiler version available on
+    # AppVeyor. Note: gcc.exe only works properly if the corresponding bin/ directory is
+    # contained in PATH.
     - GETH_ARCH: amd64
-      MSYS2_ARCH: x86_64
-      MSYS2_BITS: 64
-      MSYSTEM: MINGW64
-      PATH: C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+      GETH_CC: C:\msys64\mingw64\bin\gcc.exe
+      PATH: C:\msys64\mingw64\bin;C:\Program Files (x86)\NSIS\;%PATH%
     - GETH_ARCH: 386
-      MSYS2_ARCH: i686
-      MSYS2_BITS: 32
-      MSYSTEM: MINGW32
-      PATH: C:\msys64\mingw32\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+      GETH_CC: C:\msys64\mingw32\bin\gcc.exe
+      PATH: C:\msys64\mingw32\bin;C:\Program Files (x86)\NSIS\;%PATH%
 
 install:
-  - git submodule update --init
-  - rmdir C:\go /s /q
-  - appveyor DownloadFile https://dl.google.com/go/go1.16.windows-%GETH_ARCH%.zip
-  - 7z x go1.16.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
+  - git submodule update --init --depth 1
   - go version
-  - gcc --version
+  - "%GETH_CC% --version"
 
 build_script:
-  - go run build\ci.go install -dlgo
+  - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
 
 after_build:
-  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
 test_script:
-  - set CGO_ENABLED=1
-  - go run build\ci.go test -coverage
+  - go run build\ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -coverage
