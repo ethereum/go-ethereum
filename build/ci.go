@@ -208,57 +208,24 @@ func doInstall(cmdline []string) {
 		cc   = flag.String("cc", "", "C compiler to cross build with")
 	)
 	flag.CommandLine.Parse(cmdline)
+
+	// Configure the toolchain.
+	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
+	if *dlgo {
+		csdb := build.MustLoadChecksums("build/checksums.txt")
+		tc.Root = build.DownloadGo(csdb, dlgoVersion)
+	}
+
+	// Configure the build.
 	env := build.Env()
-
-	// Check local Go version. People regularly open issues about compilation
-	// failure with outdated Go. This should save them the trouble.
-	if !strings.Contains(runtime.Version(), "devel") {
-		// Figure out the minor version number since we can't textually compare (1.10 < 1.9)
-		var minor int
-		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
-		if minor < 13 {
-			log.Println("You have Go version", runtime.Version())
-			log.Println("go-ethereum requires at least Go version 1.13 and cannot")
-			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
-			os.Exit(1)
-		}
-	}
-
-	// Choose which go command we're going to use.
-	var gobuild *exec.Cmd
-	if !*dlgo {
-		// Default behavior: use the go version which runs ci.go right now.
-		gobuild = goTool("build")
-	} else {
-		// Download of Go requested. This is for build environments where the
-		// installed version is too old and cannot be upgraded easily.
-		cachedir := filepath.Join("build", "cache")
-		goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
-		gobuild = localGoTool(goroot, "build")
-	}
-
-	// Configure environment for cross build.
-	if *arch != "" || *arch != runtime.GOARCH {
-		gobuild.Env = append(gobuild.Env, "CGO_ENABLED=1")
-		gobuild.Env = append(gobuild.Env, "GOARCH="+*arch)
-	}
-
-	// Configure C compiler.
-	if *cc != "" {
-		gobuild.Env = append(gobuild.Env, "CC="+*cc)
-	} else if os.Getenv("CC") != "" {
-		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
-	}
+	gobuild := tc.Go("build", buildFlags(env)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
-	if runtime.GOARCH == "arm64" {
+	if env.CI && runtime.GOARCH == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
-
-	// Put the default settings in.
-	gobuild.Args = append(gobuild.Args, buildFlags(env)...)
 
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
@@ -301,53 +268,30 @@ func buildFlags(env build.Environment) (flags []string) {
 	return flags
 }
 
-// goTool returns the go tool. This uses the Go version which runs ci.go.
-func goTool(subcmd string, args ...string) *exec.Cmd {
-	cmd := build.GoTool(subcmd, args...)
-	goToolSetEnv(cmd)
-	return cmd
-}
-
-// localGoTool returns the go tool from the given GOROOT.
-func localGoTool(goroot string, subcmd string, args ...string) *exec.Cmd {
-	gotool := filepath.Join(goroot, "bin", "go")
-	cmd := exec.Command(gotool, subcmd)
-	goToolSetEnv(cmd)
-	cmd.Env = append(cmd.Env, "GOROOT="+goroot)
-	cmd.Args = append(cmd.Args, args...)
-	return cmd
-}
-
-// goToolSetEnv forwards the build environment to the go tool.
-func goToolSetEnv(cmd *exec.Cmd) {
-	cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOBIN=") || strings.HasPrefix(e, "CC=") {
-			continue
-		}
-		cmd.Env = append(cmd.Env, e)
-	}
-}
-
 // Running The Tests
 //
 // "tests" also includes static analysis tools such as vet.
 
 func doTest(cmdline []string) {
-	coverage := flag.Bool("coverage", false, "Whether to record code coverage")
-	verbose := flag.Bool("v", false, "Whether to log verbosely")
+	var (
+		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch     = flag.String("arch", "", "Run tests for given architecture")
+		cc       = flag.String("cc", "", "Sets C compiler binary")
+		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
+		verbose  = flag.Bool("v", false, "Whether to log verbosely")
+	)
 	flag.CommandLine.Parse(cmdline)
-	env := build.Env()
 
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+	// Configure the toolchain.
+	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
+	if *dlgo {
+		csdb := build.MustLoadChecksums("build/checksums.txt")
+		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
+	gotest := tc.Go("test")
 
-	// Run the actual tests.
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
-	gotest := goTool("test", buildFlags(env)...)
 	gotest.Args = append(gotest.Args, "-p", "1")
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
@@ -356,6 +300,10 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-v")
 	}
 
+	packages := []string{"./..."}
+	if len(flag.CommandLine.Args()) > 0 {
+		packages = flag.CommandLine.Args()
+	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
 }
@@ -415,8 +363,7 @@ func doArchive(cmdline []string) {
 	}
 
 	var (
-		env = build.Env()
-
+		env      = build.Env()
 		basegeth = archiveBasename(*arch, params.ArchiveVersion(env.Commit))
 		geth     = "geth-" + basegeth + ext
 		alltools = "geth-alltools-" + basegeth + ext
@@ -492,15 +439,15 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 // skips archiving for some build configurations.
 func maybeSkipArchive(env build.Environment) {
 	if env.IsPullRequest {
-		log.Printf("skipping because this is a PR build")
+		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
 	if env.IsCronJob {
-		log.Printf("skipping because this is a cron job")
+		log.Printf("skipping archive creation because this is a cron job")
 		os.Exit(0)
 	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
-		log.Printf("skipping because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
+		log.Printf("skipping archive creation because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
 	}
 }
@@ -518,6 +465,7 @@ func doDebianSource(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
 	env := build.Env()
+	tc := new(build.GoToolchain)
 	maybeSkipArchive(env)
 
 	// Import the signing key.
@@ -531,12 +479,12 @@ func doDebianSource(cmdline []string) {
 	gobundle := downloadGoSources(*cachedir)
 
 	// Download all the dependencies needed to build the sources and run the ci script
-	srcdepfetch := goTool("mod", "download")
-	srcdepfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	srcdepfetch := tc.Go("mod", "download")
+	srcdepfetch.Env = append(srcdepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
 	build.MustRun(srcdepfetch)
 
-	cidepfetch := goTool("run", "./build/ci.go")
-	cidepfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	cidepfetch := tc.Go("run", "./build/ci.go")
+	cidepfetch.Env = append(cidepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
 	cidepfetch.Run() // Command fails, don't care, we only need the deps to start it
 
 	// Create Debian packages and upload them.
@@ -590,41 +538,6 @@ func downloadGoSources(cachedir string) string {
 		log.Fatal(err)
 	}
 	return dst
-}
-
-// downloadGo downloads the Go binary distribution and unpacks it into a temporary
-// directory. It returns the GOROOT of the unpacked toolchain.
-func downloadGo(goarch, goos, cachedir string) string {
-	if goarch == "arm" {
-		goarch = "armv6l"
-	}
-
-	csdb := build.MustLoadChecksums("build/checksums.txt")
-	file := fmt.Sprintf("go%s.%s-%s", dlgoVersion, goos, goarch)
-	if goos == "windows" {
-		file += ".zip"
-	} else {
-		file += ".tar.gz"
-	}
-	url := "https://golang.org/dl/" + file
-	dst := filepath.Join(cachedir, file)
-	if err := csdb.DownloadFile(url, dst); err != nil {
-		log.Fatal(err)
-	}
-
-	ucache, err := os.UserCacheDir()
-	if err != nil {
-		log.Fatal(err)
-	}
-	godir := filepath.Join(ucache, fmt.Sprintf("geth-go-%s-%s-%s", dlgoVersion, goos, goarch))
-	if err := build.ExtractArchive(dst, godir); err != nil {
-		log.Fatal(err)
-	}
-	goroot, err := filepath.Abs(filepath.Join(godir, "go"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return goroot
 }
 
 func ppaUpload(workdir, ppa, sshUser string, files []string) {
@@ -901,13 +814,23 @@ func doAndroidArchive(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
+	tc := new(build.GoToolchain)
 
 	// Sanity check that the SDK and NDK are installed and set
 	if os.Getenv("ANDROID_HOME") == "" {
 		log.Fatal("Please ensure ANDROID_HOME points to your Android SDK")
 	}
+
+	// Build gomobile.
+	install := tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest")
+	install.Env = append(install.Env)
+	build.MustRun(install)
+
+	// Ensure all dependencies are available. This is required to make
+	// gomobile bind work because it expects go.sum to contain all checksums.
+	build.MustRun(tc.Go("mod", "download"))
+
 	// Build the Android archive and Maven resources
-	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
 	build.MustRun(gomobileTool("bind", "-ldflags", "-s -w", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
 
 	if *local {
@@ -1027,10 +950,16 @@ func doXCodeFramework(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
+	tc := new(build.GoToolchain)
+
+	// Build gomobile.
+	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest"))
+
+	// Ensure all dependencies are available. This is required to make
+	// gomobile bind work because it expects go.sum to contain all checksums.
+	build.MustRun(tc.Go("mod", "download"))
 
 	// Build the iOS XCode framework
-	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
-	build.MustRun(gomobileTool("init"))
 	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
 
 	if *local {
@@ -1039,16 +968,13 @@ func doXCodeFramework(cmdline []string) {
 		build.MustRun(bind)
 		return
 	}
+
+	// Create the archive.
+	maybeSkipArchive(env)
 	archive := "geth-" + archiveBasename("ios", params.ArchiveVersion(env.Commit))
-	if err := os.Mkdir(archive, os.ModePerm); err != nil {
-		log.Fatal(err)
-	}
 	bind.Dir, _ = filepath.Abs(archive)
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)
-
-	// Skip CocoaPods deploy and Azure upload for PR builds
-	maybeSkipArchive(env)
 
 	// Sign and upload the framework to Azure
 	if err := archiveUpload(archive+".tar.gz", *upload, *signer, *signify); err != nil {
@@ -1115,10 +1041,10 @@ func doXgo(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
+	var tc build.GoToolchain
 
 	// Make sure xgo is available for cross compilation
-	gogetxgo := goTool("get", "github.com/karalabe/xgo")
-	build.MustRun(gogetxgo)
+	build.MustRun(tc.Install(GOBIN, "github.com/karalabe/xgo@latest"))
 
 	// If all tools building is requested, build everything the builder wants
 	args := append(buildFlags(env), flag.Args()...)
@@ -1129,27 +1055,23 @@ func doXgo(cmdline []string) {
 			if strings.HasPrefix(res, GOBIN) {
 				// Binary tool found, cross build it explicitly
 				args = append(args, "./"+filepath.Join("cmd", filepath.Base(res)))
-				xgo := xgoTool(args)
-				build.MustRun(xgo)
+				build.MustRun(xgoTool(args))
 				args = args[:len(args)-1]
 			}
 		}
 		return
 	}
-	// Otherwise xxecute the explicit cross compilation
+
+	// Otherwise execute the explicit cross compilation
 	path := args[len(args)-1]
 	args = append(args[:len(args)-1], []string{"--dest", GOBIN, path}...)
-
-	xgo := xgoTool(args)
-	build.MustRun(xgo)
+	build.MustRun(xgoTool(args))
 }
 
 func xgoTool(args []string) *exec.Cmd {
 	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, []string{
-		"GOBIN=" + GOBIN,
-	}...)
+	cmd.Env = append(cmd.Env, []string{"GOBIN=" + GOBIN}...)
 	return cmd
 }
 
