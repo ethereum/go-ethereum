@@ -972,6 +972,9 @@ func doXCodeFramework(cmdline []string) {
 	// Create the archive.
 	maybeSkipArchive(env)
 	archive := "geth-" + archiveBasename("ios", params.ArchiveVersion(env.Commit))
+	if err := os.MkdirAll(archive, 0755); err != nil {
+		log.Fatal(err)
+	}
 	bind.Dir, _ = filepath.Abs(archive)
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)
