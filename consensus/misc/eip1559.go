@@ -27,6 +27,11 @@ import (
 )
 
 func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
+	// Verify the header is not malformed
+	if header.BaseFee == nil {
+		return fmt.Errorf("missing baseFee after EIP-1559 fork block")
+	}
+
 	// Verify that the gasUsed is <= gasTarget*elasticityMultiplier
 	if header.GasUsed > header.GasLimit*params.ElasticityMultiplier {
 		return fmt.Errorf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
