@@ -84,6 +84,12 @@ type Backend interface {
 
 // MakeProtocols constructs the P2P protocol definitions for `snap`.
 func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
+	// Filter the discovery iterator for nodes advertising snap support.
+	dnsdisc = enode.Filter(dnsdisc, func(n *enode.Node) bool {
+		var snap enrEntry
+		return n.Load(&snap) == nil
+	})
+
 	protocols := make([]p2p.Protocol, len(ProtocolVersions))
 	for i, version := range ProtocolVersions {
 		version := version // Closure
