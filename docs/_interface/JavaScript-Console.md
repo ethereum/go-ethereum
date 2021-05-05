@@ -7,6 +7,8 @@ The Geth JavaScript console exposes the full [web3 JavaScript Dapp
 API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and further administrative
 APIs.
 
+(note: the web3 version bundled within geth is very old, and not up to date with official docs)
+
 ## Interactive Use: The Console
 
 The geth JavaScript console is started with the `console` or `attach` geth sub-commands.
