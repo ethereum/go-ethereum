@@ -32,14 +32,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
 
 // Client discovers nodes by querying DNS servers.
 type Client struct {
-	cfg     Config
-	clock   mclock.Clock
-	entries *lru.Cache
+	cfg          Config
+	clock        mclock.Clock
+	entries      *lru.Cache
+	ratelimit    *rate.Limiter
+	singleflight singleflight.Group
 }
 
 // Config holds configuration options for the client.
@@ -97,8 +100,12 @@ func NewClient(cfg Config) *Client {
 		panic(err)
 	}
 	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
-	cfg.Resolver = &rateLimitResolver{cfg.Resolver, rlimit}
-	return &Client{cfg: cfg, entries: cache, clock: mclock.System{}}
+	return &Client{
+		cfg:       cfg,
+		entries:   cache,
+		clock:     mclock.System{},
+		ratelimit: rlimit,
+	}
 }
 
 // SyncTree downloads the entire node tree at the given URL.
@@ -130,17 +137,20 @@ func (c *Client) NewIterator(urls ...string) (enode.Iterator, error) {
 
 // resolveRoot retrieves a root entry via DNS.
 func (c *Client) resolveRoot(ctx context.Context, loc *linkEntry) (rootEntry, error) {
-	txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
-	c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
-	if err != nil {
-		return rootEntry{}, err
-	}
-	for _, txt := range txts {
-		if strings.HasPrefix(txt, rootPrefix) {
-			return parseAndVerifyRoot(txt, loc)
+	e, err, _ := c.singleflight.Do(loc.str, func() (interface{}, error) {
+		txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
+		c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
+		if err != nil {
+			return rootEntry{}, err
 		}
-	}
-	return rootEntry{}, nameError{loc.domain, errNoRoot}
+		for _, txt := range txts {
+			if strings.HasPrefix(txt, rootPrefix) {
+				return parseAndVerifyRoot(txt, loc)
+			}
+		}
+		return rootEntry{}, nameError{loc.domain, errNoRoot}
+	})
+	return e.(rootEntry), err
 }
 
 func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
@@ -157,16 +167,27 @@ func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
 // resolveEntry retrieves an entry from the cache or fetches it from the network
 // if it isn't cached.
 func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, error) {
+	// The rate limit always applies, even when the result might be cached. This is
+	// important because it avoids hot-spinning in consumers of node iterators created on
+	// this client.
+	if err := c.ratelimit.Wait(ctx); err != nil {
+		return nil, err
+	}
 	cacheKey := truncateHash(hash)
 	if e, ok := c.entries.Get(cacheKey); ok {
 		return e.(entry), nil
 	}
-	e, err := c.doResolveEntry(ctx, domain, hash)
-	if err != nil {
-		return nil, err
-	}
-	c.entries.Add(cacheKey, e)
-	return e, nil
+
+	ei, err, _ := c.singleflight.Do(cacheKey, func() (interface{}, error) {
+		e, err := c.doResolveEntry(ctx, domain, hash)
+		if err != nil {
+			return nil, err
+		}
+		c.entries.Add(cacheKey, e)
+		return e, nil
+	})
+	e, _ := ei.(entry)
+	return e, err
 }
 
 // doResolveEntry fetches an entry via DNS.
@@ -196,19 +217,6 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 	return nil, nameError{name, errNoEntry}
 }
 
-// rateLimitResolver applies a rate limit to a Resolver.
-type rateLimitResolver struct {
-	r       Resolver
-	limiter *rate.Limiter
-}
-
-func (r *rateLimitResolver) LookupTXT(ctx context.Context, domain string) ([]string, error) {
-	if err := r.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return r.r.LookupTXT(ctx, domain)
-}
-
 // randomIterator traverses a set of trees and returns nodes found in them.
 type randomIterator struct {
 	cur      *enode.Node
@@ -217,8 +225,11 @@ type randomIterator struct {
 	c        *Client
 
 	mu    sync.Mutex
-	trees map[string]*clientTree // all trees
 	lc    linkCache              // tracks tree dependencies
+	trees map[string]*clientTree // all trees
+	// buffers for syncableTrees
+	syncableList []*clientTree
+	disabledList []*clientTree
 }
 
 func (c *Client) newRandomIterator() *randomIterator {
@@ -238,10 +249,10 @@ func (it *randomIterator) Node() *enode.Node {
 
 // Close closes the iterator.
 func (it *randomIterator) Close() {
+	it.cancelFn()
+
 	it.mu.Lock()
 	defer it.mu.Unlock()
-
-	it.cancelFn()
 	it.trees = nil
 }
 
@@ -264,7 +275,7 @@ func (it *randomIterator) addTree(url string) error {
 // nextNode syncs random tree entries until it finds a node.
 func (it *randomIterator) nextNode() *enode.Node {
 	for {
-		ct := it.nextTree()
+		ct := it.pickTree()
 		if ct == nil {
 			return nil
 		}
@@ -282,26 +293,79 @@ func (it *randomIterator) nextNode() *enode.Node {
 	}
 }
 
-// nextTree returns a random tree.
-func (it *randomIterator) nextTree() *clientTree {
+// pickTree returns a random tree to sync from.
+func (it *randomIterator) pickTree() *clientTree {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
+	// Rebuild the trees map if any links have changed.
 	if it.lc.changed {
 		it.rebuildTrees()
 		it.lc.changed = false
 	}
-	if len(it.trees) == 0 {
-		return nil
-	}
-	limit := rand.Intn(len(it.trees))
-	for _, ct := range it.trees {
-		if limit == 0 {
-			return ct
+
+	for {
+		canSync, trees := it.syncableTrees()
+		switch {
+		case canSync:
+			// Pick a random tree.
+			return trees[rand.Intn(len(trees))]
+		case len(trees) > 0:
+			// No sync action can be performed on any tree right now. The only meaningful
+			// thing to do is waiting for any root record to get updated.
+			if !it.waitForRootUpdates(trees) {
+				// Iterator was closed while waiting.
+				return nil
+			}
+		default:
+			// There are no trees left, the iterator was closed.
+			return nil
 		}
-		limit--
 	}
-	return nil
+}
+
+// syncableTrees finds trees on which any meaningful sync action can be performed.
+func (it *randomIterator) syncableTrees() (canSync bool, trees []*clientTree) {
+	// Resize tree lists.
+	it.syncableList = it.syncableList[:0]
+	it.disabledList = it.disabledList[:0]
+
+	// Partition them into the two lists.
+	for _, ct := range it.trees {
+		if ct.canSyncRandom() {
+			it.syncableList = append(it.syncableList, ct)
+		} else {
+			it.disabledList = append(it.disabledList, ct)
+		}
+	}
+	if len(it.syncableList) > 0 {
+		return true, it.syncableList
+	}
+	return false, it.disabledList
+}
+
+// waitForRootUpdates waits for the closest scheduled root check time on the given trees.
+func (it *randomIterator) waitForRootUpdates(trees []*clientTree) bool {
+	var minTree *clientTree
+	var nextCheck mclock.AbsTime
+	for _, ct := range trees {
+		check := ct.nextScheduledRootCheck()
+		if minTree == nil || check < nextCheck {
+			minTree = ct
+			nextCheck = check
+		}
+	}
+
+	sleep := nextCheck.Sub(it.c.clock.Now())
+	it.c.cfg.Logger.Debug("DNS iterator waiting for root updates", "sleep", sleep, "tree", minTree.loc.domain)
+	timeout := it.c.clock.NewTimer(sleep)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C():
+		return true
+	case <-it.ctx.Done():
+		return false // Iterator was closed.
+	}
 }
 
 // rebuildTrees rebuilds the 'trees' map.

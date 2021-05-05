@@ -84,6 +84,15 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	return ID{Hash: checksumToBytes(hash), Next: next}
 }
 
+// NewIDWithChain calculates the Ethereum fork ID from an existing chain instance.
+func NewIDWithChain(chain Blockchain) ID {
+	return NewID(
+		chain.Config(),
+		chain.Genesis().Hash(),
+		chain.CurrentHeader().Number.Uint64(),
+	)
+}
+
 // NewFilter creates a filter that returns if a fork ID should be rejected or not
 // based on the local chain's status.
 func NewFilter(chain Blockchain) Filter {

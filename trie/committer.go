@@ -220,13 +220,13 @@ func (c *committer) commitLoop(db *Database) {
 			switch n := n.(type) {
 			case *shortNode:
 				if child, ok := n.Val.(valueNode); ok {
-					c.onleaf(nil, child, hash)
+					c.onleaf(nil, nil, child, hash)
 				}
 			case *fullNode:
 				// For children in range [0, 15], it's impossible
 				// to contain valuenode. Only check the 17th child.
 				if n.Children[16] != nil {
-					c.onleaf(nil, n.Children[16].(valueNode), hash)
+					c.onleaf(nil, nil, n.Children[16].(valueNode), hash)
 				}
 			}
 		}
@@ -267,6 +267,5 @@ func estimateSize(n node) int {
 		return 1 + len(n)
 	default:
 		panic(fmt.Sprintf("node type %T", n))
-
 	}
 }

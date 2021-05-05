@@ -24,6 +24,26 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
+func ReadSnapshotDisabled(db ethdb.KeyValueReader) bool {
+	disabled, _ := db.Has(snapshotDisabledKey)
+	return disabled
+}
+
+// WriteSnapshotDisabled stores the snapshot pause flag.
+func WriteSnapshotDisabled(db ethdb.KeyValueWriter) {
+	if err := db.Put(snapshotDisabledKey, []byte("42")); err != nil {
+		log.Crit("Failed to store snapshot disabled flag", "err", err)
+	}
+}
+
+// DeleteSnapshotDisabled deletes the flag keeping the snapshot maintenance disabled.
+func DeleteSnapshotDisabled(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotDisabledKey); err != nil {
+		log.Crit("Failed to remove snapshot disabled flag", "err", err)
+	}
+}
+
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in
 // the persisted snapshot.
 func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
@@ -173,5 +193,26 @@ func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
 func DeleteSnapshotRecoveryNumber(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotRecoveryKey); err != nil {
 		log.Crit("Failed to remove snapshot recovery number", "err", err)
+	}
+}
+
+// ReadSnapshotSyncStatus retrieves the serialized sync status saved at shutdown.
+func ReadSnapshotSyncStatus(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(snapshotSyncStatusKey)
+	return data
+}
+
+// WriteSnapshotSyncStatus stores the serialized sync status to save at shutdown.
+func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
+	if err := db.Put(snapshotSyncStatusKey, status); err != nil {
+		log.Crit("Failed to store snapshot sync status", "err", err)
+	}
+}
+
+// DeleteSnapshotSyncStatus deletes the serialized sync status saved at the last
+// shutdown
+func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotSyncStatusKey); err != nil {
+		log.Crit("Failed to remove snapshot sync status", "err", err)
 	}
 }

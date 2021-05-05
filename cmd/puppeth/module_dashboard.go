@@ -518,6 +518,8 @@ var dashboardMascot = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01s\x
 var dashboardDockerfile = `
 FROM mhart/alpine-node:latest
 
+WORKDIR /usr/app
+
 RUN \
 	npm install connect serve-static && \
 	\

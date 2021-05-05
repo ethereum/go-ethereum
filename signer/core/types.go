@@ -76,6 +76,10 @@ type SendTxArgs struct {
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
+
+	// For non-legacy transactions
+	AccessList *types.AccessList `json:"accessList,omitempty"`
+	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
 
 func (args SendTxArgs) String() string {
@@ -93,8 +97,32 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else if args.Input != nil {
 		input = *args.Input
 	}
-	if args.To == nil {
-		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), uint64(args.Gas), (*big.Int)(&args.GasPrice), input)
+	var to *common.Address
+	if args.To != nil {
+		_to := args.To.Address()
+		to = &_to
 	}
-	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input)
+	var data types.TxData
+	if args.AccessList == nil {
+		data = &types.LegacyTx{
+			To:       to,
+			Nonce:    uint64(args.Nonce),
+			Gas:      uint64(args.Gas),
+			GasPrice: (*big.Int)(&args.GasPrice),
+			Value:    (*big.Int)(&args.Value),
+			Data:     input,
+		}
+	} else {
+		data = &types.AccessListTx{
+			To:         to,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasPrice:   (*big.Int)(&args.GasPrice),
+			Value:      (*big.Int)(&args.Value),
+			Data:       input,
+			AccessList: *args.AccessList,
+		}
+	}
+	return types.NewTx(data)
 }

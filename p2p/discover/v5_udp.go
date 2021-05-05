@@ -74,7 +74,7 @@ type UDPv5 struct {
 
 	// talkreq handler registry
 	trlock     sync.Mutex
-	trhandlers map[string]func([]byte) []byte
+	trhandlers map[string]TalkRequestHandler
 
 	// channels into dispatch
 	packetInCh    chan ReadPacket
@@ -95,6 +95,9 @@ type UDPv5 struct {
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
 }
+
+// TalkRequestHandler callback processes a talk request and optionally returns a reply
+type TalkRequestHandler func(enode.ID, *net.UDPAddr, []byte) []byte
 
 // callV5 represents a remote procedure call against another node.
 type callV5 struct {
@@ -145,7 +148,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		log:          cfg.Log,
 		validSchemes: cfg.ValidSchemes,
 		clock:        cfg.Clock,
-		trhandlers:   make(map[string]func([]byte) []byte),
+		trhandlers:   make(map[string]TalkRequestHandler),
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -233,7 +236,7 @@ func (t *UDPv5) LocalNode() *enode.LocalNode {
 // RegisterTalkHandler adds a handler for 'talk requests'. The handler function is called
 // whenever a request for the given protocol is received and should return the response
 // data or nil.
-func (t *UDPv5) RegisterTalkHandler(protocol string, handler func([]byte) []byte) {
+func (t *UDPv5) RegisterTalkHandler(protocol string, handler TalkRequestHandler) {
 	t.trlock.Lock()
 	defer t.trlock.Unlock()
 	t.trhandlers[protocol] = handler
@@ -454,9 +457,20 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) 
 
 // callDone tells dispatch that the active call is done.
 func (t *UDPv5) callDone(c *callV5) {
-	select {
-	case t.callDoneCh <- c:
-	case <-t.closeCtx.Done():
+	// This needs a loop because further responses may be incoming until the
+	// send to callDoneCh has completed. Such responses need to be discarded
+	// in order to avoid blocking the dispatch loop.
+	for {
+		select {
+		case <-c.ch:
+			// late response, discard.
+		case <-c.err:
+			// late error, discard.
+		case t.callDoneCh <- c:
+			return
+		case <-t.closeCtx.Done():
+			return
+		}
 	}
 }
 
@@ -749,9 +763,16 @@ func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, err
 
 // handlePing sends a PONG response.
 func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAddr) {
+	remoteIP := fromAddr.IP
+	// Handle IPv4 mapped IPv6 addresses in the
+	// event the local node is binded to an
+	// ipv6 interface.
+	if remoteIP.To4() != nil {
+		remoteIP = remoteIP.To4()
+	}
 	t.sendResponse(fromID, fromAddr, &v5wire.Pong{
 		ReqID:  p.ReqID,
-		ToIP:   fromAddr.IP,
+		ToIP:   remoteIP,
 		ToPort: uint16(fromAddr.Port),
 		ENRSeq: t.localNode.Node().Seq(),
 	})
@@ -830,7 +851,7 @@ func (t *UDPv5) handleTalkRequest(p *v5wire.TalkRequest, fromID enode.ID, fromAd
 
 	var response []byte
 	if handler != nil {
-		response = handler(p.Message)
+		response = handler(fromID, fromAddr, p.Message)
 	}
 	resp := &v5wire.TalkResponse{ReqID: p.ReqID, Message: response}
 	t.sendResponse(fromID, fromAddr, resp)

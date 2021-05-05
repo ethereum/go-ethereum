@@ -506,7 +506,7 @@ func parseBytes(encType interface{}) ([]byte, bool) {
 	case []byte:
 		return v, true
 	case hexutil.Bytes:
-		return []byte(v), true
+		return v, true
 	case string:
 		bytes, err := hexutil.Decode(v)
 		if err != nil {

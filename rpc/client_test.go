@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -376,6 +377,93 @@ func TestClientCloseUnsubscribeRace(t *testing.T) {
 	}
 }
 
+// unsubscribeRecorder collects the subscription IDs of *_unsubscribe calls.
+type unsubscribeRecorder struct {
+	ServerCodec
+	unsubscribes map[string]bool
+}
+
+func (r *unsubscribeRecorder) readBatch() ([]*jsonrpcMessage, bool, error) {
+	if r.unsubscribes == nil {
+		r.unsubscribes = make(map[string]bool)
+	}
+
+	msgs, batch, err := r.ServerCodec.readBatch()
+	for _, msg := range msgs {
+		if msg.isUnsubscribe() {
+			var params []string
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				panic("unsubscribe decode error: " + err.Error())
+			}
+			r.unsubscribes[params[0]] = true
+		}
+	}
+	return msgs, batch, err
+}
+
+// This checks that Client calls the _unsubscribe method on the server when Unsubscribe is
+// called on a subscription.
+func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
+	t.Parallel()
+
+	// Create the server.
+	srv := NewServer()
+	srv.RegisterName("nftest", new(notificationTestService))
+	p1, p2 := net.Pipe()
+	recorder := &unsubscribeRecorder{ServerCodec: NewCodec(p1)}
+	go srv.ServeCodec(recorder, OptionMethodInvocation|OptionSubscriptions)
+	defer srv.Stop()
+
+	// Create the client on the other end of the pipe.
+	client, _ := newClient(context.Background(), func(context.Context) (ServerCodec, error) {
+		return NewCodec(p2), nil
+	})
+	defer client.Close()
+
+	// Create the subscription.
+	ch := make(chan int)
+	sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unsubscribe and check that unsubscribe was called.
+	sub.Unsubscribe()
+	if !recorder.unsubscribes[sub.subid] {
+		t.Fatal("client did not call unsubscribe method")
+	}
+	if _, open := <-sub.Err(); open {
+		t.Fatal("subscription error channel not closed after unsubscribe")
+	}
+}
+
+// This checks that the subscribed channel can be closed after Unsubscribe.
+// It is the reproducer for https://github.com/ethereum/go-ethereum/issues/22322
+func TestClientSubscriptionChannelClose(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	srv.RegisterName("nftest", new(notificationTestService))
+	client, _ := Dial(wsURL)
+
+	for i := 0; i < 100; i++ {
+		ch := make(chan int, 100)
+		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub.Unsubscribe()
+		close(ch)
+	}
+}
+
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {
@@ -427,7 +515,7 @@ func TestClientNotificationStorm(t *testing.T) {
 	}
 
 	doTest(8000, false)
-	doTest(23000, true)
+	doTest(24000, true)
 }
 
 func TestClientSetHeader(t *testing.T) {

@@ -599,6 +599,7 @@ func (ns *NodeStateMachine) updateEnode(n *enode.Node) (enode.ID, *nodeInfo) {
 	node := ns.nodes[id]
 	if node != nil && n.Seq() > node.node.Seq() {
 		node.node = n
+		node.dirty = true
 	}
 	return id, node
 }
@@ -725,7 +726,7 @@ func (ns *NodeStateMachine) opFinish() {
 	}
 	ns.opPending = nil
 	ns.opFlag = false
-	ns.opWait.Signal()
+	ns.opWait.Broadcast()
 }
 
 // Operation calls the given function as an operation callback. This allows the caller
@@ -855,6 +856,23 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 		return node.fields[ns.fieldIndex(field)]
 	}
 	return nil
+}
+
+// GetState retrieves the current state of the given node. Note that when used in a
+// subscription callback the result can be out of sync with the state change represented
+// by the callback parameters so extra safety checks might be necessary.
+func (ns *NodeStateMachine) GetState(n *enode.Node) Flags {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	ns.checkStarted()
+	if ns.closed {
+		return Flags{}
+	}
+	if _, node := ns.updateEnode(n); node != nil {
+		return Flags{mask: node.state, setup: ns.setup}
+	}
+	return Flags{}
 }
 
 // SetField sets the given field of the given node and blocks until the operation is finished

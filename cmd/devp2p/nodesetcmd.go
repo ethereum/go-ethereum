@@ -17,8 +17,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -60,24 +64,63 @@ func nodesetInfo(ctx *cli.Context) error {
 
 	ns := loadNodesJSON(ctx.Args().First())
 	fmt.Printf("Set contains %d nodes.\n", len(ns))
+	showAttributeCounts(ns)
 	return nil
+}
+
+// showAttributeCounts prints the distribution of ENR attributes in a node set.
+func showAttributeCounts(ns nodeSet) {
+	attrcount := make(map[string]int)
+	var attrlist []interface{}
+	for _, n := range ns {
+		r := n.N.Record()
+		attrlist = r.AppendElements(attrlist[:0])[1:]
+		for i := 0; i < len(attrlist); i += 2 {
+			key := attrlist[i].(string)
+			attrcount[key]++
+		}
+	}
+
+	var keys []string
+	var maxlength int
+	for key := range attrcount {
+		keys = append(keys, key)
+		if len(key) > maxlength {
+			maxlength = len(key)
+		}
+	}
+	sort.Strings(keys)
+	fmt.Println("ENR attribute counts:")
+	for _, key := range keys {
+		fmt.Printf("%s%s: %d\n", strings.Repeat(" ", maxlength-len(key)+1), key, attrcount[key])
+	}
 }
 
 func nodesetFilter(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
-	ns := loadNodesJSON(ctx.Args().First())
+	// Parse -limit.
+	limit, err := parseFilterLimit(ctx.Args().Tail())
+	if err != nil {
+		return err
+	}
+	// Parse the filters.
 	filter, err := andFilter(ctx.Args().Tail())
 	if err != nil {
 		return err
 	}
 
+	// Load nodes and apply filters.
+	ns := loadNodesJSON(ctx.Args().First())
 	result := make(nodeSet)
 	for id, n := range ns {
 		if filter(n) {
 			result[id] = n
 		}
+	}
+	if limit >= 0 {
+		result = result.topN(limit)
 	}
 	writeNodesJSON("-", result)
 	return nil
@@ -91,12 +134,15 @@ type nodeFilterC struct {
 }
 
 var filterFlags = map[string]nodeFilterC{
+	"-limit":       {1, trueFilter}, // needed to skip over -limit
 	"-ip":          {1, ipFilter},
 	"-min-age":     {1, minAgeFilter},
 	"-eth-network": {1, ethFilter},
 	"-les-server":  {0, lesFilter},
+	"-snap":        {0, snapFilter},
 }
 
+// parseFilters parses nodeFilters from args.
 func parseFilters(args []string) ([]nodeFilter, error) {
 	var filters []nodeFilter
 	for len(args) > 0 {
@@ -104,19 +150,39 @@ func parseFilters(args []string) ([]nodeFilter, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid filter %q", args[0])
 		}
-		if len(args) < fc.narg {
-			return nil, fmt.Errorf("filter %q wants %d arguments, have %d", args[0], fc.narg, len(args))
+		if len(args)-1 < fc.narg {
+			return nil, fmt.Errorf("filter %q wants %d arguments, have %d", args[0], fc.narg, len(args)-1)
 		}
-		filter, err := fc.fn(args[1:])
+		filter, err := fc.fn(args[1 : 1+fc.narg])
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", args[0], err)
 		}
 		filters = append(filters, filter)
-		args = args[fc.narg+1:]
+		args = args[1+fc.narg:]
 	}
 	return filters, nil
 }
 
+// parseFilterLimit parses the -limit option in args. It returns -1 if there is no limit.
+func parseFilterLimit(args []string) (int, error) {
+	limit := -1
+	for i, arg := range args {
+		if arg == "-limit" {
+			if i == len(args)-1 {
+				return -1, errors.New("-limit requires an argument")
+			}
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return -1, fmt.Errorf("invalid -limit %q", args[i+1])
+			}
+			limit = n
+		}
+	}
+	return limit, nil
+}
+
+// andFilter parses node filters in args and and returns a single filter that requires all
+// of them to match.
 func andFilter(args []string) (nodeFilter, error) {
 	checks, err := parseFilters(args)
 	if err != nil {
@@ -131,6 +197,10 @@ func andFilter(args []string) (nodeFilter, error) {
 		return true
 	}
 	return f, nil
+}
+
+func trueFilter(args []string) (nodeFilter, error) {
+	return func(n nodeJSON) bool { return true }, nil
 }
 
 func ipFilter(args []string) (nodeFilter, error) {
@@ -172,7 +242,7 @@ func ethFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var eth struct {
 			ForkID forkid.ID
-			_      []rlp.RawValue `rlp:"tail"`
+			Tail   []rlp.RawValue `rlp:"tail"`
 		}
 		if n.N.Load(enr.WithEntry("eth", &eth)) != nil {
 			return false
@@ -185,9 +255,19 @@ func ethFilter(args []string) (nodeFilter, error) {
 func lesFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var les struct {
-			_ []rlp.RawValue `rlp:"tail"`
+			Tail []rlp.RawValue `rlp:"tail"`
 		}
 		return n.N.Load(enr.WithEntry("les", &les)) == nil
+	}
+	return f, nil
+}
+
+func snapFilter(args []string) (nodeFilter, error) {
+	f := func(n nodeJSON) bool {
+		var snap struct {
+			Tail []rlp.RawValue `rlp:"tail"`
+		}
+		return n.N.Load(enr.WithEntry("snap", &snap)) == nil
 	}
 	return f, nil
 }
