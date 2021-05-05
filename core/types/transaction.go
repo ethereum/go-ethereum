@@ -34,9 +34,10 @@ import (
 var (
 	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
 	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
+	ErrFeeCapTooLow         = errors.New("fee cap less than base fee")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
-	errNegativeEffectiveTip = errors.New("negative effective miner tip")
 )
 
 // Transaction types.
@@ -305,15 +306,11 @@ func (tx *Transaction) EffectiveTip(baseFee *big.Int) (*big.Int, error) {
 	if baseFee == nil {
 		return tx.Tip(), nil
 	}
-	remainingFee := (&big.Int{}).Sub(tx.FeeCap(), baseFee)
-	if remainingFee.Sign() < 0 {
-		return nil, errNegativeEffectiveTip
+	feeCap := tx.FeeCap()
+	if feeCap.Cmp(baseFee) == -1 {
+		return nil, ErrFeeCapTooLow
 	}
-	minerFee := tx.Tip()
-	if remainingFee.Cmp(minerFee) < 0 {
-		minerFee = remainingFee
-	}
-	return minerFee, nil
+	return math.BigMin(tx.Tip(), feeCap.Sub(feeCap, baseFee)), nil
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
