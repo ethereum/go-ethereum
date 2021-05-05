@@ -210,6 +210,8 @@ type BlockChain struct {
 	shouldPreserve     func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 	writeLegacyJournal bool                           // Testing flag used to flush the snapshot journal in legacy format.
+
+	pendingHeaderContainer *PandoraTempHeaderContainer // in memory temporary header container which holds headers for orchestrator confirmation.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -226,6 +228,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
+	headerContainer := NewPandoraTempHeaderContainer()
+
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
@@ -236,16 +240,17 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:           make(chan struct{}),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		quit:                   make(chan struct{}),
+		shouldPreserve:         shouldPreserve,
+		bodyCache:              bodyCache,
+		bodyRLPCache:           bodyRLPCache,
+		receiptsCache:          receiptsCache,
+		blockCache:             blockCache,
+		txLookupCache:          txLookupCache,
+		futureBlocks:           futureBlocks,
+		engine:                 engine,
+		vmConfig:               vmConfig,
+		pendingHeaderContainer: headerContainer,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -2425,6 +2430,11 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
 	}
+	// save chain in the in-memory database
+	bc.pendingHeaderContainer.WriteHeaderBatch(chain)
+
+	//TODO: send to feed
+	// TODO: in future we will halt execution here to get confirmation from orchestrator.
 
 	// Make sure only one thread manipulates the chain at once
 	bc.chainmu.Lock()
@@ -2512,6 +2522,11 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 	bc.txLookupCache.Add(hash, lookup)
 	return lookup
+}
+
+// GetTempHeadersSince returns in-memory saved temporary headers so that orchestrator can validate it
+func (bc *BlockChain) GetTempHeadersSince(from common.Hash) []*types.Header {
+	return bc.pendingHeaderContainer.ReadHeaderSince(from)
 }
 
 // Config retrieves the chain's fork configuration.

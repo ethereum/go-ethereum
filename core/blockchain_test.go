@@ -201,6 +201,39 @@ func TestLastBlock(t *testing.T) {
 	}
 }
 
+func TestPendingBlockHash(t *testing.T) {
+
+	// prepare a dummy bc
+	_, blockchain, err := newCanonical(ethash.NewFaker(), 0, true)
+	if err != nil {
+		t.Fatalf("failed to create pristine chain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	// prepare header chain
+	headers := makeHeaderChain(blockchain.CurrentHeader(), 5, ethash.NewFullFaker(), blockchain.db, 0)
+	pendingHeaderDb := rawdb.NewMemoryDatabase()
+	for _, header := range headers {
+		t.Logf("header hash %v", header.Hash())
+		rawdb.WriteHeader(pendingHeaderDb, header)
+		rawdb.WriteHeadHeaderHash(pendingHeaderDb, header.Hash())
+	}
+
+	// set up the range
+	fromHeaderNumber := rawdb.ReadHeaderNumber(pendingHeaderDb, headers[0].Hash())
+	lastHeaderNumber := rawdb.ReadHeaderNumber(pendingHeaderDb, rawdb.ReadHeadHeaderHash(pendingHeaderDb))
+
+
+	for i := *fromHeaderNumber; i <= *lastHeaderNumber; i++ {
+
+		hashes := rawdb.ReadAllHashes(pendingHeaderDb, i)
+		t.Logf("hashes %v", hashes)
+
+		header := rawdb.ReadHeader(pendingHeaderDb, hashes[0], i)
+		t.Logf("retrieved header %v", header)
+	}
+}
+
 // Tests that given a starting canonical chain of a given size, it can be extended
 // with various length chains.
 func TestExtendCanonicalHeaders(t *testing.T) { testExtendCanonical(t, false) }
