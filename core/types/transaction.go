@@ -457,12 +457,12 @@ func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) (*TxWithMinerFee, erro
 	}, nil
 }
 
-// TxByMinerFeeAndTime implements both the sort and the heap interface, making it useful
+// TxByPriceAndTime implements both the sort and the heap interface, making it useful
 // for all at once sorting as well as individually adding and removing elements.
-type TxByMinerFeeAndTime []*TxWithMinerFee
+type TxByPriceAndTime []*TxWithMinerFee
 
-func (s TxByMinerFeeAndTime) Len() int { return len(s) }
-func (s TxByMinerFeeAndTime) Less(i, j int) bool {
+func (s TxByPriceAndTime) Len() int { return len(s) }
+func (s TxByPriceAndTime) Less(i, j int) bool {
 	// If the prices are equal, use the time the transaction was first seen for
 	// deterministic sorting
 	cmp := s[i].minerFee.Cmp(s[j].minerFee)
@@ -471,13 +471,13 @@ func (s TxByMinerFeeAndTime) Less(i, j int) bool {
 	}
 	return cmp > 0
 }
-func (s TxByMinerFeeAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s TxByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func (s *TxByMinerFeeAndTime) Push(x interface{}) {
+func (s *TxByPriceAndTime) Push(x interface{}) {
 	*s = append(*s, x.(*TxWithMinerFee))
 }
 
-func (s *TxByMinerFeeAndTime) Pop() interface{} {
+func (s *TxByPriceAndTime) Pop() interface{} {
 	old := *s
 	n := len(old)
 	x := old[n-1]
@@ -485,12 +485,12 @@ func (s *TxByMinerFeeAndTime) Pop() interface{} {
 	return x
 }
 
-// TransactionsByMinerFeeAndNonce represents a set of transactions that can return
+// TransactionsByPriceAndNonce represents a set of transactions that can return
 // transactions in a profit-maximizing sorted order, while supporting removing
 // entire batches of transactions for non-executable accounts.
-type TransactionsByMinerFeeAndNonce struct {
+type TransactionsByPriceAndNonce struct {
 	txs     map[common.Address]Transactions // Per account nonce-sorted list of transactions
-	heads   TxByMinerFeeAndTime             // Next transaction for each unique account (price heap)
+	heads   TxByPriceAndTime                // Next transaction for each unique account (price heap)
 	signer  Signer                          // Signer for the set of transactions
 	baseFee *big.Int                        // Current base fee
 }
@@ -500,9 +500,9 @@ type TransactionsByMinerFeeAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, baseFee *big.Int) *TransactionsByMinerFeeAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, baseFee *big.Int) *TransactionsByPriceAndNonce {
 	// Initialize a price and received time based heap with the head transactions
-	heads := make(TxByMinerFeeAndTime, 0, len(txs))
+	heads := make(TxByPriceAndTime, 0, len(txs))
 	for from, accTxs := range txs {
 		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee)
 		if err != nil {
@@ -515,7 +515,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 	heap.Init(&heads)
 
 	// Assemble and return the transaction set
-	return &TransactionsByMinerFeeAndNonce{
+	return &TransactionsByPriceAndNonce{
 		txs:     txs,
 		heads:   heads,
 		signer:  signer,
@@ -524,7 +524,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 }
 
 // Peek returns the next transaction by price.
-func (t *TransactionsByMinerFeeAndNonce) Peek() *Transaction {
+func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	if len(t.heads) == 0 {
 		return nil
 	}
@@ -532,7 +532,7 @@ func (t *TransactionsByMinerFeeAndNonce) Peek() *Transaction {
 }
 
 // Shift replaces the current best head with the next one from the same account.
-func (t *TransactionsByMinerFeeAndNonce) Shift() {
+func (t *TransactionsByPriceAndNonce) Shift() {
 	acc, _ := Sender(t.signer, t.heads[0].tx)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
 		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee); err == nil {
@@ -547,7 +547,7 @@ func (t *TransactionsByMinerFeeAndNonce) Shift() {
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.
-func (t *TransactionsByMinerFeeAndNonce) Pop() {
+func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
