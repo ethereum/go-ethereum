@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
+func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	// Verify the header is not malformed
 	if header.BaseFee == nil {
 		return fmt.Errorf("missing baseFee after EIP-1559 fork block")
@@ -38,12 +38,7 @@ func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
 	}
 
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := new(big.Int).SetUint64(params.InitialBaseFee)
-	if notFirst {
-		// Only calculate the correct baseFee if the parent header is
-		// also a EIP-1559 header.
-		expectedBaseFee = CalcBaseFee(parent)
-	}
+	expectedBaseFee := CalcBaseFee(config, parent)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: expected: %d, have %d, parentBaseFee: %v, parentGasUsed: %v", expectedBaseFee, header.BaseFee.Int64(), parent.BaseFee.Int64(), parent.GasUsed)
 	}
@@ -51,7 +46,12 @@ func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
 	return nil
 }
 
-func CalcBaseFee(parent *types.Header) *big.Int {
+func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
+	if !config.IsAleut(parent.Number) {
+		return new(big.Int).SetUint64(params.InitialBaseFee)
+	}
+
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parent.GasLimit {
 		return new(big.Int).Set(parent.BaseFee)

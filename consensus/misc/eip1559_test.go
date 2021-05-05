@@ -21,9 +21,16 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+func config() *params.ChainConfig {
+	config := params.TestChainConfig
+	config.AleutBlock = common.Big0
+	return config
+}
 
 func TestBlockElasticity(t *testing.T) {
 	initial := new(big.Int).SetUint64(params.InitialBaseFee)
@@ -37,12 +44,12 @@ func TestBlockElasticity(t *testing.T) {
 		GasLimit: 10000000,
 		BaseFee:  initial,
 	}
-	if err := VerifyEip1559Header(parent, header, false); err != nil {
+	if err := VerifyEip1559Header(config(), parent, header); err != nil {
 		t.Errorf("Expected valid header: %s", err)
 	}
 	header.GasUsed += 1
 	expected := fmt.Sprintf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
-	if err := VerifyEip1559Header(parent, header, false); fmt.Sprint(err) != expected {
+	if err := VerifyEip1559Header(config(), parent, header); fmt.Sprint(err) != expected {
 		t.Errorf("Expected invalid header")
 	}
 }
@@ -78,11 +85,12 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 	for i, test := range tests {
 		parent := &types.Header{
+			Number:   common.Big2,
 			GasLimit: test.parentGasLimit,
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  test.parentBaseFee,
 		}
-		baseFee := CalcBaseFee(parent)
+		baseFee := CalcBaseFee(config(), parent)
 		if baseFee.Cmp(test.expectedBaseFee) != 0 {
 			t.Errorf("Test %d: expected %d, got %d", i+1, test.expectedBaseFee.Int64(), baseFee.Int64())
 		}

@@ -278,7 +278,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 
 	// Verify the block's gas usage and (if applicable) verify the base fee.
 	if chain.Config().IsAleut(header.Number) {
-		if err := misc.VerifyEip1559Header(parent, header, chain.Config().IsAleut(parent.Number)); err != nil {
+		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 			return err
 		}
 	} else {

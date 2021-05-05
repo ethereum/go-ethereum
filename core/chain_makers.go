@@ -269,9 +269,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	}
 
 	if chain.Config().IsAleut(parent.Number()) {
-		header.BaseFee = misc.CalcBaseFee(parent.Header())
-	} else if chain.Config().IsAleut(header.Number) {
-		header.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
 	}
 
 	return header
