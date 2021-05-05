@@ -747,7 +747,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByMinerFeeAndNonce, coinbase common.Address, interrupt *int32) bool {
+func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
 		return true
@@ -889,10 +889,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Time:       uint64(timestamp),
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	if w.chain.Config().IsAleut(parent.Number()) {
-		header.BaseFee = misc.CalcBaseFee(parent.Header())
-	} else if w.chain.Config().IsAleut(header.Number) {
-		header.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+	if w.chainConfig.IsAleut(header.Number) {
+		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
