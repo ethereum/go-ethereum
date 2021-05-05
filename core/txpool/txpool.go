@@ -41,6 +41,8 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+	chainHeadChanSize = 10
 )
 
 var (
@@ -114,12 +116,13 @@ type TxPool struct {
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 
-	config *TxPoolConfig
+	config TxPoolConfig
 	// feed for notifying about new tx
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 	// subscription for new head events
 	chainHeadSub event.Subscription
+	chainHeadCh  chan core.ChainHeadEvent
 	// all transactions
 	all          *txLookup
 	localSenders *senderSet
@@ -127,7 +130,35 @@ type TxPool struct {
 	localTxs     *txList
 	remoteTxs    *txList
 	// global txpool mutex
-	mu *sync.RWMutex
+	mu sync.RWMutex
+}
+
+// NewTxPool creates a new transaction pool to gather, sort and filter inbound
+// transactions from the network.
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+
+	// TODO move this to reset once that is done
+	statedb, err := chain.StateAt(chain.CurrentBlock().Hash())
+	if err != nil {
+		panic("failed to set current state")
+	}
+
+	pool := &TxPool{
+		config:        config,
+		chainconfig:   chainconfig,
+		chain:         chain,
+		signer:        types.LatestSigner(chainconfig),
+		all:           newTxLookup(),
+		chainHeadCh:   make(chan core.ChainHeadEvent, chainHeadChanSize),
+		localSenders:  newSenderSet(),
+		pendingNonces: newTxNoncer(statedb), // TODO move to reset
+		currentState:  statedb,              // TODO move to reset
+	}
+
+	// Subscribe events from blockchain and start the main event loop.
+	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+
+	return pool
 }
 
 // Stop stops the transaction pool, closes all registered subscriptions,
@@ -167,6 +198,7 @@ func (pool *TxPool) Stats() (int, int) { panic("not implemented") }
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+	// Only used by the api for introspection, might need to rewrite that
 	panic("not implemented")
 }
 
