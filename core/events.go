@@ -36,6 +36,11 @@ type ChainEvent struct {
 	Logs  []*types.Log
 }
 
+// PendingHeaderEvent is an event for handling pending headers verification from the orchestrator
+type PendingHeaderEvent struct {
+	Headers []*types.Header
+}
+
 type ChainSideEvent struct {
 	Block *types.Block
 }

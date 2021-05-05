@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 /*
@@ -15,27 +16,28 @@ import (
 * Insert Headers operation will halt until the header is validated by orchestrator.
  */
 
-// PandoraTempHeaderContainer will hold temporary headers in a in memory db.
-type PandoraTempHeaderContainer struct {
+// PandoraPendingHeaderContainer will hold temporary headers in a in memory db.
+type PandoraPendingHeaderContainer struct {
 	headerContainer ethdb.Database	// in-memory database which will hold headers temporarily
+	pndHeaderFeed 	event.Feed	// announce new arrival of pending header
 }
 
-// NewPandoraTempHeaderContainer will return a fully initiated in-memory header container
-func NewPandoraTempHeaderContainer() *PandoraTempHeaderContainer {
-	return &PandoraTempHeaderContainer{
+// NewPandoraPendingHeaderContainer will return a fully initiated in-memory header container
+func NewPandoraPendingHeaderContainer() *PandoraPendingHeaderContainer {
+	return &PandoraPendingHeaderContainer{
 		headerContainer: rawdb.NewMemoryDatabase(),
 	}
 }
 
 // WriteHeaderBatch dumps a batch of header into header container
-func (container *PandoraTempHeaderContainer) WriteHeaderBatch (headers []*types.Header) {
+func (container *PandoraPendingHeaderContainer) WriteHeaderBatch (headers []*types.Header) {
 	for _, header := range headers {
 		container.WriteHeader(header)
 	}
 }
 
 // WriteHeader dump a single header in the header container
-func (container *PandoraTempHeaderContainer) WriteHeader (header *types.Header)  {
+func (container *PandoraPendingHeaderContainer) WriteHeader (header *types.Header)  {
 	// write the header into db
 	rawdb.WriteHeader(container.headerContainer, header)
 
@@ -44,7 +46,7 @@ func (container *PandoraTempHeaderContainer) WriteHeader (header *types.Header) 
 }
 
 // ReadHeaderSince will receive a from header hash and return a batch of headers from that header.
-func (container *PandoraTempHeaderContainer) ReadHeaderSince (from common.Hash) []*types.Header {
+func (container *PandoraPendingHeaderContainer) ReadHeaderSince (from common.Hash) []*types.Header {
 	fromHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, from)
 	lastHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, rawdb.ReadHeadHeaderHash(container.headerContainer))
 
@@ -58,7 +60,7 @@ func (container *PandoraTempHeaderContainer) ReadHeaderSince (from common.Hash) 
 }
 
 // readHeader reads a single header which is given as the header number
-func (container *PandoraTempHeaderContainer) readHeader(headerNumber uint64) *types.Header {
+func (container *PandoraPendingHeaderContainer) readHeader(headerNumber uint64) *types.Header {
 	hashes := rawdb.ReadAllHashes(container.headerContainer, headerNumber)
 	return rawdb.ReadHeader(container.headerContainer, hashes[0], headerNumber)
 }

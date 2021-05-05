@@ -211,7 +211,7 @@ type BlockChain struct {
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 	writeLegacyJournal bool                           // Testing flag used to flush the snapshot journal in legacy format.
 
-	pendingHeaderContainer *PandoraTempHeaderContainer // in memory temporary header container which holds headers for orchestrator confirmation.
+	pendingHeaderContainer *PandoraPendingHeaderContainer // in memory temporary header container which holds headers for orchestrator confirmation.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -228,7 +228,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
-	headerContainer := NewPandoraTempHeaderContainer()
+	headerContainer := NewPandoraPendingHeaderContainer()
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -2433,7 +2433,8 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	// save chain in the in-memory database
 	bc.pendingHeaderContainer.WriteHeaderBatch(chain)
 
-	//TODO: send to feed
+	// send chain to the subscribed orchestrator.
+	bc.pendingHeaderContainer.pndHeaderFeed.Send(PendingHeaderEvent{Headers: chain})
 	// TODO: in future we will halt execution here to get confirmation from orchestrator.
 
 	// Make sure only one thread manipulates the chain at once
@@ -2564,4 +2565,9 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// SubscribePendingHeaderEvent registers a subscription of *types.Header
+func (bc *BlockChain) SubscribePendingHeaderEvent(ch chan<- PendingHeaderEvent) event.Subscription {
+	return bc.scope.Track(bc.pendingHeaderContainer.pndHeaderFeed.Subscribe(ch))
 }
