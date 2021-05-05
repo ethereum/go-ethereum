@@ -225,6 +225,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return p.RequestTxs(hashes)
 	}
 	has := func(hash common.Hash) bool {
+		// TODO change back to txpool.Has
 		return h.txpool.Get(hash) != nil
 	}
 	h.txFetcher = fetcher.NewTxFetcher(has, h.txpool.AddRemotes, fetchTx)

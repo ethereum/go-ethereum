@@ -556,6 +556,7 @@ func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
 	// Looking the transaction in txpool first.
 	if b.TxPool().Get(hash) != nil {
+		// TODO: change to use txpool.Has
 		stat.Status = core.TxStatusPending
 	} else {
 		// If the transaction is unknown to the pool, try looking it up locally.

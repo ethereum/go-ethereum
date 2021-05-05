@@ -8,6 +8,22 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type transactionOrNumber struct {
+	tx     *types.Transaction
+	number *uint64
+}
+
+func (t *transactionOrNumber) Tx() (*types.Transaction, bool) {
+	return t.tx, t.tx != nil
+}
+
+func (t *transactionOrNumber) Number() (uint64, bool) {
+	if t.number != nil {
+		return 0, false
+	}
+	return *t.number, false
+}
+
 // txLookup is used internally by TxPool to track transactions while allowing
 // lookup without mutex contention.
 //
@@ -23,39 +39,29 @@ import (
 type txLookup struct {
 	slots   int
 	lock    sync.RWMutex
-	locals  map[common.Hash]*types.Transaction
-	remotes map[common.Hash]*types.Transaction
+	locals  map[common.Hash]*transactionOrNumber
+	remotes map[common.Hash]*transactionOrNumber
 }
 
 // newTxLookup returns a new txLookup structure.
 func newTxLookup() *txLookup {
 	return &txLookup{
-		locals:  make(map[common.Hash]*types.Transaction),
-		remotes: make(map[common.Hash]*types.Transaction),
+		locals:  make(map[common.Hash]*transactionOrNumber),
+		remotes: make(map[common.Hash]*transactionOrNumber),
 	}
 }
 
-// Range calls f on each key and value present in the map. The callback passed
-// should return the indicator whether the iteration needs to be continued.
-// Callers need to specify which set (or both) to be iterated.
-func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction, local bool) bool, local bool, remote bool) {
+// Has returns true if a transaction exists in the lookup
+func (t *txLookup) Has(hash common.Hash) bool {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-
-	if local {
-		for key, value := range t.locals {
-			if !f(key, value, true) {
-				return
-			}
-		}
+	if tx := t.remotes[hash]; tx != nil {
+		return true
 	}
-	if remote {
-		for key, value := range t.remotes {
-			if !f(key, value, false) {
-				return
-			}
-		}
+	if tx := t.locals[hash]; tx != nil {
+		return true
 	}
+	return false
 }
 
 // Get returns a transaction if it exists in the lookup, or nil if not found.
@@ -63,18 +69,35 @@ func (t *txLookup) Get(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	if tx := t.locals[hash]; tx != nil {
+	if tx := t.remotes[hash]; tx != nil {
+		tx, ok := tx.Tx()
+		if !ok {
+			panic("TODO: lookup tx in db")
+		}
 		return tx
 	}
-	return t.remotes[hash]
+	if tx := t.locals[hash]; tx != nil {
+		tx, ok := tx.Tx()
+		if !ok {
+			panic("TODO: lookup tx in db")
+		}
+		return tx
+	}
+	return nil
 }
 
 // GetLocal returns a transaction if it exists in the lookup, or nil if not found.
 func (t *txLookup) GetLocal(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-
-	return t.locals[hash]
+	if tx := t.locals[hash]; tx != nil {
+		tx, ok := tx.Tx()
+		if !ok {
+			panic("TODO: lookup tx in db")
+		}
+		return tx
+	}
+	return nil
 }
 
 // GetRemote returns a transaction if it exists in the lookup, or nil if not found.
@@ -82,7 +105,14 @@ func (t *txLookup) GetRemote(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.remotes[hash]
+	if tx := t.remotes[hash]; tx != nil {
+		tx, ok := tx.Tx()
+		if !ok {
+			panic("TODO: lookup tx in db")
+		}
+		return tx
+	}
+	return nil
 }
 
 // Count returns the current number of transactions in the lookup.
@@ -125,9 +155,9 @@ func (t *txLookup) Add(tx *types.Transaction, local bool) {
 	t.slots += numSlots(tx)
 
 	if local {
-		t.locals[tx.Hash()] = tx
+		t.locals[tx.Hash()] = &transactionOrNumber{tx: tx}
 	} else {
-		t.remotes[tx.Hash()] = tx
+		t.remotes[tx.Hash()] = &transactionOrNumber{tx: tx}
 	}
 }
 
@@ -144,7 +174,13 @@ func (t *txLookup) Remove(hash common.Hash) {
 		log.Error("No transaction found to be deleted", "hash", hash)
 		return
 	}
-	t.slots -= numSlots(tx)
+	var resTx *types.Transaction
+	if t, ok := tx.Tx(); ok {
+		resTx = t
+	} else {
+		panic("TODO: delete tx from disk")
+	}
+	t.slots -= numSlots(resTx)
 
 	delete(t.locals, hash)
 	delete(t.remotes, hash)

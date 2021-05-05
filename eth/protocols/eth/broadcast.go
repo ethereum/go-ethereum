@@ -147,6 +147,7 @@ func (p *Peer) announceTransactions() {
 				size    common.StorageSize
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
+				// TODO: change to use txpool.Has
 				if p.txpool.Get(queue[count]) != nil {
 					pending = append(pending, queue[count])
 					size += common.HashLength

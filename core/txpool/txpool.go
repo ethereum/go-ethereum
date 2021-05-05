@@ -95,6 +95,16 @@ type TxPoolConfig struct {
 
 	PriceBump  int
 	MaxTxCount int
+	NoLocals   bool
+
+	// maximal gas in block
+	maxGasPerBlock uint64
+	// minimal gas price
+	minGasPrice *big.Int
+	// pendingBlockSize determines how many transactions should be returned to
+	// the miner when it requests the best transactions from the pool.
+	// it is computed as the max gas per block / 21.000
+	pendingBlockSize uint64
 }
 
 type TxPool struct {
@@ -105,10 +115,6 @@ type TxPool struct {
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 
 	config *TxPoolConfig
-	// maximal gas in block
-	maxGasPerBlock uint64
-	// minimal gas price
-	minGasPrice *big.Int
 	// feed for notifying about new tx
 	txFeed event.Feed
 	scope  event.SubscriptionScope
@@ -121,7 +127,7 @@ type TxPool struct {
 	localTxs     *txList
 	remoteTxs    *txList
 	// global txpool mutex
-	mu *sync.Mutex
+	mu *sync.RWMutex
 }
 
 // Stop stops the transaction pool, closes all registered subscriptions,
@@ -147,7 +153,12 @@ func (pool *TxPool) SetGasPrice(price *big.Int) { panic("not implemented") }
 
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top. This is the pending nonce of the account.
-func (pool *TxPool) Nonce(addr common.Address) uint64 { panic("not implemented") }
+func (pool *TxPool) Nonce(addr common.Address) uint64 {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	return pool.pendingNonces.get(addr)
+}
 
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
@@ -167,29 +178,62 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 
 // PendingBlock retrieves the best currently available and executable transactions.
 // The PendingTransactions are in two classes: local and remote transactions.
-func (pool *TxPool) PendingBlock() (types.Transactions, types.Transactions, error) {
-	panic("not implemented")
+func (pool *TxPool) PendingBlock() (locals types.Transactions, remotes types.Transactions) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	locals = pool.localTxs.Peek(int(pool.config.pendingBlockSize))
+	missing := int(pool.config.pendingBlockSize) - len(locals)
+	if missing > 0 {
+		remotes = pool.remoteTxs.Peek(missing)
+		missing -= len(remotes)
+	}
+	if missing > 0 {
+		panic("TODO lookup tx's from disk if we don't have enough in ram")
+	}
+	return
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
-func (pool *TxPool) Locals() []common.Address { panic("not implemented") }
+func (pool *TxPool) Locals() []common.Address {
+	// TODO: this method is not needed anymore, once the miner is cleaned up
+	accounts := make([]common.Address, 0, len(pool.localSenders.accounts))
+	for account := range pool.localSenders.accounts {
+		accounts = append(accounts, account)
+	}
+	return accounts
+}
 
 // AddLocal enqueues a single local transaction into the pool if it is valid.
 // It marks the sending account as local, meaning all further transactions are considered local.
-func (pool *TxPool) AddLocal(tx *types.Transaction) error { panic("not implemented") }
+func (pool *TxPool) AddLocal(tx *types.Transaction) error {
+	errs := pool.addTxs([]*types.Transaction{tx}, !pool.config.NoLocals, true)
+	return errs[0]
+}
 
 // AddRemotes enqueues a batch of transactions into the pool if they are valid. If the
 // senders are not among the locally tracked ones, full pricing constraints will apply.
 //
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
-func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error { panic("not implemented") }
+func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
+	return pool.addTxs(txs, false, false)
+}
 
 // This is like AddRemotes, but waits for pool reorganization. Tests use this method.
-func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error { panic("not implemented") }
+func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
+	return pool.addTxs(txs, false, true)
+}
 
 // Get returns a transaction if it is contained in the pool and nil otherwise.
-func (pool *TxPool) Get(hash common.Hash) *types.Transaction { panic("not implemented") }
+func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
+	return pool.all.Get(hash)
+}
+
+// Has returns true if a transaction is contained in the pool.
+func (pool *TxPool) Has(hash common.Hash) bool {
+	return pool.all.Has(hash)
+}
 
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
@@ -199,7 +243,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	)
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
-		if pool.all.Get(tx.Hash()) != nil {
+		if pool.all.Has(tx.Hash()) {
 			errs[i] = ErrAlreadyKnown
 			continue
 		}
@@ -254,7 +298,7 @@ func (pool *TxPool) addTxsLocked(txs []*txEntry, local bool) []error {
 func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// If the transaction is already known, discard it
 	hash := tx.tx.Hash()
-	if pool.all.Get(hash) != nil {
+	if pool.all.Has(hash) {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		return false, ErrAlreadyKnown
 	}
@@ -380,7 +424,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.maxGasPerBlock < tx.Gas() {
+	if pool.config.maxGasPerBlock < tx.Gas() {
 		return ErrGasLimit
 	}
 	// Make sure the transaction is signed properly.
@@ -389,7 +433,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
-	if !local && tx.GasPriceIntCmp(pool.minGasPrice) < 0 {
+	if !local && tx.GasPriceIntCmp(pool.config.minGasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
