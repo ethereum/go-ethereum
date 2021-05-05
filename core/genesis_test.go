@@ -186,8 +186,8 @@ func TestGenesisHashes(t *testing.T) {
 			hash:    params.RinkebyGenesisHash,
 		},
 		{
-			genesis: DefaultYoloV3GenesisBlock(),
-			hash:    params.YoloV3GenesisHash,
+			genesis: DefaultBaikalGenesisBlock(),
+			hash:    params.BaikalGenesisHash,
 		},
 	}
 	for i, c := range cases {

@@ -779,7 +779,7 @@ func MakeDataDir(ctx *cli.Context) string {
 			return filepath.Join(path, "goerli")
 		}
 		if ctx.GlobalBool(BaikalFlag.Name) {
-			return filepath.Join(path, "yolo-v3")
+			return filepath.Join(path, "baikal")
 		}
 		return path
 	}
@@ -1276,7 +1276,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.GlobalBool(BaikalFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v3")
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "baikal")
 	}
 }
 
@@ -1624,7 +1624,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1642 // https://github.com/ethereum/eth1.0-specs/blob/master/network-upgrades/client-integration-testnets/baikal.md
 		}
-		cfg.Genesis = core.DefaultYoloV3GenesisBlock()
+		cfg.Genesis = core.DefaultBaikalGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1814,7 +1814,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.GlobalBool(BaikalFlag.Name):
-		genesis = core.DefaultYoloV3GenesisBlock()
+		genesis = core.DefaultBaikalGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

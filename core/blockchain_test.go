@@ -3049,7 +3049,7 @@ func TestEIP2718Transition(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(1000000000)
 		gspec   = &Genesis{
-			Config: params.YoloV3ChainConfig,
+			Config: params.TestChainConfig,
 			Alloc: GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xAAAA sloads 0x00 and 0x01

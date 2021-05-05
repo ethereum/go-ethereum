@@ -31,7 +31,7 @@ var (
 	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	YoloV3GenesisHash  = common.HexToHash("0xf1f2876e8500c77afcc03228757b39477eceffccf645b734967fe3c7e16967b7")
+	BaikalGenesisHash  = common.HexToHash("0xa0bc5d43c72a990cedeb59d305702602b34c3ee8585e77d03c7a4fa64d79636e")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -217,27 +217,6 @@ var (
 		Threshold: 2,
 	}
 
-	// YoloV3ChainConfig contains the chain parameters to run a node on the YOLOv3 test network.
-	YoloV3ChainConfig = &ChainConfig{
-		ChainID:             new(big.Int).SetBytes([]byte("yolov3x")),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    nil,
-		BerlinBlock:         big.NewInt(0),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
-	}
-
 	BaikalChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1642),
 		HomesteadBlock:      big.NewInt(0),
@@ -254,7 +233,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		Clique: &CliqueConfig{
-			Period: 15,
+			Period: 30,
 			Epoch:  30000,
 		},
 	}

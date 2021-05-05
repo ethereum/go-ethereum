@@ -246,8 +246,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
-	case ghash == params.YoloV3GenesisHash:
-		return params.YoloV3ChainConfig
+	case ghash == params.BaikalGenesisHash:
+		return params.BaikalChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -383,15 +383,15 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-func DefaultYoloV3GenesisBlock() *Genesis {
+func DefaultBaikalGenesisBlock() *Genesis {
 	// Full genesis: https://gist.github.com/holiman/c6ed9269dce28304ad176314caa75e97
 	return &Genesis{
-		Config:     params.YoloV3ChainConfig,
-		Timestamp:  0x6027dd2e,
-		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000001041afbcb359d5a8dc58c15b2ff51354ff8a217d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		Config:     params.BaikalChainConfig,
+		Timestamp:  0x6092ca7f,
+		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000005211cea3870c7ba7c6c44b185e62eecdb864cd8c560228ce57d31efbf64c200b2c200aacec78cf17a7148e784fe95a7a750335f8b9572ee28d72e7650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   0x47b760,
 		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(yoloV3AllocData),
+		Alloc:      decodePrealloc(baikalAllocData),
 	}
 }
 
