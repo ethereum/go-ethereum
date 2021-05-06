@@ -31,7 +31,7 @@ jobs:
         run: go run ./build/ci.go lint
 
       - name: Test
-        run: SKIP_ANDROID=true SKIP_CACHE_FILL=true go run ./build/ci.go test
+        run: SKIP_ANDROID=true go run ./build/ci.go test
 
   build:
     strategy:
