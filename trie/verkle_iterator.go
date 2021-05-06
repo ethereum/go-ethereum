@@ -50,7 +50,8 @@ func newVerkleNodeIterator(trie *VerkleTrie, start []byte) NodeIterator {
 // Next moves the iterator to the next node. If the parameter is false, any child
 // nodes will be skipped.
 func (it *verkleNodeIterator) Next(descend bool) bool {
-	if it.lastErr == errIteratorEnd {
+	if it.lastErr == errIteratorEnd || len(it.stack) == 0 {
+		it.lastErr = errIteratorEnd
 		return false
 	}
 
@@ -61,6 +62,8 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 			// Stop on this internal node
 			context.Index++
 			return true
+		}
+
 		// Look for the next non-empty child
 		children := node.Children()
 		for ; context.Index < len(children); context.Index++ {
