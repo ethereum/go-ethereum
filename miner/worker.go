@@ -88,6 +88,7 @@ type environment struct {
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
+	original  *state.StateDB // verkle: keep the orignal data to prove the pre-state
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
@@ -766,6 +767,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
+		original:  state.Copy(),
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,
@@ -1146,6 +1148,28 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if err != nil {
 			return err
 		}
+
+		if tr := w.current.original.GetTrie(); tr.IsVerkle() {
+			vtr := tr.(*trie.VerkleTrie)
+			keys := s.Witness().Keys()
+			kvs := s.Witness().KeyVals()
+			for _, key := range keys {
+				// XXX workaround - there is a problem in the witness creation
+				// so fix the witness creation as well.
+				v, err := vtr.TryGet(key)
+				if err != nil {
+					panic(err)
+				}
+				kvs[string(key)] = v
+			}
+			vtr.Hash()
+			p, k, err := vtr.ProveAndSerialize(s.Witness().Keys(), s.Witness().KeyVals())
+			if err != nil {
+				return err
+			}
+			block.SetVerkleProof(p, k)
+		}
+
 		// If we're post merge, just ignore
 		if !w.isTTDReached(block.Header()) {
 			select {

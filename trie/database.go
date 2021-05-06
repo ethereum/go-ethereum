@@ -266,6 +266,7 @@ type Config struct {
 	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
 	Journal   string // Journal of clean cache to survive node restarts
 	Preimages bool   // Flag whether the preimage of trie key is recorded
+	UseVerkle bool   // Flag whether the data is stored in a verkle trie
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before

@@ -20,6 +20,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -49,6 +51,7 @@ type Contract struct {
 	CallerAddress common.Address
 	caller        ContractRef
 	self          ContractRef
+	addressPoint  *verkle.Point
 
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
@@ -57,6 +60,9 @@ type Contract struct {
 	CodeHash common.Hash
 	CodeAddr *common.Address
 	Input    []byte
+
+	// is the execution frame represented by this object a contract deployment
+	IsDeployment bool
 
 	Gas   uint64
 	value *big.Int
@@ -93,15 +99,15 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	if OpCode(c.Code[udest]) != JUMPDEST {
 		return false
 	}
-	return c.isCode(udest)
+	return c.IsCode(udest)
 }
 
-// isCode returns true if the provided PC location is an actual opcode, as
+// IsCode returns true if the provided PC location is an actual opcode, as
 // opposed to a data-segment following a PUSHN operation.
-func (c *Contract) isCode(udest uint64) bool {
+func (c *Contract) IsCode(udest uint64) bool {
 	// Do we already have an analysis laying around?
 	if c.analysis != nil {
-		return c.analysis.codeSegment(udest)
+		return c.analysis.IsCode(udest)
 	}
 	// Do we have a contract hash already?
 	// If we do have a hash, that means it's a 'regular' contract. For regular
@@ -117,7 +123,7 @@ func (c *Contract) isCode(udest uint64) bool {
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
-		return analysis.codeSegment(udest)
+		return analysis.IsCode(udest)
 	}
 	// We don't have the code hash, most likely a piece of initcode not already
 	// in state trie. In that case, we do an analysis, and save it locally, so
@@ -126,7 +132,7 @@ func (c *Contract) isCode(udest uint64) bool {
 	if c.analysis == nil {
 		c.analysis = codeBitmap(c.Code)
 	}
-	return c.analysis.codeSegment(udest)
+	return c.analysis.IsCode(udest)
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current
@@ -170,6 +176,14 @@ func (c *Contract) UseGas(gas uint64) (ok bool) {
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()
+}
+
+func (c *Contract) AddressPoint() *verkle.Point {
+	if c.addressPoint == nil {
+		c.addressPoint = utils.EvaluateAddressPoint(c.Address().Bytes())
+	}
+
+	return c.addressPoint
 }
 
 // Value returns the contract's value (sent to it from it's caller)

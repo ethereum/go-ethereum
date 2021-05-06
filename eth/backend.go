@@ -58,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gballet/go-verkle"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -148,6 +149,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
+
+	// Start the precomputation of Lagrange points
+	// if this config supports verkle trees.
+	if chainConfig.CancunBlock != nil {
+		log.Info("Detected the use of verkle trees, rebuilding the cache")
+		verkle.GetConfig()
+	}
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)

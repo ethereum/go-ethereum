@@ -268,7 +268,25 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+
+	var trieCfg *trie.Config
+
+	if genesis == nil {
+		storedcfg := rawdb.ReadChainConfig(db, stored)
+		if storedcfg == nil {
+			panic("this should never be reached: if genesis is nil, the config is already present or 'geth init' is being called which created it (in the code above, which means genesis != nil)")
+		}
+
+		if storedcfg.CancunBlock != nil {
+			if storedcfg.CancunBlock.Cmp(big.NewInt(0)) != 0 {
+				panic("cancun block must be 0")
+			}
+
+			trieCfg = &trie.Config{UseVerkle: storedcfg.IsCancun(big.NewInt(header.Number.Int64()))}
+		}
+	}
+
+	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, trieCfg), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -353,6 +371,11 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
+	var trieCfg *trie.Config
+	if g.Config != nil {
+		trieCfg = &trie.Config{UseVerkle: g.Config.IsCancun(big.NewInt(int64(g.Number)))}
+	}
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	root, err := g.Alloc.flush(db)
 	if err != nil {
 		panic(err)

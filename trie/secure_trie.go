@@ -219,3 +219,7 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
+
+func (t *SecureTrie) IsVerkle() bool {
+	return false
+}

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"hash"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -183,6 +184,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
+
+		if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
+			// if the PC ends up in a new "page" of verkleized code, charge the
+			// associated witness costs.
+			contract.Gas -= touchEachChunksOnReadAndChargeGas(pc, 1, contract.AddressPoint(), contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
+		}
+
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)

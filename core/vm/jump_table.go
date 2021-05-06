@@ -452,6 +452,7 @@ func newFrontierInstructionSet() JumpTable {
 		EXTCODESIZE: {
 			execute:     opExtCodeSize,
 			constantGas: params.ExtcodeSizeGasFrontier,
+			dynamicGas:  gasExtCodeSize,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -532,6 +533,7 @@ func newFrontierInstructionSet() JumpTable {
 		SLOAD: {
 			execute:     opSload,
 			constantGas: params.SloadGasFrontier,
+			dynamicGas:  gasSLoad,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},

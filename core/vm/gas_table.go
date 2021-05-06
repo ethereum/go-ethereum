@@ -21,7 +21,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -87,13 +89,88 @@ func memoryCopierGas(stackpos int) gasFunc {
 }
 
 var (
-	gasCallDataCopy   = memoryCopierGas(2)
-	gasCodeCopy       = memoryCopierGas(2)
-	gasExtCodeCopy    = memoryCopierGas(3)
-	gasReturnDataCopy = memoryCopierGas(2)
+	gasCallDataCopy        = memoryCopierGas(2)
+	gasCodeCopyStateful    = memoryCopierGas(2)
+	gasExtCodeCopyStateful = memoryCopierGas(3)
+	gasReturnDataCopy      = memoryCopierGas(2)
 )
 
+func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	usedGas := uint64(0)
+	slot := stack.Back(0)
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
+		usedGas += evm.TxContext.Accesses.TouchAddressOnReadAndComputeGas(index)
+	}
+
+	return usedGas, nil
+}
+
+func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var statelessGas uint64
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		var (
+			codeOffset = stack.Back(1)
+			length     = stack.Back(2)
+		)
+		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+		if overflow {
+			uint64CodeOffset = 0xffffffffffffffff
+		}
+		uint64Length, overflow := length.Uint64WithOverflow()
+		if overflow {
+			uint64Length = 0xffffffffffffffff
+		}
+		_, offset, nonPaddedSize := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, uint64Length)
+		statelessGas = touchEachChunksOnReadAndChargeGas(offset, nonPaddedSize, contract.AddressPoint(), nil, evm.Accesses, contract.IsDeployment)
+	}
+	usedGas, err := gasCodeCopyStateful(evm, contract, stack, mem, memorySize)
+	return usedGas + statelessGas, err
+}
+
+func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var statelessGas uint64
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		var (
+			codeOffset = stack.Back(2)
+			length     = stack.Back(3)
+			targetAddr = stack.Back(0).Bytes20()
+		)
+		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+		if overflow {
+			uint64CodeOffset = 0xffffffffffffffff
+		}
+		uint64Length, overflow := length.Uint64WithOverflow()
+		if overflow {
+			uint64Length = 0xffffffffffffffff
+		}
+		// note:  we must charge witness costs for the specified range regardless of whether it
+		// is in-bounds of the actual target account code.  This is because we must charge the cost
+		// before hitting the db to be able to now what the actual code size is.  This is different
+		// behavior from CODECOPY which only charges witness access costs for the part of the range
+		// which overlaps in the account code.  TODO: clarify this is desired behavior and amend the
+		// spec.
+		statelessGas = touchEachChunksOnReadAndChargeGasWithAddress(uint64CodeOffset, uint64Length, targetAddr[:], nil, evm.Accesses, contract.IsDeployment)
+	}
+	usedGas, err := gasExtCodeCopyStateful(evm, contract, stack, mem, memorySize)
+	return usedGas + statelessGas, err
+}
+
+func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	usedGas := uint64(0)
+
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		where := stack.Back(0)
+		index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(contract.AddressPoint(), where)
+		usedGas += evm.Accesses.TouchAddressOnReadAndComputeGas(index)
+	}
+
+	return usedGas, nil
+}
+
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// Apply the witness access costs, err is nil
+	accessGas, _ := gasSLoad(evm, contract, stack, mem, memorySize)
 	var (
 		y, x    = stack.Back(1), stack.Back(0)
 		current = evm.StateDB.GetState(contract.Address(), x.Bytes32())
@@ -109,12 +186,12 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
-			return params.SstoreSetGas, nil
+			return params.SstoreSetGas + accessGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
-			return params.SstoreClearGas, nil
+			return params.SstoreClearGas + accessGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
-			return params.SstoreResetGas, nil
+			return params.SstoreResetGas + accessGas, nil
 		}
 	}
 	// The new gas metering is based on net gas costs (EIP-1283):
@@ -331,6 +408,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		transfersValue = !stack.Back(2).IsZero()
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
+
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
 			gas += params.CallNewAccountGas
@@ -357,6 +435,21 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()[:]))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+		if transfersValue {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeValueTransfer(contract.Address().Bytes()[:], address.Bytes()[:]))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
+
 	return gas, nil
 }
 
@@ -382,6 +475,15 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -398,6 +500,15 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -413,6 +524,15 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
+	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
 	}
 	return gas, nil
 }
@@ -432,6 +552,12 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		} else if !evm.StateDB.Exist(address) {
 			gas += params.CreateBySelfdestructGas
 		}
+	}
+
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		// TODO turn this into a panic (when we are sure this method
+		// will never execute when verkle is enabled)
+		log.Warn("verkle witness accumulation not supported for selfdestruct")
 	}
 
 	if !evm.StateDB.HasSuicided(contract.Address()) {
