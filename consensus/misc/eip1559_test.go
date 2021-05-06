@@ -36,12 +36,12 @@ func TestBlockElasticity(t *testing.T) {
 	initial := new(big.Int).SetUint64(params.InitialBaseFee)
 	parent := &types.Header{
 		GasUsed:  10000000,
-		GasLimit: 10000000,
+		GasLimit: 20000000,
 		BaseFee:  initial,
 	}
 	header := &types.Header{
 		GasUsed:  20000000,
-		GasLimit: 10000000,
+		GasLimit: 20000000,
 		BaseFee:  initial,
 	}
 	if err := VerifyEip1559Header(config(), parent, header); err != nil {
@@ -64,21 +64,21 @@ func TestCalcBaseFee(t *testing.T) {
 		// baseFee should remain unchaned when the gasUsed is equal to the gasTarget
 		{
 			new(big.Int).SetUint64(params.InitialBaseFee),
-			10000000,
+			20000000,
 			10000000,
 			new(big.Int).SetUint64(params.InitialBaseFee),
 		},
 		// baseFee should decrease when the gasUsed is below the gasTarget
 		{
 			new(big.Int).SetUint64(params.InitialBaseFee),
-			10000000,
+			20000000,
 			9000000,
 			new(big.Int).SetUint64(987500000),
 		},
 		// baseFee should increase when the gasUsed is below the gasTarget
 		{
 			new(big.Int).SetUint64(params.InitialBaseFee),
-			10000000,
+			20000000,
 			11000000,
 			new(big.Int).SetUint64(1012500000),
 		},

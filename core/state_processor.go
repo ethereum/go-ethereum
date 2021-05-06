@@ -61,14 +61,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		usedGas  = new(uint64)
 		header   = block.Header()
 		allLogs  []*types.Log
-		gp       *GasPool
+		gp       = new(GasPool).AddGas(block.GasLimit())
 	)
-	// Allow EIP-1559 to expand blocks larger than the gas target
-	if p.config.IsLondon(block.Number()) {
-		gp = new(GasPool).AddGas(block.GasLimit() * params.ElasticityMultiplier)
-	} else {
-		gp = new(GasPool).AddGas(block.GasLimit())
-	}
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)

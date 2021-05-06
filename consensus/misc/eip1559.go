@@ -33,7 +33,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	}
 
 	// Verify that the gasUsed is <= gasTarget*elasticityMultiplier
-	if header.GasUsed > header.GasLimit*params.ElasticityMultiplier {
+	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
 	}
 
@@ -52,21 +52,22 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
-	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
-	if parent.GasUsed == parent.GasLimit {
-		return new(big.Int).Set(parent.BaseFee)
-	}
-
 	var (
-		gasLimit                 = new(big.Int).SetUint64(parent.GasLimit)
+		gasTarget                = parent.GasLimit / params.ElasticityMultiplier
+		gasTargetBig             = new(big.Int).SetUint64(gasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(params.BaseFeeChangeDenominator)
 	)
 
-	if parent.GasUsed > parent.GasLimit {
+	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
+	if parent.GasUsed == gasTarget {
+		return new(big.Int).Set(parent.BaseFee)
+	}
+
+	if parent.GasUsed > gasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
-		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - parent.GasLimit)
+		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - gasTarget)
 		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, gasLimit)
+		y := x.Div(x, gasTargetBig)
 		baseFeeDelta := math.BigMax(
 			x.Div(y, baseFeeChangeDenominator),
 			common.Big1,
@@ -75,9 +76,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return x.Add(parent.BaseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		gasUsedDelta := new(big.Int).SetUint64(parent.GasLimit - parent.GasUsed)
+		gasUsedDelta := new(big.Int).SetUint64(gasTarget - parent.GasUsed)
 		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, gasLimit)
+		y := x.Div(x, gasTargetBig)
 		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
 		return math.BigMax(
