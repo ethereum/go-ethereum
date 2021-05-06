@@ -8,19 +8,19 @@ $ geth --help
 NAME:
    geth - the go-ethereum command line interface
 
-   Copyright 2013-2019 The go-ethereum Authors
+   Copyright 2013-2021 The go-ethereum Authors
 
 USAGE:
-   geth [options] command [command options] [arguments...]
-   
+   geth [options] [command] [command options] [arguments...]
+
 VERSION:
-   1.9.19-stable-3e064192
-   
+   1.10.3-stable-991384a7
+
 COMMANDS:
    account                            Manage accounts
    attach                             Start an interactive JavaScript environment (connect to node)
    console                            Start an interactive JavaScript environment
-   copydb                             Create a local chain from a target chaindata folder
+   db                                 Low level database operations
    dump                               Dump a specific block from storage
    dumpconfig                         Show configuration values
    dumpgenesis                        Dumps genesis block JSON configuration to stdout
@@ -29,39 +29,41 @@ COMMANDS:
    import                             Import a blockchain file
    import-preimages                   Import the preimage database from an RLP stream
    init                               Bootstrap and initialize a new genesis block
-   inspect                            Inspect the storage size for each type of data in the database
    js                                 Execute the specified JavaScript files
    license                            Display license information
    makecache                          Generate ethash verification cache (for testing)
    makedag                            Generate ethash mining DAG (for testing)
    removedb                           Remove blockchain and state databases
-   retesteth                          Launches geth in retesteth mode
    show-deprecated-flags              Show flags that have been deprecated
+   snapshot                           A set of commands based on the snapshot
    version                            Print version numbers
+   version-check                      Checks (online) whether the current version suffers from any known security vulnerabilities
    wallet                             Manage Ethereum presale wallets
    help, h                            Shows a list of commands or help for one command
-   
+
 ETHEREUM OPTIONS:
   --config value                      TOML configuration file
   --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
   --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
+  --datadir.minfreedisk value         Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)
   --keystore value                    Directory for the keystore (default = inside the datadir)
-  --nousb                             Disables monitoring for and managing USB hardware wallets
+  --usb                               Enable monitoring and management of USB hardware wallets
   --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
-  --networkid value                   Network identifier (integer, 1=Frontier, 3=Ropsten, 4=Rinkeby, 5=Görli) (default: 1)
+  --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
+  --mainnet                           Ethereum mainnet
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
-  --yolov1                            YOLOv1 network: pre-configured proof-of-authority shortlived test network.
+  --yolov3                            YOLOv3 network: pre-configured proof-of-authority shortlived test network.
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
-  --syncmode value                    Blockchain sync mode ("fast", "full", or "light") (default: fast)
+  --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: fast)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
-  --txlookuplimit value               Number of recent blocks to maintain transactions index by-hash for (default = index all blocks) (default: 0)
+  --txlookuplimit value               Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (default: 2350000)
   --ethstats value                    Reporting URL of a ethstats service (nodename:secret@host:port)
   --identity value                    Custom node name
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
   --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
-  
+
 LIGHT CLIENT OPTIONS:
   --light.serve value                 Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100) (default: 0)
   --light.ingress value               Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited) (default: 0)
@@ -71,11 +73,12 @@ LIGHT CLIENT OPTIONS:
   --ulc.fraction value                Minimum % of trusted ultra-light servers required to announce a new head (default: 75)
   --ulc.onlyannounce                  Ultra light server sends announcements only
   --light.nopruning                   Disable ancient light chain data pruning
-  
+  --light.nosyncserve                 Enables serving light clients before syncing
+
 DEVELOPER CHAIN OPTIONS:
   --dev                               Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
   --dev.period value                  Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
-  
+
 ETHASH OPTIONS:
   --ethash.cachedir value             Directory to store the ethash verification caches (default = inside the datadir)
   --ethash.cachesinmem value          Number of recent ethash caches to keep in memory (16MB each) (default: 2)
@@ -85,7 +88,7 @@ ETHASH OPTIONS:
   --ethash.dagsinmem value            Number of recent ethash mining DAGs to keep in memory (1+GB each) (default: 1)
   --ethash.dagsondisk value           Number of recent ethash mining DAGs to keep on disk (1+GB each) (default: 2)
   --ethash.dagslockmmap               Lock memory maps for recent ethash mining DAGs
-  
+
 TRANSACTION POOL OPTIONS:
   --txpool.locals value               Comma separated accounts to treat as locals (no flush, priority inclusion)
   --txpool.nolocals                   Disables price exemptions for locally submitted transactions
@@ -98,7 +101,7 @@ TRANSACTION POOL OPTIONS:
   --txpool.accountqueue value         Maximum number of non-executable transaction slots permitted per account (default: 64)
   --txpool.globalqueue value          Maximum number of non-executable transaction slots for all accounts (default: 1024)
   --txpool.lifetime value             Maximum amount of time non-executable transaction are queued (default: 3h0m0s)
-  
+
 PERFORMANCE TUNING OPTIONS:
   --cache value                       Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode) (default: 1024)
   --cache.database value              Percentage of cache memory allowance to use for database io (default: 50)
@@ -108,13 +111,14 @@ PERFORMANCE TUNING OPTIONS:
   --cache.gc value                    Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode) (default: 25)
   --cache.snapshot value              Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode) (default: 10)
   --cache.noprefetch                  Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
-  
+  --cache.preimages                   Enable recording the SHA3/keccak preimages of trie keys
+
 ACCOUNT OPTIONS:
   --unlock value                      Comma separated list of accounts to unlock
   --password value                    Password file to use for non-interactive password input
   --signer value                      External signer (url or path to ipc file)
   --allow-insecure-unlock             Allow insecure account unlocking when account-related RPCs are exposed by http
-  
+
 API AND CONSOLE OPTIONS:
   --ipcdisable                        Disable the IPC-RPC server
   --ipcpath value                     Filename for IPC socket/pipe within the datadir (explicit paths escape it)
@@ -122,22 +126,25 @@ API AND CONSOLE OPTIONS:
   --http.addr value                   HTTP-RPC server listening interface (default: "localhost")
   --http.port value                   HTTP-RPC server listening port (default: 8545)
   --http.api value                    API's offered over the HTTP-RPC interface
+  --http.rpcprefix value              HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
   --http.corsdomain value             Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --http.vhosts value                 Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
   --ws                                Enable the WS-RPC server
   --ws.addr value                     WS-RPC server listening interface (default: "localhost")
   --ws.port value                     WS-RPC server listening port (default: 8546)
   --ws.api value                      API's offered over the WS-RPC interface
+  --ws.rpcprefix value                HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
   --ws.origins value                  Origins from which to accept websockets requests
   --graphql                           Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
   --graphql.corsdomain value          Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --graphql.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
   --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 25000000)
   --rpc.txfeecap value                Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 1)
+  --rpc.allow-unprotected-txs         Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC
   --jspath loadScript                 JavaScript root path for loadScript (default: ".")
   --exec value                        Execute JavaScript statement
   --preload value                     Comma separated list of JavaScript files to preload into the console
-  
+
 NETWORKING OPTIONS:
   --bootnodes value                   Comma separated enode URLs for P2P discovery bootstrap
   --discovery.dns value               Sets DNS discovery entry points (use "" to disable DNS)
@@ -150,11 +157,12 @@ NETWORKING OPTIONS:
   --netrestrict value                 Restricts network communication to the given IP networks (CIDR masks)
   --nodekey value                     P2P node key file
   --nodekeyhex value                  P2P node key as hex (for testing)
-  
+
 MINER OPTIONS:
   --mine                              Enable mining
   --miner.threads value               Number of CPU threads to use for mining (default: 0)
   --miner.notify value                Comma separated HTTP URL list to notify of new work packages
+  --miner.notify.full                 Notify with pending block headers instead of work packages
   --miner.gasprice value              Minimum gas price for mining a transaction (default: 1000000000)
   --miner.gastarget value             Target gas floor for mined blocks (default: 8000000)
   --miner.gaslimit value              Target gas ceiling for mined blocks (default: 8000000)
@@ -162,23 +170,25 @@ MINER OPTIONS:
   --miner.extradata value             Block extra data set by the miner (default = client version)
   --miner.recommit value              Time interval to recreate the block being mined (default: 3s)
   --miner.noverify                    Disable remote sealing verification
-  
+
 GAS PRICE ORACLE OPTIONS:
   --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
-  
+  --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
+
 VIRTUAL MACHINE OPTIONS:
   --vmdebug                           Record information useful for VM and contract debugging
   --vm.evm value                      External EVM configuration (default = built-in interpreter)
   --vm.ewasm value                    External ewasm configuration (default = built-in interpreter)
-  
+
 LOGGING AND DEBUGGING OPTIONS:
   --fakepow                           Disables proof-of-work verification
   --nocompaction                      Disables db compaction after import
   --verbosity value                   Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail (default: 3)
   --vmodule value                     Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
-  --backtrace value                   Request a stack trace at a specific logging statement (e.g. "block.go:271")
-  --debug                             Prepends log messages with call-site location (file and line number)
+  --log.json                          Format logs with JSON
+  --log.backtrace value               Request a stack trace at a specific logging statement (e.g. "block.go:271")
+  --log.debug                         Prepends log messages with call-site location (file and line number)
   --pprof                             Enable the pprof HTTP server
   --pprof.addr value                  pprof HTTP server listening interface (default: "127.0.0.1")
   --pprof.port value                  pprof HTTP server listening port (default: 6060)
@@ -186,7 +196,7 @@ LOGGING AND DEBUGGING OPTIONS:
   --pprof.blockprofilerate value      Turn on block profiling with the given rate (default: 0)
   --pprof.cpuprofile value            Write CPU profile to the given file
   --trace value                       Write execution trace to the given file
-  
+
 METRICS AND STATS OPTIONS:
   --metrics                           Enable metrics collection and reporting
   --metrics.expensive                 Enable expensive metrics collection and reporting
@@ -198,18 +208,24 @@ METRICS AND STATS OPTIONS:
   --metrics.influxdb.username value   Username to authorize access to the database (default: "test")
   --metrics.influxdb.password value   Password to authorize access to the database (default: "test")
   --metrics.influxdb.tags value       Comma-separated InfluxDB tags (key/values) attached to all measurements (default: "host=localhost")
-  
-WHISPER (EXPERIMENTAL) OPTIONS:
-  --shh                               Enable Whisper
-  --shh.maxmessagesize value          Max message size accepted (default: 1048576)
-  --shh.pow value                     Minimum POW accepted (default: 0.2)
-  --shh.restrict-light                Restrict connection between two whisper light clients
-  
+
+ALIASED (deprecated) OPTIONS:
+  --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
+  --rpc                               Enable the HTTP-RPC server (deprecated and will be removed June 2021, use --http)
+  --rpcaddr value                     HTTP-RPC server listening interface (deprecated and will be removed June 2021, use --http.addr) (default: "localhost")
+  --rpcport value                     HTTP-RPC server listening port (deprecated and will be removed June 2021, use --http.port) (default: 8545)
+  --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)
+  --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
+  --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
+
 MISC OPTIONS:
-  --snapshot                          Enables snapshot-database mode -- experimental work in progress feature
+  --snapshot                          Enables snapshot-database mode (default = enable)
+  --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                          show help
-  
+  --catalyst                          Catalyst mode (eth2 integration testing)
+  --override.berlin value             Manually specify Berlin fork-block, overriding the bundled setting (default: 0)
+
 
 COPYRIGHT:
-   Copyright 2013-2020 The go-ethereum Authors
+   Copyright 2013-2021 The go-ethereum Authors
 ```
