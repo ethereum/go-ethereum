@@ -18,6 +18,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -33,6 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
+	"github.com/holiman/uint256"
 )
 
 type revision struct {
@@ -102,6 +106,8 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList *accessList
 
+	witness *types.AccessWitness
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -147,6 +153,15 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 	}
+	if tr.IsVerkle() {
+		sdb.witness = types.NewAccessWitness()
+		if sdb.snaps == nil {
+			sdb.snaps, err = snapshot.New(db.DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
 			sdb.snapDestructs = make(map[common.Hash]struct{})
@@ -157,6 +172,21 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+func (s *StateDB) Snaps() *snapshot.Tree {
+	return s.snaps
+}
+
+func (s *StateDB) Witness() *types.AccessWitness {
+	if s.witness == nil {
+		s.witness = types.NewAccessWitness()
+	}
+	return s.witness
+}
+
+func (s *StateDB) SetWitness(aw *types.AccessWitness) {
+	s.witness = aw
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
@@ -165,7 +195,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.snap != nil {
+	if s.snap != nil && !s.trie.IsVerkle() {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
 }
@@ -267,6 +297,24 @@ func (s *StateDB) GetBalance(addr common.Address) *big.Int {
 		return stateObject.Balance()
 	}
 	return common.Big0
+}
+
+func (s *StateDB) GetNonceLittleEndian(address common.Address) []byte {
+	var nonceBytes [8]byte
+	binary.LittleEndian.PutUint64(nonceBytes[:], s.GetNonce(address))
+	return nonceBytes[:]
+}
+
+func (s *StateDB) GetBalanceLittleEndian(address common.Address) []byte {
+	var paddedBalance [32]byte
+	balanceBytes := s.GetBalance(address).Bytes()
+	// swap to little-endian
+	for i, j := 0, len(balanceBytes)-1; i < j; i, j = i+1, j-1 {
+		balanceBytes[i], balanceBytes[j] = balanceBytes[j], balanceBytes[i]
+	}
+
+	copy(paddedBalance[:len(balanceBytes)], balanceBytes)
+	return paddedBalance[:len(balanceBytes)]
 }
 
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
@@ -464,7 +512,23 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 	if err := s.trie.TryUpdateAccount(addr[:], &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+	}
+	if s.trie.IsVerkle() {
+		if len(obj.code) > 0 {
+			cs := make([]byte, 32)
+			binary.LittleEndian.PutUint64(cs, uint64(len(obj.code)))
+			if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+			}
+
+			if obj.dirtyCode {
+				chunks := trie.ChunkifyCode(obj.code)
+				for i := 0; i < len(chunks); i += 32 {
+					s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32)), chunks[i:i+32])
+				}
+			}
+		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -658,6 +722,9 @@ func (s *StateDB) Copy() *StateDB {
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
 	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
+	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
@@ -844,7 +911,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+			if s.trie.IsVerkle() {
+				obj.updateTrie(s.db)
+			} else {
+				obj.updateRoot(s.db)
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -894,6 +965,20 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
 }
 
+// GetTrie returns the account trie.
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
+}
+
+func (s *StateDB) Cap(root common.Hash) error {
+	if s.snaps != nil {
+		return s.snaps.Cap(root, 0)
+	}
+	// pre-verkle path: noop if s.snaps hasn't been
+	// initialized.
+	return nil
+}
+
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if s.dbErr != nil {
@@ -913,6 +998,26 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
+				if s.trie.IsVerkle() {
+					var (
+						chunks = trie.ChunkifyCode(obj.code)
+						key    []byte
+						values [][]byte
+					)
+					for i := 0; i < len(chunks); i += 32 {
+
+						groupOffset := (i / 32) % 256
+						if groupOffset == 0 {
+							values = make([][]byte, verkle.NodeWidth)
+							key = trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32))
+						}
+						values[groupOffset] = chunks[i : i+32]
+
+						if groupOffset == 255 || len(chunks)-1 <= 32 {
+							s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values)
+						}
+					}
+				}
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}

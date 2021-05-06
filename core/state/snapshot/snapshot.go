@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -183,7 +184,7 @@ type Tree struct {
 //   This case happens when the snapshot is 'ahead' of the state trie.
 // - otherwise, the entire snapshot is considered invalid and will be recreated on
 //   a background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool, useVerkle bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
@@ -202,6 +203,17 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	}
 	if err != nil {
 		if rebuild {
+			if useVerkle {
+				snap.layers = map[common.Hash]snapshot{
+					root: &diskLayer{
+						diskdb: diskdb,
+						triedb: triedb,
+						root:   root,
+						cache:  fastcache.New(cache * 1024 * 1024),
+					},
+				}
+				return snap, nil
+			}
 			log.Warn("Failed to load snapshot, regenerating", "err", err)
 			snap.Rebuild(root)
 			return snap, nil

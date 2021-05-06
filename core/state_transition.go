@@ -115,7 +115,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -259,6 +259,19 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
+}
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -309,6 +322,40 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+	}
+	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
+		var originBalance, originNonceBytes []byte
+
+		targetAddr := msg.To()
+		originAddr := msg.From()
+
+		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndComputeGas(originAddr.Bytes())
+		if !tryConsumeGas(&st.gas, statelessGasOrigin) {
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
+		}
+		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
+		originNonce := st.evm.StateDB.GetNonce(originAddr)
+		originNonceBytes = st.evm.StateDB.GetNonceLittleEndian(originAddr)
+		st.evm.Accesses.SetTxOriginTouchedLeaves(originAddr.Bytes(), originBalance, originNonceBytes, st.evm.StateDB.GetCodeSize(originAddr))
+
+		if msg.To() != nil {
+			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value().Sign() != 0)
+			if !tryConsumeGas(&st.gas, statelessGasDest) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
+			}
+
+			// ensure the code size ends up in the access witness
+			st.evm.StateDB.GetCodeSize(*targetAddr)
+		} else {
+			contractAddr := crypto.CreateAddress(originAddr, originNonce)
+			if !tryConsumeGas(&st.gas, st.evm.Accesses.TouchAndChargeContractCreateInit(contractAddr.Bytes(), msg.Value().Sign() != 0)) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
+			}
+		}
+
+		if st.gas < gas {
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
+		}
 	}
 	st.gas -= gas
 
