@@ -37,13 +37,23 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// testTxPoolConfig is a transaction pool configuration without stateful disk
-// sideeffects used during testing.
-var testTxPoolConfig TxPoolConfig
+var (
+	// testTxPoolConfig is a transaction pool configuration without stateful disk
+	// sideeffects used during testing.
+	testTxPoolConfig TxPoolConfig
+
+	// eip1559Config is a chain config with EIP-1559 enabled at block 0.
+	eip1559Config *params.ChainConfig
+)
 
 func init() {
 	testTxPoolConfig = DefaultTxPoolConfig
 	testTxPoolConfig.Journal = ""
+
+	cpy := *params.TestChainConfig
+	eip1559Config = &cpy
+	eip1559Config.BerlinBlock = common.Big0
+	eip1559Config.LondonBlock = common.Big0
 }
 
 type testBlockChain struct {
@@ -89,7 +99,7 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 
 func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
 	tx := types.NewTx(&types.DynamicFeeTx{
-		ChainID:    params.AleutChainConfig.ChainID,
+		ChainID:    params.TestChainConfig.ChainID,
 		Nonce:      nonce,
 		Tip:        tip,
 		FeeCap:     gasFee,
@@ -99,7 +109,7 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 		Data:       nil,
 		AccessList: nil,
 	})
-	tx, _ = types.SignTx(tx, types.LatestSignerForChainID(params.AleutChainConfig.ChainID), key)
+	tx, _ = types.SignTx(tx, types.LatestSignerForChainID(params.TestChainConfig.ChainID), key)
 	return tx
 }
 
@@ -370,7 +380,7 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(params.AleutChainConfig)
+	pool, key := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
@@ -1415,7 +1425,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, _ := setupTxPoolWithConfig(params.AleutChainConfig)
+	pool, _ := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1542,7 +1552,7 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
-	pool := NewTxPool(testTxPoolConfig, params.AleutChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559Config, blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them
@@ -1786,7 +1796,7 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(params.AleutChainConfig)
+	pool, _ := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 2
@@ -2039,7 +2049,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, key := setupTxPoolWithConfig(params.AleutChainConfig)
+	pool, key := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
 	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
