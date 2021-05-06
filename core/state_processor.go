@@ -64,7 +64,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp       *GasPool
 	)
 	// Allow EIP-1559 to expand blocks larger than the gas target
-	if p.config.IsAleut(block.Number()) {
+	if p.config.IsLondon(block.Number()) {
 		gp = new(GasPool).AddGas(block.GasLimit() * params.ElasticityMultiplier)
 	} else {
 		gp = new(GasPool).AddGas(block.GasLimit())

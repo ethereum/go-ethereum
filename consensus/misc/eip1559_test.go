@@ -28,7 +28,7 @@ import (
 
 func config() *params.ChainConfig {
 	config := params.TestChainConfig
-	config.AleutBlock = common.Big0
+	config.LondonBlock = common.Big0
 	return config
 }
 

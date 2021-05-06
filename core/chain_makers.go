@@ -268,7 +268,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Time:     time,
 	}
 
-	if chain.Config().IsAleut(parent.Number()) {
+	if chain.Config().IsLondon(parent.Number()) {
 		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
 	}
 

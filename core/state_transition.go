@@ -213,18 +213,18 @@ func (st *StateTransition) preCheck() error {
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
 	}
-	// Make sure baseFee is only defined for blocks after the Aleut fork, and that
+	// Make sure baseFee is only defined for blocks after the London fork, and that
 	// the transaction feeCap is greater than the baseFee.
-	isAleut := st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber)
+	isLondon := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 	switch {
-	case isAleut && st.evm.Context.BaseFee != nil:
+	case isLondon && st.evm.Context.BaseFee != nil:
 		if st.feeCap.Cmp(st.evm.Context.BaseFee) < 0 {
 			return fmt.Errorf("%w: address %v, feeCap: %d baseFee: %d", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.feeCap.Uint64(), st.evm.Context.BaseFee.Uint64())
 		}
-	case isAleut && st.evm.Context.BaseFee == nil:
+	case isLondon && st.evm.Context.BaseFee == nil:
 		return fmt.Errorf("baseFee missing")
-	case !isAleut && st.evm.Context.BaseFee != nil:
+	case !isLondon && st.evm.Context.BaseFee != nil:
 		return fmt.Errorf("baseFee before fork block")
 	}
 	return st.buyGas()
@@ -297,7 +297,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.refundGas()
 
 	effectiveTip := st.gasPrice
-	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
+	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		effectiveTip = cmath.BigMin(st.tip, new(big.Int).Sub(st.feeCap, st.evm.Context.BaseFee))
 	}
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))

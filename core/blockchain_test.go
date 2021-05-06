@@ -3157,7 +3157,7 @@ func TestEIP1559Transition(t *testing.T) {
 	)
 
 	gspec.Config.BerlinBlock = common.Big0
-	gspec.Config.AleutBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
 	genesis := gspec.MustCommit(db)
 	signer := types.LatestSigner(gspec.Config)
 

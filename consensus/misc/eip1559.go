@@ -48,7 +48,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
-	if !config.IsAleut(parent.Number) {
+	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
