@@ -18,6 +18,7 @@ package trie
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -72,6 +73,10 @@ type Database struct {
 	cleans    *fastcache.Cache // Megabytes permitted using for read caches
 	preimages *preimageStore   // The store for caching preimages
 	backend   backend          // The backend for managing trie nodes
+
+	// Items used for root conversion during the verkle transition
+	addrToRoot     map[common.Address]common.Hash
+	addrToRootLock sync.RWMutex
 }
 
 // prepare initializes the database with provided configs, but the
@@ -228,4 +233,38 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return nil, errors.New("not supported")
 	}
 	return hdb.Node(hash)
+}
+
+func (db *Database) HasStorageRootConversion(addr common.Address) bool {
+	db.addrToRootLock.RLock()
+	defer db.addrToRootLock.RUnlock()
+	if db.addrToRoot == nil {
+		return false
+	}
+	_, ok := db.addrToRoot[addr]
+	return ok
+}
+
+func (db *Database) SetStorageRootConversion(addr common.Address, root common.Hash) {
+	db.addrToRootLock.Lock()
+	defer db.addrToRootLock.Unlock()
+	if db.addrToRoot == nil {
+		db.addrToRoot = make(map[common.Address]common.Hash)
+	}
+	db.addrToRoot[addr] = root
+}
+
+func (db *Database) StorageRootConversion(addr common.Address) common.Hash {
+	db.addrToRootLock.RLock()
+	defer db.addrToRootLock.RUnlock()
+	if db.addrToRoot == nil {
+		return common.Hash{}
+	}
+	return db.addrToRoot[addr]
+}
+
+func (db *Database) ClearStorageRootConversion(addr common.Address) {
+	db.addrToRootLock.Lock()
+	defer db.addrToRootLock.Unlock()
+	delete(db.addrToRoot, addr)
 }

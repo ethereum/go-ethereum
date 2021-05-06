@@ -89,6 +89,9 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	// XXX check if this is still necessary
+	preRoot common.Hash
 }
 
 // copy creates a deep copy of environment.
@@ -100,6 +103,7 @@ func (env *environment) copy() *environment {
 		coinbase: env.coinbase,
 		header:   types.CopyHeader(env.header),
 		receipts: copyReceipts(env.receipts),
+		preRoot:  env.preRoot,
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -712,6 +716,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
+		preRoot:  parent.Root,
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -1050,6 +1055,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if err != nil {
 			return err
 		}
+
 		// If we're post merge, just ignore
 		if !w.isTTDReached(block.Header()) {
 			select {

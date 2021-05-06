@@ -302,7 +302,7 @@ func (sf *subfetcher) loop() {
 		}
 		sf.trie = trie
 	} else {
-		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root)
+		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil /* safe to set to nil for now, as there is no prefetcher for verkle */)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return

@@ -58,6 +58,11 @@ func (acct *StateAccount) Copy() *StateAccount {
 	}
 }
 
+// HasStorage returns true if the account has a non-empty storage tree.
+func (acc *StateAccount) HasStorage() bool {
+	return len(acc.Root) == 32 && acc.Root == EmptyRootHash
+}
+
 // SlimAccount is a modified version of an Account, where the root is replaced
 // with a byte slice. This format can be used to represent full-consensus format
 // or slim format which replaces the empty root and code hash as nil byte slice.

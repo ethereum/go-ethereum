@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -154,6 +155,7 @@ type Config struct {
 	Recovery   bool // Indicator that the snapshots is in the recovery mode
 	NoBuild    bool // Indicator that the snapshots generation is disallowed
 	AsyncBuild bool // The snapshot generation is allowed to be constructed asynchronously
+	Verkle     bool // True if verkle trees are enabled
 }
 
 // Tree is an Ethereum state snapshot tree. It consists of one persistent base
@@ -213,6 +215,18 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *trie.Database, root 
 	if err != nil {
 		log.Warn("Failed to load snapshot", "err", err)
 		if !config.NoBuild {
+			if config.Verkle {
+				snap.layers = map[common.Hash]snapshot{
+					root: &diskLayer{
+						diskdb: diskdb,
+						triedb: triedb,
+						root:   root,
+						cache:  fastcache.New(config.CacheSize * 1024 * 1024),
+					},
+				}
+				return snap, nil
+			}
+			log.Warn("Failed to load snapshot, regenerating", "err", err)
 			snap.Rebuild(root)
 			return snap, nil
 		}

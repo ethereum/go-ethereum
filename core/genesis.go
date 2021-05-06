@@ -121,10 +121,15 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 }
 
 // deriveHash computes the state root according to the genesis specification.
-func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
+func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig) (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
+	// XXX check this is the case
+	// TODO remove the nil config check once we have rebased, it should never be nil
+	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), 0 /* XXX */) {
+		db.EndVerkleTransition()
+	}
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
 	if err != nil {
 		return common.Hash{}, err
@@ -143,11 +148,17 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 // flush is very similar with deriveHash, but the main difference is
 // all the generated states will be persisted into the given database.
 // Also, the genesis state specification will be flushed as well.
-func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
+func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash, cfg *params.ChainConfig) error {
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		return err
 	}
+
+	// End the verkle conversion at genesis if the fork block is 0
+	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), 0 /* XXX */) {
+		statedb.Database().EndVerkleTransition()
+	}
+
 	for addr, account := range *ga {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
@@ -171,18 +182,24 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	if err != nil {
 		return err
 	}
+
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
-	return nil
+	return statedb.Cap(root) // XXX check this is still necessary
 }
 
 // CommitGenesisState loads the stored genesis state with the given block
 // hash and commits it into the provided trie database.
 func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
 	var alloc GenesisAlloc
+	var config *params.ChainConfig
 	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
 			return err
+		}
+		config = rawdb.ReadChainConfig(db, blockhash)
+		if config == nil {
+			return errors.New("genesis config missing from db")
 		}
 	} else {
 		// Genesis allocation is missing and there are several possibilities:
@@ -201,11 +218,12 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 		}
 		if genesis != nil {
 			alloc = genesis.Alloc
+			config = genesis.Config
 		} else {
 			return errors.New("not found")
 		}
 	}
-	return alloc.flush(db, triedb, blockhash)
+	return alloc.flush(db, triedb, blockhash, config)
 }
 
 // GenesisAccount is an account in the state of the genesis block.
@@ -326,6 +344,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
+
 	if header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
@@ -438,7 +457,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := g.Alloc.deriveHash()
+	root, err := g.Alloc.deriveHash(g.Config)
 	if err != nil {
 		panic(err)
 	}
@@ -510,7 +529,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	// All the checks has passed, flush the states derived from the genesis
 	// specification as well as the specification itself into the provided
 	// database.
-	if err := g.Alloc.flush(db, triedb, block.Hash()); err != nil {
+	if err := g.Alloc.flush(db, triedb, block.Hash(), g.Config); err != nil {
 		return nil, err
 	}
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
