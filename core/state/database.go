@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/gballet/go-verkle"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -114,7 +115,7 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{
+	return &VerkleDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
@@ -196,5 +197,59 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {
+	return db.db
+}
+
+// VerkleDB implements state.Database for a verkle tree
+type VerkleDB struct {
+	db            *trie.Database
+	codeSizeCache *lru.Cache
+	codeCache     *fastcache.Cache
+}
+
+// OpenTrie opens the main account trie.
+func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
+	if root == (common.Hash{}) || root == emptyRoot {
+		return trie.NewVerkleTrie(verkle.New(8), db.db), nil
+	}
+	payload, err := db.db.DiskDB().Get(root[:])
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := verkle.ParseNode(payload, 0, 8)
+	if err != nil {
+		panic(err)
+	}
+	return trie.NewVerkleTrie(r, db.db), err
+}
+
+// OpenStorageTrie opens the storage trie of an account.
+func (db *VerkleDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
+	return db.OpenTrie(root)
+}
+
+// CopyTrie returns an independent copy of the given trie.
+func (db *VerkleDB) CopyTrie(tr Trie) Trie {
+	_, ok := tr.(*trie.VerkleTrie)
+	if !ok {
+		panic("invalid tree type != VerkleTrie")
+	}
+	panic("need to merge #35 for this to work")
+	//return trie.NewVerkleTrie(t.Copy(), db.db)
+}
+
+// ContractCode retrieves a particular contract's code.
+func (db *VerkleDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
+	return db.db.DiskDB().Get(codeHash[:])
+}
+
+// ContractCodeSize retrieves a particular contracts code's size.
+func (db *VerkleDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
+	panic("need to merge #31 for this to work")
+}
+
+// TrieDB retrieves the low level trie database used for data storage.
+func (db *VerkleDB) TrieDB() *trie.Database {
 	return db.db
 }
