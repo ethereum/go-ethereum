@@ -3,8 +3,6 @@ package ethash
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"math"
@@ -462,24 +460,6 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	timePassed := epochNumber*uint64(slotDuration.Seconds())*uint64(validatorListLen) + genesisTimeUnix
 	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
 	pandoraMode.EpochTimeStartUnix = uint64(pandoraMode.EpochTimeStart.Unix())
-}
-
-func (pandoraMode *MinimalEpochConsensusInfo) getDBKey() (key []byte) {
-	key = make([]byte, 8)
-	binary.LittleEndian.PutUint64(key[:], pandoraMode.Epoch)
-
-	return
-}
-
-func (pandoraMode *MinimalEpochConsensusInfo) mustSerializeToDB() (key []byte, value []byte) {
-	key = pandoraMode.getDBKey()
-	value, err := json.Marshal(pandoraMode)
-
-	if nil != err {
-		panic(err)
-	}
-
-	return
 }
 
 func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
