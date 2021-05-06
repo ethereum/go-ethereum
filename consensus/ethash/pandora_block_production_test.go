@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -157,22 +156,6 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 		minimalConsensusInfos = append(minimalConsensusInfos, consensusInfoParam)
 	}
 
-	consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
-	listener, server, location := makeOrchestratorServer(t, consensusChannel)
-	defer func() {
-		if recovery := recover(); recovery != nil {
-			t.Log("Recovered in server stop", recovery)
-		}
-		server.Stop()
-	}()
-	require.Equal(t, location, listener.Addr().String())
-
-	urls := []string{location}
-	config := Config{
-		PowMode: ModePandora,
-		Log:     log.Root(),
-	}
-
 	var (
 		consensusInfo []*params.MinimalEpochConsensusInfo
 	)
@@ -182,6 +165,22 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 	consensusInfo = append(consensusInfo, genesisEpoch)
 
 	t.Run("Should subscribe to MinimalConsensusInformation", func(t *testing.T) {
+		consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
+		listener, server, location := makeOrchestratorServer(t, consensusChannel)
+		defer func() {
+			if recovery := recover(); recovery != nil {
+				t.Log("Recovered in server stop", recovery)
+			}
+			server.Stop()
+		}()
+		require.Equal(t, location, listener.Addr().String())
+
+		urls := []string{location}
+		config := Config{
+			PowMode: ModePandora,
+			Log:     log.Root(),
+		}
+
 		ethash := NewPandora(config, urls, true, consensusInfo, false)
 		remoteSealerServer := ethash.remote
 		pandora := Pandora{remoteSealerServer}
@@ -284,6 +283,22 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 	})
 
 	t.Run("Should fill cache with MinimalConsensusInformation", func(t *testing.T) {
+		consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
+		listener, server, location := makeOrchestratorServer(t, consensusChannel)
+		defer func() {
+			if recovery := recover(); recovery != nil {
+				t.Log("Recovered in server stop", recovery)
+			}
+			server.Stop()
+		}()
+		require.Equal(t, location, listener.Addr().String())
+
+		urls := []string{location}
+		config := Config{
+			PowMode: ModePandora,
+			Log:     log.Root(),
+		}
+
 		ethash := NewPandora(config, urls, true, consensusInfo, true)
 		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
 		assert.False(t, isPreviousPresent)
@@ -304,19 +319,12 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 		for {
 			select {
 			case shouldFail := <-failChannel:
-				// We are having some problems in CI/CD pipeline.
-				// TODO: check why CI/CD is having problem with networking or cache.
-				if "true" == os.Getenv("SKIP_CACHE_FILL") {
-					t.Log("Skipping test due to the flag SKIP_CACHE_FILL")
-					assert.True(t, true)
-					return
-				}
-
 				if shouldFail {
 					t.FailNow()
 				}
 			default:
 				currentConsensusInfo, isPresent := ethash.mci.cache.Get(indexToCheck)
+
 				time.Sleep(time.Millisecond * 50)
 
 				if isPresent {
