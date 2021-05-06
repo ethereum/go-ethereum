@@ -188,7 +188,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db, false)
 	chain, _ := light.NewLightChain(odr, gspec.Config, engine)
 
 	client := &LightEthereum{
@@ -227,7 +227,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db, false)
 
 	// create a simulation backend and pre-commit several customized block to the database.
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)

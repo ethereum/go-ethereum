@@ -18,6 +18,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -34,6 +35,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
+	"github.com/holiman/uint256"
 )
 
 type revision struct {
@@ -103,6 +107,9 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
+	// Verkle tree access witness
+	witness *AccessWitness
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -151,6 +158,22 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
+	if tr.IsVerkle() {
+		sdb.witness = NewAccessWitness(sdb)
+		if sdb.snaps == nil {
+			snapconfig := snapshot.Config{
+				CacheSize:  256,
+				Recovery:   false,
+				NoBuild:    false,
+				AsyncBuild: false,
+				Verkle:     true,
+			}
+			sdb.snaps, err = snapshot.New(snapconfig, db.DiskDB(), db.TrieDB(), root)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
 			sdb.snapAccounts = make(map[common.Hash][]byte)
@@ -158,6 +181,21 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		}
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) Snaps() *snapshot.Tree {
+	return s.snaps
+}
+
+func (s *StateDB) Witness() *AccessWitness {
+	if s.witness == nil {
+		s.witness = NewAccessWitness(s)
+	}
+	return s.witness
+}
+
+func (s *StateDB) SetWitness(aw *AccessWitness) {
+	s.witness = aw
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -168,7 +206,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.snap != nil {
+	if s.snap != nil && !s.trie.IsVerkle() {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
 }
@@ -513,7 +551,35 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+	}
+	if s.trie.IsVerkle() && obj.dirtyCode {
+		var (
+			chunks = trie.ChunkifyCode(obj.code)
+			values [][]byte
+			key    []byte
+		)
+		for i, chunknr := 0, uint64(0); i < len(chunks); i, chunknr = i+32, chunknr+1 {
+			groupOffset := (chunknr + 128) % 256
+			if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
+				values = make([][]byte, verkle.NodeWidth)
+				key = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.db.db.(*cachingDB).GetTreeKeyHeader(obj.address[:]), uint256.NewInt(chunknr))
+			}
+			values[groupOffset] = chunks[i : i+32]
+
+			// Reuse the calculated key to also update the code size.
+			if i == 0 {
+				cs := make([]byte, 32)
+				binary.LittleEndian.PutUint64(cs, uint64(len(obj.code)))
+				values[utils.CodeSizeLeafKey] = cs
+			}
+
+			if groupOffset == 255 || len(chunks)-i <= 32 {
+				if err := s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values); err != nil {
+					s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+				}
+			}
+		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -712,6 +778,9 @@ func (s *StateDB) Copy() *StateDB {
 		journal:              newJournal(),
 		hasher:               crypto.NewKeccakState(),
 	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
+	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
@@ -905,7 +974,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+			if s.trie.IsVerkle() {
+				obj.updateTrie(s.db)
+			} else {
+				obj.updateRoot(s.db)
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -954,6 +1027,20 @@ func (s *StateDB) clearJournalAndRefund() {
 		s.refund = 0
 	}
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
+}
+
+// GetTrie returns the account trie.
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
+}
+
+func (s *StateDB) Cap(root common.Hash) error {
+	if s.snaps != nil {
+		return s.snaps.Cap(root, 0)
+	}
+	// pre-verkle path: noop if s.snaps hasn't been
+	// initialized.
+	return nil
 }
 
 // Commit writes the state to the underlying in-memory trie database.

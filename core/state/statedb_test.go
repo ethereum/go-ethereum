@@ -713,7 +713,10 @@ func TestMissingTrieNodes(t *testing.T) {
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	var root common.Hash
-	state, _ := New(common.Hash{}, db, nil)
+	state, err := New(common.Hash{}, db, nil)
+	if err != nil {
+		panic("nil stte")
+	}
 	addr := common.BytesToAddress([]byte("so"))
 	{
 		state.SetBalance(addr, big.NewInt(1))
@@ -745,7 +748,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 	// Modify the state
 	state.SetBalance(addr, big.NewInt(2))
-	root, err := state.Commit(false)
+	root, err = state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
 	}
@@ -996,5 +999,29 @@ func TestStateDBTransientStorage(t *testing.T) {
 	cpy := state.Copy()
 	if got := cpy.GetTransientState(addr, key); got != value {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, value)
+	}
+}
+
+// Test that an account with more than 128 pieces of code overflows
+// correctly into the next group.
+func TestCodeChunkOverflow(t *testing.T) {
+	// Create an empty state database
+	db := rawdb.NewMemoryDatabase()
+	state, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil)
+
+	// Update it with some accounts
+	addr := common.BytesToAddress([]byte{1})
+	state.AddBalance(addr, big.NewInt(int64(11)))
+	state.SetNonce(addr, uint64(42))
+	state.SetState(addr, common.BytesToHash([]byte{1, 1, 1}), common.BytesToHash([]byte{1, 1, 1, 1}))
+	code := make([]byte, 31*256)
+	for i := range code {
+		code[i] = 1
+	}
+	state.SetCode(addr, code)
+
+	root := state.IntermediateRoot(false)
+	if err := state.Database().TrieDB().Commit(root, false); err != nil {
+		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}
 }

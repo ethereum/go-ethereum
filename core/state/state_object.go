@@ -98,6 +98,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	if data.Root == (common.Hash{}) {
 		data.Root = types.EmptyRootHash
 	}
+
 	return &stateObject{
 		db:             db,
 		address:        address,
@@ -142,7 +143,7 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
-			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root, s.db.trie)
 			if err != nil {
 				return nil, err
 			}
@@ -183,8 +184,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If no live objects are available, attempt to use snapshots
 	var (
-		enc []byte
-		err error
+		enc   []byte
+		err   error
+		value common.Hash
 	)
 	if s.db.snap != nil {
 		start := time.Now()
@@ -201,7 +203,13 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.setError(err)
 			return common.Hash{}
 		}
-		enc, err = tr.GetStorage(s.address, key.Bytes())
+		if s.db.GetTrie().IsVerkle() {
+			var v []byte
+			v, err = tr.GetStorage(s.address, key.Bytes())
+			copy(value[:], v)
+		} else {
+			enc, err = tr.GetStorage(s.address, key.Bytes())
+		}
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -210,7 +218,6 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			return common.Hash{}
 		}
 	}
-	var value common.Hash
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
@@ -218,6 +225,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		}
 		value.SetBytes(content)
 	}
+
 	s.originStorage[key] = value
 	return value
 }
@@ -302,9 +310,17 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			if err := tr.UpdateStorage(s.address, key[:], v); err != nil {
-				s.db.setError(err)
-				return nil, err
+			if !tr.IsVerkle() {
+				if err := tr.UpdateStorage(s.address, key[:], v); err != nil {
+					s.db.setError(err)
+					return nil, err
+				}
+			} else {
+				// Update the trie, with v as a value
+				if err := tr.UpdateStorage(s.address, key[:], v); err != nil {
+					s.db.setError(err)
+					return nil, err
+				}
 			}
 			s.db.StorageUpdated += 1
 		}

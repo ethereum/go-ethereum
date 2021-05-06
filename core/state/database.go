@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 )
 
 const (
@@ -42,7 +44,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash, main Trie) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -58,6 +60,9 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+
+	// EndVerkleTransition signals that the verkle transition is complete.
+	EndVerkleTransition()
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -123,6 +128,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	// IsVerkle returns true if the trie is verkle-tree based
+	IsVerkle() bool
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -141,6 +149,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        trie.NewDatabaseWithConfig(db, config),
+		addrToPoint:   utils.NewPointCache(),
 	}
 }
 
@@ -151,6 +160,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
+		addrToPoint:   utils.NewPointCache(),
 	}
 }
 
@@ -159,10 +169,35 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	triedb        *trie.Database
+
+	// Verkle specific fields
+	ended       bool              // mark when the conversion started/ended
+	addrToPoint *utils.PointCache // cache for address to point conversion
+}
+
+// EndVerkleTransition marks the end of the verkle trie transition
+func (db *cachingDB) EndVerkleTransition() {
+	db.ended = true
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if db.ended {
+		if root == (common.Hash{}) || root == types.EmptyRootHash {
+			return trie.NewVerkleTrie(verkle.New(), db.DiskDB(), db.addrToPoint), nil
+		}
+		payload, err := db.disk.Get(root[:])
+		if err != nil {
+			return nil, err
+		}
+
+		r, err := verkle.ParseNode(payload, 0, root[:])
+		if err != nil {
+			panic(err)
+		}
+		return trie.NewVerkleTrie(r, db.DiskDB(), db.addrToPoint), err
+	}
+
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -171,7 +206,12 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash, self Trie) (Trie, error) {
+	if db.ended {
+		// TODO return an adapter object to detect whether this is a storage trie. Or just a regular
+		// VerkleTrie after adding a "storage" flag to the VerkleTrie.
+		return self, nil
+	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -184,6 +224,8 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
 		return t.Copy()
+	case *trie.VerkleTrie:
+		return t.Copy(db.DiskDB())
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
@@ -238,4 +280,8 @@ func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {
 	return db.triedb
+}
+
+func (db *cachingDB) GetTreeKeyHeader(addr []byte) *verkle.Point {
+	return db.addrToPoint.GetTreeKeyHeader(addr)
 }

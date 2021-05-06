@@ -54,7 +54,7 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(state, addrHash, root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenStorageTrie(state, addrHash, root common.Hash, _ state.Trie) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
 }
 
@@ -96,6 +96,10 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 }
 
 func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
+	panic("not implemented")
+}
+
+func (db *odrDatabase) EndVerkleTransition() {
 	panic("not implemented")
 }
 
@@ -188,6 +192,10 @@ func (t *odrTrie) GetKey(sha []byte) []byte {
 
 func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	return errors.New("not implemented, needs client/server interface split")
+}
+
+func (t *odrTrie) IsVerkle() bool {
+	return false
 }
 
 // do tries and retries to execute a function until it returns with no error or

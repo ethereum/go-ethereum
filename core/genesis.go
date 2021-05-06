@@ -116,10 +116,15 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 }
 
 // deriveHash computes the state root according to the genesis specification.
-func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
+func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig) (common.Hash, error) {
+	var trieCfg *trie.Config
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabase(rawdb.NewMemoryDatabase())
+	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), trieCfg)
+	// TODO remove the nil config check once we have rebased, it should never be nil
+	if cfg != nil && cfg.IsCancun(0) {
+		db.EndVerkleTransition()
+	}
 	statedb, err := state.New(common.Hash{}, db, nil)
 	if err != nil {
 		return common.Hash{}, err
@@ -138,10 +143,14 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 // flush is very similar with deriveHash, but the main difference is
 // all the generated states will be persisted into the given database.
 // Also, the genesis state specification will be flushed as well.
-func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
+func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash, verkle bool) error {
 	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		return err
+	}
+	// Mark the verkle transition as ended if verkle trees are used from the genesis block.
+	if verkle {
+		statedb.Database().EndVerkleTransition()
 	}
 	for addr, account := range *ga {
 		statedb.AddBalance(addr, account.Balance)
@@ -174,6 +183,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 // hash and commits it into the provided trie database.
 func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
 	var alloc GenesisAlloc
+	var verkle bool
 	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
@@ -198,11 +208,12 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 		}
 		if genesis != nil {
 			alloc = genesis.Alloc
+			verkle = genesis.Config.IsCancun(genesis.Timestamp)
 		} else {
 			return errors.New("not found")
 		}
 	}
-	return alloc.flush(db, triedb, blockhash)
+	return alloc.flush(db, triedb, blockhash, verkle)
 }
 
 // GenesisAccount is an account in the state of the genesis block.
@@ -307,7 +318,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, genesis.Config.IsCancun(genesis.Timestamp))
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -326,7 +337,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, genesis.Config.IsCancun(genesis.Timestamp))
 		if err != nil {
 			return genesis.Config, hash, err
 		}
@@ -434,7 +445,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := g.Alloc.deriveHash()
+	root, err := g.Alloc.deriveHash(g.Config)
 	if err != nil {
 		panic(err)
 	}
@@ -475,7 +486,7 @@ func (g *Genesis) ToBlock() *types.Block {
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, verkle bool) (*types.Block, error) {
 	block := g.ToBlock()
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
@@ -493,7 +504,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	// All the checks has passed, flush the states derived from the genesis
 	// specification as well as the specification itself into the provided
 	// database.
-	if err := g.Alloc.flush(db, triedb, block.Hash()); err != nil {
+	if err := g.Alloc.flush(db, triedb, block.Hash(), verkle); err != nil {
 		return nil, err
 	}
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
@@ -511,8 +522,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 // The block is committed as the canonical head block.
 // Note the state changes will be committed in hash-based scheme, use Commit
 // if path-scheme is preferred.
-func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db, trie.NewDatabase(db))
+func (g *Genesis) MustCommit(db ethdb.Database, verkle bool) *types.Block {
+	block, err := g.Commit(db, trie.NewDatabase(db), verkle)
 	if err != nil {
 		panic(err)
 	}
