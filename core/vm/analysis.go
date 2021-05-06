@@ -55,6 +55,10 @@ func (bits bitvec) set16(pos uint64) {
 	bits[pos/8+2] = ^a
 }
 
+func (bits *bitvec) IsCode(pos uint64) bool {
+	return bits.codeSegment(pos)
+}
+
 // codeSegment checks if the position is in a code segment.
 func (bits *bitvec) codeSegment(pos uint64) bool {
 	return (((*bits)[pos/8] >> (pos % 8)) & 1) == 0

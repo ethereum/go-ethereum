@@ -83,6 +83,7 @@ type environment struct {
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
+	original  *state.StateDB // verkle: keep the orignal data to prove the pre-state
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
@@ -103,6 +104,7 @@ func (env *environment) copy() *environment {
 		ancestors: env.ancestors.Clone(),
 		family:    env.family.Clone(),
 		tcount:    env.tcount,
+		original:  env.original.Copy(),
 		coinbase:  env.coinbase,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
@@ -771,6 +773,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
+		original:  state.Copy(),
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,
@@ -1137,6 +1140,26 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
+		}
+		if tr := w.current.original.GetTrie(); tr.IsVerkle() {
+			vtr := tr.(*trie.VerkleTrie)
+			keys := env.state.Witness().Keys()
+			kvs := env.state.Witness().KeyVals()
+			for _, key := range keys {
+				// XXX workaround - there is a problem in the witness creation
+				// so fix the witness creation as well.
+				v, err := vtr.TryGet(key)
+				if err != nil {
+					panic(err)
+				}
+				kvs[string(key)] = v
+			}
+			vtr.Hash()
+			p, k, err := vtr.ProveAndSerialize(env.state.Witness().Keys(), env.state.Witness().KeyVals())
+			if err != nil {
+				return err
+			}
+			block.SetVerkleProof(p, k)
 		}
 		// If we're post merge, just ignore
 		if !w.isTTDReached(block.Header()) {

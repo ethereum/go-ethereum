@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/gballet/go-verkle"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -104,6 +105,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	// IsVerkle returns true if the trie is verkle-tree based
+	IsVerkle() bool
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -118,6 +122,13 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
+	if config != nil && config.UseVerkle {
+		return &VerkleDB{
+			db:            trie.NewDatabaseWithConfig(db, config),
+			codeSizeCache: csc,
+			codeCache:     fastcache.New(codeCacheSize),
+		}
+	}
 	return &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
@@ -200,5 +211,78 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {
+	return db.db
+}
+
+// VerkleDB implements state.Database for a verkle tree
+type VerkleDB struct {
+	db            *trie.Database
+	codeSizeCache *lru.Cache
+	codeCache     *fastcache.Cache
+}
+
+// OpenTrie opens the main account trie.
+func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
+	if root == (common.Hash{}) || root == emptyRoot {
+		return trie.NewVerkleTrie(verkle.New(), db.db), nil
+	}
+	payload, err := db.db.DiskDB().Get(root[:])
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := verkle.ParseNode(payload, 0, root[:])
+	if err != nil {
+		panic(err)
+	}
+	return trie.NewVerkleTrie(r, db.db), err
+}
+
+// OpenStorageTrie opens the storage trie of an account.
+func (db *VerkleDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
+	// alternatively, return accTrie
+	panic("should not be called")
+}
+
+// CopyTrie returns an independent copy of the given trie.
+func (db *VerkleDB) CopyTrie(tr Trie) Trie {
+	t, ok := tr.(*trie.VerkleTrie)
+	if ok {
+		return t.Copy(db.db)
+	}
+
+	panic("invalid tree type != VerkleTrie")
+}
+
+// ContractCode retrieves a particular contract's code.
+func (db *VerkleDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+		return code, nil
+	}
+	code := rawdb.ReadCode(db.db.DiskDB(), codeHash)
+	if len(code) > 0 {
+		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
+	}
+	return nil, errors.New("not found")
+}
+
+// ContractCodeSize retrieves a particular contracts code's size.
+func (db *VerkleDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+		return len(code), nil
+	}
+	code := rawdb.ReadCode(db.db.DiskDB(), codeHash)
+	if len(code) > 0 {
+		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeSizeCache.Add(codeHash, len(code))
+		return len(code), nil
+	}
+	return 0, nil
+}
+
+// TrieDB retrieves the low level trie database used for data storage.
+func (db *VerkleDB) TrieDB() *trie.Database {
 	return db.db
 }
