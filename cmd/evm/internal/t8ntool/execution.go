@@ -101,7 +101,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
-	gaspool.AddGas(pre.Env.GasLimit)
+
+	if chainConfig.IsLondon(new(big.Int).SetUint64(pre.Env.Number)) {
+		gaspool.AddGas(pre.Env.GasLimit * params.ElasticityMultiplier)
+	} else {
+		gaspool.AddGas(pre.Env.GasLimit)
+	}
+
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
