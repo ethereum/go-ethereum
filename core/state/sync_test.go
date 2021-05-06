@@ -69,7 +69,10 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 		state.updateStateObject(obj)
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(false)
+	root, err := state.Commit(false)
+	if err != nil {
+		panic(err)
+	}
 
 	// Return the generated state
 	return db, root, accounts

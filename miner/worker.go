@@ -98,6 +98,8 @@ type environment struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
+
+	preRoot common.Hash
 }
 
 // copy creates a deep copy of environment.
@@ -111,6 +113,7 @@ func (env *environment) copy() *environment {
 		coinbase:  env.coinbase,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
+		preRoot:   env.preRoot,
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -770,6 +773,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		family:    mapset.NewSet(),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
+		preRoot:   parent.Root(),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -1146,6 +1150,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if err != nil {
 			return err
 		}
+
 		// If we're post merge, just ignore
 		if !w.isTTDReached(block.Header()) {
 			select {

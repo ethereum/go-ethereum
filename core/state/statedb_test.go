@@ -703,7 +703,10 @@ func TestMissingTrieNodes(t *testing.T) {
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	var root common.Hash
-	state, _ := New(common.Hash{}, db, nil)
+	state, err := New(common.Hash{}, db, nil)
+	if err != nil {
+		panic("nil stte")
+	}
 	addr := common.BytesToAddress([]byte("so"))
 	{
 		state.SetBalance(addr, big.NewInt(1))
@@ -735,7 +738,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 	// Modify the state
 	state.SetBalance(addr, big.NewInt(2))
-	root, err := state.Commit(false)
+	root, err = state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
 	}
