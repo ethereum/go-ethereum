@@ -102,6 +102,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
 		}
+		fmt.Println("failure here")
 		return consensus.ErrPrunedAncestor
 	}
 	return nil

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
@@ -50,6 +51,11 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			}
 		}
 		value := common.Hash(y.Bytes32())
+
+		if evm.chainRules.IsCancun {
+			index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(contract.AddressPoint(), x.Bytes())
+			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(index)
+		}
 
 		if current == value { // noop (1)
 			// EIP 2200 original clause:
@@ -103,14 +109,23 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	loc := stack.peek()
 	slot := common.Hash(loc.Bytes32())
+	var gasUsed uint64
+
+	if evm.chainRules.IsCancun {
+		where := stack.Back(0)
+		addr := contract.Address()
+		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)
+		gasUsed += evm.Accesses.TouchAddressOnReadAndComputeGas(index)
+	}
+
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
-		return params.ColdSloadCostEIP2929, nil
+		return gasUsed + params.ColdSloadCostEIP2929, nil
 	}
-	return params.WarmStorageReadCostEIP2929, nil
+	return gasUsed + params.WarmStorageReadCostEIP2929, nil
 }
 
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -339,6 +340,19 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
+}
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -388,6 +402,32 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	st.gasRemaining -= gas
+
+	if rules.IsCancun {
+		targetAddr := msg.To
+		originAddr := msg.From
+
+		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndComputeGas(originAddr.Bytes())
+		if !tryConsumeGas(&st.gasRemaining, statelessGasOrigin) {
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+		}
+		originNonce := st.evm.StateDB.GetNonce(originAddr)
+
+		if msg.To != nil {
+			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value.Sign() != 0)
+			if !tryConsumeGas(&st.gasRemaining, statelessGasDest) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+			}
+
+			// ensure the code size ends up in the access witness
+			st.evm.StateDB.GetCodeSize(*targetAddr)
+		} else {
+			contractAddr := crypto.CreateAddress(originAddr, originNonce)
+			if !tryConsumeGas(&st.gasRemaining, st.evm.Accesses.TouchAndChargeContractCreateInit(contractAddr.Bytes(), msg.Value.Sign() != 0)) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+			}
+		}
+	}
 
 	// Check clause 6
 	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {

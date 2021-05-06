@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -55,7 +56,7 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, _ state.Trie) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
@@ -98,6 +99,62 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 
 func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
 	panic("not implemented")
+}
+
+func (db *odrDatabase) StartVerkleTransition(originalRoot common.Hash, translatedRoot common.Hash, chainConfig *params.ChainConfig, _ *uint64) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) EndVerkleTransition() {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) InTransition() bool {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) Transitioned() bool {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SetCurrentSlotHash(hash common.Hash) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) GetCurrentAccountAddress() *common.Address {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SetCurrentAccountAddress(_ common.Address) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) GetCurrentAccountHash() common.Hash {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) GetCurrentSlotHash() common.Hash {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SetStorageProcessed(_ bool) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) GetStorageProcessed() bool {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) GetCurrentPreimageOffset() int64 {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SetCurrentPreimageOffset(_ int64) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) AddRootTranslation(originalRoot common.Hash, translatedRoot common.Hash) {
+	panic("not implemented") // TODO: Implement
 }
 
 type odrTrie struct {
@@ -228,6 +285,10 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			return err
 		}
 	}
+}
+
+func (t *odrTrie) IsVerkle() bool {
+	return false
 }
 
 type nodeIterator struct {

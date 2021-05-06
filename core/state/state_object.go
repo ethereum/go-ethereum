@@ -102,6 +102,7 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
+
 	return &stateObject{
 		db:             db,
 		address:        address,
@@ -145,7 +146,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
-			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
+			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root, s.db.trie)
 			if err != nil {
 				return nil, err
 			}
@@ -222,6 +223,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 		value.SetBytes(val)
 	}
+
 	s.originStorage[key] = value
 	return value
 }

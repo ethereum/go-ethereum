@@ -288,3 +288,7 @@ func (t *StateTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
+
+func (t *StateTrie) IsVerkle() bool {
+	return false
+}
