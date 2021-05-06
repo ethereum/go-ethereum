@@ -306,7 +306,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", hash,
 				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", parentHash)
 
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].Number,
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, chain[i-1].Number,
 				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHash[:4])
 		}
 		// If the header is a banned one, straight out abort

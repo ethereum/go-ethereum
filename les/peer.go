@@ -1099,7 +1099,6 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 				// set default announceType on server side
 				p.announceType = announceTypeSimple
 			}
-			p.fcClient = flowcontrol.NewClientNode(server.fcManager, p.fcParams)
 		}
 		return nil
 	})

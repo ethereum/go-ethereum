@@ -283,7 +283,7 @@ func TestEstimatedPriority(t *testing.T) {
 		{time.Second, 3 * time.Second, 1000000000, 48},
 
 		// All positive balance is used up
-		{time.Second * 55, 0, 0, 0},
+		{time.Second * 55, 0, 0, -1},
 
 		// 1 minute estimated time cost, 4/58 * 10^9 estimated request cost per sec.
 		{0, time.Minute, 0, -int64(time.Minute) - int64(time.Second)*120/29},
@@ -292,8 +292,8 @@ func TestEstimatedPriority(t *testing.T) {
 		b.clock.Run(i.runTime)
 		node.RequestServed(i.reqCost)
 		priority := node.estimatePriority(1000000000, 0, i.futureTime, 0, false)
-		if priority != i.priority-1 {
-			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority-1, priority)
+		if priority != i.priority {
+			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority, priority)
 		}
 	}
 }

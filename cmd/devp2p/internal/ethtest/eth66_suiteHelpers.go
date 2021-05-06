@@ -18,6 +18,7 @@ package ethtest
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -111,6 +112,18 @@ func (c *Conn) read66() (uint64, Message) {
 		msg = new(Transactions)
 	case (NewPooledTransactionHashes{}).Code():
 		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		ethMsg := new(eth.GetPooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, GetPooledTransactions(ethMsg.GetPooledTransactionsPacket)
+	case (PooledTransactions{}.Code()):
+		ethMsg := new(eth.PooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, PooledTransactions(ethMsg.PooledTransactionsPacket)
 	default:
 		msg = errorf("invalid message code: %d", code)
 	}
@@ -124,13 +137,21 @@ func (c *Conn) read66() (uint64, Message) {
 	return 0, errorf("invalid message: %s", string(rawData))
 }
 
+func (c *Conn) waitForResponse(chain *Chain, timeout time.Duration, requestID uint64) Message {
+	for {
+		id, msg := c.readAndServe66(chain, timeout)
+		if id == requestID {
+			return msg
+		}
+	}
+}
+
 // ReadAndServe serves GetBlockHeaders requests while waiting
 // on another message from the node.
 func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Message) {
 	start := time.Now()
 	for time.Since(start) < timeout {
-		timeout := time.Now().Add(10 * time.Second)
-		c.SetReadDeadline(timeout)
+		c.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 		reqID, msg := c.read66()
 
@@ -173,27 +194,33 @@ func (s *Suite) testAnnounce66(t *utesting.T, sendConn, receiveConn *Conn, block
 }
 
 func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
-	timeout := 20 * time.Second
-	_, msg := conn.readAndServe66(s.chain, timeout)
-	switch msg := msg.(type) {
-	case *NewBlock:
-		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
-		assert.Equal(t,
-			blockAnnouncement.Block.Header(), msg.Block.Header(),
-			"wrong block header in announcement",
-		)
-		assert.Equal(t,
-			blockAnnouncement.TD, msg.TD,
-			"wrong TD in announcement",
-		)
-	case *NewBlockHashes:
-		blockHashes := *msg
-		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(blockHashes))
-		assert.Equal(t, blockAnnouncement.Block.Hash(), blockHashes[0].Hash,
-			"wrong block hash in announcement",
-		)
-	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+	for {
+		_, msg := conn.readAndServe66(s.chain, timeout)
+		switch msg := msg.(type) {
+		case *NewBlock:
+			t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
+			assert.Equal(t,
+				blockAnnouncement.Block.Header(), msg.Block.Header(),
+				"wrong block header in announcement",
+			)
+			assert.Equal(t,
+				blockAnnouncement.TD, msg.TD,
+				"wrong TD in announcement",
+			)
+			return
+		case *NewBlockHashes:
+			blockHashes := *msg
+			t.Logf("received NewBlockHashes message: %s", pretty.Sdump(blockHashes))
+			assert.Equal(t, blockAnnouncement.Block.Hash(), blockHashes[0].Hash,
+				"wrong block hash in announcement",
+			)
+			return
+		case *NewPooledTransactionHashes:
+			// ignore old txs being propagated
+			continue
+		default:
+			t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+		}
 	}
 }
 
@@ -202,8 +229,11 @@ func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *New
 func (c *Conn) waitForBlock66(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := eth.GetBlockHeadersPacket66{
 			RequestId: 54,
@@ -226,10 +256,15 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 			if reqID != req.RequestId {
 				return fmt.Errorf("request ID mismatch: wanted %d, got %d", req.RequestId, reqID)
 			}
-			if len(msg) > 0 {
-				return nil
+			for _, header := range msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
+		case *NewPooledTransactionHashes:
+			// ignore old announcements
+			continue
 		default:
 			return fmt.Errorf("invalid message: %s", pretty.Sdump(msg))
 		}
@@ -238,37 +273,61 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 
 func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection66(t)
+	defer sendConn.Close()
 	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
-func sendFailingTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
-	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
-	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
-}
-
-func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, expectedID uint64) BlockHeaders {
-	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	// check block headers response
+// waitForBlockHeadersResponse66 waits for a BlockHeaders message with the given expected request ID
+func (s *Suite) waitForBlockHeadersResponse66(conn *Conn, expectedID uint64) (BlockHeaders, error) {
 	reqID, msg := conn.readAndServe66(s.chain, timeout)
-
 	switch msg := msg.(type) {
 	case BlockHeaders:
 		if reqID != expectedID {
-			t.Fatalf("request ID mismatch: wanted %d, got %d", expectedID, reqID)
+			return nil, fmt.Errorf("request ID mismatch: wanted %d, got %d", expectedID, reqID)
 		}
-		return msg
+		return msg, nil
 	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
-		return nil
+		return nil, fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
-func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) {
+func (s *Suite) getBlockHeaders66(conn *Conn, req eth.Packet, expectedID uint64) (BlockHeaders, error) {
+	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
+		return nil, fmt.Errorf("could not write to connection: %v", err)
+	}
+	return s.waitForBlockHeadersResponse66(conn, expectedID)
+}
+
+func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) bool {
+	mismatched := 0
 	for _, header := range headers {
 		num := header.Number.Uint64()
 		t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
-		assert.Equal(t, chain.blocks[int(num)].Header(), header)
+		if !reflect.DeepEqual(chain.blocks[int(num)].Header(), header) {
+			mismatched += 1
+			t.Logf("received wrong header: %v", pretty.Sdump(header))
+		}
 	}
+	return mismatched == 0
+}
+
+func (s *Suite) sendNextBlock66(t *utesting.T) {
+	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer sendConn.Close()
+	defer receiveConn.Close()
+
+	// create new block announcement
+	nextBlock := len(s.chain.blocks)
+	blockAnnouncement := &NewBlock{
+		Block: s.fullChain.blocks[nextBlock],
+		TD:    s.fullChain.TD(nextBlock + 1),
+	}
+	// send announcement and wait for node to request the header
+	s.testAnnounce66(t, sendConn, receiveConn, blockAnnouncement)
+	// wait for client to update its chain
+	if err := receiveConn.waitForBlock66(s.fullChain.blocks[nextBlock]); err != nil {
+		t.Fatal(err)
+	}
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }

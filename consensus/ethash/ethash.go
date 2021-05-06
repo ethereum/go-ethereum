@@ -112,12 +112,13 @@ func memoryMapFile(file *os.File, write bool) (mmap.MMap, []uint32, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	// Yay, we managed to memory map the file, here be dragons
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&mem))
-	header.Len /= 4
-	header.Cap /= 4
-
-	return mem, *(*[]uint32)(unsafe.Pointer(&header)), nil
+	// The file is now memory-mapped. Create a []uint32 view of the file.
+	var view []uint32
+	header := (*reflect.SliceHeader)(unsafe.Pointer(&view))
+	header.Data = (*reflect.SliceHeader)(unsafe.Pointer(&mem)).Data
+	header.Cap = len(mem) / 4
+	header.Len = header.Cap
+	return mem, view, nil
 }
 
 // memoryMapAndGenerate tries to memory map a temporary file of uint32s for write

@@ -326,12 +326,13 @@ func TestPaidClientKickedOut(t *testing.T) {
 	if cap := connect(pool, newPoolTestPeer(11, kickedCh)); cap == 0 {
 		t.Fatalf("Free client should be accepted")
 	}
+	clock.Run(0)
 	select {
 	case id := <-kickedCh:
 		if id != 0 {
 			t.Fatalf("Kicked client mismatch, want %v, got %v", 0, id)
 		}
-	case <-time.NewTimer(time.Second).C:
+	default:
 		t.Fatalf("timeout")
 	}
 }
@@ -399,23 +400,27 @@ func TestFreeClientKickedOut(t *testing.T) {
 	if cap := connect(pool, newPoolTestPeer(10, kicked)); cap != 0 {
 		t.Fatalf("New free client should be rejected")
 	}
+	clock.Run(0)
 	select {
 	case <-kicked:
-	case <-time.NewTimer(time.Second).C:
+	default:
 		t.Fatalf("timeout")
 	}
 	disconnect(pool, newPoolTestPeer(10, kicked))
 	clock.Run(5 * time.Minute)
 	for i := 0; i < 10; i++ {
 		connect(pool, newPoolTestPeer(i+10, kicked))
+
 	}
+	clock.Run(0)
+
 	for i := 0; i < 10; i++ {
 		select {
 		case id := <-kicked:
 			if id >= 10 {
 				t.Fatalf("Old client should be kicked, now got: %d", id)
 			}
-		case <-time.NewTimer(time.Second).C:
+		default:
 			t.Fatalf("timeout")
 		}
 	}

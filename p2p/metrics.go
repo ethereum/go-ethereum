@@ -33,9 +33,6 @@ const (
 
 	// HandleHistName is the prefix of the per-packet serving time histograms.
 	HandleHistName = "p2p/handle"
-
-	// WaitHistName is the prefix of the per-packet (req only) waiting time histograms.
-	WaitHistName = "p2p/wait"
 )
 
 var (

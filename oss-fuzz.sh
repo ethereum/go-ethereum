@@ -114,5 +114,10 @@ compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
 compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
 compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
 
+compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1Add fuzz_cross_g1_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1MultiExp fuzz_cross_g1_multiexp
+compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
+
 #TODO: move this to tests/fuzzers, if possible
 compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
