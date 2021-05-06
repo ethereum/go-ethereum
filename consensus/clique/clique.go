@@ -20,6 +20,7 @@ package clique
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"math/rand"
@@ -328,6 +329,11 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if chain.Config().IsLondon(header.Number) {
 		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 			return err
+		}
+	} else {
+		// Verify BaseFee not present before EIP-1559 fork.
+		if header.BaseFee != nil {
+			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
 		}
 	}
 	// Retrieve the snapshot needed to verify this header and cache it

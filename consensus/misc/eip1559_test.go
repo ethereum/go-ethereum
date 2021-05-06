@@ -48,7 +48,7 @@ func TestBlockElasticity(t *testing.T) {
 		t.Errorf("Expected valid header: %s", err)
 	}
 	header.GasUsed += 1
-	expected := fmt.Sprintf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
+	expected := fmt.Sprintf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
 	if err := VerifyEip1559Header(config(), parent, header); fmt.Sprint(err) != expected {
 		t.Errorf("Expected invalid header")
 	}
