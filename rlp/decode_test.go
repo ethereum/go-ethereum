@@ -369,6 +369,12 @@ type intField struct {
 	X int
 }
 
+type optionalFields struct {
+	A uint32
+	B uint32 `rlp:"optional"`
+	C uint32 `rlp:"optional"`
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -590,6 +596,28 @@ var decodeTests = []decodeTest{
 		input: "C2C103",
 		ptr:   new(nilStringSlice),
 		value: nilStringSlice{X: &[]uint{3}},
+	},
+
+	// struct tag "optional"
+	{
+		input: "C101",
+		ptr:   new(optionalFields),
+		value: optionalFields{1, 0, 0},
+	},
+	{
+		input: "C20102",
+		ptr:   new(optionalFields),
+		value: optionalFields{1, 2, 0},
+	},
+	{
+		input: "C3010203",
+		ptr:   new(optionalFields),
+		value: optionalFields{1, 2, 3},
+	},
+	{
+		input: "C401020304",
+		ptr:   new(optionalFields),
+		error: "rlp: input list has too many elements for rlp.optionalFields",
 	},
 
 	// RawValue

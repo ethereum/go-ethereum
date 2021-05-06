@@ -264,6 +264,12 @@ var encTests = []encTest{
 	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 	{val: &intField{X: 3}, error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)"},
 
+	// struct tag "optional"
+	{val: &optionalFields{A: 1}, output: "C101"},
+	{val: &optionalFields{A: 1, B: 2}, output: "C20102"},
+	{val: &optionalFields{A: 1, B: 2, C: 3}, output: "C3010203"},
+	{val: &optionalFields{A: 1, B: 0, C: 3}, output: "C3018003"},
+
 	// nil
 	{val: (*uint)(nil), output: "80"},
 	{val: (*string)(nil), output: "80"},

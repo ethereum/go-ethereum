@@ -44,6 +44,8 @@ type tags struct {
 	// or empty lists.
 	nilKind Kind
 
+	optional bool
+
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
@@ -104,26 +106,52 @@ func cachedTypeInfo1(typ reflect.Type, tags tags) *typeinfo {
 }
 
 type field struct {
-	index int
-	info  *typeinfo
+	index    int
+	info     *typeinfo
+	optional bool
 }
 
+// structFields resolves the typeinfo of all public fields in a struct type.
 func structFields(typ reflect.Type) (fields []field, err error) {
-	lastPublic := lastPublicField(typ)
+	var (
+		lastPublic  = lastPublicField(typ)
+		anyOptional = false
+	)
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
 			tags, err := parseStructTag(typ, i, lastPublic)
 			if err != nil {
 				return nil, err
 			}
+
+			// Skip rlp:"-" fields.
 			if tags.ignored {
 				continue
 			}
+			// If any field has the "optional" tag, subsequent fields must also have it.
+			if tags.optional {
+				anyOptional = true
+			} else {
+				if anyOptional {
+					err := fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
+					return nil, err
+				}
+			}
 			info := cachedTypeInfo1(f.Type, tags)
-			fields = append(fields, field{i, info})
+			fields = append(fields, field{i, info, tags.optional})
 		}
 	}
 	return fields, nil
+}
+
+// anyOptionalFields returns the index of the first field with "optional" tag.
+func firstOptionalField(fields []field) int {
+	for i, f := range fields {
+		if f.optional {
+			return i
+		}
+	}
+	return len(fields)
 }
 
 type structFieldError struct {
@@ -166,6 +194,8 @@ func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 			case "nilList":
 				ts.nilKind = List
 			}
+		case "optional":
+			ts.optional = true
 		case "tail":
 			ts.tail = true
 			if fi != lastPublic {

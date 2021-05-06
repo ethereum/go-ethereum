@@ -102,20 +102,47 @@ Signed integers, floating point numbers, maps, channels and functions cannot be 
 
 Struct Tags
 
-Package rlp honours certain struct tags: "-", "tail", "nil", "nilList" and "nilString".
+As with encoding/json, the "-" tag ignores fields.
 
-The "-" tag ignores fields.
+    type StructWithIgnoredField struct{
+        Ignored uint `rlp:"-"`
+        Field   uint
+    }
+
+All other supported struct tags have the purpose of modifying the mapping between
+RLP lists and Go struct fields.
 
 The "tail" tag, which may only be used on the last exported struct field, allows slurping
-up any excess list elements into a slice. See examples for more details.
+up any excess list elements into a slice.
+
+    type StructWithTail struct{
+        Field   uint
+        Tail    []string `rlp:"tail"`
+    }
+
+The "optional" tag says that the field may be omitted if it is zero-valued. If this tag is
+used on a struct field, all subsequent public fields must also be declared optional. When
+decoding an RLP list into a struct, optional fields may be omitted from the input list.
+When encoding a struct with optional fields, the output RLP list contains all values up to
+the last non-zero optional field.
+
+   type StructWithOptionalFields struct{
+        Required  uint
+        Optional1 uint `rlp:"optional"`
+        Optional2 uint `rlp:"optional"`
+   }
 
 The "nil" tag applies to pointer-typed fields and changes the decoding rules for the field
 such that input values of size zero decode as a nil pointer. This tag can be useful when
 decoding recursive types.
 
-    type StructWithOptionalFoo struct {
-        Foo *[20]byte `rlp:"nil"`
+    type StructWithNilField struct {
+        Field *[3]byte `rlp:"nil"`
     }
+
+In the example above, the field allows two possible input sizes. For input 0xC180 (list
+containing an empty string) Field is set to nil after decoding. For input 0xC483000000 (a
+list containing a 3-byte string), Field is set to a non-nil array pointer.
 
 RLP supports two kinds of empty values: empty lists and empty strings. When using the
 "nil" tag, the kind of empty value allowed for a type is chosen automatically. A struct
