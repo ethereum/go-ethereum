@@ -86,6 +86,9 @@ type Header struct {
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
+	// The verkle proof is ignored in legacy headers
+	VerkleProof []byte `json:"verkleProof" rlp:"optional"`
+
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
 		// Random was added during the merge and contains the BeaconState randomness
@@ -335,6 +338,10 @@ func (b *Block) Size() common.StorageSize {
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
 	return b.header.SanityCheck()
+}
+
+func (b *Block) SetVerkleProof(vp []byte) {
+	b.header.VerkleProof = vp
 }
 
 type writeCounter common.StorageSize

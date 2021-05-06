@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -115,7 +117,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -301,6 +303,27 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+	}
+	if st.evm.TxContext.Accesses != nil {
+		if msg.To() != nil {
+			toBalance := trieUtils.GetTreeKeyBalance(msg.To().Bytes())
+			pre := st.state.GetBalance(*msg.To())
+			gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(toBalance, pre.Bytes())
+
+			// NOTE: Nonce also needs to be charged, because it is needed for execution
+			// on the statless side.
+			var preTN [8]byte
+			fromNonce := trieUtils.GetTreeKeyNonce(msg.To().Bytes())
+			binary.BigEndian.PutUint64(preTN[:], st.state.GetNonce(*msg.To()))
+			gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromNonce, preTN[:])
+		}
+		fromBalance := trieUtils.GetTreeKeyBalance(msg.From().Bytes())
+		preFB := st.state.GetBalance(msg.From()).Bytes()
+		fromNonce := trieUtils.GetTreeKeyNonce(msg.From().Bytes())
+		var preFN [8]byte
+		binary.BigEndian.PutUint64(preFN[:], st.state.GetNonce(msg.From()))
+		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromNonce, preFN[:])
+		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromBalance, preFB[:])
 	}
 	st.gas -= gas
 

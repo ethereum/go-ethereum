@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -43,6 +44,7 @@ type BlockGen struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   []*types.Header
+	witness  *types.AccessWitness
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -103,9 +105,16 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, accesses, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
+	}
+	if accesses != nil {
+		if b.witness != nil {
+			b.witness.Merge(accesses)
+		} else {
+			b.witness = accesses
+		}
 	}
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
@@ -273,6 +282,90 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		block, receipt := genblock(i, parent, statedb)
+		blocks[i] = block
+		receipts[i] = receipt
+		parent = block
+	}
+	return blocks, receipts
+}
+
+func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine, witness: types.NewAccessWitness()}
+		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+
+		// Mutate the state and block according to any hard-fork specs
+		if daoBlock := config.DAOForkBlock; daoBlock != nil {
+			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+				if config.DAOForkSupport {
+					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+				}
+			}
+		}
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+			misc.ApplyDAOHardFork(statedb)
+		}
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			if err != nil {
+				panic(err)
+			}
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			// Generate an associated verkle proof
+			if tr := statedb.GetTrie(); tr.IsVerkle() {
+				vtr := tr.(*trie.VerkleTrie)
+				// Generate the proof if we are using a verkle tree
+				// WORKAROUND: make sure all keys are resolved
+				// before building the proof. Ultimately, node
+				// resolution can be done with a prefetcher or
+				// from GetCommitmentsAlongPath.
+				keys := b.witness.Keys()
+				for _, key := range keys {
+					out, err := vtr.TryGet(key)
+					if err != nil {
+						panic(err)
+					}
+					if len(out) == 0 {
+						panic(fmt.Sprintf("%x should be present in the tree", key))
+					}
+				}
+				vtr.Hash()
+				_, err := vtr.ProveAndSerialize(keys, b.witness.KeyVals())
+				//block.SetVerkleProof(p)
+				if err != nil {
+					panic(err)
+				}
+			}
+			return block, b.receipts
+		}
+		return nil, nil
+	}
+	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), state.NewDatabaseWithConfig(db, &trie.Config{UseVerkle: true}), nil)
 		if err != nil {
 			panic(err)
 		}

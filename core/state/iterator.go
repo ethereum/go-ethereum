@@ -76,6 +76,14 @@ func (it *NodeIterator) step() error {
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
 		it.stateIt = it.state.trie.NodeIterator(nil)
+
+		// If the trie is a verkle trie, then the data and state
+		// are the same tree, and as a result both iterators are
+		// the same. This is a hack meant for both tree types to
+		// work.
+		if _, ok := it.state.trie.(*trie.VerkleTrie); ok {
+			it.dataIt = it.stateIt
+		}
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -100,10 +108,11 @@ func (it *NodeIterator) step() error {
 		it.state, it.stateIt = nil, nil
 		return nil
 	}
-	// If the state trie node is an internal entry, leave as is
+	// If the state trie node is an internal entry, leave as is.
 	if !it.stateIt.Leaf() {
 		return nil
 	}
+
 	// Otherwise we've reached an account node, initiate data iteration
 	var account types.StateAccount
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {

@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -239,9 +241,13 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
-			s.setError(err)
-			return common.Hash{}
+		if !s.db.trie.IsVerkle() {
+			if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+				s.setError(err)
+				return common.Hash{}
+			}
+		} else {
+			panic("verkle trees use the snapshot")
 		}
 	}
 	var value common.Hash
@@ -332,7 +338,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
+	var tr Trie
+	if s.db.trie.IsVerkle() {
+		tr = s.db.trie
+	} else {
+		tr = s.getTrie(db)
+	}
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
@@ -345,12 +356,25 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			if tr.IsVerkle() {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				s.setError(tr.TryDelete(k))
+				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
+			} else {
+				s.setError(tr.TryDelete(key[:]))
+			}
 			s.db.StorageDeleted += 1
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+
+			if !tr.IsVerkle() {
+				s.setError(tr.TryUpdate(key[:], v))
+			} else {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				// Update the trie, with v as a value
+				s.setError(tr.TryUpdate(k, v))
+			}
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit

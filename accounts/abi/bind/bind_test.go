@@ -1983,7 +1983,7 @@ func TestGolangBindings(t *testing.T) {
 		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)
 	}
 	// Test the entire package and report any failures
-	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
+	cmd := exec.Command(gocmd, "test", "-tags=bignum_kilic", "-v", "-count", "1")
 	cmd.Dir = pkg
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to run binding test: %v\n%s", err, out)

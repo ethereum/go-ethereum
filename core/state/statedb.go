@@ -18,6 +18,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -33,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 type revision struct {
@@ -99,6 +102,9 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList *accessList
 
+	// Stateless locations for this block
+	stateless map[common.Hash]common.Hash
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -143,6 +149,12 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
+	}
+	if sdb.snaps == nil && tr.IsVerkle() {
+		sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -411,6 +423,12 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
+// SetStateless sets the vales recovered from the execution of a stateless
+// block.
+func (s *StateDB) SetStateless(leaves map[common.Hash]common.Hash) {
+	s.stateless = leaves
+}
+
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -452,6 +470,46 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 // Setting, updating & deleting state object methods.
 //
 
+func (s *StateDB) updateStatelessStateObject(obj *stateObject) {
+	addr := obj.Address()
+
+	var (
+		ok bool
+		n  common.Hash
+		v  common.Hash
+		b  common.Hash
+		cs common.Hash
+		ch common.Hash
+	)
+
+	versionKey := common.BytesToHash(trieUtils.GetTreeKeyVersion(addr[:]))
+	if v, ok = s.stateless[versionKey]; ok {
+		nonceKey := common.BytesToHash(trieUtils.GetTreeKeyNonce(addr[:]))
+		if n, ok = s.stateless[nonceKey]; ok {
+			balanceKey := common.BytesToHash(trieUtils.GetTreeKeyBalance(addr[:]))
+			if b, ok = s.stateless[balanceKey]; ok {
+				codeHashKey := common.BytesToHash(trieUtils.GetTreeKeyCodeKeccak(addr[:]))
+				if _, ok = s.stateless[codeHashKey]; ok {
+					v[0] = byte(0)
+					binary.BigEndian.PutUint64(n[:], obj.data.Nonce)
+					copy(ch[:], obj.data.CodeHash[:])
+					copy(b[:], obj.data.Balance.Bytes())
+					binary.BigEndian.PutUint64(cs[:], uint64(len(obj.code)))
+
+					// TODO(@gballet) stateless tree update
+					// i.e. perform a "delta" update on all
+					// commitments. go-verkle currently has
+					// no support for these.
+				}
+			}
+		}
+	}
+
+	if !ok {
+		s.setError(fmt.Errorf("updateStatelessStateObject (%x) missing", addr[:]))
+	}
+}
+
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Track the amount of time wasted on updating the account from the trie
@@ -460,8 +518,22 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
+
+	// bypass the snapshot and writing to tree if in stateless mode
+	if s.stateless != nil {
+		s.updateStatelessStateObject(obj)
+		return
+	}
+
 	if err := s.trie.TryUpdateAccount(addr[:], &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+	}
+	if len(obj.code) > 0 && s.trie.IsVerkle() {
+		cs := make([]byte, 32)
+		binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+		if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -473,16 +545,34 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 }
 
+func (s *StateDB) deleteStatelessStateObject(obj *stateObject) {
+	// unsupported
+	panic("not currently supported")
+}
+
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(obj *stateObject) {
 	// Track the amount of time wasted on deleting the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 	}
+	if s.stateless != nil {
+		s.deleteStatelessStateObject(obj)
+		return
+	}
+
 	// Delete the account from the trie
-	addr := obj.Address()
-	if err := s.trie.TryDelete(addr[:]); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+	if !s.trie.IsVerkle() {
+		addr := obj.Address()
+		if err := s.trie.TryDelete(addr[:]); err != nil {
+			s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		}
+	} else {
+		for i := byte(0); i <= 255; i++ {
+			if err := s.trie.TryDelete(trieUtils.GetTreeKeyAccountLeaf(obj.Address().Bytes(), i)); err != nil {
+				s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", obj.Address(), err))
+			}
+		}
 	}
 }
 
@@ -494,6 +584,48 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return obj
 	}
 	return nil
+}
+
+func (s *StateDB) getStatelessDeletedStateObject(addr common.Address) *stateObject {
+	// Check that it is present in the witness, if running
+	// in stateless execution mode.
+	chunk := trieUtils.GetTreeKeyNonce(addr[:])
+	nb, ok := s.stateless[common.BytesToHash(chunk)]
+	if !ok {
+		log.Error("Failed to decode state object", "addr", addr)
+		s.setError(fmt.Errorf("could not find nonce chunk in proof: %x", chunk))
+		// TODO(gballet) remove after debug, and check the issue is found
+		panic("inivalid chunk")
+		return nil
+	}
+	chunk = trieUtils.GetTreeKeyBalance(addr[:])
+	bb, ok := s.stateless[common.BytesToHash(chunk)]
+	if !ok {
+		log.Error("Failed to decode state object", "addr", addr)
+		s.setError(fmt.Errorf("could not find balance chunk in proof: %x", chunk))
+		// TODO(gballet) remove after debug, and check the issue is found
+		panic("inivalid chunk")
+		return nil
+	}
+	chunk = trieUtils.GetTreeKeyCodeKeccak(addr[:])
+	cb, ok := s.stateless[common.BytesToHash(chunk)]
+	if !ok {
+		// Assume that this is an externally-owned account, and that
+		// the code has not been accessed.
+		// TODO(gballet) write this down, just like deletions, so
+		// that an error can be triggered if trying to access the
+		// account code.
+		copy(cb[:], emptyCodeHash)
+	}
+	data := &types.StateAccount{
+		Nonce:    binary.BigEndian.Uint64(nb[:8]),
+		Balance:  big.NewInt(0).SetBytes(bb[:]),
+		CodeHash: cb[:],
+	}
+	// Insert into the live set
+	obj := newObject(s, addr, *data)
+	s.setStateObject(obj)
+	return obj
 }
 
 // getDeletedStateObject is similar to getStateObject, but instead of returning
@@ -510,6 +642,10 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		data *types.StateAccount
 		err  error
 	)
+	// if executing statelessly, bypass the snapshot and the db.
+	if s.stateless != nil {
+		return s.getStatelessDeletedStateObject(addr)
+	}
 	if s.snap != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
@@ -532,6 +668,14 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				data.Root = emptyRoot
 			}
 		}
+
+		// NOTE: Do not touch the addresses here, kick the can down the
+		// road. That is because I don't want to change the interface
+		// to getDeletedStateObject at this stage, as the PR would then
+		// have a huge footprint.
+		// The alternative is to make accesses available via the state
+		// db instead of the evm. This requires a significant rewrite,
+		// that isn't currently warranted.
 	}
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
@@ -708,6 +852,13 @@ func (s *StateDB) Copy() *StateDB {
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
 
+	if s.stateless != nil {
+		state.stateless = make(map[common.Hash]common.Hash, len(s.stateless))
+		for addr, value := range s.stateless {
+			state.stateless[addr] = value
+		}
+	}
+
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
 	// know that they need to explicitly terminate an active copy).
@@ -845,7 +996,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+			if s.trie.IsVerkle() {
+				obj.updateTrie(s.db)
+			} else {
+				obj.updateRoot(s.db)
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -896,6 +1051,20 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entires
 }
 
+// GetTrie returns the account trie.
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
+}
+
+func (s *StateDB) Cap(root common.Hash) error {
+	if s.snaps != nil {
+		return s.snaps.Cap(root, 0)
+	}
+	// pre-verkle path: noop if s.snaps hasn't been
+	// initialized.
+	return nil
+}
+
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if s.dbErr != nil {
@@ -909,17 +1078,27 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			// Write any contract code associated with the state object
-			if obj.code != nil && obj.dirtyCode {
-				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
-				obj.dirtyCode = false
-			}
 			// Write any storage changes in the state object to its storage trie
 			committed, err := obj.CommitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
 			}
 			storageCommitted += committed
+			// Write any contract code associated with the state object
+			if obj.code != nil && obj.dirtyCode {
+				if s.trie.IsVerkle() {
+					if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
+						for i, chunk := range chunks {
+							s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr[:], uint256.NewInt(uint64(i))), chunk[:])
+						}
+					} else {
+						s.setError(err)
+					}
+				} else {
+					rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+				}
+				obj.dirtyCode = false
+			}
 		}
 	}
 	if len(s.stateObjectsDirty) > 0 {

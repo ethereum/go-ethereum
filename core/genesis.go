@@ -180,7 +180,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	var cfg *trie.Config = nil
+	if genesis.Config.UseVerkle {
+		cfg = &trie.Config{UseVerkle: true}
+	}
+	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, cfg), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -264,7 +268,11 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	var trieCfg *trie.Config
+	if g.Config != nil {
+		trieCfg = &trie.Config{UseVerkle: g.Config.UseVerkle}
+	}
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	if err != nil {
 		panic(err)
 	}
@@ -306,6 +314,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
+	if err := statedb.Cap(root); err != nil {
+		panic(err)
+	}
 
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
 }
@@ -355,6 +366,20 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	return g.MustCommit(db)
+}
+
+func DefaultVerkleGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.VerkleChainConfig,
+		Nonce:      86,
+		GasLimit:   0x2fefd8,
+		Difficulty: big.NewInt(1),
+		Alloc: map[common.Address]GenesisAccount{
+			common.BytesToAddress([]byte{97, 118, 97, 209, 72, 165, 43, 239, 81, 162, 104, 199, 40, 179, 162, 27, 88, 249, 67, 6}): {
+				Balance: big.NewInt(0).Lsh(big.NewInt(1), 27),
+			},
+		},
+	}
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

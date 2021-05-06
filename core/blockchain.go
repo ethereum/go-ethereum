@@ -234,6 +234,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
+			UseVerkle: chainConfig.UseVerkle,
 		}),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
@@ -375,7 +376,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
 			recover = true
 		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover, bc.Config().UseVerkle)
 	}
 
 	// Start future block processor.
@@ -1592,7 +1593,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		var (
+			usedGas  uint64
+			receipts types.Receipts
+			logs     []*types.Log
+		)
+		if len(block.Header().VerkleProof) == 0 {
+			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+		} else {
+			var leaves map[common.Hash]common.Hash
+			_, _, _, leaves, err = trie.DeserializeAndVerifyVerkleProof(block.Header().VerkleProof)
+			if err != nil {
+				return it.index, err
+			}
+			statedb.SetStateless(leaves)
+			receipts, logs, usedGas, err = bc.processor.ProcessStateless(block, statedb, bc.vmConfig, leaves)
+		}
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

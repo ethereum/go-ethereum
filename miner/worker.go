@@ -91,6 +91,9 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	// list of all locations touched by the transactions in this block
+	witness *types.AccessWitness
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -696,6 +699,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		family:    mapset.NewSet(),
 		uncles:    mapset.NewSet(),
 		header:    header,
+		witness:   types.NewAccessWitness(),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -770,18 +774,18 @@ func (w *worker) updateSnapshot() {
 	w.snapshotState = w.current.state.Copy()
 }
 
-func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, *types.AccessWitness, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, accesses, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
-		return nil, err
+		return nil, accesses, err
 	}
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
 
-	return receipt.Logs, nil
+	return receipt.Logs, accesses, nil
 }
 
 func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
@@ -844,7 +848,12 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
-		logs, err := w.commitTransaction(tx, coinbase)
+		logs, accs, err := w.commitTransaction(tx, coinbase)
+		if w.current.witness == nil {
+			w.current.witness = accs
+		} else {
+			w.current.witness.Merge(accs)
+		}
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1039,7 +1048,15 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-
+	if tr := s.GetTrie(); tr.IsVerkle() {
+		vtr := tr.(*trie.VerkleTrie)
+		// Generate the proof if we are using a verkle tree
+		p, err := vtr.ProveAndSerialize(w.current.witness.Keys(), w.current.witness.KeyVals())
+		w.current.header.VerkleProof = p
+		if err != nil {
+			return err
+		}
+	}
 	if w.isRunning() && !w.merger.TDDReached() {
 		if interval != nil {
 			interval()

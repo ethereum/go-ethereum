@@ -17,13 +17,16 @@
 package vm
 
 import (
+	"encoding/binary"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -75,6 +78,8 @@ type BlockContext struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
+
+	StatelessAccesses map[common.Hash]common.Hash
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -83,6 +88,8 @@ type TxContext struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
+
+	Accesses *types.AccessWitness
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -120,6 +127,8 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	accesses map[common.Hash]common.Hash
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -222,6 +231,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
+			// Touch the account data
+			var data [32]byte
+			evm.Accesses.TouchAddress(utils.GetTreeKeyVersion(addr.Bytes()), data[:])
+			binary.BigEndian.PutUint64(data[:], evm.StateDB.GetNonce(addr))
+			evm.Accesses.TouchAddress(utils.GetTreeKeyNonce(addr[:]), data[:])
+			evm.Accesses.TouchAddress(utils.GetTreeKeyBalance(addr[:]), evm.StateDB.GetBalance(addr).Bytes())
+			binary.BigEndian.PutUint64(data[:], uint64(len(code)))
+			evm.Accesses.TouchAddress(utils.GetTreeKeyCodeSize(addr[:]), data[:])
+			evm.Accesses.TouchAddress(utils.GetTreeKeyCodeKeccak(addr[:]), evm.StateDB.GetCodeHash(addr).Bytes())
+
 			addrCopy := addr
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
