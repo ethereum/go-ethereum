@@ -87,8 +87,9 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 		Time    time.Duration       `json:"time"`
 		Err     string              `json:"error,omitempty"`
 	}
+	var errMsg string
 	if err != nil {
-		l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, err.Error()})
+		errMsg = err.Error()
 	}
-	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, ""})
+	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, errMsg})
 }
