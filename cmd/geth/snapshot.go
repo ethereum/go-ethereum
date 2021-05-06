@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
+	"github.com/holiman/uint256"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -157,6 +161,26 @@ as the backend data source, making this command a lot faster.
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
 `,
+			},
+			{
+				Name:      "to-verkle",
+				Usage:     "use the snapshot to compute a translation of a MPT into a verkle tree",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(convertToVerkle),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.RopstenFlag,
+					utils.RinkebyFlag,
+					utils.GoerliFlag,
+				},
+				Description: `
+geth snapshot to-verkle <state-root>
+This command takes a snapshot and inserts its values in a fresh verkle tree.
+
+The argument is interpreted as the root hash. If none is provided, the latest
+block is used.
+ `,
 			},
 		},
 	}
@@ -574,5 +598,186 @@ func dumpState(ctx *cli.Context) error {
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func convertToVerkle(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	headBlock := rawdb.ReadHeadBlock(chaindb)
+	if headBlock == nil {
+		log.Error("Failed to load head block")
+		return errors.New("no head block")
+	}
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+	var (
+		root common.Hash
+		err  error
+	)
+	if ctx.NArg() == 1 {
+		root, err = parseRoot(ctx.Args()[0])
+		if err != nil {
+			log.Error("Failed to resolve state root", "error", err)
+			return err
+		}
+		log.Info("Start traversing the state", "root", root)
+	} else {
+		root = headBlock.Root()
+		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
+	}
+	var (
+		accounts   int
+		lastReport time.Time
+		start      = time.Now()
+	)
+
+	convdb, err := rawdb.NewLevelDBDatabase("verkle", 128, 128, "", false)
+	if err != nil {
+		panic(err)
+	}
+
+	saveverkle := func(n verkle.VerkleNode) {
+		s, err := n.Serialize()
+		if err != nil {
+			panic(err)
+		}
+		comm := n.ComputeCommitment().Bytes()
+		if err := convdb.Put(comm[:], s); err != nil {
+			panic(err)
+		}
+	}
+
+	vRoot := verkle.New()
+	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, root, false, false, false)
+	if err != nil {
+		return err
+	}
+	accIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIt.Release()
+
+	for accIt.Next() {
+		accounts += 1
+
+		var acc types.StateAccount
+		accIt, err := snaptree.AccountIterator(root, common.Hash{})
+		if err != nil {
+			log.Error("Invalid account encountered during traversal", "error", err)
+			return err
+		}
+
+		// Store the basic account data
+		var nonce, balance, version [32]byte
+		binary.LittleEndian.PutUint64(nonce[:8], acc.Nonce)
+		for i, b := range acc.Balance.Bytes() {
+			balance[len(acc.Balance.Bytes())-1-i] = b
+		}
+		// XXX use preimages, accIter is the hash of the address
+		versionkey := trieUtils.GetTreeKeyVersion(accIt.Hash().Bytes())
+		vRoot.Insert(versionkey, version[:], convdb.Get)
+		var balanceKey [32]byte
+		copy(balanceKey[:31], versionkey[:31])
+		balanceKey[31] = 1
+		vRoot.Insert(balanceKey[:], balance[:], convdb.Get)
+		var nonceKey [32]byte
+		copy(nonceKey[:31], versionkey[:31])
+		nonceKey[31] = 2
+		vRoot.Insert(nonceKey[:], nonce[:], convdb.Get)
+		var shakey [32]byte
+		copy(shakey[:31], versionkey[:31])
+		shakey[31] = 3
+		vRoot.Insert(shakey[:], acc.CodeHash, convdb.Get)
+		var sizekey [32]byte
+		copy(sizekey[:31], versionkey[:31])
+		sizekey[31] = 3
+
+		// Store the account code if present
+		if !bytes.Equal(acc.CodeHash, emptyCode) {
+			code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
+			chunks, err := trie.ChunkifyCode(code)
+			if err != nil {
+				panic(err)
+			}
+			laststem := make([]byte, 31)
+			copy(laststem, versionkey[:31])
+			for i, chunk := range chunks {
+				chunkkey := trieUtils.GetTreeKeyCodeChunk(accIt.Hash().Bytes(), uint256.NewInt(uint64(i)))
+
+				// if this chunk is inserted into a new group, and the previous group isn't
+				// that of the account header, flush the previous group.
+				if !bytes.Equal(laststem, chunkkey[:31]) {
+					if !bytes.Equal(laststem, versionkey[:31]) {
+						vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
+					}
+
+					laststem = chunkkey[:31]
+				}
+				vRoot.Insert(chunkkey, chunk[:], convdb.Get)
+			}
+			var size [32]byte
+			binary.LittleEndian.PutUint64(size[:8], uint64(len(code)))
+			vRoot.Insert(sizekey[:], size[:], convdb.Get)
+		} else {
+			// hack: because version is also 0, use it as the code size
+			vRoot.Insert(sizekey[:], version[:], convdb.Get)
+		}
+
+		// Save every slot into the tree
+		if acc.Root != emptyRoot {
+			laststem := make([]byte, 31)
+			copy(laststem, versionkey[:31])
+			storageIt, err := snaptree.StorageIterator(root, acc.Root, common.Hash{})
+			if err != nil {
+				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
+				return err
+			}
+			defer storageIt.Release()
+			for storageIt.Next() {
+				slotkey := trieUtils.GetTreeKeyStorageSlot(accIt.Hash().Bytes(), uint256.NewInt(0).SetBytes(storageIt.Hash().Bytes()))
+
+				// if this slot is inserted into a new group, and the previous group isn't
+				// that of the account header, flush the previous group.
+				if !bytes.Equal(laststem, slotkey[:31]) {
+					if !bytes.Equal(laststem, versionkey[:31]) {
+						vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
+					}
+
+					laststem = slotkey[:31]
+				}
+				var value [32]byte
+				copy(value[:len(storageIt.Slot())-1], storageIt.Slot())
+				// XXX use preimages, accIter is the hash of the address
+				err = vRoot.Insert(slotkey, value[:], convdb.Get)
+				if err != nil {
+					panic(err)
+				}
+			}
+			if !bytes.Equal(laststem, versionkey[:31]) {
+				vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
+			}
+			if storageIt.Error() != nil {
+				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIt.Error())
+				return storageIt.Error()
+			}
+		}
+
+		vRoot.(*verkle.InternalNode).FlushStem(versionkey[:31], saveverkle)
+		if time.Since(lastReport) > time.Second*8 {
+			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
+			lastReport = time.Now()
+		}
+	}
+	if accIt.Error() != nil {
+		log.Error("Failed to compute commitment", "root", root, "error", accIt.Error())
+		return accIt.Error()
+	}
+	log.Info("Conversion complete", "root commitment", vRoot.ComputeCommitment(), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
