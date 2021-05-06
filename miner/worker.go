@@ -83,6 +83,7 @@ type environment struct {
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
+	original  *state.StateDB // verkle: keep the orignal data to prove the pre-state
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
@@ -766,11 +767,11 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	}
 	state.StartPrefetcher("miner")
 
-	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
+		original:  state.Copy(),
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,

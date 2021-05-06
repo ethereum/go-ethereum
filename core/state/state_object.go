@@ -18,6 +18,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
@@ -28,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -100,6 +103,24 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
+	if db.trie.IsVerkle() {
+		var nonce, balance, version []byte
+
+		// preserve nil as a balance value, it means it's not in the tree
+		// use is as a heuristic for the nonce being null as well
+		if data.Balance != nil {
+			nonce = make([]byte, 32)
+			balance = make([]byte, 32)
+			version = make([]byte, 32)
+			for i, b := range data.Balance.Bytes() {
+				balance[len(data.Balance.Bytes())-1-i] = b
+			}
+
+			binary.LittleEndian.PutUint64(nonce[:8], data.Nonce)
+		}
+		db.witness.SetGetObjectTouchedLeaves(address.Bytes(), version, balance[:], nonce[:], data.CodeHash)
+	}
+
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -201,6 +222,17 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		enc []byte
 		err error
 	)
+	readStart := time.Now()
+	if metrics.EnabledExpensive {
+		// If the snap is 'under construction', the first lookup may fail. If that
+		// happens, we don't want to double-count the time elapsed. Thus this
+		// dance with the metering.
+		defer func() {
+			if meter != nil {
+				*meter += time.Since(readStart)
+			}
+		}()
+	}
 	if s.db.snap != nil {
 		// If the object was destructed in *this* block (and potentially resurrected),
 		// the storage has been cleared out, and we should *not* consult the previous
@@ -219,6 +251,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
+		if s.db.GetTrie().IsVerkle() {
+			panic("verkle trees use the snapshot")
+		}
 		start := time.Now()
 		enc, err = s.getTrie(db).TryGet(key.Bytes())
 		if metrics.EnabledExpensive {
@@ -237,6 +272,22 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		}
 		value.SetBytes(content)
 	}
+
+	// Capture the initial value of the location in the verkle proof witness
+	if s.db.GetTrie().IsVerkle() {
+		if err != nil {
+			return common.Hash{}
+		}
+		addr := s.Address()
+		loc := new(uint256.Int).SetBytes(key[:])
+		index := trieUtils.GetTreeKeyStorageSlot(addr[:], loc)
+		if len(enc) > 0 {
+			s.db.Witness().SetLeafValue(index, value.Bytes())
+		} else {
+			s.db.Witness().SetLeafValue(index, nil)
+		}
+	}
+
 	s.originStorage[key] = value
 	return value
 }
@@ -317,7 +368,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
+	var tr Trie
+	if s.db.trie.IsVerkle() {
+		tr = s.db.trie
+	} else {
+		tr = s.getTrie(db)
+	}
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
@@ -330,12 +386,24 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			if tr.IsVerkle() {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				s.setError(tr.TryDelete(k))
+				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
+			} else {
+				s.setError(tr.TryDelete(key[:]))
+			}
 			s.db.StorageDeleted += 1
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+			if !tr.IsVerkle() {
+				s.setError(tr.TryUpdate(key[:], v))
+			} else {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				// Update the trie, with v as a value
+				s.setError(tr.TryUpdate(k, value[:]))
+			}
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit
@@ -459,11 +527,20 @@ func (s *stateObject) Code(db Database) []byte {
 		return s.code
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+		if s.db.GetTrie().IsVerkle() {
+			// Mark the code size and code hash as empty
+			s.db.witness.SetObjectCodeTouchedLeaves(s.address.Bytes(), nil, nil)
+		}
 		return nil
 	}
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+	}
+	if s.db.GetTrie().IsVerkle() {
+		var cs [32]byte
+		binary.LittleEndian.PutUint64(cs[:8], uint64(len(code)))
+		s.db.witness.SetObjectCodeTouchedLeaves(s.address.Bytes(), cs[:], s.CodeHash())
 	}
 	s.code = code
 	return code
@@ -477,11 +554,20 @@ func (s *stateObject) CodeSize(db Database) int {
 		return len(s.code)
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+		if s.db.trie.IsVerkle() {
+			var sz [32]byte
+			s.db.witness.SetLeafValuesMessageCall(s.address.Bytes(), sz[:])
+		}
 		return 0
 	}
 	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
+	}
+	if s.db.trie.IsVerkle() {
+		var sz [32]byte
+		binary.LittleEndian.PutUint64(sz[:8], uint64(size))
+		s.db.witness.SetLeafValuesMessageCall(s.address.Bytes(), sz[:])
 	}
 	return size
 }
@@ -522,8 +608,23 @@ func (s *stateObject) Balance() *big.Int {
 	return s.data.Balance
 }
 
+func (s *stateObject) BalanceLE() []byte {
+	var out [32]byte
+	for i, b := range s.data.Balance.Bytes() {
+		out[len(s.data.Balance.Bytes())-1-i] = b
+	}
+
+	return out[:]
+}
+
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
+}
+
+func (s *stateObject) NonceLE() []byte {
+	var out [32]byte
+	binary.LittleEndian.PutUint64(out[:8], s.data.Nonce)
+	return out[:]
 }
 
 // Never called, but must be present to allow stateObject to be used
