@@ -754,7 +754,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	}
 
 	gasLimit := w.current.header.GasLimit
-	if w.chain.Config().IsAleut(w.current.header.Number) {
+	if w.chain.Config().IsLondon(w.current.header.Number) {
 		gasLimit *= params.ElasticityMultiplier
 	}
 	if w.current.gasPool == nil {
@@ -889,7 +889,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Time:       uint64(timestamp),
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	if w.chainConfig.IsAleut(header.Number) {
+	if w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
