@@ -278,7 +278,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 	}
-	signer := NewEIP2930Signer(big.NewInt(0))
+	signer := LatestSignerForChainID(common.Big1)
 
 	// Generate a batch of transactions with overlapping values, but shifted nonces
 	groups := map[common.Address]Transactions{}
@@ -312,7 +312,10 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 					count = i
 				}
 			}
-			tx, _ = SignTx(tx, signer, key)
+			tx, err := SignTx(tx, signer, key)
+			if err != nil {
+				t.Fatalf("failed to sign tx: %s", err)
+			}
 			groups[addr] = append(groups[addr], tx)
 		}
 		expectedCount += count
