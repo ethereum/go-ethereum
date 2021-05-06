@@ -17,89 +17,108 @@
 package txpool
 
 import (
-	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
-var testTxPoolConfig = TxPoolConfig{}
+// Tests that the pool rejects duplicate transactions.
+func TestTransactionDeduplication(t *testing.T) {
+	t.Parallel()
 
-type testBlockChain struct {
-	statedb       *state.StateDB
-	gasLimit      uint64
-	chainHeadFeed *event.Feed
-}
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
-func (bc *testBlockChain) CurrentBlock() *types.Block {
-	return types.NewBlock(&types.Header{
-		GasLimit: bc.gasLimit,
-	}, nil, nil, nil, trie.NewStackTrie(nil))
-}
-
-func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
-}
-
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
-	return bc.statedb, nil
-}
-
-func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return bc.chainHeadFeed.Subscribe(ch)
-}
-
-func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
-	return pricedTransaction(nonce, gaslimit, big.NewInt(1), key)
-}
-
-func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
-	return tx
-}
-
-// Benchmarks the speed of batched transaction insertion.
-func BenchmarkPoolBatchInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100) }
-func BenchmarkPoolBatchInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000) }
-func BenchmarkPoolBatchInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000) }
-
-func benchmarkPoolBatchInsert(b *testing.B, size int) {
-	// Generate a batch of transactions to enqueue into the pool
-	pool, key := setupTxPool()
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
 	defer pool.Stop()
 
-	account := crypto.PubkeyToAddress(key.PublicKey)
-	pool.currentState.AddBalance(account, big.NewInt(1000000))
+	// Create a test account to add transactions with
+	key, _ := crypto.GenerateKey()
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
-	batches := make([]types.Transactions, b.N)
-	for i := 0; i < b.N; i++ {
-		batches[i] = make(types.Transactions, size)
-		for j := 0; j < size; j++ {
-			batches[i][j] = transaction(uint64(size*i+j), 100000, key)
+	// Create a batch of transactions and add a few of them
+	txs := make([]*types.Transaction, 16)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = pricedTransaction(uint64(i), 100000, big.NewInt(1), key)
+	}
+	var firsts []*types.Transaction
+	for i := 0; i < len(txs); i += 2 {
+		firsts = append(firsts, txs[i])
+	}
+	errs := pool.AddRemotesSync(firsts)
+	if len(errs) != len(firsts) {
+		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), len(firsts))
+	}
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("add %d failed: %v", i, err)
 		}
 	}
-	// Benchmark importing the transactions into the queue
-	b.ResetTimer()
-	for _, batch := range batches {
-		pool.AddRemotes(batch)
+	pending, queued := pool.Stats()
+	if pending != 1 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
+	}
+	if queued != len(txs)/2-1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, len(txs)/2-1)
+	}
+	// Try to add all of them now and ensure previous ones error out as knowns
+	errs = pool.AddRemotesSync(txs)
+	if len(errs) != len(txs) {
+		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), len(txs))
+	}
+	for i, err := range errs {
+		if i%2 == 0 && err == nil {
+			t.Errorf("add %d succeeded, should have failed as known", i)
+		}
+		if i%2 == 1 && err != nil {
+			t.Errorf("add %d failed: %v", i, err)
+		}
+	}
+	pending, queued = pool.Stats()
+	if pending != len(txs) {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, len(txs))
+	}
+	if queued != 0 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
+	}
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 }
 
-func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
+// validateTxPoolInternals checks various consistency invariants within the pool.
+func validateTxPoolInternals(pool *TxPool) error {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
-	key, _ := crypto.GenerateKey()
-	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	// Ensure the total transaction set is consistent with pending + queued
+	pending, queued := pool.Stats()
+	if total := pool.all.Count(); total != pending+queued {
+		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
+	}
 
-	return pool, key
+	/*
+		// Ensure the next nonce to assign is the correct one
+		for addr, txs := range pool.Pending() {
+			// Find the last transaction
+			var last uint64
+			for nonce := range txs.txs.items {
+				if last < nonce {
+					last = nonce
+				}
+			}
+			if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
+				return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
+			}
+		}*/
+	return nil
 }

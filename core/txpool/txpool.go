@@ -18,6 +18,7 @@ package txpool
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -127,8 +128,8 @@ type TxPool struct {
 	all          *txLookup
 	localSenders *senderSet
 	signer       types.Signer
-	localTxs     *txList
-	remoteTxs    *txList
+	localTxs     txList
+	remoteTxs    txList
 	// global txpool mutex
 	mu sync.RWMutex
 }
@@ -137,26 +138,20 @@ type TxPool struct {
 // transactions from the network.
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
 
-	// TODO move this to reset once that is done
-	statedb, err := chain.StateAt(chain.CurrentBlock().Hash())
-	if err != nil {
-		panic("failed to set current state")
-	}
-
 	pool := &TxPool{
-		config:        config,
-		chainconfig:   chainconfig,
-		chain:         chain,
-		signer:        types.LatestSigner(chainconfig),
-		all:           newTxLookup(),
-		chainHeadCh:   make(chan core.ChainHeadEvent, chainHeadChanSize),
-		localSenders:  newSenderSet(),
-		pendingNonces: newTxNoncer(statedb), // TODO move to reset
-		currentState:  statedb,              // TODO move to reset
+		config:       config,
+		chainconfig:  chainconfig,
+		chain:        chain,
+		signer:       types.LatestSigner(chainconfig),
+		all:          newTxLookup(),
+		chainHeadCh:  make(chan core.ChainHeadEvent, chainHeadChanSize),
+		localSenders: newSenderSet(),
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+
+	pool.reset(nil, chain.CurrentBlock().Header())
 
 	return pool
 }
@@ -178,6 +173,23 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subsc
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+// reset retrieves the current state of the blockchain and ensures the content
+// of the transaction pool is valid with regard to the chain state.
+func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+	// Initialize the internal state to the current head
+	if newHead == nil {
+		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
+	}
+	statedb, err := pool.chain.StateAt(newHead.Root)
+	if err != nil {
+		log.Error("Failed to reset txpool state", "err", err)
+		return
+	}
+	pool.currentState = statedb
+	pool.pendingNonces = newTxNoncer(statedb)
+	pool.config.maxGasPerBlock = newHead.GasLimit
+}
+
 // SetGasPrice updates the minimum price required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (pool *TxPool) SetGasPrice(price *big.Int) { panic("not implemented") }
@@ -193,7 +205,7 @@ func (pool *TxPool) Nonce(addr common.Address) uint64 {
 
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) Stats() (int, int) { panic("not implemented") }
+func (pool *TxPool) Stats() (int, int) { return pool.all.Count(), 0 }
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
@@ -338,7 +350,7 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.localSenders.contains(tx.sender)
 	isReplacement := pool.pendingNonces.get(tx.sender) < tx.tx.Nonce()
-	isGapped := pool.pendingNonces.get(tx.sender)+1 < tx.tx.Nonce()
+	isGapped := pool.pendingNonces.get(tx.sender)+1 <= tx.tx.Nonce()
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx.tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
@@ -363,18 +375,21 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 			}
 		}()
 	}
-
-	// If this is a replacement transaction, we have to replace it
-	if isReplacement {
-		return pool.addReplacementTx(tx, isLocal)
-	}
+	fmt.Printf("1: %v\n", tx.tx.Nonce())
 	// If it is a queued transaction, we can write it to disk
 	if isGapped {
+		fmt.Println("3")
 		return false, pool.addGapped(tx, isLocal)
+	}
+	// If this is a replacement transaction, we have to replace it
+	if isReplacement {
+		fmt.Println("2")
+		return pool.addReplacementTx(tx, isLocal)
 	}
 	// If it is the transaction with pendingNonce + 1,
 	// we need to insert it and maybe add some now valid transactions
 	// from the queued list into the pool
+	fmt.Println("4")
 	return false, pool.addContinuousTx(tx, isLocal)
 }
 
@@ -426,6 +441,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
 	if shouldPrune {
+		//panic("not implemented")
 		// TODO prune in memory list to disk
 	}
 	return replaced, nil
@@ -436,7 +452,18 @@ func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
 }
 
 func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
-	panic("not implemented")
+	if local {
+		pool.localTxs.Add(tx)
+		pool.all.Add(tx.tx, true)
+		return nil
+	}
+	shouldPrune := pool.remoteTxs.Add(tx)
+	pool.all.Add(tx.tx, false)
+	if shouldPrune {
+		//panic("not implemented")
+	}
+	// TODO a continuous tx might unstuck gapped transactions
+	return nil
 }
 
 // validateTx checks whether a transaction is valid according to the consensus
