@@ -671,7 +671,7 @@ var decodeTests = []decodeTest{
 		value: optionalPtrField{A: 1},
 	},
 	{
-		input: "C20180", // not accepted because "optional" does not preclude "nil"
+		input: "C20180", // not accepted because "optional" doesn't enable "nil"
 		ptr:   new(optionalPtrField),
 		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrField).B",
 	},
