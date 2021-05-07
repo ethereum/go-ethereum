@@ -213,19 +213,14 @@ func (st *StateTransition) preCheck() error {
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
 	}
-	// Make sure baseFee is only defined for blocks after the London fork, and that
-	// the transaction feeCap is greater than the baseFee.
-	isLondon := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
-	switch {
-	case isLondon && st.evm.Context.BaseFee != nil:
+	// Make sure that transaction feeCap is greater than the baseFee (post london)
+	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
+		// This will panic if baseFee is nil, but basefee presence is verified
+		// as part of header validation.
 		if st.feeCap.Cmp(st.evm.Context.BaseFee) < 0 {
 			return fmt.Errorf("%w: address %v, feeCap: %s baseFee: %s", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.feeCap, st.evm.Context.BaseFee)
 		}
-	case isLondon && st.evm.Context.BaseFee == nil:
-		return fmt.Errorf("%w: have: <nil>", ErrBaseFeeMissing)
-	case !isLondon && st.evm.Context.BaseFee != nil:
-		return fmt.Errorf("%w: have: %s want: <nil>", ErrBaseFeePremature, st.evm.Context.BaseFee)
 	}
 	return st.buyGas()
 }
