@@ -72,15 +72,7 @@ var (
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
 
-	// ErrInsufficientFeeCap is returned if the transaction fee cap is less than the
+	// ErrFeeCapTooLow is returned if the transaction fee cap is less than the
 	// the base fee of the block.
 	ErrFeeCapTooLow = errors.New("fee cap less than block base fee")
-
-	// ErrBaseFeeMissing is returned if a block is processed after EIP-1559 is activated
-	// and it does not have base fee initialized.
-	ErrBaseFeeMissing = errors.New("expected base fee")
-
-	// ErrBaseFeePremature is returned if a block defines a base fee before the EIP-1559
-	// fork block.
-	ErrBaseFeePremature = errors.New("unexpected base fee")
 )
