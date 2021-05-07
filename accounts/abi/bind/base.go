@@ -56,5 +56,5 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
-	return bind.DeployContract(opts, abi, bytecode, backend, params)
+	return bind.DeployContract(opts, abi, bytecode, backend, params...)
 }
