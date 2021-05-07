@@ -701,6 +701,28 @@ var decodeTests = []decodeTest{
 		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrFieldNil).B",
 	},
 
+	// struct tag "optional" field clearing
+	{
+		input: "C101",
+		ptr:   &optionalFields{A: 9, B: 8, C: 7},
+		value: optionalFields{A: 1, B: 0, C: 0},
+	},
+	{
+		input: "C20102",
+		ptr:   &optionalFields{A: 9, B: 8, C: 7},
+		value: optionalFields{A: 1, B: 2, C: 0},
+	},
+	{
+		input: "C20102",
+		ptr:   &optionalAndTailField{A: 9, B: 8, Tail: []uint{7, 6, 5}},
+		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{}},
+	},
+	{
+		input: "C101",
+		ptr:   &optionalPtrField{A: 9, B: &[3]byte{8, 7, 6}},
+		value: optionalPtrField{A: 1},
+	},
+
 	// RawValue
 	{input: "01", ptr: new(RawValue), value: RawValue(unhex("01"))},
 	{input: "82FFFF", ptr: new(RawValue), value: RawValue(unhex("82FFFF"))},
