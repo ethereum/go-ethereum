@@ -146,6 +146,10 @@ func enable2929(jt *JumpTable) {
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 
+// enable3529 enabled "EIP-3529: Reduction in refunds":
+// - Removes refunds for selfdestructs
+// - Reduces refunds for SSTORE
+// - Reduces max refunds to 20% gas
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
