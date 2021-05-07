@@ -38,17 +38,16 @@ type typeinfo struct {
 // tags represents struct tags.
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
-	nilOK bool
-
-	// This controls whether nil pointers are encoded/decoded as empty strings
-	// or empty lists.
+	// nilKind is the kind of empty value allowed for the field.
 	nilKind Kind
+	nilOK   bool
 
+	// rlp:"optional" allows for a field to be missing in the input list.
+	// If this is set, all subsequent fields must also be optional.
 	optional bool
 
-	// rlp:"tail" controls whether this field swallows additional list
-	// elements. It can only be set for the last field, which must be
-	// of slice type.
+	// rlp:"tail" controls whether this field swallows additional list elements. It can
+	// only be set for the last field, which must be of slice type.
 	tail bool
 
 	// rlp:"-" ignores fields.
@@ -131,8 +130,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			// If any field has the "optional" tag, subsequent fields must also have it.
 			if tags.optional || tags.tail {
 				anyOptional = true
-			}
-			if tags.optional && !anyOptional {
+			} else if anyOptional {
 				err := fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
 				return nil, err
 			}
@@ -195,10 +193,16 @@ func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 			}
 		case "optional":
 			ts.optional = true
+			if ts.tail {
+				return ts, structTagError{typ, f.Name, t, `also has "tail" tag`}
+			}
 		case "tail":
 			ts.tail = true
 			if fi != lastPublic {
 				return ts, structTagError{typ, f.Name, t, "must be on last field"}
+			}
+			if ts.optional {
+				return ts, structTagError{typ, f.Name, t, `also has "optional" tag`}
 			}
 			if f.Type.Kind() != reflect.Slice {
 				return ts, structTagError{typ, f.Name, t, "field type is not slice"}

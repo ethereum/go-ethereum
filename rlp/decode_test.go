@@ -953,6 +953,40 @@ func TestDecoderFunc(t *testing.T) {
 	x()
 }
 
+// This tests the validity checks for fields with struct tag "optional".
+func TestInvalidOptionalField(t *testing.T) {
+	type (
+		invalid1 struct {
+			A uint `rlp:"optional"`
+			B uint
+		}
+		invalid2 struct {
+			T []uint `rlp:"tail,optional"`
+		}
+		invalid3 struct {
+			T []uint `rlp:"optional,tail"`
+		}
+	)
+
+	tests := []struct {
+		v   interface{}
+		err string
+	}{
+		{v: new(invalid1), err: `rlp: struct field rlp.invalid1.B needs "optional" tag`},
+		{v: new(invalid2), err: `rlp: invalid struct tag "optional" for rlp.invalid2.T (also has "tail" tag)`},
+		{v: new(invalid3), err: `rlp: invalid struct tag "tail" for rlp.invalid3.T (also has "optional" tag)`},
+	}
+	for _, test := range tests {
+		err := DecodeBytes(unhex("C20102"), test.v)
+		if err == nil {
+			t.Errorf("no error for %T", test.v)
+		} else if err.Error() != test.err {
+			t.Errorf("wrong error for %T: %v", test.v, err.Error())
+		}
+	}
+
+}
+
 func ExampleDecode() {
 	input, _ := hex.DecodeString("C90A1486666F6F626172")
 
