@@ -219,13 +219,13 @@ func (st *StateTransition) preCheck() error {
 	switch {
 	case isLondon && st.evm.Context.BaseFee != nil:
 		if st.feeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-			return fmt.Errorf("%w: address %v, feeCap: %d baseFee: %d", ErrFeeCapTooLow,
-				st.msg.From().Hex(), st.feeCap.Uint64(), st.evm.Context.BaseFee.Uint64())
+			return fmt.Errorf("%w: address %v, feeCap: %s baseFee: %s", ErrFeeCapTooLow,
+				st.msg.From().Hex(), st.feeCap, st.evm.Context.BaseFee)
 		}
 	case isLondon && st.evm.Context.BaseFee == nil:
-		return fmt.Errorf("baseFee missing")
+		return fmt.Errorf("%w: have: <nil>", ErrBaseFeeMissing)
 	case !isLondon && st.evm.Context.BaseFee != nil:
-		return fmt.Errorf("baseFee before fork block")
+		return fmt.Errorf("%w: have: %s want: <nil>", ErrBaseFeePremature, st.evm.Context.BaseFee)
 	}
 	return st.buyGas()
 }

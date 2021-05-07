@@ -61,10 +61,6 @@ var (
 	// is higher than the balance of the user's account.
 	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
-	// ErrInsufficientFeeCap is returned if the transaction fee cap is less than the
-	// the base fee of the block.
-	ErrFeeCapTooLow = errors.New("fee cap less than block base fee")
-
 	// ErrGasUintOverflow is returned when calculating gas usage.
 	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 
@@ -75,4 +71,16 @@ var (
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
+
+	// ErrInsufficientFeeCap is returned if the transaction fee cap is less than the
+	// the base fee of the block.
+	ErrFeeCapTooLow = errors.New("fee cap less than block base fee")
+
+	// ErrBaseFeeMissing is returned if a block is processed after EIP-1559 is activated
+	// and it does not have base fee initialized.
+	ErrBaseFeeMissing = errors.New("expected base fee")
+
+	// ErrBaseFeePremature is returned if a block defines a base fee before the EIP-1559
+	// fork block.
+	ErrBaseFeePremature = errors.New("unexpected base fee")
 )
