@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var testTxPoolConfig = TxPoolConfig{minGasPrice: big.NewInt(1)}
+var testTxPoolConfig = TxPoolConfig{minGasPrice: big.NewInt(1), MaxTxCount: 1000, pendingBlockSize: 16}
 
 type testBlockChain struct {
 	statedb       *state.StateDB

@@ -59,6 +59,10 @@ type txList struct {
 	maxLen int
 }
 
+func newTxList(maxLen int) txList {
+	return txList{maxLen: maxLen}
+}
+
 func (l *txList) LastEntry() *txEntry {
 	return l.bottom
 }

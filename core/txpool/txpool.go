@@ -130,6 +130,7 @@ type TxPool struct {
 	signer       types.Signer
 	localTxs     txList
 	remoteTxs    txList
+	gappedTxs    map[common.Address]*txHeap
 	// global txpool mutex
 	mu sync.RWMutex
 }
@@ -146,6 +147,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		all:          newTxLookup(),
 		chainHeadCh:  make(chan core.ChainHeadEvent, chainHeadChanSize),
 		localSenders: newSenderSet(),
+		gappedTxs:    make(map[common.Address]*txHeap),
+		localTxs:     newTxList(config.MaxTxCount),
+		remoteTxs:    newTxList(config.MaxTxCount),
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
@@ -205,7 +209,13 @@ func (pool *TxPool) Nonce(addr common.Address) uint64 {
 
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) Stats() (int, int) { return pool.all.Count(), 0 }
+func (pool *TxPool) Stats() (int, int) {
+	queued := 0
+	for _, h := range pool.gappedTxs {
+		queued += h.Len()
+	}
+	return pool.all.Count(), queued
+}
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
@@ -233,7 +243,7 @@ func (pool *TxPool) PendingBlock() (locals types.Transactions, remotes types.Tra
 		missing -= len(remotes)
 	}
 	if missing > 0 {
-		panic("TODO lookup tx's from disk if we don't have enough in ram")
+		//panic("TODO lookup tx's from disk if we don't have enough in ram")
 	}
 	return
 }
@@ -349,8 +359,8 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.localSenders.contains(tx.sender)
-	isReplacement := pool.pendingNonces.get(tx.sender) < tx.tx.Nonce()
-	isGapped := pool.pendingNonces.get(tx.sender)+1 <= tx.tx.Nonce()
+	isReplacement := tx.tx.Nonce() < pool.pendingNonces.get(tx.sender)
+	isGapped := tx.tx.Nonce() > pool.pendingNonces.get(tx.sender)
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx.tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
@@ -360,7 +370,7 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// If the sender was not in the local senders,
 	// we need to add all transactions of this sender to the local txs
 	// even if the tx is not valid in the end.
-	if !pool.localSenders.contains(tx.sender) {
+	if isLocal && !pool.localSenders.contains(tx.sender) {
 		defer func() {
 			for {
 				if entry := pool.remoteTxs.Delete(func(e *txEntry) bool {
@@ -414,7 +424,6 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 		}
 		pool.localTxs.Add(tx)
 		pool.all.Add(tx.tx, true)
-
 		return replaced, nil
 	}
 	// If the tx pays less than what we have in memory
@@ -448,22 +457,49 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 }
 
 func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
-	panic("not implemented")
+	if pool.gappedTxs[tx.sender] == nil {
+		pool.gappedTxs[tx.sender] = newTxHeap()
+	}
+	if old := pool.gappedTxs[tx.sender].Get(tx.tx.Nonce()); old != nil {
+		if !ableToReplace(tx, old, pool.config.PriceBump) {
+			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
+			return ErrUnderpriced
+		}
+	}
+	pool.gappedTxs[tx.sender].Put(tx)
+	return nil
 }
 
 func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
 	if local {
 		pool.localTxs.Add(tx)
 		pool.all.Add(tx.tx, true)
+		pool.pendingNonces.set(tx.sender, tx.tx.Nonce()+1)
 		return nil
 	}
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
 	if shouldPrune {
-		//panic("not implemented")
+		panic("not implemented")
 	}
-	// TODO a continuous tx might unstuck gapped transactions
-	return nil
+	return pool.addUngappedTx(tx)
+}
+
+func (pool *TxPool) addUngappedTx(tx *txEntry) error {
+	wantedNonce := tx.tx.Nonce() + 1
+	for {
+		nonce, err := pool.gappedTxs[tx.sender].LowestNonce()
+		if err != nil || nonce != wantedNonce {
+			// no more gapped tx to add
+			pool.pendingNonces.set(tx.sender, wantedNonce)
+			return nil
+		}
+		// found a gapped transaction that now becomes executable.
+		toAdd := pool.gappedTxs[tx.sender].Pop()
+		pool.remoteTxs.Add(toAdd)
+		pool.all.Add(toAdd.tx, false)
+		wantedNonce = wantedNonce + 1
+	}
 }
 
 // validateTx checks whether a transaction is valid according to the consensus

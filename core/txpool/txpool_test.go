@@ -85,6 +85,10 @@ func TestTransactionDeduplication(t *testing.T) {
 	}
 	pending, queued = pool.Stats()
 	if pending != len(txs) {
+		_, remote := pool.PendingBlock()
+		for _, t := range remote {
+			fmt.Printf("%v\n", t.Nonce())
+		}
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, len(txs))
 	}
 	if queued != 0 {
