@@ -63,6 +63,9 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
+		if config.LondonBlock != nil {
+			return NewLondonSigner(config.ChainID)
+		}
 		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
@@ -84,7 +87,7 @@ func LatestSignerForChainID(chainID *big.Int) Signer {
 	if chainID == nil {
 		return HomesteadSigner{}
 	}
-	return NewEIP2930Signer(chainID)
+	return NewLondonSigner(chainID)
 }
 
 // SignTx signs the transaction using the given signer and private key.
