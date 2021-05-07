@@ -546,15 +546,40 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 			return nil, structFieldError{typ, f.index, f.info.writerErr}
 		}
 	}
-	writer := func(val reflect.Value, w *encbuf) error {
-		lh := w.list()
-		for _, f := range fields {
-			if err := f.info.writer(val.Field(f.index), w); err != nil {
-				return err
+
+	var writer writer
+	firstOptionalField := firstOptionalField(fields)
+	if firstOptionalField == len(fields) {
+		// This is the writer function for structs without any optional fields.
+		writer = func(val reflect.Value, w *encbuf) error {
+			lh := w.list()
+			for _, f := range fields {
+				if err := f.info.writer(val.Field(f.index), w); err != nil {
+					return err
+				}
 			}
+			w.listEnd(lh)
+			return nil
 		}
-		w.listEnd(lh)
-		return nil
+	} else {
+		// If there are any "optional" fields, the writer needs to perform additional
+		// checks to determine the output list length.
+		writer = func(val reflect.Value, w *encbuf) error {
+			lastField := len(fields) - 1
+			for ; lastField >= firstOptionalField; lastField-- {
+				if !val.Field(fields[lastField].index).IsZero() {
+					break
+				}
+			}
+			lh := w.list()
+			for i := 0; i <= lastField; i++ {
+				if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
+					return err
+				}
+			}
+			w.listEnd(lh)
+			return nil
+		}
 	}
 	return writer, nil
 }
