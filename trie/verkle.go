@@ -113,3 +113,10 @@ func (trie *VerkleTrie) NodeIterator(startKey []byte) NodeIterator {
 func (trie *VerkleTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	panic("not implemented")
 }
+
+func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
+	return &VerkleTrie{
+		root: trie.root.Copy(),
+		db:   db,
+	}
+}
