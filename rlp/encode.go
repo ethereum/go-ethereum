@@ -565,19 +565,14 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 		// If there are any "optional" fields, the writer needs to perform additional
 		// checks to determine the output list length.
 		writer = func(val reflect.Value, w *encbuf) error {
-			lh := w.list()
-			for i := 0; i < firstOptionalField; i++ {
-				if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
-					return err
-				}
-			}
 			lastField := len(fields) - 1
 			for ; lastField >= firstOptionalField; lastField-- {
 				if !val.Field(fields[lastField].index).IsZero() {
 					break
 				}
 			}
-			for i := firstOptionalField; i <= lastField; i++ {
+			lh := w.list()
+			for i := 0; i <= lastField; i++ {
 				if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
 					return err
 				}
