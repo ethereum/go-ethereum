@@ -90,7 +90,7 @@ func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
 func (tx *DynamicFeeTx) feeCap() *big.Int       { return tx.FeeCap }
 func (tx *DynamicFeeTx) tip() *big.Int          { return tx.Tip }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.Tip }
+func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.FeeCap }
 func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
