@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,14 +41,14 @@ func NewVerkleTrie(root verkle.VerkleNode, db *Database) *VerkleTrie {
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
 func (trie *VerkleTrie) GetKey(key []byte) []byte {
-	return trie.db.preimage(common.BytesToHash(key))
+	return key
 }
 
 // TryGet returns the value for key stored in the trie. The value bytes must
 // not be modified by the caller. If a node was not found in the database, a
 // trie.MissingNodeError is returned.
 func (trie *VerkleTrie) TryGet(key []byte) ([]byte, error) {
-	return trie.root.Get(key, nil)
+	return trie.root.Get(key, trie.db.DiskDB().Get)
 }
 
 // TryUpdate associates key with value in the trie. If value has length zero, any
@@ -63,7 +62,7 @@ func (trie *VerkleTrie) TryUpdate(key, value []byte) error {
 // TryDelete removes any existing value for key from the trie. If a node was not
 // found in the database, a trie.MissingNodeError is returned.
 func (trie *VerkleTrie) TryDelete(key []byte) error {
-	return errors.New("not implemented")
+	return trie.root.Delete(key)
 }
 
 // Hash returns the root hash of the trie. It does not write to the database and
@@ -87,7 +86,6 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, error) {
 			panic(err)
 		}
 		fmt.Printf("%x %x %v\n", n.Hash[:], value[:], n.Node)
-
 
 		if err := trie.db.DiskDB().Put(n.Hash[:], value); err != nil {
 			return common.Hash{}, err

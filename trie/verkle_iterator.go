@@ -82,12 +82,14 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		}
 		it.current = it.stack[len(it.stack)-1].Node
 		it.stack = it.stack[:len(it.stack)-1]
+		it.stack[len(it.stack)-1].Index++
 		return it.Next(descend)
 	case *verkle.LeafNode:
 		// go back to parent to get the next leaf
-		it.current = it.stack[len(it.stack)-1].Node
+		it.current = it.stack[len(it.stack)-2].Node
 		it.stack = it.stack[:len(it.stack)-1]
-		return it.Next(descend)
+		it.stack[len(it.stack)-1].Index++
+		return true
 	case *verkle.HashedNode:
 		// resolve the trie
 		h := node.Hash()
@@ -104,7 +106,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		it.stack[len(it.stack)-1].Node = it.current
 		parent := &it.stack[len(it.stack)-2]
 		parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
-		return it.Next(descend)
+		return true
 	default:
 		fmt.Println(node)
 		panic("invalid node type")

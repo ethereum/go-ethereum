@@ -241,7 +241,16 @@ func (db *VerkleDB) CopyTrie(tr Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *VerkleDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	return db.db.DiskDB().Get(codeHash[:])
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+		return code, nil
+	}
+	code := rawdb.ReadCode(db.db.DiskDB(), codeHash)
+	if len(code) > 0 {
+		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
+	}
+	return nil, errors.New("not found")
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.
