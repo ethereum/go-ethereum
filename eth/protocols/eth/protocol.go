@@ -155,19 +155,20 @@ func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
 // DecodeRLP is a specialized decoder for HashOrNumber to decode the contents
 // into either a block hash or a block number.
 func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	origin, err := s.Raw()
-	if err == nil {
-		switch {
-		case size == 32:
-			err = rlp.DecodeBytes(origin, &hn.Hash)
-		case size <= 8:
-			err = rlp.DecodeBytes(origin, &hn.Number)
-		default:
-			err = fmt.Errorf("invalid input size %d for origin", size)
-		}
+	_, size, err := s.Kind()
+	if err != nil {
+		return err
 	}
-	return err
+	switch {
+	case size == 32:
+		hn.Number = 0
+		return s.Decode(&hn.Hash)
+	case size <= 8:
+		hn.Hash = common.Hash{}
+		return s.Decode(&hn.Number)
+	default:
+		return fmt.Errorf("invalid input size %d for origin", size)
+	}
 }
 
 // BlockHeadersPacket represents a block header response.
