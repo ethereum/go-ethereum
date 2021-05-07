@@ -22,7 +22,7 @@ There are two transactions, each invokes the contract above.
 
 Running it yields: 
 ```
-$ dir=./testdata/9 && ./evm t8n --state.fork=Aleut --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json --trace && cat trace-* | grep SLOAD
+$ dir=./testdata/9 && ./evm t8n --state.fork=London --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json --trace && cat trace-* | grep SLOAD
 {"pc":2,"op":84,"gas":"0x48c28","gasCost":"0x834","memory":"0x","memSize":0,"stack":["0x0","0x1"],"returnStack":null,"returnD
 ata":"0x","depth":1,"refund":0,"opName":"SLOAD","error":""}
 {"pc":3,"op":84,"gas":"0x483f4","gasCost":"0x64","memory":"0x","memSize":0,"stack":["0x0","0x0"],"returnStack":null,"returnDa
@@ -35,7 +35,7 @@ ata":"0x","depth":1,"refund":0,"opName":"SLOAD","error":""}
 
 We can also get the post-alloc:
 ```
-$ dir=./testdata/9 && ./evm t8n --state.fork=Aleut --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json --output.alloc=stdout
+$ dir=./testdata/9 && ./evm t8n --state.fork=London --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json --output.alloc=stdout
 {
  "alloc": {
   "0x000000000000000000000000000000000000aaaa": {
@@ -56,8 +56,20 @@ $ dir=./testdata/9 && ./evm t8n --state.fork=Aleut --input.alloc=$dir/alloc.json
 
 If we try to execute it on older rules: 
 ```
-dir=./testdata/9 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json 
-INFO [04-28|22:05:19.339] rejected tx                              index=0 hash=9a5bbc..d8cc42 from=0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B error="baseFee before fork block"
-INFO [04-28|22:05:19.339] rejected tx                              index=1 hash=a9c6c6..fa4036 from=0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B error="nonce too high: address 0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B, tx: 1 state: 0"
+dir=./testdata/9 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json --output.alloc=stdout
+ERROR(10): Failed signing transactions: ERROR(10): Tx 0: failed to sign tx: transaction type not supported
 ```
-Number `0` is not applicable, and therefore number `1` has wrong nonce. 
+
+It fails, due to the `evm t8n` cannot sign them in with the given signer. We can bypass that, however, 
+by feeding it presigned transactions, located in `txs_signed.json`. 
+
+```
+dir=./testdata/9 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json --input.txs=$dir/txs_signed.json --input.env=$dir/env.json 
+INFO [05-07|12:28:42.072] rejected tx                              index=0 hash=b4821e..536819 error="transaction type not supported"
+INFO [05-07|12:28:42.072] rejected tx                              index=1 hash=a9c6c6..fa4036 from=0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B error="nonce too high: address 0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B, tx: 1 state: 0"
+INFO [05-07|12:28:42.073] Wrote file                               file=alloc.json
+INFO [05-07|12:28:42.073] Wrote file                               file=result.json
+```
+
+Number `0` is not applicable, and therefore number `1` has wrong nonce, and both are rejected.
+

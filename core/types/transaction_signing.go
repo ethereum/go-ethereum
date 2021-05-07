@@ -40,6 +40,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsLondon(blockNumber):
+		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
@@ -165,6 +167,72 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
+type londonSigner struct{ eip2930Signer }
+
+// NewLondonSigner returns a signer that accepts
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+func NewLondonSigner(chainId *big.Int) Signer {
+	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
+}
+
+func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != DynamicFeeTxType {
+		return s.eip2930Signer.Sender(tx)
+	}
+	V, R, S := tx.RawSignatureValues()
+	// DynamicFee txs are defined to use 0 and 1 as their recovery
+	// id, add 27 to become equivalent to unprotected Homestead signatures.
+	V = new(big.Int).Add(V, big.NewInt(27))
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return common.Address{}, ErrInvalidChainId
+	}
+	return recoverPlain(s.Hash(tx), R, S, V, true)
+}
+
+func (s londonSigner) Equal(s2 Signer) bool {
+	x, ok := s2.(londonSigner)
+	return ok && x.chainId.Cmp(s.chainId) == 0
+}
+
+func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	txdata, ok := tx.inner.(*DynamicFeeTx)
+	if !ok {
+		return s.eip2930Signer.SignatureValues(tx, sig)
+	}
+	// Check that chain ID of tx matches the signer. We also accept ID zero here,
+	// because it indicates that the chain ID was not specified in the tx.
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+		return nil, nil, nil, ErrInvalidChainId
+	}
+	R, S, _ = decodeSignature(sig)
+	V = big.NewInt(int64(sig[64]))
+	return R, S, V, nil
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s londonSigner) Hash(tx *Transaction) common.Hash {
+	if tx.Type() != DynamicFeeTxType {
+		return s.eip2930Signer.Hash(tx)
+	}
+	return prefixedRlpHash(
+		tx.Type(),
+		[]interface{}{
+			s.chainId,
+			tx.Nonce(),
+			tx.Tip(),
+			tx.FeeCap(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			tx.AccessList(),
+		})
+}
+
 type eip2930Signer struct{ EIP155Signer }
 
 // NewEIP2930Signer returns a signer that accepts EIP-2930 access list transactions,
@@ -192,9 +260,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
 	case AccessListTxType:
-		fallthrough
-	case DynamicFeeTxType:
-		// AL and DynamicFee txs are defined to use 0 and 1 as their recovery
+		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
 	default:
@@ -211,14 +277,6 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	case *LegacyTx:
 		return s.EIP155Signer.SignatureValues(tx, sig)
 	case *AccessListTx:
-		// Check that chain ID of tx matches the signer. We also accept ID zero here,
-		// because it indicates that the chain ID was not specified in the tx.
-		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, ErrInvalidChainId
-		}
-		R, S, _ = decodeSignature(sig)
-		V = big.NewInt(int64(sig[64]))
-	case *DynamicFeeTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
 		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
@@ -253,20 +311,6 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				s.chainId,
 				tx.Nonce(),
 				tx.GasPrice(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			})
-	case DynamicFeeTxType:
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.Nonce(),
-				tx.Tip(),
-				tx.FeeCap(),
 				tx.Gas(),
 				tx.To(),
 				tx.Value(),
