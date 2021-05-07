@@ -131,8 +131,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			if tags.optional || tags.tail {
 				anyOptional = true
 			} else if anyOptional {
-				err := fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
-				return nil, err
+				return nil, fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
 			}
 			info := cachedTypeInfo1(f.Type, tags)
 			fields = append(fields, field{i, info, tags.optional})
