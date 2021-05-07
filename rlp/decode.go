@@ -518,7 +518,7 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 }
 
 // Kind represents the kind of value contained in an RLP stream.
-type Kind int
+type Kind int8
 
 const (
 	Byte Kind = iota
@@ -561,18 +561,14 @@ type ByteReader interface {
 type Stream struct {
 	r ByteReader
 
-	// number of bytes remaining to be read from r.
-	remaining uint64
-	limited   bool
-
-	// auxiliary buffer for integer decoding
-	uintbuf []byte
-
-	kind    Kind   // kind of value ahead
-	size    uint64 // size of value ahead
-	byteval byte   // value of single byte in type tag
-	kinderr error  // error from last readKind
-	stack   []listpos
+	remaining uint64    // number of bytes remaining to be read from r
+	size      uint64    // size of value ahead
+	kinderr   error     // error from last readKind
+	stack     []listpos // list sizes
+	uintbuf   [8]byte   // auxiliary buffer for integer decoding
+	kind      Kind      // kind of value ahead
+	byteval   byte      // value of single byte in type tag
+	limited   bool      // true if input limit is in effect
 }
 
 type listpos struct{ pos, size uint64 }
@@ -818,10 +814,8 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 	s.size = 0
 	s.kind = -1
 	s.kinderr = nil
-	if s.uintbuf == nil {
-		s.uintbuf = make([]byte, 8)
-	}
 	s.byteval = 0
+	s.uintbuf = [8]byte{}
 }
 
 // Kind returns the kind and size of the next value in the
@@ -952,7 +946,7 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 			// ErrCanonInt in this case.
 			return 0, ErrCanonSize
 		}
-		return binary.BigEndian.Uint64(s.uintbuf), nil
+		return binary.BigEndian.Uint64(s.uintbuf[:]), nil
 	}
 }
 
