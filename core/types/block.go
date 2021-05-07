@@ -82,87 +82,9 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
-	BaseFee     *big.Int       `json:"baseFee"`
-}
 
-// EncodeRLP implements rlp.Encoder
-func (h *Header) EncodeRLP(w io.Writer) error {
-	if h.BaseFee == nil {
-		return rlp.Encode(w, extheader(*h))
-	}
-	return rlp.Encode(w, ext1559header(*h))
-}
-
-// DecodeRLP implements rlp.Decoder
-func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	// Retrieve the entire header blob as we need to try multiple decoders
-	raw, err := s.Raw()
-	if err != nil {
-		return err
-	}
-	// Try decoding as a legacy header first, then the as an EIP-1559 one. Although
-	// EIP-1559 is the latest format, legacy headers are more likely to be decoded
-	// in bulk (during sync).
-	if err := decodeLegacyHeader(h, raw); err == nil {
-		return nil
-	}
-	return decodeEIP1559Header(h, raw)
-}
-
-func decodeLegacyHeader(h *Header, raw []byte) error {
-	var tmp extheader
-	if err := rlp.DecodeBytes(raw, &tmp); err != nil {
-		return err
-	}
-	*h = Header(tmp)
-	return nil
-}
-
-func decodeEIP1559Header(h *Header, raw []byte) error {
-	var tmp ext1559header
-	if err := rlp.DecodeBytes(raw, &tmp); err != nil {
-		return err
-	}
-	*h = Header(tmp)
-	return nil
-}
-
-type extheader struct {
-	ParentHash  common.Hash
-	UncleHash   common.Hash
-	Coinbase    common.Address
-	Root        common.Hash
-	TxHash      common.Hash
-	ReceiptHash common.Hash
-	Bloom       Bloom
-	Difficulty  *big.Int
-	Number      *big.Int
-	GasLimit    uint64
-	GasUsed     uint64
-	Time        uint64
-	Extra       []byte
-	MixDigest   common.Hash
-	Nonce       BlockNonce
-	BaseFee     *big.Int `rlp:"-"` // BaseFee is ignored in legacy headers
-}
-
-type ext1559header struct {
-	ParentHash  common.Hash
-	UncleHash   common.Hash
-	Coinbase    common.Address
-	Root        common.Hash
-	TxHash      common.Hash
-	ReceiptHash common.Hash
-	Bloom       Bloom
-	Difficulty  *big.Int
-	Number      *big.Int
-	GasLimit    uint64
-	GasUsed     uint64
-	Time        uint64
-	Extra       []byte
-	MixDigest   common.Hash
-	Nonce       BlockNonce
-	BaseFee     *big.Int
+	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
+	BaseFee *big.Int `json:"baseFee" rlp:"optional"`
 }
 
 // field type overrides for gencodec
