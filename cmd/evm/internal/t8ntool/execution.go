@@ -60,15 +60,25 @@ type ommer struct {
 	Address common.Address `json:"address"`
 }
 
+//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase    common.Address
-	Difficulty  *big.Int
-	GasLimit    uint64
-	BaseFee     *big.Int
-	Number      uint64
-	Timestamp   uint64
-	BlockHashes map[math.HexOrDecimal64]common.Hash
-	Ommers      []ommer
+	Coinbase    common.Address                      `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty  *big.Int                            `json:"currentDifficulty" gencodec:"required"`
+	GasLimit    uint64                              `json:"currentGasLimit"   gencodec:"required"`
+	Number      uint64                              `json:"currentNumber"     gencodec:"required"`
+	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
+	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+	Ommers      []ommer                             `json:"ommers,omitempty"`
+	BaseFee     *big.Int                            `json:"currentBaseFee,omitempty"`
+}
+
+type stEnvMarshaling struct {
+	Coinbase   common.UnprefixedAddress
+	Difficulty *math.HexOrDecimal256
+	GasLimit   math.HexOrDecimal64
+	Number     math.HexOrDecimal64
+	Timestamp  math.HexOrDecimal64
+	BaseFee    *math.HexOrDecimal256
 }
 
 // Apply applies a set of transactions to a pre-state
@@ -101,13 +111,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
-
-	if chainConfig.IsLondon(new(big.Int).SetUint64(pre.Env.Number)) {
-		gaspool.AddGas(pre.Env.GasLimit * params.ElasticityMultiplier)
-	} else {
-		gaspool.AddGas(pre.Env.GasLimit)
-	}
-
+	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
