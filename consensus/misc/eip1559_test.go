@@ -17,7 +17,6 @@
 package misc
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -26,73 +25,109 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// copyConfig does a _shallow_ copy of a given config. Safe to set new values, but
+// do not use e.g. SetInt() on the numbers. For testing only
+func copyConfig(original *params.ChainConfig) *params.ChainConfig {
+	return &params.ChainConfig{
+		original.ChainID,
+		original.HomesteadBlock,
+		original.DAOForkBlock,
+		original.DAOForkSupport,
+		original.EIP150Block,
+		original.EIP150Hash,
+		original.EIP155Block,
+		original.EIP158Block,
+		original.ByzantiumBlock,
+		original.ConstantinopleBlock,
+		original.PetersburgBlock,
+		original.IstanbulBlock,
+		original.MuirGlacierBlock,
+		original.BerlinBlock,
+		original.LondonBlock,
+		original.EWASMBlock,
+		original.CatalystBlock,
+		original.Ethash,
+		original.Clique,
+	}
+}
+
 func config() *params.ChainConfig {
-	config := params.TestChainConfig
-	config.LondonBlock = common.Big0
+	config := copyConfig(params.TestChainConfig)
+	config.LondonBlock = big.NewInt(5)
 	return config
 }
 
-func TestBlockElasticity(t *testing.T) {
+// TestBlockGasLimits tests the gasLimit checks for blocks both across
+// the EIP-1559 boundary and post-1559 blocks
+func TestBlockGasLimits(t *testing.T) {
 	initial := new(big.Int).SetUint64(params.InitialBaseFee)
-	parent := &types.Header{
-		GasUsed:  10000000,
-		GasLimit: 20000000,
-		BaseFee:  initial,
-	}
-	header := &types.Header{
-		GasUsed:  20000000,
-		GasLimit: 20000000,
-		BaseFee:  initial,
-	}
-	if err := VerifyEip1559Header(config(), parent, header); err != nil {
-		t.Errorf("Expected valid header: %s", err)
-	}
-	header.GasUsed += 1
-	expected := fmt.Sprintf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
-	if err := VerifyEip1559Header(config(), parent, header); fmt.Sprint(err) != expected {
-		t.Errorf("Expected invalid header")
+
+	for i, tc := range []struct {
+		pGasLimit uint64
+		pNum      int64
+		gasLimit  uint64
+		ok        bool
+	}{
+		// Transitions from non-london to london
+		{10000000, 4, 20000000, true},  // No change
+		{10000000, 4, 20019531, true},  // Upper limit
+		{10000000, 4, 20019532, false}, // Upper +1
+		{10000000, 4, 19980470, true},  // Lower limit
+		{10000000, 4, 19980469, false}, // Lower limit -1
+		// London to London
+		{20000000, 5, 20000000, true},
+		{20000000, 5, 20019531, true},  // Upper limit
+		{20000000, 5, 20019532, false}, // Upper limit +1
+		{20000000, 5, 19980470, true},  // Lower limit
+		{20000000, 5, 19980469, false}, // Lower limit -1
+		{40000000, 5, 40039063, true},  // Upper limit
+		{40000000, 5, 40039064, false}, // Upper limit +1
+		{40000000, 5, 39960938, true},  // lower limit
+		{40000000, 5, 39960937, false}, // Lower limit -1
+	} {
+		parent := &types.Header{
+			GasUsed:  tc.pGasLimit / 2,
+			GasLimit: tc.pGasLimit,
+			BaseFee:  initial,
+			Number:   big.NewInt(tc.pNum),
+		}
+		header := &types.Header{
+			GasUsed:  tc.gasLimit / 2,
+			GasLimit: tc.gasLimit,
+			BaseFee:  initial,
+			Number:   big.NewInt(tc.pNum + 1),
+		}
+		err := VerifyEip1559Header(config(), parent, header)
+		if tc.ok && err != nil {
+			t.Errorf("test %d: Expected valid header: %s", i, err)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("test %d: Expected invalid header", i)
+		}
 	}
 }
 
+// TestCalcBaseFee assumes all blocks are 1559-blocks
 func TestCalcBaseFee(t *testing.T) {
 	tests := []struct {
-		parentBaseFee   *big.Int
+		parentBaseFee   int64
 		parentGasLimit  uint64
 		parentGasUsed   uint64
-		expectedBaseFee *big.Int
+		expectedBaseFee int64
 	}{
-		// baseFee should remain unchaned when the gasUsed is equal to the gasTarget
-		{
-			new(big.Int).SetUint64(params.InitialBaseFee),
-			20000000,
-			10000000,
-			new(big.Int).SetUint64(params.InitialBaseFee),
-		},
-		// baseFee should decrease when the gasUsed is below the gasTarget
-		{
-			new(big.Int).SetUint64(params.InitialBaseFee),
-			20000000,
-			9000000,
-			new(big.Int).SetUint64(987500000),
-		},
-		// baseFee should increase when the gasUsed is below the gasTarget
-		{
-			new(big.Int).SetUint64(params.InitialBaseFee),
-			20000000,
-			11000000,
-			new(big.Int).SetUint64(1012500000),
-		},
+		{params.InitialBaseFee, 20000000, 10000000, params.InitialBaseFee}, // usage == target
+		{params.InitialBaseFee, 20000000, 9000000, 987500000},              // usage below target
+		{params.InitialBaseFee, 20000000, 11000000, 1012500000},            // usage above target
 	}
 	for i, test := range tests {
 		parent := &types.Header{
-			Number:   common.Big2,
+			Number:   common.Big32,
 			GasLimit: test.parentGasLimit,
 			GasUsed:  test.parentGasUsed,
-			BaseFee:  test.parentBaseFee,
+			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
-		baseFee := CalcBaseFee(config(), parent)
-		if baseFee.Cmp(test.expectedBaseFee) != 0 {
-			t.Errorf("Test %d: expected %d, got %d", i+1, test.expectedBaseFee.Int64(), baseFee.Int64())
+		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
 }
