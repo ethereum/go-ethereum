@@ -69,12 +69,13 @@ func (r *hashRange) End() common.Hash {
 	if overflow {
 		return common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	}
-	return new(uint256.Int).Sub(next, new(uint256.Int).SetOne()).Bytes32()
+	return next.SubUint64(next, 1).Bytes32()
 }
 
 // incHash returns the next hash, in lexicographical order (a.k.a plus one)
 func incHash(h common.Hash) common.Hash {
-	a := new(uint256.Int).SetBytes32(h[:])
-	a.Add(a, new(uint256.Int).SetOne())
+	var a uint256.Int
+	a.SetBytes32(h[:])
+	a.AddUint64(&a, 1)
 	return common.Hash(a.Bytes32())
 }
