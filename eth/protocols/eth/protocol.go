@@ -156,10 +156,9 @@ func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
 // into either a block hash or a block number.
 func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	_, size, err := s.Kind()
-	if err != nil {
-		return err
-	}
 	switch {
+	case err != nil:
+		return err
 	case size == 32:
 		hn.Number = 0
 		return s.Decode(&hn.Hash)
