@@ -1372,6 +1372,9 @@ var lastWrite uint64
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
 func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+	if bc.insertStopped() {
+		return errInsertionInterrupted
+	}
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1387,6 +1390,9 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
+	if bc.insertStopped() {
+		return errInsertionInterrupted
+	}
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
