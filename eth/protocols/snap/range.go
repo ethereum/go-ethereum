@@ -49,8 +49,7 @@ func newHashRange(start common.Hash, num uint64) *hashRange {
 
 // Next pushes the hash range to the next interval.
 func (r *hashRange) Next() bool {
-	next := new(uint256.Int)
-	next, overflow := next.AddOverflow(r.current, r.step)
+	next, overflow := new(uint256.Int).AddOverflow(r.current, r.step)
 	if overflow {
 		return false
 	}
@@ -66,8 +65,7 @@ func (r *hashRange) Start() common.Hash {
 // End returns the last hash in the current interval.
 func (r *hashRange) End() common.Hash {
 	// If the end overflows (non divisible range), return a shorter interval
-	next := new(uint256.Int)
-	next, overflow := next.AddOverflow(r.current, r.step)
+	next, overflow := new(uint256.Int).AddOverflow(r.current, r.step)
 	if overflow {
 		return common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	}
