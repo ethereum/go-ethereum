@@ -796,6 +796,9 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 		case *bytes.Reader:
 			s.remaining = uint64(br.Len())
 			s.limited = true
+		case *bytes.Buffer:
+			s.remaining = uint64(br.Len())
+			s.limited = true
 		case *strings.Reader:
 			s.remaining = uint64(br.Len())
 			s.limited = true
