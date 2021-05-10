@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/holiman/bagdb"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -44,6 +46,8 @@ const (
 	txMaxSize = 4 * txSlotSize // 128KB
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+	// txEntryChanSize is the size of the channel for triggering ungappings
+	txEntryChanSize = 10
 )
 
 var (
@@ -99,6 +103,7 @@ type TxPoolConfig struct {
 	PriceBump  int
 	MaxTxCount int
 	NoLocals   bool
+	dbPath     string
 
 	// maximal gas in block
 	maxGasPerBlock uint64
@@ -124,6 +129,10 @@ type TxPool struct {
 	// subscription for new head events
 	chainHeadSub event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
+
+	ungappedAccountsCh chan *txEntry
+	pruneCh            chan struct{}
+	unPruneCh          chan struct{}
 	// all transactions
 	all          *txLookup
 	localSenders *senderSet
@@ -131,33 +140,99 @@ type TxPool struct {
 	localTxs     txList
 	remoteTxs    txList
 	gappedTxs    map[common.Address]*txHeap
+	database     bagdb.Database
 	// global txpool mutex
 	mu sync.RWMutex
+	wg sync.WaitGroup // tracks loop, background operations
+
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
 
+	db, err := bagdb.Open(config.dbPath, 128, 1024, nil)
+	if err != nil {
+		panic(err)
+	}
+
 	pool := &TxPool{
-		config:       config,
-		chainconfig:  chainconfig,
-		chain:        chain,
-		signer:       types.LatestSigner(chainconfig),
-		all:          newTxLookup(),
-		chainHeadCh:  make(chan core.ChainHeadEvent, chainHeadChanSize),
-		localSenders: newSenderSet(),
-		gappedTxs:    make(map[common.Address]*txHeap),
-		localTxs:     newTxList(config.MaxTxCount),
-		remoteTxs:    newTxList(config.MaxTxCount),
+		config:             config,
+		chainconfig:        chainconfig,
+		chain:              chain,
+		signer:             types.LatestSigner(chainconfig),
+		all:                newTxLookup(),
+		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
+		ungappedAccountsCh: make(chan *txEntry, txEntryChanSize),
+		pruneCh:            make(chan struct{}),
+		localSenders:       newSenderSet(),
+		gappedTxs:          make(map[common.Address]*txHeap),
+		localTxs:           newTxList(config.MaxTxCount),
+		remoteTxs:          newTxList(config.MaxTxCount),
+		database:           db,
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 
 	pool.reset(nil, chain.CurrentBlock().Header())
+	pool.wg.Add(1)
+	go pool.loop()
 
 	return pool
+}
+
+func (pool *TxPool) loop() {
+	defer pool.wg.Done()
+	var (
+		head = pool.chain.CurrentBlock()
+	)
+
+	for {
+		select {
+		// New block mined
+		case ev := <-pool.chainHeadCh:
+			if ev.Block != nil {
+				pool.reset(head.Header(), ev.Block.Header())
+				head = ev.Block
+			}
+		// System shutdown
+		case <-pool.chainHeadSub.Err():
+			return
+		// Reinsert transactions from now un-gapped accounts
+		case entry := <-pool.ungappedAccountsCh:
+			// TODO properly lock the pool
+			pool.addUngappedTx(entry)
+		// prune in memory transactions to disk
+		case <-pool.pruneCh:
+			txs := pool.remoteTxs.Prune()
+			for _, t := range txs.Peek(txs.Len()) {
+				marshalled, err := t.MarshalBinary()
+				if err != nil {
+					panic(err)
+				}
+				key := pool.database.Put(marshalled)
+				pool.all.Update(t.Hash(), transactionOrNumber{number: &key}, false)
+			}
+		case <-pool.unPruneCh:
+			for _, t := range pool.all.remotes {
+				if i, ok := t.Number(); ok {
+					val, err := pool.database.Get(i)
+					if err != nil {
+						panic(err)
+					}
+					pool.database.Delete(i)
+					var tx *types.Transaction
+					if err := tx.UnmarshalBinary(val); err != nil {
+						panic(err)
+					}
+					pool.all.Update(tx.Hash(), transactionOrNumber{tx: t.tx}, false)
+					pool.remoteTxs.Add(&txEntry{})
+				}
+			}
+			// TODO handle reads from disk
+		}
+	}
 }
 
 // Stop stops the transaction pool, closes all registered subscriptions,
@@ -167,7 +242,8 @@ func (pool *TxPool) Stop() {
 	pool.scope.Close()
 	// Unsubscribe subscriptions registered from blockchain
 	pool.chainHeadSub.Unsubscribe()
-	// TODO: wait for the main loop to shutdown
+	// wait for the main loop to shutdown
+	pool.wg.Wait()
 	// TODO: Write all missing transactions to disk
 }
 
@@ -244,6 +320,7 @@ func (pool *TxPool) PendingBlock() (locals types.Transactions, remotes types.Tra
 	}
 	if missing > 0 {
 		//panic("TODO lookup tx's from disk if we don't have enough in ram")
+		// TODO add a request to fetch some tx from disk
 	}
 	return
 }
@@ -304,13 +381,13 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
-		sender, err := types.Sender(pool.signer, tx)
+		entry, err := pool.txToTxEntry(tx)
 		if err != nil {
-			errs[i] = ErrInvalidSender
+			errs[i] = err
 			continue
 		}
 		// Accumulate all unknown transactions for deeper processing
-		news = append(news, &txEntry{tx: tx, sender: sender, price: tx.GasPrice()})
+		news = append(news, entry)
 	}
 	if len(news) == 0 {
 		return errs
@@ -482,10 +559,12 @@ func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
 	if shouldPrune {
 		panic("not implemented")
 	}
+	// TODO schedule the pool to add the ungapped transactions (and wait for them if sync is true)
 	return pool.addUngappedTx(tx)
 }
 
 func (pool *TxPool) addUngappedTx(tx *txEntry) error {
+	// TODO move this to the background thread
 	wantedNonce := tx.tx.Nonce() + 1
 	for {
 		nonce, err := pool.gappedTxs[tx.sender].LowestNonce()
@@ -564,4 +643,12 @@ func ableToReplace(new, old *txEntry, priceBump int) bool {
 		return true
 	}
 	return false
+}
+
+func (pool *TxPool) txToTxEntry(tx *types.Transaction) (*txEntry, error) {
+	sender, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return nil, ErrInvalidSender
+	}
+	return &txEntry{tx: tx, sender: sender, price: tx.GasPrice()}, nil
 }

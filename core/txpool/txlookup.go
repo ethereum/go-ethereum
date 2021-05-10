@@ -177,6 +177,18 @@ func (t *txLookup) Add(tx *types.Transaction, local bool) {
 	}
 }
 
+// Update updates a transaction in the lookup.
+func (t *txLookup) Update(hash common.Hash, tx transactionOrNumber, local bool) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if local {
+		t.locals[hash] = &tx
+	} else {
+		t.remotes[hash] = &tx
+	}
+}
+
 // Remove removes a transaction from the lookup.
 func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
