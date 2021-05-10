@@ -1271,7 +1271,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
-	if tx.Type() == types.AccessListTxType {
+	if tx.Type() != types.LegacyTxType {
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
