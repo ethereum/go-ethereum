@@ -1223,11 +1223,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-
-	// For EIP-1559, adjust the gas limit by the elasticity multiplier
-	if pool.eip1559 {
-		pool.currentMaxGas *= params.ElasticityMultiplier
-	}
 }
 
 // promoteExecutables moves transactions that have become processable from the
