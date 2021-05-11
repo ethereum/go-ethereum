@@ -264,9 +264,6 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	// for loop GetPendingHeadersSince(from)
-	// send (rpcsub.ID)
-
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {

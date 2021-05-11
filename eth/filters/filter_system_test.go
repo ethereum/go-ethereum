@@ -93,10 +93,6 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return nil, nil
 }
 
-func (b *testBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
-	return nil
-}
-
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
 	number := rawdb.ReadHeaderNumber(b.db, hash)
 	if number == nil {
@@ -131,10 +127,6 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
-	return b.pendingHeaderFeed.Subscribe(ch)
-}
-
 func (b *testBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
@@ -164,69 +156,6 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 			}
 		}
 	}()
-}
-
-// TestPendingHeaderSubscription tests pending header events. In pending header, a batch of headers are come in insert header.
-// pending header event send that batch to the API end.
-func TestPendingHeaderSubscription(t *testing.T) {
-	t.Parallel()
-
-	// Initialize the backend
-	var (
-		db          = rawdb.NewMemoryDatabase()
-		backend     = &testBackend{db: db}
-		api         = NewPublicFilterAPI(backend, false, deadline)
-		genesis     = new(core.Genesis).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
-		pendingHeaderEvents = []core.PendingHeaderEvent{}
-	)
-
-	var headers []*types.Header
-
-	// form the header chain from the created blocks
-	for _, blk := range chain {
-		headers = append(headers, blk.Header())
-	}
-	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
-
-	// create two subscriber channels
-	chan0 := make(chan *types.Header)
-	sub0 := api.events.SubscribePendingHeads(chan0)
-	chan1 := make(chan *types.Header)
-	sub1 := api.events.SubscribePendingHeads(chan1)
-
-	go func() { // simulate client
-		i1, i2 := 0, 0
-		// a batch of headers are received as event.
-		// but in subscriber end we have to send the batch as one by one header
-		for i1 != len(pendingHeaderEvents[0].Headers) || i2 != len(pendingHeaderEvents[0].Headers) {
-			select {
-			// here we will receive a single header from the batch and will process it
-			case header := <-chan0:
-				if pendingHeaderEvents[0].Headers[i1].Hash() != header.Hash() {
-					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[0].Headers[i1].Hash(), header.Hash())
-				}
-				i1++
-			case header := <-chan1:
-				if pendingHeaderEvents[0].Headers[i2].Hash() != header.Hash() {
-					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", i2, pendingHeaderEvents[0].Headers[i2].Hash(), header.Hash())
-				}
-				i2++
-			}
-		}
-
-		sub0.Unsubscribe()
-		sub1.Unsubscribe()
-	}()
-
-	time.Sleep(1 * time.Second)
-	for _, e := range pendingHeaderEvents {
-		// send the pending header batch to the feed.
-		backend.pendingHeaderFeed.Send(e)
-	}
-
-	<-sub0.Err()
-	<-sub1.Err()
 }
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.
