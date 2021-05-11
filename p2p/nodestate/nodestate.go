@@ -599,6 +599,7 @@ func (ns *NodeStateMachine) updateEnode(n *enode.Node) (enode.ID, *nodeInfo) {
 	node := ns.nodes[id]
 	if node != nil && n.Seq() > node.node.Seq() {
 		node.node = n
+		node.dirty = true
 	}
 	return id, node
 }
@@ -725,7 +726,7 @@ func (ns *NodeStateMachine) opFinish() {
 	}
 	ns.opPending = nil
 	ns.opFlag = false
-	ns.opWait.Signal()
+	ns.opWait.Broadcast()
 }
 
 // Operation calls the given function as an operation callback. This allows the caller

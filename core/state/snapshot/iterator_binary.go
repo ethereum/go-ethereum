@@ -37,7 +37,7 @@ type binaryIterator struct {
 }
 
 // initBinaryAccountIterator creates a simplistic iterator to step over all the
-// accounts in a slow, but eaily verifiable way. Note this function is used for
+// accounts in a slow, but easily verifiable way. Note this function is used for
 // initialization, use `newBinaryAccountIterator` as the API.
 func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 	parent, ok := dl.parent.(*diffLayer)
@@ -62,7 +62,7 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 }
 
 // initBinaryStorageIterator creates a simplistic iterator to step over all the
-// storage slots in a slow, but eaily verifiable way. Note this function is used
+// storage slots in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryStorageIterator` as the API.
 func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
@@ -199,14 +199,14 @@ func (it *binaryIterator) Release() {
 }
 
 // newBinaryAccountIterator creates a simplistic account iterator to step over
-// all the accounts in a slow, but eaily verifiable way.
+// all the accounts in a slow, but easily verifiable way.
 func (dl *diffLayer) newBinaryAccountIterator() AccountIterator {
 	iter := dl.initBinaryAccountIterator()
 	return iter.(AccountIterator)
 }
 
 // newBinaryStorageIterator creates a simplistic account iterator to step over
-// all the storage slots in a slow, but eaily verifiable way.
+// all the storage slots in a slow, but easily verifiable way.
 func (dl *diffLayer) newBinaryStorageIterator(account common.Hash) StorageIterator {
 	iter := dl.initBinaryStorageIterator(account)
 	return iter.(StorageIterator)

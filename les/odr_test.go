@@ -19,7 +19,10 @@ package les
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -40,6 +43,7 @@ type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.Chain
 
 func TestOdrGetBlockLes2(t *testing.T) { testOdr(t, 2, 1, true, odrGetBlock) }
 func TestOdrGetBlockLes3(t *testing.T) { testOdr(t, 3, 1, true, odrGetBlock) }
+func TestOdrGetBlockLes4(t *testing.T) { testOdr(t, 4, 1, true, odrGetBlock) }
 
 func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var block *types.Block
@@ -57,6 +61,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 
 func TestOdrGetReceiptsLes2(t *testing.T) { testOdr(t, 2, 1, true, odrGetReceipts) }
 func TestOdrGetReceiptsLes3(t *testing.T) { testOdr(t, 3, 1, true, odrGetReceipts) }
+func TestOdrGetReceiptsLes4(t *testing.T) { testOdr(t, 4, 1, true, odrGetReceipts) }
 
 func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
@@ -78,6 +83,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 
 func TestOdrAccountsLes2(t *testing.T) { testOdr(t, 2, 1, true, odrAccounts) }
 func TestOdrAccountsLes3(t *testing.T) { testOdr(t, 3, 1, true, odrAccounts) }
+func TestOdrAccountsLes4(t *testing.T) { testOdr(t, 4, 1, true, odrAccounts) }
 
 func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
@@ -107,6 +113,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 
 func TestOdrContractCallLes2(t *testing.T) { testOdr(t, 2, 2, true, odrContractCall) }
 func TestOdrContractCallLes3(t *testing.T) { testOdr(t, 3, 2, true, odrContractCall) }
+func TestOdrContractCallLes4(t *testing.T) { testOdr(t, 4, 2, true, odrContractCall) }
 
 type callmsg struct {
 	types.Message
@@ -128,10 +135,11 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				from := statedb.GetOrNewStateObject(bankAddr)
 				from.SetBalance(math.MaxBig256)
 
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false)}
 
-				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+				context := core.NewEVMBlockContext(header, bc, nil)
+				txContext := core.NewEVMTxContext(msg)
+				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -142,9 +150,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
 			state.SetBalance(bankAddr, math.MaxBig256)
-			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
-			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, state, config, vm.Config{})
+			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false)}
+			context := core.NewEVMBlockContext(header, lc, nil)
+			txContext := core.NewEVMTxContext(msg)
+			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			result, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {
@@ -157,6 +166,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 func TestOdrTxStatusLes2(t *testing.T) { testOdr(t, 2, 1, false, odrTxStatus) }
 func TestOdrTxStatusLes3(t *testing.T) { testOdr(t, 3, 1, false, odrTxStatus) }
+func TestOdrTxStatusLes4(t *testing.T) { testOdr(t, 4, 1, false, odrTxStatus) }
 
 func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var txs types.Transactions
@@ -183,7 +193,13 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 // testOdr tests odr requests whose validation guaranteed by block headers.
 func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn odrTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true, true)
+	netconfig := testnetConfig{
+		blocks:    4,
+		protocol:  protocol,
+		connect:   true,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.
@@ -238,4 +254,185 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 		test(5)
 	}
+}
+
+func TestGetTxStatusFromUnindexedPeersLES4(t *testing.T) { testGetTxStatusFromUnindexedPeers(t, lpv4) }
+
+func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
+	var (
+		blocks    = 8
+		netconfig = testnetConfig{
+			blocks:    blocks,
+			protocol:  protocol,
+			nopruning: true,
+		}
+	)
+	server, client, tearDown := newClientServerEnv(t, netconfig)
+	defer tearDown()
+
+	// Iterate the chain, create the tx indexes locally
+	var (
+		testHash   common.Hash
+		testStatus light.TxStatus
+
+		txs          = make(map[common.Hash]*types.Transaction) // Transaction objects set
+		blockNumbers = make(map[common.Hash]uint64)             // Transaction hash to block number mappings
+		blockHashes  = make(map[common.Hash]common.Hash)        // Transaction hash to block hash mappings
+		intraIndex   = make(map[common.Hash]uint64)             // Transaction intra-index in block
+	)
+	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().NumberU64(); number++ {
+		block := server.backend.Blockchain().GetBlockByNumber(number)
+		if block == nil {
+			t.Fatalf("Failed to retrieve block %d", number)
+		}
+		for index, tx := range block.Transactions() {
+			txs[tx.Hash()] = tx
+			blockNumbers[tx.Hash()] = number
+			blockHashes[tx.Hash()] = block.Hash()
+			intraIndex[tx.Hash()] = uint64(index)
+
+			if testHash == (common.Hash{}) {
+				testHash = tx.Hash()
+				testStatus = light.TxStatus{
+					Status: core.TxStatusIncluded,
+					Lookup: &rawdb.LegacyTxLookupEntry{
+						BlockHash:  block.Hash(),
+						BlockIndex: block.NumberU64(),
+						Index:      uint64(index),
+					},
+				}
+			}
+		}
+	}
+	// serveMsg processes incoming GetTxStatusMsg and sends the response back.
+	serveMsg := func(peer *testPeer, txLookup uint64) error {
+		msg, err := peer.app.ReadMsg()
+		if err != nil {
+			return err
+		}
+		if msg.Code != GetTxStatusMsg {
+			return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, GetTxStatusMsg)
+		}
+		var r GetTxStatusPacket
+		if err := msg.Decode(&r); err != nil {
+			return err
+		}
+		stats := make([]light.TxStatus, len(r.Hashes))
+		for i, hash := range r.Hashes {
+			number, exist := blockNumbers[hash]
+			if !exist {
+				continue // Filter out unknown transactions
+			}
+			min := uint64(blocks) - txLookup
+			if txLookup != txIndexUnlimited && (txLookup == txIndexDisabled || number < min) {
+				continue // Filter out unindexed transactions
+			}
+			stats[i].Status = core.TxStatusIncluded
+			stats[i].Lookup = &rawdb.LegacyTxLookupEntry{
+				BlockHash:  blockHashes[hash],
+				BlockIndex: number,
+				Index:      intraIndex[hash],
+			}
+		}
+		data, _ := rlp.EncodeToBytes(stats)
+		reply := &reply{peer.app, TxStatusMsg, r.ReqID, data}
+		reply.send(testBufLimit)
+		return nil
+	}
+
+	var testspecs = []struct {
+		peers     int
+		txLookups []uint64
+		txs       []common.Hash
+		results   []light.TxStatus
+	}{
+		// Retrieve mined transaction from the empty peerset
+		{
+			peers:     0,
+			txLookups: []uint64{},
+			txs:       []common.Hash{testHash},
+			results:   []light.TxStatus{{}},
+		},
+		// Retrieve unknown transaction from the full peers
+		{
+			peers:     3,
+			txLookups: []uint64{txIndexUnlimited, txIndexUnlimited, txIndexUnlimited},
+			txs:       []common.Hash{randomHash()},
+			results:   []light.TxStatus{{}},
+		},
+		// Retrieve mined transaction from the full peers
+		{
+			peers:     3,
+			txLookups: []uint64{txIndexUnlimited, txIndexUnlimited, txIndexUnlimited},
+			txs:       []common.Hash{testHash},
+			results:   []light.TxStatus{testStatus},
+		},
+		// Retrieve mixed transactions from the full peers
+		{
+			peers:     3,
+			txLookups: []uint64{txIndexUnlimited, txIndexUnlimited, txIndexUnlimited},
+			txs:       []common.Hash{randomHash(), testHash},
+			results:   []light.TxStatus{{}, testStatus},
+		},
+		// Retrieve mixed transactions from unindexed peer(but the target is still available)
+		{
+			peers:     3,
+			txLookups: []uint64{uint64(blocks) - testStatus.Lookup.BlockIndex, uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 2},
+			txs:       []common.Hash{randomHash(), testHash},
+			results:   []light.TxStatus{{}, testStatus},
+		},
+		// Retrieve mixed transactions from unindexed peer(but the target is not available)
+		{
+			peers:     3,
+			txLookups: []uint64{uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 2},
+			txs:       []common.Hash{randomHash(), testHash},
+			results:   []light.TxStatus{{}, {}},
+		},
+	}
+	for _, testspec := range testspecs {
+		// Create a bunch of server peers with different tx history
+		var (
+			serverPeers []*testPeer
+			closeFns    []func()
+		)
+		for i := 0; i < testspec.peers; i++ {
+			peer, closePeer, _ := client.newRawPeer(t, fmt.Sprintf("server-%d", i), protocol, testspec.txLookups[i])
+			serverPeers = append(serverPeers, peer)
+			closeFns = append(closeFns, closePeer)
+
+			// Create a one-time routine for serving message
+			go func(i int, peer *testPeer) {
+				serveMsg(peer, testspec.txLookups[i])
+			}(i, peer)
+		}
+
+		// Send out the GetTxStatus requests, compare the result with
+		// expected value.
+		r := &light.TxStatusRequest{Hashes: testspec.txs}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		err := client.handler.backend.odr.RetrieveTxStatus(ctx, r)
+		if err != nil {
+			t.Errorf("Failed to retrieve tx status %v", err)
+		} else {
+			if !reflect.DeepEqual(testspec.results, r.Status) {
+				t.Errorf("Result mismatch, diff")
+			}
+		}
+
+		// Close all connected peers and start the next round
+		for _, closeFn := range closeFns {
+			closeFn()
+		}
+	}
+}
+
+// randomHash generates a random blob of data and returns it as a hash.
+func randomHash() common.Hash {
+	var hash common.Hash
+	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
+		panic(err)
+	}
+	return hash
 }

@@ -98,3 +98,28 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 func TestHTTPResponseWithEmptyGet(t *testing.T) {
 	confirmHTTPRequestYieldsStatusCode(t, http.MethodGet, "", "", http.StatusOK)
 }
+
+// This checks that maxRequestContentLength is not applied to the response of a request.
+func TestHTTPRespBodyUnlimited(t *testing.T) {
+	const respLength = maxRequestContentLength * 3
+
+	s := NewServer()
+	defer s.Stop()
+	s.RegisterName("test", largeRespService{respLength})
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+
+	c, err := DialHTTP(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	var r string
+	if err := c.Call(&r, "test_largeResp"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r) != respLength {
+		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}

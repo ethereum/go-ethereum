@@ -25,12 +25,23 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
+	VersionCheckUrlFlag = cli.StringFlag{
+		Name:  "check.url",
+		Usage: "URL to use when checking vulnerabilities",
+		Value: "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json",
+	}
+	VersionCheckVersionFlag = cli.StringFlag{
+		Name:  "check.version",
+		Usage: "Version to check",
+		Value: fmt.Sprintf("Geth/v%v/%v-%v/%v",
+			params.VersionWithCommit(gitCommit, gitDate),
+			runtime.GOOS, runtime.GOARCH, runtime.Version()),
+	}
 	makecacheCommand = cli.Command{
 		Action:    utils.MigrateFlags(makecache),
 		Name:      "makecache",
@@ -65,6 +76,21 @@ Regular users do not need to execute it.
 		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The output of this command is supposed to be machine-readable.
+`,
+	}
+	versionCheckCommand = cli.Command{
+		Action: utils.MigrateFlags(versionCheck),
+		Flags: []cli.Flag{
+			VersionCheckUrlFlag,
+			VersionCheckVersionFlag,
+		},
+		Name:      "version-check",
+		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
+		ArgsUsage: "<versionstring (optional)>",
+		Category:  "MISCELLANEOUS COMMANDS",
+		Description: `
+The version-check command fetches vulnerability-information from https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
+and displays information about any security vulnerabilities that affect the currently executing version.
 `,
 	}
 	licenseCommand = cli.Command{
@@ -116,7 +142,6 @@ func version(ctx *cli.Context) error {
 		fmt.Println("Git Commit Date:", gitDate)
 	}
 	fmt.Println("Architecture:", runtime.GOARCH)
-	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))

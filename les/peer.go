@@ -29,12 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -161,9 +161,17 @@ func (p *peerCommons) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id, fmt.Sprintf("les/%d", p.version))
 }
 
+// PeerInfo represents a short summary of the `eth` sub-protocol metadata known
+// about a connected peer.
+type PeerInfo struct {
+	Version    int      `json:"version"`    // Ethereum protocol version negotiated
+	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
+	Head       string   `json:"head"`       // SHA3 hash of the peer's best owned block
+}
+
 // Info gathers and returns a collection of metadata known about a peer.
-func (p *peerCommons) Info() *eth.PeerInfo {
-	return &eth.PeerInfo{
+func (p *peerCommons) Info() *PeerInfo {
+	return &PeerInfo{
 		Version:    p.version,
 		Difficulty: p.Td(),
 		Head:       fmt.Sprintf("%x", p.Head()),
@@ -246,7 +254,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 // network IDs, difficulties, head and genesis blocks. Besides the basic handshake
 // fields, server and client can exchange and resolve some specified fields through
 // two callback functions.
-func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
+func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -262,6 +270,12 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
 
+	// If the protocol version is beyond les4, then pass the forkID
+	// as well. Check http://eips.ethereum.org/EIPS/eip-2124 for more
+	// spec detail.
+	if p.version >= lpv4 {
+		send = send.add("forkID", forkID)
+	}
 	// Add client-specified or server-specified fields
 	if sendCallback != nil {
 		sendCallback(&send)
@@ -295,6 +309,16 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
+	// Check forkID if the protocol version is beyond the les4
+	if p.version >= lpv4 {
+		var forkID forkid.ID
+		if err := recv.get("forkID", &forkID); err != nil {
+			return err
+		}
+		if err := forkFilter(forkID); err != nil {
+			return errResp(ErrForkIDRejected, "%v", err)
+		}
+	}
 	if recvCallback != nil {
 		return recvCallback(recv)
 	}
@@ -317,6 +341,7 @@ type serverPeer struct {
 	onlyAnnounce            bool   // The flag whether the server sends announcement only.
 	chainSince, chainRecent uint64 // The range of chain server peer can serve.
 	stateSince, stateRecent uint64 // The range of state server peer can serve.
+	txHistory               uint64 // The length of available tx history, 0 means all, 1 means disabled
 
 	// Advertised checkpoint fields
 	checkpointNumber uint64                   // The block height which the checkpoint is registered.
@@ -324,8 +349,7 @@ type serverPeer struct {
 
 	fcServer         *flowcontrol.ServerNode // Client side mirror token bucket.
 	vtLock           sync.Mutex
-	valueTracker     *lpc.ValueTracker
-	nodeValueTracker *lpc.NodeValueTracker
+	nodeValueTracker *vfc.NodeValueTracker
 	sentReqs         map[uint64]sentReqEntry
 
 	// Statistics
@@ -407,14 +431,14 @@ func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount
 // specified header query, based on the hash of an origin block.
 func (p *serverPeer) requestHeadersByHash(reqID uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *serverPeer) requestHeadersByNumber(reqID, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestBodies fetches a batch of blocks' bodies corresponding to the hashes
@@ -561,10 +585,10 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs and genesis blocks.
-func (p *serverPeer) Handshake(genesis common.Hash) error {
+func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter forkid.Filter) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
-	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {
+	return p.handshake(common.Big0, common.Hash{}, 0, genesis, forkid, forkFilter, func(lists *keyValueList) {
 		// Add some client-specific handshake fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
@@ -604,6 +628,18 @@ func (p *serverPeer) Handshake(genesis common.Hash) error {
 		if recv.get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
+		if p.version >= lpv4 {
+			var recentTx uint
+			if err := recv.get("recentTxLookup", &recentTx); err != nil {
+				return err
+			}
+			p.txHistory = uint64(recentTx)
+		} else {
+			// The weak assumption is held here that legacy les server(les2,3)
+			// has unlimited transaction history. The les serving in these legacy
+			// versions is disabled if the transaction is unindexed.
+			p.txHistory = txIndexUnlimited
+		}
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
@@ -639,9 +675,8 @@ func (p *serverPeer) Handshake(genesis common.Hash) error {
 
 // setValueTracker sets the value tracker references for connected servers. Note that the
 // references should be removed upon disconnection by setValueTracker(nil, nil).
-func (p *serverPeer) setValueTracker(vt *lpc.ValueTracker, nvt *lpc.NodeValueTracker) {
+func (p *serverPeer) setValueTracker(nvt *vfc.NodeValueTracker) {
 	p.vtLock.Lock()
-	p.valueTracker = vt
 	p.nodeValueTracker = nvt
 	if nvt != nil {
 		p.sentReqs = make(map[uint64]sentReqEntry)
@@ -668,7 +703,7 @@ func (p *serverPeer) updateVtParams() {
 			}
 		}
 	}
-	p.valueTracker.UpdateCosts(p.nodeValueTracker, reqCosts)
+	p.nodeValueTracker.UpdateCosts(reqCosts)
 }
 
 // sentReqEntry remembers sent requests and their sending times
@@ -695,27 +730,26 @@ func (p *serverPeer) answeredRequest(id uint64) {
 	}
 	e, ok := p.sentReqs[id]
 	delete(p.sentReqs, id)
-	vt := p.valueTracker
 	nvt := p.nodeValueTracker
 	p.vtLock.Unlock()
 	if !ok {
 		return
 	}
 	var (
-		vtReqs   [2]lpc.ServedRequest
+		vtReqs   [2]vfc.ServedRequest
 		reqCount int
 	)
 	m := requestMapping[e.reqType]
 	if m.rest == -1 || e.amount <= 1 {
 		reqCount = 1
-		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: e.amount}
+		vtReqs[0] = vfc.ServedRequest{ReqType: uint32(m.first), Amount: e.amount}
 	} else {
 		reqCount = 2
-		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
-		vtReqs[1] = lpc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
+		vtReqs[0] = vfc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
+		vtReqs[1] = vfc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
 	}
 	dt := time.Duration(mclock.Now() - e.at)
-	vt.Served(nvt, vtReqs[:reqCount], dt)
+	nvt.Served(vtReqs[:reqCount], dt)
 }
 
 // clientPeer represents each node to which the les server is connected.
@@ -728,7 +762,7 @@ type clientPeer struct {
 	responseLock  sync.Mutex
 	responseCount uint64 // Counter to generate an unique id for request processing.
 
-	balance *lps.NodeBalance
+	balance *vfs.NodeBalance
 
 	// invalidLock is used for protecting invalidCount.
 	invalidLock  sync.RWMutex
@@ -944,11 +978,25 @@ func (p *clientPeer) freezeClient() {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
+	recentTx := server.handler.blockchain.TxLookupLimit()
+	if recentTx != txIndexUnlimited {
+		if recentTx < blockSafetyMargin {
+			recentTx = txIndexDisabled
+		} else {
+			recentTx -= blockSafetyMargin - txIndexRecentOffset
+		}
+	}
+	if server.config.UltraLightOnlyAnnounce {
+		recentTx = txIndexDisabled
+	}
+	if recentTx != txIndexUnlimited && p.version < lpv4 {
+		return errors.New("Cannot serve old clients without a complete tx index")
+	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
 	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
-	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
+	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
 			*lists = (*lists).add("serveHeaders", nil)
@@ -957,12 +1005,15 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - 4)
+			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
 			if server.archiveMode {
 				stateRecent = 0
 			}
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
+		}
+		if p.version >= lpv4 {
+			*lists = (*lists).add("recentTxLookup", recentTx)
 		}
 		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
 		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
