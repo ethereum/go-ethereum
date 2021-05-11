@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/gballet/go-verkle"
@@ -79,13 +77,11 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, error) {
 		trie.root.(*verkle.InternalNode).Flush(flush)
 		close(flush)
 	}()
-	fmt.Println("commiting verkle")
 	for n := range flush {
 		value, err := n.Node.Serialize()
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("%x %x %v\n", n.Hash[:], value[:], n.Node)
 
 		if err := trie.db.DiskDB().Put(n.Hash[:], value); err != nil {
 			return common.Hash{}, err
