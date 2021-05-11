@@ -7,6 +7,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -81,17 +83,19 @@ func NewPandora(
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
+	mci := ethash.mci
+	mciCache := mci.cache
 
 	// Fill cache with minimal consensus info
-	for index, consensusInfo := range consensusInfo {
-		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
+	for index, currentConsensusInfo := range consensusInfo {
+		convertedInfo := NewMinimalConsensusInfo(currentConsensusInfo.Epoch)
 		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
 		pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
 			int64(genesisConsensusTimeStart.EpochTimeStart),
 			0,
 		))
-		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorList)
-		ethash.mci.cache.Add(index, pandoraConsensusInfo)
+		pandoraConsensusInfo.AssignValidators(currentConsensusInfo.ValidatorList)
+		mciCache.Add(index, pandoraConsensusInfo)
 	}
 
 	ethash.remote = StartRemotePandora(ethash, notify, noverify, orcSubscribe)
@@ -206,7 +210,7 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 			if nil != currentErr {
 				errChan <- currentErr
 
-				continue
+				break
 			}
 
 			coreMinimalConsensus.ValidatorsList[index], currentErr = herumi.PublicKeyFromBytes(publicKeyBytes)
@@ -214,7 +218,7 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 			if nil != currentErr {
 				errChan <- currentErr
 
-				continue
+				break
 			}
 		}
 
@@ -507,85 +511,6 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64, ctx
 	return
 }
 
-func (pandora *Pandora) InsertMinimalConsensusInfo(
-	epoch uint64,
-	validatorsList []string,
-	epochTimeStartUnix uint64,
-) bool {
-	// Works only in pandora mode
-	sealer := pandora.sealer
-	ethash := sealer.ethash
-	consensusInfo := NewMinimalConsensusInfo(epoch).(*MinimalEpochConsensusInfo)
-	consensusInfo.EpochTimeStartUnix = epochTimeStartUnix
-	consensusInfo.EpochTimeStart = time.Unix(int64(epochTimeStartUnix), 0)
-	consensusInfo.ValidatorsList = [validatorListLen]common2.PublicKey{}
-
-	// Invalid payload
-	if len(validatorsList) != validatorListLen {
-		ethash.config.Log.Error(
-			"Invalid validators list for epoch",
-			"epoch",
-			epoch,
-			"validatorLen",
-			len(validatorsList),
-		)
-		return false
-	}
-
-	for index, validator := range validatorsList {
-		// For genesis slot 0 there is no validator, so we should just simply insert something
-		genesisCheck := index == 0 && epoch == 0
-
-		if genesisCheck {
-			secretKey, _ := herumi.RandKey()
-			consensusInfo.ValidatorsList[index] = secretKey.PublicKey()
-
-			continue
-		}
-
-		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
-
-		if nil != err {
-			ethash.config.Log.Error(
-				"Could not cast public key from bytes",
-				"epoch",
-				epoch,
-				"index",
-				index,
-				"validator",
-				validator,
-				"err",
-				err.Error(),
-			)
-			return false
-		}
-
-		consensusInfo.ValidatorsList[index] = pubKey
-	}
-
-	ethash.config.Log.Info(
-		"Inserting minimal consensus info for epoch",
-		"epoch",
-		epoch,
-		"timeStartUnix",
-		consensusInfo.EpochTimeStartUnix,
-	)
-
-	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
-
-	if nil != err {
-		ethash.config.Log.Error(
-			"Could not insert minimal consensus info",
-			"epoch",
-			epoch,
-			"err",
-			err.Error(),
-		)
-	}
-
-	return nil == err
-}
-
 func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	minimalConsensus *MinimalEpochConsensusInfo,
 	err error,
@@ -614,6 +539,16 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	// Extract epoch
 	headerTime := header.Time
 	relativeTime := headerTime - uint64(genesisStart.Unix())
+
+	if relativeTime < 0 {
+		err = fmt.Errorf(
+			"awaiting for vanguard to start. Left: %ds",
+			time.Unix(int64(relativeTime)*-1, 0).Second())
+		log.Error(err.Error())
+
+		return
+	}
+
 	derivedEpoch := int(relativeTime / (pandoraEpochLength * SlotTimeDuration))
 
 	// Get minimal consensus info for counted epoch
