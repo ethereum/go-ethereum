@@ -725,9 +725,11 @@ func (s *Stream) List() (size uint64, err error) {
 		return 0, ErrExpectedList
 	}
 
-	// remove size of value in stack
-	if len(s.stack) > 0 {
-		s.stack[len(s.stack)-1] -= size
+	// Remove size of inner list from outer list before pushing the new size
+	// onto the stack. This ensures that the remaining outer list size will
+	// be correct after the matching call to ListEnd.
+	if inList, limit := s.listLimit(); inList {
+		s.stack[len(s.stack)-1] = limit - size
 	}
 	s.stack = append(s.stack, size)
 	s.kind = -1
@@ -833,39 +835,29 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 // the value. Subsequent calls to Kind (until the value is decoded)
 // will not advance the input reader and return cached information.
 func (s *Stream) Kind() (kind Kind, size uint64, err error) {
-	var (
-		listLimit uint64
-		inList    bool
-	)
-	if len(s.stack) > 0 {
-		listLimit = s.stack[len(s.stack)-1]
-		inList = true
+	// If kind has already been read, return it.
+	if s.kind >= 0 {
+		return s.kind, s.size, s.kinderr
 	}
-
-	if s.kind < 0 {
-		s.kinderr = nil
-		// Don't read further if we're at the end of the innermost list.
-		if inList && listLimit == 0 {
-			return 0, 0, EOL
-		}
-		s.kind, s.size, s.kinderr = s.readKind()
-		if s.kinderr == nil {
-			if inList {
-				// Inside a list, check that the value doesn't overflow the list.
-				if s.size > listLimit {
-					s.kinderr = ErrElemTooLarge
-				}
-			} else {
-				// At toplevel, check that the value is smaller
-				// than the remaining input length.
-				if s.limited && s.size > s.remaining {
-					s.kinderr = ErrValueTooLarge
-				}
-			}
+	// Check for end of list. This needs to be done here because readKind
+	// checks against the list size, and would return the wrong error.
+	inList, listLimit := s.listLimit()
+	if inList && listLimit == 0 {
+		return 0, 0, EOL
+	}
+	// Read the actual size tag.
+	s.kind, s.size, s.kinderr = s.readKind()
+	if s.kinderr == nil {
+		// Check the data size of the value ahead against input limits. This
+		// is done here because many decoders require allocating an input
+		// buffer matching the value size. Checking it here protects those
+		// decoders from inputs declaring very large value size.
+		if inList && s.size > listLimit {
+			s.kinderr = ErrElemTooLarge
+		} else if s.limited && s.size > s.remaining {
+			s.kinderr = ErrValueTooLarge
 		}
 	}
-	// Note: this might return a sticky error generated
-	// by an earlier call to readKind.
 	return s.kind, s.size, s.kinderr
 }
 
@@ -954,6 +946,7 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 	}
 }
 
+// readFull reads into buf from the underlying stream.
 func (s *Stream) readFull(buf []byte) (err error) {
 	if err := s.willRead(uint64(len(buf))); err != nil {
 		return err
@@ -975,6 +968,7 @@ func (s *Stream) readFull(buf []byte) (err error) {
 	return err
 }
 
+// readByte reads a single byte from the underlying stream.
 func (s *Stream) readByte() (byte, error) {
 	if err := s.willRead(1); err != nil {
 		return 0, err
@@ -986,17 +980,17 @@ func (s *Stream) readByte() (byte, error) {
 	return b, err
 }
 
+// willRead is called before any read from the underlying stream. It checks
+// n against size limits, and updates the limits if n doesn't overflow them.
 func (s *Stream) willRead(n uint64) error {
 	s.kind = -1 // rearm Kind
 
-	// check list overflow
-	if len(s.stack) > 0 {
-		if n > s.stack[len(s.stack)-1] {
+	if inList, limit := s.listLimit(); inList {
+		if n > limit {
 			return ErrElemTooLarge
 		}
-		s.stack[len(s.stack)-1] -= n
+		s.stack[len(s.stack)-1] = limit - n
 	}
-	// check size limit overflow
 	if s.limited {
 		if n > s.remaining {
 			return ErrValueTooLarge
@@ -1004,4 +998,12 @@ func (s *Stream) willRead(n uint64) error {
 		s.remaining -= n
 	}
 	return nil
+}
+
+// listLimit returns the amount of data remaining in the innermost list.
+func (s *Stream) listLimit() (inList bool, limit uint64) {
+	if len(s.stack) == 0 {
+		return false, 0
+	}
+	return true, s.stack[len(s.stack)-1]
 }
