@@ -1390,9 +1390,6 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
-	if bc.insertStopped() {
-		return errInsertionInterrupted
-	}
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1417,6 +1414,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	if bc.insertStopped() {
+		return NonStatTy, errInsertionInterrupted
+	}
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
