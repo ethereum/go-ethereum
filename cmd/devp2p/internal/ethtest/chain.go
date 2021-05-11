@@ -129,10 +129,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock, err := gen.ToBlock(nil)
-	if err != nil {
-		return nil, err
-	}
+	gblock := gen.ToBlock(nil)
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {
@@ -183,6 +180,5 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 		}
 		blocks = append(blocks, &b)
 	}
-
 	return blocks, nil
 }

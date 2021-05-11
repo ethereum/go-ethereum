@@ -31,17 +31,11 @@ import (
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
-	block, err := DefaultGenesisBlock().ToBlock(nil)
-	if err != nil {
-		t.Fatalf("error getting genesis block: %v", err)
-	}
+	block := DefaultGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.MainnetGenesisHash {
 		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
 	}
-	block, err = DefaultRopstenGenesisBlock().ToBlock(nil)
-	if err != nil {
-		t.Fatalf("error getting ropsten genesis block: %v", err)
-	}
+	block = DefaultRopstenGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.RopstenGenesisHash {
 		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
 	}

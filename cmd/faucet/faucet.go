@@ -251,11 +251,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
-	gblock, err := genesis.ToBlock(nil)
-	if err != nil {
-		return nil, err
-	}
-	utils.SetDNSDiscoveryDefaults(&cfg, gblock.Hash())
+	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
 
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
