@@ -740,11 +740,10 @@ func (s *Stream) List() (size uint64, err error) {
 // ListEnd returns to the enclosing list.
 // The input reader must be positioned at the end of a list.
 func (s *Stream) ListEnd() error {
-	if len(s.stack) == 0 {
-		return errNotInList
-	}
 	// Ensure that no more data is remaining in the current list.
-	if s.stack[len(s.stack)-1] > 0 {
+	if inList, listLimit := s.listLimit(); !inList {
+		return errNotInList
+	} else if listLimit > 0 {
 		return errNotAtEOL
 	}
 	s.stack = s.stack[:len(s.stack)-1] // pop
