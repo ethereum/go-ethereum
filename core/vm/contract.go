@@ -88,11 +88,11 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	udest, overflow := dest.Uint64WithOverflow()
 	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
 	// Don't bother checking for JUMPDEST in that case.
-	if overflow || udest >= uint64(len(c.Code)) {
+	if overflow || udest >= c.CodeSize() {
 		return false
 	}
 	// Only JUMPDESTs allowed for destinations
-	if OpCode(c.Code[udest]) != JUMPDEST {
+	if OpCode(c.Code[c.CodeBeginOffset()+udest]) != JUMPDEST {
 		return false
 	}
 	return c.isCode(udest)
@@ -114,7 +114,7 @@ func (c *Contract) isCode(udest uint64) bool {
 		if !exist {
 			// Do the analysis and save in parent context
 			// We do not need to store it in c.analysis
-			analysis = codeBitmap(c.Code)
+			analysis = codeBitmap(c)
 			c.jumpdests[c.CodeHash] = analysis
 		}
 		// Also stash it in current contract for faster access
@@ -126,7 +126,7 @@ func (c *Contract) isCode(udest uint64) bool {
 	// we don't have to recalculate it for every JUMP instruction in the execution
 	// However, we don't save it within the parent context
 	if c.analysis == nil {
-		c.analysis = codeBitmap(c.Code)
+		c.analysis = codeBitmap(c)
 	}
 	return c.analysis.codeSegment(udest)
 }
@@ -199,6 +199,13 @@ func (c *Contract) CodeEndOffset() uint64 {
 		return uint64(len(c.Code))
 	}
 	return c.header.CodeEndOffset()
+}
+
+func (c *Contract) CodeSize() uint64 {
+	if c.IsLegacy() {
+		return uint64(len(c.Code))
+	}
+	return uint64(c.header.codeSize)
 }
 
 // SetCallCode sets the code of the contract and address of the backing data

@@ -20,6 +20,7 @@ import (
 	"math/bits"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -52,7 +53,15 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH32)}, 0b0000_0001, 4},
 	}
 	for i, test := range tests {
-		ret := codeBitmap(test.code)
+		var (
+			contract Contract
+			addr     common.Address
+			hash     common.Hash
+			header   EOF1Header
+		)
+		contract.SetCallCode(&addr, hash, test.code, &header)
+
+		ret := codeBitmap(&contract)
 		if ret[test.which] != test.exp {
 			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
@@ -64,10 +73,17 @@ const analysisCodeSize = 1200 * 1024
 func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	// 1.4 ms
 	code := make([]byte, analysisCodeSize)
-	bench.SetBytes(analysisCodeSize)
+	var (
+		contract Contract
+		addr     common.Address
+		hash     common.Hash
+		header   EOF1Header
+	)
+	contract.SetCallCode(&addr, hash, code, &header)
 	bench.ResetTimer()
+	bench.SetBytes(analysisCodeSize)
 	for i := 0; i < bench.N; i++ {
-		codeBitmap(code)
+		codeBitmap(&contract)
 	}
 	bench.StopTimer()
 }
@@ -83,7 +99,13 @@ func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 }
 
 func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
-	var op OpCode
+	var (
+		contract Contract
+		addr     common.Address
+		hash     common.Hash
+		header   EOF1Header
+		op       OpCode
+	)
 	bencher := func(b *testing.B) {
 		code := make([]byte, analysisCodeSize)
 		b.SetBytes(analysisCodeSize)
@@ -91,12 +113,13 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 			code[i] = byte(op)
 		}
 		bits := make(bitvec, len(code)/8+1+4)
+		contract.SetCallCode(&addr, hash, code, &header)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for j := range bits {
 				bits[j] = 0
 			}
-			codeBitmapInternal(code, bits)
+			codeBitmapInternal(&contract, bits)
 		}
 	}
 	for op = PUSH1; op <= PUSH32; op++ {
