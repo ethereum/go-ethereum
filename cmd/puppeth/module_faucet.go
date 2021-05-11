@@ -63,7 +63,7 @@ services:
       - "{{.EthPort}}:{{.EthPort}}/udp"{{if not .VHost}}
       - "{{.ApiPort}}:8080"{{end}}
     volumes:
-      - {{.Datadir}}:/root/.faucet
+      - {{.Datadir}}:/home/ethereum/.faucet
     environment:
       - ETH_PORT={{.EthPort}}
       - ETH_NAME={{.EthName}}
@@ -235,7 +235,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	// Container available, assemble and return the useful infos
 	return &faucetInfos{
 		node: &nodeInfos{
-			datadir:  infos.volumes["/root/.faucet"],
+			datadir:  infos.volumes["/home/ethereum/.faucet"],
 			port:     infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
 			ethstats: infos.envvars["ETH_NAME"],
 			keyJSON:  keyJSON,
