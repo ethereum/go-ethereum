@@ -161,6 +161,7 @@ It's also usable without snapshot enabled.
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
+					utils.DumpLimitFlag,
 				},
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
@@ -461,7 +462,7 @@ func dumpState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	opts, db, root, err := parseDumpOptions(ctx, stack)
+	conf, db, root, err := parseDumpConfig(ctx, stack)
 	if err != nil {
 		return err
 	}
@@ -469,7 +470,7 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	accIt, err := snaptree.AccountIterator(root, common.BytesToHash(opts.Start))
+	accIt, err := snaptree.AccountIterator(root, common.BytesToHash(conf.Start))
 	if err != nil {
 		return err
 	}
@@ -496,10 +497,10 @@ func dumpState(ctx *cli.Context) error {
 			CodeHash:  common.Bytes2Hex(account.CodeHash),
 			SecureKey: accIt.Hash().Bytes(),
 		}
-		if !opts.SkipCode && !bytes.Equal(account.CodeHash, emptyCode) {
+		if !conf.SkipCode && !bytes.Equal(account.CodeHash, emptyCode) {
 			da.Code = common.Bytes2Hex(rawdb.ReadCode(db, common.BytesToHash(account.CodeHash)))
 		}
-		if !opts.SkipStorage {
+		if !conf.SkipStorage {
 			stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 			if err != nil {
 				return err
@@ -514,6 +515,9 @@ func dumpState(ctx *cli.Context) error {
 			log.Info("Snapshot iteration in progress", "at", accIt.Hash(), "accounts", accounts,
 				"elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
+		}
+		if conf.Max > 0 && accounts >= conf.Max {
+			break
 		}
 	}
 	log.Info("Snapshot iteration complete", "accounts", accounts,

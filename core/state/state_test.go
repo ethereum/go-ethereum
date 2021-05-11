@@ -57,7 +57,7 @@ func TestDump(t *testing.T) {
 	s.state.Commit(false)
 
 	// check that DumpToCollector contains the state objects that are in trie
-	got := string(s.state.Dump(&DumpOptions{}))
+	got := string(s.state.Dump(&DumpConfig{}))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
     "accounts": {

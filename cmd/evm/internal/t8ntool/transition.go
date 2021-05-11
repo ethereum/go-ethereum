@@ -219,7 +219,7 @@ func Main(ctx *cli.Context) error {
 	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
-	s.DumpToCollector(collector, &state.DumpOptions{})
+	s.DumpToCollector(collector, &state.DumpConfig{})
 	return dispatchOutput(ctx, baseDir, result, collector, body)
 
 }

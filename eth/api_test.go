@@ -34,7 +34,7 @@ import (
 var dumper = spew.ConfigState{Indent: "    "}
 
 func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.IteratorDump {
-	result := statedb.IteratorDump(&state.DumpOptions{
+	result := statedb.IteratorDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: false,
@@ -142,7 +142,7 @@ func TestEmptyAccountRange(t *testing.T) {
 	)
 	st.Commit(true)
 	st.IntermediateRoot(true)
-	results := st.IteratorDump(&state.DumpOptions{
+	results := st.IteratorDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: true,

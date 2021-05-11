@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -165,6 +166,7 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 			utils.ExcludeStorageFlag,
 			utils.IncludeIncompletesFlag,
 			utils.StartKeyFlag,
+			utils.DumpLimitFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -377,12 +379,13 @@ func exportPreimages(ctx *cli.Context) error {
 	return nil
 }
 
-func parseDumpOptions(ctx *cli.Context, stack *node.Node) (*state.DumpOptions, ethdb.Database, common.Hash, error) {
+func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	var header *types.Header
 	if ctx.NArg() > 1 {
 		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
-	} else if ctx.NArg() == 1 {
+	}
+	if ctx.NArg() == 1 {
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
@@ -409,25 +412,39 @@ func parseDumpOptions(ctx *cli.Context, stack *node.Node) (*state.DumpOptions, e
 	if header == nil {
 		return nil, nil, common.Hash{}, errors.New("no head block found")
 	}
-	var opts = &state.DumpOptions{
+	startArg := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
+	var start common.Hash
+	switch len(startArg) {
+	case 0: // common.Hash
+	case 32:
+		start = common.BytesToHash(startArg)
+	case 20:
+		start = crypto.Keccak256Hash(startArg)
+		log.Info("Converting start-address to hash", "address", common.BytesToAddress(startArg), "hash", start.Hex())
+	default:
+		return nil, nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
+	}
+	var conf = &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
 		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
 		OnlyWithAddresses: !ctx.Bool(utils.IncludeIncompletesFlag.Name),
-		Start:             common.FromHex(ctx.String(utils.StartKeyFlag.Name)),
+		Start:             start.Bytes(),
+		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
 	}
 	log.Info("Dump options", "block", header.Number,
 		"hash", header.Hash().Hex(),
-		"code", !opts.SkipCode,
-		"storage", !opts.SkipStorage,
-		"start", hexutil.Encode(opts.Start))
-	return opts, db, header.Root, nil
+		"code", !conf.SkipCode,
+		"storage", !conf.SkipStorage,
+		"start", hexutil.Encode(conf.Start),
+		"limit", conf.Max)
+	return conf, db, header.Root, nil
 }
 
 func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	opts, db, root, err := parseDumpOptions(ctx, stack)
+	conf, db, root, err := parseDumpConfig(ctx, stack)
 	if err != nil {
 		return err
 	}
@@ -436,14 +453,14 @@ func dump(ctx *cli.Context) error {
 		return err
 	}
 	if ctx.Bool(utils.IterativeOutputFlag.Name) {
-		state.IterativeDump(opts, json.NewEncoder(os.Stdout))
+		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
 	} else {
-		if opts.OnlyWithAddresses {
+		if conf.OnlyWithAddresses {
 			fmt.Fprintf(os.Stderr, "If you want to include accounts with missing preimages, you need iterative output, since"+
 				" otherwise the accounts will overwrite each other in the resulting mapping.")
 			return fmt.Errorf("incompatible options")
 		}
-		fmt.Println(string(state.Dump(opts)))
+		fmt.Println(string(state.Dump(conf)))
 	}
 	return nil
 }

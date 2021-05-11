@@ -264,7 +264,7 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 
 // DumpBlock retrieves the entire state of the database at a given block.
 func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
-	opts := &state.DumpOptions{
+	opts := &state.DumpConfig{
 		OnlyWithAddresses: true,
 		Start:             nil,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
@@ -391,7 +391,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 		return state.IteratorDump{}, errors.New("either block number or block hash must be specified")
 	}
 
-	opts := &state.DumpOptions{
+	opts := &state.DumpConfig{
 		SkipCode:          nocode,
 		SkipStorage:       nostorage,
 		OnlyWithAddresses: !incompletes,
