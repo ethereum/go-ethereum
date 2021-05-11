@@ -834,10 +834,10 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 // the value. Subsequent calls to Kind (until the value is decoded)
 // will not advance the input reader and return cached information.
 func (s *Stream) Kind() (kind Kind, size uint64, err error) {
-	// If kind has already been read, return it.
 	if s.kind >= 0 {
 		return s.kind, s.size, s.kinderr
 	}
+
 	// Check for end of list. This needs to be done here because readKind
 	// checks against the list size, and would return the wrong error.
 	inList, listLimit := s.listLimit()
