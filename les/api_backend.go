@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -64,6 +65,16 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(number))
+}
+
+// GetPendingHeadsSince is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
+func (b *LesApiBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
+	panic(fmt.Errorf("invalid function call. it is only for dummy purpose"))
+}
+
+// SubscribePendingHeaderEvent is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
+func (b *LesApiBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
+	panic(fmt.Errorf("invalid function call. it is only for dummy purpose"))
 }
 
 func (b *LesApiBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {

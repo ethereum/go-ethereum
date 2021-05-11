@@ -728,6 +728,16 @@ type filterBackend struct {
 	bc *core.BlockChain
 }
 
+// SubscribePendingHeaderEvent is implemented due to bad design of Backend interface. Don't use it here.
+func (b *filterBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
+	panic(fmt.Errorf("called dummy purpose function. this call is invalid"))
+}
+
+// GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
+func (b *filterBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
+	panic(fmt.Errorf("called dummy purpose function. this call is invalid"))
+}
+
 func (fb *filterBackend) ChainDb() ethdb.Database  { return fb.db }
 func (fb *filterBackend) EventMux() *event.TypeMux { panic("not supported") }
 
