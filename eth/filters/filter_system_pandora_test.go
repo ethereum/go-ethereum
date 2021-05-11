@@ -37,10 +37,12 @@ func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEv
 	return b.pendingHeaderFeed.Subscribe(ch)
 }
 
+// GetPendingHeadsSince returns pending headers from blockchain container
 func (b *pandoraTestBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
 	return b.bc.GetTempHeadersSince(from)
 }
 
+// SubscribePendingHeaderEvent subscribe with the headers to get new headers.
 func (b *pandoraTestBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
 	return b.bc.SubscribePendingHeaderEvent(ch)
 }
@@ -127,6 +129,14 @@ func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db et
 	return headers
 }
 
+// TestPendingBlockHeaderFullPath tests backend to API subscription level testing of pandora pending event subscription container.
+// The testing procedure is discussed here:
+// 1. create header chain and a blockchain backend
+// 2. Two clients subscribe with the pending header container
+// 3. After inserting chain headers an event is triggered.
+// 4. If two clients can get similar headers then test success.
+// 5. Add another client and sync it with the pending header container
+// 6. Run the same test for the new client.
 func TestPendingBlockHeaderFullPath(t *testing.T) {
 	t.Parallel()
 
