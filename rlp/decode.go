@@ -561,17 +561,15 @@ type ByteReader interface {
 type Stream struct {
 	r ByteReader
 
-	remaining uint64    // number of bytes remaining to be read from r
-	size      uint64    // size of value ahead
-	kinderr   error     // error from last readKind
-	stack     []listpos // list sizes
-	uintbuf   [8]byte   // auxiliary buffer for integer decoding
-	kind      Kind      // kind of value ahead
-	byteval   byte      // value of single byte in type tag
-	limited   bool      // true if input limit is in effect
+	remaining uint64   // number of bytes remaining to be read from r
+	size      uint64   // size of value ahead
+	kinderr   error    // error from last readKind
+	stack     []uint64 // list sizes
+	uintbuf   [8]byte  // auxiliary buffer for integer decoding
+	kind      Kind     // kind of value ahead
+	byteval   byte     // value of single byte in type tag
+	limited   bool     // true if input limit is in effect
 }
-
-type listpos struct{ pos, size uint64 }
 
 // NewStream creates a new decoding stream reading from r.
 //
@@ -726,7 +724,12 @@ func (s *Stream) List() (size uint64, err error) {
 	if kind != List {
 		return 0, ErrExpectedList
 	}
-	s.stack = append(s.stack, listpos{0, size})
+
+	// remove size of value in stack
+	if len(s.stack) > 0 {
+		s.stack[len(s.stack)-1] -= size
+	}
+	s.stack = append(s.stack, size)
 	s.kind = -1
 	s.size = 0
 	return size, nil
@@ -738,14 +741,11 @@ func (s *Stream) ListEnd() error {
 	if len(s.stack) == 0 {
 		return errNotInList
 	}
-	tos := s.stack[len(s.stack)-1]
-	if tos.pos != tos.size {
+	// Ensure that no more data is remaining in the current list.
+	if s.stack[len(s.stack)-1] > 0 {
 		return errNotAtEOL
 	}
 	s.stack = s.stack[:len(s.stack)-1] // pop
-	if len(s.stack) > 0 {
-		s.stack[len(s.stack)-1].pos += tos.size
-	}
 	s.kind = -1
 	s.size = 0
 	return nil
@@ -833,29 +833,33 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 // the value. Subsequent calls to Kind (until the value is decoded)
 // will not advance the input reader and return cached information.
 func (s *Stream) Kind() (kind Kind, size uint64, err error) {
-	var tos *listpos
+	var (
+		listLimit uint64
+		inList    bool
+	)
 	if len(s.stack) > 0 {
-		tos = &s.stack[len(s.stack)-1]
+		listLimit = s.stack[len(s.stack)-1]
+		inList = true
 	}
+
 	if s.kind < 0 {
 		s.kinderr = nil
-		// Don't read further if we're at the end of the
-		// innermost list.
-		if tos != nil && tos.pos == tos.size {
+		// Don't read further if we're at the end of the innermost list.
+		if inList && listLimit == 0 {
 			return 0, 0, EOL
 		}
 		s.kind, s.size, s.kinderr = s.readKind()
 		if s.kinderr == nil {
-			if tos == nil {
+			if inList {
+				// Inside a list, check that the value doesn't overflow the list.
+				if s.size > listLimit {
+					s.kinderr = ErrElemTooLarge
+				}
+			} else {
 				// At toplevel, check that the value is smaller
 				// than the remaining input length.
 				if s.limited && s.size > s.remaining {
 					s.kinderr = ErrValueTooLarge
-				}
-			} else {
-				// Inside a list, check that the value doesn't overflow the list.
-				if s.size > tos.size-tos.pos {
-					s.kinderr = ErrElemTooLarge
 				}
 			}
 		}
@@ -985,14 +989,14 @@ func (s *Stream) readByte() (byte, error) {
 func (s *Stream) willRead(n uint64) error {
 	s.kind = -1 // rearm Kind
 
+	// check list overflow
 	if len(s.stack) > 0 {
-		// check list overflow
-		tos := s.stack[len(s.stack)-1]
-		if n > tos.size-tos.pos {
+		if n > s.stack[len(s.stack)-1] {
 			return ErrElemTooLarge
 		}
-		s.stack[len(s.stack)-1].pos += n
+		s.stack[len(s.stack)-1] -= n
 	}
+	// check size limit overflow
 	if s.limited {
 		if n > s.remaining {
 			return ErrValueTooLarge
