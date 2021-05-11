@@ -17,11 +17,13 @@
 package txpool
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,6 +31,74 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+func TestInvalidTransactions(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := transaction(0, 100, key)
+	from, _ := deriveSender(tx)
+
+	pool.currentState.AddBalance(from, big.NewInt(1))
+	if err := pool.AddRemotes([]*types.Transaction{tx}); !errors.Is(err[0], core.ErrInsufficientFunds) {
+		t.Error("expected", core.ErrInsufficientFunds)
+	}
+
+	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice()))
+	pool.currentState.AddBalance(from, balance)
+	if err := pool.AddRemotes([]*types.Transaction{tx}); !errors.Is(err[0], core.ErrIntrinsicGas) {
+		t.Error("expected", core.ErrIntrinsicGas)
+	}
+
+	pool.currentState.SetNonce(from, 1)
+	pool.currentState.AddBalance(from, big.NewInt(0xffffffffffffff))
+	tx = transaction(0, 100000, key)
+	if err := pool.AddRemotes([]*types.Transaction{tx}); !errors.Is(err[0], core.ErrNonceTooLow) {
+		t.Error("expected", core.ErrNonceTooLow)
+	}
+	// Test negative value
+	tx2, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+	from2, _ := deriveSender(tx2)
+	pool.currentState.AddBalance(from2, big.NewInt(1))
+	if err := pool.AddRemotes([]*types.Transaction{tx2}); err[0] != core.ErrNegativeValue {
+		t.Error("expected", core.ErrNegativeValue, "got", err[0])
+	}
+
+	tx = transaction(1, 100000, key)
+	pool.config.minGasPrice = big.NewInt(1000)
+	if err := pool.AddRemotes([]*types.Transaction{tx}); err[0] != core.ErrUnderpriced {
+		t.Error("expected", core.ErrUnderpriced)
+	}
+	if err := pool.AddLocal(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+
+}
+
+func TestTransactionMissingNonce(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.currentState.AddBalance(addr, big.NewInt(100000000000000))
+	tx := transaction(1, 100000, key)
+	if err := pool.AddRemotes([]*types.Transaction{tx}); err[0] != nil {
+		t.Error("didn't expect error", err)
+	}
+	if pool.remoteTxs.Len() != 0 {
+		t.Error("expected 0 pending transactions, got", pool.remoteTxs.Len())
+	}
+	if pool.gappedTxs[addr].Len() != 1 {
+		t.Error("expected 1 queued transaction, got", pool.gappedTxs[addr].Len())
+	}
+	if pool.all.Count() != 1 {
+		t.Error("expected 1 total transactions, got", pool.all.Count())
+	}
+}
 
 // Tests that the pool rejects duplicate transactions.
 func TestTransactionDeduplication(t *testing.T) {
@@ -125,4 +195,8 @@ func validateTxPoolInternals(pool *TxPool) error {
 			}
 		}*/
 	return nil
+}
+
+func deriveSender(tx *types.Transaction) (common.Address, error) {
+	return types.Sender(types.HomesteadSigner{}, tx)
 }

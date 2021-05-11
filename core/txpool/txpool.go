@@ -17,7 +17,6 @@
 package txpool
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -48,40 +47,6 @@ const (
 	chainHeadChanSize = 10
 	// txEntryChanSize is the size of the channel for triggering ungappings
 	txEntryChanSize = 10
-)
-
-var (
-	// ErrAlreadyKnown is returned if the transactions is already contained
-	// within the pool.
-	ErrAlreadyKnown = errors.New("already known")
-
-	// ErrInvalidSender is returned if the transaction contains an invalid signature.
-	ErrInvalidSender = errors.New("invalid sender")
-
-	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
-	// configured for the transaction pool.
-	ErrUnderpriced = errors.New("transaction underpriced")
-
-	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accpet
-	// another remote transaction.
-	ErrTxPoolOverflow = errors.New("txpool is full")
-
-	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
-	// with a different one without the required price bump.
-	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
-
-	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
-	// maximum allowance of the current block.
-	ErrGasLimit = errors.New("exceeds block gas limit")
-
-	// ErrNegativeValue is a sanity error to ensure no one is able to specify a
-	// transaction with a negative value.
-	ErrNegativeValue = errors.New("negative value")
-
-	// ErrOversizedData is returned if the input data of a transaction is greater
-	// than some meaningful limit a user might use. This is not a consensus error
-	// making the transaction invalid, rather a DOS protection.
-	ErrOversizedData = errors.New("oversized data")
 )
 
 // blockChain provides the state of blockchain and current gas limit to do
@@ -375,7 +340,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Has(tx.Hash()) {
-			errs[i] = ErrAlreadyKnown
+			errs[i] = core.ErrAlreadyKnown
 			continue
 		}
 		// Exclude transactions with invalid signatures as soon as
@@ -431,7 +396,7 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	hash := tx.tx.Hash()
 	if pool.all.Has(hash) {
 		log.Trace("Discarding already known transaction", "hash", hash)
-		return false, ErrAlreadyKnown
+		return false, core.ErrAlreadyKnown
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
@@ -496,7 +461,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 				// Re-add the deleted tx to the pool
 				pool.localTxs.Add(entry)
 				log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-				return false, ErrUnderpriced
+				return false, core.ErrUnderpriced
 			}
 		}
 		pool.localTxs.Add(tx)
@@ -521,7 +486,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 			// Re-add the deleted tx to the pool
 			pool.remoteTxs.Add(entry)
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-			return false, ErrUnderpriced
+			return false, core.ErrUnderpriced
 		}
 	}
 	shouldPrune := pool.remoteTxs.Add(tx)
@@ -540,10 +505,11 @@ func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
 	if old := pool.gappedTxs[tx.sender].Get(tx.tx.Nonce()); old != nil {
 		if !ableToReplace(tx, old, pool.config.PriceBump) {
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-			return ErrUnderpriced
+			return core.ErrUnderpriced
 		}
 	}
 	pool.gappedTxs[tx.sender].Put(tx)
+	pool.all.Add(tx.tx, false)
 	return nil
 }
 
@@ -590,25 +556,25 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
-		return ErrOversizedData
+		return core.ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
-		return ErrNegativeValue
+		return core.ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.config.maxGasPerBlock < tx.Gas() {
-		return ErrGasLimit
+		return core.ErrGasLimit
 	}
 	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
-		return ErrInvalidSender
+		return core.ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	if !local && tx.GasPriceIntCmp(pool.config.minGasPrice) < 0 {
-		return ErrUnderpriced
+		return core.ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
@@ -648,7 +614,7 @@ func ableToReplace(new, old *txEntry, priceBump int) bool {
 func (pool *TxPool) txToTxEntry(tx *types.Transaction) (*txEntry, error) {
 	sender, err := types.Sender(pool.signer, tx)
 	if err != nil {
-		return nil, ErrInvalidSender
+		return nil, core.ErrInvalidSender
 	}
 	return &txEntry{tx: tx, sender: sender, price: tx.GasPrice()}, nil
 }
