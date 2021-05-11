@@ -32,12 +32,14 @@ import (
 const sampleNumber = 3 // Number of transactions sampled in a block
 
 var DefaultMaxPrice = big.NewInt(500 * params.GWei)
+var DefaultIgnorePrice = big.NewInt(2 * params.Wei)
 
 type Config struct {
-	Blocks     int
-	Percentile int
-	Default    *big.Int `toml:",omitempty"`
-	MaxPrice   *big.Int `toml:",omitempty"`
+	Blocks      int
+	Percentile  int
+	Default     *big.Int `toml:",omitempty"`
+	MaxPrice    *big.Int `toml:",omitempty"`
+	IgnorePrice *big.Int `toml:",omitempty"`
 }
 
 // OracleBackend includes all necessary background APIs for oracle.
@@ -50,12 +52,13 @@ type OracleBackend interface {
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
-	backend   OracleBackend
-	lastHead  common.Hash
-	lastPrice *big.Int
-	maxPrice  *big.Int
-	cacheLock sync.RWMutex
-	fetchLock sync.Mutex
+	backend     OracleBackend
+	lastHead    common.Hash
+	lastPrice   *big.Int
+	maxPrice    *big.Int
+	ignorePrice *big.Int
+	cacheLock   sync.RWMutex
+	fetchLock   sync.Mutex
 
 	checkBlocks int
 	percentile  int
@@ -83,10 +86,18 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxPrice = DefaultMaxPrice
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
+	ignorePrice := params.IgnorePrice
+	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
+		ignorePrice = DefaultIgnorePrice
+		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
+	} else if ignorePrice.Int64() > 0 {
+		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
+	}
 	return &Oracle{
 		backend:     backend,
 		lastPrice:   params.Default,
 		maxPrice:    maxPrice,
+		ignorePrice: ignorePrice,
 		checkBlocks: blocks,
 		percentile:  percent,
 	}
@@ -123,7 +134,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		txPrices  []*big.Int
 	)
 	for sent < gpo.checkBlocks && number > 0 {
-		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, result, quit)
+		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
 		sent++
 		exp++
 		number--
@@ -146,7 +157,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		// meaningful returned, try to query more blocks. But the maximum
 		// is 2*checkBlocks.
 		if len(res.prices) == 1 && len(txPrices)+1+exp < gpo.checkBlocks*2 && number > 0 {
-			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, result, quit)
+			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
 			sent++
 			exp++
 			number--
@@ -183,7 +194,7 @@ func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].GasPriceCmp(t[
 // and sends it to the result channel. If the block is empty or all transactions
 // are sent by the miner itself(it doesn't make any sense to include this kind of
 // transaction prices for sampling), nil gasprice is returned.
-func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, limit int, result chan getBlockPricesResult, quit chan struct{}) {
+func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, limit int, ignoreUnder *big.Int, result chan getBlockPricesResult, quit chan struct{}) {
 	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
 		select {
@@ -199,7 +210,7 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 
 	var prices []*big.Int
 	for _, tx := range txs {
-		if tx.GasPriceIntCmp(common.Big1) <= 0 {
+		if ignoreUnder != nil && tx.GasPriceIntCmp(ignoreUnder) == -1 {
 			continue
 		}
 		sender, err := types.Sender(signer, tx)
