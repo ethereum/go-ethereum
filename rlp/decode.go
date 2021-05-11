@@ -640,8 +640,8 @@ func (s *Stream) Raw() ([]byte, error) {
 		s.kind = -1 // rearm Kind
 		return []byte{s.byteval}, nil
 	}
-	// the original header has already been read and is no longer
-	// available. read content and put a new header in front of it.
+	// The original header has already been read and is no longer
+	// available. Read content and put a new header in front of it.
 	start := headsize(size)
 	buf := make([]byte, uint64(start)+size)
 	if err := s.readFull(buf[start:]); err != nil {
@@ -775,7 +775,7 @@ func (s *Stream) Decode(val interface{}) error {
 
 	err = decoder(s, rval.Elem())
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
-		// add decode target type to error so context has more meaning
+		// Add decode target type to error so context has more meaning.
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
 	}
 	return err
