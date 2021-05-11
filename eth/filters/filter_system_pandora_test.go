@@ -219,14 +219,12 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
 		for i1 != len(pendingHeaderEvents[1].Headers) {
-			select {
 			// here we will receive a single header from the batch and will process it
-			case header := <-chan2:
-				if pendingHeaderEvents[1].Headers[i1].Hash() != header.Hash() {
-					t.Errorf("sub2 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[1].Headers[i1].Hash(), header.Hash())
-				}
-				i1++
+			header := <-chan2
+			if pendingHeaderEvents[1].Headers[i1].Hash() != header.Hash() {
+				t.Errorf("sub2 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[1].Headers[i1].Hash(), header.Hash())
 			}
+			i1++
 		}
 
 		sub2.Unsubscribe()
