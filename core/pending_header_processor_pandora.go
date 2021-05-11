@@ -30,7 +30,7 @@ func NewPandoraPendingHeaderContainer() *PandoraPendingHeaderContainer {
 }
 
 // WriteHeaderBatch dumps a batch of header into header container
-func (container *PandoraPendingHeaderContainer) WriteHeaderBatch (headers []*types.Header) {
+func (container *PandoraPendingHeaderContainer) WriteHeaderBatch(headers []*types.Header) {
 	for _, header := range headers {
 		container.WriteHeader(header)
 	}

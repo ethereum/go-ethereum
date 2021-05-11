@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	PendingHeaderChannelSize = 10 	// size of the pending header channel
+	PendingHeaderChannelSize = 10 // size of the pending header channel
 )
 
 // filter is a helper struct that holds meta information over the filter type

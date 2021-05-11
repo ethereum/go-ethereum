@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestInsertHeaderChainWithPendingHeaders(t *testing.T)  {
+func TestInsertHeaderChainWithPendingHeaders(t *testing.T) {
 	// prepare a dummy bc
 	engine := ethash.NewFullFaker()
 	_, blockchain, err := newCanonical(engine, 0, false)
