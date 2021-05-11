@@ -10,7 +10,16 @@ RUN cd /go-ethereum && make geth
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+RUN adduser --disabled-password --home /home/ethereum ethereum
+RUN chown ethereum:ethereum /home/ethereum
+
+USER ethereum
+WORKDIR /home/ethereum
+
+COPY --from=builder --chown=ethereum:ethereum /go-ethereum/build/bin/geth /home/ethereum/bin/
+
+ENV PATH="/home/ethereum/bin:${PATH}"
+
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
