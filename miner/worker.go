@@ -888,9 +888,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
-		parentGasTarget := parent.GasLimit() / params.ElasticityMultiplier
-		header.GasLimit = core.CalcGasLimit(parent.GasUsed(), parentGasTarget, w.config.GasFloor,
-			w.config.GasCeil) * params.ElasticityMultiplier
+		parentGasLimit := parent.GasLimit()
+		parentGasTarget := parentGasLimit / params.ElasticityMultiplier
+		if !w.chainConfig.IsLondon(parent.Number()) {
+			// Bump by 2x
+			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
+			parentGasTarget = parent.GasLimit()
+		}
+		header.GasLimit = core.CalcGasLimit1559(parent.GasUsed(), parentGasTarget, w.config.GasFloor,
+			w.config.GasCeil)
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {

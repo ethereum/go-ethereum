@@ -138,3 +138,31 @@ func CalcGasLimit(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint6
 	}
 	return limit
 }
+
+// CalcGasLimit1559 calculates the next block gas limit under 1559 rules.
+func CalcGasLimit1559(parentGasUsed, parentGasLimit, gasFloor, gasCeil uint64) uint64 {
+	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
+	limit := parentGasLimit
+	if parentGasUsed > parentGasLimit/2 {
+		// Bump it
+		limit += delta
+	} else if parentGasUsed < parentGasLimit/2 {
+		limit -= delta
+	}
+	if limit < params.MinGasLimit {
+		limit = params.MinGasLimit
+	}
+	// If we're outside our allowed gas range, we try to hone towards them
+	if limit < gasFloor {
+		limit = parentGasLimit + delta
+		if limit > gasFloor {
+			limit = gasFloor
+		}
+	} else if limit > gasCeil {
+		limit = parentGasLimit - delta
+		if limit < gasCeil {
+			limit = gasCeil
+		}
+	}
+	return limit
+}
