@@ -223,7 +223,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 			Difficulty: parent.Difficulty(),
 			UncleHash:  parent.UncleHash(),
 		}),
-		GasLimit:  CalcGasLimit(parent, parent.GasLimit(), parent.GasLimit()),
+		GasLimit:  parent.GasLimit(),
 		Number:    new(big.Int).Add(parent.Number(), common.Big1),
 		Time:      parent.Time() + 10,
 		UncleHash: types.EmptyUncleHash,
