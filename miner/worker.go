@@ -1091,8 +1091,10 @@ func (bs *blockState) Commit() error {
 
 func (bs *blockState) AddTransactions(sequence *types.Transactions) error {
 	var (
-		snap = w.current.state.Snapshot()
-		err  error
+		snap   = w.current.state.Snapshot()
+		err    error
+		logs   *types.Log
+		tcount = w.current.tcount
 	)
 
 	for i, tx := range sequence {
@@ -1100,49 +1102,25 @@ func (bs *blockState) AddTransactions(sequence *types.Transactions) error {
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			return core.ErrGasLimitReached
 		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		//
-		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(w.current.signer, tx)
-		// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-			continue
-		}
 		// Start executing the transaction
 		bs.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
-		var logs []*types.Log
-		logs, err = w.commitTransaction(tx, coinbase)
-		switch {
-		case errors.Is(err, core.ErrGasLimitReached):
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Trace("Gas limit exceeded for current block", "sender", from)
-		case errors.Is(err, core.ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-		case errors.Is(err, core.ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			bs.logs = append(bs.coalescedLogs, logs...)
-			w.current.tcount++
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-		}
-		if err != nil {
+		var txLogs []*types.Log
+		txLogs, err = w.commitTransaction(tx, coinbase)
+		if err == nil {
+			logs = append(logs, txLogs...)
+			tcount++
+		} else {
+			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
+				"type", tx.Type(), "hash", tx.Hash(), "err", err)
 			break
 		}
 	}
 	if err != nil {
 		bs.state.RevertToSnapshot(snap)
+	} else {
+		bs.logs = append(bs.coalescedLogs, logs...)
+		w.current.tcount = tcount
 	}
 	return err
 }
@@ -1191,6 +1169,13 @@ func (w *DefaultCollator) submit(bs BlockState, txs *types.TransactionsByPriceAn
 			txs.Pop()
 			continue
 		}
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+			continue
+		}
+
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		err := bs.AddTransactions(types.Transactions{tx})
