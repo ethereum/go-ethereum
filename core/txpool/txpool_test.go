@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -169,6 +170,86 @@ func TestTransactionDeduplication(t *testing.T) {
 	}
 }
 
+// Tests that the pool rejects replacement transactions that don't meet the minimum
+// price bump required.
+func TestTransactionReplacement(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Keep track of transaction events to ensure all executables get announced
+	events := make(chan core.NewTxsEvent, 32)
+	sub := pool.txFeed.Subscribe(events)
+	defer sub.Unsubscribe()
+
+	// Create a test account to add transactions with
+	key, _ := crypto.GenerateKey()
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+
+	// Add pending transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	price := int64(100)
+	threshold := (price * (100 + int64(testTxPoolConfig.PriceBump))) / 100
+
+	if err := pool.AddRemotesSync([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(1), key)}); err[0] != nil {
+		t.Fatalf("failed to add original cheap pending transaction: %v", err[0])
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100001, big.NewInt(1), key)}); err[0] != core.ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(2), key)}); err[0] != nil {
+		t.Fatalf("failed to replace original cheap pending transaction: %v", err[0])
+	}
+	if err := validateEvents(events, 2); err != nil {
+		t.Fatalf("cheap replacement event firing failed: %v", err)
+	}
+
+	if err := pool.AddRemotesSync([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(price), key)}); err[0] != nil {
+		t.Fatalf("failed to add original proper pending transaction: %v", err[0])
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100001, big.NewInt(threshold-1), key)}); err[0] != core.ErrReplaceUnderpriced {
+		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(threshold), key)}); err[0] != nil {
+		t.Fatalf("failed to replace original proper pending transaction: %v", err[0])
+	}
+	if err := validateEvents(events, 2); err != nil {
+		t.Fatalf("proper replacement event firing failed: %v", err)
+	}
+
+	// Add queued transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(1), key)}); err[0] != nil {
+		t.Fatalf("failed to add original cheap queued transaction: %v", err[0])
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100001, big.NewInt(1), key)}); err[0] != core.ErrReplaceUnderpriced {
+		t.Fatalf("original cheap queued transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(2), key)}); err[0] != nil {
+		t.Fatalf("failed to replace original cheap queued transaction: %v", err[0])
+	}
+
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(price), key)}); err[0] != nil {
+		t.Fatalf("failed to add original proper queued transaction: %v", err[0])
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100001, big.NewInt(threshold-1), key)}); err[0] != core.ErrReplaceUnderpriced {
+		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
+	}
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(threshold), key)}); err[0] != nil {
+		t.Fatalf("failed to replace original proper queued transaction: %v", err[0])
+	}
+
+	if err := validateEvents(events, 0); err != nil {
+		t.Fatalf("queued replacement event firing failed: %v", err)
+	}
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
 // validateTxPoolInternals checks various consistency invariants within the pool.
 func validateTxPoolInternals(pool *TxPool) error {
 	pool.mu.RLock()
@@ -194,6 +275,34 @@ func validateTxPoolInternals(pool *TxPool) error {
 				return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 			}
 		}*/
+	return nil
+}
+
+// validateEvents checks that the correct number of transaction addition events
+// were fired on the pool's event feed.
+func validateEvents(events chan core.NewTxsEvent, count int) error {
+	var received []*types.Transaction
+
+	for len(received) < count {
+		select {
+		case ev := <-events:
+			received = append(received, ev.Txs...)
+		case <-time.After(time.Second):
+			return fmt.Errorf("event #%d not fired", len(received))
+		}
+	}
+	if len(received) > count {
+		return fmt.Errorf("more than %d events fired: %v", count, received[count:])
+	}
+	select {
+	case ev := <-events:
+		return fmt.Errorf("more than %d events fired: %v", count, ev.Txs)
+
+	case <-time.After(50 * time.Millisecond):
+		// This branch should be "default", but it's a data race between goroutines,
+		// reading the event channel and pushing into it, so better wait a bit ensuring
+		// really nothing gets injected.
+	}
 	return nil
 }
 

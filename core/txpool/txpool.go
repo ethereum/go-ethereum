@@ -158,7 +158,9 @@ func (pool *TxPool) loop() {
 		// New block mined
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
+				pool.mu.Lock()
 				pool.reset(head.Header(), ev.Block.Header())
+				pool.mu.Unlock()
 				head = ev.Block
 			}
 		// System shutdown
@@ -223,7 +225,7 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subsc
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// If we're reorging an old state, reinject all dropped transactions
-	var reinject types.Transactions
+	var reinject []*txEntry
 
 	if oldHead != nil && oldHead.Hash() != newHead.ParentHash {
 		// REORG
@@ -281,7 +283,15 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 						return
 					}
 				}
-				reinject = types.TxDifference(discarded, included)
+				txs := types.TxDifference(discarded, included)
+				core.SenderCacher.Recover(pool.signer, txs)
+				for _, t := range txs {
+					entry, err := pool.txToTxEntry(t)
+					if err != nil {
+						continue
+					}
+					reinject = append(reinject, entry)
+				}
 			}
 		}
 	}
@@ -298,6 +308,11 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.config.maxGasPerBlock = newHead.GasLimit
+
+	// Inject any transactions discarded due to reorgs
+	log.Debug("Reinjecting stale transactions", "count", len(reinject))
+	pool.addTxsLocked(reinject, false)
+
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.config.istanbul = pool.chainconfig.IsIstanbul(next)
@@ -530,7 +545,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 				// Re-add the deleted tx to the pool
 				pool.localTxs.Add(entry)
 				log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-				return false, core.ErrUnderpriced
+				return false, core.ErrReplaceUnderpriced
 			}
 		}
 		pool.localTxs.Add(tx)
@@ -555,7 +570,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 			// Re-add the deleted tx to the pool
 			pool.remoteTxs.Add(entry)
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-			return false, core.ErrUnderpriced
+			return false, core.ErrReplaceUnderpriced
 		}
 	}
 	shouldPrune := pool.remoteTxs.Add(tx)

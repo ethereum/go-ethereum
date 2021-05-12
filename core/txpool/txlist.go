@@ -44,7 +44,7 @@ func (t *txEntry) Less(entry *txEntry) bool {
 		panic("Less called with nil arg, should not happen")
 	}
 	if t.sender == entry.sender {
-		return t.tx.Nonce() < entry.tx.Nonce()
+		return t.tx.Nonce() > entry.tx.Nonce()
 	}
 	if t.price.Cmp(entry.price) == 0 {
 		return t.tx.Before(entry.tx)
@@ -77,6 +77,7 @@ func (l *txList) Add(entry *txEntry) bool {
 	if l.head == nil {
 		l.head = entry
 		l.bottom = entry
+		l.len++
 		return false
 	}
 	// If the new entry is bigger than the head, replace head
@@ -90,7 +91,7 @@ func (l *txList) Add(entry *txEntry) bool {
 	// Insert into the linked list
 	inserted := false
 	for new := old.next; new != nil; new = new.next {
-		if !new.Less(entry) {
+		if new.Less(entry) {
 			old.next = entry
 			entry.next = new
 			l.len++
