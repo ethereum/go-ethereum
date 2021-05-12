@@ -45,6 +45,11 @@ var (
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
 
+	// calcDifficultyEip3554 is the difficulty adjustment algorithm as specified by EIP 3554.
+	// It offsets the bomb a total of 9.5M blocks.
+	// Specification EIP-3554: https://eips.ethereum.org/EIPS/eip-3554
+	calcDifficultyEip3554 = makeDifficultyCalculator(big.NewInt(9500000))
+
 	// calcDifficultyEip2384 is the difficulty adjustment algorithm as specified by EIP 2384.
 	// It offsets the bomb 4M blocks from Constantinople, so in total 9M blocks.
 	// Specification EIP-2384: https://eips.ethereum.org/EIPS/eip-2384
@@ -325,6 +330,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	switch {
 	case config.IsCatalyst(next):
 		return big.NewInt(1)
+	case config.IsLondon(next):
+		return calcDifficultyEip3554(time, parent)
 	case config.IsMuirGlacier(next):
 		return calcDifficultyEip2384(time, parent)
 	case config.IsConstantinople(next):
