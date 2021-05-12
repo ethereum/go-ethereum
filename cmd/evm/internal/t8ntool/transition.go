@@ -142,7 +142,9 @@ func Main(ctx *cli.Context) error {
 	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		decoder.Decode(inputData)
+		if err := decoder.Decode(inputData); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
 	}
 	if allocStr != stdinSelector {
 		inFile, err := os.Open(allocStr)
