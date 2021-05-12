@@ -141,10 +141,8 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 		return rlp.EncodeToBytes(r)
 	}
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
-	buf := encodeBufferPool.Get().(*bytes.Buffer)
-	defer encodeBufferPool.Put(buf)
-	buf.Reset()
-	err := r.encodeTyped(data, buf)
+	var buf bytes.Buffer
+	err := r.encodeTyped(data, &buf)
 	return buf.Bytes(), err
 }
 
