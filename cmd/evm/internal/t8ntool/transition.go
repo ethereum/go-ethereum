@@ -219,9 +219,8 @@ func Main(ctx *cli.Context) error {
 	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
-	s.DumpToCollector(collector, &state.DumpConfig{})
+	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)
-
 }
 
 // txWithKey is a helper-struct, to allow us to use the types.Transaction along with
@@ -303,7 +302,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 		}
 	}
 	genesisAccount := core.GenesisAccount{
-		Code:    common.FromHex(dumpAccount.Code),
+		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,

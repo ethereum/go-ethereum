@@ -475,7 +475,8 @@ func dumpState(ctx *cli.Context) error {
 		return err
 	}
 	defer accIt.Release()
-	log.Info("Snapshot iteration started", "root", root)
+
+	log.Info("Snapshot dumping started", "root", root)
 	var (
 		start    = time.Now()
 		logged   = time.Now()
@@ -493,14 +494,16 @@ func dumpState(ctx *cli.Context) error {
 		da := &state.DumpAccount{
 			Balance:   account.Balance.String(),
 			Nonce:     account.Nonce,
-			Root:      common.Bytes2Hex(account.Root),
-			CodeHash:  common.Bytes2Hex(account.CodeHash),
+			Root:      account.Root,
+			CodeHash:  account.CodeHash,
 			SecureKey: accIt.Hash().Bytes(),
 		}
 		if !conf.SkipCode && !bytes.Equal(account.CodeHash, emptyCode) {
-			da.Code = common.Bytes2Hex(rawdb.ReadCode(db, common.BytesToHash(account.CodeHash)))
+			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.CodeHash))
 		}
 		if !conf.SkipStorage {
+			da.Storage = make(map[common.Hash]string)
+
 			stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 			if err != nil {
 				return err
@@ -511,8 +514,8 @@ func dumpState(ctx *cli.Context) error {
 		}
 		enc.Encode(da)
 		accounts++
-		if time.Since(logged) > 10*time.Second {
-			log.Info("Snapshot iteration in progress", "at", accIt.Hash(), "accounts", accounts,
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Snapshot dumping in progress", "at", accIt.Hash(), "accounts", accounts,
 				"elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
@@ -520,7 +523,7 @@ func dumpState(ctx *cli.Context) error {
 			break
 		}
 	}
-	log.Info("Snapshot iteration complete", "accounts", accounts,
+	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// DumpConfig is a set of options to control what portions of the statewill be
+// iterated and collected.
 type DumpConfig struct {
 	SkipCode          bool
 	SkipStorage       bool
@@ -48,9 +50,9 @@ type DumpCollector interface {
 type DumpAccount struct {
 	Balance   string                 `json:"balance"`
 	Nonce     uint64                 `json:"nonce"`
-	Root      string                 `json:"root"`
-	CodeHash  string                 `json:"codeHash"`
-	Code      string                 `json:"code,omitempty"`
+	Root      hexutil.Bytes          `json:"root"`
+	CodeHash  hexutil.Bytes          `json:"codeHash"`
+	Code      hexutil.Bytes          `json:"code,omitempty"`
 	Storage   map[common.Hash]string `json:"storage,omitempty"`
 	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
 	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
@@ -120,14 +122,22 @@ func (d iterativeDump) OnRoot(root common.Hash) {
 	}{root})
 }
 
+// DumpToCollector iterates the state according to the given options and inserts
+// the items into a collector for aggregation or serialization.
 func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte) {
+	// Sanitize the input to allow nil configs
+	if conf == nil {
+		conf = new(DumpConfig)
+	}
 	var (
 		missingPreimages int
 		accounts         uint64
 		start            = time.Now()
 		logged           = time.Now()
 	)
+	log.Info("Trie dumping started", "root", s.trie.Hash())
 	c.OnRoot(s.trie.Hash())
+
 	it := trie.NewIterator(s.trie.NodeIterator(conf.Start))
 	for it.Next() {
 		var data Account
@@ -137,8 +147,8 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		account := DumpAccount{
 			Balance:   data.Balance.String(),
 			Nonce:     data.Nonce,
-			Root:      common.Bytes2Hex(data.Root[:]),
-			CodeHash:  common.Bytes2Hex(data.CodeHash),
+			Root:      data.Root[:],
+			CodeHash:  data.CodeHash,
 			SecureKey: it.Key,
 		}
 		addrBytes := s.trie.GetKey(it.Key)
@@ -153,7 +163,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		addr := common.BytesToAddress(addrBytes)
 		obj := newObject(s, addr, data)
 		if !conf.SkipCode {
-			account.Code = common.Bytes2Hex(obj.Code(s.db))
+			account.Code = obj.Code(s.db)
 		}
 		if !conf.SkipStorage {
 			account.Storage = make(map[common.Hash]string)
@@ -169,8 +179,8 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 		c.OnAccount(addr, account)
 		accounts++
-		if time.Since(logged) > 10*time.Second {
-			log.Info("Trie iteration in progress", "at", it.Key, "accounts", accounts,
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Trie dumping in progress", "at", it.Key, "accounts", accounts,
 				"elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
@@ -184,7 +194,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
-	log.Info("Trie iteration complete", "accounts", accounts,
+	log.Info("Trie dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nextKey

@@ -266,7 +266,6 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	opts := &state.DumpConfig{
 		OnlyWithAddresses: true,
-		Start:             nil,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
 	if blockNr == rpc.PendingBlockNumber {
