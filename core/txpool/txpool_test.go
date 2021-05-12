@@ -75,7 +75,7 @@ func TestInvalidTransactions(t *testing.T) {
 	if err := pool.AddLocal(tx); err != nil {
 		t.Error("expected", nil, "got", err)
 	}
-
+	validateTxPoolInternals(pool)
 }
 
 func TestTransactionMissingNonce(t *testing.T) {
@@ -99,6 +99,7 @@ func TestTransactionMissingNonce(t *testing.T) {
 	if pool.all.Count() != 1 {
 		t.Error("expected 1 total transactions, got", pool.all.Count())
 	}
+	validateTxPoolInternals(pool)
 }
 
 // Tests that the pool rejects duplicate transactions.
@@ -204,7 +205,7 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(2), key)}); err[0] != nil {
 		t.Fatalf("failed to replace original cheap pending transaction: %v", err[0])
 	}
-	if err := validateEvents(events, 2); err != nil {
+	if err := validateEvents(events, 1); err != nil {
 		t.Fatalf("cheap replacement event firing failed: %v", err)
 	}
 
@@ -214,10 +215,10 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100001, big.NewInt(threshold-1), key)}); err[0] != core.ErrReplaceUnderpriced {
 		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
 	}
-	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(threshold), key)}); err[0] != nil {
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(0, 100000, big.NewInt(threshold+1), key)}); err[0] != nil {
 		t.Fatalf("failed to replace original proper pending transaction: %v", err[0])
 	}
-	if err := validateEvents(events, 2); err != nil {
+	if err := validateEvents(events, 1); err != nil {
 		t.Fatalf("proper replacement event firing failed: %v", err)
 	}
 
@@ -238,11 +239,11 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100001, big.NewInt(threshold-1), key)}); err[0] != core.ErrReplaceUnderpriced {
 		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err[0], core.ErrReplaceUnderpriced)
 	}
-	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(threshold), key)}); err[0] != nil {
+	if err := pool.AddRemotes([]*types.Transaction{pricedTransaction(2, 100000, big.NewInt(threshold+1), key)}); err[0] != nil {
 		t.Fatalf("failed to replace original proper queued transaction: %v", err[0])
 	}
 
-	if err := validateEvents(events, 0); err != nil {
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("queued replacement event firing failed: %v", err)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
@@ -261,20 +262,24 @@ func validateTxPoolInternals(pool *TxPool) error {
 		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
 	}
 
-	/*
-		// Ensure the next nonce to assign is the correct one
-		for addr, txs := range pool.Pending() {
-			// Find the last transaction
-			var last uint64
-			for nonce := range txs.txs.items {
-				if last < nonce {
-					last = nonce
-				}
-			}
-			if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
-				return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
-			}
-		}*/
+	// Ensure the next nonce to assign is the correct one
+	highestNonce := make(map[common.Address]uint64)
+	remotes := pool.remoteTxs.Peek(pool.remoteTxs.Len())
+	for _, tx := range remotes {
+		// Find the last transaction
+		sender, err := types.Sender(types.HomesteadSigner{}, tx)
+		if err != nil {
+			panic(err)
+		}
+		if highestNonce[sender] < tx.Nonce() {
+			highestNonce[sender] = tx.Nonce()
+		}
+	}
+	for addr, last := range highestNonce {
+		if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
+			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
+		}
+	}
 	return nil
 }
 

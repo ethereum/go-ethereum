@@ -461,9 +461,17 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 // The transaction pool lock must be held.
 func (pool *TxPool) addTxsLocked(txs []*txEntry, local bool) []error {
 	errs := make([]error, len(txs))
+
+	var succTxs []*types.Transaction
 	for i, tx := range txs {
 		_, err := pool.add(tx, local)
 		errs[i] = err
+		if err != nil {
+			succTxs = append(succTxs, tx.tx)
+		}
+	}
+	if len(succTxs) > 0 {
+		pool.txFeed.Send(core.NewTxsEvent{Txs: succTxs})
 	}
 	return errs
 }
@@ -589,7 +597,7 @@ func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
 	if old := pool.gappedTxs[tx.sender].Get(tx.tx.Nonce()); old != nil {
 		if !ableToReplace(tx, old, pool.config.PriceBump) {
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-			return core.ErrUnderpriced
+			return core.ErrReplaceUnderpriced
 		}
 	}
 	pool.gappedTxs[tx.sender].Put(tx)
