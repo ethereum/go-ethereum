@@ -443,8 +443,7 @@ type Syncer struct {
 	startTime time.Time // Time instance when snapshot sync started
 	logTime   time.Time // Time instance when status was last reported
 
-	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
-	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
+	lock sync.RWMutex // Protects fields that can change outside of sync (peers, reqs, root)
 }
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
@@ -672,7 +671,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 func (s *Syncer) loadSyncStatus() {
 	var progress syncProgress
 
-	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
+	if status := rawdb.ReadSnapshotSyncStatus(s.db); len(status) > 0 {
 		if err := json.Unmarshal(status, &progress); err != nil {
 			log.Error("Failed to decode snap sync status", "err", err)
 		} else {
@@ -928,10 +927,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		s.accountReqs[reqid] = req
 		delete(s.accountIdlers, idle)
 
-		s.pend.Add(1)
 		go func(root common.Hash) {
-			defer s.pend.Done()
-
 			// Attempt to send the remote request and revert if it fails
 			if cap > maxRequestSize {
 				cap = maxRequestSize
@@ -1012,11 +1008,11 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 		if cap > maxCodeRequestCount {
 			cap = maxCodeRequestCount
 		}
-		hashes := make([]common.Hash, 0, cap)
+		hashes := make([]common.Hash, 0, int(cap))
 		for hash := range task.codeTasks {
 			delete(task.codeTasks, hash)
 			hashes = append(hashes, hash)
-			if len(hashes) >= cap {
+			if len(hashes) >= int(cap) {
 				break
 			}
 		}
@@ -1039,10 +1035,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 		s.bytecodeReqs[reqid] = req
 		delete(s.bytecodeIdlers, idle)
 
-		s.pend.Add(1)
 		go func() {
-			defer s.pend.Done()
-
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestByteCodes(reqid, hashes, maxRequestSize); err != nil {
 				log.Debug("Failed to request bytecodes", "err", err)
@@ -1186,10 +1179,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		s.storageReqs[reqid] = req
 		delete(s.storageIdlers, idle)
 
-		s.pend.Add(1)
 		go func(root common.Hash) {
-			defer s.pend.Done()
-
 			// Attempt to send the remote request and revert if it fails
 			var origin, limit []byte
 			if subtask != nil {
@@ -1284,9 +1274,9 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			cap = maxTrieRequestCount
 		}
 		var (
-			hashes   = make([]common.Hash, 0, cap)
-			paths    = make([]trie.SyncPath, 0, cap)
-			pathsets = make([]TrieNodePathSet, 0, cap)
+			hashes   = make([]common.Hash, 0, int(cap))
+			paths    = make([]trie.SyncPath, 0, int(cap))
+			pathsets = make([]TrieNodePathSet, 0, int(cap))
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)
@@ -1295,7 +1285,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			paths = append(paths, pathset)
 			pathsets = append(pathsets, [][]byte(pathset)) // TODO(karalabe): group requests by account hash
 
-			if len(hashes) >= cap {
+			if len(hashes) >= int(cap) {
 				break
 			}
 		}
@@ -1319,10 +1309,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 		s.trienodeHealReqs[reqid] = req
 		delete(s.trienodeHealIdlers, idle)
 
-		s.pend.Add(1)
 		go func(root common.Hash) {
-			defer s.pend.Done()
-
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestTrieNodes(reqid, root, pathsets, maxRequestSize); err != nil {
 				log.Debug("Failed to request trienode healers", "err", err)
@@ -1407,12 +1394,12 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 		if cap > maxCodeRequestCount {
 			cap = maxCodeRequestCount
 		}
-		hashes := make([]common.Hash, 0, cap)
+		hashes := make([]common.Hash, 0, int(cap))
 		for hash := range s.healer.codeTasks {
 			delete(s.healer.codeTasks, hash)
 
 			hashes = append(hashes, hash)
-			if len(hashes) >= cap {
+			if len(hashes) >= int(cap) {
 				break
 			}
 		}
@@ -1435,10 +1422,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 		s.bytecodeHealReqs[reqid] = req
 		delete(s.bytecodeHealIdlers, idle)
 
-		s.pend.Add(1)
 		go func() {
-			defer s.pend.Done()
-
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestByteCodes(reqid, hashes, maxRequestSize); err != nil {
 				log.Debug("Failed to request bytecode healers", "err", err)

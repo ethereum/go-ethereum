@@ -430,7 +430,7 @@ func (s *stateSync) commit(force bool) error {
 // batch currently being retried, or fetching new data from the trie sync itself.
 func (s *stateSync) assignTasks() {
 	// Iterate over all idle peers and try to assign them state fetches
-	peers, _ := s.d.peers.NodeDataIdlePeers()
+	peers, _ := s.d.peers.NodeDataIdlePeersNoReqID()
 	for _, p := range peers {
 		// Assign a batch of fetches proportional to the estimated latency/bandwidth
 		cap := p.NodeDataCapacity(s.d.peers.rates.TargetRoundTrip())

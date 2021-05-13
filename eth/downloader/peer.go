@@ -72,7 +72,7 @@ type peerConnection struct {
 type LightPeer interface {
 	Head() (common.Hash, *big.Int)
 	RequestHeadersByHash(common.Hash, int, int, bool) error
-	RequestHeadersByNumber(uint64, int, int, bool) error
+	RequestHeadersByNumber(uint64, uint64, int, int, bool) error
 }
 
 // Peer encapsulates the methods required to synchronise with a remote full peer.
@@ -92,8 +92,8 @@ func (w *lightPeerWrapper) Head() (common.Hash, *big.Int) { return w.peer.Head()
 func (w *lightPeerWrapper) RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool) error {
 	return w.peer.RequestHeadersByHash(h, amount, skip, reverse)
 }
-func (w *lightPeerWrapper) RequestHeadersByNumber(i uint64, amount int, skip int, reverse bool) error {
-	return w.peer.RequestHeadersByNumber(i, amount, skip, reverse)
+func (w *lightPeerWrapper) RequestHeadersByNumber(reqId uint64, number uint64, amount int, skip int, reverse bool) error {
+	return w.peer.RequestHeadersByNumber(reqId, number, amount, skip, reverse)
 }
 func (w *lightPeerWrapper) RequestBodies([]common.Hash) error {
 	panic("RequestBodies not supported in light client mode sync")
@@ -130,7 +130,7 @@ func (p *peerConnection) Reset() {
 }
 
 // FetchHeaders sends a header retrieval request to the remote peer.
-func (p *peerConnection) FetchHeaders(from uint64, count int) error {
+func (p *peerConnection) FetchHeaders(reqId uint64, from uint64, count int) error {
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
 		return errAlreadyFetching
@@ -138,7 +138,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	p.headerStarted = time.Now()
 
 	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestHeadersByNumber(from, count, 0, false)
+	go p.peer.RequestHeadersByNumber(reqId, from, count, 0, false)
 
 	return nil
 }
@@ -404,9 +404,12 @@ func (ps *peerSet) AllPeers() []*peerConnection {
 	return list
 }
 
-// HeaderIdlePeers retrieves a flat list of all the currently header-idle peers
-// within the active peer set, ordered by their reputation.
-func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
+// HeaderIdlePeersNoReqID retrieves a flat list of all the currently header-idle
+// peers within the active peer set, ordered by their reputation.
+//
+// The method also returns peers not supporting request IDs yet. This needs to be
+// deleted once we stop serving eth/65 peers. TODO(karalabe).
+func (ps *peerSet) HeaderIdlePeersNoReqID() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
 		return atomic.LoadInt32(&p.headerIdle) == 0
 	}
@@ -416,9 +419,28 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
-// BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
-// the active peer set, ordered by their reputation.
-func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
+// HeaderIdlePeersWithReqID retrieves a flat list of all the currently header-idle
+// peers within the active peer set, ordered by their reputation.
+//
+// The method only returns peesr supporting request IDs. This method needs to be
+// renamed once we stop serving eth/65 peers. It's deliberately verbost now to make
+// it super clear in calling code which peers we'll get. TODO(karalabe).
+func (ps *peerSet) HeaderIdlePeersWithReqID() ([]*peerConnection, int) {
+	idle := func(p *peerConnection) bool {
+		return atomic.LoadInt32(&p.headerIdle) == 0
+	}
+	throughput := func(p *peerConnection) int {
+		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
+	}
+	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+}
+
+// BodyIdlePeersNoReqID retrieves a flat list of all the currently body-idle peers
+// within the active peer set, ordered by their reputation.
+//
+// The method also returns peers not supporting request IDs yet. This needs to be
+// deleted once we stop serving eth/65 peers. TODO(karalabe).
+func (ps *peerSet) BodyIdlePeersNoReqID() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
 		return atomic.LoadInt32(&p.blockIdle) == 0
 	}
@@ -428,9 +450,12 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
-// ReceiptIdlePeers retrieves a flat list of all the currently receipt-idle peers
-// within the active peer set, ordered by their reputation.
-func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
+// ReceiptIdlePeersNoReqID retrieves a flat list of all the currently receipt-idle
+// peers within the active peer set, ordered by their reputation.
+//
+// The method also returns peers not supporting request IDs yet. This needs to be
+// deleted once we stop serving eth/65 peers. TODO(karalabe).
+func (ps *peerSet) ReceiptIdlePeersNoReqID() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
 		return atomic.LoadInt32(&p.receiptIdle) == 0
 	}
@@ -440,9 +465,12 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
-// NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
+// NodeDataIdlePeersNoReqID retrieves a flat list of all the currently node-data-idle
 // peers within the active peer set, ordered by their reputation.
-func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
+//
+// The method also returns peers not supporting request IDs yet. This needs to be
+// deleted once we stop serving eth/65 peers. TODO(karalabe).
+func (ps *peerSet) NodeDataIdlePeersNoReqID() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
 		return atomic.LoadInt32(&p.stateIdle) == 0
 	}
@@ -477,25 +505,25 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol uint, idleCheck func(*peer
 	// And sort them
 	sortPeers := &peerCapacitySort{idle, tps}
 	sort.Sort(sortPeers)
-	return sortPeers.p, total
+	return sortPeers.peers, total
 }
 
 // peerCapacitySort implements sort.Interface.
 // It sorts peer connections by capacity (descending).
 type peerCapacitySort struct {
-	p  []*peerConnection
-	tp []int
+	peers []*peerConnection
+	caps  []int
 }
 
 func (ps *peerCapacitySort) Len() int {
-	return len(ps.p)
+	return len(ps.peers)
 }
 
 func (ps *peerCapacitySort) Less(i, j int) bool {
-	return ps.tp[i] > ps.tp[j]
+	return ps.caps[i] > ps.caps[j]
 }
 
 func (ps *peerCapacitySort) Swap(i, j int) {
-	ps.p[i], ps.p[j] = ps.p[j], ps.p[i]
-	ps.tp[i], ps.tp[j] = ps.tp[j], ps.tp[i]
+	ps.peers[i], ps.peers[j] = ps.peers[j], ps.peers[i]
+	ps.caps[i], ps.caps[j] = ps.caps[j], ps.caps[i]
 }
