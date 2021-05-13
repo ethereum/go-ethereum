@@ -794,6 +794,7 @@ func TestMultiSyncManyUseless(t *testing.T) {
 	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
+/*
 // TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	// We're setting the timeout to very low, to increase the chance of the timeout
@@ -894,7 +895,7 @@ func TestMultiSyncManyUnresponsive(t *testing.T) {
 	}
 	close(done)
 	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
-}
+}*/
 
 func checkStall(t *testing.T, term func()) chan struct{} {
 	testDone := make(chan struct{})

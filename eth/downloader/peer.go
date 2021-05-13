@@ -32,11 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/msgrate"
 )
 
 const (
-	maxLackingHashes  = 4096 // Maximum number of entries allowed on the list or lacking items
-	measurementImpact = 0.1  // The impact a single measurement has on a peer's final throughput value.
+	maxLackingHashes = 4096 // Maximum number of entries allowed on the list or lacking items
 )
 
 var (
@@ -54,18 +54,12 @@ type peerConnection struct {
 	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
 	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
-	headerThroughput  float64 // Number of headers measured to be retrievable per second
-	blockThroughput   float64 // Number of blocks (bodies) measured to be retrievable per second
-	receiptThroughput float64 // Number of receipts measured to be retrievable per second
-	stateThroughput   float64 // Number of node data pieces measured to be retrievable per second
-
-	rtt time.Duration // Request round trip time to track responsiveness (QoS)
-
 	headerStarted  time.Time // Time instance when the last header fetch was started
 	blockStarted   time.Time // Time instance when the last block (body) fetch was started
 	receiptStarted time.Time // Time instance when the last receipt fetch was started
 	stateStarted   time.Time // Time instance when the last node data fetch was started
 
+	rates   *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
 
 	peer Peer
@@ -132,11 +126,6 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.blockIdle, 0)
 	atomic.StoreInt32(&p.receiptIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
-
-	p.headerThroughput = 0
-	p.blockThroughput = 0
-	p.receiptThroughput = 0
-	p.stateThroughput = 0
 
 	p.lacking = make(map[common.Hash]struct{})
 }
@@ -212,93 +201,72 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
-	p.setIdle(deliveryTime.Sub(p.headerStarted), delivered, &p.headerThroughput, &p.headerIdle)
+	p.rates.Update(eth.BlockHeadersMsg, deliveryTime.Sub(p.headerStarted), delivered)
+	atomic.StoreInt32(&p.headerIdle, 0)
 }
 
 // SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
-	p.setIdle(deliveryTime.Sub(p.blockStarted), delivered, &p.blockThroughput, &p.blockIdle)
+	p.rates.Update(eth.BlockBodiesMsg, deliveryTime.Sub(p.blockStarted), delivered)
+	atomic.StoreInt32(&p.blockIdle, 0)
 }
 
 // SetReceiptsIdle sets the peer to idle, allowing it to execute new receipt
 // retrieval requests. Its estimated receipt retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
-	p.setIdle(deliveryTime.Sub(p.receiptStarted), delivered, &p.receiptThroughput, &p.receiptIdle)
+	p.rates.Update(eth.ReceiptsMsg, deliveryTime.Sub(p.receiptStarted), delivered)
+	atomic.StoreInt32(&p.receiptIdle, 0)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
-	p.setIdle(deliveryTime.Sub(p.stateStarted), delivered, &p.stateThroughput, &p.stateIdle)
-}
-
-// setIdle sets the peer to idle, allowing it to execute new retrieval requests.
-// Its estimated retrieval throughput is updated with that measured just now.
-func (p *peerConnection) setIdle(elapsed time.Duration, delivered int, throughput *float64, idle *int32) {
-	// Irrelevant of the scaling, make sure the peer ends up idle
-	defer atomic.StoreInt32(idle, 0)
-
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	// If nothing was delivered (hard timeout / unavailable data), reduce throughput to minimum
-	if delivered == 0 {
-		*throughput = 0
-		return
-	}
-	// Otherwise update the throughput with a new measurement
-	if elapsed <= 0 {
-		elapsed = 1 // +1 (ns) to ensure non-zero divisor
-	}
-	measured := float64(delivered) / (float64(elapsed) / float64(time.Second))
-
-	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
-	p.rtt = time.Duration((1-measurementImpact)*float64(p.rtt) + measurementImpact*float64(elapsed))
-
-	p.log.Trace("Peer throughput measurements updated",
-		"hps", p.headerThroughput, "bps", p.blockThroughput,
-		"rps", p.receiptThroughput, "sps", p.stateThroughput,
-		"miss", len(p.lacking), "rtt", p.rtt)
+	p.rates.Update(eth.NodeDataMsg, deliveryTime.Sub(p.stateStarted), delivered)
+	atomic.StoreInt32(&p.stateIdle, 0)
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Min(1+math.Max(1, p.headerThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxHeaderFetch)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.BlockHeadersMsg, targetRTT)))
+	if cap > MaxHeaderFetch {
+		cap = MaxHeaderFetch
+	}
+	return cap
 }
 
 // BlockCapacity retrieves the peers block download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Min(1+math.Max(1, p.blockThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxBlockFetch)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.BlockBodiesMsg, targetRTT)))
+	if cap > MaxBlockFetch {
+		cap = MaxBlockFetch
+	}
+	return cap
 }
 
 // ReceiptCapacity retrieves the peers receipt download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Min(1+math.Max(1, p.receiptThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxReceiptFetch)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.ReceiptsMsg, targetRTT)))
+	if cap > MaxReceiptFetch {
+		cap = MaxReceiptFetch
+	}
+	return cap
 }
 
 // NodeDataCapacity retrieves the peers state download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Min(1+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.NodeDataMsg, targetRTT)))
+	if cap > MaxStateFetch {
+		cap = MaxStateFetch
+	}
+	return cap
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
@@ -330,16 +298,20 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 // peerSet represents the collection of active peer participating in the chain
 // download procedure.
 type peerSet struct {
-	peers        map[string]*peerConnection
+	peers map[string]*peerConnection
+	rates *msgrate.Trackers // Set of rate trackers to give the sync a common beat
+
 	newPeerFeed  event.Feed
 	peerDropFeed event.Feed
-	lock         sync.RWMutex
+
+	lock sync.RWMutex
 }
 
 // newPeerSet creates a new peer set top track the active download sources.
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peerConnection),
+		rates: msgrate.NewTrackers(log.New("proto", "eth")),
 	}
 }
 
@@ -371,30 +343,15 @@ func (ps *peerSet) Reset() {
 // average of all existing peers, to give it a realistic chance of being used
 // for data retrievals.
 func (ps *peerSet) Register(p *peerConnection) error {
-	// Retrieve the current median RTT as a sane default
-	p.rtt = ps.medianRTT()
-
 	// Register the new peer with some meaningful defaults
 	ps.lock.Lock()
 	if _, ok := ps.peers[p.id]; ok {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
-	if len(ps.peers) > 0 {
-		p.headerThroughput, p.blockThroughput, p.receiptThroughput, p.stateThroughput = 0, 0, 0, 0
-
-		for _, peer := range ps.peers {
-			peer.lock.RLock()
-			p.headerThroughput += peer.headerThroughput
-			p.blockThroughput += peer.blockThroughput
-			p.receiptThroughput += peer.receiptThroughput
-			p.stateThroughput += peer.stateThroughput
-			peer.lock.RUnlock()
-		}
-		p.headerThroughput /= float64(len(ps.peers))
-		p.blockThroughput /= float64(len(ps.peers))
-		p.receiptThroughput /= float64(len(ps.peers))
-		p.stateThroughput /= float64(len(ps.peers))
+	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.MedianRoundTrip())
+	if err := ps.rates.Track(p.id, p.rates); err != nil {
+		return err
 	}
 	ps.peers[p.id] = p
 	ps.lock.Unlock()
@@ -413,6 +370,7 @@ func (ps *peerSet) Unregister(id string) error {
 		return errNotRegistered
 	}
 	delete(ps.peers, id)
+	ps.rates.Untrack(id)
 	ps.lock.Unlock()
 
 	ps.peerDropFeed.Send(p)
@@ -454,9 +412,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.headerIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.headerThroughput
+		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
@@ -468,9 +424,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.blockIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.blockThroughput
+		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
@@ -482,9 +436,7 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.receiptIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.receiptThroughput
+		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
@@ -496,9 +448,7 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.stateIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.stateThroughput
+		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
@@ -525,37 +475,6 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol uint, idleCheck func(*peer
 	sortPeers := &peerThroughputSort{idle, tps}
 	sort.Sort(sortPeers)
 	return sortPeers.p, total
-}
-
-// medianRTT returns the median RTT of the peerset, considering only the tuning
-// peers if there are more peers available.
-func (ps *peerSet) medianRTT() time.Duration {
-	// Gather all the currently measured round trip times
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	rtts := make([]float64, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		p.lock.RLock()
-		rtts = append(rtts, float64(p.rtt))
-		p.lock.RUnlock()
-	}
-	sort.Float64s(rtts)
-
-	median := rttMaxEstimate
-	if qosTuningPeers <= len(rtts) {
-		median = time.Duration(rtts[qosTuningPeers/2]) // Median of our tuning peers
-	} else if len(rtts) > 0 {
-		median = time.Duration(rtts[len(rtts)/2]) // Median of our connected peers (maintain even like this some baseline qos)
-	}
-	// Restrict the RTT into some QoS defaults, irrelevant of true RTT
-	if median < rttMinEstimate {
-		median = rttMinEstimate
-	}
-	if median > rttMaxEstimate {
-		median = rttMaxEstimate
-	}
-	return median
 }
 
 // peerThroughputSort implements the Sort interface, and allows for

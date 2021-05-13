@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
@@ -51,14 +52,15 @@ var (
 )
 
 const (
-	// maxRequestSize is the maximum number of bytes to request from a remote peer.
-	maxRequestSize = 128 * 1024
+	// minRequestSize is the minimum number of bytes to request from a remote peer.
+	// This number is used as the low cap for account and storage range requests.
+	// Bytecode and trienode are limited inherently by item count (1).
+	minRequestSize = 16 * 1024
 
-	// maxStorageSetRequestCount is the maximum number of contracts to request the
-	// storage of in a single query. If this number is too low, we're not filling
-	// responses fully and waste round trip times. If it's too high, we're capping
-	// responses and waste bandwidth.
-	maxStorageSetRequestCount = maxRequestSize / 1024
+	// maxRequestSize is the maximum number of bytes to request from a remote peer.
+	// This number is used as the high cap for account and storage range requests.
+	// Bytecode and trienode are limited more explicitly by the caps below.
+	maxRequestSize = 2 * 1024 * 1024
 
 	// maxCodeRequestCount is the maximum number of bytecode blobs to request in a
 	// single query. If this number is too low, we're not filling responses fully
@@ -74,7 +76,7 @@ const (
 	// a single query. If this number is too low, we're not filling responses fully
 	// and waste round trip times. If it's too high, we're capping responses and
 	// waste bandwidth.
-	maxTrieRequestCount = 256
+	maxTrieRequestCount = maxRequestSize / 512
 )
 
 var (
@@ -85,10 +87,6 @@ var (
 	// storageConcurrency is the number of chunks to split the a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
-
-	// requestTimeout is the maximum time a peer is allowed to spend on serving
-	// a single network request.
-	requestTimeout = 15 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 )
 
 // ErrCancelled is returned from snap syncing if the operation was prematurely
@@ -105,8 +103,9 @@ var ErrCancelled = errors.New("sync cancelled")
 // is only included to allow the runloop to match a response to the task being
 // synced without having yet another set of maps.
 type accountRequest struct {
-	peer string // Peer to which this request is assigned
-	id   uint64 // Request ID of this request
+	peer string    // Peer to which this request is assigned
+	id   uint64    // Request ID of this request
+	time time.Time // Timestamp when the request was sent
 
 	deliver chan *accountResponse // Channel to deliver successful response on
 	revert  chan *accountRequest  // Channel to deliver request failure on
@@ -142,8 +141,9 @@ type accountResponse struct {
 // is only included to allow the runloop to match a response to the task being
 // synced without having yet another set of maps.
 type bytecodeRequest struct {
-	peer string // Peer to which this request is assigned
-	id   uint64 // Request ID of this request
+	peer string    // Peer to which this request is assigned
+	id   uint64    // Request ID of this request
+	time time.Time // Timestamp when the request was sent
 
 	deliver chan *bytecodeResponse // Channel to deliver successful response on
 	revert  chan *bytecodeRequest  // Channel to deliver request failure on
@@ -173,8 +173,9 @@ type bytecodeResponse struct {
 // is only included to allow the runloop to match a response to the task being
 // synced without having yet another set of maps.
 type storageRequest struct {
-	peer string // Peer to which this request is assigned
-	id   uint64 // Request ID of this request
+	peer string    // Peer to which this request is assigned
+	id   uint64    // Request ID of this request
+	time time.Time // Timestamp when the request was sent
 
 	deliver chan *storageResponse // Channel to deliver successful response on
 	revert  chan *storageRequest  // Channel to deliver request failure on
@@ -218,8 +219,9 @@ type storageResponse struct {
 // is only included to allow the runloop to match a response to the task being
 // synced without having yet another set of maps.
 type trienodeHealRequest struct {
-	peer string // Peer to which this request is assigned
-	id   uint64 // Request ID of this request
+	peer string    // Peer to which this request is assigned
+	id   uint64    // Request ID of this request
+	time time.Time // Timestamp when the request was sent
 
 	deliver chan *trienodeHealResponse // Channel to deliver successful response on
 	revert  chan *trienodeHealRequest  // Channel to deliver request failure on
@@ -252,8 +254,9 @@ type trienodeHealResponse struct {
 // is only included to allow the runloop to match a response to the task being
 // synced without having yet another set of maps.
 type bytecodeHealRequest struct {
-	peer string // Peer to which this request is assigned
-	id   uint64 // Request ID of this request
+	peer string    // Peer to which this request is assigned
+	id   uint64    // Request ID of this request
+	time time.Time // Timestamp when the request was sent
 
 	deliver chan *bytecodeHealResponse // Channel to deliver successful response on
 	revert  chan *bytecodeHealRequest  // Channel to deliver request failure on
@@ -396,6 +399,7 @@ type Syncer struct {
 	peers    map[string]SyncPeer // Currently active peers to download from
 	peerJoin *event.Feed         // Event feed to react to peers joining
 	peerDrop *event.Feed         // Event feed to react to peers dropping
+	rates    *msgrate.Trackers   // Message throughput rates for peers
 
 	// Request tracking during syncing phase
 	statelessPeers map[string]struct{} // Peers that failed to deliver state data
@@ -452,6 +456,7 @@ func NewSyncer(db ethdb.KeyValueStore) *Syncer {
 		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
+		rates:    msgrate.NewTrackers(log.New("proto", "snap")),
 		update:   make(chan struct{}, 1),
 
 		accountIdlers:  make(map[string]struct{}),
@@ -484,6 +489,7 @@ func (s *Syncer) Register(peer SyncPeer) error {
 		return errors.New("already registered")
 	}
 	s.peers[id] = peer
+	s.rates.Track(id, msgrate.NewTracker(s.rates.MeanCapacities(), s.rates.MedianRoundTrip()))
 
 	// Mark the peer as idle, even if no sync is running
 	s.accountIdlers[id] = struct{}{}
@@ -509,6 +515,7 @@ func (s *Syncer) Unregister(id string) error {
 		return errors.New("not registered")
 	}
 	delete(s.peers, id)
+	s.rates.Untrack(id)
 
 	// Remove status markers, even if no sync is running
 	delete(s.statelessPeers, id)
@@ -895,6 +902,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		req := &accountRequest{
 			peer:    idle,
 			id:      reqid,
+			time:    time.Now(),
 			deliver: success,
 			revert:  fail,
 			cancel:  cancel,
@@ -903,8 +911,9 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			limit:   task.Last,
 			task:    task,
 		}
-		req.timeout = time.AfterFunc(requestTimeout, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Account range request timed out", "reqid", reqid)
+			s.rates.Update(idle, AccountRangeMsg, 0, 0)
 			s.scheduleRevertAccountRequest(req)
 		})
 		s.accountReqs[reqid] = req
@@ -915,7 +924,14 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
-			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, maxRequestSize); err != nil {
+			cap := uint64(s.rates.Capacity(idle, AccountRangeMsg, s.rates.TargetRoundTrip()))
+			if cap > maxRequestSize {
+				cap = maxRequestSize
+			}
+			if cap < minRequestSize { // Don't bother with peers below a bare minimum performance
+				cap = minRequestSize
+			}
+			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, cap); err != nil {
 				peer.Log().Debug("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
@@ -976,17 +992,22 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 			break
 		}
 		// Generate the network query and send it to the peer
-		hashes := make([]common.Hash, 0, maxCodeRequestCount)
+		cap := int(s.rates.Capacity(idle, ByteCodesMsg, s.rates.TargetRoundTrip()))
+		if cap > maxCodeRequestCount {
+			cap = maxCodeRequestCount
+		}
+		hashes := make([]common.Hash, 0, cap)
 		for hash := range task.codeTasks {
 			delete(task.codeTasks, hash)
 			hashes = append(hashes, hash)
-			if len(hashes) >= maxCodeRequestCount {
+			if len(hashes) >= cap {
 				break
 			}
 		}
 		req := &bytecodeRequest{
 			peer:    idle,
 			id:      reqid,
+			time:    time.Now(),
 			deliver: success,
 			revert:  fail,
 			cancel:  cancel,
@@ -994,8 +1015,9 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 			hashes:  hashes,
 			task:    task,
 		}
-		req.timeout = time.AfterFunc(requestTimeout, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Bytecode request timed out", "reqid", reqid)
+			s.rates.Update(idle, ByteCodesMsg, 0, 0)
 			s.scheduleRevertBytecodeRequest(req)
 		})
 		s.bytecodeReqs[reqid] = req
@@ -1067,9 +1089,18 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		// Generate the network query and send it to the peer. If there are
 		// large contract tasks pending, complete those before diving into
 		// even more new contracts.
+		cap := uint64(s.rates.Capacity(idle, StorageRangesMsg, s.rates.TargetRoundTrip()))
+		if cap > maxRequestSize {
+			cap = maxRequestSize
+		}
+		if cap < minRequestSize { // Don't bother with peers below a bare minimum performance
+			cap = minRequestSize
+		}
+		storageSets := int(cap / 1024)
+
 		var (
-			accounts = make([]common.Hash, 0, maxStorageSetRequestCount)
-			roots    = make([]common.Hash, 0, maxStorageSetRequestCount)
+			accounts = make([]common.Hash, 0, storageSets)
+			roots    = make([]common.Hash, 0, storageSets)
 			subtask  *storageTask
 		)
 		for account, subtasks := range task.SubTasks {
@@ -1096,7 +1127,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 				accounts = append(accounts, acccount)
 				roots = append(roots, root)
 
-				if len(accounts) >= maxStorageSetRequestCount {
+				if len(accounts) >= storageSets {
 					break
 				}
 			}
@@ -1109,6 +1140,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		req := &storageRequest{
 			peer:     idle,
 			id:       reqid,
+			time:     time.Now(),
 			deliver:  success,
 			revert:   fail,
 			cancel:   cancel,
@@ -1122,8 +1154,9 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			req.origin = subtask.Next
 			req.limit = subtask.Last
 		}
-		req.timeout = time.AfterFunc(requestTimeout, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Storage request timed out", "reqid", reqid)
+			s.rates.Update(idle, StorageRangesMsg, 0, 0)
 			s.scheduleRevertStorageRequest(req)
 		})
 		s.storageReqs[reqid] = req
@@ -1138,7 +1171,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			if subtask != nil {
 				origin, limit = req.origin[:], req.limit[:]
 			}
-			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, maxRequestSize); err != nil {
+			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, cap); err != nil {
 				log.Debug("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
@@ -1214,10 +1247,14 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			break
 		}
 		// Generate the network query and send it to the peer
+		cap := int(s.rates.Capacity(idle, TrieNodesMsg, s.rates.TargetRoundTrip()))
+		if cap > maxTrieRequestCount {
+			cap = maxTrieRequestCount
+		}
 		var (
-			hashes   = make([]common.Hash, 0, maxTrieRequestCount)
-			paths    = make([]trie.SyncPath, 0, maxTrieRequestCount)
-			pathsets = make([]TrieNodePathSet, 0, maxTrieRequestCount)
+			hashes   = make([]common.Hash, 0, cap)
+			paths    = make([]trie.SyncPath, 0, cap)
+			pathsets = make([]TrieNodePathSet, 0, cap)
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)
@@ -1226,13 +1263,14 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			paths = append(paths, pathset)
 			pathsets = append(pathsets, [][]byte(pathset)) // TODO(karalabe): group requests by account hash
 
-			if len(hashes) >= maxTrieRequestCount {
+			if len(hashes) >= cap {
 				break
 			}
 		}
 		req := &trienodeHealRequest{
 			peer:    idle,
 			id:      reqid,
+			time:    time.Now(),
 			deliver: success,
 			revert:  fail,
 			cancel:  cancel,
@@ -1241,8 +1279,9 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			paths:   paths,
 			task:    s.healer,
 		}
-		req.timeout = time.AfterFunc(requestTimeout, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Trienode heal request timed out", "reqid", reqid)
+			s.rates.Update(idle, TrieNodesMsg, 0, 0)
 			s.scheduleRevertTrienodeHealRequest(req)
 		})
 		s.trienodeHealReqs[reqid] = req
@@ -1324,18 +1363,23 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 			break
 		}
 		// Generate the network query and send it to the peer
-		hashes := make([]common.Hash, 0, maxCodeRequestCount)
+		cap := int(s.rates.Capacity(idle, ByteCodesMsg, s.rates.TargetRoundTrip()))
+		if cap > maxCodeRequestCount {
+			cap = maxCodeRequestCount
+		}
+		hashes := make([]common.Hash, 0, cap)
 		for hash := range s.healer.codeTasks {
 			delete(s.healer.codeTasks, hash)
 
 			hashes = append(hashes, hash)
-			if len(hashes) >= maxCodeRequestCount {
+			if len(hashes) >= cap {
 				break
 			}
 		}
 		req := &bytecodeHealRequest{
 			peer:    idle,
 			id:      reqid,
+			time:    time.Now(),
 			deliver: success,
 			revert:  fail,
 			cancel:  cancel,
@@ -1343,8 +1387,9 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 			hashes:  hashes,
 			task:    s.healer,
 		}
-		req.timeout = time.AfterFunc(requestTimeout, func() {
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Bytecode heal request timed out", "reqid", reqid)
+			s.rates.Update(idle, ByteCodesMsg, 0, 0)
 			s.scheduleRevertBytecodeHealRequest(req)
 		})
 		s.bytecodeHealReqs[reqid] = req
@@ -2142,6 +2187,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		return nil
 	}
 	delete(s.accountReqs, id)
+	s.rates.Update(peer.ID(), AccountRangeMsg, time.Since(req.time), int(size))
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
@@ -2253,6 +2299,7 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 		return nil
 	}
 	delete(s.bytecodeReqs, id)
+	s.rates.Update(peer.ID(), ByteCodesMsg, time.Since(req.time), len(bytecodes))
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
@@ -2361,6 +2408,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		return nil
 	}
 	delete(s.storageReqs, id)
+	s.rates.Update(peer.ID(), StorageRangesMsg, time.Since(req.time), int(size))
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
@@ -2487,6 +2535,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 		return nil
 	}
 	delete(s.trienodeHealReqs, id)
+	s.rates.Update(peer.ID(), TrieNodesMsg, time.Since(req.time), len(trienodes))
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
@@ -2603,6 +2652,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 		return nil
 	}
 	s.lock.Unlock()
+	s.rates.Update(peer.ID(), ByteCodesMsg, time.Since(req.time), len(bytecodes))
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
