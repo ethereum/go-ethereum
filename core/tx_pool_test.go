@@ -2072,9 +2072,10 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	//	5.  Send new tx with larger tip and feeCap => accept
 	//	6.  Bump tip max allowed so it's still underpriced => discard
 	//	7.  Bump fee cap max allowed so it's still underpriced => discard
-	//	8.  Bump tip min for acceptance => accept
-	//	9.  Bump feecap min for acceptance => accept
-	//	10. Check events match expected (2 new executable txs during pending, 0 during queue)
+	//	8.  Bump tip min for acceptance => discard
+	//	9.  Bump feecap min for acceptance => discard
+	//	10. Bump feecap and tip min for acceptance => accept
+	//	11. Check events match expected (2 new executable txs during pending, 0 during queue)
 	stages := []string{"pending", "queued"}
 	for _, stage := range stages {
 		// Since state is empty, 0 nonce txs are "executable" and can go
@@ -2124,16 +2125,21 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 		}
 		// 8.  Bump tip min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(tipThreshold), key)
-		if err := pool.AddRemote(tx); err != nil {
-			t.Fatalf("failed to replace original proper %s transaction: %v", stage, err)
+		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 9.  Bump fee cap min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(tip), key)
-		if err := pool.AddRemote(tx); err != nil {
-			t.Fatalf("failed to replace original proper %s transaction: %v", stage, err)
+		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 10. Check events match expected (3 new executable txs during pending, 0 during queue)
-		count = 3
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold), key)
+		if err := pool.AddRemote(tx); err != nil {
+			t.Fatalf("failed to replace original cheap %s transaction: %v", stage, err)
+		}
+		// 11. Check events match expected (3 new executable txs during pending, 0 during queue)
+		count = 2
 		if stage == "queued" {
 			count = 0
 		}
