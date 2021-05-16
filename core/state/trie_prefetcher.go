@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -196,9 +197,9 @@ func (p *triePrefetcher) used(root common.Hash, used [][]byte) {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db   Database    // Database to load trie nodes through
-	root common.Hash // Root hash of the trie to prefetch
-	trie Trie        // Trie being populated with nodes
+	db   Database           // Database to load trie nodes through
+	root common.Hash        // Root hash of the trie to prefetch
+	trie *trie.PrefetchTrie // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -257,7 +258,7 @@ func (sf *subfetcher) peek() Trie {
 		if sf.trie == nil {
 			return nil
 		}
-		return sf.db.CopyTrie(sf.trie)
+		return sf.db.CopyTrie(sf.trie.AsTrie())
 	}
 }
 
@@ -279,7 +280,7 @@ func (sf *subfetcher) loop() {
 	defer close(sf.term)
 
 	// Start by opening the trie and stop processing if it fails
-	trie, err := sf.db.OpenTrie(sf.root)
+	trie, err := trie.NewPrefetch(sf.root, sf.db.TrieDB())
 	if err != nil {
 		log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 		return
@@ -308,7 +309,7 @@ func (sf *subfetcher) loop() {
 
 				case ch := <-sf.copy:
 					// Somebody wants a copy of the current trie, grant them
-					ch <- sf.db.CopyTrie(sf.trie)
+					ch <- sf.db.CopyTrie(sf.trie.AsTrie())
 
 				default:
 					// No termination request yet, prefetch the next entry
@@ -316,7 +317,7 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[taskid]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						sf.trie.TryGetAsync(task)
 						sf.seen[taskid] = struct{}{}
 					}
 				}
@@ -324,7 +325,7 @@ func (sf *subfetcher) loop() {
 
 		case ch := <-sf.copy:
 			// Somebody wants a copy of the current trie, grant them
-			ch <- sf.db.CopyTrie(sf.trie)
+			ch <- sf.db.CopyTrie(sf.trie.AsTrie())
 
 		case <-sf.stop:
 			// Termination is requested, abort and leave remaining tasks
