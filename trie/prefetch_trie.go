@@ -125,7 +125,7 @@ func (t *PrefetchTrie) loop() {
 			}
 			j.ret <- GetReturnType{val, err}
 		default:
-			panic(fmt.Sprintf("Invalid Job"))
+			panic("Invalid Job")
 		}
 
 	}
