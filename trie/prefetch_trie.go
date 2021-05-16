@@ -202,5 +202,8 @@ func (t *PrefetchTrie) Copy() *PrefetchTrie {
 
 // AsTrie returns the trie the prefetch Trie wraps
 func (t *PrefetchTrie) AsTrie() *SecureTrie {
-	return t.trie.Copy()
+	t.rootLock.RLock()
+	trie := t.trie.Copy()
+	t.rootLock.RUnlock()
+	return trie
 }
