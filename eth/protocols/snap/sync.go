@@ -874,7 +874,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Reverse(idlers)
+	sort.Sort(sort.Reverse(idlers))
 
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -971,7 +971,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Reverse(idlers)
+	sort.Sort(sort.Reverse(idlers))
 
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -1074,7 +1074,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Reverse(idlers)
+	sort.Sort(sort.Reverse(idlers))
 
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -1230,7 +1230,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Reverse(idlers)
+	sort.Sort(sort.Reverse(idlers))
 
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.trieTasks) > 0 || s.healer.scheduler.Pending() > 0 {
@@ -1354,7 +1354,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Reverse(idlers)
+	sort.Sort(sort.Reverse(idlers))
 
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.codeTasks) > 0 || s.healer.scheduler.Pending() > 0 {
