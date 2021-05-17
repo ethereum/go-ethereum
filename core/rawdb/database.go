@@ -197,7 +197,11 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
 	if !frdb.readonly {
-		go frdb.freeze(db)
+		frdb.wg.Add(1)
+		go func() {
+			frdb.freeze(db)
+			frdb.wg.Done()
+		}()
 	}
 	return &freezerdb{
 		KeyValueStore: db,
