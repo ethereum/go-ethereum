@@ -226,6 +226,10 @@ type Trackers struct {
 	// run every now and again.
 	tuned time.Time
 
+	// The fields below can be used to override certain default values. Their
+	// purpose is to allow quicker tests. Don't use them in production.
+	OverrideTTLLimit time.Duration
+
 	log  log.Logger
 	lock sync.RWMutex
 }
@@ -233,11 +237,12 @@ type Trackers struct {
 // NewTrackers creates an empty set of trackers to be filled with peers.
 func NewTrackers(log log.Logger) *Trackers {
 	return &Trackers{
-		trackers:   make(map[string]*Tracker),
-		roundtrip:  rttMaxEstimate,
-		confidence: 1,
-		tuned:      time.Now(),
-		log:        log,
+		trackers:         make(map[string]*Tracker),
+		roundtrip:        rttMaxEstimate,
+		confidence:       1,
+		tuned:            time.Now(),
+		OverrideTTLLimit: ttlLimit,
+		log:              log,
 	}
 }
 
@@ -369,8 +374,8 @@ func (t *Trackers) TargetTimeout() time.Duration {
 // during QoS tuning.
 func (t *Trackers) targetTimeout() time.Duration {
 	timeout := time.Duration(ttlScaling * float64(t.roundtrip) / t.confidence)
-	if timeout > ttlLimit {
-		timeout = ttlLimit
+	if timeout > t.OverrideTTLLimit {
+		timeout = t.OverrideTTLLimit
 	}
 	return timeout
 }
