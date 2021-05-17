@@ -257,38 +257,47 @@ func TestTransactionQueue(t *testing.T) {
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
-	tx := transaction(0, 100, key)
+	tx := transaction(1, 100, key)
 	from, _ := deriveSender(tx)
-	pool.currentState.AddBalance(from, big.NewInt(1000))
+	pool.currentState.AddBalance(from, big.NewInt(100000))
 	pool.runReorg(nil, nil)
 
-	entry, err := pool.txToTxEntry(tx)
+	entry1, err := pool.txToTxEntry(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool.addGapped(entry, false)
+	pool.addGapped(entry1, false)
 	if pending, queued := pool.Stats(); pending != 0 || queued != 1 {
 		t.Errorf("expected valid txs to be 1 is %v , pending is %v", queued, pending)
 	}
 
-	tx = transaction(1, 100, key)
+	tx = transaction(2, 21000, key)
 	from, _ = deriveSender(tx)
-	pool.currentState.SetNonce(from, 2)
-	entry, err = pool.txToTxEntry(tx)
+	entry, err := pool.txToTxEntry(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool.add(entry, false)
+	if _, err := pool.add(entry, false); err != nil {
+		t.Fatal(err)
+	}
 
-	/*
-		TODO reenable
-		if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
-			t.Error("expected transaction to be in tx pool")
+	// Request promotion
+	pool.addUngappedTx(0, from)
+
+	var found bool
+	pool.remoteTxs.Delete(func(entry *txEntry) bool {
+		if entry.tx.Nonce() == tx.Nonce() {
+			found = true
 		}
-		if len(pool.queue) > 0 {
-			t.Error("expected transaction queue to be empty. is", len(pool.queue))
-		}
-	*/
+		return false
+	})
+
+	if !found {
+		t.Error("expected transaction to be in tx pool")
+	}
+	if pending, queued := pool.Stats(); pending != 2 || queued != 0 {
+		t.Errorf("expected valid txs to be 2 is %v , queued is %v", pending, queued)
+	}
 }
 
 func TestStateChangeDuringTransactionPoolReset(t *testing.T) {

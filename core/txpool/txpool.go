@@ -169,7 +169,7 @@ func (pool *TxPool) loop() {
 		// Reinsert transactions from now un-gapped accounts
 		case entry := <-pool.ungappedAccountsCh:
 			// TODO properly lock the pool
-			pool.addUngappedTx(entry)
+			pool.addUngappedTx(entry.tx.Nonce(), entry.sender)
 		// prune in memory transactions to disk
 		case <-pool.pruneCh:
 			txs := pool.remoteTxs.Prune()
@@ -346,6 +346,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	pool.addTxsLocked(reinject, false)
+
+	// TODO maybe we need to remove txs from the txLists?
 
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
@@ -656,21 +658,21 @@ func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
 		panic("not implemented")
 	}
 	// TODO schedule the pool to add the ungapped transactions (and wait for them if sync is true)
-	return pool.addUngappedTx(tx)
+	return pool.addUngappedTx(tx.tx.Nonce(), tx.sender)
 }
 
-func (pool *TxPool) addUngappedTx(tx *txEntry) error {
+func (pool *TxPool) addUngappedTx(nonce uint64, sender common.Address) error {
 	// TODO move this to the background thread
-	wantedNonce := tx.tx.Nonce() + 1
+	wantedNonce := nonce + 1
 	for {
-		nonce, err := pool.gappedTxs[tx.sender].LowestNonce()
+		nonce, err := pool.gappedTxs[sender].LowestNonce()
 		if err != nil || nonce != wantedNonce {
 			// no more gapped tx to add
-			pool.pendingNonces.set(tx.sender, wantedNonce)
+			pool.pendingNonces.set(sender, wantedNonce)
 			return nil
 		}
 		// found a gapped transaction that now becomes executable.
-		toAdd := pool.gappedTxs[tx.sender].Pop()
+		toAdd := pool.gappedTxs[sender].Pop()
 		pool.remoteTxs.Add(toAdd)
 		pool.all.Add(toAdd.tx, false)
 		wantedNonce = wantedNonce + 1
