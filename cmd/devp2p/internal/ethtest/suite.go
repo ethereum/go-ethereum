@@ -457,8 +457,6 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	if err := s.sendNextBlock(false); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }
 
 // TestBroadcast66 tests whether a block announcement is correctly
