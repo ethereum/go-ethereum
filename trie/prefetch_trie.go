@@ -3,7 +3,6 @@ package trie
 import (
 	"bytes"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -42,22 +41,17 @@ type prefetchJobWrapper struct {
 // PrefetchTrie allows you to fetch nodes into the DB layer
 // Or to start to build a Trie async as the nodes are fetched
 type PrefetchTrie struct {
-	trie     SecureTrie
-	jobs     chan prefetchJobWrapper
-	rootLock *sync.RWMutex
+	trie SecureTrie
+	jobs chan prefetchJobWrapper
 }
 
 func (t *PrefetchTrie) getRoot() node {
-	t.rootLock.RLock()
 	node := t.trie.trie.root
-	t.rootLock.RUnlock()
 	return node
 }
 
 func (t *PrefetchTrie) setRoot(newroot node) {
-	t.rootLock.Lock()
 	t.trie.trie.root = newroot
-	t.rootLock.Unlock()
 }
 
 // NewPrefetch intializes an PrefetchTrie
@@ -75,8 +69,6 @@ func NewPrefetch(root common.Hash, db *Database) (*PrefetchTrie, error) {
 		trie: *trie,
 
 		jobs: make(chan prefetchJobWrapper, 2048),
-
-		rootLock: &sync.RWMutex{},
 	}
 
 	if root != (common.Hash{}) && root != emptyRoot {
@@ -196,14 +188,10 @@ func (t *PrefetchTrie) resolveHash(hash common.Hash, prefix []byte) (node, error
 // Copy returns a copy of PrefetchTrie.
 func (t *PrefetchTrie) Copy() *PrefetchTrie {
 	cpy := *t
-	cpy.rootLock = &sync.RWMutex{}
 	return &cpy
 }
 
 // AsTrie returns the trie the prefetch Trie wraps
 func (t *PrefetchTrie) AsTrie() *SecureTrie {
-	t.rootLock.RLock()
-	trie := t.trie.Copy()
-	t.rootLock.RUnlock()
-	return trie
+	return t.trie.Copy()
 }
