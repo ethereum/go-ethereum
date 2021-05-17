@@ -69,9 +69,8 @@ var GoerliBootnodes = []string{
 
 // BaikalBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Baikal ephemeral test network.
-// TODO: Set Baikal bootnodes
 var BaikalBootnodes = []string{
-	"",
+	"enode://9e1096aa59862a6f164994cb5cb16f5124d6c992cdbf4535ff7dea43ea1512afe5448dca9df1b7ab0726129603f1a3336b631e4d7a1a44c94daddd03241587f9@3.9.20.133:30303",
 }
 
 var V5Bootnodes = []string{
