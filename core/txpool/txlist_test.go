@@ -76,9 +76,9 @@ func TestTxList(t *testing.T) {
 	}
 	printTxList(txlist)
 	// Retrieve last entry
-	last := txlist.LastEntry()
-	if last.tx != txs[3].tx {
-		t.Fatalf("LastEntry returned false entry %v, want %v", last.tx.Nonce(), txs[3].tx.Nonce())
+	last := txlist.LowestEntry()
+	if last.tx != txs[2].tx {
+		t.Fatalf("LowestEntry returned false entry %v, want %v", last.tx.Nonce(), txs[2].tx.Nonce())
 	}
 	// Delete second transactions
 	entry := txlist.Delete(func(e *txEntry) bool {
@@ -111,7 +111,7 @@ func TestTxList(t *testing.T) {
 	key2, _ := crypto.GenerateKey()
 	txs2 := []*txEntry{
 		createTxEntry(0, 12, big.NewInt(1000), key2),
-		createTxEntry(0, 12, big.NewInt(1), key2),
+		createTxEntry(1, 12, big.NewInt(1), key2),
 	}
 	for _, tx := range txs2 {
 		if txlist.Add(tx) {
@@ -140,6 +140,30 @@ func TestTxList(t *testing.T) {
 	}
 	if peeked[4] != txs2[1].tx {
 		t.Fatalf("Wrong tx retrieved got %v, want %v", peeked[4].Nonce(), txs2[1].tx.Nonce())
+	}
+}
+
+func TestTxListBadOrdering(t *testing.T) {
+	// We're adding the following txs ({Sender,Nonce,GasPrice})
+	// {A,0,3}, {A,1,2}, {B,2,1}
+	// and then {B,3,4} which should be the last one
+	txlist := newTxList(10)
+	keyA, _ := crypto.GenerateKey()
+	keyB, _ := crypto.GenerateKey()
+	txs := []*txEntry{
+		createTxEntry(0, 12, big.NewInt(3), keyA),
+		createTxEntry(1, 13, big.NewInt(2), keyA),
+		createTxEntry(2, 12, big.NewInt(1), keyB),
+		createTxEntry(3, 12, big.NewInt(4), keyB),
+	}
+	for _, tx := range txs {
+		txlist.Add(tx)
+	}
+	peeked := txlist.Peek(5)
+	for i := 0; i < len(peeked); i++ {
+		if peeked[i] != txs[i].tx {
+			t.Fatalf("Wrong tx retrieved got %v, want %v", peeked[i].Nonce(), txs[i].tx.Nonce())
+		}
 	}
 }
 

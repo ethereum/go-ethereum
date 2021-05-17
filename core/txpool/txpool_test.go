@@ -251,6 +251,88 @@ func TestTransactionReplacement(t *testing.T) {
 	}
 }
 
+func TestTransactionQueue(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := transaction(0, 100, key)
+	from, _ := deriveSender(tx)
+	pool.currentState.AddBalance(from, big.NewInt(1000))
+	pool.runReorg(nil, nil)
+
+	entry, err := pool.txToTxEntry(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.addGapped(entry, false)
+	if pending, queued := pool.Stats(); pending != 0 || queued != 1 {
+		t.Errorf("expected valid txs to be 1 is %v , pending is %v", queued, pending)
+	}
+
+	tx = transaction(1, 100, key)
+	from, _ = deriveSender(tx)
+	pool.currentState.SetNonce(from, 2)
+	entry, err = pool.txToTxEntry(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.add(entry, false)
+
+	/*
+		TODO reenable
+		if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
+			t.Error("expected transaction to be in tx pool")
+		}
+		if len(pool.queue) > 0 {
+			t.Error("expected transaction queue to be empty. is", len(pool.queue))
+		}
+	*/
+}
+
+func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
+	t.Parallel()
+
+	var (
+		key, _     = crypto.GenerateKey()
+		address    = crypto.PubkeyToAddress(key.PublicKey)
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		trigger    = false
+	)
+
+	// setup pool with 2 transaction in it
+	statedb.SetBalance(address, new(big.Int).SetUint64(params.Ether))
+	blockchain := &testChain{&testBlockChain{statedb, 1000000000, new(event.Feed)}, address, &trigger}
+
+	tx0 := transaction(0, 100000, key)
+	tx1 := transaction(1, 100000, key)
+
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	nonce := pool.Nonce(address)
+	if nonce != 0 {
+		t.Fatalf("Invalid nonce, want 0, got %d", nonce)
+	}
+
+	pool.AddRemotesSync([]*types.Transaction{tx0, tx1})
+
+	nonce = pool.Nonce(address)
+	if nonce != 2 {
+		t.Fatalf("Invalid nonce, want 2, got %d", nonce)
+	}
+
+	// trigger state change in the background
+	trigger = true
+	pool.runReorg(nil, nil)
+
+	nonce = pool.Nonce(address)
+	if nonce != 2 {
+		t.Fatalf("Invalid nonce, want 2, got %d", nonce)
+	}
+}
+
 // validateTxPoolInternals checks various consistency invariants within the pool.
 func validateTxPoolInternals(pool *TxPool) error {
 	pool.mu.RLock()
@@ -313,4 +395,28 @@ func validateEvents(events chan core.NewTxsEvent, count int) error {
 
 func deriveSender(tx *types.Transaction) (common.Address, error) {
 	return types.Sender(types.HomesteadSigner{}, tx)
+}
+
+type testChain struct {
+	*testBlockChain
+	address common.Address
+	trigger *bool
+}
+
+// testChain.State() is used multiple times to reset the pending state.
+// when simulate is true it will create a state that indicates
+// that tx0 and tx1 are included in the chain.
+func (c *testChain) State() (*state.StateDB, error) {
+	// delay "state change" by one. The tx pool fetches the
+	// state multiple times and by delaying it a bit we simulate
+	// a state change between those fetches.
+	stdb := c.statedb
+	if *c.trigger {
+		c.statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		// simulate that the new head block included tx0 and tx1
+		c.statedb.SetNonce(c.address, 2)
+		c.statedb.SetBalance(c.address, new(big.Int).SetUint64(params.Ether))
+		*c.trigger = false
+	}
+	return stdb, nil
 }

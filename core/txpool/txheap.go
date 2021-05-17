@@ -62,7 +62,21 @@ func (m *txHeap) Get(nonce uint64) *txEntry {
 }
 
 func (m *txHeap) Remove(nonce uint64) *txEntry {
-	panic("not implemented")
+	// Short circuit if no transaction is present
+	_, ok := m.items[nonce]
+	if !ok {
+		return nil
+	}
+	// Otherwise delete the transaction and fix the heap index
+	for i := 0; i < m.index.Len(); i++ {
+		if (*m.index)[i] == nonce {
+			heap.Remove(m.index, i)
+			break
+		}
+	}
+	item := m.items[nonce]
+	delete(m.items, nonce)
+	return item
 }
 
 func (m *txHeap) Len() int {

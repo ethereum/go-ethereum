@@ -220,6 +220,40 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subsc
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+func (pool *TxPool) runReorg(oldHead, newHead *types.Header) {
+	pool.reset(oldHead, newHead)
+
+	// Demote unexecutables
+	maxNonces := make(map[common.Address]uint64)
+	for i := 0; i < pool.remoteTxs.Len(); i++ {
+		// Remove all txs with low nonces
+		if e := pool.remoteTxs.Delete(func(e *txEntry) bool {
+			nonce := pool.pendingNonces.get(e.sender)
+			if e.tx.Nonce() < nonce {
+				return true
+			}
+			// update the max nonces
+			if maxNonces[e.sender] < e.tx.Nonce() {
+				maxNonces[e.sender] = e.tx.Nonce()
+			}
+			return false
+		}); e == nil {
+			// Found all unexecutables
+			break
+		} else {
+			// Remove tx from pool
+			pool.all.Remove(e.tx.Hash())
+		}
+	}
+
+	// Update pending nonces
+	for addr, nonce := range maxNonces {
+		pool.pendingNonces.set(addr, nonce+1)
+	}
+
+	// TODO maybe truncate here
+}
+
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
@@ -306,8 +340,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		return
 	}
 	pool.currentState = statedb
-	pool.pendingNonces = newTxNoncer(statedb)
 	pool.config.maxGasPerBlock = newHead.GasLimit
+	pool.pendingNonces = newTxNoncer(statedb)
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -339,7 +373,8 @@ func (pool *TxPool) Stats() (int, int) {
 	for _, h := range pool.gappedTxs {
 		queued += h.Len()
 	}
-	return pool.all.Count(), queued
+	// TODO does not take pending local transactions into account
+	return pool.remoteTxs.Len() + pool.localTxs.Len(), queued
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
@@ -562,7 +597,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 	}
 	// If the tx pays less than what we have in memory
 	// we can directly replace it on disk.
-	if pool.remoteTxs.Len() > pool.config.MaxTxCount && tx.Less(pool.remoteTxs.LastEntry()) {
+	if pool.remoteTxs.Len() > pool.config.MaxTxCount && tx.Less(pool.remoteTxs.LowestEntry()) {
 		// TODO write directly to disk
 	}
 	replaced := false
@@ -598,6 +633,9 @@ func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
 		if !ableToReplace(tx, old, pool.config.PriceBump) {
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
 			return core.ErrReplaceUnderpriced
+		} else {
+			pool.all.Remove(old.tx.Hash())
+			pool.gappedTxs[tx.sender].Remove(old.tx.Nonce())
 		}
 	}
 	pool.gappedTxs[tx.sender].Put(tx)

@@ -19,6 +19,7 @@ package txpool
 import (
 	"crypto/ecdsa"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +33,12 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var testTxPoolConfig = TxPoolConfig{minGasPrice: big.NewInt(1), MaxTxCount: 1000, pendingBlockSize: 16}
+var testTxPoolConfig = TxPoolConfig{
+	minGasPrice:      big.NewInt(1),
+	MaxTxCount:       1000,
+	pendingBlockSize: 16,
+	dbPath:           os.TempDir() + "/geth-test",
+}
 
 type testBlockChain struct {
 	statedb       *state.StateDB
