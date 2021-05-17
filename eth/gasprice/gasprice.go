@@ -194,8 +194,6 @@ type SortableTxs interface {
 
 type transactionsByGasPrice []*types.Transaction
 
-func makeTxsByGasPrice(txs []*types.Transaction) SortableTxs { return transactionsByGasPrice(txs) }
-
 func (t transactionsByGasPrice) Len() int                                { return len(t) }
 func (t transactionsByGasPrice) Swap(i, j int)                           { t[i], t[j] = t[j], t[i] }
 func (t transactionsByGasPrice) Less(i, j int) bool                      { return t[i].GasPriceCmp(t[j]) < 0 }
@@ -203,8 +201,6 @@ func (t transactionsByGasPrice) GasPrice(i int) *big.Int                 { retur
 func (t transactionsByGasPrice) EffectiveTip(i int, b *big.Int) *big.Int { return nil }
 
 type transactionsByTip []*types.Transaction
-
-func makeTxsByTip(txs []*types.Transaction) SortableTxs { return transactionsByGasPrice(txs) }
 
 func (t transactionsByTip) Len() int                { return len(t) }
 func (t transactionsByTip) Swap(i, j int)           { t[i], t[j] = t[j], t[i] }

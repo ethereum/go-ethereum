@@ -75,13 +75,6 @@ func (arg *TransactionArgs) data() []byte {
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
-		if args.FeeCap == nil {
-			feeCap, err := b.SuggestFeeCap(ctx)
-			if err != nil {
-				return err
-			}
-			args.FeeCap = (*hexutil.Big)(feeCap)
-		}
 		if args.Tip == nil {
 			tip, err := b.SuggestTip(ctx)
 			if err != nil {
@@ -89,6 +82,15 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			}
 			args.Tip = (*hexutil.Big)(tip)
 		}
+		if args.FeeCap == nil {
+			feeCap, err := b.SuggestFeeCap(ctx)
+			if err != nil {
+				return err
+			}
+			args.FeeCap = (*hexutil.Big)(feeCap)
+		}
+		// Don't let tip exceed feeCap.
+		args.FeeCap = (*hexutil.Big)(math.BigMax(args.FeeCap.ToInt(), args.Tip.ToInt()))
 	} else {
 		if args.GasPrice == nil {
 			price, err := b.SuggestPrice(ctx)
