@@ -138,6 +138,10 @@ type (
 		address *common.Address
 		slot    *common.Hash
 	}
+	accessListAddChunkChange struct {
+		address *common.Address
+		chunk   uint16
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -265,5 +269,14 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 }
 
 func (ch accessListAddSlotChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListAddChunkChange) revert(s *StateDB) {
+	// TODO implement this
+	//s.accessList.DeleteSlot(*ch.address, *ch.slot)
+}
+
+func (ch accessListAddChunkChange) dirtied() *common.Address {
 	return nil
 }

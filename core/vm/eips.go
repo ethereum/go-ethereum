@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -25,6 +26,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	9999: enable9999,
 	3529: enable3529,
 	2929: enable2929,
 	2200: enable2200,
@@ -153,4 +155,83 @@ func enable2929(jt *JumpTable) {
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
+}
+
+func enable9999(jt *JumpTable) {
+	jt[CODECOPY].dynamicGas = eip9999CodeCopyCost
+	jt[EXTCODECOPY].dynamicGas = eip9999ExtCodeCopyCost
+}
+
+func eip9999CodeCopyCost(evm *EVM, contract *Contract, stack *Stack, memory *Memory, u uint64) (uint64, error) {
+	oldCost, err := gasCodeCopy(evm, contract, stack, memory, u)
+	if err != nil {
+		return oldCost, err
+	}
+	codeOffset := stack.Back(1)
+	length := stack.Back(2)
+	if length.IsZero() {
+		return oldCost, nil
+	}
+	codeSize := uint64(len(contract.Code))
+	if !codeOffset.LtUint64(codeSize) {
+		return oldCost, nil // No additional cost
+	}
+	firstChunk := uint256.NewInt(31)
+	firstChunk = firstChunk.Div(codeOffset, firstChunk)
+
+	lastChunk := codeOffset.Clone()
+	lastChunk.Add(lastChunk, length)
+	if !lastChunk.LtUint64(codeSize) {
+		lastChunk.SetUint64(codeSize) // Some additional cost
+	}
+	lastChunk = lastChunk.Div(lastChunk, uint256.NewInt(31))
+
+	addr := contract.Address()
+	var chunkCost uint64
+	for chunk := uint16(firstChunk.Uint64()); chunk <= uint16(lastChunk.Uint64()); chunk++ {
+		if evm.StateDB.AddCodeChunkToAccessList(addr, chunk) {
+			// Need to add to cost
+			chunkCost += 350
+		}
+	}
+	return oldCost + chunkCost, nil
+}
+
+func eip9999ExtCodeCopyCost(evm *EVM, contract *Contract, stack *Stack, memory *Memory, u uint64) (uint64, error) {
+	oldCost, err := gasExtCodeCopy(evm, contract, stack, memory, u)
+	if err != nil {
+		return oldCost, err
+	}
+	addr := common.Address(stack.Back(0).Bytes20())
+	codeOffset := stack.Back(2)
+	length := stack.Back(3)
+	if length.IsZero() {
+		return oldCost, nil
+	}
+	// This is a bit ugly. We need to actually load the code in order to know the size
+	// of it.
+	code := evm.StateDB.GetCode(addr)
+	codeSize := uint64(len(code))
+	if !codeOffset.LtUint64(codeSize) {
+		return oldCost, nil // No additional cost
+	}
+	firstChunk := uint256.NewInt(31)
+	firstChunk = firstChunk.Div(codeOffset, firstChunk)
+
+	lastChunk :=  codeOffset.Clone()
+	lastChunk.Add(lastChunk, length)
+	if !lastChunk.LtUint64(codeSize) {
+		lastChunk.SetUint64(codeSize) // Some additional cost
+	}
+	lastChunk = lastChunk.Div(lastChunk, uint256.NewInt(31))
+
+	var chunkCost uint64
+	// Both first and last are now guaranteed to be <uint64Max
+	for chunk := uint16(firstChunk.Uint64()); chunk <= uint16(lastChunk.Uint64()); chunk++ {
+		if evm.StateDB.AddCodeChunkToAccessList(addr, chunk) {
+			// Need to add to cost
+			chunkCost += 350
+		}
+	}
+	return oldCost + chunkCost, nil
 }

@@ -23,6 +23,7 @@ import (
 type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
+	codes     map[common.Address]*bitvec
 }
 
 // ContainsAddress returns true if the address is in the access list.
@@ -133,4 +134,40 @@ func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 // operations.
 func (al *accessList) DeleteAddress(address common.Address) {
 	delete(al.addresses, address)
+}
+
+// AddCodeChunk adds a chunk of code as 'visited'.
+// returns 'true' if the operation caused a change (chunk was not previously accessed).
+func (al *accessList) AddCodeChunk(address common.Address, chunk uint16) bool {
+	chunkMap, ok := al.codes[address]
+	if !ok {
+		al.codes = make(map[common.Address]*bitvec)
+		chunkMap = new(bitvec)
+		chunkMap.set(chunk)
+		al.codes[address] = chunkMap
+		return true
+	}
+	visited := chunkMap.visited(chunk)
+	chunkMap.set(chunk)
+	return visited
+}
+
+// bitvec is a bit vector which maps chunks in a program.
+// An unset bit means the chunk has not been visited.
+// Since code is limited to  0x6000 (24576), and chunk size is 31, it means
+// the 'chunk' should never exceed '792', and the number of bytes needed
+// to represent any code is limited to `792 // 8 = 99` bytes
+type bitvec [99]byte
+
+func (bits *bitvec) set(pos uint16) {
+	(*bits)[pos/8] |= 0x80 >> (pos % 8)
+}
+func (bits *bitvec) set8(pos uint16) {
+	(*bits)[pos/8] |= 0xFF >> (pos % 8)
+	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))
+}
+
+// visited checks if the position is set.
+func (bits *bitvec) visited(pos uint16) bool {
+	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }

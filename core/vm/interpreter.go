@@ -173,8 +173,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
-		pc   = uint64(0) // program counter
-		cost uint64
+		pc = uint64(0) // program counter
+		// chunk counter starts at 0xffff, so the first pc is detected and charged
+		chunk = uint16(0xffff)
+		codeChunkingActivated = true
+		cost  uint64
 		// copies used by tracer
 		pcCopy  uint64 // needed for the deferred Tracer
 		gasCopy uint64 // for Tracer to log gas remaining before execution
@@ -228,6 +231,20 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
+
+		cost = 0
+		if curChunk := uint16(pc / 31); codeChunkingActivated && curChunk != chunk {
+			// Crossed to a new chunk here. Add cost if it hasn't already been
+			// accessed
+			if in.evm.StateDB.AddCodeChunkToAccessList(callContext.Contract.Address(), curChunk) {
+				// Need to add to cost
+				cost = 350
+				if !contract.UseGas(350) {
+					return nil, ErrOutOfGas
+				}
+			}
+			chunk = curChunk
+		}
 		// If the operation is valid, enforce write restrictions
 		if in.readOnly && in.evm.chainRules.IsByzantium {
 			// If the interpreter is operating in readonly mode, make sure no
@@ -240,7 +257,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 		// Static portion of gas
-		cost = operation.constantGas // For tracing
+		cost += operation.constantGas // For tracing
 		if !contract.UseGas(operation.constantGas) {
 			return nil, ErrOutOfGas
 		}
@@ -275,7 +292,21 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
-
+		if codeChunkingActivated &&  op >= PUSH1 && op <= PUSH32 {
+			firstChunk := uint16((pc + 1) / 31)
+			lastChunk := uint16((pc + 1 + uint64(op - PUSH1)) / 31)
+			var pushdataCost uint64
+			for i := firstChunk; i <= lastChunk; i++ {
+				if in.evm.StateDB.AddCodeChunkToAccessList(contract.Address(), i) {
+					// Need to add to cost
+					pushdataCost += 350
+				}
+			}
+			if !contract.UseGas(pushdataCost) {
+				return nil, ErrOutOfGas
+			}
+			cost += pushdataCost
+		}
 		if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
