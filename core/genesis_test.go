@@ -162,3 +162,38 @@ func TestSetupGenesis(t *testing.T) {
 		}
 	}
 }
+
+// TestGenesisHashes checks the congruity of default genesis data to corresponding hardcoded genesis hash values.
+func TestGenesisHashes(t *testing.T) {
+	cases := []struct {
+		genesis *Genesis
+		hash    common.Hash
+	}{
+		{
+			genesis: DefaultGenesisBlock(),
+			hash:    params.MainnetGenesisHash,
+		},
+		{
+			genesis: DefaultGoerliGenesisBlock(),
+			hash:    params.GoerliGenesisHash,
+		},
+		{
+			genesis: DefaultRopstenGenesisBlock(),
+			hash:    params.RopstenGenesisHash,
+		},
+		{
+			genesis: DefaultRinkebyGenesisBlock(),
+			hash:    params.RinkebyGenesisHash,
+		},
+		{
+			genesis: DefaultBaikalGenesisBlock(),
+			hash:    params.BaikalGenesisHash,
+		},
+	}
+	for i, c := range cases {
+		b := c.genesis.MustCommit(rawdb.NewMemoryDatabase())
+		if got := b.Hash(); got != c.hash {
+			t.Errorf("case: %d, want: %s, got: %s", i, c.hash.Hex(), got.Hex())
+		}
+	}
+}

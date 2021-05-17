@@ -120,6 +120,14 @@ type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
 
 func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
+type GetPooledTransactions eth.GetPooledTransactionsPacket
+
+func (gpt GetPooledTransactions) Code() int { return 25 }
+
+type PooledTransactions eth.PooledTransactionsPacket
+
+func (pt PooledTransactions) Code() int { return 26 }
+
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
@@ -163,6 +171,10 @@ func (c *Conn) Read() Message {
 		msg = new(Transactions)
 	case (NewPooledTransactionHashes{}).Code():
 		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		msg = new(GetPooledTransactions)
+	case (PooledTransactions{}.Code()):
+		msg = new(PooledTransactions)
 	default:
 		return errorf("invalid message code: %d", code)
 	}
@@ -178,8 +190,7 @@ func (c *Conn) Read() Message {
 func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
 	for time.Since(start) < timeout {
-		timeout := time.Now().Add(10 * time.Second)
-		c.SetReadDeadline(timeout)
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
 		switch msg := c.Read().(type) {
 		case *Ping:
 			c.Write(&Pong{})
@@ -323,8 +334,11 @@ loop:
 func (c *Conn) waitForBlock(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
@@ -332,8 +346,10 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 		}
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
-			if len(*msg) > 0 {
-				return nil
+			for _, header := range *msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
 		default:

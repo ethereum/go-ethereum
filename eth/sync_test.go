@@ -28,8 +28,8 @@ import (
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.
-func TestFastSyncDisabling64(t *testing.T) { testFastSyncDisabling(t, 64) }
-func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, 65) }
+func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, eth.ETH65) }
+func TestFastSyncDisabling66(t *testing.T) { testFastSyncDisabling(t, eth.ETH66) }
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
