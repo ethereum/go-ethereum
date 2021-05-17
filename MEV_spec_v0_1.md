@@ -78,7 +78,7 @@ The `maxTimestamp` value `MUST` be greater or equal the `minTimestamp` value.
 
 ### Accepting bundles from the network
 
-Node `MUST` provide a way of exposing a JSON RPC endpoint accepting `eth_sendBundle` calls (specified [here](https://hackmd.io/kbW7uxzqS_6Bi2xi9VI2ww)). Such endpoint `SHOULD` only be accepting calls from `MEV-relay` but there is no requirement to restrict it through the node source code as it can be done on the infrastructure level.
+Node `MUST` provide a way of exposing a JSON RPC endpoint accepting `eth_sendBundle` calls (specified [here](MEV_spec_RPC_v0_1.md)). Such endpoint `SHOULD` only be accepting calls from `MEV-relay` but there is no requirement to restrict it through the node source code as it can be done on the infrastructure level.
 
 ### Bundle eligibility
 

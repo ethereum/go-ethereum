@@ -6,26 +6,11 @@ Flashbots is a research and development organization formed to mitigate the nega
 
 ## Quick start
 
-<<<<<<< HEAD
-
-## Building the source
-
-For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/install-and-build/installing-geth).
-
-Building `geth` requires both a Go (version 1.14 or later) and a C compiler. You can install
-them using your favourite package manager. Once the dependencies are installed, run
-
-```shell
-=======
 ```
-
 git clone https://github.com/flashbots/mev-geth
 cd mev-geth
-
-> > > > > > > dfdcfc666 (Add infra/CI and update README)
-> > > > > > > make geth
-
-````
+make geth
+```
 
 See [here](https://geth.ethereum.org/docs/install-and-build/installing-geth#build-go-ethereum-from-source-code) for further info on building MEV-geth from source.
 
@@ -42,20 +27,7 @@ We have designed and implemented a proof of concept for permissionless MEV extra
 | Complete privacy     | ❌  |     ❌      |    ❌    |
 | Finality             | ❌  |     ❌      |    ❌    |
 
-<<<<<<< HEAD
-|    Command    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| :-----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  **`geth`**   | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI page](https://geth.ethereum.org/docs/interface/command-line-options) for command line options.          |
-|   `clef`    | Stand-alone signing tool, which can be used as a backend signer for `geth`.  |
-|   `devp2p`    | Utilities to interact with nodes on the networking layer, without running a full blockchain. |
-|   `abigen`    | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://geth.ethereum.org/docs/dapp/native-bindings) page for details. |
-|  `bootnode`   | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                                                 |
-|     `evm`     | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                                                     |
-|   `rlpdump`   | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://eth.wiki/en/fundamentals/rlp)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                                                                 |
-|   `puppeth`   | a CLI wizard that aids in creating a new Ethereum network.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-=======
 ### Why MEV-Geth?
->>>>>>> dfdcfc666 (Add infra/CI and update README)
 
 We believe that without the adoption of neutral, public, open-source infrastructure for permissionless MEV extraction, MEV risks becoming an insiders' game. We commit as an organization to releasing reference implementations for participation in fair, ethical, and politically neutral MEV extraction. By doing so, we hope to prevent the properties of Ethereum from being eroded by trust-based dark pools or proprietary channels which are key points of security weakness. We thus release MEV-Geth with the dual goal of creating an ecosystem for MEV extraction that preserves Ethereum properties, as well as starting conversations with the community around our research and development roadmap.
 
@@ -78,35 +50,7 @@ The MEV-Geth proof of concept relies on the fact that searchers can withhold bid
 
 The MEV-Geth proof of concept does not provide any finality guarantees. We expect the solution to this problem to require post-trade execution privacy through private chain state or strong economic infeasibility. The design of a system with strong finality is the second core objective of the MEV-Geth research effort.
 
-<<<<<<< HEAD
-This command will:
- * Start `geth` in fast sync mode (default, can be changed with the `--syncmode` flag),
-   causing it to download more data in exchange for avoiding processing the entire history
-   of the Ethereum network, which is very CPU intensive.
- * Start up `geth`'s built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://web3js.readthedocs.io/en/)
-   (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
-   as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/rpc/server).
-   This tool is optional and if you leave it out you can always attach to an already running
-   `geth` instance with `geth attach`.
-
-### A Full node on the Görli test network
-
-Transitioning towards developers, if you'd like to play around with creating Ethereum
-contracts, you almost certainly would like to do that without any real money involved until
-you get the hang of the entire system. In other words, instead of attaching to the main
-network, you want to join the **test** network with your node, which is fully equivalent to
-the main network, but with play-Ether only.
-
-```shell
-$ geth --goerli console
-````
-
-=======
-
 ### How it works
-
-> > > > > > > dfdcfc666 (Add infra/CI and update README)
 
 MEV-Geth introduces the concepts of "searchers", "transaction bundles", and "block template" to Ethereum. Effectively, MEV-Geth provides a way for miners to delegate the task of finding and ordering transactions to third parties called "searchers". These searchers compete with each other to find the most profitable ordering and bid for its inclusion in the next block using a standardized template called a "transaction bundle". These bundles are evaluated in a sealed-bid auction hosted by miners to produce a "block template" which holds the [information about transaction order required to begin mining](https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture).
 
@@ -186,7 +130,7 @@ You do _not_ need to run MEV-Geth as a searcher, but, instead, to monitor the Et
 
 An MEV-Geth bundle is a standard message template composed of an array of valid ethereum transactions, a blockheight, and an optional timestamp range over which the bundle is valid.
 
-```json
+```jsonld
 {
     "signedTransactions": ['...'], // RLP encoded signed transaction array
     "blocknumber": "0x386526", // hex string
