@@ -688,3 +688,140 @@ func TestColdAccountAccessCost(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeChunking(t *testing.T) {
+	id := 1
+	prettyPrint := func(comment string, code []byte) {
+
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+		fmt.Printf("### Case %d\n\n", id)
+		id++
+		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
+			comment,
+			code, ops)
+		Execute(code, nil, &Config{
+			EVMConfig: vm.Config{
+				Debug:     true,
+				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				ExtraEips: []int{9999},
+			},
+		})
+	}
+
+	{ // Code which just walks from chunk 0 to chunk 1
+		code := []byte{
+			// Three checks against a precompile
+			byte(vm.PUSH1), 1, byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP), byte(vm.DUP1), byte(vm.POP),
+			byte(vm.DUP1), byte(vm.POP),
+			byte(vm.STOP),
+		}
+		prettyPrint("This code segment spans chunk 0 and 1", code)
+	}
+
+	{ // Code which jumps from chunk 0 to chunk 3
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1)
+		code[1] = 62
+		code[2] = byte(vm.JUMP)
+		code[62] = byte(vm.JUMPDEST)
+		prettyPrint("This code jumps from chunk 0 to chunk 2", code)
+	}
+	{ // Code which jumps from chunk 0 to chunk 3 and back to chunk 0
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1)
+		code[1] = 62
+		code[2] = byte(vm.JUMP)
+		code[62] = byte(vm.JUMPDEST)
+		code[63] = byte(vm.PUSH1)
+		code[64] = 3
+		code[65] = byte(vm.JUMP)
+		code[3] = byte(vm.JUMPDEST)
+		prettyPrint("This code jumps from chunk 0 to chunk 2 and back to 0", code)
+	}
+	{ // Code has PUSHDATA crossing chunks
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH32)
+		code[33] = byte(vm.JUMPDEST)
+		prettyPrint("This code has pushdata crossing from chunk 0 to chunk 2", code)
+	}
+	{ // Code has PUSHDATA crossing chunks
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH30)
+		code[31] = byte(vm.JUMPDEST)
+		prettyPrint("This code jumps from chunk 0 to chunk 1, then walks into chunk 2", code)
+	}
+
+	{ // Code has PUSHDATA crossing chunks
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1)
+		code[31] = byte(vm.JUMPDEST)
+		prettyPrint("This code jumps from chunk 0 to chunk 1, then walks into chunk 2", code)
+	}
+
+	{
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1) // length
+		code[1] = 0              // length
+		code[2] = byte(vm.PUSH1) // codeOffset
+		code[3] = 100            // codeOffset
+		code[4] = byte(vm.PUSH1) // memOffset
+		code[5] = 0              // memOffset
+		code[6] = byte(vm.CODECOPY)
+		code[7] = 0 // STOP
+		prettyPrint("This does 0-length codecopy", code)
+	}
+	{
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1) // length
+		code[1] = 1              // length
+		code[2] = byte(vm.PUSH1) // codeOffset
+		code[3] = 100            // codeOffset
+		code[4] = byte(vm.PUSH1) // memOffset
+		code[5] = 0              // memOffset
+		code[6] = byte(vm.CODECOPY)
+		code[7] = 0 // STOP
+		prettyPrint("This does 1-length codecopy", code)
+	}
+
+	{
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1) // length
+		code[1] = 0xff           // length
+		code[2] = byte(vm.PUSH1) // codeOffset
+		code[3] = 100            // codeOffset
+		code[4] = byte(vm.PUSH1) // memOffset
+		code[5] = 0              // memOffset
+		code[6] = byte(vm.CODECOPY)
+		code[7] = 0 // STOP
+		prettyPrint("This does a codecopy where the end exceeds the code size (code size 128)", code)
+	}
+
+	{
+		code := make([]byte, 128)
+		code[0] = byte(vm.PUSH1) // length
+		code[1] = 0xff           // length
+		code[2] = byte(vm.PUSH1) // codeOffset
+		code[3] = 0xff           // codeOffset
+		code[4] = byte(vm.PUSH1) // memOffset
+		code[5] = 0              // memOffset
+		code[6] = byte(vm.CODECOPY)
+		code[7] = 0 // STOP
+		prettyPrint("This does a codecopy fully outside the code size (code size 128)", code)
+	}
+}
