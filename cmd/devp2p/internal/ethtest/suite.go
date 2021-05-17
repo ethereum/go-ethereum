@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// Suite represents a structure used to test the eth protocol
-// of a node(s).
+// Suite represents a structure used to test a node's conformance
+// to the eth protocol.
 type Suite struct {
 	Dest *enode.Node
 
@@ -121,6 +121,11 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 	}
 }
 
+var (
+	eth66 = true  // indicates whether suite should negotiate eth66 connection
+	eth65 = false // indicates whether suite should negotiate eth65 connection or below.
+)
+
 // TestStatus attempts to connect to the given node and exchange
 // a status message with it.
 func (s *Suite) TestStatus(t *utesting.T) {
@@ -167,7 +172,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		Skip:    1,
 		Reverse: false,
 	}
-	headers, err := conn.headersRequest(req, s.chain, false, 0)
+	headers, err := conn.headersRequest(req, s.chain, eth65, 0)
 	if err != nil {
 		t.Fatalf("GetBlockHeaders request failed: %v", err)
 	}
@@ -201,7 +206,7 @@ func (s *Suite) TestGetBlockHeaders66(t *utesting.T) {
 		Skip:    1,
 		Reverse: false,
 	}
-	headers, err := conn.headersRequest(req, s.chain, true, 33)
+	headers, err := conn.headersRequest(req, s.chain, eth66, 33)
 	if err != nil {
 		t.Fatalf("could not get block headers: %v", err)
 	}
@@ -370,7 +375,7 @@ func (s *Suite) TestZeroRequestID66(t *utesting.T) {
 		},
 		Amount: 2,
 	}
-	headers, err := conn.headersRequest(req, s.chain, true, 0)
+	headers, err := conn.headersRequest(req, s.chain, eth66, 0)
 	if err != nil {
 		t.Fatalf("failed to get block headers: %v", err)
 	}
@@ -454,7 +459,7 @@ func (s *Suite) TestGetBlockBodies66(t *utesting.T) {
 // TestBroadcast tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
-	if err := s.sendNextBlock(false); err != nil {
+	if err := s.sendNextBlock(eth65); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
 }
@@ -462,7 +467,7 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 // TestBroadcast66 tests whether a block announcement is correctly
 // propagated to the given node's peer(s) on the eth66 protocol.
 func (s *Suite) TestBroadcast66(t *utesting.T) {
-	if err := s.sendNextBlock(true); err != nil {
+	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
 }
@@ -473,7 +478,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    totalDifficultyAt(s.fullChain, nextBlock),
+			TD:    s.fullChain.TotalDifficultyAt(nextBlock),
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
@@ -508,7 +513,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		conn.Close()
 	}
 	// Test the last block as a valid block
-	if err := s.sendNextBlock(false); err != nil {
+	if err := s.sendNextBlock(eth65); err != nil {
 		t.Fatalf("failed to broadcast next block: %v", err)
 	}
 }
@@ -520,7 +525,7 @@ func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    totalDifficultyAt(s.fullChain, nextBlock),
+			TD:    s.fullChain.TotalDifficultyAt(nextBlock),
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
@@ -555,14 +560,14 @@ func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 		conn.Close()
 	}
 	// Test the last block as a valid block
-	if err := s.sendNextBlock(true); err != nil {
+	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("failed to broadcast next block: %v", err)
 	}
 }
 
 // TestOldAnnounce tests the announcement mechanism with an old block.
 func (s *Suite) TestOldAnnounce(t *utesting.T) {
-	if err := s.oldAnnounce(false); err != nil {
+	if err := s.oldAnnounce(eth65); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -570,21 +575,21 @@ func (s *Suite) TestOldAnnounce(t *utesting.T) {
 // TestOldAnnounce66 tests the announcement mechanism with an old block,
 // over the eth66 protocol.
 func (s *Suite) TestOldAnnounce66(t *utesting.T) {
-	if err := s.oldAnnounce(true); err != nil {
+	if err := s.oldAnnounce(eth66); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // TestMaliciousHandshake tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
-	if err := s.maliciousHandshakes(t, false); err != nil {
+	if err := s.maliciousHandshakes(t, eth65); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // TestMaliciousHandshake66 tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake66(t *utesting.T) {
-	if err := s.maliciousHandshakes(t, true); err != nil {
+	if err := s.maliciousHandshakes(t, eth66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -619,7 +624,7 @@ func (s *Suite) TestMaliciousStatus66(t *utesting.T) {
 // TestTransaction sends a valid transaction to the node and
 // checks if the transaction gets propagated.
 func (s *Suite) TestTransaction(t *utesting.T) {
-	if err := s.sendSuccessfulTxs(t, false); err != nil {
+	if err := s.sendSuccessfulTxs(t, eth65); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -627,7 +632,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 // TestTransaction66 sends a valid transaction to the node and
 // checks if the transaction gets propagated.
 func (s *Suite) TestTransaction66(t *utesting.T) {
-	if err := s.sendSuccessfulTxs(t, true); err != nil {
+	if err := s.sendSuccessfulTxs(t, eth66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -635,7 +640,7 @@ func (s *Suite) TestTransaction66(t *utesting.T) {
 // TestMaliciousTx sends several invalid transactions and tests whether
 // the node will propagate them.
 func (s *Suite) TestMaliciousTx(t *utesting.T) {
-	if err := s.sendMaliciousTxs(t, false); err != nil {
+	if err := s.sendMaliciousTxs(t, eth65); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -643,7 +648,7 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 // TestMaliciousTx66 sends several invalid transactions and tests whether
 // the node will propagate them.
 func (s *Suite) TestMaliciousTx66(t *utesting.T) {
-	if err := s.sendMaliciousTxs(t, true); err != nil {
+	if err := s.sendMaliciousTxs(t, eth66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -653,7 +658,7 @@ func (s *Suite) TestMaliciousTx66(t *utesting.T) {
 func (s *Suite) TestLargeTxRequest66(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
 	// is able to accept txs
-	if err := s.sendNextBlock(true); err != nil {
+	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 	// send 2000 transactions to the node
@@ -704,7 +709,7 @@ func (s *Suite) TestLargeTxRequest66(t *utesting.T) {
 func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
 	// is able to accept txs
-	if err := s.sendNextBlock(true); err != nil {
+	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 	// generate 50 txs

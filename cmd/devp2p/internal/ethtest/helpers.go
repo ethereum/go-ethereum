@@ -88,15 +88,15 @@ func (s *Suite) dial() (*Conn, error) {
 func (s *Suite) dial66() (*Conn, error) {
 	conn, err := s.dial()
 	if err != nil {
-		return nil, fmt.Errorf("could not dial: %v", err)
+		return nil, fmt.Errorf("dial failed: %v", err)
 	}
 	conn.caps = append(conn.caps, p2p.Cap{Name: "eth", Version: 66})
 	conn.ourHighestProtoVersion = 66
 	return conn, nil
 }
 
-// peer performs both the encoding handshake and the protocol handshake
-// with the node in order to peer with it.
+// peer performs both the protocol handshake and the status message
+// exchange with the node in order to peer with it.
 func (c *Conn) peer(chain *Chain, status *Status) error {
 	if err := c.handshake(); err != nil {
 		return fmt.Errorf("handshake failed: %v", err)
@@ -107,7 +107,7 @@ func (c *Conn) peer(chain *Chain, status *Status) error {
 	return nil
 }
 
-// handshake exchanges a `HELLO` with the node.
+// handshake performs a protocol handshake with the node.
 func (c *Conn) handshake() error {
 	defer c.SetDeadline(time.Time{})
 	c.SetDeadline(time.Now().Add(10 * time.Second))
@@ -298,11 +298,11 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 }
 
 // headersRequest executes the given `GetBlockHeaders` request.
-func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, is66 bool, reqID uint64) (BlockHeaders, error) {
+func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, isEth66 bool, reqID uint64) (BlockHeaders, error) {
 	defer c.SetReadDeadline(time.Time{})
 	c.SetReadDeadline(time.Now().Add(20 * time.Second))
 	// if on eth66 connection, perform eth66 GetBlockHeaders request
-	if is66 {
+	if isEth66 {
 		return getBlockHeaders66(chain, c, request, reqID)
 	}
 	if err := c.Write(request); err != nil {
@@ -372,7 +372,7 @@ func (s *Suite) sendNextBlock(isEth66 bool) error {
 	nextBlock := s.fullChain.blocks[s.chain.Len()]
 	blockAnnouncement := &NewBlock{
 		Block: nextBlock,
-		TD:    totalDifficultyAt(s.fullChain, s.chain.Len()),
+		TD:    s.fullChain.TotalDifficultyAt(s.chain.Len()),
 	}
 	// send announcement and wait for node to request the header
 	if err = s.testAnnounce(sendConn, recvConn, blockAnnouncement); err != nil {
@@ -443,9 +443,9 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool)
 		)
 		if isEth66 {
 			requestID := uint64(54)
-			headers, err = conn.headersRequest(req, s.chain, true, requestID)
+			headers, err = conn.headersRequest(req, s.chain, eth66, requestID)
 		} else {
-			headers, err = conn.headersRequest(req, s.chain, false, 0)
+			headers, err = conn.headersRequest(req, s.chain, eth65, 0)
 		}
 		if err != nil {
 			return fmt.Errorf("GetBlockHeader request failed: %v", err)
@@ -457,36 +457,15 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool)
 		}
 		if !reflect.DeepEqual(block.Header(), headers[0]) {
 			return fmt.Errorf("wrong header returned: wanted %v, got %v", block.Header(), headers[0])
-		} else {
-			return nil
 		}
+		return nil
 	}
 }
 
 func (s *Suite) oldAnnounce(isEth66 bool) error {
-	var (
-		sendConn    *Conn
-		receiveConn *Conn
-		err         error
-	)
-	if isEth66 {
-		sendConn, err = s.dial66()
-		if err != nil {
-			return fmt.Errorf("dial failed: %v", err)
-		}
-		receiveConn, err = s.dial66()
-		if err != nil {
-			return fmt.Errorf("dial failed: %v", err)
-		}
-	} else {
-		sendConn, err = s.dial()
-		if err != nil {
-			return fmt.Errorf("dial failed: %v", err)
-		}
-		receiveConn, err = s.dial()
-		if err != nil {
-			return fmt.Errorf("dial failed: %v", err)
-		}
+	sendConn, receiveConn, err := s.createSendAndRecvConns(isEth66)
+	if err != nil {
+		return err
 	}
 	defer sendConn.Close()
 	defer receiveConn.Close()
@@ -606,7 +585,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T, isEth66 bool) error {
 				return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 			}
 		}
-		// Dial for the next round
+		// dial for the next round
 		if isEth66 {
 			conn, err = s.dial66()
 			if err != nil {
