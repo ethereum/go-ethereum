@@ -43,6 +43,7 @@ type Config struct {
 	Value       *big.Int
 	Debug       bool
 	EVMConfig   vm.Config
+	BaseFee     *big.Int
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -92,6 +93,9 @@ func setDefaults(cfg *Config) {
 		cfg.GetHashFn = func(n uint64) common.Hash {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
+	}
+	if cfg.BaseFee == nil {
+		cfg.BaseFee = new(big.Int)
 	}
 }
 
