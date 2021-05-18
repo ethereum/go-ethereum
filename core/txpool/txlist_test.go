@@ -20,7 +20,9 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -165,6 +167,100 @@ func TestTxListBadOrdering(t *testing.T) {
 			t.Fatalf("Wrong tx retrieved got %v, want %v", peeked[i].Nonce(), txs[i].tx.Nonce())
 		}
 	}
+}
+
+func TestTxListRndRemove(t *testing.T) {
+	N := 100
+	txlist := filledRndTxList(N)
+	var biggest *txEntry
+	for i := 0; i < N; i++ {
+		// Delete from the beginning
+		entry := txlist.Delete(func(*txEntry) bool {
+			return true
+		})
+		if biggest == nil {
+			biggest = entry
+		}
+		if biggest.price.Cmp(entry.price) < 0 {
+			t.Fatalf("Wrong order, biggest: %v entry: %v", biggest.price, entry.price)
+		}
+		biggest = entry
+	}
+	if txlist.Len() != 0 {
+		t.Fatalf("Wrong length: %v", txlist.Len())
+	}
+}
+
+func TestTxListRndRemoveLastElement(t *testing.T) {
+	N := 100
+	txlist := filledRndTxList(N)
+	var smallest *txEntry
+	for i := 0; i < N; i++ {
+		// Delete from the beginning
+		entry := txlist.Delete(func(entry *txEntry) bool {
+			return entry == txlist.bottom
+		})
+		if smallest == nil {
+			smallest = entry
+		}
+		if smallest.price.Cmp(entry.price) > 0 {
+			t.Fatalf("Wrong order, smallest: %v entry: %v", smallest.price, entry.price)
+		}
+		smallest = entry
+	}
+	if txlist.Len() != 0 {
+		t.Fatalf("Wrong length: %v", txlist.Len())
+	}
+}
+
+func TestTxListRemove(t *testing.T) {
+	N := 100
+	txlist := filledTxList(N)
+	var head *txEntry
+	for i := 0; i < N; i++ {
+		// Delete from the beginning
+		entry := txlist.Delete(func(*txEntry) bool {
+			return true
+		})
+		if head == nil {
+			head = entry
+		}
+		if head.tx.Nonce() > entry.tx.Nonce() {
+			t.Fatalf("Wrong order, biggest: %v entry: %v", head.tx.Nonce(), entry.tx.Nonce())
+		}
+		head = entry
+	}
+	if txlist.Len() != 0 {
+		t.Fatalf("Wrong length: %v", txlist.Len())
+	}
+}
+
+func filledRndTxList(N int) *txList {
+	txlist := newTxList(N)
+	for i := 0; i < N; i++ {
+		key, _ := crypto.GenerateKey()
+		gasPrice := big.NewInt(rand.Int63())
+		tx := createTxEntry(0, 12, gasPrice, key)
+		txlist.Add(tx)
+	}
+	return &txlist
+}
+
+func filledTxList(N int) *txList {
+	txlist := newTxList(N)
+	key, _ := crypto.GenerateKey()
+	var txs []*txEntry
+	for i := 0; i < N; i++ {
+		gasPrice := big.NewInt(rand.Int63())
+		tx := createTxEntry(uint64(i), 12, gasPrice, key)
+		txs = append(txs, tx)
+	}
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(txs), func(i, j int) { txs[i], txs[j] = txs[j], txs[i] })
+	for _, tx := range txs {
+		txlist.Add(tx)
+	}
+	return &txlist
 }
 
 func createTxEntry(nonce, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *txEntry {
