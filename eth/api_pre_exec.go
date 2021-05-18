@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/sha3"
 	"hash"
@@ -37,14 +36,8 @@ func (h *helpHash) Hash() common.Hash {
 }
 
 type PreExecTx struct {
-	ChainId  *big.Int
-	From     string
-	To       string
-	Data     string
-	Value    string
-	Gas      string
-	GasPrice string
-	Nonce    string
+	ChainId                                     *big.Int
+	From, To, Data, Value, Gas, GasPrice, Nonce string
 }
 
 // PreExecAPI provides pre exec info for rpc
@@ -56,7 +49,7 @@ func NewPreExecAPI(e *Ethereum) *PreExecAPI {
 	return &PreExecAPI{e: e}
 }
 
-func (api *PreExecAPI) GetBlockAndMsg(origin *PreExecTx, number *big.Int) (*types.Block, *types.Message) {
+func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*types.Block, types.Message) {
 	fromAddr := common.HexToAddress(origin.From)
 	toAddr := common.HexToAddress(origin.To)
 
@@ -85,12 +78,12 @@ func (api *PreExecAPI) GetBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		nil, false,
 	)
 
-	return block, &msg
+	return block, msg
 }
 
 func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.Receipt, error) {
 	var (
-		bc   = api.e.blockchain
+		bc = api.e.blockchain
 	)
 	header, err := api.e.APIBackend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
@@ -104,19 +97,18 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 		return nil, err
 	}
 
-	block, msg := api.GetBlockAndMsg(origin, latestNumber)
+	block, msg := api.getBlockAndMsg(origin, latestNumber)
 	tx := block.Transactions()[0]
 	gas := tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
 	stateDb.Prepare(tx.Hash(), block.Hash(), 0)
-	recept, err := core.ApplyTransactionForPreExec(
-		bc.Config(), bc, nil, gp, stateDb, header, tx, *msg, &gas, *bc.GetVMConfig())
+	receipt, err := core.ApplyTransactionForPreExec(
+		bc.Config(), bc, nil, gp, stateDb, header, tx, msg, &gas, *bc.GetVMConfig())
 	if err != nil {
 		return nil, err
 	}
-	log.Info("process info", "logs", recept.Logs, "used gas", recept.GasUsed, "err", err)
-	return recept, nil
+	return receipt, nil
 }
 
 func (api *PreExecAPI) TraceTx(ctx context.Context, tx *PreExecTx) (interface{}, error) {
