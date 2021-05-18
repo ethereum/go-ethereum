@@ -1912,7 +1912,14 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	var preloads []string
 
 	for _, file := range strings.Split(ctx.GlobalString(PreloadJSFlag.Name), ",") {
-		preloads = append(preloads, strings.TrimSpace(file))
+		if(filepath.IsAbs(strings.TrimSpace(file))==false){
+			file,err:=filepath.Abs(strings.TrimSpace(file))
+			if err == nil {
+				preloads = append(preloads, file)
+			}
+		} else {
+			preloads = append(preloads, strings.TrimSpace(file))
+		}
 	}
 	return preloads
 }
