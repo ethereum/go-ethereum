@@ -349,6 +349,22 @@ func (tx *Transaction) TipIntCmp(other *big.Int) int {
 	return tx.inner.tip().Cmp(other)
 }
 
+// EffectiveTip returns the effective tip calculated as MIN(tip, feeCap-baseFee)
+// Note: the returned value can be negative, meaning that the transaction cannot be included
+// with the given base fee.
+func (tx *Transaction) EffectiveTip(baseFee *big.Int) *big.Int {
+	effTip := new(big.Int).Sub(tx.inner.feeCap(), baseFee)
+	if effTip.Cmp(tx.inner.tip()) > 0 {
+		effTip = tx.inner.tip()
+	}
+	return effTip
+}
+
+// EffectiveTipCmp compares the effective tip of two transactions assuming the given base fee.
+func (tx *Transaction) EffectiveTipCmp(other *Transaction, baseFee *big.Int) int {
+	return tx.EffectiveTip(baseFee).Cmp(other.EffectiveTip(baseFee))
+}
+
 // Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
