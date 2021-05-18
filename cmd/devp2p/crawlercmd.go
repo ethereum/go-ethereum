@@ -19,10 +19,14 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"database/sql"
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -35,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
@@ -55,11 +60,7 @@ var (
 			utils.NetworkIdFlag,
 			crawlTimeoutFlag,
 			nodeURLFlag,
-			influxDBFlag,
-			influxDBURLFlag,
-			influxDBBucketFlag,
-			influxDBOrgFlag,
-			influxDBTokenFlag,
+			tableNameFlag,
 		},
 	}
 	nodeURLFlag = cli.StringFlag{
@@ -76,25 +77,9 @@ var (
 		Usage: "Timeout for the crawling in a round",
 		Value: 1 * time.Minute,
 	}
-	influxDBFlag = cli.BoolFlag{
-		Name:  "influxdb",
-		Usage: "Store the crawled data in a influxdb",
-	}
-	influxDBURLFlag = cli.StringFlag{
-		Name:  "influxdb.url",
-		Usage: "URL where the influxdb is reachable",
-	}
-	influxDBBucketFlag = cli.StringFlag{
-		Name:  "influxdb.bucket",
-		Usage: "Bucket where the data should be stored",
-	}
-	influxDBOrgFlag = cli.StringFlag{
-		Name:  "influxdb.org",
-		Usage: "InfluxDB organization where data should be stored",
-	}
-	influxDBTokenFlag = cli.StringFlag{
-		Name:  "influxdb.token",
-		Usage: "Token used to authenticate with influxdb",
+	tableNameFlag = cli.StringFlag{
+		Name:  "table",
+		Usage: "Name of the sqlite table",
 	}
 	status           *ethtest.Status
 	lastStatusUpdate time.Time
@@ -125,22 +110,30 @@ func crawlNodes(ctx *cli.Context) error {
 		}
 	}
 
-	var influxdb *influx
-	if ctx.IsSet(influxDBFlag.Name) {
-		url := ctx.String(influxDBURLFlag.Name)
-		bucket := ctx.String(influxDBBucketFlag.Name)
-		org := ctx.String(influxDBOrgFlag.Name)
-		token := ctx.String(influxDBTokenFlag.Name)
+	var db *sql.DB
+	if ctx.IsSet(tableNameFlag.Name) {
+		name := ctx.String(tableNameFlag.Name)
+		shouldInit := false
+		if _, err := os.Stat(name); os.IsNotExist(err) {
+			shouldInit = true
+		}
 		var err error
-		if influxdb, err = NewInflux(url, bucket, org, token); err != nil {
+		if db, err = sql.Open("sqlite3", name); err != nil {
 			exit(err)
 		}
-		log.Info("Connected to influxdb")
+		log.Info("Connected to db")
+		if shouldInit {
+			log.Info("DB did not exist, init")
+			if err := createDB(db); err != nil {
+				exit(err)
+			}
+		}
+
 	}
 	timeout := ctx.Duration(timeoutFlag.Name)
 
 	for {
-		inputSet = crawlRound(ctx, inputSet, influxdb, timeout)
+		inputSet = crawlRound(ctx, inputSet, db, timeout)
 	}
 }
 
@@ -179,7 +172,7 @@ func makeGenesis(ctx *cli.Context) *core.Genesis {
 	}
 }
 
-func crawlRound(ctx *cli.Context, inputSet nodeSet, influxdb *influx, timeout time.Duration) nodeSet {
+func crawlRound(ctx *cli.Context, inputSet nodeSet, db *sql.DB, timeout time.Duration) nodeSet {
 	output := make(nodeSet)
 	log.Info("DiscV5")
 	v5 := discv5(ctx, nodeSet{}, timeout)
@@ -224,8 +217,8 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, influxdb *influx, timeout ti
 		nodes = append(nodes, node)
 	}
 	// Write the node info to influx
-	if influxdb != nil {
-		if err := influxdb.updateNodes(nodes); err != nil {
+	if db != nil {
+		if err := updateNodes(db, nodes); err != nil {
 			exit(err)
 		}
 	}
@@ -385,4 +378,114 @@ func negotiateEthProtocol(caps, peer []p2p.Cap) uint {
 		}
 	}
 	return highestEthVersion
+}
+
+func updateNodes(db *sql.DB, nodes []crawledNode) error {
+	log.Info("Writing nodes to db", "nodes", len(nodes))
+	now := time.Now()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(
+		`insert into nodes(ID, 
+			Now,
+			ClientType,
+			PK,
+			SoftwareVersion,
+			Capabilities,
+			NetworkID,
+			ForkID,
+			Blockheight,
+			TotalDifficulty,
+			HeadHash,
+			IP,
+			FirstSeen,
+			LastSeen,
+			Seq,
+			Score,
+			ConnType) 
+			values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, node := range nodes {
+		n := node.node
+		info := &clientInfo{}
+		if node.info != nil {
+			info = node.info
+		}
+		connType := ""
+		var portUDP enr.UDP
+		if n.N.Load(&portUDP) == nil {
+			connType = "UDP"
+		}
+		var portTCP enr.TCP
+		if n.N.Load(&portTCP) == nil {
+			connType = "TCP"
+		}
+		var caps string
+		for _, c := range info.Capabilities {
+			caps = fmt.Sprintf("%v, %v", caps, c.String())
+		}
+		var pk string
+		if n.N.Pubkey() != nil {
+			pk = fmt.Sprintf("X: %v, Y: %v", n.N.Pubkey().X.String(), n.N.Pubkey().Y.String())
+		}
+		fid := fmt.Sprintf("Hash: %v, Next %v", info.ForkID.Hash, info.ForkID.Next)
+
+		_, err = stmt.Exec(
+			n.N.ID().GoString(),
+			now.String(),
+			info.ClientType,
+			pk,
+			info.SoftwareVersion,
+			caps,
+			info.NetworkID,
+			fid,
+			info.Blockheight,
+			info.TotalDifficulty.String(),
+			info.HeadHash.String(),
+			n.N.IP().String(),
+			n.FirstResponse.String(),
+			n.LastResponse.String(),
+			n.Seq,
+			n.Score,
+			connType,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func createDB(db *sql.DB) error {
+	sqlStmt := `
+	CREATE TABLE nodes (
+		ID text not null, 
+		Now text not null,
+		ClientType text,
+		PK text,
+		SoftwareVersion text,
+		Capabilities text,
+		NetworkID number,
+		ForkID text,
+		Blockheight text,
+		TotalDifficulty text,
+		HeadHash text,
+		IP text,
+		FirstSeen text,
+		LastSeen text,
+		Seq number,
+		Score number,
+		ConnType text,
+		PRIMARY KEY (ID, Now)
+	);
+	delete from nodes;
+	`
+	_, err := db.Exec(sqlStmt)
+	return err
 }
