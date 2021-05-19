@@ -165,8 +165,6 @@ func makeGenesis(ctx *cli.Context) *core.Genesis {
 		return core.DefaultRinkebyGenesisBlock()
 	case ctx.Bool(utils.GoerliFlag.Name):
 		return core.DefaultGoerliGenesisBlock()
-	case ctx.Bool(utils.YoloV3Flag.Name):
-		return core.DefaultYoloV3GenesisBlock()
 	default:
 		return core.DefaultGenesisBlock()
 	}
