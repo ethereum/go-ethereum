@@ -37,8 +37,8 @@ type TransactionArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
-	FeeCap   *hexutil.Big    `json:"feeCap"`
-	Tip      *hexutil.Big    `json:"tip"`
+	FeeCap   *hexutil.Big    `json:"maxFeePerGas"`
+	Tip      *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 
