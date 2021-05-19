@@ -303,13 +303,13 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+	if g.Config == nil {
+		g.Config = params.AllEthashProtocolChanges
+	}
+	config := g.Config
 	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
-	}
-	config := g.Config
-	if config == nil {
-		config = params.AllEthashProtocolChanges
 	}
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err

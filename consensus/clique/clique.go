@@ -478,7 +478,7 @@ func (c *Clique) verifySeal(chain consensus.ChainHeaderReader, header *types.Hea
 		return err
 	}
 	if _, ok := snap.Signers[signer]; !ok {
-		return errUnauthorizedSigner
+		return fmt.Errorf("%w: %v", errUnauthorizedSigner, signer.Hex())
 	}
 	for seen, recent := range snap.Recents {
 		if recent == signer {
@@ -620,7 +620,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		return err
 	}
 	if _, authorized := snap.Signers[signer]; !authorized {
-		return errUnauthorizedSigner
+		return fmt.Errorf("%w: %v", errUnauthorizedSigner, signer.Hex())
 	}
 	// If we're amongst the recent signers, wait for the next block
 	for seen, recent := range snap.Recents {
