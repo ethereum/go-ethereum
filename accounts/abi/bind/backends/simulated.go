@@ -428,7 +428,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
 // chain doesn't have miners, we just return a gas price of 875000000 (initial basefee) for any call.
 func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(875000000), nil
+	return big.NewInt(params.InitialBaseFee), nil
 }
 
 // EstimateGas executes the requested code against the currently pending block/state and
@@ -529,7 +529,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
-		call.GasPrice = big.NewInt(875000000)
+		call.GasPrice = big.NewInt(params.InitialBaseFee)
 	}
 	if call.FeeCap == nil {
 		call.FeeCap = new(big.Int).Set(call.GasPrice)
