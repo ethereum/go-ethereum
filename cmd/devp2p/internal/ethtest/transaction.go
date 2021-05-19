@@ -42,15 +42,20 @@ func (s *Suite) sendSuccessfulTxs(t *utesting.T, isEth66 bool) error {
 			return fmt.Errorf("could not find tx to send")
 		}
 		t.Logf("Testing tx propagation %d: sending tx %v %v %v\n", i, tx.Hash().String(), tx.GasPrice(), tx.Gas())
+		// get previous tx if exists for reference in case of old tx propagation
+		var prevTx *types.Transaction
+		if i != 0 {
+			prevTx = tests[i-1]
+		}
 		// write tx to connection
-		if err := sendSuccessfulTx(s, tx, isEth66); err != nil {
-			return fmt.Errorf("send successful tx test failed:\ntx: %v\n error: %v", tx, err)
+		if err := sendSuccessfulTx(s, tx, prevTx, isEth66); err != nil {
+			return fmt.Errorf("send successful tx test failed: %v", err)
 		}
 	}
 	return nil
 }
 
-func sendSuccessfulTx(s *Suite, tx *types.Transaction, isEth66 bool) error {
+func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction, isEth66 bool) error {
 	sendConn, recvConn, err := s.createSendAndRecvConns(isEth66)
 	if err != nil {
 		return err
@@ -71,27 +76,41 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, isEth66 bool) error {
 	// update last nonce seen
 	nonce = tx.Nonce()
 	// Wait for the transaction announcement
-	switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
-	case *Transactions:
-		recTxs := *msg
-		for _, gotTx := range recTxs {
-			if gotTx.Hash() == tx.Hash() {
-				// Ok
-				return nil
+	for {
+		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
+		case *Transactions:
+			recTxs := *msg
+			// if you receive an old tx propagation, read from connection again
+			if len(recTxs) == 1 && prevTx != nil {
+				if recTxs[0] == prevTx {
+					continue
+				}
 			}
-		}
-		return fmt.Errorf("missing transaction: got %v missing %v", recTxs, tx.Hash())
-	case *NewPooledTransactionHashes:
-		txHashes := *msg
-		for _, gotHash := range txHashes {
-			if gotHash == tx.Hash() {
-				// Ok
-				return nil
+			for _, gotTx := range recTxs {
+				if gotTx.Hash() == tx.Hash() {
+					// Ok
+					return nil
+				}
 			}
+			return fmt.Errorf("missing transaction: got %v missing %v", recTxs, tx.Hash())
+		case *NewPooledTransactionHashes:
+			txHashes := *msg
+			// if you receive an old tx propagation, read from connection again
+			if len(txHashes) == 1 && prevTx != nil {
+				if txHashes[0] == prevTx.Hash() {
+					continue
+				}
+			}
+			for _, gotHash := range txHashes {
+				if gotHash == tx.Hash() {
+					// Ok
+					return nil
+				}
+			}
+			return fmt.Errorf("missing transaction announcement: got %v missing %v", txHashes, tx.Hash())
+		default:
+			return fmt.Errorf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
 		}
-		return fmt.Errorf("missing transaction announcement: got %v missing %v", txHashes, tx.Hash())
-	default:
-		return fmt.Errorf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
 	}
 }
 
