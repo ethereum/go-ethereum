@@ -257,7 +257,7 @@ func TestTransactionQueue(t *testing.T) {
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
-	tx := transaction(1, 100, key)
+	tx := transaction(0, 100, key)
 	from, _ := deriveSender(tx)
 	pool.currentState.AddBalance(from, big.NewInt(100000))
 	pool.runReorg(nil, nil)
@@ -271,8 +271,7 @@ func TestTransactionQueue(t *testing.T) {
 		t.Errorf("expected valid txs to be 1 is %v , pending is %v", queued, pending)
 	}
 
-	tx = transaction(2, 21000, key)
-	from, _ = deriveSender(tx)
+	tx = transaction(1, 21000, key)
 	entry, err := pool.txToTxEntry(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -297,6 +296,68 @@ func TestTransactionQueue(t *testing.T) {
 	}
 	if pending, queued := pool.Stats(); pending != 2 || queued != 0 {
 		t.Errorf("expected valid txs to be 2 is %v , queued is %v", pending, queued)
+	}
+}
+
+func TestTransactionQueue2(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	txs := []*types.Transaction{
+		transaction(0, 100, key),
+		transaction(10, 100, key),
+		transaction(11, 100, key),
+	}
+	from, _ := deriveSender(txs[0])
+	pool.currentState.AddBalance(from, big.NewInt(1000))
+	pool.reset(nil, nil)
+
+	for _, tx := range txs {
+		entry, err := pool.txToTxEntry(tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pool.addGapped(entry, false)
+	}
+
+	pool.addUngappedTx(0, from)
+
+	pending, queued := pool.Stats()
+	if pending != 1 {
+		t.Error("expected pending length to be 1, got", pending)
+	}
+	if queued != 2 {
+		t.Error("expected len(queue) == 2, got", queued)
+	}
+}
+
+func TestTransactionChainFork(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	resetState := func() {
+		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb.AddBalance(addr, big.NewInt(100000000000000))
+
+		pool.chain = &testBlockChain{statedb, 1000000, new(event.Feed)}
+	}
+	resetState()
+
+	tx := transaction(0, 100000, key)
+	if _, err := pool.add(tx, false); err != nil {
+		t.Error("didn't expect error", err)
+	}
+	pool.removeTx(tx.Hash(), true)
+
+	// reset the pool's internal state
+	resetState()
+	if _, err := pool.add(tx, false); err != nil {
+		t.Error("didn't expect error", err)
 	}
 }
 

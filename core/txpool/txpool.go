@@ -170,7 +170,7 @@ func (pool *TxPool) loop() {
 		// Reinsert transactions from now un-gapped accounts
 		case entry := <-pool.ungappedAccountsCh:
 			// TODO properly lock the pool
-			pool.addUngappedTx(entry.tx.Nonce(), entry.sender)
+			pool.addUngappedTx(entry.tx.Nonce()+1, entry.sender)
 		// prune in memory transactions to disk
 		case <-pool.pruneCh:
 			pool.mu.Lock()
@@ -665,12 +665,12 @@ func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
 		pool.pruneCh <- struct{}{}
 	}
 	// TODO schedule the pool to add the ungapped transactions (and wait for them if sync is true)
-	return pool.addUngappedTx(tx.tx.Nonce(), tx.sender)
+	return pool.addUngappedTx(tx.tx.Nonce()+1, tx.sender)
 }
 
 func (pool *TxPool) addUngappedTx(nonce uint64, sender common.Address) error {
 	// TODO move this to the background thread
-	wantedNonce := nonce + 1
+	wantedNonce := nonce
 	for {
 		nonce, err := pool.gappedTxs[sender].LowestNonce()
 		if err != nil || nonce != wantedNonce {
