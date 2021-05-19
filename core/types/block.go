@@ -84,7 +84,7 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee *big.Int `json:"baseFee" rlp:"optional"`
+	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 }
 
 // field type overrides for gencodec

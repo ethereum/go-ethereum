@@ -757,8 +757,8 @@ type CallArgs struct {
 	To         *common.Address   `json:"to"`
 	Gas        *hexutil.Uint64   `json:"gas"`
 	GasPrice   *hexutil.Big      `json:"gasPrice"`
-	FeeCap     *hexutil.Big      `json:"feeCap"`
-	Tip        *hexutil.Big      `json:"tip"`
+	FeeCap     *hexutil.Big      `json:"maxFeePerGas"`
+	Tip        *hexutil.Big      `json:"maxPriorityFeePerGas"`
 	Value      *hexutil.Big      `json:"value"`
 	Data       *hexutil.Bytes    `json:"data"`
 	AccessList *types.AccessList `json:"accessList"`
@@ -1250,8 +1250,8 @@ type RPCTransaction struct {
 	From             common.Address    `json:"from"`
 	Gas              hexutil.Uint64    `json:"gas"`
 	GasPrice         *hexutil.Big      `json:"gasPrice"`
-	FeeCap           *hexutil.Big      `json:"feeCap,omitempty"`
-	Tip              *hexutil.Big      `json:"tip,omitempty"`
+	FeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	Tip              *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
 	Hash             common.Hash       `json:"hash"`
 	Input            hexutil.Bytes     `json:"input"`
 	Nonce            hexutil.Uint64    `json:"nonce"`
@@ -1652,8 +1652,8 @@ type SendTxArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
-	FeeCap   *hexutil.Big    `json:"feeCap"`
-	Tip      *hexutil.Big    `json:"tip"`
+	FeeCap   *hexutil.Big    `json:"maxFeePerGas"`
+	Tip      *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons. "input" is the
