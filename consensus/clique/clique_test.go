@@ -47,7 +47,7 @@ func TestReimportMirroredState(t *testing.T) {
 	genspec := &core.Genesis{
 		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
 		Alloc: map[common.Address]core.GenesisAccount{
-			addr: {Balance: big.NewInt(1)},
+			addr: {Balance: big.NewInt(2 * 18375000000000)},
 		},
 	}
 	copy(genspec.ExtraData[extraVanity:], addr[:])
@@ -61,11 +61,11 @@ func TestReimportMirroredState(t *testing.T) {
 		// The chain maker doesn't have access to a chain, so the difficulty will be
 		// lets unset (nil). Set it here to the correct value.
 		block.SetDifficulty(diffInTurn)
-
+		block.SetCoinbase(addr)
 		// We want to simulate an empty middle block, having the same state as the
 		// first one. The last is needs a state change again to force a reorg.
 		if i != 1 {
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr), common.Address{0x00}, new(big.Int), params.TxGas, nil, nil), signer, key)
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr), common.Address{0x00}, new(big.Int), params.TxGas, big.NewInt(875000000), nil), signer, key)
 			if err != nil {
 				panic(err)
 			}
@@ -77,9 +77,10 @@ func TestReimportMirroredState(t *testing.T) {
 		if i > 0 {
 			header.ParentHash = blocks[i-1].Hash()
 		}
+		// We need to clear out the coinbase for Clique signing
+		header.Coinbase = common.Address{}
 		header.Extra = make([]byte, extraVanity+extraSeal)
 		header.Difficulty = diffInTurn
-
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
 		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 		blocks[i] = block.WithSeal(header)
