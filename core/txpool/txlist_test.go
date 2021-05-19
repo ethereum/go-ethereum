@@ -143,6 +143,7 @@ func TestTxList(t *testing.T) {
 	if peeked[4] != txs2[1].tx {
 		t.Fatalf("Wrong tx retrieved got %v, want %v", peeked[4].Nonce(), txs2[1].tx.Nonce())
 	}
+	assertTxListOrder(t, &txlist)
 }
 
 func TestTxListBadOrdering(t *testing.T) {
@@ -167,6 +168,7 @@ func TestTxListBadOrdering(t *testing.T) {
 			t.Fatalf("Wrong tx retrieved got %v, want %v", peeked[i].Nonce(), txs[i].tx.Nonce())
 		}
 	}
+	assertTxListOrder(t, &txlist)
 }
 
 func TestTxListRndRemove(t *testing.T) {
@@ -235,13 +237,45 @@ func TestTxListRemove(t *testing.T) {
 	}
 }
 
+func TestTxListPrune(t *testing.T) {
+	N := 100
+	// Create a full txlist
+	txlist := filledTxList(N)
+	// Add a transaction
+	key, _ := crypto.GenerateKey()
+	tx := createTxEntry(0, 12, big.NewInt(1000), key)
+	shouldPrune := txlist.Add(tx)
+	if !shouldPrune {
+		t.Fatal("TxList should have N+1 elements, thus should prune")
+	}
+	if txlist.Len() != 101 {
+		t.Fatal("TxList has invalid length")
+	}
+	// Prune me baby one more time
+	pruned := txlist.Prune()
+	if txlist.Len() != 75 {
+		t.Fatalf("TxList has invalid length after pruning: %v", txlist.Len())
+	}
+	if pruned.Len() != 26 {
+		t.Fatalf("Pruned has invalid length after pruning: %v", pruned.Len())
+	}
+	// Test if txlist can be pruned again
+	if pr := txlist.Prune(); pr != nil {
+		t.Fatalf("TxList can be pruned again")
+	}
+	assertTxListOrder(t, txlist)
+	assertTxListOrder(t, pruned)
+}
+
 func filledRndTxList(N int) *txList {
 	txlist := newTxList(N)
 	for i := 0; i < N; i++ {
 		key, _ := crypto.GenerateKey()
 		gasPrice := big.NewInt(rand.Int63())
 		tx := createTxEntry(0, 12, gasPrice, key)
-		txlist.Add(tx)
+		if txlist.Add(tx) {
+			panic("Add returned true, want false")
+		}
 	}
 	return &txlist
 }
@@ -258,7 +292,9 @@ func filledTxList(N int) *txList {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(txs), func(i, j int) { txs[i], txs[j] = txs[j], txs[i] })
 	for _, tx := range txs {
-		txlist.Add(tx)
+		if txlist.Add(tx) {
+			panic("Add returned true, want false")
+		}
 	}
 	return &txlist
 }
@@ -277,5 +313,16 @@ func printTxList(l txList) {
 	for new := l.head; new != nil; new = new.next {
 		fmt.Printf("%v: %v\n", i, new.tx.Nonce())
 		i++
+	}
+}
+
+func assertTxListOrder(t *testing.T, l *txList) {
+	old := l.head
+	for i := 0; i < l.len; i++ {
+		if old.Less(old.next) {
+			t.Errorf("Invalid ordering between element %v and %v\n", i, i+1)
+			printTxList(*l)
+			t.Fail()
+		}
 	}
 }

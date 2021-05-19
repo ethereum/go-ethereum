@@ -232,12 +232,12 @@ func (l *txList) Peek(len int) types.Transactions {
 // Prune splits the list to 3/4 of the max length.
 // It returns a new list with the resulting entries
 func (l *txList) Prune() *txList {
-	l.lowestEntry = nil
-	res := newTxList(l.maxLen)
 	len := (l.maxLen / 4) * 3
-	if len < l.len {
+	if len >= l.len {
 		return nil
 	}
+	l.lowestEntry = nil
+	res := newTxList(l.maxLen)
 	old := l.head
 	for i := 0; i < len; i++ {
 		old = old.next

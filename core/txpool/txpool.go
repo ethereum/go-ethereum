@@ -105,6 +105,7 @@ type TxPool struct {
 	localTxs     txList
 	remoteTxs    txList
 	gappedTxs    map[common.Address]*txHeap
+	dbTxs        map[common.Address]nonceHeap
 	database     bagdb.Database
 	// global txpool mutex
 	mu sync.RWMutex
@@ -172,7 +173,14 @@ func (pool *TxPool) loop() {
 			pool.addUngappedTx(entry.tx.Nonce(), entry.sender)
 		// prune in memory transactions to disk
 		case <-pool.pruneCh:
+			pool.mu.Lock()
 			txs := pool.remoteTxs.Prune()
+			pool.mu.Unlock()
+			if txs == nil {
+				// already pruned, continue
+				continue
+			}
+			fmt.Print("Pruning\n")
 			for _, t := range txs.Peek(txs.Len()) {
 				marshalled, err := t.MarshalBinary()
 				if err != nil {
@@ -407,6 +415,7 @@ func (pool *TxPool) PendingBlock() (locals types.Transactions, remotes types.Tra
 	if missing > 0 {
 		//panic("TODO lookup tx's from disk if we don't have enough in ram")
 		// TODO add a request to fetch some tx from disk
+		pool.unPruneCh <- struct{}{}
 	}
 	return
 }
@@ -556,7 +565,6 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 			}
 		}()
 	}
-	fmt.Printf("1: %v\n", tx.tx.Nonce())
 	// If it is a queued transaction, we can write it to disk
 	if isGapped {
 		fmt.Println("3")
@@ -621,8 +629,7 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
 	if shouldPrune {
-		//panic("not implemented")
-		// TODO prune in memory list to disk
+		pool.pruneCh <- struct{}{}
 	}
 	return replaced, nil
 }
@@ -655,7 +662,7 @@ func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
 	if shouldPrune {
-		panic("not implemented")
+		pool.pruneCh <- struct{}{}
 	}
 	// TODO schedule the pool to add the ungapped transactions (and wait for them if sync is true)
 	return pool.addUngappedTx(tx.tx.Nonce(), tx.sender)
