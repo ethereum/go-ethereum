@@ -612,8 +612,14 @@ func TestFastVsFullChains(t *testing.T) {
 
 		// If the block number is multiple of 3, send a few bonus transactions to the miner
 		if i%3 == 2 {
+			to := common.Address{}
 			for j := 0; j < i%4+1; j++ {
-				tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, nil, params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key)
+				tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
+					Nonce:    block.TxNonce(address),
+					GasPrice: big.NewInt(params.InitialBaseFee),
+					Gas:      params.TxGas,
+					To:       &to,
+				})
 				if err != nil {
 					panic(err)
 				}
@@ -851,8 +857,20 @@ func TestChainTxReorgs(t *testing.T) {
 	// Create two transactions shared between the chains:
 	//  - postponed: transaction included at a later block in the forked chain
 	//  - swapped: transaction included at the same block number in the forked chain
-	postponed, _ := types.SignTx(types.NewTransaction(0, addr1, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key1)
-	swapped, _ := types.SignTx(types.NewTransaction(1, addr1, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key1)
+	postponed, _ := types.SignNewTx(key1, signer, &types.LegacyTx{
+		Nonce:    0,
+		To:       &addr1,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
+	swapped, _ := types.SignNewTx(key1, signer, &types.LegacyTx{
+		Nonce:    1,
+		To:       &addr1,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
 
 	// Create two transactions that will be dropped by the forked chain:
 	//  - pastDrop: transaction dropped retroactively from a past block
@@ -868,13 +886,24 @@ func TestChainTxReorgs(t *testing.T) {
 	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 3, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
-			pastDrop, _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key2)
-
+			pastDrop, _ = types.SignNewTx(key2, signer, &types.LegacyTx{
+				Nonce:    gen.TxNonce(addr2),
+				To:       &addr2,
+				Value:    big.NewInt(1000),
+				Gas:      params.TxGas,
+				GasPrice: big.NewInt(params.InitialBaseFee),
+			})
 			gen.AddTx(pastDrop)  // This transaction will be dropped in the fork from below the split point
 			gen.AddTx(postponed) // This transaction will be postponed till block #3 in the fork
 
 		case 2:
-			freshDrop, _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key2)
+			freshDrop, _ = types.SignNewTx(key2, signer, &types.LegacyTx{
+				Nonce:    gen.TxNonce(addr2),
+				To:       &addr2,
+				Value:    big.NewInt(1000),
+				Gas:      params.TxGas,
+				GasPrice: big.NewInt(params.InitialBaseFee),
+			})
 
 			gen.AddTx(freshDrop) // This transaction will be dropped in the fork from exactly at the split point
 			gen.AddTx(swapped)   // This transaction will be swapped out at the exact height
