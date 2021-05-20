@@ -995,6 +995,8 @@ func (bc *BlockChain) Stop() {
 	bc.scope.Close()
 	close(bc.quit)
 	bc.StopInsert()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
@@ -1375,8 +1377,6 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 	if bc.insertStopped() {
 		return errInsertionInterrupted
 	}
-	bc.wg.Add(1)
-	defer bc.wg.Done()
 
 	batch := bc.db.NewBatch()
 	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), td)
@@ -1390,9 +1390,6 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
@@ -1417,8 +1414,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if bc.insertStopped() {
 		return NonStatTy, errInsertionInterrupted
 	}
-	bc.wg.Add(1)
-	defer bc.wg.Done()
 
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -1600,11 +1595,9 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	n, err := bc.insertChain(chain, true)
 	bc.chainmu.Unlock()
-	bc.wg.Done()
 
 	return n, err
 }
@@ -1616,11 +1609,9 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	defer bc.blockProcFeed.Send(false)
 
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	n, err := bc.insertChain(types.Blocks([]*types.Block{block}), false)
 	bc.chainmu.Unlock()
-	bc.wg.Done()
 
 	return n, err
 }
@@ -2246,7 +2237,6 @@ func (bc *BlockChain) update() {
 // the extra indices.
 func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	defer bc.wg.Done()
-
 	// Before starting the actual maintenance, we need to handle a special case,
 	// where user might init Geth with an external ancient database. If so, we
 	// need to reindex all necessary transactions before starting to process any
@@ -2361,8 +2351,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	bc.wg.Add(1)
-	defer bc.wg.Done()
 	_, err := bc.hc.InsertHeaderChain(chain, start)
 	return 0, err
 }
