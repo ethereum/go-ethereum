@@ -298,6 +298,12 @@ func (it *randomIterator) pickTree() *clientTree {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
+	// First check if iterator was closed.
+	// Need to do this here to avoid nil map access in rebuildTrees.
+	if it.trees == nil {
+		return nil
+	}
+
 	// Rebuild the trees map if any links have changed.
 	if it.lc.changed {
 		it.rebuildTrees()
