@@ -1898,6 +1898,61 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	}
 }
 
+func TestDualHeapEviction(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	defer pool.Stop()
+
+	pool.config.GlobalSlots = 5
+	pool.config.GlobalQueue = 5
+
+	var (
+		highTip, highCap *types.Transaction
+		baseFee          int
+	)
+
+	check := func(tx *types.Transaction, name string) {
+		if pool.all.GetRemote(tx.Hash()) == nil {
+			t.Fatalf("highest %s transaction evicted from the pool", name)
+		}
+	}
+
+	add := func(urgent bool) {
+		txs := make([]*types.Transaction, 10)
+		for i := range txs {
+			// Create a test accounts and fund it
+			key, _ := crypto.GenerateKey()
+			pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000000))
+			if urgent {
+				txs[i] = dynamicFeeTx(0, 100000, big.NewInt(int64(baseFee+1+i)), big.NewInt(int64(1+i)), key)
+				highTip = txs[i]
+			} else {
+				txs[i] = dynamicFeeTx(0, 100000, big.NewInt(int64(baseFee+200+i)), big.NewInt(1), key)
+				highCap = txs[i]
+			}
+		}
+		pool.AddRemotes(txs)
+		pending, queued := pool.Stats()
+		if pending+queued != 10 {
+			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 10)
+		}
+	}
+
+	add(false)
+	for baseFee = 0; baseFee <= 1000; baseFee += 100 {
+		pool.priced.SetBaseFee(big.NewInt(int64(baseFee)))
+		add(true)
+		check(highCap, "fee cap")
+		add(false)
+		check(highTip, "effective tip")
+	}
+
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
 // Tests that the pool rejects duplicate transactions.
 func TestTransactionDeduplication(t *testing.T) {
 	t.Parallel()
