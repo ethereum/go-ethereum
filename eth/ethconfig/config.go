@@ -209,6 +209,9 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideBerlin *big.Int `toml:",omitempty"`
+
+	// Bor logs flag
+	BorLogs bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

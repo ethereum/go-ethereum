@@ -370,6 +370,10 @@ var (
 		Value: ethconfig.Defaults.TxPool.Lifetime,
 	}
 	// Performance tuning settings
+	BorLogsFlag = cli.BoolFlag{
+		Name:  "bor.logs",
+		Usage: "Enable bor logs retrieval",
+	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
@@ -1467,6 +1471,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
+
+	if ctx.GlobalIsSet(BorLogsFlag.Name) {
+		cfg.BorLogs = ctx.GlobalBool(BorLogsFlag.Name)
+	}
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
