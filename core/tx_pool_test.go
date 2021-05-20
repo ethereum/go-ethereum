@@ -98,7 +98,7 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 }
 
 func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx := types.NewTx(&types.DynamicFeeTx{
+	tx, _ := types.SignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.DynamicFeeTx{
 		ChainID:    params.TestChainConfig.ChainID,
 		Nonce:      nonce,
 		Tip:        tip,
@@ -109,7 +109,6 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 		Data:       nil,
 		AccessList: nil,
 	})
-	tx, _ = types.SignTx(tx, types.LatestSignerForChainID(params.TestChainConfig.ChainID), key)
 	return tx
 }
 
@@ -1898,6 +1897,8 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	}
 }
 
+// Tests whether highest fee cap transaction is retained after a batch of high effective
+// tip transactions are added and vice versa
 func TestDualHeapEviction(t *testing.T) {
 	t.Parallel()
 

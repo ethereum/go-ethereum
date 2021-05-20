@@ -554,7 +554,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Ensure feeCap is less than or equal to tip.
-	if pool.eip1559 && tx.FeeCapIntCmp(tx.Tip()) < 0 {
+	if tx.FeeCapIntCmp(tx.Tip()) < 0 {
 		return ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
