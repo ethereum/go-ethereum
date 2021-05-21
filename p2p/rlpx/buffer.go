@@ -104,11 +104,11 @@ func (b *writeBuffer) Write(data []byte) (int, error) {
 
 const maxUint24 = int(^uint32(0) >> 8)
 
-func readInt24(b []byte) uint32 {
+func readUint24(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
 
-func putInt24(v uint32, b []byte) {
+func putUint24(v uint32, b []byte) {
 	b[0] = byte(v >> 16)
 	b[1] = byte(v >> 8)
 	b[2] = byte(v)

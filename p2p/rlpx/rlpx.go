@@ -176,7 +176,7 @@ func (h *sessionState) readFrame(conn io.Reader) ([]byte, error) {
 
 	// Decrypt the frame header to get the frame size.
 	h.dec.XORKeyStream(header[:16], header[:16])
-	fsize := readInt24(header[:16])
+	fsize := readUint24(header[:16])
 	// Frame size rounded up to 16 byte boundary for padding.
 	rsize := fsize
 	if padding := fsize % 16; padding > 0 {
@@ -241,7 +241,7 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 		return errPlainMessageTooLarge
 	}
 	header := h.wbuf.appendZero(16)
-	putInt24(uint32(fsize), header)
+	putUint24(uint32(fsize), header)
 	copy(header[3:], zeroHeader)
 	h.enc.XORKeyStream(header, header)
 
