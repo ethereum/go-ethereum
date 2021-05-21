@@ -17,10 +17,16 @@
 package core
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/redis"
 	"math"
 	"math/big"
+	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -119,6 +125,17 @@ var (
 
 // TxStatus is the current status of a transaction as seen by the pool.
 type TxStatus uint
+
+type TxContents struct {
+	TxHash   string `json:"txHash"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	GasPrice string `json:"gasPrice"`
+	GasLimit string `json:"gasLimit"`
+	Data     string `json:"data"`
+	Nonce    string `json:"nonce"`
+	Value    string `json:"value"`
+}
 
 const (
 	TxStatusUnknown TxStatus = iota
@@ -520,6 +537,33 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
+func pub(from string, tx *types.Transaction) error {
+	// pub to redis
+	txContents := new(TxContents)
+	txContents.TxHash = tx.Hash().String()
+	txContents.From = from
+	txContents.To = tx.To().String()
+	txContents.GasPrice = tx.GasPrice().String()
+	txContents.GasLimit = strconv.Itoa(int(tx.Gas()))
+	txContents.Data = hexutil.Encode(tx.Data())
+	txContents.Value = tx.Value().String()
+	txContents.Nonce = strconv.Itoa(int(tx.Nonce()))
+	bs, err := json.Marshal(txContents)
+	if err != nil {
+		return err
+	}
+	var network = os.Getenv("network")
+	if network == "" {
+		network = "Ethereum"
+	}
+	if redis.Client != nil {
+		_ = redis.Publish(context.TODO(), network+":NewTxns|All", string(bs))
+		_ = redis.Publish(context.TODO(), network+":NewTxns|To|"+txContents.To, string(bs))
+		_ = redis.Publish(context.TODO(), network+":NewTxns|From|"+txContents.From, string(bs))
+	}
+	return nil
+}
+
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
@@ -566,6 +610,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
+	go pub(from.String(), tx)
 	return nil
 }
 

@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/redis"
 	"os"
 	"sort"
 	"strconv"
@@ -251,6 +252,11 @@ func init() {
 		debug.Exit()
 		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
+	}
+	redisAddr := os.Getenv("redis-addr")
+	redisPass := os.Getenv("redis-pass")
+	if redisAddr != "" {
+		redis.Init(redisAddr, redisPass)
 	}
 }
 
