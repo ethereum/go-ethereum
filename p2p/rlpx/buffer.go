@@ -113,3 +113,15 @@ func putUint24(v uint32, b []byte) {
 	b[1] = byte(v >> 8)
 	b[2] = byte(v)
 }
+
+// growslice ensures b has the wanted length by either expanding it to its capacity
+// or allocating a new slice if b has insufficient capacity.
+func growslice(b []byte, wantLength int) []byte {
+	if len(b) >= wantLength {
+		return b
+	}
+	if cap(b) >= wantLength {
+		return b[:cap(b)]
+	}
+	return make([]byte, wantLength)
+}

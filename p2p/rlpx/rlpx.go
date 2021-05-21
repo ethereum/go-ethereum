@@ -153,8 +153,8 @@ func (c *Conn) Read() (code uint64, data []byte, wireSize int, err error) {
 		if actualSize > maxUint24 {
 			return code, nil, 0, errPlainMessageTooLarge
 		}
-		c.snappyReadBuffer, err = snappy.Decode(c.snappyReadBuffer, data)
-		data = c.snappyReadBuffer
+		c.snappyReadBuffer = growslice(c.snappyReadBuffer, actualSize)
+		data, err = snappy.Decode(c.snappyReadBuffer, data)
 	}
 	return code, data, wireSize, err
 }
@@ -219,11 +219,7 @@ func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 		// Ensure the buffer has sufficient size.
 		// Package snappy will allocate its own buffer if the provided
 		// one is smaller than MaxEncodedLen.
-		maxLen := snappy.MaxEncodedLen(len(data))
-		if len(c.snappyWriteBuffer) < maxLen {
-			c.snappyWriteBuffer = make([]byte, maxLen)
-		}
-		// Compress.
+		c.snappyWriteBuffer = growslice(c.snappyWriteBuffer, snappy.MaxEncodedLen(len(data)))
 		data = snappy.Encode(c.snappyWriteBuffer, data)
 	}
 
