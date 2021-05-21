@@ -43,8 +43,10 @@ type peerInfo struct {
 func SetBlockPeer(hash common.Hash, peer string) {
 	log.Debug("Recording block peer", "hash", hash, "peer", peer)
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	if _, ok := blockPeerMap.Get(hash); !ok {
 		blockPeerMap.Add(hash, peer)
+		tsMap.Add(hash, time.Now().UnixNano())
 	}
 }
 
@@ -131,9 +133,10 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 			select {
 			case h := <-headers:
 				peerid, _ := blockPeerMap.Get(h.Hash())
+				p2pts, _ := tsMap.Get(h.Hash())
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewHeadsWithPeers", "hash", h.Hash(), "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano()} )
+				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts.(int64)} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
