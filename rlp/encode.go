@@ -124,19 +124,15 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 }
 
 type encbuf struct {
-	str      []byte        // string data, contains everything except list headers
-	lheads   []listhead    // all list headers
-	lhsize   int           // sum of sizes of all encoded list headers
-	sizebuf  [9]byte       // auxiliary buffer for uint encoding
-	bufvalue reflect.Value // used in writeByteArrayCopy
+	str     []byte     // string data, contains everything except list headers
+	lheads  []listhead // all list headers
+	lhsize  int        // sum of sizes of all encoded list headers
+	sizebuf [9]byte    // auxiliary buffer for uint encoding
 }
 
 // encbufs are pooled.
 var encbufPool = sync.Pool{
-	New: func() interface{} {
-		var bytes []byte
-		return &encbuf{bufvalue: reflect.ValueOf(&bytes).Elem()}
-	},
+	New: func() interface{} { return new(encbuf) },
 }
 
 func (w *encbuf) reset() {
@@ -429,21 +425,14 @@ func writeBytes(val reflect.Value, w *encbuf) error {
 	return nil
 }
 
-var byteType = reflect.TypeOf(byte(0))
-
 func makeByteArrayWriter(typ reflect.Type) writer {
-	length := typ.Len()
-	if length == 0 {
+	switch typ.Len() {
+	case 0:
 		return writeLengthZeroByteArray
-	} else if length == 1 {
+	case 1:
 		return writeLengthOneByteArray
-	}
-	if typ.Elem() != byteType {
-		return writeNamedByteArray
-	}
-	return func(val reflect.Value, w *encbuf) error {
-		writeByteArrayCopy(length, val, w)
-		return nil
+	default:
+		return writeByteArray
 	}
 }
 
@@ -462,29 +451,18 @@ func writeLengthOneByteArray(val reflect.Value, w *encbuf) error {
 	return nil
 }
 
-// writeByteArrayCopy encodes byte arrays using reflect.Copy. This is
-// the fast path for [N]byte where N > 1.
-func writeByteArrayCopy(length int, val reflect.Value, w *encbuf) {
-	w.encodeStringHeader(length)
-	offset := len(w.str)
-	w.str = append(w.str, make([]byte, length)...)
-	w.bufvalue.SetBytes(w.str[offset:])
-	reflect.Copy(w.bufvalue, val)
-}
-
-// writeNamedByteArray encodes byte arrays with named element type.
-// This exists because reflect.Copy can't be used with such types.
-func writeNamedByteArray(val reflect.Value, w *encbuf) error {
+func writeByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
-		// Slice requires the value to be addressable.
-		// Make it addressable by copying.
+		// Getting the byte slice of val requires it to be addressable. Make it
+		// addressable by copying.
 		copy := reflect.New(val.Type()).Elem()
 		copy.Set(val)
 		val = copy
 	}
-	size := val.Len()
-	slice := val.Slice(0, size).Bytes()
-	w.encodeString(slice)
+
+	slice := byteArrayBytes(val)
+	w.encodeStringHeader(len(slice))
+	w.str = append(w.str, slice...)
 	return nil
 }
 
