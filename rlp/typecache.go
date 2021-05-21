@@ -102,8 +102,12 @@ func (c *typeCache) generate(typ reflect.Type, tags tags) *typeinfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Copy cur to next.
 	cur := c.cur.Load().(map[typekey]*typeinfo)
+	if info := cur[typekey{typ, tags}]; info != nil {
+		return info
+	}
+
+	// Copy cur to next.
 	c.next = make(map[typekey]*typeinfo, len(cur)+1)
 	for k, v := range cur {
 		c.next[k] = v
