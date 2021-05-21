@@ -18,7 +18,6 @@ package eth
 
 import (
 	"math/big"
-	"math/rand"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
@@ -404,7 +403,7 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
-func (p *Peer) RequestOneHeader(hash common.Hash) error {
+func (p *Peer) RequestOneHeader(id uint64, hash common.Hash) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
@@ -413,8 +412,6 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 		Reverse: false,
 	}
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 			RequestId:             id,
@@ -426,7 +423,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByHash(id uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: origin},
@@ -435,8 +432,6 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 			RequestId:             id,
@@ -448,7 +443,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
-func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByNumber(id uint64, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},
@@ -457,8 +452,6 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 			RequestId:             id,
@@ -482,11 +475,9 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int,
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
-func (p *Peer) RequestBodies(hashes []common.Hash) error {
+func (p *Peer) RequestBodies(id uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetBlockBodiesMsg, BlockBodiesMsg, id)
 		return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
 			RequestId:            id,
@@ -498,11 +489,9 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 
 // RequestNodeData fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
-func (p *Peer) RequestNodeData(hashes []common.Hash) error {
+func (p *Peer) RequestNodeData(id uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetNodeDataMsg, NodeDataMsg, id)
 		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{
 			RequestId:         id,
@@ -513,11 +502,9 @@ func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestReceipts(hashes []common.Hash) error {
+func (p *Peer) RequestReceipts(id uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetReceiptsMsg, ReceiptsMsg, id)
 		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{
 			RequestId:         id,
@@ -528,11 +515,9 @@ func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
-func (p *Peer) RequestTxs(hashes []common.Hash) error {
+func (p *Peer) RequestTxs(id uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
 		requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
 		return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{
 			RequestId:                   id,

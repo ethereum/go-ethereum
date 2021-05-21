@@ -432,7 +432,7 @@ func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 // RequestHeadersByHash constructs a GetBlockHeaders function based on a hashed
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (dlp *downloadTesterPeer) RequestHeadersByHash(id uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	result := dlp.chain.headersByHash(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -441,7 +441,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 // RequestHeadersByNumber constructs a GetBlockHeaders function based on a numbered
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (dlp *downloadTesterPeer) RequestHeadersByNumber(id uint64, origin uint64, amount int, skip int, reverse bool) error {
 	result := dlp.chain.headersByNumber(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -450,7 +450,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 // RequestBodies constructs a getBlockBodies method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.
-func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
+func (dlp *downloadTesterPeer) RequestBodies(id uint64, hashes []common.Hash) error {
 	txs, uncles := dlp.chain.bodies(hashes)
 	go dlp.dl.downloader.DeliverBodies(dlp.id, txs, uncles)
 	return nil
@@ -459,7 +459,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 // RequestReceipts constructs a getReceipts method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
-func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
+func (dlp *downloadTesterPeer) RequestReceipts(id uint64, hashes []common.Hash) error {
 	receipts := dlp.chain.receipts(hashes)
 	go dlp.dl.downloader.DeliverReceipts(dlp.id, receipts)
 	return nil
@@ -468,7 +468,7 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
 // RequestNodeData constructs a getNodeData method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of node state data from the particularly requested peer.
-func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
+func (dlp *downloadTesterPeer) RequestNodeData(id uint64, hashes []common.Hash) error {
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
 
@@ -1551,20 +1551,20 @@ type floodingTestPeer struct {
 }
 
 func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
-func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
-	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
+func (ftp *floodingTestPeer) RequestHeadersByHash(id uint64, hash common.Hash, count int, skip int, reverse bool) error {
+	return ftp.peer.RequestHeadersByHash(id, hash, count, skip, reverse)
 }
-func (ftp *floodingTestPeer) RequestBodies(hashes []common.Hash) error {
-	return ftp.peer.RequestBodies(hashes)
+func (ftp *floodingTestPeer) RequestBodies(id uint64, hashes []common.Hash) error {
+	return ftp.peer.RequestBodies(id, hashes)
 }
-func (ftp *floodingTestPeer) RequestReceipts(hashes []common.Hash) error {
-	return ftp.peer.RequestReceipts(hashes)
+func (ftp *floodingTestPeer) RequestReceipts(id uint64, hashes []common.Hash) error {
+	return ftp.peer.RequestReceipts(id, hashes)
 }
-func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
-	return ftp.peer.RequestNodeData(hashes)
+func (ftp *floodingTestPeer) RequestNodeData(id uint64, hashes []common.Hash) error {
+	return ftp.peer.RequestNodeData(id, hashes)
 }
 
-func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {
+func (ftp *floodingTestPeer) RequestHeadersByNumber(id uint64, from uint64, count, skip int, reverse bool) error {
 	deliveriesDone := make(chan struct{}, 500)
 	for i := 0; i < cap(deliveriesDone)-1; i++ {
 		peer := fmt.Sprintf("fake-peer%d", i)
@@ -1584,7 +1584,7 @@ func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int
 				// Start delivering the requested headers
 				// after one of the flooding responses has arrived.
 				go func() {
-					ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
+					ftp.peer.RequestHeadersByNumber(id, from, count, skip, reverse)
 					deliveriesDone <- struct{}{}
 				}()
 				launched = true

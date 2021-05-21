@@ -195,7 +195,7 @@ func (f *fetcherTester) makeHeaderFetcher(peer string, blocks map[common.Hash]*t
 		closure[hash] = block
 	}
 	// Create a function that return a header from the closure
-	return func(hash common.Hash) error {
+	return func(id uint64, hash common.Hash) error {
 		// Gather the blocks to return
 		headers := make([]*types.Header, 0, 1)
 		if block, ok := closure[hash]; ok {
@@ -215,7 +215,7 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 		closure[hash] = block
 	}
 	// Create a function that returns blocks from the closure
-	return func(hashes []common.Hash) error {
+	return func(id uint64, hashes []common.Hash) error {
 		// Gather the block bodies to return
 		transactions := make([][]*types.Transaction, 0, len(hashes))
 		uncles := make([][]*types.Header, 0, len(hashes))
@@ -368,13 +368,13 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	secondBodyFetcher := tester.makeBodyFetcher("second", blocks, 0)
 
 	counter := uint32(0)
-	firstHeaderWrapper := func(hash common.Hash) error {
+	firstHeaderWrapper := func(id uint64, hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
-		return firstHeaderFetcher(hash)
+		return firstHeaderFetcher(id, hash)
 	}
-	secondHeaderWrapper := func(hash common.Hash) error {
+	secondHeaderWrapper := func(id uint64, hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
-		return secondHeaderFetcher(hash)
+		return secondHeaderFetcher(id, hash)
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
@@ -468,13 +468,13 @@ func testPendingDeduplication(t *testing.T, light bool) {
 
 	delay := 50 * time.Millisecond
 	counter := uint32(0)
-	headerWrapper := func(hash common.Hash) error {
+	headerWrapper := func(id uint64, hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
 
 		// Simulate a long running fetch
 		go func() {
 			time.Sleep(delay)
-			headerFetcher(hash)
+			headerFetcher(id, hash)
 		}()
 		return nil
 	}

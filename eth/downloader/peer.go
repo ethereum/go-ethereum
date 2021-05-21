@@ -23,6 +23,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -72,16 +73,16 @@ type peerConnection struct {
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
 	Head() (common.Hash, *big.Int)
-	RequestHeadersByHash(common.Hash, int, int, bool) error
-	RequestHeadersByNumber(uint64, int, int, bool) error
+	RequestHeadersByHash(uint64, common.Hash, int, int, bool) error
+	RequestHeadersByNumber(uint64, uint64, int, int, bool) error
 }
 
 // Peer encapsulates the methods required to synchronise with a remote full peer.
 type Peer interface {
 	LightPeer
-	RequestBodies([]common.Hash) error
-	RequestReceipts([]common.Hash) error
-	RequestNodeData([]common.Hash) error
+	RequestBodies(uint64, []common.Hash) error
+	RequestReceipts(uint64, []common.Hash) error
+	RequestNodeData(uint64, []common.Hash) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -90,19 +91,19 @@ type lightPeerWrapper struct {
 }
 
 func (w *lightPeerWrapper) Head() (common.Hash, *big.Int) { return w.peer.Head() }
-func (w *lightPeerWrapper) RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool) error {
-	return w.peer.RequestHeadersByHash(h, amount, skip, reverse)
+func (w *lightPeerWrapper) RequestHeadersByHash(id uint64, h common.Hash, amount int, skip int, reverse bool) error {
+	return w.peer.RequestHeadersByHash(id, h, amount, skip, reverse)
 }
-func (w *lightPeerWrapper) RequestHeadersByNumber(i uint64, amount int, skip int, reverse bool) error {
-	return w.peer.RequestHeadersByNumber(i, amount, skip, reverse)
+func (w *lightPeerWrapper) RequestHeadersByNumber(id uint64, number uint64, amount int, skip int, reverse bool) error {
+	return w.peer.RequestHeadersByNumber(id, number, amount, skip, reverse)
 }
-func (w *lightPeerWrapper) RequestBodies([]common.Hash) error {
+func (w *lightPeerWrapper) RequestBodies(uint64, []common.Hash) error {
 	panic("RequestBodies not supported in light client mode sync")
 }
-func (w *lightPeerWrapper) RequestReceipts([]common.Hash) error {
+func (w *lightPeerWrapper) RequestReceipts(uint64, []common.Hash) error {
 	panic("RequestReceipts not supported in light client mode sync")
 }
-func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
+func (w *lightPeerWrapper) RequestNodeData(uint64, []common.Hash) error {
 	panic("RequestNodeData not supported in light client mode sync")
 }
 
@@ -139,7 +140,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	p.headerStarted = time.Now()
 
 	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestHeadersByNumber(from, count, 0, false)
+	go p.peer.RequestHeadersByNumber(rand.Uint64(), from, count, 0, false)
 
 	return nil
 }
@@ -158,7 +159,7 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 		for _, header := range request.Headers {
 			hashes = append(hashes, header.Hash())
 		}
-		p.peer.RequestBodies(hashes)
+		p.peer.RequestBodies(rand.Uint64(), hashes)
 	}()
 
 	return nil
@@ -178,7 +179,7 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 		for _, header := range request.Headers {
 			hashes = append(hashes, header.Hash())
 		}
-		p.peer.RequestReceipts(hashes)
+		p.peer.RequestReceipts(rand.Uint64(), hashes)
 	}()
 
 	return nil
@@ -192,7 +193,7 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	}
 	p.stateStarted = time.Now()
 
-	go p.peer.RequestNodeData(hashes)
+	go p.peer.RequestNodeData(rand.Uint64(), hashes)
 
 	return nil
 }
