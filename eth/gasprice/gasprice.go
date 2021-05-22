@@ -210,7 +210,7 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 
 	var prices []*big.Int
 	for _, tx := range txs {
-		if ignoreUnder != nil && tx.GasPriceIntCmp(ignoreUnder) == -1 {
+		if ignoreUnder != nil && tx.GasPrice().Cmp(ignoreUnder) == -1 {
 			continue
 		}
 		sender, err := types.Sender(signer, tx)

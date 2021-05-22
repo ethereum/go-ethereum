@@ -306,16 +306,6 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
-// GasPriceCmp compares the gas prices of two transactions.
-func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.inner.gasPrice().Cmp(other.inner.gasPrice())
-}
-
-// GasPriceIntCmp compares the gas price of the transaction against the given price.
-func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
-	return tx.inner.gasPrice().Cmp(other)
-}
-
 // FeeCapCmp compares the fee cap of two transactions.
 func (tx *Transaction) FeeCapCmp(other *Transaction) int {
 	return tx.inner.feeCap().Cmp(other.inner.feeCap())
