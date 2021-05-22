@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -479,4 +480,36 @@ func BenchmarkEncodeBigInts(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func BenchmarkEncodeConcurrentInterface(b *testing.B) {
+	type struct1 struct {
+		A string
+		B *big.Int
+		C [20]byte
+	}
+	value := []interface{}{
+		uint(999),
+		&struct1{A: "hello", B: big.NewInt(0xFFFFFFFF)},
+		[10]byte{1, 2, 3, 4, 5, 6},
+		[]string{"yeah", "yeah", "yeah"},
+	}
+
+	var wg sync.WaitGroup
+	for cpu := 0; cpu < runtime.NumCPU(); cpu++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var buffer bytes.Buffer
+			for i := 0; i < b.N; i++ {
+				buffer.Reset()
+				err := Encode(&buffer, value)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
