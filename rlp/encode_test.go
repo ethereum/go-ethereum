@@ -513,3 +513,22 @@ func BenchmarkEncodeConcurrentInterface(b *testing.B) {
 	}
 	wg.Wait()
 }
+
+type byteArrayStruct struct {
+	A [20]byte
+	B [32]byte
+	C [32]byte
+}
+
+func BenchmarkEncodeByteArrayStruct(b *testing.B) {
+	var out bytes.Buffer
+	var value byteArrayStruct
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		out.Reset()
+		if err := Encode(&out, &value); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

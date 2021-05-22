@@ -26,6 +26,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestStreamKind(t *testing.T) {
@@ -1063,7 +1065,7 @@ func ExampleStream() {
 	// [102 111 111 98 97 114] <nil>
 }
 
-func BenchmarkDecode(b *testing.B) {
+func BenchmarkDecodeUints(b *testing.B) {
 	enc := encodeTestSlice(90000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
@@ -1078,7 +1080,7 @@ func BenchmarkDecode(b *testing.B) {
 	}
 }
 
-func BenchmarkDecodeIntSliceReuse(b *testing.B) {
+func BenchmarkDecodeUintsReused(b *testing.B) {
 	enc := encodeTestSlice(100000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
@@ -1089,6 +1091,44 @@ func BenchmarkDecodeIntSliceReuse(b *testing.B) {
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
 			b.Fatalf("Decode error: %v", err)
+		}
+	}
+}
+
+func BenchmarkDecodeByteArrayStruct(b *testing.B) {
+	enc, err := EncodeToBytes(&byteArrayStruct{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(enc)))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var out byteArrayStruct
+	for i := 0; i < b.N; i++ {
+		if err := DecodeBytes(enc, &out); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkDecodeBigInts(b *testing.B) {
+	ints := make([]*big.Int, 200)
+	for i := range ints {
+		ints[i] = math.BigPow(2, int64(i))
+	}
+	enc, err := EncodeToBytes(ints)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(enc)))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var out []*big.Int
+	for i := 0; i < b.N; i++ {
+		if err := DecodeBytes(enc, &out); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

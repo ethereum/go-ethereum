@@ -348,25 +348,23 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	if err != nil {
 		return err
 	}
-	vlen := val.Len()
+	slice := byteArrayBytes(val)
 	switch kind {
 	case Byte:
-		if vlen == 0 {
+		if len(slice) == 0 {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
-		}
-		if vlen > 1 {
+		} else if len(slice) > 1 {
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
-		bv, _ := s.Uint()
-		val.Index(0).SetUint(bv)
+		slice[0] = s.byteval
+		s.kind = -1
 	case String:
-		if uint64(vlen) < size {
+		if uint64(len(slice)) < size {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
-		if uint64(vlen) > size {
+		if uint64(len(slice)) > size {
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
-		slice := val.Slice(0, vlen).Interface().([]byte)
 		if err := s.readFull(slice); err != nil {
 			return err
 		}
