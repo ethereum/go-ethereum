@@ -329,6 +329,11 @@ type recstruct struct {
 	Child *recstruct `rlp:"nil"`
 }
 
+type bigIntStruct struct {
+	I *big.Int
+	B string
+}
+
 type invalidNilTag struct {
 	X []byte `rlp:"nil"`
 }
@@ -500,6 +505,13 @@ var decodeTests = []decodeTest{
 		input: "C601C402C203C0",
 		ptr:   new(recstruct),
 		value: recstruct{1, &recstruct{2, &recstruct{3, nil}}},
+	},
+	{
+		// This checks that empty big.Int works correctly in struct context. It's easy to
+		// miss the update of s.kind for this case, so it needs its own test.
+		input: "C58083343434",
+		ptr:   new(bigIntStruct),
+		value: bigIntStruct{new(big.Int), "444"},
 	},
 
 	// struct errors
