@@ -27,9 +27,9 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/dezzyboy/go-ethereum/acash/catalyst"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/cmd/utils"
-	"github.com/dezzyboy/go-ethereum/eth/catalyst"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/internal/ethapi"
 	"github.com/dezzyboy/go-ethereum/metrics"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -76,7 +76,7 @@ type ethstatsConfig struct {
 }
 
 type gethConfig struct {
-	Eth      ethconfig.Config
+	Acash    ethconfig.Config
 	Node     node.Config
 	Ethstats ethstatsConfig
 	Metrics  metrics.Config
@@ -101,8 +101,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
-	cfg.WSModules = append(cfg.WSModules, "eth")
+	cfg.HTTPModules = append(cfg.HTTPModules, "acash")
+	cfg.WSModules = append(cfg.WSModules, "acash")
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }
@@ -111,7 +111,7 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
-		Eth:     ethconfig.Defaults,
+		Acash:   ethconfig.Defaults,
 		Node:    defaultNodeConfig(),
 		Metrics: metrics.DefaultConfig,
 	}
@@ -129,7 +129,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	utils.SetEthConfig(ctx, stack, &cfg.Eth)
+	utils.SetEthConfig(ctx, stack, &cfg.Acash)
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
@@ -142,16 +142,16 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
-		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
+		cfg.Acash.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+	backend, acash := utils.RegisterEthService(stack, &cfg.Acash)
 
 	// Configure catalyst.
 	if ctx.GlobalBool(utils.CatalystFlag.Name) {
-		if eth == nil {
+		if acash == nil {
 			utils.Fatalf("Catalyst does not work in light client mode.")
 		}
-		if err := catalyst.Register(stack, eth); err != nil {
+		if err := catalyst.Register(stack, acash); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
@@ -172,8 +172,8 @@ func dumpConfig(ctx *cli.Context) error {
 	_, cfg := makeConfigNode(ctx)
 	comment := ""
 
-	if cfg.Eth.Genesis != nil {
-		cfg.Eth.Genesis = nil
+	if cfg.Acash.Genesis != nil {
+		cfg.Acash.Genesis = nil
 		comment += "# Note: this config doesn't contain the genesis block.\n\n"
 	}
 

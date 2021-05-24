@@ -28,12 +28,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/internal/debug"
 	"github.com/dezzyboy/go-ethereum/log"

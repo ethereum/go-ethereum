@@ -933,7 +933,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 }
 
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-// [deprecated by eth/62]
+// [deprecated by acash/62]
 func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {

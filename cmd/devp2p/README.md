@@ -44,14 +44,14 @@ set to standard output. The following filters are supported:
 - `-limit <N>` limits the output set to N entries, taking the top N nodes by score
 - `-ip <CIDR>` filters nodes by IP subnet
 - `-min-age <duration>` filters nodes by 'first seen' time
-- `-eth-network <mainnet/rinkeby/goerli/ropsten>` filters nodes by "eth" ENR entry
+- `-acash-network <mainnet/rinkeby/goerli/ropsten>` filters nodes by "acash" ENR entry
 - `-les-server` filters nodes by LES server support
 - `-snap` filters nodes by snap protocol support
 
 For example, given a node set in `nodes.json`, you could create a filtered set containing
-up to 20 eth mainnet nodes which also support snap sync using this command:
+up to 20 acash mainnet nodes which also support snap sync using this command:
 
-    devp2p nodeset filter nodes.json -eth-network mainnet -snap -limit 20
+    devp2p nodeset filter nodes.json -acash-network mainnet -snap -limit 20
 
 ### Discovery v4 Utilities
 
@@ -106,9 +106,9 @@ Start the test by running `devp2p discv5 test -listen1 127.0.0.1 -listen2 127.0.
 
 ### Eth Protocol Test Suite
 
-The Eth Protocol test suite is a conformance test suite for the [eth protocol][eth].
+The Eth Protocol test suite is a conformance test suite for the [acash protocol][acash].
 
-To run the eth protocol test suite against your implementation, the node needs to be initialized as such:
+To run the acash protocol test suite against your implementation, the node needs to be initialized as such:
 
 1. initialize the geth node with the `genesis.json` file contained in the `testdata` directory
 2. import the `halfchain.rlp` file in the `testdata` directory
@@ -119,14 +119,14 @@ geth --datadir <datadir> --nodiscover --nat=none --networkid 19763 --verbosity 5
 
 Then, run the following command, replacing `<enode>` with the enode of the geth node:
  ```
- devp2p rlpx eth-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
+ devp2p rlpx acash-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
 ```
 
 Repeat the above process (re-initialising the node) in order to run the Eth Protocol test suite again.
 
 #### Eth66 Test Suite
 
-The Eth66 test suite is also a conformance test suite for the eth 66 protocol version specifically.
+The Eth66 test suite is also a conformance test suite for the acash 66 protocol version specifically.
 To run the eth66 protocol test suite, initialize a geth node as described above and run the following command,
 replacing `<enode>` with the enode of the geth node:
 
@@ -134,7 +134,7 @@ replacing `<enode>` with the enode of the geth node:
  devp2p rlpx eth66-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
 ```
 
-[eth]: https://github.com/ethereum/devp2p/blob/master/caps/eth.md
+[acash]: https://github.com/ethereum/devp2p/blob/master/caps/acash.md
 [dns-tutorial]: https://geth.ethereum.org/docs/developers/dns-discovery-setup
 [discv4]: https://github.com/ethereum/devp2p/tree/master/discv4.md
 [discv5]: https://github.com/ethereum/devp2p/tree/master/discv5/discv5.md

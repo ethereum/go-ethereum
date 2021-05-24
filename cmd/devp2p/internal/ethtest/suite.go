@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/internal/utesting"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/p2p/enode"
@@ -42,7 +42,7 @@ var pretty = spew.ConfigState{
 
 var timeout = 20 * time.Second
 
-// Suite represents a structure used to test the eth
+// Suite represents a structure used to test the acash
 // protocol of a node(s).
 type Suite struct {
 	Dest *enode.Node
@@ -51,7 +51,7 @@ type Suite struct {
 	fullChain *Chain
 }
 
-// NewSuite creates and returns a new eth-test suite that can
+// NewSuite creates and returns a new acash-test suite that can
 // be used to test the given node against the given blockchain
 // data.
 func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, error) {
@@ -118,7 +118,7 @@ func (s *Suite) EthTests() []utesting.Test {
 
 func (s *Suite) Eth66Tests() []utesting.Test {
 	return []utesting.Test{
-		// only proceed with eth66 test suite if node supports eth 66 protocol
+		// only proceed with eth66 test suite if node supports acash 66 protocol
 		{Name: "TestStatus_66", Fn: s.TestStatus_66},
 		{Name: "TestGetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
 		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
@@ -204,7 +204,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	// get block headers
 	req := &GetBlockHeaders{
-		Origin: eth.HashOrNumber{
+		Origin: acash.HashOrNumber{
 			Hash: s.chain.blocks[1].Hash(),
 		},
 		Amount:  2,
@@ -304,24 +304,24 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			ID: append(pub0, byte(0)),
 		},
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			ID: append(pub0, pub0...),
 		},
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			ID: largeBuffer(2),
 		},
@@ -505,8 +505,8 @@ func (s *Suite) dial() (*Conn, error) {
 	}
 	// set default p2p capabilities
 	conn.caps = []p2p.Cap{
-		{Name: "eth", Version: 64},
-		{Name: "eth", Version: 65},
+		{Name: "acash", Version: 64},
+		{Name: "acash", Version: 65},
 	}
 	conn.ourHighestProtoVersion = 65
 	return &conn, nil

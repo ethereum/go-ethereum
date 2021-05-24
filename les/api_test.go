@@ -28,12 +28,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/hexutil"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/les/flowcontrol"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -504,7 +504,7 @@ func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.L
 	config.SyncMode = downloader.FullSync
 	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
-	ethereum, err := eth.New(stack, &config)
+	ethereum, err := acash.New(stack, &config)
 	if err != nil {
 		return nil, err
 	}

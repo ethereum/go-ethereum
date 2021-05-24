@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/internal/utesting"
 	"github.com/dezzyboy/go-ethereum/node"
 	"github.com/dezzyboy/go-ethereum/p2p"
@@ -87,7 +87,7 @@ func setupGeth(stack *node.Node) error {
 		return err
 	}
 
-	backend, err := eth.New(stack, &ethconfig.Config{
+	backend, err := acash.New(stack, &ethconfig.Config{
 		Genesis:                 &chain.genesis,
 		NetworkId:               chain.genesis.Config.ChainID.Uint64(), // 19763
 		DatabaseCache:           10,

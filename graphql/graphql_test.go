@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/node"
 	"github.com/dezzyboy/go-ethereum/params"
 
@@ -253,9 +253,9 @@ func createGQLService(t *testing.T, stack *node.Node) {
 		TrieTimeout:             60 * time.Minute,
 		SnapshotCache:           5,
 	}
-	ethBackend, err := eth.New(stack, ethConf)
+	ethBackend, err := acash.New(stack, ethConf)
 	if err != nil {
-		t.Fatalf("could not create eth backend: %v", err)
+		t.Fatalf("could not create acash backend: %v", err)
 	}
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
@@ -310,9 +310,9 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 		SnapshotCache:           5,
 	}
 
-	ethBackend, err := eth.New(stack, ethConf)
+	ethBackend, err := acash.New(stack, ethConf)
 	if err != nil {
-		t.Fatalf("could not create eth backend: %v", err)
+		t.Fatalf("could not create acash backend: %v", err)
 	}
 	signer := types.LatestSigner(ethConf.Genesis.Config)
 

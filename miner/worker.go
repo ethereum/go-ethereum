@@ -126,7 +126,7 @@ type worker struct {
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
-	eth         Backend
+	acash       Backend
 	chain       *core.BlockChain
 
 	// Feeds
@@ -187,18 +187,18 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, acash Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
-		eth:                eth,
+		acash:              acash,
 		mux:                mux,
-		chain:              eth.BlockChain(),
+		chain:              acash.BlockChain(),
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		unconfirmed:        newUnconfirmedBlocks(acash.BlockChain(), miningLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -212,10 +212,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
 	// Subscribe NewTxsEvent for tx pool
-	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+	worker.txsSub = acash.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
-	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
-	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+	worker.chainHeadSub = acash.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
+	worker.chainSideSub = acash.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -963,7 +963,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	// Fill the block with all available pending transactions.
-	pending, err := w.eth.TxPool().Pending()
+	pending, err := w.acash.TxPool().Pending()
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
@@ -977,7 +977,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
-	for _, account := range w.eth.TxPool().Locals() {
+	for _, account := range w.acash.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
 			localTxs[account] = txs
@@ -1048,7 +1048,7 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
+// totalFees computes total consumed miner fees in ACASH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {

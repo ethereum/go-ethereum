@@ -23,8 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/les/flowcontrol"
 	"github.com/dezzyboy/go-ethereum/log"

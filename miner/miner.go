@@ -22,13 +22,13 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/hexutil"
 	"github.com/dezzyboy/go-ethereum/consensus"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/state"
 	"github.com/dezzyboy/go-ethereum/core/types"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/params"
@@ -58,22 +58,22 @@ type Miner struct {
 	mux      *event.TypeMux
 	worker   *worker
 	coinbase common.Address
-	eth      Backend
+	acash    Backend
 	engine   consensus.Engine
 	exitCh   chan struct{}
 	startCh  chan common.Address
 	stopCh   chan struct{}
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+func New(acash Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
-		eth:     eth,
+		acash:   acash,
 		mux:     mux,
 		engine:  engine,
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		worker:  newWorker(config, chainConfig, engine, acash, mux, isLocalBlock, true),
 	}
 	go miner.update()
 

@@ -65,7 +65,7 @@ func (p *pruner) loop() {
 
 	// pruning finds the sections that have been processed by all indexers
 	// and deletes all historical chain data.
-	// Note, if some indexers don't support pruning(e.g. eth.BloomIndexer),
+	// Note, if some indexers don't support pruning(e.g. acash.BloomIndexer),
 	// pruning operations can be silently ignored.
 	pruning := func() {
 		min := uint64(math.MaxUint64)

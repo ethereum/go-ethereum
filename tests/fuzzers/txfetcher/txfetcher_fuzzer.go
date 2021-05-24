@@ -23,10 +23,10 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/fetcher"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
 	"github.com/dezzyboy/go-ethereum/core/types"
-	"github.com/dezzyboy/go-ethereum/eth/fetcher"
 )
 
 var (

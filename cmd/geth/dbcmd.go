@@ -208,7 +208,7 @@ func removeDB(ctx *cli.Context) error {
 		log.Info("Full node state database missing", "path", path)
 	}
 	// Remove the full node ancient database
-	path = config.Eth.DatabaseFreezer
+	path = config.Acash.DatabaseFreezer
 	switch {
 	case path == "":
 		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")

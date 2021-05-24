@@ -163,7 +163,7 @@ func (p *peerCommons) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id, fmt.Sprintf("les/%d", p.version))
 }
 
-// PeerInfo represents a short summary of the `eth` sub-protocol metadata known
+// PeerInfo represents a short summary of the `acash` sub-protocol metadata known
 // about a connected peer.
 type PeerInfo struct {
 	Version    int      `json:"version"`    // Ethereum protocol version negotiated
@@ -1406,7 +1406,7 @@ func (ps *clientPeerSet) close() {
 // serverSet is a special set which contains all connected les servers.
 // Les servers will also be discovered by discovery protocol because they
 // also run the LES protocol. We can't drop them although they are useless
-// for us(server) but for other protocols(e.g. ETH) upon the devp2p they
+// for us(server) but for other protocols(e.g. ACASH) upon the devp2p they
 // may be useful.
 type serverSet struct {
 	lock   sync.Mutex

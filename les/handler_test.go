@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
@@ -30,7 +31,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/light"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/params"

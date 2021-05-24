@@ -33,6 +33,11 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
+	"github.com/dezzyboy/go-ethereum/acash/gasprice"
+	"github.com/dezzyboy/go-ethereum/acash/tracers"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/common"
@@ -44,11 +49,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/vm"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
-	"github.com/dezzyboy/go-ethereum/eth/gasprice"
-	"github.com/dezzyboy/go-ethereum/eth/tracers"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/ethstats"
 	"github.com/dezzyboy/go-ethereum/graphql"
@@ -1179,7 +1179,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if lightClient {
 		ethPeers = 0
 	}
-	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
+	log.Info("Maximum peer count", "ACASH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
@@ -1475,7 +1475,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
-// SetEthConfig applies eth-related command line flags to the config.
+// SetEthConfig applies acash-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, BaikalFlag)
@@ -1715,7 +1715,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *acash.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
@@ -1724,7 +1724,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
-	backend, err := eth.New(stack, cfg)
+	backend, err := acash.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}

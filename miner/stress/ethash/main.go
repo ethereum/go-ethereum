@@ -26,6 +26,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/fdlimit"
@@ -33,9 +36,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/miner"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -60,7 +60,7 @@ func main() {
 	genesis := makeGenesis(faucets)
 
 	var (
-		nodes  []*eth.Ethereum
+		nodes  []*acash.Ethereum
 		enodes []*enode.Node
 	)
 	for i := 0; i < 4; i++ {
@@ -141,7 +141,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+func makeMiner(genesis *core.Genesis) (*node.Node, *acash.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -161,7 +161,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	ethBackend, err := acash.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,

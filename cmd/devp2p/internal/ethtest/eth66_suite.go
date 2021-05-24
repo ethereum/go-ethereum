@@ -19,10 +19,10 @@ package ethtest
 import (
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/internal/utesting"
 	"github.com/dezzyboy/go-ethereum/p2p"
 )
@@ -64,10 +64,10 @@ func (s *Suite) TestGetBlockHeaders_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
 	defer conn.Close()
 	// get block headers
-	req := &eth.GetBlockHeadersPacket66{
+	req := &acash.GetBlockHeadersPacket66{
 		RequestId: 3,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
 			Amount:  2,
@@ -94,10 +94,10 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
 	defer conn.Close()
 	// create two requests
-	req1 := &eth.GetBlockHeadersPacket66{
+	req1 := &acash.GetBlockHeadersPacket66{
 		RequestId: 111,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
 			Amount:  2,
@@ -105,10 +105,10 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 			Reverse: false,
 		},
 	}
-	req2 := &eth.GetBlockHeadersPacket66{
+	req2 := &acash.GetBlockHeadersPacket66{
 		RequestId: 222,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
 			Amount:  4,
@@ -156,9 +156,9 @@ func (s *Suite) TestGetBlockBodies_66(t *utesting.T) {
 	defer conn.Close()
 	// create block bodies request
 	id := uint64(55)
-	req := &eth.GetBlockBodiesPacket66{
+	req := &acash.GetBlockBodiesPacket66{
 		RequestId: id,
-		GetBlockBodiesPacket: eth.GetBlockBodiesPacket{
+		GetBlockBodiesPacket: acash.GetBlockBodiesPacket{
 			s.chain.blocks[54].Hash(),
 			s.chain.blocks[75].Hash(),
 		},
@@ -246,27 +246,27 @@ func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
-				{Name: "eth", Version: 66},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
+				{Name: "acash", Version: 66},
 			},
 			ID: append(pub0, byte(0)),
 		},
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
-				{Name: "eth", Version: 66},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
+				{Name: "acash", Version: 66},
 			},
 			ID: append(pub0, pub0...),
 		},
 		{
 			Version: 5,
 			Caps: []p2p.Cap{
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
-				{Name: "eth", Version: 66},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
+				{Name: "acash", Version: 66},
 			},
 			ID: largeBuffer(2),
 		},
@@ -377,10 +377,10 @@ func (s *Suite) TestZeroRequestID_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
 	defer conn.Close()
 
-	req := &eth.GetBlockHeadersPacket66{
+	req := &acash.GetBlockHeadersPacket66{
 		RequestId: 0,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Number: 0,
 			},
 			Amount: 2,
@@ -401,19 +401,19 @@ func (s *Suite) TestSameRequestID_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
 	// create two requests with the same request ID
 	reqID := uint64(1234)
-	request1 := &eth.GetBlockHeadersPacket66{
+	request1 := &acash.GetBlockHeadersPacket66{
 		RequestId: reqID,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Number: 1,
 			},
 			Amount: 2,
 		},
 	}
-	request2 := &eth.GetBlockHeadersPacket66{
+	request2 := &acash.GetBlockHeadersPacket66{
 		RequestId: reqID,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+		GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+			Origin: acash.HashOrNumber{
 				Number: 33,
 			},
 			Amount: 2,
@@ -462,7 +462,7 @@ func (s *Suite) TestLargeTxRequest_66(t *utesting.T) {
 	for _, hash := range hashMap {
 		hashes = append(hashes, hash)
 	}
-	getTxReq := &eth.GetPooledTransactionsPacket66{
+	getTxReq := &acash.GetPooledTransactionsPacket66{
 		RequestId:                   1234,
 		GetPooledTransactionsPacket: hashes,
 	}

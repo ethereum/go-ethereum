@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/core/types"
-	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/internal/utesting"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/rlp"
@@ -46,12 +46,12 @@ func (s *Suite) dial66(t *utesting.T) *Conn {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
-	conn.caps = append(conn.caps, p2p.Cap{Name: "eth", Version: 66})
+	conn.caps = append(conn.caps, p2p.Cap{Name: "acash", Version: 66})
 	conn.ourHighestProtoVersion = 66
 	return conn
 }
 
-func (c *Conn) write66(req eth.Packet, code int) error {
+func (c *Conn) write66(req acash.Packet, code int) error {
 	payload, err := rlp.EncodeToBytes(req)
 	if err != nil {
 		return err
@@ -81,25 +81,25 @@ func (c *Conn) read66() (uint64, Message) {
 	case (Status{}).Code():
 		msg = new(Status)
 	case (GetBlockHeaders{}).Code():
-		ethMsg := new(eth.GetBlockHeadersPacket66)
+		ethMsg := new(acash.GetBlockHeadersPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
 		return ethMsg.RequestId, GetBlockHeaders(*ethMsg.GetBlockHeadersPacket)
 	case (BlockHeaders{}).Code():
-		ethMsg := new(eth.BlockHeadersPacket66)
+		ethMsg := new(acash.BlockHeadersPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
 		return ethMsg.RequestId, BlockHeaders(ethMsg.BlockHeadersPacket)
 	case (GetBlockBodies{}).Code():
-		ethMsg := new(eth.GetBlockBodiesPacket66)
+		ethMsg := new(acash.GetBlockBodiesPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
 		return ethMsg.RequestId, GetBlockBodies(ethMsg.GetBlockBodiesPacket)
 	case (BlockBodies{}).Code():
-		ethMsg := new(eth.BlockBodiesPacket66)
+		ethMsg := new(acash.BlockBodiesPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
@@ -113,13 +113,13 @@ func (c *Conn) read66() (uint64, Message) {
 	case (NewPooledTransactionHashes{}).Code():
 		msg = new(NewPooledTransactionHashes)
 	case (GetPooledTransactions{}.Code()):
-		ethMsg := new(eth.GetPooledTransactionsPacket66)
+		ethMsg := new(acash.GetPooledTransactionsPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
 		return ethMsg.RequestId, GetPooledTransactions(ethMsg.GetPooledTransactionsPacket)
 	case (PooledTransactions{}.Code()):
-		ethMsg := new(eth.PooledTransactionsPacket66)
+		ethMsg := new(acash.PooledTransactionsPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return 0, errorf("could not rlp decode message: %v", err)
 		}
@@ -163,9 +163,9 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 			if err != nil {
 				return 0, errorf("could not get headers for inbound header request: %v", err)
 			}
-			resp := &eth.BlockHeadersPacket66{
+			resp := &acash.BlockHeadersPacket66{
 				RequestId:          reqID,
-				BlockHeadersPacket: eth.BlockHeadersPacket(headers),
+				BlockHeadersPacket: acash.BlockHeadersPacket(headers),
 			}
 			if err := c.write66(resp, BlockHeaders{}.Code()); err != nil {
 				return 0, errorf("could not write to connection: %v", err)
@@ -235,10 +235,10 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 	// so the GetBlockHeaders request must be sent again until the BlockHeaders
 	// response contains the desired header.
 	for {
-		req := eth.GetBlockHeadersPacket66{
+		req := acash.GetBlockHeadersPacket66{
 			RequestId: 54,
-			GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-				Origin: eth.HashOrNumber{
+			GetBlockHeadersPacket: &acash.GetBlockHeadersPacket{
+				Origin: acash.HashOrNumber{
 					Hash: block.Hash(),
 				},
 				Amount: 1,
@@ -291,7 +291,7 @@ func (s *Suite) waitForBlockHeadersResponse66(conn *Conn, expectedID uint64) (Bl
 	}
 }
 
-func (s *Suite) getBlockHeaders66(conn *Conn, req eth.Packet, expectedID uint64) (BlockHeaders, error) {
+func (s *Suite) getBlockHeaders66(conn *Conn, req acash.Packet, expectedID uint64) (BlockHeaders, error) {
 	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
 		return nil, fmt.Errorf("could not write to connection: %v", err)
 	}

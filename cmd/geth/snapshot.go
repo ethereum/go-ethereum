@@ -180,7 +180,7 @@ func pruneState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
-	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.GlobalUint64(utils.BloomFilterSizeFlag.Name))
+	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Acash.TrieCleanCacheJournal), ctx.GlobalUint64(utils.BloomFilterSizeFlag.Name))
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err

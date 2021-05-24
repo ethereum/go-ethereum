@@ -21,13 +21,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
+	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/stretchr/testify/assert"
 )
 
 // TestEthProtocolNegotiation tests whether the test suite
-// can negotiate the highest eth protocol in a status message exchange
+// can negotiate the highest acash protocol in a status message exchange
 func TestEthProtocolNegotiation(t *testing.T) {
 	var tests = []struct {
 		conn     *Conn
@@ -39,9 +39,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 65,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			expected: uint32(65),
 		},
@@ -50,9 +50,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 65,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			expected: uint32(65),
 		},
@@ -61,9 +61,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 65,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			expected: uint32(65),
 		},
@@ -72,9 +72,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 64,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
+				{Name: "acash", Version: 65},
 			},
 			expected: 64,
 		},
@@ -83,9 +83,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 65,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 0},
-				{Name: "eth", Version: 89},
-				{Name: "eth", Version: 65},
+				{Name: "acash", Version: 0},
+				{Name: "acash", Version: 89},
+				{Name: "acash", Version: 65},
 			},
 			expected: uint32(65),
 		},
@@ -94,8 +94,8 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 64,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
 				{Name: "wrongProto", Version: 65},
 			},
 			expected: uint32(64),
@@ -105,8 +105,8 @@ func TestEthProtocolNegotiation(t *testing.T) {
 				ourHighestProtoVersion: 65,
 			},
 			caps: []p2p.Cap{
-				{Name: "eth", Version: 63},
-				{Name: "eth", Version: 64},
+				{Name: "acash", Version: 63},
+				{Name: "acash", Version: 64},
 				{Name: "wrongProto", Version: 65},
 			},
 			expected: uint32(64),
@@ -144,7 +144,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	}{
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: acash.HashOrNumber{
 					Number: uint64(2),
 				},
 				Amount:  uint64(5),
@@ -161,7 +161,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: acash.HashOrNumber{
 					Number: uint64(chain.Len() - 1),
 				},
 				Amount:  uint64(3),
@@ -176,7 +176,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: acash.HashOrNumber{
 					Hash: chain.Head().Hash(),
 				},
 				Amount:  uint64(1),

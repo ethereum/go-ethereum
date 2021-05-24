@@ -27,14 +27,14 @@ import (
 	"time"
 
 	"github.com/dezzyboy/go-ethereum"
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/node"
 	"github.com/dezzyboy/go-ethereum/params"
 	"github.com/dezzyboy/go-ethereum/rpc"
@@ -198,7 +198,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
 	config.Ethash.PowMode = ethash.ModeFake
-	ethservice, err := eth.New(n, config)
+	ethservice, err := acash.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}

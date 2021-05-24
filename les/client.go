@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
+	"github.com/dezzyboy/go-ethereum/acash/filters"
+	"github.com/dezzyboy/go-ethereum/acash/gasprice"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/hexutil"
@@ -30,10 +34,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/bloombits"
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
-	"github.com/dezzyboy/go-ethereum/eth/filters"
-	"github.com/dezzyboy/go-ethereum/eth/gasprice"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/internal/ethapi"
 	"github.com/dezzyboy/go-ethereum/les/vflux"
@@ -80,11 +80,11 @@ type LightEthereum struct {
 
 // New creates an instance of the light client.
 func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
-	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
+	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "acash/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
-	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/lesclient/", false)
+	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "acash/db/lesclient/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -289,17 +289,17 @@ func (s *LightEthereum) APIs() []rpc.API {
 	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
 	return append(apis, []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true, 5*time.Minute),
 			Public:    true,

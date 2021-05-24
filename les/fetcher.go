@@ -22,12 +22,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash/fetcher"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
-	"github.com/dezzyboy/go-ethereum/eth/fetcher"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/light"
 	"github.com/dezzyboy/go-ethereum/log"
@@ -125,7 +125,7 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 }
 
 // lightFetcher implements retrieval of newly announced headers. It reuses
-// the eth.BlockFetcher as the underlying fetcher but adding more additional
+// the acash.BlockFetcher as the underlying fetcher but adding more additional
 // rules: e.g. evict "timeout" peers.
 type lightFetcher struct {
 	// Various handlers
@@ -498,8 +498,8 @@ func (f *lightFetcher) trackRequest(peerid enode.ID, reqid uint64, hash common.H
 // requestHeaderByHash constructs a header retrieval request and sends it to
 // local request distributor.
 //
-// Note, we rely on the underlying eth/fetcher to retrieve and validate the
-// response, so that we have to obey the rule of eth/fetcher which only accepts
+// Note, we rely on the underlying acash/fetcher to retrieve and validate the
+// response, so that we have to obey the rule of acash/fetcher which only accepts
 // the response from given peer.
 func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) error {
 	return func(hash common.Hash) error {

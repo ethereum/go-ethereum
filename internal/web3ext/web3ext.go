@@ -24,7 +24,7 @@ var Modules = map[string]string{
 	"clique":     CliqueJs,
 	"ethash":     EthashJs,
 	"debug":      DebugJs,
-	"eth":        EthJs,
+	"acash":      EthJs,
 	"miner":      MinerJs,
 	"net":        NetJs,
 	"personal":   PersonalJs,
@@ -489,7 +489,7 @@ web3._extend({
 
 const EthJs = `
 web3._extend({
-	property: 'eth',
+	property: 'acash',
 	methods: [
 		new web3._extend.Method({
 			name: 'chainId',

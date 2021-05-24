@@ -1,0 +1,82 @@
+"enode://a79201ef48730a1a733f8e5fb866d533e8a3ef8ba3495f051ea8e8ca5873f642b9f46a76bf30522ade3fe8b3aff7164e20a75acda10e00b77a4daa27f83571d8@216.128.176.172:30301"
+"enode://9df25fe574373b8bbce48d2a227ae1aeba3178075c4a4a1dfc8bd1a3af25ccbb41aa50a8f8629e9df81a7759e0d0b3611bbd50017ebc02c1087d932d36860dc8@155.138.134.40:30301"
+
+
+
+0x768da4687cf0e8CB4ADb21aa00d6d19898B3D09E
+
+0xda7C02362c5f829cf86b91aa722b2d7b71CD52FC
+
+
+{
+  "config": {
+    "chainId": 15,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "ethash": {}
+  },
+  "difficulty": "1",
+  "gasLimit": "8000000",
+  "alloc": {
+    "7df9a875a174b3bc565e6424a0050ebc1b2d1d82": { "balance": "300000" },
+    "f41c74c9ae680c1aa78f42e5647a62f353b7bdde": { "balance": "400000" }
+  }
+}
+
+{
+  "config": {
+    "chainId": 545454,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "clique": {
+      "period": 3,
+      "epoch": 200
+    }
+  },
+  "difficulty": "1",
+  "gasLimit": "8000000",
+  "extradata": "0x0000000000000000000000000000000000000000000000000000000000000000768da4687cf0e8CB4ADb21aa00d6d19898B3D09E0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "alloc": {
+    "0x768da4687cf0e8CB4ADb21aa00d6d19898B3D09E": { "balance": "1000000" },
+    "0xda7C02362c5f829cf86b91aa722b2d7b71CD52FC": { "balance": "1000000" }
+  }
+}
+
+"enode://e206cfd7e22fabadac0d18fe35f002f34763f6da9d0aef216e348461a13177572a7375d3c7b0b37cf5b11745ef14d869ac712aa9c482d74399889274fccef5c8@216.128.176.172:50405"
+
+
+--unlock 0x768da4687cf0e8CB4ADb21aa00d6d19898B3D09E --mine
+
+
+{
+  "config": {
+    "chainId": 545454,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "ethash": {}
+  },
+  "difficulty": "1",
+  "gasLimit": "8000000",
+  "alloc": {
+    "0xf04C0adc16296044FD20D3A2844320F662e30C64": { "balance": "1000000" },
+    "0x08F009C9fba9C5918B148Db9B31a0B23d50392Bf": { "balance": "1000000" }
+  }
+}
+
+
+"enr:-J24QFwAKqC1wXblDBhF5KHHIR0CqIG7puw2KAvLW2nbE-r7USt96EGDNTybnEF9QvqHekqZY1xr8N1FG1t2o9h3D0QCg2V0aMfGhCTl8E2AgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQOU0MY_EtZBjbbZFu8CQOYLQ8wyeC0kzLBEhaMGrtDjsYRzbmFwwIN0Y3CCxOWDdWRwgsTl"

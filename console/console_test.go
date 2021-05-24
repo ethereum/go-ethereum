@@ -26,12 +26,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dezzyboy/go-ethereum/acash"
+	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/console/prompt"
 	"github.com/dezzyboy/go-ethereum/core"
-	"github.com/dezzyboy/go-ethereum/eth"
-	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/internal/jsre"
 	"github.com/dezzyboy/go-ethereum/miner"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -78,7 +78,7 @@ func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 type tester struct {
 	workspace string
 	stack     *node.Node
-	ethereum  *eth.Ethereum
+	ethereum  *acash.Ethereum
 	console   *Console
 	input     *hookedPrompter
 	output    *bytes.Buffer
@@ -110,7 +110,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if confOverride != nil {
 		confOverride(ethConf)
 	}
-	ethBackend, err := eth.New(stack, ethConf)
+	ethBackend, err := acash.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}

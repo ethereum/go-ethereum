@@ -2508,7 +2508,7 @@ module.exports={
 
 var RequestManager = require('./web3/requestmanager');
 var Iban = require('./web3/iban');
-var Eth = require('./web3/methods/eth');
+var Acash = require('./web3/methods/acash');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2530,7 +2530,7 @@ var BigNumber = require('bignumber.js');
 function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
-    this.eth = new Eth(this);
+    this.acash = new Acash(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -2632,7 +2632,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/acash":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -2711,7 +2711,7 @@ AllSolidityEvents.prototype.execute = function (options, callback) {
 
     var o = this.encode(options);
     var formatter = this.decode.bind(this);
-    return new Filter(o, 'eth', this._requestManager, watches.eth(), formatter, callback);
+    return new Filter(o, 'acash', this._requestManager, watches.acash(), formatter, callback);
 };
 
 AllSolidityEvents.prototype.attachToContract = function (contract) {
@@ -2955,8 +2955,8 @@ var checkForContractAddress = function(contract, callback){
  * @method ContractFactory
  * @param {Array} abi
  */
-var ContractFactory = function (eth, abi) {
-    this.eth = eth;
+var ContractFactory = function (acash, abi) {
+    this.acash = acash;
     this.abi = abi;
 
     /**
@@ -2972,7 +2972,7 @@ var ContractFactory = function (eth, abi) {
     this.new = function () {
         /*jshint maxcomplexity: 7 */
         
-        var contract = new Contract(this.eth, this.abi);
+        var contract = new Contract(this.acash, this.abi);
 
         // parse arguments
         var options = {}; // required!
@@ -3004,7 +3004,7 @@ var ContractFactory = function (eth, abi) {
         if (callback) {
 
             // wait for the contract address and check if the code was deployed
-            this.eth.sendTransaction(options, function (err, hash) {
+            this.acash.sendTransaction(options, function (err, hash) {
                 if (err) {
                     callback(err);
                 } else {
@@ -3018,7 +3018,7 @@ var ContractFactory = function (eth, abi) {
                 }
             });
         } else {
-            var hash = this.eth.sendTransaction(options);
+            var hash = this.acash.sendTransaction(options);
             // add the transaction hash
             contract.transactionHash = hash;
             checkForContractAddress(contract);
@@ -3053,7 +3053,7 @@ var ContractFactory = function (eth, abi) {
  * otherwise calls callback function (err, contract)
  */
 ContractFactory.prototype.at = function (address, callback) {
-    var contract = new Contract(this.eth, this.abi, address);
+    var contract = new Contract(this.acash, this.abi, address);
 
     // this functions are not part of prototype,
     // because we don't want to spoil the interface
@@ -3093,8 +3093,8 @@ ContractFactory.prototype.getData = function () {
  * @param {Array} abi
  * @param {Address} contract address
  */
-var Contract = function (eth, abi, address) {
-    this._eth = eth;
+var Contract = function (acash, abi, address) {
+    this._eth = acash;
     this.transactionHash = null;
     this.address = address;
     this.abi = abi;
@@ -3336,7 +3336,7 @@ SolidityEvent.prototype.execute = function (indexed, options, callback) {
 
     var o = this.encode(indexed, options);
     var formatter = this.decode.bind(this);
-    return new Filter(o, 'eth', this._requestManager, watches.eth(), formatter, callback);
+    return new Filter(o, 'acash', this._requestManager, watches.acash(), formatter, callback);
 };
 
 /**
@@ -3470,7 +3470,7 @@ var getOptions = function (options, type) {
 
 
     switch(type) {
-        case 'eth':
+        case 'acash':
 
             // make sure topics, get converted to hex
             options.topics = options.topics || [];
@@ -3996,8 +3996,8 @@ var sha3 = require('../utils/sha3');
 /**
  * This prototype should be used to call/sendTransaction to solidity functions
  */
-var SolidityFunction = function (eth, json, address) {
-    this._eth = eth;
+var SolidityFunction = function (acash, json, address) {
+    this._eth = acash;
     this._inputTypes = json.inputs.map(function (i) {
         return i.type;
     });
@@ -4535,7 +4535,7 @@ Iban.fromBban = function (bban) {
  * @return {Iban} the IBAN object
  */
 Iban.createIndirect = function (options) {
-    return Iban.fromBban('ETH' + options.institution + options.identifier);
+    return Iban.fromBban('ACASH' + options.institution + options.identifier);
 };
 
 /**
@@ -4557,7 +4557,7 @@ Iban.isValid = function (iban) {
  * @returns {Boolean} true if it is, otherwise false
  */
 Iban.prototype.isValid = function () {
-    return /^XE[0-9]{2}(ETH[0-9A-Z]{13}|[0-9A-Z]{30,31})$/.test(this._iban) &&
+    return /^XE[0-9]{2}(ACASH[0-9A-Z]{13}|[0-9A-Z]{30,31})$/.test(this._iban) &&
         mod9710(iso13616Prepare(this._iban)) === 1;
 };
 
@@ -5185,7 +5185,7 @@ module.exports = DB;
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file eth.js
+ * @file acash.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
  * @date 2015
@@ -5226,7 +5226,7 @@ var uncleCountCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getUncleCountByBlockHash' : 'eth_getUncleCountByBlockNumber';
 };
 
-function Eth(web3) {
+function Acash(web3) {
     this._requestManager = web3._requestManager;
 
     var self = this;
@@ -5246,7 +5246,7 @@ function Eth(web3) {
     this.sendIBANTransaction = transfer.bind(null, this);
 }
 
-Object.defineProperty(Eth.prototype, 'defaultBlock', {
+Object.defineProperty(Acash.prototype, 'defaultBlock', {
     get: function () {
         return c.defaultBlock;
     },
@@ -5256,7 +5256,7 @@ Object.defineProperty(Eth.prototype, 'defaultBlock', {
     }
 });
 
-Object.defineProperty(Eth.prototype, 'defaultAccount', {
+Object.defineProperty(Acash.prototype, 'defaultAccount', {
     get: function () {
         return c.defaultAccount;
     },
@@ -5500,28 +5500,28 @@ var properties = function () {
     ];
 };
 
-Eth.prototype.contract = function (abi) {
+Acash.prototype.contract = function (abi) {
     var factory = new Contract(this, abi);
     return factory;
 };
 
-Eth.prototype.filter = function (options, callback, filterCreationErrorCallback) {
-    return new Filter(options, 'eth', this._requestManager, watches.eth(), formatters.outputLogFormatter, callback, filterCreationErrorCallback);
+Acash.prototype.filter = function (options, callback, filterCreationErrorCallback) {
+    return new Filter(options, 'acash', this._requestManager, watches.acash(), formatters.outputLogFormatter, callback, filterCreationErrorCallback);
 };
 
-Eth.prototype.namereg = function () {
+Acash.prototype.namereg = function () {
     return this.contract(namereg.global.abi).at(namereg.global.address);
 };
 
-Eth.prototype.icapNamereg = function () {
+Acash.prototype.icapNamereg = function () {
     return this.contract(namereg.icap.abi).at(namereg.icap.address);
 };
 
-Eth.prototype.isSyncing = function (callback) {
+Acash.prototype.isSyncing = function (callback) {
     return new IsSyncing(this._requestManager, callback);
 };
 
-module.exports = Eth;
+module.exports = Acash;
 
 },{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],39:[function(require,module,exports){
 /*
@@ -5540,7 +5540,7 @@ module.exports = Eth;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file eth.js
+/** @file acash.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -5560,7 +5560,7 @@ var Net = function (web3) {
     });
 };
 
-/// @returns an array of objects describing web3.eth api properties
+/// @returns an array of objects describing web3.acash api properties
 var properties = function () {
     return [
         new Property({
@@ -5595,7 +5595,7 @@ module.exports = Net;
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file eth.js
+ * @file acash.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
  * @date 2015
@@ -6012,8 +6012,8 @@ module.exports = Swarm;
 
 var Method = require('../method');
 
-/// @returns an array of objects describing web3.eth.filter api methods
-var eth = function () {
+/// @returns an array of objects describing web3.acash.filter api methods
+var acash = function () {
     var newFilterCall = function (args) {
         var type = args[0];
 
@@ -6091,7 +6091,7 @@ var shh = function () {
 };
 
 module.exports = {
-    eth: eth,
+    acash: acash,
     shh: shh
 };
 
@@ -6691,23 +6691,23 @@ var exchangeAbi = require('../contracts/SmartExchange.json');
  * @param {Value} value to be tranfered
  * @param {Function} callback, callback
  */
-var transfer = function (eth, from, to, value, callback) {
+var transfer = function (acash, from, to, value, callback) {
     var iban = new Iban(to); 
     if (!iban.isValid()) {
         throw new Error('invalid iban address');
     }
 
     if (iban.isDirect()) {
-        return transferToAddress(eth, from, iban.address(), value, callback);
+        return transferToAddress(acash, from, iban.address(), value, callback);
     }
     
     if (!callback) {
-        var address = eth.icapNamereg().addr(iban.institution());
-        return deposit(eth, from, address, value, iban.client());
+        var address = acash.icapNamereg().addr(iban.institution());
+        return deposit(acash, from, address, value, iban.client());
     }
 
-    eth.icapNamereg().addr(iban.institution(), function (err, address) {
-        return deposit(eth, from, address, value, iban.client(), callback);
+    acash.icapNamereg().addr(iban.institution(), function (err, address) {
+        return deposit(acash, from, address, value, iban.client(), callback);
     });
     
 };
@@ -6721,8 +6721,8 @@ var transfer = function (eth, from, to, value, callback) {
  * @param {Value} value to be tranfered
  * @param {Function} callback, callback
  */
-var transferToAddress = function (eth, from, to, value, callback) {
-    return eth.sendTransaction({
+var transferToAddress = function (acash, from, to, value, callback) {
+    return acash.sendTransaction({
         address: to,
         from: from,
         value: value
@@ -6739,9 +6739,9 @@ var transferToAddress = function (eth, from, to, value, callback) {
  * @param {String} client unique identifier
  * @param {Function} callback, callback
  */
-var deposit = function (eth, from, to, value, client, callback) {
+var deposit = function (acash, from, to, value, client, callback) {
     var abi = exchangeAbi;
-    return eth.contract(abi).at(to).deposit(client, {
+    return acash.contract(abi).at(to).deposit(client, {
         from: from,
         value: value
     }, callback);

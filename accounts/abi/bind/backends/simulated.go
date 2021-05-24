@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dezzyboy/go-ethereum"
+	"github.com/dezzyboy/go-ethereum/acash/filters"
 	"github.com/dezzyboy/go-ethereum/accounts/abi"
 	"github.com/dezzyboy/go-ethereum/accounts/abi/bind"
 	"github.com/dezzyboy/go-ethereum/common"
@@ -37,7 +38,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/state"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
-	"github.com/dezzyboy/go-ethereum/eth/filters"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/log"

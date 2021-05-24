@@ -307,7 +307,7 @@ In a different window we can start Geth, list our accounts, even list our wallet
 ```text
 $ geth --rinkeby --signer=~/.clef/clef.ipc console
 
-> eth.accounts
+> acash.accounts
 ["0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x086278a6c067775f71d6b2bb1856db6e28c30418"]
 
 > personal.listWallets
@@ -323,7 +323,7 @@ $ geth --rinkeby --signer=~/.clef/clef.ipc console
     url: "extapi://$HOME/.clef/clef.ipc"
 }]
 
-> eth.sendTransaction({from: eth.accounts[0], to: eth.accounts[0]})
+> acash.sendTransaction({from: acash.accounts[0], to: acash.accounts[0]})
 ```
 
 Lastly, when we requested a transaction to be sent, Clef prompted us in the original window to approve it:

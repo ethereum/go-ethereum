@@ -191,7 +191,7 @@ func (c *Console) initExtensions() error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	aliases := map[string]struct{}{"eth": {}, "personal": {}}
+	aliases := map[string]struct{}{"acash": {}, "personal": {}}
 	for api := range apis {
 		if api == "web3" {
 			continue
@@ -277,7 +277,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 		return "", nil, ""
 	}
 	// Chunck data to relevant part for autocompletion
-	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
+	// E.g. in case of nested lines acash.getBalance(acash.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
@@ -305,9 +305,9 @@ func (c *Console) Welcome() {
 	if res, err := c.jsre.Run(`
 		var message = "instance: " + web3.version.node + "\n";
 		try {
-			message += "coinbase: " + eth.coinbase + "\n";
+			message += "coinbase: " + acash.coinbase + "\n";
 		} catch (err) {}
-		message += "at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")\n";
+		message += "at block: " + acash.blockNumber + " (" + new Date(1000 * acash.getBlock(acash.blockNumber).timestamp) + ")\n";
 		try {
 			message += " datadir: " + admin.datadir + "\n";
 		} catch (err) {}

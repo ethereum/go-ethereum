@@ -21,6 +21,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus"
@@ -29,7 +30,6 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/state"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
-	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/params"
@@ -94,17 +94,17 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
@@ -123,7 +123,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(apiBackend),
 		}, {
-			Namespace: "eth",
+			Namespace: "acash",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,

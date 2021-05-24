@@ -32,22 +32,22 @@ type lesEntry struct {
 
 func (lesEntry) ENRKey() string { return "les" }
 
-// ethEntry is the "eth" ENR entry. This is redeclared here to avoid depending on package eth.
+// ethEntry is the "acash" ENR entry. This is redeclared here to avoid depending on package acash.
 type ethEntry struct {
 	ForkID forkid.ID
 	Tail   []rlp.RawValue `rlp:"tail"`
 }
 
-func (ethEntry) ENRKey() string { return "eth" }
+func (ethEntry) ENRKey() string { return "acash" }
 
-// setupDiscovery creates the node discovery source for the eth protocol.
-func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
+// setupDiscovery creates the node discovery source for the acash protocol.
+func (acash *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 	it := enode.NewFairMix(0)
 
 	// Enable DNS discovery.
-	if len(eth.config.EthDiscoveryURLs) != 0 {
+	if len(acash.config.EthDiscoveryURLs) != 0 {
 		client := dnsdisc.NewClient(dnsdisc.Config{})
-		dns, err := client.NewIterator(eth.config.EthDiscoveryURLs...)
+		dns, err := client.NewIterator(acash.config.EthDiscoveryURLs...)
 		if err != nil {
 			return nil, err
 		}
@@ -55,11 +55,11 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 	}
 
 	// Enable DHT.
-	if eth.udpEnabled {
-		it.AddSource(eth.p2pServer.DiscV5.RandomNodes())
+	if acash.udpEnabled {
+		it.AddSource(acash.p2pServer.DiscV5.RandomNodes())
 	}
 
-	forkFilter := forkid.NewFilter(eth.blockchain)
+	forkFilter := forkid.NewFilter(acash.blockchain)
 	iterator := enode.Filter(it, func(n *enode.Node) bool { return nodeIsServer(forkFilter, n) })
 	return iterator, nil
 }
@@ -67,6 +67,6 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 // nodeIsServer checks whether n is an LES server node.
 func nodeIsServer(forkFilter forkid.Filter, n *enode.Node) bool {
 	var les lesEntry
-	var eth ethEntry
-	return n.Load(&les) == nil && n.Load(&eth) == nil && forkFilter(eth.ForkID) == nil
+	var acash ethEntry
+	return n.Load(&les) == nil && n.Load(&acash) == nil && forkFilter(acash.ForkID) == nil
 }
