@@ -79,7 +79,7 @@ Changed the namespace format to adhere to the legacy ethereum format: `name_meth
 
 ```go
 type Account struct {
-	Address common.Address `json:"address"` // AkoinCash account address derived from the key
+	Address common.Address `json:"address"` // Ethereum account address derived from the key
 	URL     URL            `json:"url"`     // Optional resource locator within a backend
 }
 ```

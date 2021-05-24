@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light AkoinCash Subprotocol.
+// Package les implements the Light Ethereum Subprotocol.
 package les
 
 import (
@@ -49,7 +49,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/rpc"
 )
 
-type LightAkoinCash struct {
+type LightEthereum struct {
 	lesCommons
 
 	peers              *serverPeerSet
@@ -79,7 +79,7 @@ type LightAkoinCash struct {
 }
 
 // New creates an instance of the light client.
-func New(stack *node.Node, config *ethconfig.Config) (*LightAkoinCash, error) {
+func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "acash/db/chaindata/", false)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightAkoinCash, error) {
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	peers := newServerPeerSet()
-	leth := &LightAkoinCash{
+	leth := &LightEthereum{
 		lesCommons: lesCommons{
 			genesis:     genesisHash,
 			config:      config,
@@ -199,7 +199,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightAkoinCash, error) {
 }
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses
-func (s *LightAkoinCash) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
+func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
 	if !s.udpEnabled {
 		return nil
 	}
@@ -214,7 +214,7 @@ func (s *LightAkoinCash) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.
 
 // vfxVersion returns the version number of the "les" service subdomain of the vflux UDP
 // service, as advertised in the ENR record
-func (s *LightAkoinCash) vfxVersion(n *enode.Node) uint {
+func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
 	if n.Seq() == 0 {
 		var err error
 		if !s.udpEnabled {
@@ -238,7 +238,7 @@ func (s *LightAkoinCash) vfxVersion(n *enode.Node) uint {
 
 // prenegQuery sends a capacity query to the given server node to determine whether
 // a connection slot is immediately available
-func (s *LightAkoinCash) prenegQuery(n *enode.Node) int {
+func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 	if s.vfxVersion(n) < 1 {
 		// UDP query not supported, always try TCP connection
 		return 1
@@ -284,7 +284,7 @@ func (s *LightDummyAPI) Mining() bool {
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *LightAkoinCash) APIs() []rpc.API {
+func (s *LightEthereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.ApiBackend)
 	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
 	return append(apis, []rpc.API{
@@ -322,19 +322,19 @@ func (s *LightAkoinCash) APIs() []rpc.API {
 	}...)
 }
 
-func (s *LightAkoinCash) ResetWithGenesisBlock(gb *types.Block) {
+func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *LightAkoinCash) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightAkoinCash) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightAkoinCash) Engine() consensus.Engine           { return s.engine }
-func (s *LightAkoinCash) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
-func (s *LightAkoinCash) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *LightAkoinCash) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
+func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
+func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
+func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
+func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols returns all the currently configured network protocols to start.
-func (s *LightAkoinCash) Protocols() []p2p.Protocol {
+func (s *LightEthereum) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
 		if p := s.peers.peer(id.String()); p != nil {
 			return p.Info()
@@ -345,7 +345,7 @@ func (s *LightAkoinCash) Protocols() []p2p.Protocol {
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // light ethereum protocol implementation.
-func (s *LightAkoinCash) Start() error {
+func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
 	if s.udpEnabled && s.p2pServer.DiscV5 == nil {
@@ -367,8 +367,8 @@ func (s *LightAkoinCash) Start() error {
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
-// AkoinCash protocol.
-func (s *LightAkoinCash) Stop() error {
+// Ethereum protocol.
+func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
 	s.serverPool.Stop()
 	s.peers.close()

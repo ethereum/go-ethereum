@@ -40,40 +40,40 @@ import (
 	"github.com/dezzyboy/go-ethereum/trie"
 )
 
-// PublicAkoinCashAPI provides an API to access AkoinCash full node-related
+// PublicEthereumAPI provides an API to access Ethereum full node-related
 // information.
-type PublicAkoinCashAPI struct {
-	e *AkoinCash
+type PublicEthereumAPI struct {
+	e *Ethereum
 }
 
-// NewPublicAkoinCashAPI creates a new AkoinCash protocol API for full nodes.
-func NewPublicAkoinCashAPI(e *AkoinCash) *PublicAkoinCashAPI {
-	return &PublicAkoinCashAPI{e}
+// NewPublicEthereumAPI creates a new Ethereum protocol API for full nodes.
+func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
+	return &PublicEthereumAPI{e}
 }
 
 // Acashbase is the address that mining rewards will be send to
-func (api *PublicAkoinCashAPI) Acashbase() (common.Address, error) {
+func (api *PublicEthereumAPI) Acashbase() (common.Address, error) {
 	return api.e.Acashbase()
 }
 
 // Coinbase is the address that mining rewards will be send to (alias for Acashbase)
-func (api *PublicAkoinCashAPI) Coinbase() (common.Address, error) {
+func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 	return api.Acashbase()
 }
 
 // Hashrate returns the POW hashrate
-func (api *PublicAkoinCashAPI) Hashrate() hexutil.Uint64 {
+func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {
-	e *AkoinCash
+	e *Ethereum
 }
 
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
-func NewPublicMinerAPI(e *AkoinCash) *PublicMinerAPI {
+func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
 	return &PublicMinerAPI{e}
 }
 
@@ -85,11 +85,11 @@ func (api *PublicMinerAPI) Mining() bool {
 // PrivateMinerAPI provides private RPC methods to control the miner.
 // These methods can be abused by external users and must be considered insecure for use by untrusted users.
 type PrivateMinerAPI struct {
-	e *AkoinCash
+	e *Ethereum
 }
 
 // NewPrivateMinerAPI create a new RPC service which controls the miner of this node.
-func NewPrivateMinerAPI(e *AkoinCash) *PrivateMinerAPI {
+func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
@@ -140,15 +140,15 @@ func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
 	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
-// PrivateAdminAPI is the collection of AkoinCash full node-related APIs
+// PrivateAdminAPI is the collection of Ethereum full node-related APIs
 // exposed over the private admin endpoint.
 type PrivateAdminAPI struct {
-	acash *AkoinCash
+	acash *Ethereum
 }
 
 // NewPrivateAdminAPI creates a new API definition for the full node private
-// admin methods of the AkoinCash service.
-func NewPrivateAdminAPI(acash *AkoinCash) *PrivateAdminAPI {
+// admin methods of the Ethereum service.
+func NewPrivateAdminAPI(acash *Ethereum) *PrivateAdminAPI {
 	return &PrivateAdminAPI{acash: acash}
 }
 
@@ -250,15 +250,15 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-// PublicDebugAPI is the collection of AkoinCash full node APIs exposed
+// PublicDebugAPI is the collection of Ethereum full node APIs exposed
 // over the public debugging endpoint.
 type PublicDebugAPI struct {
-	acash *AkoinCash
+	acash *Ethereum
 }
 
 // NewPublicDebugAPI creates a new API definition for the full node-
-// related public debug methods of the AkoinCash service.
-func NewPublicDebugAPI(acash *AkoinCash) *PublicDebugAPI {
+// related public debug methods of the Ethereum service.
+func NewPublicDebugAPI(acash *Ethereum) *PublicDebugAPI {
 	return &PublicDebugAPI{acash: acash}
 }
 
@@ -291,15 +291,15 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	return stateDb.RawDump(opts), nil
 }
 
-// PrivateDebugAPI is the collection of AkoinCash full node APIs exposed over
+// PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
 type PrivateDebugAPI struct {
-	acash *AkoinCash
+	acash *Ethereum
 }
 
 // NewPrivateDebugAPI creates a new API definition for the full node-related
-// private debug methods of the AkoinCash service.
-func NewPrivateDebugAPI(acash *AkoinCash) *PrivateDebugAPI {
+// private debug methods of the Ethereum service.
+func NewPrivateDebugAPI(acash *Ethereum) *PrivateDebugAPI {
 	return &PrivateDebugAPI{acash: acash}
 }
 

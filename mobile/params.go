@@ -26,7 +26,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/params"
 )
 
-// MainnetGenesis returns the JSON spec to use for the main AkoinCash network. It
+// MainnetGenesis returns the JSON spec to use for the main Ethereum network. It
 // is actually empty since that defaults to the hard coded binary genesis block.
 func MainnetGenesis() string {
 	return ""

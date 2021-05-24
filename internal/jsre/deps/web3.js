@@ -2409,7 +2409,7 @@ var isJson = function (str) {
 };
 
 /**
- * Returns true if given string is a valid AkoinCash block header bloom.
+ * Returns true if given string is a valid Ethereum block header bloom.
  *
  * @method isBloom
  * @param {String} hex encoded bloom filter
@@ -2609,7 +2609,7 @@ var properties = function () {
             inputFormatter: utils.toDecimal
         }),
         new Property({
-            name: 'version.akoincash',
+            name: 'version.Ethereum',
             getter: 'acash_protocolVersion',
             inputFormatter: utils.toDecimal
         }),
@@ -4496,7 +4496,7 @@ var Iban = function (iban) {
 };
 
 /**
- * This method should be used to create iban object from akoincash address
+ * This method should be used to create iban object from Ethereum address
  *
  * @method fromAddress
  * @param {String} address

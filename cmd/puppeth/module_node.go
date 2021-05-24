@@ -30,7 +30,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/log"
 )
 
-// nodeDockerfile is the Dockerfile required to run an AkoinCash node.
+// nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
 FROM ethereum/client-go:latest
 
@@ -48,7 +48,7 @@ ENTRYPOINT ["/bin/sh", "geth.sh"]
 `
 
 // nodeComposefile is the docker-compose.yml file required to deploy and maintain
-// an AkoinCash node (bootnode or miner for now).
+// an Ethereum node (bootnode or miner for now).
 var nodeComposefile = `
 version: '2'
 services:
@@ -79,7 +79,7 @@ services:
     restart: always
 `
 
-// deployNode deploys a new AkoinCash node container to a remote machine via SSH,
+// deployNode deploys a new Ethereum node container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
 func deployNode(client *sshClient, network string, bootnodes []string, config *nodeInfos, nocache bool) ([]byte, error) {

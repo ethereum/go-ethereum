@@ -81,7 +81,7 @@ type fullNodeBackend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 }
 
-// Service implements an AkoinCash netstats reporting daemon that pushes local
+// Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos

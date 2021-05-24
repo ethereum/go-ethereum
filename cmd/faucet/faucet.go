@@ -66,7 +66,7 @@ var (
 	apiPortFlag = flag.Int("apiport", 8080, "Listener port for the HTTP API connection")
 	ethPortFlag = flag.Int("ethport", 50405, "Listener port for the devp2p connection")
 	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode enode URLs to seed with")
-	netFlag     = flag.Uint64("network", 0, "Network ID to use for the AkoinCash protocol")
+	netFlag     = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol")
 	statsFlag   = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 
 	netnameFlag = flag.String("faucet.name", "", "Network name to assign to the faucet")
@@ -81,7 +81,7 @@ var (
 	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
 
 	noauthFlag = flag.Bool("noauth", false, "Enables funding requests without authentication")
-	logFlag    = flag.Int("loglevel", 3, "Log level to use for AkoinCash and the faucet")
+	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 
 	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
@@ -193,16 +193,16 @@ func main() {
 // request represents an accepted funding request.
 type request struct {
 	Avatar  string             `json:"avatar"`  // Avatar URL to make the UI nicer
-	Account common.Address     `json:"account"` // AkoinCash address being funded
+	Account common.Address     `json:"account"` // Ethereum address being funded
 	Time    time.Time          `json:"time"`    // Timestamp when the request was accepted
 	Tx      *types.Transaction `json:"tx"`      // Transaction funding the account
 }
 
-// faucet represents a crypto faucet backed by an AkoinCash light client.
+// faucet represents a crypto faucet backed by an Ethereum light client.
 type faucet struct {
 	config *params.ChainConfig // Chain configurations for signing
-	stack  *node.Node          // AkoinCash protocol stack
-	client *ethclient.Client   // Client connection to the AkoinCash chain
+	stack  *node.Node          // Ethereum protocol stack
+	client *ethclient.Client   // Client connection to the Ethereum chain
 	index  []byte              // Index page to serve up on the web
 
 	keystore *keystore.KeyStore // Keystore containing the single signer
@@ -246,7 +246,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		return nil, err
 	}
 
-	// Assemble the AkoinCash light client protocol
+	// Assemble the Ethereum light client protocol
 	cfg := ethconfig.Defaults
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
@@ -255,7 +255,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to register the AkoinCash service: %w", err)
+		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
 
 	// Assemble the ethstats monitoring and reporting service'
@@ -294,7 +294,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	}, nil
 }
 
-// close terminates the AkoinCash connection and tears down the faucet.
+// close terminates the Ethereum connection and tears down the faucet.
 func (f *faucet) close() error {
 	return f.stack.Close()
 }
@@ -451,7 +451,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		// Retrieve the AkoinCash address to fund, the requesting user and a profile picture
+		// Retrieve the Ethereum address to fund, the requesting user and a profile picture
 		var (
 			id       string
 			username string
@@ -686,7 +686,7 @@ func sendSuccess(conn *wsConn, msg string) error {
 }
 
 // authTwitter tries to authenticate a faucet request using Twitter posts, returning
-// the uniqueness identifier (user id/username), username, avatar URL and AkoinCash address to fund on success.
+// the uniqueness identifier (user id/username), username, avatar URL and Ethereum address to fund on success.
 func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
 	parts := strings.Split(url, "/")
@@ -713,7 +713,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 		return authTwitterWithTokenV2(tweetID, tokenV2)
 	}
 	// Twiter API token isn't provided so we just load the public posts
-	// and scrape it for the AkoinCash address and profile URL. We need to load
+	// and scrape it for the Ethereum address and profile URL. We need to load
 	// the mobile page though since the main page loads tweet contents via JS.
 	url = strings.Replace(url, "https://twitter.com/", "https://mobile.twitter.com/", 1)
 
@@ -738,7 +738,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", "", common.Address{}, errors.New("No AkoinCash address found to fund")
+		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -748,7 +748,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 }
 
 // authTwitterWithTokenV1 tries to authenticate a faucet request using Twitter's v1
-// API, returning the user id, username, avatar URL and AkoinCash address to fund on
+// API, returning the user id, username, avatar URL and Ethereum address to fund on
 // success.
 func authTwitterWithTokenV1(tweetID string, token string) (string, string, string, common.Address, error) {
 	// Query the tweet details from Twitter
@@ -779,13 +779,13 @@ func authTwitterWithTokenV1(tweetID string, token string) (string, string, strin
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(result.Text))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", "", common.Address{}, errors.New("No AkoinCash address found to fund")
+		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	return result.User.ID + "@twitter", result.User.Username, result.User.Avatar, address, nil
 }
 
 // authTwitterWithTokenV2 tries to authenticate a faucet request using Twitter's v2
-// API, returning the user id, username, avatar URL and AkoinCash address to fund on
+// API, returning the user id, username, avatar URL and Ethereum address to fund on
 // success.
 func authTwitterWithTokenV2(tweetID string, token string) (string, string, string, common.Address, error) {
 	// Query the tweet details from Twitter
@@ -823,13 +823,13 @@ func authTwitterWithTokenV2(tweetID string, token string) (string, string, strin
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(result.Data.Text))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", "", common.Address{}, errors.New("No AkoinCash address found to fund")
+		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	return result.Data.AuthorID + "@twitter", result.Includes.Users[0].Username, result.Includes.Users[0].Avatar, address, nil
 }
 
 // authFacebook tries to authenticate a faucet request using Facebook posts,
-// returning the username, avatar URL and AkoinCash address to fund on success.
+// returning the username, avatar URL and Ethereum address to fund on success.
 func authFacebook(url string) (string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
 	parts := strings.Split(strings.Split(url, "?")[0], "/")
@@ -844,7 +844,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 
 	// Facebook's Graph API isn't really friendly with direct links. Still, we don't
 	// want to do ask read permissions from users, so just load the public posts and
-	// scrape it for the AkoinCash address and profile URL.
+	// scrape it for the Ethereum address and profile URL.
 	//
 	// Facebook recently changed their desktop webpage to use AJAX for loading post
 	// content, so switch over to the mobile site for now. Will probably end up having
@@ -864,7 +864,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No AkoinCash address found to fund")
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -873,14 +873,14 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	return username + "@facebook", avatar, address, nil
 }
 
-// authNoAuth tries to interpret a faucet request as a plain AkoinCash address,
+// authNoAuth tries to interpret a faucet request as a plain Ethereum address,
 // without actually performing any remote authentication. This mode is prone to
 // Byzantine attack, so only ever use for truly private networks.
 func authNoAuth(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(url))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No AkoinCash address found to fund")
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
 }

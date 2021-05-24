@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ethapi implements the general AkoinCash API functions.
+// Package ethapi implements the general Ethereum API functions.
 package ethapi
 
 import (
@@ -39,7 +39,7 @@ import (
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	// General AkoinCash API
+	// General Ethereum API
 	Downloader() *downloader.Downloader
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
@@ -96,7 +96,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		{
 			Namespace: "acash",
 			Version:   "1.0",
-			Service:   NewPublicAkoinCashAPI(apiBackend),
+			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
 			Namespace: "acash",

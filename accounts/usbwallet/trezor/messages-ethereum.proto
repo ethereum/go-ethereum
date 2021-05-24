@@ -1,5 +1,5 @@
 // This file originates from the SatoshiLabs Trezor `common` repository at:
-//   https://github.com/dezzyboy/trezor-common/blob/master/protob/messages-ethereum.proto
+//   https://github.com/trezor/trezor-common/blob/master/protob/messages-ethereum.proto
 // dated 28.05.2019, commit 893fd219d4a01bcffa0cd9cfa631856371ec5aa9.
 
 syntax = "proto2";
@@ -7,7 +7,7 @@ package hw.trezor.messages.ethereum;
 
 // Sugar for easier handling in Java
 option java_package = "com.satoshilabs.trezor.lib.protobuf";
-option java_outer_classname = "TrezorMessageAkoinCash";
+option java_outer_classname = "TrezorMessageEthereum";
 
 import "messages-common.proto";
 
@@ -15,10 +15,10 @@ import "messages-common.proto";
 /**
  * Request: Ask device for public key corresponding to address_n path
  * @start
- * @next AkoinCashPublicKey
+ * @next EthereumPublicKey
  * @next Failure
  */
-message AkoinCashGetPublicKey {
+message EthereumGetPublicKey {
     repeated uint32 address_n = 1;                                      // BIP-32 path to derive the key from master node
     optional bool show_display = 2;                                     // optionally show on display before sending the result
 }
@@ -27,29 +27,29 @@ message AkoinCashGetPublicKey {
  * Response: Contains public key derived from device private seed
  * @end
  */
-message AkoinCashPublicKey {
+message EthereumPublicKey {
     optional hw.trezor.messages.common.HDNodeType node = 1;        // BIP32 public node
     optional string xpub = 2;        // serialized form of public node
 }
 
 /**
- * Request: Ask device for AkoinCash address corresponding to address_n path
+ * Request: Ask device for Ethereum address corresponding to address_n path
  * @start
- * @next AkoinCashAddress
+ * @next EthereumAddress
  * @next Failure
  */
-message AkoinCashGetAddress {
+message EthereumGetAddress {
     repeated uint32 address_n = 1;  // BIP-32 path to derive the key from master node
     optional bool show_display = 2; // optionally show on display before sending the result
 }
 
 /**
- * Response: Contains an AkoinCash address derived from device private seed
+ * Response: Contains an Ethereum address derived from device private seed
  * @end
  */
-message AkoinCashAddress {
-    optional bytes  addressBin = 1;    // AkoinCash address as 20 bytes (legacy firmwares)
-    optional string addressHex = 2;    // AkoinCash address as hex string (newer firmwares)
+message EthereumAddress {
+    optional bytes  addressBin = 1;    // Ethereum address as 20 bytes (legacy firmwares)
+    optional string addressHex = 2;    // Ethereum address as hex string (newer firmwares)
 }
 
 /**
@@ -57,10 +57,10 @@ message AkoinCashAddress {
  * All fields are optional from the protocol's point of view. Each field defaults to value `0` if missing.
  * Note: the first at most 1024 bytes of data MUST be transmitted as part of this message.
  * @start
- * @next AkoinCashTxRequest
+ * @next EthereumTxRequest
  * @next Failure
  */
-message AkoinCashSignTx {
+message EthereumSignTx {
     repeated uint32 address_n = 1;          // BIP-32 path to derive the key from master node
     optional bytes nonce = 2;               // <=256 bit unsigned big endian
     optional bytes gas_price = 3;           // <=256 bit unsigned big endian (in wei)
@@ -79,9 +79,9 @@ message AkoinCashSignTx {
  * If data_length is set, device awaits that many more bytes of payload.
  * Otherwise, the signature_* fields contain the computed transaction signature. All three fields will be present.
  * @end
- * @next AkoinCashTxAck
+ * @next EthereumTxAck
  */
-message AkoinCashTxRequest {
+message EthereumTxRequest {
     optional uint32 data_length = 1;    // Number of bytes being requested (<= 1024)
     optional uint32 signature_v = 2;    // Computed signature (recovery parameter, limited to 27 or 28)
     optional bytes signature_r = 3;     // Computed signature R component (256 bit)
@@ -90,19 +90,19 @@ message AkoinCashTxRequest {
 
 /**
  * Request: Transaction payload data.
- * @next AkoinCashTxRequest
+ * @next EthereumTxRequest
  */
-message AkoinCashTxAck {
+message EthereumTxAck {
     optional bytes data_chunk = 1;  // Bytes from transaction payload (<= 1024 bytes)
 }
 
 /**
  * Request: Ask device to sign message
  * @start
- * @next AkoinCashMessageSignature
+ * @next EthereumMessageSignature
  * @next Failure
  */
-message AkoinCashSignMessage {
+message EthereumSignMessage {
     repeated uint32 address_n = 1;  // BIP-32 path to derive the key from master node
     optional bytes message = 2;     // message to be signed
 }
@@ -111,7 +111,7 @@ message AkoinCashSignMessage {
  * Response: Signed message
  * @end
  */
-message AkoinCashMessageSignature {
+message EthereumMessageSignature {
     optional bytes addressBin = 1;     // address used to sign the message (20 bytes, legacy firmware)
     optional bytes signature = 2;      // signature of the message
     optional string addressHex = 3;    // address used to sign the message (hex string, newer firmware)
@@ -123,7 +123,7 @@ message AkoinCashMessageSignature {
  * @next Success
  * @next Failure
  */
-message AkoinCashVerifyMessage {
+message EthereumVerifyMessage {
     optional bytes addressBin = 1;  // address to verify (20 bytes, legacy firmware)
     optional bytes signature = 2;   // signature to verify
     optional bytes message = 3;     // message to verify

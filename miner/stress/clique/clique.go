@@ -60,7 +60,7 @@ func main() {
 	genesis := makeGenesis(faucets, sealers)
 
 	var (
-		nodes  []*acash.AkoinCash
+		nodes  []*acash.Ethereum
 		enodes []*enode.Node
 	)
 
@@ -164,8 +164,8 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *acash.AkoinCash, error) {
-	// Define the basic configurations for the AkoinCash node
+func makeSealer(genesis *core.Genesis) (*node.Node, *acash.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
@@ -178,7 +178,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *acash.AkoinCash, error) {
 			MaxPeers:    25,
 		},
 	}
-	// Start the node and configure a full AkoinCash node on it
+	// Start the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err

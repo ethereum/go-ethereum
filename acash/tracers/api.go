@@ -76,7 +76,7 @@ type API struct {
 	backend Backend
 }
 
-// NewAPI creates a new API definition for the tracing methods of the AkoinCash service.
+// NewAPI creates a new API definition for the tracing methods of the Ethereum service.
 func NewAPI(backend Backend) *API {
 	return &API{backend: backend}
 }

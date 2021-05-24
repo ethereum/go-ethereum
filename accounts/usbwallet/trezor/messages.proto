@@ -1,5 +1,5 @@
 // This file originates from the SatoshiLabs Trezor `common` repository at:
-//   https://github.com/dezzyboy/trezor-common/blob/master/protob/messages.proto
+//   https://github.com/trezor/trezor-common/blob/master/protob/messages.proto
 // dated 28.05.2019, commit 893fd219d4a01bcffa0cd9cfa631856371ec5aa9.
 
 syntax = "proto2";
@@ -107,17 +107,17 @@ enum MessageType {
     MessageType_DebugLinkMemoryWrite = 112 [(wire_debug_in) = true];
     MessageType_DebugLinkFlashErase = 113 [(wire_debug_in) = true];
 
-    // AkoinCash
-    MessageType_AkoinCashGetPublicKey = 450 [(wire_in) = true];
-    MessageType_AkoinCashPublicKey = 451 [(wire_out) = true];
-    MessageType_AkoinCashGetAddress = 56 [(wire_in) = true];
-    MessageType_AkoinCashAddress = 57 [(wire_out) = true];
-    MessageType_AkoinCashSignTx = 58 [(wire_in) = true];
-    MessageType_AkoinCashTxRequest = 59 [(wire_out) = true];
-    MessageType_AkoinCashTxAck = 60 [(wire_in) = true];
-    MessageType_AkoinCashSignMessage = 64 [(wire_in) = true];
-    MessageType_AkoinCashVerifyMessage = 65 [(wire_in) = true];
-    MessageType_AkoinCashMessageSignature = 66 [(wire_out) = true];
+    // Ethereum
+    MessageType_EthereumGetPublicKey = 450 [(wire_in) = true];
+    MessageType_EthereumPublicKey = 451 [(wire_out) = true];
+    MessageType_EthereumGetAddress = 56 [(wire_in) = true];
+    MessageType_EthereumAddress = 57 [(wire_out) = true];
+    MessageType_EthereumSignTx = 58 [(wire_in) = true];
+    MessageType_EthereumTxRequest = 59 [(wire_out) = true];
+    MessageType_EthereumTxAck = 60 [(wire_in) = true];
+    MessageType_EthereumSignMessage = 64 [(wire_in) = true];
+    MessageType_EthereumVerifyMessage = 65 [(wire_in) = true];
+    MessageType_EthereumMessageSignature = 66 [(wire_out) = true];
 
     // NEM
     MessageType_NEMGetAddress = 67 [(wire_in) = true];

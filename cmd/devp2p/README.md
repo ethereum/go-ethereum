@@ -5,7 +5,7 @@ protocol development purposes. It can do many things.
 
 ### ENR Decoding
 
-Use `devp2p enrdump <base64>` to verify and display an AkoinCash Node Record.
+Use `devp2p enrdump <base64>` to verify and display an Ethereum Node Record.
 
 ### Node Key Management
 

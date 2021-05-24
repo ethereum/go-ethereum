@@ -41,7 +41,7 @@ type ethEntry struct {
 func (ethEntry) ENRKey() string { return "acash" }
 
 // setupDiscovery creates the node discovery source for the acash protocol.
-func (acash *LightAkoinCash) setupDiscovery() (enode.Iterator, error) {
+func (acash *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 	it := enode.NewFairMix(0)
 
 	// Enable DNS discovery.

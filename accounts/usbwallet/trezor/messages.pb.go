@@ -96,17 +96,17 @@ const (
 	MessageType_MessageType_DebugLinkMemory      MessageType = 111
 	MessageType_MessageType_DebugLinkMemoryWrite MessageType = 112
 	MessageType_MessageType_DebugLinkFlashErase  MessageType = 113
-	// AkoinCash
-	MessageType_MessageType_AkoinCashGetPublicKey     MessageType = 450
-	MessageType_MessageType_AkoinCashPublicKey        MessageType = 451
-	MessageType_MessageType_AkoinCashGetAddress       MessageType = 56
-	MessageType_MessageType_AkoinCashAddress          MessageType = 57
-	MessageType_MessageType_AkoinCashSignTx           MessageType = 58
-	MessageType_MessageType_AkoinCashTxRequest        MessageType = 59
-	MessageType_MessageType_AkoinCashTxAck            MessageType = 60
-	MessageType_MessageType_AkoinCashSignMessage      MessageType = 64
-	MessageType_MessageType_AkoinCashVerifyMessage    MessageType = 65
-	MessageType_MessageType_AkoinCashMessageSignature MessageType = 66
+	// Ethereum
+	MessageType_MessageType_EthereumGetPublicKey     MessageType = 450
+	MessageType_MessageType_EthereumPublicKey        MessageType = 451
+	MessageType_MessageType_EthereumGetAddress       MessageType = 56
+	MessageType_MessageType_EthereumAddress          MessageType = 57
+	MessageType_MessageType_EthereumSignTx           MessageType = 58
+	MessageType_MessageType_EthereumTxRequest        MessageType = 59
+	MessageType_MessageType_EthereumTxAck            MessageType = 60
+	MessageType_MessageType_EthereumSignMessage      MessageType = 64
+	MessageType_MessageType_EthereumVerifyMessage    MessageType = 65
+	MessageType_MessageType_EthereumMessageSignature MessageType = 66
 	// NEM
 	MessageType_MessageType_NEMGetAddress       MessageType = 67
 	MessageType_MessageType_NEMAddress          MessageType = 68
@@ -306,16 +306,16 @@ var MessageType_name = map[int32]string{
 	111: "MessageType_DebugLinkMemory",
 	112: "MessageType_DebugLinkMemoryWrite",
 	113: "MessageType_DebugLinkFlashErase",
-	450: "MessageType_AkoinCashGetPublicKey",
-	451: "MessageType_AkoinCashPublicKey",
-	56:  "MessageType_AkoinCashGetAddress",
-	57:  "MessageType_AkoinCashAddress",
-	58:  "MessageType_AkoinCashSignTx",
-	59:  "MessageType_AkoinCashTxRequest",
-	60:  "MessageType_AkoinCashTxAck",
-	64:  "MessageType_AkoinCashSignMessage",
-	65:  "MessageType_AkoinCashVerifyMessage",
-	66:  "MessageType_AkoinCashMessageSignature",
+	450: "MessageType_EthereumGetPublicKey",
+	451: "MessageType_EthereumPublicKey",
+	56:  "MessageType_EthereumGetAddress",
+	57:  "MessageType_EthereumAddress",
+	58:  "MessageType_EthereumSignTx",
+	59:  "MessageType_EthereumTxRequest",
+	60:  "MessageType_EthereumTxAck",
+	64:  "MessageType_EthereumSignMessage",
+	65:  "MessageType_EthereumVerifyMessage",
+	66:  "MessageType_EthereumMessageSignature",
 	67:  "MessageType_NEMGetAddress",
 	68:  "MessageType_NEMAddress",
 	69:  "MessageType_NEMSignTx",
@@ -502,16 +502,16 @@ var MessageType_value = map[string]int32{
 	"MessageType_DebugLinkMemory":                           111,
 	"MessageType_DebugLinkMemoryWrite":                      112,
 	"MessageType_DebugLinkFlashErase":                       113,
-	"MessageType_AkoinCashGetPublicKey":                     450,
-	"MessageType_AkoinCashPublicKey":                        451,
-	"MessageType_AkoinCashGetAddress":                       56,
-	"MessageType_AkoinCashAddress":                          57,
-	"MessageType_AkoinCashSignTx":                           58,
-	"MessageType_AkoinCashTxRequest":                        59,
-	"MessageType_AkoinCashTxAck":                            60,
-	"MessageType_AkoinCashSignMessage":                      64,
-	"MessageType_AkoinCashVerifyMessage":                    65,
-	"MessageType_AkoinCashMessageSignature":                 66,
+	"MessageType_EthereumGetPublicKey":                      450,
+	"MessageType_EthereumPublicKey":                         451,
+	"MessageType_EthereumGetAddress":                        56,
+	"MessageType_EthereumAddress":                           57,
+	"MessageType_EthereumSignTx":                            58,
+	"MessageType_EthereumTxRequest":                         59,
+	"MessageType_EthereumTxAck":                             60,
+	"MessageType_EthereumSignMessage":                       64,
+	"MessageType_EthereumVerifyMessage":                     65,
+	"MessageType_EthereumMessageSignature":                  66,
 	"MessageType_NEMGetAddress":                             67,
 	"MessageType_NEMAddress":                                68,
 	"MessageType_NEMSignTx":                                 69,

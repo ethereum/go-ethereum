@@ -40,7 +40,7 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
-// Interpreter is used to run AkoinCash based contracts and will utilise the
+// Interpreter is used to run Ethereum based contracts and will utilise the
 // passed environment to query external sources for state information.
 // The Interpreter will run the byte code VM based on the passed
 // configuration.

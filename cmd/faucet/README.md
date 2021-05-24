@@ -2,25 +2,25 @@
 
 The `faucet` is a simplistic web application with the goal of distributing small amounts of Acash in private and test networks.
 
-Users need to post their AkoinCash addresses to fund in a Twitter status update or public Facebook post and share the link to the faucet. The faucet will in turn deduplicate user requests and send the Acash. After a funding round, the faucet prevents the same user requesting again for a pre-configured amount of time, proportional to the amount of Acash requested.
+Users need to post their Ethereum addresses to fund in a Twitter status update or public Facebook post and share the link to the faucet. The faucet will in turn deduplicate user requests and send the Acash. After a funding round, the faucet prevents the same user requesting again for a pre-configured amount of time, proportional to the amount of Acash requested.
 
 ## Operation
 
 The `faucet` is a single binary app (everything included) with all configurations set via command line flags and a few files.
 
-First thing's first, the `faucet` needs to connect to an AkoinCash network, for which it needs the necessary genesis and network infos. Each of the following flags must be set:
+First thing's first, the `faucet` needs to connect to an Ethereum network, for which it needs the necessary genesis and network infos. Each of the following flags must be set:
 
 - `--genesis` is a path to a file containin the network `genesis.json`
 - `--network` is the devp2p network id used during connection
 - `--bootnodes` is a list of `enode://` ids to join the network through
 
-The `faucet` will use the `les` protocol to join the configured AkoinCash network and will store its data in `$HOME/.faucet` (currently not configurable).
+The `faucet` will use the `les` protocol to join the configured Ethereum network and will store its data in `$HOME/.faucet` (currently not configurable).
 
 ## Funding
 
-To be able to distribute funds, the `faucet` needs access to an already funded AkoinCash account. This can be configured via:
+To be able to distribute funds, the `faucet` needs access to an already funded Ethereum account. This can be configured via:
 
-- `--account.json` is a path to the AkoinCash account's JSON key file
+- `--account.json` is a path to the Ethereum account's JSON key file
 - `--account.pass` is a path to a text file with the decryption passphrase
 
 The faucet is able to distribute various amounts of Acash in exchange for various timeouts. These can be configured via:

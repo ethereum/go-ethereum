@@ -38,7 +38,7 @@ func (e ethEntry) ENRKey() string {
 }
 
 // startEthEntryUpdate starts the ENR updater loop.
-func (acash *AkoinCash) startEthEntryUpdate(ln *enode.LocalNode) {
+func (acash *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := acash.blockchain.SubscribeChainHeadEvent(newHead)
 
@@ -57,7 +57,7 @@ func (acash *AkoinCash) startEthEntryUpdate(ln *enode.LocalNode) {
 	}()
 }
 
-func (acash *AkoinCash) currentEthEntry() *ethEntry {
+func (acash *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(acash.blockchain.Config(), acash.blockchain.Genesis().Hash(),
 		acash.blockchain.CurrentHeader().Number.Uint64())}
 }

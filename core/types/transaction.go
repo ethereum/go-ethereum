@@ -47,7 +47,7 @@ const (
 	DynamicFeeTxType
 )
 
-// Transaction is an AkoinCash transaction.
+// Transaction is an Ethereum transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)

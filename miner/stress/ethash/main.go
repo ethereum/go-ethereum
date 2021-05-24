@@ -60,7 +60,7 @@ func main() {
 	genesis := makeGenesis(faucets)
 
 	var (
-		nodes  []*acash.AkoinCash
+		nodes  []*acash.Ethereum
 		enodes []*enode.Node
 	)
 	for i := 0; i < 4; i++ {
@@ -141,8 +141,8 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, *acash.AkoinCash, error) {
-	// Define the basic configurations for the AkoinCash node
+func makeMiner(genesis *core.Genesis) (*node.Node, *acash.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
@@ -156,7 +156,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *acash.AkoinCash, error) {
 		},
 		UseLightweightKDF: true,
 	}
-	// Create the node and configure a full AkoinCash node on it
+	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err

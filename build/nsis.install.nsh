@@ -29,9 +29,9 @@ Section "Geth" GETH_IDX
   SimpleFC::AdvRemoveRule "Geth UDP discovery (UDP:50405)"
 
   # Firewall - add rules
-  SimpleFC::AdvAddRule "Geth incoming peers (TCP:50405)" ""  6 1 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "AkoinCash" 50405 "" "" ""
-  SimpleFC::AdvAddRule "Geth outgoing peers (TCP:50405)" ""  6 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "AkoinCash" "" 50405 "" ""
-  SimpleFC::AdvAddRule "Geth UDP discovery (UDP:50405)" "" 17 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "AkoinCash" "" 50405 "" ""
+  SimpleFC::AdvAddRule "Geth incoming peers (TCP:50405)" ""  6 1 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" 50405 "" "" ""
+  SimpleFC::AdvAddRule "Geth outgoing peers (TCP:50405)" ""  6 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 50405 "" ""
+  SimpleFC::AdvAddRule "Geth UDP discovery (UDP:50405)" "" 17 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 50405 "" ""
 
   # Set default IPC endpoint (https://github.com/ethereum/EIPs/issues/147)
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"

@@ -86,23 +86,23 @@ var (
 	debExecutables = []debExecutable{
 		{
 			BinaryName:  "abigen",
-			Description: "Source code generator to convert AkoinCash contract definitions into easy to use, compile-time type-safe Go packages.",
+			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			BinaryName:  "bootnode",
-			Description: "AkoinCash bootnode.",
+			Description: "Ethereum bootnode.",
 		},
 		{
 			BinaryName:  "evm",
-			Description: "Developer utility version of the EVM (AkoinCash Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
 			BinaryName:  "geth",
-			Description: "AkoinCash CLI client.",
+			Description: "Ethereum CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",
-			Description: "AkoinCash private network manager.",
+			Description: "Ethereum private network manager.",
 		},
 		{
 			BinaryName:  "rlpdump",
@@ -110,12 +110,12 @@ var (
 		},
 		{
 			BinaryName:  "clef",
-			Description: "AkoinCash account management tool.",
+			Description: "Ethereum account management tool.",
 		},
 	}
 
 	// A debian package is created for all executables listed here.
-	debAkoinCash = debPackage{
+	debEthereum = debPackage{
 		Name:        "ethereum",
 		Version:     params.Version,
 		Executables: debExecutables,
@@ -123,7 +123,7 @@ var (
 
 	// Debian meta packages to build and push to Ubuntu PPA
 	debPackages = []debPackage{
-		debAkoinCash,
+		debEthereum,
 	}
 
 	// Distros for which packages are created.
@@ -633,7 +633,7 @@ func (d debExecutable) Package() string {
 func newDebMetadata(distro, goboot, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
-		author = "AkoinCash Builds <fjl@ethereum.org>"
+		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
 		GoBootPackage: goboot,
