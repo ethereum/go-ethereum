@@ -272,6 +272,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 // ImportPreimages imports a batch of exported hash preimages into the database.
 func ImportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Importing preimages", "file", fn)
+	start := time.Now()
 
 	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
@@ -312,6 +313,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	if len(preimages) > 0 {
 		rawdb.WritePreimages(db, preimages)
 	}
+	log.Info("Imported preimages", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -319,6 +321,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 // truncating any data already present in the file.
 func ExportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Exporting preimages", "file", fn)
+	start := time.Now()
 
 	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -341,6 +344,97 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 	}
-	log.Info("Exported preimages", "file", fn)
+	log.Info("Exported preimages", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// ImportSnapshot imports a batch of snapshot data into the database
+func ImportSnapshot(db ethdb.Database, fn string) error {
+	log.Info("Importing snapshot data", "file", fn)
+	start := time.Now()
+
+	// Open the file handle and potentially unwrap the gzip stream
+	fh, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+	stream := rlp.NewStream(reader, 0)
+
+	// Import the snapshot in batches to prevent disk trashing
+	batch := db.NewBatch()
+	for {
+		// Read the next entry and ensure it's not junk
+		var blob []byte
+		if err := stream.Decode(&blob); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if len(blob) < common.HashLength+1 {
+			continue
+		}
+		key := blob[:common.HashLength+1]
+		val := blob[common.HashLength+1:]
+		batch.Put(key, val)
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+	}
+	// Flush the last batch snapshot data
+	if batch.ValueSize() > 0 {
+		return batch.Write()
+	}
+	log.Info("Imported snapshot data", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// ExportSnapshot exports all known snapshot data into the given file,
+// truncating any data already present in the file.
+func ExportSnapshot(db ethdb.Database, fn string) error {
+	log.Info("Exporting snapshot data", "file", fn)
+	start := time.Now()
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the snapshot and export them
+	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	for it.Next() {
+		if err := rlp.Encode(writer, append(it.Key(), it.Value()...)); err != nil {
+			return err
+		}
+	}
+	it.Release()
+
+	it = db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+	for it.Next() {
+		if err := rlp.Encode(writer, append(it.Key(), it.Value()...)); err != nil {
+			return err
+		}
+	}
+	it.Release()
+
+	log.Info("Exported snapshot data", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

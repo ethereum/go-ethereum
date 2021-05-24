@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -63,6 +64,8 @@ Remove blockchain and state databases`,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
+			dbImportCmd,
+			dbExportCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -187,6 +190,38 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.GoerliFlag,
 		},
 		Description: "This command displays information about the freezer index.",
+	}
+	dbImportCmd = cli.Command{
+		Action:    utils.MigrateFlags(importChaindata),
+		Name:      "import",
+		Usage:     "import the specified chain data from the RLP stream",
+		ArgsUsage: "<type> <dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.BaikalFlag,
+		},
+		Description: "The import command imports the specific chain data from an RLP encoded stream.",
+	}
+	dbExportCmd = cli.Command{
+		Action:    utils.MigrateFlags(exportChaindata),
+		Name:      "export",
+		Usage:     "Export the specified chain data into an RLP stream",
+		ArgsUsage: "<type> <dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.BaikalFlag,
+		},
+		Description: "The export command exports the specified chain data to an RLP encoded stream.",
 	}
 )
 
@@ -509,4 +544,60 @@ func parseHexOrString(str string) ([]byte, error) {
 		return []byte(str), nil
 	}
 	return b, err
+}
+
+// importFuncs defines all supported chain data import functions.
+var importFuncs = map[string]func(db ethdb.Database, fn string) error{
+	"preimage": utils.ImportPreimages,
+	"snapshot": utils.ImportSnapshot,
+}
+
+// exportFuncs defines all supported chain data export functions.
+var exportFuncs = map[string]func(db ethdb.Database, fn string) error{
+	"preimage": utils.ExportPreimages,
+	"snapshot": utils.ExportSnapshot,
+}
+
+func importChaindata(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	// Parse the required chain data type, make sure it's supported.
+	kind := ctx.Args().Get(0)
+	kind = strings.ToLower(strings.Trim(kind, " "))
+	fn, ok := importFuncs[kind]
+	if !ok {
+		var keys []string
+		for key := range importFuncs {
+			keys = append(keys, key)
+		}
+		return fmt.Errorf("invalid data type %s, all supported %s", kind, strings.Join(keys, ", "))
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	return fn(db, ctx.Args().Get(1))
+}
+
+func exportChaindata(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	// Parse the required chain data type, make sure it's supported.
+	kind := ctx.Args().Get(0)
+	kind = strings.ToLower(strings.Trim(kind, " "))
+	fn, ok := exportFuncs[kind]
+	if !ok {
+		var keys []string
+		for key := range exportFuncs {
+			keys = append(keys, key)
+		}
+		return fmt.Errorf("invalid data type %s, all supported %s", kind, strings.Join(keys, ", "))
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	return fn(db, ctx.Args().Get(1))
 }
