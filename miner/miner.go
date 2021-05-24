@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements AkoinCash block creation and mining.
 package miner
 
 import (
@@ -42,7 +42,7 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	Acashbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
 	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
 	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
 	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
@@ -116,20 +116,20 @@ func (miner *Miner) update() {
 			case downloader.FailedEvent:
 				canStart = true
 				if shouldStart {
-					miner.SetEtherbase(miner.coinbase)
+					miner.SetAcashbase(miner.coinbase)
 					miner.worker.start()
 				}
 			case downloader.DoneEvent:
 				canStart = true
 				if shouldStart {
-					miner.SetEtherbase(miner.coinbase)
+					miner.SetAcashbase(miner.coinbase)
 					miner.worker.start()
 				}
 				// Stop reacting to downloader events
 				events.Unsubscribe()
 			}
 		case addr := <-miner.startCh:
-			miner.SetEtherbase(addr)
+			miner.SetAcashbase(addr)
 			if canStart {
 				miner.worker.start()
 			}
@@ -194,9 +194,9 @@ func (miner *Miner) PendingBlock() *types.Block {
 	return miner.worker.pendingBlock()
 }
 
-func (miner *Miner) SetEtherbase(addr common.Address) {
+func (miner *Miner) SetAcashbase(addr common.Address) {
 	miner.coinbase = addr
-	miner.worker.setEtherbase(addr)
+	miner.worker.setAcashbase(addr)
 }
 
 // EnablePreseal turns on the preseal mining feature. It's enabled by default.

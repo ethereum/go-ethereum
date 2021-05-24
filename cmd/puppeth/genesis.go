@@ -32,7 +32,7 @@ import (
 )
 
 // alethGenesisSpec represents the genesis specification format used by the
-// C++ Ethereum implementation.
+// C++ AkoinCash implementation.
 type alethGenesisSpec struct {
 	SealEngine string `json:"sealEngine"`
 	Params     struct {
@@ -275,7 +275,7 @@ type parityChainSpec struct {
 
 	Genesis struct {
 		Seal struct {
-			Ethereum struct {
+			AkoinCash struct {
 				Nonce   types.BlockNonce `json:"nonce"`
 				MixHash hexutil.Bytes    `json:"mixHash"`
 			} `json:"ethereum"`
@@ -424,8 +424,8 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Disable this one
 	spec.Params.EIP98Transition = math.MaxInt64
 
-	spec.Genesis.Seal.Ethereum.Nonce = types.EncodeNonce(genesis.Nonce)
-	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
+	spec.Genesis.Seal.AkoinCash.Nonce = types.EncodeNonce(genesis.Nonce)
+	spec.Genesis.Seal.AkoinCash.MixHash = genesis.Mixhash[:]
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
@@ -590,9 +590,9 @@ func (spec *parityChainSpec) setIstanbul(num *big.Int) {
 	spec.Params.EIP1283ReenableTransition = hexutil.Uint64(num.Uint64())
 }
 
-// pyEthereumGenesisSpec represents the genesis specification format used by the
-// Python Ethereum implementation.
-type pyEthereumGenesisSpec struct {
+// pyAkoinCashGenesisSpec represents the genesis specification format used by the
+// Python AkoinCash implementation.
+type pyAkoinCashGenesisSpec struct {
 	Nonce      types.BlockNonce  `json:"nonce"`
 	Timestamp  hexutil.Uint64    `json:"timestamp"`
 	ExtraData  hexutil.Bytes     `json:"extraData"`
@@ -604,14 +604,14 @@ type pyEthereumGenesisSpec struct {
 	ParentHash common.Hash       `json:"parentHash"`
 }
 
-// newPyEthereumGenesisSpec converts a go-ethereum genesis block into a Parity specific
+// newPyAkoinCashGenesisSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
-func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereumGenesisSpec, error) {
+func newPyAkoinCashGenesisSpec(network string, genesis *core.Genesis) (*pyAkoinCashGenesisSpec, error) {
 	// Only ethash is currently supported between go-ethereum and pyethereum
 	if genesis.Config.Ethash == nil {
 		return nil, errors.New("unsupported consensus engine")
 	}
-	spec := &pyEthereumGenesisSpec{
+	spec := &pyAkoinCashGenesisSpec{
 		Nonce:      types.EncodeNonce(genesis.Nonce),
 		Timestamp:  (hexutil.Uint64)(genesis.Timestamp),
 		ExtraData:  genesis.ExtraData,

@@ -42,7 +42,7 @@ import (
 type LesApiBackend struct {
 	extRPCEnabled       bool
 	allowUnprotectedTxs bool
-	acash               *LightEthereum
+	acash               *LightAkoinCash
 	gpo                 *gasprice.Oracle
 }
 

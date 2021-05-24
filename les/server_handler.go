@@ -109,7 +109,7 @@ func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 }
 
 func (h *serverHandler) handle(p *clientPeer) error {
-	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
+	p.Log().Debug("Light AkoinCash peer connected", "name", p.Name())
 
 	// Execute the LES handshake
 	var (
@@ -120,7 +120,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
 	)
 	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
-		p.Log().Debug("Light Ethereum handshake failed", "err", err)
+		p.Log().Debug("Light AkoinCash handshake failed", "err", err)
 		return err
 	}
 	// Connected to another server, no messages expected, just wait for disconnection
@@ -176,7 +176,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		default:
 		}
 		if err := h.handleMsg(p, &wg); err != nil {
-			p.Log().Debug("Light Ethereum message handling failed", "err", err)
+			p.Log().Debug("Light AkoinCash message handling failed", "err", err)
 			return err
 		}
 	}
@@ -274,7 +274,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	if err != nil {
 		return err
 	}
-	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
+	p.Log().Trace("Light AkoinCash message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	// Discard large message which exceeds the limitation.
 	if msg.Size > ProtocolMaxMsgSize {

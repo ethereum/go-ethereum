@@ -9,7 +9,7 @@
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
-  <name>Android Ethereum Client</name>
+  <name>Android AkoinCash Client</name>
   <description>Android port of the go-ethereum libraries and node</description>
   <url>https://github.com/dezzyboy/go-ethereum</url>
   <inceptionYear>2015</inceptionYear>
@@ -23,7 +23,7 @@
   </licenses>
 
   <organization>
-    <name>Ethereum</name>
+    <name>AkoinCash</name>
     <url>https://ethereum.org</url>
   </organization>
 

@@ -1231,7 +1231,7 @@ SolidityParam.prototype.withOffset = function (offset) {
 };
 
 /**
- * This method should be used to combine solidity params together
+ * This method should be used to combine solidity params togacash
  * eg. when appending an array
  *
  * @method combine
@@ -1768,27 +1768,27 @@ var ACASH_UNITS = [
     'Gwei',
     'szabo',
     'finney',
-    'femtoether',
-    'picoether',
-    'nanoether',
-    'microether',
-    'milliether',
+    'femtoacash',
+    'picoacash',
+    'nanoacash',
+    'microacash',
+    'milliacash',
     'nano',
     'micro',
     'milli',
-    'ether',
+    'acash',
     'grand',
-    'Mether',
-    'Gether',
-    'Tether',
-    'Pether',
-    'Eether',
-    'Zether',
-    'Yether',
-    'Nether',
-    'Dether',
-    'Vether',
-    'Uether'
+    'Macash',
+    'Gacash',
+    'Tacash',
+    'Pacash',
+    'Eacash',
+    'Zacash',
+    'Yacash',
+    'Nacash',
+    'Dacash',
+    'Vacash',
+    'Uacash'
 ];
 
 module.exports = {
@@ -1884,33 +1884,33 @@ var sha3 = require('./sha3.js');
 var utf8 = require('utf8');
 
 var unitMap = {
-    'noether':      '0',
+    'noacash':      '0',
     'wei':          '1',
     'kwei':         '1000',
     'Kwei':         '1000',
     'babbage':      '1000',
-    'femtoether':   '1000',
+    'femtoacash':   '1000',
     'mwei':         '1000000',
     'Mwei':         '1000000',
     'lovelace':     '1000000',
-    'picoether':    '1000000',
+    'picoacash':    '1000000',
     'gwei':         '1000000000',
     'Gwei':         '1000000000',
     'shannon':      '1000000000',
-    'nanoether':    '1000000000',
+    'nanoacash':    '1000000000',
     'nano':         '1000000000',
     'szabo':        '1000000000000',
-    'microether':   '1000000000000',
+    'microacash':   '1000000000000',
     'micro':        '1000000000000',
     'finney':       '1000000000000000',
-    'milliether':    '1000000000000000',
+    'milliacash':    '1000000000000000',
     'milli':         '1000000000000000',
-    'ether':        '1000000000000000000',
-    'kether':       '1000000000000000000000',
+    'acash':        '1000000000000000000',
+    'kacash':       '1000000000000000000000',
     'grand':        '1000000000000000000000',
-    'mether':       '1000000000000000000000000',
-    'gether':       '1000000000000000000000000000',
-    'tether':       '1000000000000000000000000000000'
+    'macash':       '1000000000000000000000000',
+    'gacash':       '1000000000000000000000000000',
+    'tacash':       '1000000000000000000000000000000'
 };
 
 /**
@@ -2124,12 +2124,12 @@ var toHex = function (val) {
  * Returns value of unit in Wei
  *
  * @method getValueOfUnit
- * @param {String} unit the unit to convert to, default ether
+ * @param {String} unit the unit to convert to, default acash
  * @returns {BigNumber} value of the unit (in Wei)
  * @throws error if the unit is not correct:w
  */
 var getValueOfUnit = function (unit) {
-    unit = unit ? unit.toLowerCase() : 'ether';
+    unit = unit ? unit.toLowerCase() : 'acash';
     var unitValue = unitMap[unit];
     if (unitValue === undefined) {
         throw new Error('This unit doesn\'t exists, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
@@ -2138,24 +2138,24 @@ var getValueOfUnit = function (unit) {
 };
 
 /**
- * Takes a number of wei and converts it to any other ether unit.
+ * Takes a number of wei and converts it to any other acash unit.
  *
  * Possible units are:
  *   SI Short   SI Full        Effigy       Other
- * - kwei       femtoether     babbage
- * - mwei       picoether      lovelace
- * - gwei       nanoether      shannon      nano
- * - --         microether     szabo        micro
- * - --         milliether     finney       milli
- * - ether      --             --
- * - kether                    --           grand
- * - mether
- * - gether
- * - tether
+ * - kwei       femtoacash     babbage
+ * - mwei       picoacash      lovelace
+ * - gwei       nanoacash      shannon      nano
+ * - --         microacash     szabo        micro
+ * - --         milliacash     finney       milli
+ * - acash      --             --
+ * - kacash                    --           grand
+ * - macash
+ * - gacash
+ * - tacash
  *
  * @method fromWei
  * @param {Number|String} number can be a number, number string or a HEX of a decimal
- * @param {String} unit the unit to convert to, default ether
+ * @param {String} unit the unit to convert to, default acash
  * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
 */
 var fromWei = function(number, unit) {
@@ -2169,21 +2169,21 @@ var fromWei = function(number, unit) {
  *
  * Possible units are:
  *   SI Short   SI Full        Effigy       Other
- * - kwei       femtoether     babbage
- * - mwei       picoether      lovelace
- * - gwei       nanoether      shannon      nano
- * - --         microether     szabo        micro
- * - --         microether     szabo        micro
- * - --         milliether     finney       milli
- * - ether      --             --
- * - kether                    --           grand
- * - mether
- * - gether
- * - tether
+ * - kwei       femtoacash     babbage
+ * - mwei       picoacash      lovelace
+ * - gwei       nanoacash      shannon      nano
+ * - --         microacash     szabo        micro
+ * - --         microacash     szabo        micro
+ * - --         milliacash     finney       milli
+ * - acash      --             --
+ * - kacash                    --           grand
+ * - macash
+ * - gacash
+ * - tacash
  *
  * @method toWei
  * @param {Number|String|BigNumber} number can be a number, number string or a HEX of a decimal
- * @param {String} unit the unit to convert from, default ether
+ * @param {String} unit the unit to convert from, default acash
  * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
 */
 var toWei = function(number, unit) {
@@ -2409,7 +2409,7 @@ var isJson = function (str) {
 };
 
 /**
- * Returns true if given string is a valid Ethereum block header bloom.
+ * Returns true if given string is a valid AkoinCash block header bloom.
  *
  * @method isBloom
  * @param {String} hex encoded bloom filter
@@ -2609,7 +2609,7 @@ var properties = function () {
             inputFormatter: utils.toDecimal
         }),
         new Property({
-            name: 'version.ethereum',
+            name: 'version.akoincash',
             getter: 'acash_protocolVersion',
             inputFormatter: utils.toDecimal
         }),
@@ -4496,7 +4496,7 @@ var Iban = function (iban) {
 };
 
 /**
- * This method should be used to create iban object from ethereum address
+ * This method should be used to create iban object from akoincash address
  *
  * @method fromAddress
  * @param {String} address
@@ -5713,7 +5713,7 @@ module.exports = Personal;
 */
 /** @file shh.js
  * @authors:
- *   Fabian Vogelsteller <fabian@ethereum.org>
+ *   Fabian Vogelsteller <fabian@acasheum.org>
  *   Marek Kotewicz <marek@ethcore.io>
  * @date 2017
  */
@@ -5862,7 +5862,7 @@ module.exports = Shh;
  * @author Alex Beregszaszi <alex@rtfs.hu>
  * @date 2016
  *
- * Reference: https://github.com/dezzyboy/go-ethereum/blob/swarm/internal/web3ext/web3ext.go#L33
+ * Reference: https://github.com/dezzyboy/go-acasheum/blob/swarm/internal/web3ext/web3ext.go#L33
  */
 
 "use strict";
@@ -6317,7 +6317,7 @@ var errors = require('./errors');
 
 /**
  * It's responsible for passing messages to providers
- * It's also responsible for polling the ethereum node for incoming messages
+ * It's also responsible for polling the acasheum node for incoming messages
  * Default poll timeout is 1 second
  * Singleton
  */
@@ -8408,7 +8408,7 @@ module.exports = transfer;
 	         *
 	         * This method invokes _doProcessBlock(offset), which must be implemented by a concrete subtype.
 	         *
-	         * @param {boolean} doFlush Whether all blocks and partial blocks should be processed.
+	         * @param {boolean} doFlush Whacash all blocks and partial blocks should be processed.
 	         *
 	         * @return {WordArray} The processed data.
 	         *

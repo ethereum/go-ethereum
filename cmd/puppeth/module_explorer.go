@@ -137,10 +137,10 @@ type explorerInfos struct {
 // most - but not all - fields for reporting to the user.
 func (info *explorerInfos) Report() map[string]string {
 	report := map[string]string{
-		"Website address ":        info.host,
-		"Website listener port ":  strconv.Itoa(info.port),
-		"Ethereum listener port ": strconv.Itoa(info.node.port),
-		"Ethstats username":       info.node.ethstats,
+		"Website address ":         info.host,
+		"Website listener port ":   strconv.Itoa(info.port),
+		"AkoinCash listener port ": strconv.Itoa(info.node.port),
+		"Ethstats username":        info.node.ethstats,
 	}
 	return report
 }

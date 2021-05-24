@@ -2915,7 +2915,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 // TestInitThenFailCreateContract tests a pretty notorious case that happened
 // on mainnet over blocks 7338108, 7338110 and 7338115.
 // - Block 7338108: address e771789f5cccac282f23bb7add5690e1f6ca467c is initiated
-//   with 0.001 ether (thus created but no code)
+//   with 0.001 acash (thus created but no code)
 // - Block 7338110: a CREATE2 is attempted. The CREATE2 would deploy code on
 //   the same address e771789f5cccac282f23bb7add5690e1f6ca467c. However, the
 //   deployment fails due to OOG during initcode execution
@@ -3136,7 +3136,7 @@ func TestEIP1559Transition(t *testing.T) {
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Acash))
 		gspec   = &Genesis{
 			Config: params.AllEthashProtocolChanges,
 			Alloc: GenesisAlloc{

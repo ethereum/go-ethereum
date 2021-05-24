@@ -22,7 +22,7 @@
 //
 // Before you touch the protocol files, you need to be aware of a breaking change
 // that occurred between firmware versions 1.7.3->1.8.0 (Model One) and 2.0.10->
-// 2.1.0 (Model T). The Ethereum address representation was changed from the 20
+// 2.1.0 (Model T). The AkoinCash address representation was changed from the 20
 // byte binary blob to a 42 byte hex string. The upstream protocol buffer files
 // only support the new format, so blindly pulling in a new spec will break old
 // devices!

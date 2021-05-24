@@ -43,7 +43,7 @@ import (
 type EthAPIBackend struct {
 	extRPCEnabled       bool
 	allowUnprotectedTxs bool
-	acash               *Ethereum
+	acash               *AkoinCash
 	gpo                 *gasprice.Oracle
 }
 

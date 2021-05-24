@@ -104,19 +104,19 @@ func (w *wizard) deployNode(boot bool) {
 	// If the node is a miner/signer, load up needed credentials
 	if !boot {
 		if w.conf.Genesis.Config.Ethash != nil {
-			// Ethash based miners only need an etherbase to mine against
+			// Ethash based miners only need an acashbase to mine against
 			fmt.Println()
-			if infos.etherbase == "" {
+			if infos.acashbase == "" {
 				fmt.Printf("What address should the miner use?\n")
 				for {
 					if address := w.readAddress(); address != nil {
-						infos.etherbase = address.Hex()
+						infos.acashbase = address.Hex()
 						break
 					}
 				}
 			} else {
-				fmt.Printf("What address should the miner use? (default = %s)\n", infos.etherbase)
-				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
+				fmt.Printf("What address should the miner use? (default = %s)\n", infos.acashbase)
+				infos.acashbase = w.readDefaultAddress(common.HexToAddress(infos.acashbase)).Hex()
 			}
 		} else if w.conf.Genesis.Config.Clique != nil {
 			// If a previous signer was already set, offer to reuse it
@@ -168,7 +168,7 @@ func (w *wizard) deployNode(boot bool) {
 		nocache = w.readDefaultYesNo(false)
 	}
 	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
-		log.Error("Failed to deploy Ethereum node container", "err", err)
+		log.Error("Failed to deploy AkoinCash node container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
 		}

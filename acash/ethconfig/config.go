@@ -55,7 +55,7 @@ var LightClientGPO = gasprice.Config{
 	IgnorePrice: gasprice.DefaultIgnorePrice,
 }
 
-// Defaults contains default settings for use on the Ethereum main net.
+// Defaults contains default settings for use on the AkoinCash main net.
 var Defaults = Config{
 	SyncMode: downloader.FastSync,
 	Ethash: ethash.Config{
@@ -87,7 +87,7 @@ var Defaults = Config{
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
 	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 ether
+	RPCTxFeeCap: 1, // 1 acash
 }
 
 func init() {
@@ -116,7 +116,7 @@ func init() {
 // Config contains configuration options for of the ACASH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
-	// If nil, the Ethereum main net block is used.
+	// If nil, the AkoinCash main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
 
 	// Protocol options
@@ -192,7 +192,7 @@ type Config struct {
 	RPCGasCap uint64
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
+	// send-transction variants. The unit is acash.
 	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.

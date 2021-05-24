@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements AkoinCash block creation and mining.
 package miner
 
 import (
@@ -191,9 +191,9 @@ func TestCloseMiner(t *testing.T) {
 	waitForMiningState(t, miner, false)
 }
 
-// TestMinerSetEtherbase checks that etherbase becomes set even if mining isn't
+// TestMinerSetAcashbase checks that acashbase becomes set even if mining isn't
 // possible at the moment
-func TestMinerSetEtherbase(t *testing.T) {
+func TestMinerSetAcashbase(t *testing.T) {
 	miner, mux := createMiner(t)
 	// Start with a 'bad' mining address
 	miner.Start(common.HexToAddress("0xdead"))
@@ -232,7 +232,7 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create Ethash config
 	config := Config{
-		Etherbase: common.HexToAddress("123456789"),
+		Acashbase: common.HexToAddress("123456789"),
 	}
 	// Create chainConfig
 	memdb := memorydb.New()
@@ -244,7 +244,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	}
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
-	// Create Ethereum backend
+	// Create AkoinCash backend
 	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)

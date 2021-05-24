@@ -16,7 +16,7 @@
 
 package params
 
-// These are the multipliers for ether denominations.
+// These are the multipliers for acash denominations.
 // Example: To get the wei value of an amount in 'gwei', use
 //
 //    new(big.Int).Mul(value, big.NewInt(params.GWei))
@@ -24,5 +24,5 @@ package params
 const (
 	Wei   = 1
 	GWei  = 1e9
-	Ether = 1e18
+	Acash = 1e18
 )

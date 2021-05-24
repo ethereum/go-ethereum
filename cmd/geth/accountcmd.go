@@ -31,20 +31,20 @@ import (
 var (
 	walletCommand = cli.Command{
 		Name:      "wallet",
-		Usage:     "Manage Ethereum presale wallets",
+		Usage:     "Manage AkoinCash presale wallets",
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
     geth wallet import /path/to/my/presale.wallet
 
-will prompt for your password and imports your ether presale account.
+will prompt for your password and imports your acash presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
 		Subcommands: []cli.Command{
 			{
 
 				Name:      "import",
-				Usage:     "Import Ethereum presale wallet",
+				Usage:     "Import AkoinCash presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",
@@ -57,7 +57,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 				Description: `
 	geth wallet [options] /path/to/my/presale.wallet
 
-will prompt for your password and imports your ether presale account.
+will prompt for your password and imports your acash presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
 			},

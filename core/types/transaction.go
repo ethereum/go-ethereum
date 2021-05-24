@@ -47,7 +47,7 @@ const (
 	DynamicFeeTxType
 )
 
-// Transaction is an Ethereum transaction.
+// Transaction is an AkoinCash transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
@@ -275,7 +275,7 @@ func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.tip()) 
 // FeeCap returns the fee cap per gas of the transaction.
 func (tx *Transaction) FeeCap() *big.Int { return new(big.Int).Set(tx.inner.feeCap()) }
 
-// Value returns the ether amount of the transaction.
+// Value returns the acash amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
 // Nonce returns the sender account nonce of the transaction.

@@ -78,7 +78,7 @@ func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 type tester struct {
 	workspace string
 	stack     *node.Node
-	ethereum  *acash.Ethereum
+	ethereum  *acash.AkoinCash
 	console   *Console
 	input     *hookedPrompter
 	output    *bytes.Buffer
@@ -93,7 +93,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to create temporary keystore: %v", err)
 	}
 
-	// Create a networkless protocol stack and start an Ethereum service within
+	// Create a networkless protocol stack and start an AkoinCash service within
 	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: testInstance})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
@@ -101,7 +101,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	ethConf := &ethconfig.Config{
 		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
 		Miner: miner.Config{
-			Etherbase: common.HexToAddress(testAddress),
+			Acashbase: common.HexToAddress(testAddress),
 		},
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeTest,
@@ -112,7 +112,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	}
 	ethBackend, err := acash.New(stack, ethConf)
 	if err != nil {
-		t.Fatalf("failed to register Ethereum protocol: %v", err)
+		t.Fatalf("failed to register AkoinCash protocol: %v", err)
 	}
 	// Start the node and assemble the JavaScript console around it
 	if err = stack.Start(); err != nil {

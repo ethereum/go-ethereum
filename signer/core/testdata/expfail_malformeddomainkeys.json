@@ -45,7 +45,7 @@
   },
   "primaryType": "Mail",
   "domain": {
-    "name": "Ether Mail",
+    "name": "Acash Mail",
     "version": "1",
     "chainId": "1",
     "vFAILFAILerifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"

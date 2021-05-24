@@ -36,7 +36,7 @@ import (
 )
 
 // Register adds catalyst APIs to the node.
-func Register(stack *node.Node, backend *acash.Ethereum) error {
+func Register(stack *node.Node, backend *acash.AkoinCash) error {
 	chainconfig := backend.BlockChain().Config()
 	if chainconfig.CatalystBlock == nil {
 		return errors.New("catalystBlock is not set in genesis config")
@@ -57,10 +57,10 @@ func Register(stack *node.Node, backend *acash.Ethereum) error {
 }
 
 type consensusAPI struct {
-	acash *acash.Ethereum
+	acash *acash.AkoinCash
 }
 
-func newConsensusAPI(acash *acash.Ethereum) *consensusAPI {
+func newConsensusAPI(acash *acash.AkoinCash) *consensusAPI {
 	return &consensusAPI{acash: acash}
 }
 
@@ -130,7 +130,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, err
 	}
 
-	coinbase, err := api.acash.Etherbase()
+	coinbase, err := api.acash.Acashbase()
 	if err != nil {
 		return nil, err
 	}

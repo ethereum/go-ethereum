@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package acash implements the Ethereum protocol.
+// Package acash implements the AkoinCash protocol.
 package acash
 
 import (
@@ -61,8 +61,8 @@ import (
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
 
-// Ethereum implements the Ethereum full node service.
-type Ethereum struct {
+// AkoinCash implements the AkoinCash full node service.
+type AkoinCash struct {
 	config *ethconfig.Config
 
 	// Handlers
@@ -87,22 +87,22 @@ type Ethereum struct {
 
 	miner     *miner.Miner
 	gasPrice  *big.Int
-	etherbase common.Address
+	acashbase common.Address
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
 
-	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and acashbase)
 }
 
-// New creates a new Ethereum object (including the
-// initialisation of the common Ethereum object)
-func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
+// New creates a new AkoinCash object (including the
+// initialisation of the common AkoinCash object)
+func New(stack *node.Node, config *ethconfig.Config) (*AkoinCash, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
-		return nil, errors.New("can't run acash.Ethereum in light sync mode, use les.LightEthereum")
+		return nil, errors.New("can't run acash.AkoinCash in light sync mode, use les.LightAkoinCash")
 	}
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
@@ -126,7 +126,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	ethashConfig := config.Ethash
 	ethashConfig.NotifyFull = config.Miner.NotifyFull
 
-	// Assemble the Ethereum object
+	// Assemble the AkoinCash object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "acash/db/chaindata/", false)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
-	acash := &Ethereum{
+	acash := &AkoinCash{
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
@@ -149,7 +149,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
-		etherbase:         config.Miner.Etherbase,
+		acashbase:         config.Miner.Acashbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
@@ -160,7 +160,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising AkoinCash protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -293,7 +293,7 @@ func makeExtraData(extra []byte) []byte {
 
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
+func (s *AkoinCash) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
@@ -304,7 +304,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		{
 			Namespace: "acash",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewPublicAkoinCashAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "acash",
@@ -348,49 +348,49 @@ func (s *Ethereum) APIs() []rpc.API {
 	}...)
 }
 
-func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+func (s *AkoinCash) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+func (s *AkoinCash) Acashbase() (eb common.Address, err error) {
 	s.lock.RLock()
-	etherbase := s.etherbase
+	acashbase := s.acashbase
 	s.lock.RUnlock()
 
-	if etherbase != (common.Address{}) {
-		return etherbase, nil
+	if acashbase != (common.Address{}) {
+		return acashbase, nil
 	}
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
+			acashbase := accounts[0].Address
 
 			s.lock.Lock()
-			s.etherbase = etherbase
+			s.acashbase = acashbase
 			s.lock.Unlock()
 
-			log.Info("Etherbase automatically configured", "address", etherbase)
-			return etherbase, nil
+			log.Info("Acashbase automatically configured", "address", acashbase)
+			return acashbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.Address{}, fmt.Errorf("acashbase must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined
 // by local miner accounts.
 //
-// We regard two types of accounts as local miner account: etherbase
+// We regard two types of accounts as local miner account: acashbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(block *types.Block) bool {
+func (s *AkoinCash) isLocalBlock(block *types.Block) bool {
 	author, err := s.engine.Author(block.Header())
 	if err != nil {
 		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
 		return false
 	}
-	// Check whether the given address is etherbase.
+	// Check whether the given address is acashbase.
 	s.lock.RLock()
-	etherbase := s.etherbase
+	acashbase := s.acashbase
 	s.lock.RUnlock()
-	if author == etherbase {
+	if author == acashbase {
 		return true
 	}
 	// Check whether the given address is specified by `txpool.local`
@@ -406,7 +406,7 @@ func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 // shouldPreserve checks whether we should preserve the given block
 // during the chain reorg depending on whether the author of block
 // is a local account.
-func (s *Ethereum) shouldPreserve(block *types.Block) bool {
+func (s *AkoinCash) shouldPreserve(block *types.Block) bool {
 	// The reason we need to disable the self-reorg preserving for clique
 	// is it can be probable to introduce a deadlock.
 	//
@@ -429,19 +429,19 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	return s.isLocalBlock(block)
 }
 
-// SetEtherbase sets the mining reward address.
-func (s *Ethereum) SetEtherbase(etherbase common.Address) {
+// SetAcashbase sets the mining reward address.
+func (s *AkoinCash) SetAcashbase(acashbase common.Address) {
 	s.lock.Lock()
-	s.etherbase = etherbase
+	s.acashbase = acashbase
 	s.lock.Unlock()
 
-	s.miner.SetEtherbase(etherbase)
+	s.miner.SetAcashbase(acashbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
-func (s *Ethereum) StartMining(threads int) error {
+func (s *AkoinCash) StartMining(threads int) error {
 	// Update the thread count within the consensus engine
 	type threaded interface {
 		SetThreads(threads int)
@@ -462,15 +462,15 @@ func (s *Ethereum) StartMining(threads int) error {
 		s.txPool.SetGasPrice(price)
 
 		// Configure the local mining address
-		eb, err := s.Etherbase()
+		eb, err := s.Acashbase()
 		if err != nil {
-			log.Error("Cannot start mining without etherbase", "err", err)
-			return fmt.Errorf("etherbase missing: %v", err)
+			log.Error("Cannot start mining without acashbase", "err", err)
+			return fmt.Errorf("acashbase missing: %v", err)
 		}
 		if clique, ok := s.engine.(*clique.Clique); ok {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
+				log.Error("Acashbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
 			}
 			clique.Authorize(eb, wallet.SignData)
@@ -486,7 +486,7 @@ func (s *Ethereum) StartMining(threads int) error {
 
 // StopMining terminates the miner, both at the consensus engine level as well as
 // at the block creation level.
-func (s *Ethereum) StopMining() {
+func (s *AkoinCash) StopMining() {
 	// Update the thread count within the consensus engine
 	type threaded interface {
 		SetThreads(threads int)
@@ -498,24 +498,24 @@ func (s *Ethereum) StopMining() {
 	s.miner.Stop()
 }
 
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *AkoinCash) IsMining() bool      { return s.miner.Mining() }
+func (s *AkoinCash) Miner() *miner.Miner { return s.miner }
 
-func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
+func (s *AkoinCash) AccountManager() *accounts.Manager  { return s.accountManager }
+func (s *AkoinCash) BlockChain() *core.BlockChain       { return s.blockchain }
+func (s *AkoinCash) TxPool() *core.TxPool               { return s.txPool }
+func (s *AkoinCash) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *AkoinCash) Engine() consensus.Engine           { return s.engine }
+func (s *AkoinCash) ChainDb() ethdb.Database            { return s.chainDb }
+func (s *AkoinCash) IsListening() bool                  { return true } // Always listening
+func (s *AkoinCash) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *AkoinCash) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
+func (s *AkoinCash) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *AkoinCash) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
-func (s *Ethereum) Protocols() []p2p.Protocol {
+func (s *AkoinCash) Protocols() []p2p.Protocol {
 	protos := acash.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	if s.config.SnapshotCache > 0 {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
@@ -524,8 +524,8 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
-// Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
+// AkoinCash protocol implementation.
+func (s *AkoinCash) Start() error {
 	acash.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
@@ -545,8 +545,8 @@ func (s *Ethereum) Start() error {
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
-// Ethereum protocol.
-func (s *Ethereum) Stop() error {
+// AkoinCash protocol.
+func (s *AkoinCash) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()

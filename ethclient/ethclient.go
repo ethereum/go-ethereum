@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ethclient provides a client for the Ethereum RPC API.
+// Package ethclient provides a client for the AkoinCash RPC API.
 package ethclient
 
 import (
@@ -31,7 +31,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/rpc"
 )
 
-// Client defines typed wrappers for the Ethereum RPC API.
+// Client defines typed wrappers for the AkoinCash RPC API.
 type Client struct {
 	c *rpc.Client
 }

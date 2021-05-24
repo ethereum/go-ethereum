@@ -2,7 +2,7 @@
 
 Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and asks for permission to sign the content. If the users grants the signing request, Clef will send the signature back to the DApp.
 
-This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronised with the chain, or is a node that has no built-in (or limited) account management.
+This setup allows a DApp to connect to a remote AkoinCash node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote AkoinCash node, because a local one is not available, not synchronised with the chain, or is a node that has no built-in (or limited) account management.
 
 Clef can run as a daemon on the same machine, off a usb-stick like [USB armory](https://inversepath.com/usbarmory), or even a separate VM in a [QubesOS](https://www.qubes-os.org/) type setup.
 
@@ -434,7 +434,7 @@ Response
       },
       "primaryType": "Mail",
       "domain": {
-        "name": "Ether Mail",
+        "name": "Acash Mail",
         "version": "1",
         "chainId": 1,
         "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
@@ -735,7 +735,7 @@ Invoked when a request for account listing has been made.
       "messages": [
         {
           "name": "message",
-          "value": "\u0019Ethereum Signed Message:\n4\u0001\u0002\u0003\u0004",
+          "value": "\u0019AkoinCash Signed Message:\n4\u0001\u0002\u0003\u0004",
           "type": "text/plain"
         }
       ],

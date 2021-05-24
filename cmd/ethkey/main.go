@@ -35,7 +35,7 @@ var gitDate = ""
 var app *cli.App
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "an Ethereum key manager")
+	app = flags.NewApp(gitCommit, gitDate, "an AkoinCash key manager")
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,

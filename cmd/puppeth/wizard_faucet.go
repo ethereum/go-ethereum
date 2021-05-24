@@ -63,7 +63,7 @@ func (w *wizard) deployFaucet() {
 	}
 	// Port and proxy settings retrieved, figure out the funding amount per period configurations
 	fmt.Println()
-	fmt.Printf("How many Ethers to release per request? (default = %d)\n", infos.amount)
+	fmt.Printf("How many Acashs to release per request? (default = %d)\n", infos.amount)
 	infos.amount = w.readDefaultInt(infos.amount)
 
 	fmt.Println()

@@ -51,7 +51,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		// typical error is omitting sender due to some quirk in the javascript call
 		// e.g. https://github.com/dezzyboy/go-ethereum/issues/16106.
 		if len(data) == 0 {
-			// Prevent sending ether into black hole (show stopper)
+			// Prevent sending acash into black hole (show stopper)
 			if tx.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
 				return nil, errors.New("transaction will create a contract with value but empty code")
 			}

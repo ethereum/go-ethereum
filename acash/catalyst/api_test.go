@@ -35,7 +35,7 @@ var (
 	// testKey is a private key to use for funding a tester account.
 	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-	// testAddr is the Ethereum address of the tester account.
+	// testAddr is the AkoinCash address of the tester account.
 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 
 	testBalance = big.NewInt(2e10)
@@ -215,7 +215,7 @@ func TestEth2NewBlock(t *testing.T) {
 }
 
 // startEthService creates a full node instance for testing.
-func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *acash.Ethereum) {
+func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *acash.AkoinCash) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{})
@@ -235,7 +235,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	ethservice.SetEtherbase(testAddr)
+	ethservice.SetAcashbase(testAddr)
 
 	return n, ethservice
 }

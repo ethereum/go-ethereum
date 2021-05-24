@@ -21,7 +21,7 @@
     "name": "Denial of service due to Go CVE-2020-28362",
     "uid": "GETH-2020-02",
     "summary": "A denial-of-service issue can be used to crash Geth nodes during block processing, due to an underlying bug in Go (CVE-2020-28362) versions < `1.15.5`, or `<1.14.12`",
-    "description": "The DoS issue can be used to crash all Geth nodes during block processing, the effects of which would be that a major part of the Ethereum network went offline.\n\nOutside of Go-Ethereum, the issue is most likely relevant for all forks of Geth (such as TurboGeth or ETC’s core-geth) which is built with versions of Go which contains the vulnerability.",
+    "description": "The DoS issue can be used to crash all Geth nodes during block processing, the effects of which would be that a major part of the AkoinCash network went offline.\n\nOutside of Go-AkoinCash, the issue is most likely relevant for all forks of Geth (such as TurboGeth or ETC’s core-geth) which is built with versions of Go which contains the vulnerability.",
     "links": [
       "https://blog.ethereum.org/2020/11/12/geth_security_release/",
       "https://groups.google.com/g/golang-announce/c/NpBGTTmKzpM",

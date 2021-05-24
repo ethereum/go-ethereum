@@ -166,7 +166,7 @@ func (p *peerCommons) String() string {
 // PeerInfo represents a short summary of the `acash` sub-protocol metadata known
 // about a connected peer.
 type PeerInfo struct {
-	Version    int      `json:"version"`    // Ethereum protocol version negotiated
+	Version    int      `json:"version"`    // AkoinCash protocol version negotiated
 	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
 	Head       string   `json:"head"`       // SHA3 hash of the peer's best owned block
 }
@@ -1129,7 +1129,7 @@ type serverPeerSubscriber interface {
 }
 
 // serverPeerSet represents the set of active server peers currently
-// participating in the Light Ethereum sub-protocol.
+// participating in the Light AkoinCash sub-protocol.
 type serverPeerSet struct {
 	peers map[string]*serverPeer
 	// subscribers is a batch of subscribers and peerset will notify
@@ -1280,7 +1280,7 @@ func (ps *serverPeerSet) close() {
 }
 
 // clientPeerSet represents the set of active client peers currently
-// participating in the Light Ethereum sub-protocol.
+// participating in the Light AkoinCash sub-protocol.
 type clientPeerSet struct {
 	peers  map[enode.ID]*clientPeer
 	lock   sync.RWMutex

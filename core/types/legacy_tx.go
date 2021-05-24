@@ -22,7 +22,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/common"
 )
 
-// LegacyTx is the transaction data of regular Ethereum transactions.
+// LegacyTx is the transaction data of regular AkoinCash transactions.
 type LegacyTx struct {
 	Nonce    uint64          // nonce of sender account
 	GasPrice *big.Int        // wei per gas

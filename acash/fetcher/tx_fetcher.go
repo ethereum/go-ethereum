@@ -40,7 +40,7 @@ const (
 	// maxTxRetrievals is the maximum transaction number can be fetched in one
 	// request. The rationale to pick 256 is:
 	//   - In acash protocol, the softResponseLimit is 2MB. Nowadays according to
-	//     Etherscan the average transaction size is around 200B, so in theory
+	//     Acashscan the average transaction size is around 200B, so in theory
 	//     we can include lots of transaction in a single protocol packet.
 	//   - However the maximum size of a single transaction is raised to 128KB,
 	//     so pick a middle value here to ensure we can maximize the efficiency
