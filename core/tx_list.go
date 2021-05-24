@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -583,6 +584,7 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.
 func (l *txPricedList) Reheap() {
+	start := time.Now()
 	l.stales = 0
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
 	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
@@ -602,6 +604,7 @@ func (l *txPricedList) Reheap() {
 		l.floating.list[i] = heap.Pop(&l.urgent).(*types.Transaction)
 	}
 	heap.Init(&l.floating)
+	reheapTimer.Update(time.Since(start))
 }
 
 // SetBaseFee updates the base fee and triggers a re-heap. Note that Removed is not
