@@ -571,7 +571,7 @@ func importChaindata(ctx *cli.Context) error {
 		for key := range importFuncs {
 			keys = append(keys, key)
 		}
-		return fmt.Errorf("invalid data type %s, all supported %s", kind, strings.Join(keys, ", "))
+		return fmt.Errorf("invalid data type %s, all supported types: %s", kind, strings.Join(keys, ", "))
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -593,7 +593,7 @@ func exportChaindata(ctx *cli.Context) error {
 		for key := range exportFuncs {
 			keys = append(keys, key)
 		}
-		return fmt.Errorf("invalid data type %s, all supported %s", kind, strings.Join(keys, ", "))
+		return fmt.Errorf("invalid data type %s, all supported types: %s", kind, strings.Join(keys, ", "))
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()

@@ -394,7 +394,9 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 	}
 	// Flush the last batch snapshot data
 	if batch.ValueSize() > 0 {
-		return batch.Write()
+		if err := batch.Write(); err != nil {
+			return err
+		}
 	}
 	log.Info("Imported snapshot data", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
