@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/golang/snappy"
@@ -45,6 +46,30 @@ func (t *freezerTable) NewBatch() *freezerBatch {
 		count:     0,
 		headBytes: 0,
 	}
+}
+
+// AppendRLP rlp-encodes and adds data at the end of the freezer table. The item number
+// is a precautionary parameter to ensure data correctness, but the table will
+// reject already existing data.
+func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
+	if batch.startItem == math.MaxUint64 {
+		batch.startItem = item
+	}
+	if have, want := item, batch.startItem+batch.count; have != want {
+		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
+	}
+	
+	//if !batch.t.noCompression {
+	//	blob = snappy.Encode(nil, blob)
+	//}
+
+	// TODO, would be nice to get the size out more neatly
+	s0 := batch.data.Len()
+	rlp.Encode(batch.data, data)
+	s1 := batch.data.Len()
+	batch.sizes = append(batch.sizes, uint32(s1-s0))
+	batch.count++
+	return nil
 }
 
 // Append injects a binary blob at the end of the freezer table. The item number
