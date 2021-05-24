@@ -38,7 +38,21 @@ func (s *BufferedSnapWriter) Write(p []byte) (n int, err error) {
 // WriteTo snappy-compresses the data, writes to the given writer and truncates
 // instantiated buffers.
 func (s *BufferedSnapWriter) WriteTo(w io.Writer) {
-	s.dst = snappy.Encode(s.dst, s.buf.Bytes())
+	data := s.buf.Bytes()
+	// The snappy library does not care what the capacity of the buffer is,
+	// but only checks the length. If the length is too small, it will
+	// allocate a brand new buffer.
+	// To avoid that, we check the required size here, and grow the size of the
+	// buffer to utilize the full capacity.
+	n := snappy.MaxEncodedLen(len(data))
+	if cap(s.dst) < n {
+		s.dst = make([]byte, n, n)
+	}
+	if len(s.dst) < n {
+		// Now grow the size as needed
+		s.dst = s.dst[:n]
+	}
+	s.dst = snappy.Encode(s.dst, data)
 	w.Write(s.dst)
 	s.dst = s.dst[:0]
 	s.buf.Reset()
@@ -47,6 +61,20 @@ func (s *BufferedSnapWriter) WriteTo(w io.Writer) {
 // WriteDirectTo snappy-compresses the data, writes to the given writer.
 // This method writes _only_ the input 'buf'.
 func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, buf []byte) {
+	data := s.buf.Bytes()
+	// The snappy library does not care what the capacity of the buffer is,
+	// but only checks the length. If the length is too small, it will
+	// allocate a brand new buffer.
+	// To avoid that, we check the required size here, and grow the size of the
+	// buffer to utilize the full capacity.
+	n := snappy.MaxEncodedLen(len(data))
+	if cap(s.dst) < n {
+		s.dst = make([]byte, n, n)
+	}
+	if len(s.dst) < n {
+		// Now grow the size as needed
+		s.dst = s.dst[:n]
+	}
 	s.dst = snappy.Encode(s.dst, buf)
 	w.Write(s.dst)
 	s.dst = s.dst[:0]
