@@ -30,7 +30,6 @@ type freezerBatch struct {
 	data      []byte
 	startItem uint64
 	count     uint64
-	filenum   uint32
 	sizes     []uint32
 
 	headBytes uint32
@@ -38,14 +37,10 @@ type freezerBatch struct {
 
 // NewBatch creates a new batch for the freezer table.
 func (t *freezerTable) NewBatch() *freezerBatch {
-	t.lock.RLock()
-	filenum := t.headId
-	defer t.lock.RUnlock()
 	return &freezerBatch{
 		t:         t,
 		data:      nil,
 		startItem: math.MaxUint64,
-		filenum:   filenum,
 		count:     0,
 		headBytes: 0,
 	}
@@ -112,16 +107,18 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 		}
 		// And update the batch to point to the new file
 		batch.headBytes = 0
-		batch.filenum = atomic.LoadUint32(&batch.t.headId)
 	}
-	var indexData = make([]byte, 0, len(batch.sizes)*indexEntrySize)
-	var count uint64
-	var writtenDataSize int
+	var (
+		filenum         = atomic.LoadUint32(&batch.t.headId)
+		indexData       = make([]byte, 0, len(batch.sizes)*indexEntrySize)
+		count           uint64
+		writtenDataSize int
+	)
 	for _, size := range batch.sizes {
 		if batch.headBytes+size <= batch.t.maxFileSize {
 			writtenDataSize += int(size)
 			idx := indexEntry{
-				filenum: batch.filenum,
+				filenum: filenum,
 				offset:  batch.headBytes + size,
 			}
 			batch.headBytes += size
