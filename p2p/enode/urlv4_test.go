@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/p2p/enr"
 )
 
 func init() {
@@ -49,7 +49,7 @@ var parseNodeTests = []struct {
 			testKey, _ := crypto.HexToECDSA("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")
 			var r enr.Record
 			r.Set(enr.IP{127, 0, 0, 1})
-			r.Set(enr.UDP(30303))
+			r.Set(enr.UDP(50405))
 			r.SetSeq(99)
 			SignV4(&r, testKey)
 			n, _ := New(ValidSchemes, &r)

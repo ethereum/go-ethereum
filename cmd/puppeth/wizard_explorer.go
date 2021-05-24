@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/dezzyboy/go-ethereum/log"
 )
 
 // deployExplorer creates a new block explorer based on some user input.
@@ -46,7 +46,7 @@ func (w *wizard) deployExplorer() {
 	infos, err := checkExplorer(client, w.network)
 	if err != nil {
 		infos = &explorerInfos{
-			node: &nodeInfos{port: 30303},
+			node: &nodeInfos{port: 50405},
 			port: 80,
 			host: client.server,
 		}

@@ -24,9 +24,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
+	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/internal/utesting"
+	"github.com/dezzyboy/go-ethereum/p2p/discover/v4wire"
 )
 
 const (
@@ -298,8 +298,8 @@ func UnsolicitedNeighbors(t *utesting.T) {
 		Nodes: []v4wire.Node{{
 			ID:  encFakeKey,
 			IP:  net.IP{1, 2, 3, 4},
-			UDP: 30303,
-			TCP: 30303,
+			UDP: 50405,
+			TCP: 50405,
 		}},
 	}
 	te.send(te.l1, &neighbors)

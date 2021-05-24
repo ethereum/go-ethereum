@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -58,12 +58,12 @@ var (
 	tcpPortFlag = cli.IntFlag{
 		Name:  "tcp",
 		Usage: "TCP port of the node",
-		Value: 30303,
+		Value: 50405,
 	}
 	udpPortFlag = cli.IntFlag{
 		Name:  "udp",
 		Usage: "UDP port of the node",
-		Value: 30303,
+		Value: 50405,
 	}
 )
 

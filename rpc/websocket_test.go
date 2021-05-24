@@ -140,7 +140,7 @@ func TestClientWebsocketPing(t *testing.T) {
 	// server can't handle the request.
 
 	// Wait for the context's deadline to be reached before proceeding.
-	// This is important for reproducing https://github.com/ethereum/go-ethereum/issues/19798
+	// This is important for reproducing https://github.com/dezzyboy/go-ethereum/issues/19798
 	<-ctx.Done()
 	close(sendPing)
 

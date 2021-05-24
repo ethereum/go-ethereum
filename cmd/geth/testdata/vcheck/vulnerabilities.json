@@ -5,10 +5,10 @@
     "summary": "Mining nodes will generate erroneous PoW on epochs > `385`.",
     "description": "A mining flaw could cause miners to erroneously calculate PoW, due to an index overflow, if DAG size is exceeding the maximum 32 bit unsigned value.\n\nThis occurred on the ETC chain on 2020-11-06. This is likely to trigger for ETH mainnet around block `11550000`/epoch `385`, slated to occur early January 2021.\n\nThis issue is relevant only for miners, non-mining nodes are unaffected, since non-mining nodes use a smaller verification cache instead of a full DAG.",
     "links": [
-      "https://github.com/ethereum/go-ethereum/pull/21793",
+      "https://github.com/dezzyboy/go-ethereum/pull/21793",
       "https://blog.ethereum.org/2020/11/12/geth_security_release/",
-      "https://github.com/ethereum/go-ethereum/commit/567d41d9363706b4b13ce0903804e8acf214af49",
-      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-v592-xf75-856p"
+      "https://github.com/dezzyboy/go-ethereum/commit/567d41d9363706b4b13ce0903804e8acf214af49",
+      "https://github.com/dezzyboy/go-ethereum/security/advisories/GHSA-v592-xf75-856p"
     ],
     "introduced": "v1.6.0",
     "fixed": "v1.9.24",
@@ -26,7 +26,7 @@
       "https://blog.ethereum.org/2020/11/12/geth_security_release/",
       "https://groups.google.com/g/golang-announce/c/NpBGTTmKzpM",
       "https://github.com/golang/go/issues/42552",
-      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-m6gx-rhvj-fh52"
+      "https://github.com/dezzyboy/go-ethereum/security/advisories/GHSA-m6gx-rhvj-fh52"
     ],
     "introduced": "v0.0.0",
     "fixed": "v1.9.24",
@@ -42,7 +42,7 @@
     "description": "Geth erroneously performed a 'shallow' copy when the precompiled `datacopy` (at `0x00...04`) was invoked. An attacker could deploy a contract that uses the shallow copy to corrupt the contents of the `RETURNDATA`, thus causing a consensus failure.",
     "links": [
       "https://blog.ethereum.org/2020/11/12/geth_security_release/",
-      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-69v6-xc2j-r2jf"
+      "https://github.com/dezzyboy/go-ethereum/security/advisories/GHSA-69v6-xc2j-r2jf"
     ],
     "introduced": "v1.9.7",
     "fixed": "v1.9.17",
@@ -58,7 +58,7 @@
     "description": "Full details to be disclosed at a later date",
     "links": [
       "https://blog.ethereum.org/2020/11/12/geth_security_release/",
-      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-jm5c-rv3w-w83m"
+      "https://github.com/dezzyboy/go-ethereum/security/advisories/GHSA-jm5c-rv3w-w83m"
     ],
     "introduced": "v1.9.16",
     "fixed": "v1.9.18",
