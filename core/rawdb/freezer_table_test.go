@@ -704,7 +704,7 @@ func BenchmarkBatchedAppend1024(b *testing.B) { batchBenchmark(b, 1024) }
 func BenchmarkBatchedAppend4096(b *testing.B) { batchBenchmark(b, 4096) }
 
 func tableBenchmark(b *testing.B, nbytes int) {
-	dir, err := ioutil.TempDir("", "freezer-benchmark")
+	dir, err := ioutil.TempDir("./", "freezer-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -729,7 +729,7 @@ func tableBenchmark(b *testing.B, nbytes int) {
 }
 
 func batchBenchmark(b *testing.B, nbytes int) {
-	dir, err := ioutil.TempDir("", "freezer-batch-benchmark")
+	dir, err := ioutil.TempDir("./", "freezer-batch-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -750,7 +750,7 @@ func batchBenchmark(b *testing.B, nbytes int) {
 		if err := batch.Append(uint64(i), data); err != nil {
 			b.Fatal(err)
 		}
-		if batch.count > 100 || len(batch.data) > 1*1024*1024 {
+		if len(batch.data) > 1*1024*1024 {
 			if err := batch.Write(); err != nil {
 				b.Fatal(err)
 			}
@@ -763,7 +763,7 @@ func batchBenchmark(b *testing.B, nbytes int) {
 }
 
 func TestBatch(t *testing.T) {
-	dir, err := ioutil.TempDir("", "freezer")
+	dir, err := ioutil.TempDir("./", "freezer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,7 +791,7 @@ func TestBatch(t *testing.T) {
 }
 
 func TestNoBatch(t *testing.T) {
-	dir, err := ioutil.TempDir("", "freezer")
+	dir, err := ioutil.TempDir("./", "freezer")
 	if err != nil {
 		t.Fatal(err)
 	}
