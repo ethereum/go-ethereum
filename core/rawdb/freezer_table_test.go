@@ -750,7 +750,7 @@ func batchBenchmark(b *testing.B, nbytes int) {
 		if err := batch.Append(uint64(i), data); err != nil {
 			b.Fatal(err)
 		}
-		if len(batch.data) > 1*1024*1024 {
+		if batch.Size() > 1*1024*1024 {
 			if err := batch.Write(); err != nil {
 				b.Fatal(err)
 			}

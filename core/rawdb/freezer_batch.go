@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -27,7 +28,7 @@ import (
 // freezerBatch is a batch for a freezer table.
 type freezerBatch struct {
 	t         *freezerTable
-	data      []byte
+	data      *bytes.Buffer
 	startItem uint64
 	count     uint64
 	sizes     []uint32
@@ -39,7 +40,7 @@ type freezerBatch struct {
 func (t *freezerTable) NewBatch() *freezerBatch {
 	return &freezerBatch{
 		t:         t,
-		data:      nil,
+		data:      bytes.NewBuffer(nil),
 		startItem: math.MaxUint64,
 		count:     0,
 		headBytes: 0,
@@ -59,7 +60,7 @@ func (batch *freezerBatch) Append(item uint64, blob []byte) error {
 	if !batch.t.noCompression {
 		blob = snappy.Encode(nil, blob)
 	}
-	batch.data = append(batch.data, blob...)
+	batch.data.Write(blob)
 	batch.sizes = append(batch.sizes, uint32(len(blob)))
 	batch.count++
 	return nil
@@ -134,27 +135,29 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 		return batch.count > 0, nil
 	}
 	// Write the actual data
-	if _, err := batch.t.head.Write(batch.data[:writtenDataSize]); err != nil {
+	if _, err := batch.t.head.Write(batch.data.Next(writtenDataSize)); err != nil {
 		return false, err
 	}
 	// Write the new indexdata
 	if _, err := batch.t.index.Write(indexData); err != nil {
 		return false, err
 	}
-	batch.t.writeMeter.Mark(int64(len(batch.data)) + int64(batch.count)*int64(indexEntrySize))
-	batch.t.sizeGauge.Inc(int64(len(batch.data)) + int64(batch.count)*int64(indexEntrySize))
+	batch.t.writeMeter.Mark(int64(batch.data.Len()) + int64(batch.count)*int64(indexEntrySize))
+	batch.t.sizeGauge.Inc(int64(batch.data.Len()) + int64(batch.count)*int64(indexEntrySize))
 	atomic.AddUint64(&batch.t.items, count)
 	batch.startItem += count
 	batch.count -= count
 
 	if batch.count > 0 {
 		// Some data left to write on a retry.
-		batch.data = batch.data[writtenDataSize:]
 		batch.sizes = batch.sizes[count:]
 		return true, nil
 	}
 	// All data written. We can simply truncate and keep using the buffer
-	batch.data = batch.data[:0]
 	batch.sizes = batch.sizes[:0]
 	return false, nil
+}
+
+func (batch *freezerBatch) Size() int {
+	return batch.data.Len()
 }
