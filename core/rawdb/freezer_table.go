@@ -512,21 +512,9 @@ func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool
 		if !wlock {
 			return true, nil
 		}
-		nextID := atomic.LoadUint32(&t.headId) + 1
-		// We open the next file in truncated mode -- if this file already
-		// exists, we need to start over from scratch on it
-		newHead, err := t.openFile(nextID, openFreezerFileTruncated)
-		if err != nil {
+		if err := t.advanceHead(); err != nil {
 			return false, err
 		}
-		// Close old file, and reopen in RDONLY mode
-		t.releaseFile(t.headId)
-		t.openFile(t.headId, openFreezerFileForReadOnly)
-
-		// Swap out the current head
-		t.head = newHead
-		atomic.StoreUint32(&t.headBytes, 0)
-		atomic.StoreUint32(&t.headId, nextID)
 	}
 	if _, err := t.head.Write(encodedBlob); err != nil {
 		return false, err
@@ -649,6 +637,27 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	}
 	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
 	return total, nil
+}
+
+// advanceHead should be called when the current head file would outgrow the file limits,
+// and a new file must be opened. The caller of this method must hold the write-lock
+// before calling this method.
+func (t *freezerTable) advanceHead() error {
+	nextID := atomic.LoadUint32(&t.headId) + 1
+	// We open the next file in truncated mode -- if this file already
+	// exists, we need to start over from scratch on it
+	newHead, err := t.openFile(nextID, openFreezerFileTruncated)
+	if err != nil {
+		return err
+	}
+	// Close old file, and reopen in RDONLY mode
+	t.releaseFile(t.headId)
+	t.openFile(t.headId, openFreezerFileForReadOnly)
+	// Swap out the current head
+	t.head = newHead
+	atomic.StoreUint32(&t.headBytes, 0)
+	atomic.StoreUint32(&t.headId, nextID)
+	return nil
 }
 
 // Sync pushes any pending data from memory out to disk. This is an expensive

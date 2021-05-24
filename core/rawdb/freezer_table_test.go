@@ -693,24 +693,18 @@ func TestAppendTruncateParallel(t *testing.T) {
 	}
 }
 
-func BenchmarkFreezerAppend32(b *testing.B) {
-	tableBenchmark(b, 32)
-}
+func BenchmarkFreezerAppend32(b *testing.B)   { tableBenchmark(b, 32) }
+func BenchmarkFreezerAppend256(b *testing.B)  { tableBenchmark(b, 256) }
+func BenchmarkFreezerAppend1024(b *testing.B) { tableBenchmark(b, 1024) }
+func BenchmarkFreezerAppend4096(b *testing.B) { tableBenchmark(b, 4096) }
 
-func BenchmarkFreezerAppend256(b *testing.B) {
-	tableBenchmark(b, 256)
-}
-
-func BenchmarkFreezerAppend1024(b *testing.B) {
-	tableBenchmark(b, 1024)
-}
-
-func BenchmarkFreezerAppend4096(b *testing.B) {
-	tableBenchmark(b, 4096)
-}
+func BenchmarkBatchedAppend32(b *testing.B)   { batchBenchmark(b, 32) }
+func BenchmarkBatchedAppend256(b *testing.B)  { batchBenchmark(b, 256) }
+func BenchmarkBatchedAppend1024(b *testing.B) { batchBenchmark(b, 1024) }
+func BenchmarkBatchedAppend4096(b *testing.B) { batchBenchmark(b, 4096) }
 
 func tableBenchmark(b *testing.B, nbytes int) {
-	dir, err := os.MkdirTemp("", "freezer-benchmark")
+	dir, err := ioutil.TempDir("", "freezer-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -732,4 +726,91 @@ func tableBenchmark(b *testing.B, nbytes int) {
 		}
 	}
 	b.StopTimer() // Stop timer before deleting the files
+}
+
+func batchBenchmark(b *testing.B, nbytes int) {
+	dir, err := ioutil.TempDir("", "freezer-batch-benchmark")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+	data := make([]byte, nbytes)
+	rand.Read(data)
+	batch := f.NewBatch()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
+	for i := 0; i < b.N; i++ {
+		if err := batch.Append(uint64(i), data); err != nil {
+			b.Fatal(err)
+		}
+		if batch.count > 100 || len(batch.data) > 1*1024*1024 {
+			if err := batch.Write(); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+	if err := batch.Write(); err != nil {
+		b.Fatal(err)
+	}
+	b.StopTimer() // Stop timer before deleting the files
+}
+
+func TestBatch(t *testing.T) {
+	dir, err := ioutil.TempDir("", "freezer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 31, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := f.NewBatch()
+	// Write 15 bytes 30 times
+	for x := 0; x < 30; x++ {
+		data := getChunk(15, x)
+		batch.Append(uint64(x), data)
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatal(err)
+	}
+	f.DumpIndex(0, 30)
+	if got, err := f.Retrieve(29); err != nil {
+		t.Fatal(err)
+	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
+		t.Fatalf("expected %x got %x", exp, got)
+	}
+}
+
+func TestNoBatch(t *testing.T) {
+	dir, err := ioutil.TempDir("", "freezer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 31, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Write 15 bytes 30 times
+	for x := 0; x < 30; x++ {
+		data := getChunk(15, x)
+		f.Append(uint64(x), data)
+	}
+	f.DumpIndex(0, 30)
+
+	if got, err := f.Retrieve(29); err != nil {
+		t.Fatal(err)
+	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
+		t.Fatalf("expected %x got %x", exp, got)
+	}
 }
