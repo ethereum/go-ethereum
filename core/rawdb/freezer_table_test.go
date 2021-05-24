@@ -692,3 +692,23 @@ func TestAppendTruncateParallel(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkFreezerTable(b *testing.B) {
+	dir := "./tmp-deleteme"
+	defer os.RemoveAll(dir)
+	f, err := newCustomTable(dir, "foobar", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+	data := make([]byte, 32)
+	rand.Read(data)
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data) * b.N))
+	for i := 0; i < b.N; i++ {
+		if err := f.Append(uint64(i), data); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer() // Stop timer before deleting the files
+}
