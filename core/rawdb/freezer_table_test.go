@@ -697,6 +697,14 @@ func BenchmarkFreezerAppend32(b *testing.B) {
 	tableBenchmark(b, 32)
 }
 
+func BenchmarkFreezerAppend256(b *testing.B) {
+	tableBenchmark(b, 256)
+}
+
+func BenchmarkFreezerAppend1024(b *testing.B) {
+	tableBenchmark(b, 1024)
+}
+
 func BenchmarkFreezerAppend4096(b *testing.B) {
 	tableBenchmark(b, 4096)
 }
