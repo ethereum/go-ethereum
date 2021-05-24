@@ -693,18 +693,31 @@ func TestAppendTruncateParallel(t *testing.T) {
 	}
 }
 
-func BenchmarkFreezerTable(b *testing.B) {
-	dir := "./tmp-deleteme"
-	defer os.RemoveAll(dir)
-	f, err := newCustomTable(dir, "foobar", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, true)
+func BenchmarkFreezerAppend32(b *testing.B) {
+	tableBenchmark(b, 32)
+}
+
+func BenchmarkFreezerAppend4096(b *testing.B) {
+	tableBenchmark(b, 4096)
+}
+
+func tableBenchmark(b *testing.B, nbytes int) {
+	dir, err := os.MkdirTemp("", "freezer-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
-	data := make([]byte, 32)
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+	data := make([]byte, nbytes)
 	rand.Read(data)
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	b.SetBytes(int64(len(data) * b.N))
+	b.SetBytes(int64(len(data)))
 	for i := 0; i < b.N; i++ {
 		if err := f.Append(uint64(i), data); err != nil {
 			b.Fatal(err)
