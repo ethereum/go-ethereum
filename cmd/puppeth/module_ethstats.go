@@ -44,7 +44,7 @@ services:
   ethstats:
     build: .
     image: {{.Network}}/ethstats
-    container_name: {{.Network}}_ethstats_1{{if not .VHost}}
+    container_name: {{.Network}}_acashstats_1{{if not .VHost}}
     ports:
       - "{{.Port}}:3000"{{end}}
     environment:
@@ -131,7 +131,7 @@ func (info *ethstatsInfos) Report() map[string]string {
 // it's running, and if yes, gathering a collection of useful infos about it.
 func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
 	// Inspect a possible ethstats container on the host
-	infos, err := inspectContainer(client, fmt.Sprintf("%s_ethstats_1", network))
+	infos, err := inspectContainer(client, fmt.Sprintf("%s_acashstats_1", network))
 	if err != nil {
 		return nil, err
 	}

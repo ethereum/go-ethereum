@@ -106,9 +106,9 @@ func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 // as transactions enter the pending state.
 //
 // It is part of the filter package because this filter can be used through the
-// `eth_getFilterChanges` polling method that is also used for log filters.
+// `acash_getFilterChanges` polling method that is also used for log filters.
 //
-// https://acash.wiki/json-rpc/API#eth_newpendingtransactionfilter
+// https://acash.wiki/json-rpc/API#acash_newpendingtransactionfilter
 func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 	var (
 		pendingTxs   = make(chan []common.Hash)
@@ -176,9 +176,9 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 }
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
-// It is part of the filter package since polling goes with eth_getFilterChanges.
+// It is part of the filter package since polling goes with acash_getFilterChanges.
 //
-// https://acash.wiki/json-rpc/API#eth_newblockfilter
+// https://acash.wiki/json-rpc/API#acash_newblockfilter
 func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	var (
 		headers   = make(chan *types.Header)
@@ -294,7 +294,7 @@ type FilterCriteria ethereum.FilterQuery
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 //
-// https://acash.wiki/json-rpc/API#eth_newfilter
+// https://acash.wiki/json-rpc/API#acash_newfilter
 func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	logs := make(chan []*types.Log)
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
@@ -329,7 +329,7 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 
 // GetLogs returns logs matching the given argument that are stored within the state.
 //
-// https://acash.wiki/json-rpc/API#eth_getlogs
+// https://acash.wiki/json-rpc/API#acash_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	var filter *Filter
 	if crit.BlockHash != nil {
@@ -358,7 +358,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 
 // UninstallFilter removes the filter with the given filter id.
 //
-// https://acash.wiki/json-rpc/API#eth_uninstallfilter
+// https://acash.wiki/json-rpc/API#acash_uninstallfilter
 func (api *PublicFilterAPI) UninstallFilter(id rpc.ID) bool {
 	api.filtersMu.Lock()
 	f, found := api.filters[id]
@@ -376,7 +376,7 @@ func (api *PublicFilterAPI) UninstallFilter(id rpc.ID) bool {
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
 //
-// https://acash.wiki/json-rpc/API#eth_getfilterlogs
+// https://acash.wiki/json-rpc/API#acash_getfilterlogs
 func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log, error) {
 	api.filtersMu.Lock()
 	f, found := api.filters[id]
@@ -417,7 +417,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 //
-// https://acash.wiki/json-rpc/API#eth_getfilterchanges
+// https://acash.wiki/json-rpc/API#acash_getfilterchanges
 func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	api.filtersMu.Lock()
 	defer api.filtersMu.Unlock()

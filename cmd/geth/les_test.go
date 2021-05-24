@@ -68,7 +68,7 @@ func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
 func (g *gethrpc) waitSynced() {
 	// Check if it's synced now
 	var result interface{}
-	g.callRPC(&result, "eth_syncing")
+	g.callRPC(&result, "acash_syncing")
 	syncing, ok := result.(bool)
 	if ok && !syncing {
 		g.geth.Logf("%v already synced", g.name)
