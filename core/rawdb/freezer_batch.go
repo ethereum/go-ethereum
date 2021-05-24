@@ -19,20 +19,20 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"sync/atomic"
 )
 
 // freezerBatch is a batch for a freezer table.
 type freezerBatch struct {
-	t         *freezerTable
-	data      *bytes.Buffer
-	startItem uint64
-	count     uint64
-	sizes     []uint32
+	t        *freezerTable
+	buf      bytes.Buffer
+	firstIdx uint64
+	count    uint64
+	sizes    []uint32
 
 	headBytes uint32
 }
@@ -40,11 +40,8 @@ type freezerBatch struct {
 // NewBatch creates a new batch for the freezer table.
 func (t *freezerTable) NewBatch() *freezerBatch {
 	return &freezerBatch{
-		t:         t,
-		data:      bytes.NewBuffer(nil),
-		startItem: math.MaxUint64,
-		count:     0,
-		headBytes: 0,
+		t:        t,
+		firstIdx: math.MaxUint64,
 	}
 }
 
@@ -52,21 +49,20 @@ func (t *freezerTable) NewBatch() *freezerBatch {
 // is a precautionary parameter to ensure data correctness, but the table will
 // reject already existing data.
 func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
-	if batch.startItem == math.MaxUint64 {
-		batch.startItem = item
+	if batch.firstIdx == math.MaxUint64 {
+		batch.firstIdx = item
 	}
-	if have, want := item, batch.startItem+batch.count; have != want {
+	if have, want := item, batch.firstIdx+batch.count; have != want {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
-	
-	//if !batch.t.noCompression {
-	//	blob = snappy.Encode(nil, blob)
-	//}
-
+	s0 := batch.buf.Len()
+	if !batch.t.noCompression {
+		panic("aah")
+	} else {
+		rlp.Encode(&batch.buf, data)
+	}
 	// TODO, would be nice to get the size out more neatly
-	s0 := batch.data.Len()
-	rlp.Encode(batch.data, data)
-	s1 := batch.data.Len()
+	s1 := batch.buf.Len()
 	batch.sizes = append(batch.sizes, uint32(s1-s0))
 	batch.count++
 	return nil
@@ -76,16 +72,16 @@ func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
 // is a precautionary parameter to ensure data correctness, but the table will
 // reject already existing data.
 func (batch *freezerBatch) Append(item uint64, blob []byte) error {
-	if batch.startItem == math.MaxUint64 {
-		batch.startItem = item
+	if batch.firstIdx == math.MaxUint64 {
+		batch.firstIdx = item
 	}
-	if have, want := item, batch.startItem+batch.count; have != want {
+	if have, want := item, batch.firstIdx+batch.count; have != want {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
 	if !batch.t.noCompression {
 		blob = snappy.Encode(nil, blob)
 	}
-	batch.data.Write(blob)
+	batch.buf.Write(blob)
 	batch.sizes = append(batch.sizes, uint32(len(blob)))
 	batch.count++
 	return nil
@@ -124,8 +120,8 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 		return false, errClosed
 	}
 	// Ensure we're in sync with the data
-	if atomic.LoadUint64(&batch.t.items) != batch.startItem {
-		return false, fmt.Errorf("appending unexpected item: want %d, have %d", batch.t.items, batch.startItem)
+	if atomic.LoadUint64(&batch.t.items) != batch.firstIdx {
+		return false, fmt.Errorf("appending unexpected item: want %d, have %d", batch.t.items, batch.firstIdx)
 	}
 	if newHead {
 		if err := batch.t.advanceHead(); err != nil {
@@ -160,17 +156,17 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 		return batch.count > 0, nil
 	}
 	// Write the actual data
-	if _, err := batch.t.head.Write(batch.data.Next(writtenDataSize)); err != nil {
+	if _, err := batch.t.head.Write(batch.buf.Next(writtenDataSize)); err != nil {
 		return false, err
 	}
 	// Write the new indexdata
 	if _, err := batch.t.index.Write(indexData); err != nil {
 		return false, err
 	}
-	batch.t.writeMeter.Mark(int64(batch.data.Len()) + int64(batch.count)*int64(indexEntrySize))
-	batch.t.sizeGauge.Inc(int64(batch.data.Len()) + int64(batch.count)*int64(indexEntrySize))
+	batch.t.writeMeter.Mark(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
+	batch.t.sizeGauge.Inc(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
 	atomic.AddUint64(&batch.t.items, count)
-	batch.startItem += count
+	batch.firstIdx += count
 	batch.count -= count
 
 	if batch.count > 0 {
@@ -184,5 +180,5 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 }
 
 func (batch *freezerBatch) Size() int {
-	return batch.data.Len()
+	return batch.buf.Len()
 }
