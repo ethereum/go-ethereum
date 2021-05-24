@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"errors"
 	"math/big"
 	"sync"
 
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/common"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/p2p"
 )
 
@@ -41,18 +41,18 @@ var (
 	errPeerNotRegistered = errors.New("peer not registered")
 
 	// errSnapWithoutEth is returned if a peer attempts to connect only on the
-	// snap protocol without advertizing the acash main protocol.
-	errSnapWithoutEth = errors.New("peer connected on snap without compatible acash support")
+	// snap protocol without advertizing the eth main protocol.
+	errSnapWithoutEth = errors.New("peer connected on snap without compatible eth support")
 )
 
 // peerSet represents the collection of active peers currently participating in
-// the `acash` protocol, with or without the `snap` extension.
+// the `eth` protocol, with or without the `snap` extension.
 type peerSet struct {
-	peers     map[string]*ethPeer // Peers connected on the `acash` protocol
+	peers     map[string]*ethPeer // Peers connected on the `eth` protocol
 	snapPeers int                 // Number of `snap` compatible peers for connection prioritization
 
-	snapWait map[string]chan *snap.Peer // Peers connected on `acash` waiting for their snap extension
-	snapPend map[string]*snap.Peer      // Peers connected on the `snap` protocol, but not yet on `acash`
+	snapWait map[string]chan *snap.Peer // Peers connected on `eth` waiting for their snap extension
+	snapPend map[string]*snap.Peer      // Peers connected on the `snap` protocol, but not yet on `eth`
 
 	lock   sync.RWMutex
 	closed bool
@@ -67,13 +67,13 @@ func newPeerSet() *peerSet {
 	}
 }
 
-// registerSnapExtension unblocks an already connected `acash` peer waiting for its
+// registerSnapExtension unblocks an already connected `eth` peer waiting for its
 // `snap` extension, or if no such peer exists, tracks the extension for the time
-// being until the `acash` main protocol starts looking for it.
+// being until the `eth` main protocol starts looking for it.
 func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
-	// Reject the peer if it advertises `snap` without `acash` as `snap` is only a
-	// satellite protocol meaningful with the chain selection of `acash`
-	if !peer.RunningCap(acash.ProtocolName, acash.ProtocolVersions) {
+	// Reject the peer if it advertises `snap` without `eth` as `snap` is only a
+	// satellite protocol meaningful with the chain selection of `eth`
+	if !peer.RunningCap(eth.ProtocolName, eth.ProtocolVersions) {
 		return errSnapWithoutEth
 	}
 	// Ensure nobody can double connect
@@ -87,7 +87,7 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	if _, ok := ps.snapPend[id]; ok {
 		return errPeerAlreadyRegistered // avoid connections with the same id as pending ones
 	}
-	// Inject the peer into an `acash` counterpart is available, otherwise save for later
+	// Inject the peer into an `eth` counterpart is available, otherwise save for later
 	if wait, ok := ps.snapWait[id]; ok {
 		delete(ps.snapWait, id)
 		wait <- peer
@@ -99,7 +99,7 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 
 // waitExtensions blocks until all satellite protocols are connected and tracked
 // by the peerset.
-func (ps *peerSet) waitSnapExtension(peer *acash.Peer) (*snap.Peer, error) {
+func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 	// If the peer does not support a compatible `snap`, don't wait
 	if !peer.RunningCap(snap.ProtocolName, snap.ProtocolVersions) {
 		return nil, nil
@@ -131,9 +131,9 @@ func (ps *peerSet) waitSnapExtension(peer *acash.Peer) (*snap.Peer, error) {
 	return <-wait, nil
 }
 
-// registerPeer injects a new `acash` peer into the working set, or returns an error
+// registerPeer injects a new `eth` peer into the working set, or returns an error
 // if the peer is already known.
-func (ps *peerSet) registerPeer(peer *acash.Peer, ext *snap.Peer) error {
+func (ps *peerSet) registerPeer(peer *eth.Peer, ext *snap.Peer) error {
 	// Start tracking the new peer
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
@@ -145,14 +145,14 @@ func (ps *peerSet) registerPeer(peer *acash.Peer, ext *snap.Peer) error {
 	if _, ok := ps.peers[id]; ok {
 		return errPeerAlreadyRegistered
 	}
-	acash := &ethPeer{
+	eth := &ethPeer{
 		Peer: peer,
 	}
 	if ext != nil {
-		acash.snapExt = &snapPeer{ext}
+		eth.snapExt = &snapPeer{ext}
 		ps.snapPeers++
 	}
-	ps.peers[id] = acash
+	ps.peers[id] = eth
 	return nil
 }
 
@@ -211,9 +211,9 @@ func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
 	return list
 }
 
-// len returns if the current number of `acash` peers in the set. Since the `snap`
-// peers are tied to the existence of an `acash` connection, that will always be a
-// subset of `acash`.
+// len returns if the current number of `eth` peers in the set. Since the `snap`
+// peers are tied to the existence of an `eth` connection, that will always be a
+// subset of `eth`.
 func (ps *peerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
@@ -231,12 +231,12 @@ func (ps *peerSet) snapLen() int {
 
 // peerWithHighestTD retrieves the known peer with the currently highest total
 // difficulty.
-func (ps *peerSet) peerWithHighestTD() *acash.Peer {
+func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var (
-		bestPeer *acash.Peer
+		bestPeer *eth.Peer
 		bestTd   *big.Int
 	)
 	for _, p := range ps.peers {

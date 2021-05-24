@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
 	"github.com/dezzyboy/go-ethereum/core/forkid"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/light"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/p2p"
@@ -472,7 +472,7 @@ func (d *downloaderPeerNotify) registerPeer(p *serverPeer) {
 		handler: h,
 		peer:    p,
 	}
-	h.downloader.RegisterLightPeer(p.id, acash.ETH65, pc)
+	h.downloader.RegisterLightPeer(p.id, eth.ETH65, pc)
 }
 
 func (d *downloaderPeerNotify) unregisterPeer(p *serverPeer) {

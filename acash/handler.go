@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"errors"
@@ -24,14 +24,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/fetcher"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/forkid"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/fetcher"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/log"
@@ -233,9 +233,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
-// runEthPeer registers an acash peer into the joint acash/snap peerset, adds it to
+// runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
 // various subsistems and starts handling messages.
-func (h *handler) runEthPeer(peer *acash.Peer, handler acash.Handler) error {
+func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
 	snap, err := h.peers.waitSnapExtension(peer)
@@ -295,7 +295,7 @@ func (h *handler) runEthPeer(peer *acash.Peer, handler acash.Handler) error {
 	}
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
-		peer.Log().Error("Failed to register peer in acash syncer", "err", err)
+		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
 	if snap != nil {
@@ -339,10 +339,10 @@ func (h *handler) runEthPeer(peer *acash.Peer, handler acash.Handler) error {
 	return handler(peer)
 }
 
-// runSnapExtension registers a `snap` peer into the joint acash/snap peerset and
+// runSnapExtension registers a `snap` peer into the joint eth/snap peerset and
 // starts handling inbound messages. As `snap` is only a satellite protocol to
-// `acash`, all subsystem registrations and lifecycle management will be done by
-// the main `acash` handler to prevent strange races.
+// `eth`, all subsystem registrations and lifecycle management will be done by
+// the main `eth` handler to prevent strange races.
 func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
@@ -371,7 +371,7 @@ func (h *handler) removePeer(id string) {
 		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
-	// Remove the `acash` peer if it exists
+	// Remove the `eth` peer if it exists
 	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
 
 	// Remove the `snap` extension if it exists
@@ -405,7 +405,7 @@ func (h *handler) Start(maxPeers int) {
 	// start sync handlers
 	h.wg.Add(2)
 	go h.chainSync.loop()
-	go h.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with acash/64.
+	go h.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with eth/64.
 }
 
 func (h *handler) Stop() {

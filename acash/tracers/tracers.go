@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dezzyboy/go-ethereum/acash/tracers/internal/tracers"
+	"github.com/dezzyboy/go-ethereum/eth/tracers/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

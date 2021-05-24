@@ -96,7 +96,7 @@ The addition of `contentType` makes it possible to use the method for different 
 #### 2.0.0
 
 * Commit `73abaf04b1372fa4c43201fb1b8019fe6b0a6f8d`, move `from` into `transaction` object in `signTransaction`. This
-makes the `accounts_signTransaction` identical to the old `acash_signTransaction`.
+makes the `accounts_signTransaction` identical to the old `eth_signTransaction`.
 
 
 #### 1.0.0

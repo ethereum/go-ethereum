@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/snap"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/snap"
 )
 
-// ethPeerInfo represents a short summary of the `acash` sub-protocol metadata known
+// ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type ethPeerInfo struct {
 	Version    uint     `json:"version"`    // Ethereum protocol version negotiated
@@ -33,17 +33,17 @@ type ethPeerInfo struct {
 	Head       string   `json:"head"`       // Hex hash of the peer's best owned block
 }
 
-// ethPeer is a wrapper around acash.Peer to maintain a few extra metadata.
+// ethPeer is a wrapper around eth.Peer to maintain a few extra metadata.
 type ethPeer struct {
-	*acash.Peer
+	*eth.Peer
 	snapExt *snapPeer // Satellite `snap` connection
 
-	syncDrop *time.Timer   // Connection dropper if `acash` sync progress isn't validated in time
+	syncDrop *time.Timer   // Connection dropper if `eth` sync progress isn't validated in time
 	snapWait chan struct{} // Notification channel for snap connections
 	lock     sync.RWMutex  // Mutex protecting the internal fields
 }
 
-// info gathers and returns some `acash` protocol metadata known about a peer.
+// info gathers and returns some `eth` protocol metadata known about a peer.
 func (p *ethPeer) info() *ethPeerInfo {
 	hash, td := p.Head()
 

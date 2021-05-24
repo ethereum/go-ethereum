@@ -23,7 +23,7 @@ Please make sure your contributions adhere to our coding guidelines:
 [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
  * Pull requests need to be based on and opened against the `master` branch.
  * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "acash, rpc: make trace configs optional"
+   * E.g. "eth, rpc: make trace configs optional"
 
 ## Can I have feature X
 

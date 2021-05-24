@@ -8,8 +8,8 @@ cmd/clef                        @holiman
 cmd/puppeth                     @karalabe
 consensus                       @karalabe
 core/                           @karalabe @holiman @rjl493456442
-acash/                            @karalabe @holiman @rjl493456442
-acash/catalyst/                   @gballet
+eth/                            @karalabe @holiman @rjl493456442
+eth/catalyst/                   @gballet
 graphql/                        @gballet
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442

@@ -127,7 +127,7 @@ type Tracker struct {
 	//
 	// Callers of course are free to use the item counter as a byte counter if
 	// or when their protocol of choise if capped by bytes instead of items.
-	// (eg. acash.getHeaders vs snap.getAccountRange).
+	// (eg. eth.getHeaders vs snap.getAccountRange).
 	capacity map[uint64]float64
 
 	// roundtrip is the latency a peer in general responds to data requests.

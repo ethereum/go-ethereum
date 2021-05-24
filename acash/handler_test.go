@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"math/big"
 	"sort"
 	"sync"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
@@ -29,6 +28,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
 	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/params"

@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/core"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/ethclient"
 	"github.com/dezzyboy/go-ethereum/ethstats"
 	"github.com/dezzyboy/go-ethereum/internal/debug"

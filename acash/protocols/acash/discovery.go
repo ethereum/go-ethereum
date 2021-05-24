@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"github.com/dezzyboy/go-ethereum/core"
@@ -23,7 +23,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/rlp"
 )
 
-// enrEntry is the ENR entry which advertises `acash` protocol on the discovery.
+// enrEntry is the ENR entry which advertises `eth` protocol on the discovery.
 type enrEntry struct {
 	ForkID forkid.ID // Fork identifier per EIP-2124
 
@@ -33,10 +33,10 @@ type enrEntry struct {
 
 // ENRKey implements enr.Entry.
 func (e enrEntry) ENRKey() string {
-	return "acash"
+	return "eth"
 }
 
-// StartENRUpdater starts the `acash` ENR updater loop, which listens for chain
+// StartENRUpdater starts the `eth` ENR updater loop, which listens for chain
 // head events and updates the requested node record whenever a fork is passed.
 func StartENRUpdater(chain *core.BlockChain, ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
@@ -57,7 +57,7 @@ func StartENRUpdater(chain *core.BlockChain, ln *enode.LocalNode) {
 	}()
 }
 
-// currentENREntry constructs an `acash` ENR entry based on the current state of the chain.
+// currentENREntry constructs an `eth` ENR entry based on the current state of the chain.
 func currentENREntry(chain *core.BlockChain) *enrEntry {
 	return &enrEntry{
 		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), chain.CurrentHeader().Number.Uint64()),

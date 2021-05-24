@@ -23,11 +23,11 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/state"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/node"
 	chainParams "github.com/dezzyboy/go-ethereum/params"
@@ -36,7 +36,7 @@ import (
 )
 
 // Register adds catalyst APIs to the node.
-func Register(stack *node.Node, backend *acash.Ethereum) error {
+func Register(stack *node.Node, backend *eth.Ethereum) error {
 	chainconfig := backend.BlockChain().Config()
 	if chainconfig.CatalystBlock == nil {
 		return errors.New("catalystBlock is not set in genesis config")
@@ -57,11 +57,11 @@ func Register(stack *node.Node, backend *acash.Ethereum) error {
 }
 
 type consensusAPI struct {
-	acash *acash.Ethereum
+	eth *eth.Ethereum
 }
 
-func newConsensusAPI(acash *acash.Ethereum) *consensusAPI {
-	return &consensusAPI{acash: acash}
+func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
+	return &consensusAPI{eth: eth}
 }
 
 // blockExecutionEnv gathers all the data required to execute
@@ -89,12 +89,12 @@ func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase 
 }
 
 func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*blockExecutionEnv, error) {
-	state, err := api.acash.BlockChain().StateAt(parent.Root())
+	state, err := api.eth.BlockChain().StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
 	env := &blockExecutionEnv{
-		chain:   api.acash.BlockChain(),
+		chain:   api.eth.BlockChain(),
 		state:   state,
 		header:  header,
 		gasPool: new(core.GasPool).AddGas(header.GasLimit),
@@ -107,14 +107,14 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
 	log.Info("Producing block", "parentHash", params.ParentHash)
 
-	bc := api.acash.BlockChain()
+	bc := api.eth.BlockChain()
 	parent := bc.GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
 	}
 
-	pool := api.acash.TxPool()
+	pool := api.eth.TxPool()
 
 	if parent.Time() >= params.Timestamp {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
@@ -130,7 +130,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, err
 	}
 
-	coinbase, err := api.acash.Acashbase()
+	coinbase, err := api.eth.Acashbase()
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		Extra:      []byte{},
 		Time:       params.Timestamp,
 	}
-	err = api.acash.Engine().Prepare(bc, header)
+	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 
 	// Create the block.
-	block, err := api.acash.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
+	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func insertBlockParamsToBlock(params executableData) (*types.Block, error) {
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
 func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
-	parent := api.acash.BlockChain().GetBlockByHash(params.ParentHash)
+	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
@@ -283,14 +283,14 @@ func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, err
 		return nil, err
 	}
 
-	_, err = api.acash.BlockChain().InsertChainWithoutSealVerification(block)
+	_, err = api.eth.BlockChain().InsertChainWithoutSealVerification(block)
 	return &newBlockResponse{err == nil}, err
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
 func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
-		api.acash.TxPool().AddLocal(tx)
+		api.eth.TxPool().AddLocal(tx)
 	}
 	return nil
 }

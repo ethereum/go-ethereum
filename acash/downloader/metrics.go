@@ -23,23 +23,23 @@ import (
 )
 
 var (
-	headerInMeter      = metrics.NewRegisteredMeter("acash/downloader/headers/in", nil)
-	headerReqTimer     = metrics.NewRegisteredTimer("acash/downloader/headers/req", nil)
-	headerDropMeter    = metrics.NewRegisteredMeter("acash/downloader/headers/drop", nil)
-	headerTimeoutMeter = metrics.NewRegisteredMeter("acash/downloader/headers/timeout", nil)
+	headerInMeter      = metrics.NewRegisteredMeter("eth/downloader/headers/in", nil)
+	headerReqTimer     = metrics.NewRegisteredTimer("eth/downloader/headers/req", nil)
+	headerDropMeter    = metrics.NewRegisteredMeter("eth/downloader/headers/drop", nil)
+	headerTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headers/timeout", nil)
 
-	bodyInMeter      = metrics.NewRegisteredMeter("acash/downloader/bodies/in", nil)
-	bodyReqTimer     = metrics.NewRegisteredTimer("acash/downloader/bodies/req", nil)
-	bodyDropMeter    = metrics.NewRegisteredMeter("acash/downloader/bodies/drop", nil)
-	bodyTimeoutMeter = metrics.NewRegisteredMeter("acash/downloader/bodies/timeout", nil)
+	bodyInMeter      = metrics.NewRegisteredMeter("eth/downloader/bodies/in", nil)
+	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
+	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)
+	bodyTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bodies/timeout", nil)
 
-	receiptInMeter      = metrics.NewRegisteredMeter("acash/downloader/receipts/in", nil)
-	receiptReqTimer     = metrics.NewRegisteredTimer("acash/downloader/receipts/req", nil)
-	receiptDropMeter    = metrics.NewRegisteredMeter("acash/downloader/receipts/drop", nil)
-	receiptTimeoutMeter = metrics.NewRegisteredMeter("acash/downloader/receipts/timeout", nil)
+	receiptInMeter      = metrics.NewRegisteredMeter("eth/downloader/receipts/in", nil)
+	receiptReqTimer     = metrics.NewRegisteredTimer("eth/downloader/receipts/req", nil)
+	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
+	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
-	stateInMeter   = metrics.NewRegisteredMeter("acash/downloader/states/in", nil)
-	stateDropMeter = metrics.NewRegisteredMeter("acash/downloader/states/drop", nil)
+	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
+	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
 
-	throttleCounter = metrics.NewRegisteredCounter("acash/downloader/throttle", nil)
+	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
 )

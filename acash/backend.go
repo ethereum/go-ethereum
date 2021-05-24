@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package acash implements the Ethereum protocol.
-package acash
+// Package eth implements the Ethereum protocol.
+package eth
 
 import (
 	"errors"
@@ -26,12 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
-	"github.com/dezzyboy/go-ethereum/acash/filters"
-	"github.com/dezzyboy/go-ethereum/acash/gasprice"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/hexutil"
@@ -43,6 +37,12 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/state/pruner"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
+	"github.com/dezzyboy/go-ethereum/eth/filters"
+	"github.com/dezzyboy/go-ethereum/eth/gasprice"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/snap"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/internal/ethapi"
@@ -85,16 +85,16 @@ type Ethereum struct {
 
 	APIBackend *EthAPIBackend
 
-	miner     *miner.Miner
-	gasPrice  *big.Int
-	acashbase common.Address
+	miner    *miner.Miner
+	gasPrice *big.Int
+	ethbase  common.Address
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
 
-	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and acashbase)
+	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and ethbase)
 }
 
 // New creates a new Ethereum object (including the
@@ -102,7 +102,7 @@ type Ethereum struct {
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
-		return nil, errors.New("can't run acash.Ethereum in light sync mode, use les.LightEthereum")
+		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
@@ -127,7 +127,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	ethashConfig.NotifyFull = config.Miner.NotifyFull
 
 	// Assemble the Ethereum object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "acash/db/chaindata/", false)
+	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
-	acash := &Ethereum{
+	eth := &Ethereum{
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
@@ -149,7 +149,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
-		acashbase:         config.Miner.Acashbase,
+		ethbase:           config.Miner.Acashbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
@@ -190,22 +190,22 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	acash.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, acash.engine, vmConfig, acash.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		acash.blockchain.SetHead(compat.RewindTo)
+		eth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-	acash.bloomIndexer.Start(acash.blockchain)
+	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
-	acash.txPool = core.NewTxPool(config.TxPool, chainConfig, acash.blockchain)
+	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
@@ -213,51 +213,51 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
-	if acash.handler, err = newHandler(&handlerConfig{
+	if eth.handler, err = newHandler(&handlerConfig{
 		Database:   chainDb,
-		Chain:      acash.blockchain,
-		TxPool:     acash.txPool,
+		Chain:      eth.blockchain,
+		TxPool:     eth.txPool,
 		Network:    config.NetworkId,
 		Sync:       config.SyncMode,
 		BloomCache: uint64(cacheLimit),
-		EventMux:   acash.eventMux,
+		EventMux:   eth.eventMux,
 		Checkpoint: checkpoint,
 		Whitelist:  config.Whitelist,
 	}); err != nil {
 		return nil, err
 	}
 
-	acash.miner = miner.New(acash, &config.Miner, chainConfig, acash.EventMux(), acash.engine, acash.isLocalBlock)
-	acash.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
+	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	acash.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, acash, nil}
-	if acash.APIBackend.allowUnprotectedTxs {
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	acash.APIBackend.gpo = gasprice.NewOracle(acash.APIBackend, gpoParams)
+	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
 	// Setup DNS discovery iterators.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	acash.ethDialCandidates, err = dnsclient.NewIterator(acash.config.EthDiscoveryURLs...)
+	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
 	if err != nil {
 		return nil, err
 	}
-	acash.snapDialCandidates, err = dnsclient.NewIterator(acash.config.SnapDiscoveryURLs...)
+	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start the RPC service
-	acash.netRPCService = ethapi.NewPublicNetAPI(acash.p2pServer, config.NetworkId)
+	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(acash.APIs())
-	stack.RegisterProtocols(acash.Protocols())
-	stack.RegisterLifecycle(acash)
+	stack.RegisterAPIs(eth.APIs())
+	stack.RegisterProtocols(eth.Protocols())
+	stack.RegisterLifecycle(eth)
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
@@ -271,7 +271,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
-	return acash, nil
+	return eth, nil
 }
 
 func makeExtraData(extra []byte) []byte {
@@ -302,17 +302,17 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
-			Namespace: "acash",
+			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicEthereumAPI(s),
 			Public:    true,
 		}, {
-			Namespace: "acash",
+			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicMinerAPI(s),
 			Public:    true,
 		}, {
-			Namespace: "acash",
+			Namespace: "eth",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
@@ -322,7 +322,7 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   NewPrivateMinerAPI(s),
 			Public:    false,
 		}, {
-			Namespace: "acash",
+			Namespace: "eth",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
 			Public:    true,
@@ -354,31 +354,31 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 
 func (s *Ethereum) Acashbase() (eb common.Address, err error) {
 	s.lock.RLock()
-	acashbase := s.acashbase
+	ethbase := s.ethbase
 	s.lock.RUnlock()
 
-	if acashbase != (common.Address{}) {
-		return acashbase, nil
+	if ethbase != (common.Address{}) {
+		return ethbase, nil
 	}
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			acashbase := accounts[0].Address
+			ethbase := accounts[0].Address
 
 			s.lock.Lock()
-			s.acashbase = acashbase
+			s.ethbase = ethbase
 			s.lock.Unlock()
 
-			log.Info("Acashbase automatically configured", "address", acashbase)
-			return acashbase, nil
+			log.Info("Acashbase automatically configured", "address", ethbase)
+			return ethbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("acashbase must be explicitly specified")
+	return common.Address{}, fmt.Errorf("ethbase must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined
 // by local miner accounts.
 //
-// We regard two types of accounts as local miner account: acashbase
+// We regard two types of accounts as local miner account: ethbase
 // and accounts specified via `txpool.locals` flag.
 func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 	author, err := s.engine.Author(block.Header())
@@ -386,11 +386,11 @@ func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
 		return false
 	}
-	// Check whether the given address is acashbase.
+	// Check whether the given address is ethbase.
 	s.lock.RLock()
-	acashbase := s.acashbase
+	ethbase := s.ethbase
 	s.lock.RUnlock()
-	if author == acashbase {
+	if author == ethbase {
 		return true
 	}
 	// Check whether the given address is specified by `txpool.local`
@@ -430,12 +430,12 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 }
 
 // SetAcashbase sets the mining reward address.
-func (s *Ethereum) SetAcashbase(acashbase common.Address) {
+func (s *Ethereum) SetAcashbase(ethbase common.Address) {
 	s.lock.Lock()
-	s.acashbase = acashbase
+	s.ethbase = ethbase
 	s.lock.Unlock()
 
-	s.miner.SetAcashbase(acashbase)
+	s.miner.SetAcashbase(ethbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
@@ -464,8 +464,8 @@ func (s *Ethereum) StartMining(threads int) error {
 		// Configure the local mining address
 		eb, err := s.Acashbase()
 		if err != nil {
-			log.Error("Cannot start mining without acashbase", "err", err)
-			return fmt.Errorf("acashbase missing: %v", err)
+			log.Error("Cannot start mining without ethbase", "err", err)
+			return fmt.Errorf("ethbase missing: %v", err)
 		}
 		if clique, ok := s.engine.(*clique.Clique); ok {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
@@ -516,7 +516,7 @@ func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := acash.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
+	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	if s.config.SnapshotCache > 0 {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
 	}
@@ -526,7 +526,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	acash.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)

@@ -27,9 +27,9 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/dezzyboy/go-ethereum/acash/catalyst"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/cmd/utils"
+	"github.com/dezzyboy/go-ethereum/eth/catalyst"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/internal/ethapi"
 	"github.com/dezzyboy/go-ethereum/metrics"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -101,8 +101,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
-	cfg.HTTPModules = append(cfg.HTTPModules, "acash")
-	cfg.WSModules = append(cfg.WSModules, "acash")
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
+	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }
@@ -144,14 +144,14 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
 		cfg.Acash.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
-	backend, acash := utils.RegisterEthService(stack, &cfg.Acash)
+	backend, eth := utils.RegisterEthService(stack, &cfg.Acash)
 
 	// Configure catalyst.
 	if ctx.GlobalBool(utils.CatalystFlag.Name) {
-		if acash == nil {
+		if eth == nil {
 			utils.Fatalf("Catalyst does not work in light client mode.")
 		}
-		if err := catalyst.Register(stack, acash); err != nil {
+		if err := catalyst.Register(stack, eth); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}

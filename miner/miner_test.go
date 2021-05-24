@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/clique"
 	"github.com/dezzyboy/go-ethereum/core"
@@ -29,6 +28,7 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/state"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/ethdb/memorydb"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/trie"
@@ -191,7 +191,7 @@ func TestCloseMiner(t *testing.T) {
 	waitForMiningState(t, miner, false)
 }
 
-// TestMinerSetAcashbase checks that acashbase becomes set even if mining isn't
+// TestMinerSetAcashbase checks that ethbase becomes set even if mining isn't
 // possible at the moment
 func TestMinerSetAcashbase(t *testing.T) {
 	miner, mux := createMiner(t)

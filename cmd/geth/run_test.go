@@ -75,7 +75,7 @@ func runGeth(t *testing.T, args ...string) *testgeth {
 			if i < len(args)-1 {
 				tt.Datadir = args[i+1]
 			}
-		case "--miner.acashbase":
+		case "--miner.ethbase":
 			if i < len(args)-1 {
 				tt.Acashbase = args[i+1]
 			}

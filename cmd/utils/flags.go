@@ -33,11 +33,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash"
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
-	"github.com/dezzyboy/go-ethereum/acash/gasprice"
-	"github.com/dezzyboy/go-ethereum/acash/tracers"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/common"
@@ -49,6 +44,11 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/vm"
 	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/eth"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
+	"github.com/dezzyboy/go-ethereum/eth/gasprice"
+	"github.com/dezzyboy/go-ethereum/eth/tracers"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/ethstats"
 	"github.com/dezzyboy/go-ethereum/graphql"
@@ -460,7 +460,7 @@ var (
 		Value: ethconfig.Defaults.Miner.GasPrice,
 	}
 	MinerAcashbaseFlag = cli.StringFlag{
-		Name:  "miner.acashbase",
+		Name:  "miner.ethbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
@@ -503,12 +503,12 @@ var (
 	}
 	RPCGlobalGasCapFlag = cli.Uint64Flag{
 		Name:  "rpc.gascap",
-		Usage: "Sets a cap on gas that can be used in acash_call/estimateGas (0=infinite)",
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
 		Value: ethconfig.Defaults.RPCGasCap,
 	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee (in acash) that can be sent via the RPC APIs (0 = no cap)",
+		Usage: "Sets a cap on transaction fee (in eth) that can be sent via the RPC APIs (0 = no cap)",
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Logging and debug settings
@@ -1103,24 +1103,24 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	return accs[index], nil
 }
 
-// setAcashbase retrieves the acashbase either from the directly specified
+// setAcashbase retrieves the ethbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func setAcashbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
-	// Extract the current acashbase
-	var acashbase string
+	// Extract the current ethbase
+	var ethbase string
 	if ctx.GlobalIsSet(MinerAcashbaseFlag.Name) {
-		acashbase = ctx.GlobalString(MinerAcashbaseFlag.Name)
+		ethbase = ctx.GlobalString(MinerAcashbaseFlag.Name)
 	}
-	// Convert the acashbase into an address and configure it
-	if acashbase != "" {
+	// Convert the ethbase into an address and configure it
+	if ethbase != "" {
 		if ks != nil {
-			account, err := MakeAddress(ks, acashbase)
+			account, err := MakeAddress(ks, ethbase)
 			if err != nil {
-				Fatalf("Invalid miner acashbase: %v", err)
+				Fatalf("Invalid miner ethbase: %v", err)
 			}
 			cfg.Miner.Acashbase = account.Address
 		} else {
-			Fatalf("No acashbase configured")
+			Fatalf("No ethbase configured")
 		}
 	}
 }
@@ -1475,7 +1475,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
-// SetEthConfig applies acash-related command line flags to the config.
+// SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, BaikalFlag)
@@ -1715,7 +1715,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *acash.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
@@ -1724,7 +1724,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
-	backend, err := acash.New(stack, cfg)
+	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}

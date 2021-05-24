@@ -134,12 +134,12 @@ type nodeFilterC struct {
 }
 
 var filterFlags = map[string]nodeFilterC{
-	"-limit":         {1, trueFilter}, // needed to skip over -limit
-	"-ip":            {1, ipFilter},
-	"-min-age":       {1, minAgeFilter},
-	"-acash-network": {1, ethFilter},
-	"-les-server":    {0, lesFilter},
-	"-snap":          {0, snapFilter},
+	"-limit":       {1, trueFilter}, // needed to skip over -limit
+	"-ip":          {1, ipFilter},
+	"-min-age":     {1, minAgeFilter},
+	"-eth-network": {1, ethFilter},
+	"-les-server":  {0, lesFilter},
+	"-snap":        {0, snapFilter},
 }
 
 // parseFilters parses nodeFilters from args.
@@ -240,14 +240,14 @@ func ethFilter(args []string) (nodeFilter, error) {
 	}
 
 	f := func(n nodeJSON) bool {
-		var acash struct {
+		var eth struct {
 			ForkID forkid.ID
 			Tail   []rlp.RawValue `rlp:"tail"`
 		}
-		if n.N.Load(enr.WithEntry("acash", &acash)) != nil {
+		if n.N.Load(enr.WithEntry("eth", &eth)) != nil {
 			return false
 		}
-		return filter(acash.ForkID) == nil
+		return filter(eth.ForkID) == nil
 	}
 	return f, nil
 }

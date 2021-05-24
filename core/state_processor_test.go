@@ -79,7 +79,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				Config: config,
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-						Balance: big.NewInt(1000000000000000000), // 1 acash
+						Balance: big.NewInt(1000000000000000000), // 1 eth
 						Nonce:   0,
 					},
 				},
@@ -177,7 +177,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-						Balance: big.NewInt(1000000000000000000), // 1 acash
+						Balance: big.NewInt(1000000000000000000), // 1 eth
 						Nonce:   0,
 					},
 				},

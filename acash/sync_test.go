@@ -14,22 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.
-func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, acash.ETH65) }
-func TestFastSyncDisabling66(t *testing.T) { testFastSyncDisabling(t, acash.ETH66) }
+func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, eth.ETH65) }
+func TestFastSyncDisabling66(t *testing.T) { testFastSyncDisabling(t, eth.ETH66) }
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
@@ -55,16 +55,16 @@ func testFastSyncDisabling(t *testing.T, protocol uint) {
 	defer emptyPipe.Close()
 	defer fullPipe.Close()
 
-	emptyPeer := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), emptyPipe, empty.txpool)
-	fullPeer := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), fullPipe, full.txpool)
+	emptyPeer := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), emptyPipe, empty.txpool)
+	fullPeer := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), fullPipe, full.txpool)
 	defer emptyPeer.Close()
 	defer fullPeer.Close()
 
-	go empty.handler.runEthPeer(emptyPeer, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(empty.handler), peer)
+	go empty.handler.runEthPeer(emptyPeer, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(empty.handler), peer)
 	})
-	go full.handler.runEthPeer(fullPeer, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(full.handler), peer)
+	go full.handler.runEthPeer(fullPeer, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(full.handler), peer)
 	})
 	// Wait a bit for the above handlers to start
 	time.Sleep(250 * time.Millisecond)

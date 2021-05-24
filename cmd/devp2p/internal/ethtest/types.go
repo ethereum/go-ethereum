@@ -22,9 +22,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/internal/utesting"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/p2p/rlpx"
@@ -77,54 +77,54 @@ type Pong struct{}
 
 func (p Pong) Code() int { return 0x03 }
 
-// Status is the network packet for the status message for acash/64 and later.
-type Status acash.StatusPacket
+// Status is the network packet for the status message for eth/64 and later.
+type Status eth.StatusPacket
 
 func (s Status) Code() int { return 16 }
 
 // NewBlockHashes is the network packet for the block announcements.
-type NewBlockHashes acash.NewBlockHashesPacket
+type NewBlockHashes eth.NewBlockHashesPacket
 
 func (nbh NewBlockHashes) Code() int { return 17 }
 
-type Transactions acash.TransactionsPacket
+type Transactions eth.TransactionsPacket
 
 func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
-type GetBlockHeaders acash.GetBlockHeadersPacket
+type GetBlockHeaders eth.GetBlockHeadersPacket
 
 func (g GetBlockHeaders) Code() int { return 19 }
 
-type BlockHeaders acash.BlockHeadersPacket
+type BlockHeaders eth.BlockHeadersPacket
 
 func (bh BlockHeaders) Code() int { return 20 }
 
 // GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies acash.GetBlockBodiesPacket
+type GetBlockBodies eth.GetBlockBodiesPacket
 
 func (gbb GetBlockBodies) Code() int { return 21 }
 
 // BlockBodies is the network packet for block content distribution.
-type BlockBodies acash.BlockBodiesPacket
+type BlockBodies eth.BlockBodiesPacket
 
 func (bb BlockBodies) Code() int { return 22 }
 
 // NewBlock is the network packet for the block propagation message.
-type NewBlock acash.NewBlockPacket
+type NewBlock eth.NewBlockPacket
 
 func (nb NewBlock) Code() int { return 23 }
 
 // NewPooledTransactionHashes is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes acash.NewPooledTransactionHashesPacket
+type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
 
 func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
-type GetPooledTransactions acash.GetPooledTransactionsPacket
+type GetPooledTransactions eth.GetPooledTransactionsPacket
 
 func (gpt GetPooledTransactions) Code() int { return 25 }
 
-type PooledTransactions acash.PooledTransactionsPacket
+type PooledTransactions eth.PooledTransactionsPacket
 
 func (pt PooledTransactions) Code() int { return 26 }
 
@@ -212,7 +212,7 @@ func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 }
 
 func (c *Conn) Write(msg Message) error {
-	// check if message is acash protocol message
+	// check if message is eth protocol message
 	var (
 		payload []byte
 		err     error
@@ -249,7 +249,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 		}
 		c.negotiateEthProtocol(msg.Caps)
 		if c.negotiatedProtoVersion == 0 {
-			t.Fatalf("unexpected acash protocol version")
+			t.Fatalf("unexpected eth protocol version")
 		}
 		return msg
 	default:
@@ -258,12 +258,12 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	}
 }
 
-// negotiateEthProtocol sets the Conn's acash protocol version
+// negotiateEthProtocol sets the Conn's eth protocol version
 // to highest advertised capability from peer
 func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 	var highestEthVersion uint
 	for _, capability := range caps {
-		if capability.Name != "acash" {
+		if capability.Name != "eth" {
 			continue
 		}
 		if capability.Version > highestEthVersion && capability.Version <= c.ourHighestProtoVersion {
@@ -306,9 +306,9 @@ loop:
 			t.Fatalf("bad status message: %s", pretty.Sdump(msg))
 		}
 	}
-	// make sure acash protocol version is set for negotiation
+	// make sure eth protocol version is set for negotiation
 	if c.negotiatedProtoVersion == 0 {
-		t.Fatalf("acash protocol version must be set in Conn")
+		t.Fatalf("eth protocol version must be set in Conn")
 	}
 	if status == nil {
 		// write status message to client
@@ -340,7 +340,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 	// so the GetBlockHeaders request must be sent again until the BlockHeaders
 	// response contains the desired header.
 	for {
-		req := &GetBlockHeaders{Origin: acash.HashOrNumber{Hash: block.Hash()}, Amount: 1}
+		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
 			return err
 		}

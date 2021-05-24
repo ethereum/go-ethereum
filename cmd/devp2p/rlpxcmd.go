@@ -44,7 +44,7 @@ var (
 		Action: rlpxPing,
 	}
 	rlpxEthTestCommand = cli.Command{
-		Name:      "acash-test",
+		Name:      "eth-test",
 		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
 		Action:    rlpxEthTest,
@@ -90,7 +90,7 @@ func rlpxPing(ctx *cli.Context) error {
 	return nil
 }
 
-// rlpxEthTest runs the acash protocol test suite.
+// rlpxEthTest runs the eth protocol test suite.
 func rlpxEthTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")

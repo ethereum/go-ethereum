@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"fmt"
@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	// handshakeTimeout is the maximum allowed time for the `acash` handshake to
+	// handshakeTimeout is the maximum allowed time for the `eth` handshake to
 	// complete before dropping the connection.= as malicious.
 	handshakeTimeout = 5 * time.Second
 )
 
-// Handshake executes the acash protocol handshake, negotiating version number,
+// Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
 	// Send out own handshake in a new thread

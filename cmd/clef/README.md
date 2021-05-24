@@ -70,7 +70,7 @@ The security model of Clef is as follows:
 The general flow for signing a transaction using e.g. Geth is as follows:
 ![image](sign_flow.png)
 
-In this case, `geth` would be started with `--signer http://localhost:8550` and would relay requests to `acash.sendTransaction`.
+In this case, `geth` would be started with `--signer http://localhost:8550` and would relay requests to `eth.sendTransaction`.
 
 ## TODOs
 

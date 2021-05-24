@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"fmt"
@@ -24,8 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
@@ -33,6 +31,8 @@ import (
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/core/vm"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/p2p"
 	"github.com/dezzyboy/go-ethereum/p2p/enode"
@@ -41,47 +41,47 @@ import (
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
-// on the `acash` protocol and convert them into a more easily testable form.
+// on the `eth` protocol and convert them into a more easily testable form.
 type testEthHandler struct {
 	blockBroadcasts event.Feed
 	txAnnounces     event.Feed
 	txBroadcasts    event.Feed
 }
 
-func (h *testEthHandler) Chain() *core.BlockChain                  { panic("no backing chain") }
-func (h *testEthHandler) StateBloom() *trie.SyncBloom              { panic("no backing state bloom") }
-func (h *testEthHandler) TxPool() acash.TxPool                     { panic("no backing tx pool") }
-func (h *testEthHandler) AcceptTxs() bool                          { return true }
-func (h *testEthHandler) RunPeer(*acash.Peer, acash.Handler) error { panic("not used in tests") }
-func (h *testEthHandler) PeerInfo(enode.ID) interface{}            { panic("not used in tests") }
+func (h *testEthHandler) Chain() *core.BlockChain              { panic("no backing chain") }
+func (h *testEthHandler) StateBloom() *trie.SyncBloom          { panic("no backing state bloom") }
+func (h *testEthHandler) TxPool() eth.TxPool                   { panic("no backing tx pool") }
+func (h *testEthHandler) AcceptTxs() bool                      { return true }
+func (h *testEthHandler) RunPeer(*eth.Peer, eth.Handler) error { panic("not used in tests") }
+func (h *testEthHandler) PeerInfo(enode.ID) interface{}        { panic("not used in tests") }
 
-func (h *testEthHandler) Handle(peer *acash.Peer, packet acash.Packet) error {
+func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	switch packet := packet.(type) {
-	case *acash.NewBlockPacket:
+	case *eth.NewBlockPacket:
 		h.blockBroadcasts.Send(packet.Block)
 		return nil
 
-	case *acash.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket:
 		h.txAnnounces.Send(([]common.Hash)(*packet))
 		return nil
 
-	case *acash.TransactionsPacket:
+	case *eth.TransactionsPacket:
 		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
 		return nil
 
-	case *acash.PooledTransactionsPacket:
+	case *eth.PooledTransactionsPacket:
 		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
 		return nil
 
 	default:
-		panic(fmt.Sprintf("unexpected acash packet type in tests: %T", packet))
+		panic(fmt.Sprintf("unexpected eth packet type in tests: %T", packet))
 	}
 }
 
 // Tests that peers are correctly accepted (or rejected) based on the advertised
 // fork IDs in the protocol handshake.
-func TestForkIDSplit65(t *testing.T) { testForkIDSplit(t, acash.ETH65) }
-func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, acash.ETH66) }
+func TestForkIDSplit65(t *testing.T) { testForkIDSplit(t, eth.ETH65) }
+func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, eth.ETH66) }
 
 func testForkIDSplit(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -144,17 +144,17 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 	defer p2pNoFork.Close()
 	defer p2pProFork.Close()
 
-	peerNoFork := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
-	peerProFork := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
+	peerNoFork := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 	defer peerNoFork.Close()
 	defer peerProFork.Close()
 
 	errc := make(chan error, 2)
 	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 
 	for i := 0; i < 2; i++ {
@@ -175,17 +175,17 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 	defer p2pNoFork.Close()
 	defer p2pProFork.Close()
 
-	peerNoFork = acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
-	peerProFork = acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
+	peerNoFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 	defer peerNoFork.Close()
 	defer peerProFork.Close()
 
 	errc = make(chan error, 2)
 	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 
 	for i := 0; i < 2; i++ {
@@ -206,17 +206,17 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 	defer p2pNoFork.Close()
 	defer p2pProFork.Close()
 
-	peerNoFork = acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
-	peerProFork = acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
+	peerNoFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 	defer peerNoFork.Close()
 	defer peerProFork.Close()
 
 	errc = make(chan error, 2)
 	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *acash.Peer) error { return nil })
+		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
 	}(errc)
 
 	var successes int
@@ -236,8 +236,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 }
 
 // Tests that received transactions are added to the local pool.
-func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, acash.ETH65) }
-func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, acash.ETH66) }
+func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, eth.ETH65) }
+func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, eth.ETH66) }
 
 func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -257,13 +257,13 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	defer p2pSrc.Close()
 	defer p2pSink.Close()
 
-	src := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, handler.txpool)
-	sink := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, handler.txpool)
+	src := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, handler.txpool)
+	sink := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, handler.txpool)
 	defer src.Close()
 	defer sink.Close()
 
-	go handler.handler.runEthPeer(sink, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(handler.handler), peer)
+	go handler.handler.runEthPeer(sink, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
 	var (
@@ -294,8 +294,8 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions65(t *testing.T) { testSendTransactions(t, acash.ETH65) }
-func TestSendTransactions66(t *testing.T) { testSendTransactions(t, acash.ETH66) }
+func TestSendTransactions65(t *testing.T) { testSendTransactions(t, eth.ETH65) }
+func TestSendTransactions66(t *testing.T) { testSendTransactions(t, eth.ETH66) }
 
 func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -319,13 +319,13 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	defer p2pSrc.Close()
 	defer p2pSink.Close()
 
-	src := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, handler.txpool)
-	sink := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, handler.txpool)
+	src := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, handler.txpool)
+	sink := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, handler.txpool)
 	defer src.Close()
 	defer sink.Close()
 
-	go handler.handler.runEthPeer(src, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(handler.handler), peer)
+	go handler.handler.runEthPeer(src, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
 	var (
@@ -348,7 +348,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	bcastSub := backend.txBroadcasts.Subscribe(bcasts)
 	defer bcastSub.Unsubscribe()
 
-	go acash.Handle(backend, sink)
+	go eth.Handle(backend, sink)
 
 	// Make sure we get all the transactions on the correct channels
 	seen := make(map[common.Hash]struct{})
@@ -364,7 +364,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 					seen[hash] = struct{}{}
 				}
 			case <-bcasts:
-				t.Errorf("initial tx broadcast received on post acash/65")
+				t.Errorf("initial tx broadcast received on post eth/65")
 			}
 
 		default:
@@ -380,8 +380,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
-func TestTransactionPropagation65(t *testing.T) { testTransactionPropagation(t, acash.ETH65) }
-func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, acash.ETH66) }
+func TestTransactionPropagation65(t *testing.T) { testTransactionPropagation(t, eth.ETH65) }
+func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, eth.ETH66) }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -407,16 +407,16 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{byte(i)}, "", nil), sourcePipe, source.txpool)
-		sinkPeer := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{0}, "", nil), sinkPipe, sink.txpool)
+		sourcePeer := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{byte(i)}, "", nil), sourcePipe, source.txpool)
+		sinkPeer := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{0}, "", nil), sinkPipe, sink.txpool)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
 
-		go source.handler.runEthPeer(sourcePeer, func(peer *acash.Peer) error {
-			return acash.Handle((*ethHandler)(source.handler), peer)
+		go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
+			return eth.Handle((*ethHandler)(source.handler), peer)
 		})
-		go sink.handler.runEthPeer(sinkPeer, func(peer *acash.Peer) error {
-			return acash.Handle((*ethHandler)(sink.handler), peer)
+		go sink.handler.runEthPeer(sinkPeer, func(peer *eth.Peer) error {
+			return eth.Handle((*ethHandler)(sink.handler), peer)
 		})
 	}
 	// Subscribe to all the transaction pools
@@ -450,7 +450,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 }
 
-// Tests that post acash protocol handshake, clients perform a mutual checkpoint
+// Tests that post eth protocol handshake, clients perform a mutual checkpoint
 // challenge to validate each other's chains. Hash mismatches, or missing ones
 // during a fast sync should lead to the peer getting dropped.
 func TestCheckpointChallenge(t *testing.T) {
@@ -518,13 +518,13 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	defer p2pLocal.Close()
 	defer p2pRemote.Close()
 
-	local := acash.NewPeer(acash.ETH65, p2p.NewPeer(enode.ID{1}, "", nil), p2pLocal, handler.txpool)
-	remote := acash.NewPeer(acash.ETH65, p2p.NewPeer(enode.ID{2}, "", nil), p2pRemote, handler.txpool)
+	local := eth.NewPeer(eth.ETH65, p2p.NewPeer(enode.ID{1}, "", nil), p2pLocal, handler.txpool)
+	remote := eth.NewPeer(eth.ETH65, p2p.NewPeer(enode.ID{2}, "", nil), p2pRemote, handler.txpool)
 	defer local.Close()
 	defer remote.Close()
 
-	go handler.handler.runEthPeer(local, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(handler.handler), peer)
+	go handler.handler.runEthPeer(local, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a remote handler
 	var (
@@ -608,18 +608,18 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := acash.NewPeer(acash.ETH65, p2p.NewPeer(enode.ID{byte(i)}, "", nil), sourcePipe, nil)
-		sinkPeer := acash.NewPeer(acash.ETH65, p2p.NewPeer(enode.ID{0}, "", nil), sinkPipe, nil)
+		sourcePeer := eth.NewPeer(eth.ETH65, p2p.NewPeer(enode.ID{byte(i)}, "", nil), sourcePipe, nil)
+		sinkPeer := eth.NewPeer(eth.ETH65, p2p.NewPeer(enode.ID{0}, "", nil), sinkPipe, nil)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
 
-		go source.handler.runEthPeer(sourcePeer, func(peer *acash.Peer) error {
-			return acash.Handle((*ethHandler)(source.handler), peer)
+		go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
+			return eth.Handle((*ethHandler)(source.handler), peer)
 		})
 		if err := sinkPeer.Handshake(1, td, genesis.Hash(), genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
 			t.Fatalf("failed to run protocol handshake")
 		}
-		go acash.Handle(sink, sinkPeer)
+		go eth.Handle(sink, sinkPeer)
 	}
 	// Subscribe to all the transaction pools
 	blockChs := make([]chan *types.Block, len(sinks))
@@ -660,8 +660,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 
 // Tests that a propagated malformed block (uncles or transactions don't match
 // with the hashes in the header) gets discarded and not broadcast forward.
-func TestBroadcastMalformedBlock65(t *testing.T) { testBroadcastMalformedBlock(t, acash.ETH65) }
-func TestBroadcastMalformedBlock66(t *testing.T) { testBroadcastMalformedBlock(t, acash.ETH66) }
+func TestBroadcastMalformedBlock65(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH65) }
+func TestBroadcastMalformedBlock66(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH66) }
 
 func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -676,13 +676,13 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	defer p2pSrc.Close()
 	defer p2pSink.Close()
 
-	src := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, source.txpool)
-	sink := acash.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, source.txpool)
+	src := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pSrc, source.txpool)
+	sink := eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pSink, source.txpool)
 	defer src.Close()
 	defer sink.Close()
 
-	go source.handler.runEthPeer(src, func(peer *acash.Peer) error {
-		return acash.Handle((*ethHandler)(source.handler), peer)
+	go source.handler.runEthPeer(src, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(source.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a sink handler
 	var (
@@ -700,7 +700,7 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	sub := backend.blockBroadcasts.Subscribe(blocks)
 	defer sub.Unsubscribe()
 
-	go acash.Handle(backend, sink)
+	go eth.Handle(backend, sink)
 
 	// Create various combinations of malformed blocks
 	head := source.chain.CurrentBlock()

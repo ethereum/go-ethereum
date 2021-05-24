@@ -31,13 +31,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	ethproto "github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
 	"github.com/dezzyboy/go-ethereum/consensus"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	ethproto "github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/les"
 	"github.com/dezzyboy/go-ethereum/log"
@@ -449,7 +449,7 @@ func (s *Service) login(conn *connWrapper) error {
 		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
 	}
 	var network string
-	if info := infos.Protocols["acash"]; info != nil {
+	if info := infos.Protocols["eth"]; info != nil {
 		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)

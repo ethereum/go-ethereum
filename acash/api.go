@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"compress/gzip"
@@ -129,9 +129,9 @@ func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 	return true
 }
 
-// SetAcashbase sets the acashbase of the miner
-func (api *PrivateMinerAPI) SetAcashbase(acashbase common.Address) bool {
-	api.e.SetAcashbase(acashbase)
+// SetAcashbase sets the ethbase of the miner
+func (api *PrivateMinerAPI) SetAcashbase(ethbase common.Address) bool {
+	api.e.SetAcashbase(ethbase)
 	return true
 }
 
@@ -143,13 +143,13 @@ func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
 // PrivateAdminAPI is the collection of Ethereum full node-related APIs
 // exposed over the private admin endpoint.
 type PrivateAdminAPI struct {
-	acash *Ethereum
+	eth *Ethereum
 }
 
 // NewPrivateAdminAPI creates a new API definition for the full node private
 // admin methods of the Ethereum service.
-func NewPrivateAdminAPI(acash *Ethereum) *PrivateAdminAPI {
-	return &PrivateAdminAPI{acash: acash}
+func NewPrivateAdminAPI(eth *Ethereum) *PrivateAdminAPI {
+	return &PrivateAdminAPI{eth: eth}
 }
 
 // ExportChain exports the current blockchain into a local file,
@@ -159,7 +159,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 		return false, errors.New("last cannot be specified without first")
 	}
 	if first != nil && last == nil {
-		head := api.acash.BlockChain().CurrentHeader().Number.Uint64()
+		head := api.eth.BlockChain().CurrentHeader().Number.Uint64()
 		last = &head
 	}
 	if _, err := os.Stat(file); err == nil {
@@ -182,10 +182,10 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 
 	// Export the blockchain
 	if first != nil {
-		if err := api.acash.BlockChain().ExportN(writer, *first, *last); err != nil {
+		if err := api.eth.BlockChain().ExportN(writer, *first, *last); err != nil {
 			return false, err
 		}
-	} else if err := api.acash.BlockChain().Export(writer); err != nil {
+	} else if err := api.eth.BlockChain().Export(writer); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -237,12 +237,12 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 			break
 		}
 
-		if hasAllBlocks(api.acash.BlockChain(), blocks) {
+		if hasAllBlocks(api.eth.BlockChain(), blocks) {
 			blocks = blocks[:0]
 			continue
 		}
 		// Import the batch and reset the buffer
-		if _, err := api.acash.BlockChain().InsertChain(blocks); err != nil {
+		if _, err := api.eth.BlockChain().InsertChain(blocks); err != nil {
 			return false, fmt.Errorf("batch %d: failed to insert: %v", batch, err)
 		}
 		blocks = blocks[:0]
@@ -253,13 +253,13 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 // PublicDebugAPI is the collection of Ethereum full node APIs exposed
 // over the public debugging endpoint.
 type PublicDebugAPI struct {
-	acash *Ethereum
+	eth *Ethereum
 }
 
 // NewPublicDebugAPI creates a new API definition for the full node-
 // related public debug methods of the Ethereum service.
-func NewPublicDebugAPI(acash *Ethereum) *PublicDebugAPI {
-	return &PublicDebugAPI{acash: acash}
+func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
+	return &PublicDebugAPI{eth: eth}
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
@@ -272,19 +272,19 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
-		_, stateDb := api.acash.miner.Pending()
+		_, stateDb := api.eth.miner.Pending()
 		return stateDb.RawDump(opts), nil
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
-		block = api.acash.blockchain.CurrentBlock()
+		block = api.eth.blockchain.CurrentBlock()
 	} else {
-		block = api.acash.blockchain.GetBlockByNumber(uint64(blockNr))
+		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 	}
 	if block == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.acash.BlockChain().StateAt(block.Root())
+	stateDb, err := api.eth.BlockChain().StateAt(block.Root())
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -294,18 +294,18 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
 type PrivateDebugAPI struct {
-	acash *Ethereum
+	eth *Ethereum
 }
 
 // NewPrivateDebugAPI creates a new API definition for the full node-related
 // private debug methods of the Ethereum service.
-func NewPrivateDebugAPI(acash *Ethereum) *PrivateDebugAPI {
-	return &PrivateDebugAPI{acash: acash}
+func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
+	return &PrivateDebugAPI{eth: eth}
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
-	if preimage := rawdb.ReadPreimage(api.acash.ChainDb(), hash); preimage != nil {
+	if preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); preimage != nil {
 		return preimage, nil
 	}
 	return nil, errors.New("unknown preimage")
@@ -323,7 +323,7 @@ type BadBlockArgs struct {
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.acash.chainDb)
+		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
 	for _, block := range blocks {
@@ -361,28 +361,28 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
 			// the miner and operate on those
-			_, stateDb = api.acash.miner.Pending()
+			_, stateDb = api.eth.miner.Pending()
 		} else {
 			var block *types.Block
 			if number == rpc.LatestBlockNumber {
-				block = api.acash.blockchain.CurrentBlock()
+				block = api.eth.blockchain.CurrentBlock()
 			} else {
-				block = api.acash.blockchain.GetBlockByNumber(uint64(number))
+				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
 			}
 			if block == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.acash.BlockChain().StateAt(block.Root())
+			stateDb, err = api.eth.BlockChain().StateAt(block.Root())
 			if err != nil {
 				return state.IteratorDump{}, err
 			}
 		}
 	} else if hash, ok := blockNrOrHash.Hash(); ok {
-		block := api.acash.blockchain.GetBlockByHash(hash)
+		block := api.eth.blockchain.GetBlockByHash(hash)
 		if block == nil {
 			return state.IteratorDump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.acash.BlockChain().StateAt(block.Root())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
 		if err != nil {
 			return state.IteratorDump{}, err
 		}
@@ -419,11 +419,11 @@ type storageEntry struct {
 // StorageRangeAt returns the storage at the given block height and transaction index.
 func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	// Retrieve the block
-	block := api.acash.blockchain.GetBlockByHash(blockHash)
+	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
-	_, _, statedb, err := api.acash.stateAtTransaction(block, txIndex, 0)
+	_, _, statedb, err := api.eth.stateAtTransaction(block, txIndex, 0)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -465,19 +465,19 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
 
-	startBlock = api.acash.blockchain.GetBlockByNumber(startNum)
+	startBlock = api.eth.blockchain.GetBlockByNumber(startNum)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startNum)
 	}
 
 	if endNum == nil {
 		endBlock = startBlock
-		startBlock = api.acash.blockchain.GetBlockByHash(startBlock.ParentHash())
+		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
 		}
 	} else {
-		endBlock = api.acash.blockchain.GetBlockByNumber(*endNum)
+		endBlock = api.eth.blockchain.GetBlockByNumber(*endNum)
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %d not found", *endNum)
 		}
@@ -492,19 +492,19 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
-	startBlock = api.acash.blockchain.GetBlockByHash(startHash)
+	startBlock = api.eth.blockchain.GetBlockByHash(startHash)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startHash)
 	}
 
 	if endHash == nil {
 		endBlock = startBlock
-		startBlock = api.acash.blockchain.GetBlockByHash(startBlock.ParentHash())
+		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
 		}
 	} else {
-		endBlock = api.acash.blockchain.GetBlockByHash(*endHash)
+		endBlock = api.eth.blockchain.GetBlockByHash(*endHash)
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %x not found", *endHash)
 		}
@@ -516,7 +516,7 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
-	triedb := api.acash.BlockChain().StateCache().TrieDB()
+	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
 	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
 	if err != nil {

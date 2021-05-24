@@ -16,7 +16,7 @@
 
 package params
 
-// These are the multipliers for acash denominations.
+// These are the multipliers for eth denominations.
 // Example: To get the wei value of an amount in 'gwei', use
 //
 //    new(big.Int).Mul(value, big.NewInt(params.GWei))

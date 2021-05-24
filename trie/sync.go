@@ -227,7 +227,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval. To aid
-// both acash/6x style fast sync and snap/1x style state sync, the paths of trie
+// both eth/6x style fast sync and snap/1x style state sync, the paths of trie
 // nodes are returned too, as well as separate hash list for codes.
 func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []common.Hash) {
 	var (

@@ -20,13 +20,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/dezzyboy/go-ethereum/acash"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/rawdb"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/eth"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/node"
 	"github.com/dezzyboy/go-ethereum/params"
 )
@@ -215,7 +215,7 @@ func TestEth2NewBlock(t *testing.T) {
 }
 
 // startEthService creates a full node instance for testing.
-func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *acash.Ethereum) {
+func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{})
@@ -224,9 +224,9 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	}
 
 	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
-	ethservice, err := acash.New(n, ethcfg)
+	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
-		t.Fatal("can't create acash service:", err)
+		t.Fatal("can't create eth service:", err)
 	}
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)

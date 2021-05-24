@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"math/big"
@@ -64,7 +64,7 @@ func max(a, b int) int {
 	return b
 }
 
-// Peer is a collection of relevant information we have about a `acash` peer.
+// Peer is a collection of relevant information we have about a `eth` peer.
 type Peer struct {
 	id string // Unique ID for the peer, cached
 
@@ -126,7 +126,7 @@ func (p *Peer) ID() string {
 	return p.id
 }
 
-// Version retrieves the peer's negoatiated `acash` protocol version.
+// Version retrieves the peer's negoatiated `eth` protocol version.
 func (p *Peer) Version() uint {
 	return p.version
 }
@@ -268,7 +268,7 @@ func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs []rlp.RawValu
 	return p2p.Send(p.rw, PooledTransactionsMsg, txs) // Not packed into PooledTransactionsPacket to avoid RLP decoding
 }
 
-// ReplyPooledTransactionsRLP is the acash/66 version of SendPooledTransactionsRLP.
+// ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
@@ -351,7 +351,7 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket(headers))
 }
 
-// ReplyBlockHeaders is the acash/66 version of SendBlockHeaders.
+// ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
 func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
@@ -365,7 +365,7 @@ func (p *Peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, bodies) // Not packed into BlockBodiesPacket to avoid RLP decoding
 }
 
-// ReplyBlockBodiesRLP is the acash/66 version of SendBlockBodiesRLP.
+// ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
@@ -380,7 +380,7 @@ func (p *Peer) SendNodeData(data [][]byte) error {
 	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket(data))
 }
 
-// ReplyNodeData is the acash/66 response to GetNodeData.
+// ReplyNodeData is the eth/66 response to GetNodeData.
 func (p *Peer) ReplyNodeData(id uint64, data [][]byte) error {
 	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{
 		RequestId:      id,
@@ -394,7 +394,7 @@ func (p *Peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
 }
 
-// ReplyReceiptsRLP is the acash/66 response to GetReceipts.
+// ReplyReceiptsRLP is the eth/66 response to GetReceipts.
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"errors"
@@ -23,29 +23,29 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/p2p/enode"
 	"github.com/dezzyboy/go-ethereum/trie"
 )
 
-// ethHandler implements the acash.Backend interface to handle the various network
+// ethHandler implements the eth.Backend interface to handle the various network
 // packets that are sent as replies or broadcasts.
 type ethHandler handler
 
 func (h *ethHandler) Chain() *core.BlockChain     { return h.chain }
 func (h *ethHandler) StateBloom() *trie.SyncBloom { return h.stateBloom }
-func (h *ethHandler) TxPool() acash.TxPool        { return h.txpool }
+func (h *ethHandler) TxPool() eth.TxPool          { return h.txpool }
 
-// RunPeer is invoked when a peer joins on the `acash` protocol.
-func (h *ethHandler) RunPeer(peer *acash.Peer, hand acash.Handler) error {
+// RunPeer is invoked when a peer joins on the `eth` protocol.
+func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
 	return (*handler)(h).runEthPeer(peer, hand)
 }
 
-// PeerInfo retrieves all known `acash` information about a peer.
+// PeerInfo retrieves all known `eth` information about a peer.
 func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 	if p := h.peers.peer(id.String()); p != nil {
 		return p.info()
@@ -61,52 +61,52 @@ func (h *ethHandler) AcceptTxs() bool {
 
 // Handle is invoked from a peer's message handler when it receives a new remote
 // message that the handler couldn't consume and serve itself.
-func (h *ethHandler) Handle(peer *acash.Peer, packet acash.Packet) error {
+func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the downloader
 	switch packet := packet.(type) {
-	case *acash.BlockHeadersPacket:
+	case *eth.BlockHeadersPacket:
 		return h.handleHeaders(peer, *packet)
 
-	case *acash.BlockBodiesPacket:
+	case *eth.BlockBodiesPacket:
 		txset, uncleset := packet.Unpack()
 		return h.handleBodies(peer, txset, uncleset)
 
-	case *acash.NodeDataPacket:
+	case *eth.NodeDataPacket:
 		if err := h.downloader.DeliverNodeData(peer.ID(), *packet); err != nil {
 			log.Debug("Failed to deliver node state data", "err", err)
 		}
 		return nil
 
-	case *acash.ReceiptsPacket:
+	case *eth.ReceiptsPacket:
 		if err := h.downloader.DeliverReceipts(peer.ID(), *packet); err != nil {
 			log.Debug("Failed to deliver receipts", "err", err)
 		}
 		return nil
 
-	case *acash.NewBlockHashesPacket:
+	case *eth.NewBlockHashesPacket:
 		hashes, numbers := packet.Unpack()
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
-	case *acash.NewBlockPacket:
+	case *eth.NewBlockPacket:
 		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
 
-	case *acash.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
 
-	case *acash.TransactionsPacket:
+	case *eth.TransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
 
-	case *acash.PooledTransactionsPacket:
+	case *eth.PooledTransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
 
 	default:
-		return fmt.Errorf("unexpected acash packet type: %T", packet)
+		return fmt.Errorf("unexpected eth packet type: %T", packet)
 	}
 }
 
 // handleHeaders is invoked from a peer's message handler when it transmits a batch
 // of headers for the local node to process.
-func (h *ethHandler) handleHeaders(peer *acash.Peer, headers []*types.Header) error {
+func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) error {
 	p := h.peers.peer(peer.ID())
 	if p == nil {
 		return errors.New("unregistered during callback")
@@ -162,7 +162,7 @@ func (h *ethHandler) handleHeaders(peer *acash.Peer, headers []*types.Header) er
 
 // handleBodies is invoked from a peer's message handler when it transmits a batch
 // of block bodies for the local node to process.
-func (h *ethHandler) handleBodies(peer *acash.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
+func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
 	filter := len(txs) > 0 || len(uncles) > 0
 	if filter {
@@ -179,7 +179,7 @@ func (h *ethHandler) handleBodies(peer *acash.Peer, txs [][]*types.Transaction, 
 
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
-func (h *ethHandler) handleBlockAnnounces(peer *acash.Peer, hashes []common.Hash, numbers []uint64) error {
+func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
@@ -199,7 +199,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *acash.Peer, hashes []common.Hash
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *acash.Peer, block *types.Block, td *big.Int) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 

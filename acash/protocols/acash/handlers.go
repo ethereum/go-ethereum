@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package acash
+package eth
 
 import (
 	"encoding/json"
@@ -38,7 +38,7 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.SendBlockHeaders(response)
 }
 
-// handleGetBlockHeaders66 is the acash/66 version of handleGetBlockHeaders
+// handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
 	var query GetBlockHeadersPacket66

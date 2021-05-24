@@ -28,8 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/protocols/acash"
 	"github.com/dezzyboy/go-ethereum/common"
+	"github.com/dezzyboy/go-ethereum/eth/protocols/eth"
 	"github.com/dezzyboy/go-ethereum/event"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/p2p/msgrate"
@@ -201,7 +201,7 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
-	p.rates.Update(acash.BlockHeadersMsg, deliveryTime.Sub(p.headerStarted), delivered)
+	p.rates.Update(eth.BlockHeadersMsg, deliveryTime.Sub(p.headerStarted), delivered)
 	atomic.StoreInt32(&p.headerIdle, 0)
 }
 
@@ -209,7 +209,7 @@ func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
-	p.rates.Update(acash.BlockBodiesMsg, deliveryTime.Sub(p.blockStarted), delivered)
+	p.rates.Update(eth.BlockBodiesMsg, deliveryTime.Sub(p.blockStarted), delivered)
 	atomic.StoreInt32(&p.blockIdle, 0)
 }
 
@@ -217,7 +217,7 @@ func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
 // retrieval requests. Its estimated receipt retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
-	p.rates.Update(acash.ReceiptsMsg, deliveryTime.Sub(p.receiptStarted), delivered)
+	p.rates.Update(eth.ReceiptsMsg, deliveryTime.Sub(p.receiptStarted), delivered)
 	atomic.StoreInt32(&p.receiptIdle, 0)
 }
 
@@ -225,14 +225,14 @@ func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) 
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
-	p.rates.Update(acash.NodeDataMsg, deliveryTime.Sub(p.stateStarted), delivered)
+	p.rates.Update(eth.NodeDataMsg, deliveryTime.Sub(p.stateStarted), delivered)
 	atomic.StoreInt32(&p.stateIdle, 0)
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
-	cap := int(math.Ceil(p.rates.Capacity(acash.BlockHeadersMsg, targetRTT)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.BlockHeadersMsg, targetRTT)))
 	if cap > MaxHeaderFetch {
 		cap = MaxHeaderFetch
 	}
@@ -242,7 +242,7 @@ func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
 // BlockCapacity retrieves the peers block download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
-	cap := int(math.Ceil(p.rates.Capacity(acash.BlockBodiesMsg, targetRTT)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.BlockBodiesMsg, targetRTT)))
 	if cap > MaxBlockFetch {
 		cap = MaxBlockFetch
 	}
@@ -252,7 +252,7 @@ func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
 // ReceiptCapacity retrieves the peers receipt download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
-	cap := int(math.Ceil(p.rates.Capacity(acash.ReceiptsMsg, targetRTT)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.ReceiptsMsg, targetRTT)))
 	if cap > MaxReceiptFetch {
 		cap = MaxReceiptFetch
 	}
@@ -262,7 +262,7 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 // NodeDataCapacity retrieves the peers state download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
-	cap := int(math.Ceil(p.rates.Capacity(acash.NodeDataMsg, targetRTT)))
+	cap := int(math.Ceil(p.rates.Capacity(eth.NodeDataMsg, targetRTT)))
 	if cap > MaxStateFetch {
 		cap = MaxStateFetch
 	}
@@ -311,7 +311,7 @@ type peerSet struct {
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peerConnection),
-		rates: msgrate.NewTrackers(log.New("proto", "acash")),
+		rates: msgrate.NewTrackers(log.New("proto", "eth")),
 	}
 }
 
@@ -412,9 +412,9 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.headerIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		return p.rates.Capacity(acash.BlockHeadersMsg, time.Second)
+		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
 	}
-	return ps.idlePeers(acash.ETH65, acash.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
@@ -424,9 +424,9 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.blockIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		return p.rates.Capacity(acash.BlockBodiesMsg, time.Second)
+		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
 	}
-	return ps.idlePeers(acash.ETH65, acash.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
 // ReceiptIdlePeers retrieves a flat list of all the currently receipt-idle peers
@@ -436,9 +436,9 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.receiptIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		return p.rates.Capacity(acash.ReceiptsMsg, time.Second)
+		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
 	}
-	return ps.idlePeers(acash.ETH65, acash.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
 // NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
@@ -448,9 +448,9 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 		return atomic.LoadInt32(&p.stateIdle) == 0
 	}
 	throughput := func(p *peerConnection) float64 {
-		return p.rates.Capacity(acash.NodeDataMsg, time.Second)
+		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
 	}
-	return ps.idlePeers(acash.ETH65, acash.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }
 
 // idlePeers retrieves a flat list of all currently idle peers satisfying the

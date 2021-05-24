@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash"
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/cmd/utils"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/console/prompt"
+	"github.com/dezzyboy/go-ethereum/eth"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
 	"github.com/dezzyboy/go-ethereum/ethclient"
 	"github.com/dezzyboy/go-ethereum/internal/debug"
 	"github.com/dezzyboy/go-ethereum/internal/ethapi"
@@ -410,7 +410,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		ethBackend, ok := backend.(*acash.EthAPIBackend)
+		ethBackend, ok := backend.(*eth.EthAPIBackend)
 		if !ok {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}

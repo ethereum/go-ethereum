@@ -20,9 +20,9 @@ import (
 	"crypto/ecdsa"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/common/mclock"
 	"github.com/dezzyboy/go-ethereum/core"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/les/flowcontrol"
 	vfs "github.com/dezzyboy/go-ethereum/les/vflux/server"
@@ -77,7 +77,7 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
-	lesDb, err := node.OpenDatabase("les.server", 0, 0, "acash/db/lesserver/", false)
+	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/lesserver/", false)
 	if err != nil {
 		return nil, err
 	}

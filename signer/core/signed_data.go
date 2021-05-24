@@ -643,7 +643,7 @@ func dataMismatchError(encType string, encValue interface{}) error {
 func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
 	// Returns the address for the Account that was used to create the signature.
 	//
-	// Note, this function is compatible with acash_sign and personal_sign. As such it recovers
+	// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 	// the address of:
 	// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 	// addr = ecrecover(hash, signature)

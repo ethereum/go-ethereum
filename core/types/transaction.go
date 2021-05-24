@@ -275,7 +275,7 @@ func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.tip()) 
 // FeeCap returns the fee cap per gas of the transaction.
 func (tx *Transaction) FeeCap() *big.Int { return new(big.Int).Set(tx.inner.feeCap()) }
 
-// Value returns the acash amount of the transaction.
+// Value returns the eth amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
 // Nonce returns the sender account nonce of the transaction.

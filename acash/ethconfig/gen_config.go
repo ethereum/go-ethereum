@@ -5,11 +5,11 @@ package ethconfig
 import (
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/gasprice"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/gasprice"
 	"github.com/dezzyboy/go-ethereum/miner"
 	"github.com/dezzyboy/go-ethereum/params"
 )

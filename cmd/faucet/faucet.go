@@ -41,14 +41,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/accounts"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/cmd/utils"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/ethclient"
 	"github.com/dezzyboy/go-ethereum/ethstats"
 	"github.com/dezzyboy/go-ethereum/les"
@@ -91,7 +91,7 @@ var (
 )
 
 var (
-	acash = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	eth = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 )
 
 var (
@@ -374,7 +374,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 	reqs := f.reqs
 	f.lock.RUnlock()
 	if err = send(wsconn, map[string]interface{}{
-		"funds":    new(big.Int).Div(balance, acash),
+		"funds":    new(big.Int).Div(balance, eth),
 		"funded":   nonce,
 		"peers":    f.stack.Server().PeerCount(),
 		"requests": reqs,
@@ -488,7 +488,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		)
 		if timeout = f.timeouts[id]; time.Now().After(timeout) {
 			// User wasn't funded recently, create the funding transaction
-			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), acash)
+			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), eth)
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
@@ -615,7 +615,7 @@ func (f *faucet) loop() {
 			f.lock.RLock()
 			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
 
-			balance := new(big.Int).Div(f.balance, acash)
+			balance := new(big.Int).Div(f.balance, eth)
 			peers := f.stack.Server().PeerCount()
 
 			for _, conn := range f.conns {

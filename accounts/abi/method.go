@@ -161,7 +161,7 @@ func (method Method) IsConstant() bool {
 }
 
 // IsPayable returns the indicator whether the method can process
-// plain acash transfers.
+// plain eth transfers.
 func (method Method) IsPayable() bool {
 	return method.StateMutability == "payable" || method.Payable
 }

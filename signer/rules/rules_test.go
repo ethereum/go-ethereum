@@ -359,7 +359,7 @@ const ExampleTxWindow = `
 	// Time window: 1 week
 	var window = 1000* 3600*24*7;
 
-	// Limit : 1 acash
+	// Limit : 1 eth
 	var limit = new BigNumber("1e18");
 
 	function isLimitOk(transaction){
@@ -467,7 +467,7 @@ func TestLimitWindow(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	// 0.3 acash: 429D069189E0000 wei
+	// 0.3 eth: 429D069189E0000 wei
 	v := big.NewInt(0).SetBytes(common.Hex2Bytes("0429D069189E0000"))
 	h := hexutil.Big(*v)
 	// The first three should succeed

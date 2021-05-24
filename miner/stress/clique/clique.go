@@ -26,15 +26,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash"
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/ethconfig"
 	"github.com/dezzyboy/go-ethereum/accounts/keystore"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/common/fdlimit"
 	"github.com/dezzyboy/go-ethereum/core"
 	"github.com/dezzyboy/go-ethereum/core/types"
 	"github.com/dezzyboy/go-ethereum/crypto"
+	"github.com/dezzyboy/go-ethereum/eth"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/ethconfig"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/miner"
 	"github.com/dezzyboy/go-ethereum/node"
@@ -60,7 +60,7 @@ func main() {
 	genesis := makeGenesis(faucets, sealers)
 
 	var (
-		nodes  []*acash.Ethereum
+		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
 
@@ -164,7 +164,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *acash.Ethereum, error) {
+func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -184,7 +184,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *acash.Ethereum, error) {
 		return nil, nil, err
 	}
 	// Create and register the backend
-	ethBackend, err := acash.New(stack, &ethconfig.Config{
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,

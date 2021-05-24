@@ -443,7 +443,7 @@ func (s *stateSync) assignTasks() {
 			req.peer.log.Trace("Requesting batch of state data", "nodes", len(nodes), "codes", len(codes), "root", s.root)
 			select {
 			case s.d.trackStateReq <- req:
-				req.peer.FetchNodeData(append(nodes, codes...)) // Unified retrieval under acash/6x
+				req.peer.FetchNodeData(append(nodes, codes...)) // Unified retrieval under eth/6x
 			case <-s.cancel:
 			case <-s.d.cancelCh:
 			}

@@ -224,10 +224,10 @@ func wsPingTestServer(t *testing.T, sendPing <-chan struct{}) *http.Server {
 }
 
 func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-chan struct{}) {
-	// Canned responses for the acash_subscribe call in TestClientWebsocketPing.
+	// Canned responses for the eth_subscribe call in TestClientWebsocketPing.
 	const (
 		subResp   = `{"jsonrpc":"2.0","id":1,"result":"0x00"}`
-		subNotify = `{"jsonrpc":"2.0","method":"acash_subscription","params":{"subscription":"0x00","result":1}}`
+		subNotify = `{"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0x00","result":1}}`
 	)
 
 	// Handle subscribe request.

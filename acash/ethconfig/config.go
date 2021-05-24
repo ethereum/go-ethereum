@@ -25,13 +25,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dezzyboy/go-ethereum/acash/downloader"
-	"github.com/dezzyboy/go-ethereum/acash/gasprice"
 	"github.com/dezzyboy/go-ethereum/common"
 	"github.com/dezzyboy/go-ethereum/consensus"
 	"github.com/dezzyboy/go-ethereum/consensus/clique"
 	"github.com/dezzyboy/go-ethereum/consensus/ethash"
 	"github.com/dezzyboy/go-ethereum/core"
+	"github.com/dezzyboy/go-ethereum/eth/downloader"
+	"github.com/dezzyboy/go-ethereum/eth/gasprice"
 	"github.com/dezzyboy/go-ethereum/ethdb"
 	"github.com/dezzyboy/go-ethereum/log"
 	"github.com/dezzyboy/go-ethereum/miner"
@@ -87,7 +87,7 @@ var Defaults = Config{
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
 	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 acash
+	RPCTxFeeCap: 1, // 1 eth
 }
 
 func init() {
@@ -188,11 +188,11 @@ type Config struct {
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
 
-	// RPCGasCap is the global gas cap for acash-call variants.
+	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is acash.
+	// send-transction variants. The unit is eth.
 	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
