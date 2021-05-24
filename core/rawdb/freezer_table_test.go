@@ -789,28 +789,3 @@ func TestBatch(t *testing.T) {
 		t.Fatalf("expected %x got %x", exp, got)
 	}
 }
-
-func TestNoBatch(t *testing.T) {
-	dir, err := ioutil.TempDir("./", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 31, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Write 15 bytes 30 times
-	for x := 0; x < 30; x++ {
-		data := getChunk(15, x)
-		f.Append(uint64(x), data)
-	}
-	f.DumpIndex(0, 30)
-
-	if got, err := f.Retrieve(29); err != nil {
-		t.Fatal(err)
-	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
-		t.Fatalf("expected %x got %x", exp, got)
-	}
-}

@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 )
 
+// freezerBatch is a batch for a freezer table.
 type freezerBatch struct {
 	t         *freezerTable
 	data      []byte
@@ -35,31 +36,41 @@ type freezerBatch struct {
 	headBytes uint32
 }
 
+// NewBatch creates a new batch for the freezer table.
 func (t *freezerTable) NewBatch() *freezerBatch {
+	t.lock.RLock()
+	filenum := t.headId
+	defer t.lock.RUnlock()
 	return &freezerBatch{
 		t:         t,
 		data:      nil,
 		startItem: math.MaxUint64,
-		filenum:   t.headId, // TODO: Needs rlock
+		filenum:   filenum,
 		count:     0,
 		headBytes: 0,
 	}
 }
 
+// Append injects a binary blob at the end of the freezer table. The item number
+// is a precautionary parameter to ensure data correctness, but the table will
+// reject already existing data.
 func (batch *freezerBatch) Append(item uint64, blob []byte) error {
 	if batch.startItem == math.MaxUint64 {
 		batch.startItem = item
 	}
+	if have, want := item, batch.startItem+batch.count; have != want {
+		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
+	}
 	if !batch.t.noCompression {
 		blob = snappy.Encode(nil, blob)
 	}
-	bLen := len(blob)
 	batch.data = append(batch.data, blob...)
-	batch.sizes = append(batch.sizes, uint32(bLen))
+	batch.sizes = append(batch.sizes, uint32(len(blob)))
 	batch.count++
 	return nil
 }
 
+// Write writes the batched items to the backing freezerTable.
 func (batch *freezerBatch) Write() error {
 	var (
 		retry = false
@@ -76,6 +87,10 @@ func (batch *freezerBatch) Write() error {
 	}
 }
 
+// write is the internal implementation which writes the batch to the backing
+// table. It will only ever write as many items as fits into one table: if
+// the backing table needs to open a new file, this method will return with a
+// (true, nil), to signify that it needs to be invoked again.
 func (batch *freezerBatch) write(newHead bool) (bool, error) {
 	if !newHead {
 		batch.t.lock.RLock()
