@@ -22,14 +22,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/snappy"
 	"sync/atomic"
 )
 
 // freezerBatch is a batch for a freezer table.
 type freezerBatch struct {
-	t        *freezerTable
-	buf      bytes.Buffer
+	t   *freezerTable
+	buf bytes.Buffer
+	sb  *BufferedSnapWriter
+
 	firstIdx uint64
 	count    uint64
 	sizes    []uint32
@@ -39,10 +40,14 @@ type freezerBatch struct {
 
 // NewBatch creates a new batch for the freezer table.
 func (t *freezerTable) NewBatch() *freezerBatch {
-	return &freezerBatch{
+	batch := &freezerBatch{
 		t:        t,
 		firstIdx: math.MaxUint64,
 	}
+	if !t.noCompression {
+		batch.sb = new(BufferedSnapWriter)
+	}
+	return batch
 }
 
 // AppendRLP rlp-encodes and adds data at the end of the freezer table. The item number
@@ -56,12 +61,14 @@ func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
 	s0 := batch.buf.Len()
-	if !batch.t.noCompression {
-		panic("aah")
+	if batch.sb != nil {
+		// RLP-encode
+		rlp.Encode(batch.sb, data)
+		// Pass to
+		batch.sb.WriteTo(&batch.buf)
 	} else {
 		rlp.Encode(&batch.buf, data)
 	}
-	// TODO, would be nice to get the size out more neatly
 	s1 := batch.buf.Len()
 	batch.sizes = append(batch.sizes, uint32(s1-s0))
 	batch.count++
@@ -78,11 +85,14 @@ func (batch *freezerBatch) Append(item uint64, blob []byte) error {
 	if have, want := item, batch.firstIdx+batch.count; have != want {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
-	if !batch.t.noCompression {
-		blob = snappy.Encode(nil, blob)
+	s0 := batch.buf.Len()
+	if batch.sb != nil {
+		batch.sb.WriteDirectTo(&batch.buf, blob)
+	} else {
+		batch.buf.Write(blob)
 	}
-	batch.buf.Write(blob)
-	batch.sizes = append(batch.sizes, uint32(len(blob)))
+	s1 := batch.buf.Len()
+	batch.sizes = append(batch.sizes, uint32(s1-s0))
 	batch.count++
 	return nil
 }

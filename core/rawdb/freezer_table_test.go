@@ -696,35 +696,57 @@ func TestAppendTruncateParallel(t *testing.T) {
 	}
 }
 
-func BenchmarkFreezerAppend32(b *testing.B)   { tableBench(b, 32, true) }
-func BenchmarkFreezerAppend256(b *testing.B)  { tableBench(b, 256, true) }
-func BenchmarkFreezerAppend1024(b *testing.B) { tableBench(b, 1024, true) }
-func BenchmarkFreezerAppend4096(b *testing.B) { tableBench(b, 4096, true) }
+func BenchmarkAppend32(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { tableBench(b, 32, true) })
+	b.Run("snappy", func(b *testing.B) { tableBench(b, 32, false) })
+}
+func BenchmarkAppend256(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { tableBench(b, 256, true) })
+	b.Run("snappy", func(b *testing.B) { tableBench(b, 256, false) })
+}
+func BenchmarkAppend1024(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { tableBench(b, 1024, true) })
+	b.Run("snappy", func(b *testing.B) { tableBench(b, 1024, false) })
+}
+func BenchmarkAppend4096(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { tableBench(b, 4096, true) })
+	b.Run("snappy", func(b *testing.B) { tableBench(b, 4096, false) })
+}
 
-func BenchmarkFreezerAppendSnap32(b *testing.B)   { tableBench(b, 32, false) }
-func BenchmarkFreezerAppendSnap256(b *testing.B)  { tableBench(b, 256, false) }
-func BenchmarkFreezerAppendSnap1024(b *testing.B) { tableBench(b, 1024, false) }
-func BenchmarkFreezerAppendSnap4096(b *testing.B) { tableBench(b, 4096, false) }
+func BenchmarkBatchAppendBlob32(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchBench(b, 32, true) })
+	b.Run("snappy", func(b *testing.B) { batchBench(b, 32, false) })
+}
 
-func BenchmarkBatchedAppend32(b *testing.B)   { batchBench(b, 32, true) }
-func BenchmarkBatchedAppend256(b *testing.B)  { batchBench(b, 256, true) }
-func BenchmarkBatchedAppend1024(b *testing.B) { batchBench(b, 1024, true) }
-func BenchmarkBatchedAppend4096(b *testing.B) { batchBench(b, 4096, true) }
+func BenchmarkBatchAppendBlob256(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchBench(b, 256, true) })
+	b.Run("snappy", func(b *testing.B) { batchBench(b, 256, false) })
+}
+func BenchmarkBatchAppendBlob1024(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchBench(b, 1024, true) })
+	b.Run("snappy", func(b *testing.B) { batchBench(b, 1024, false) })
+}
+func BenchmarkBatchAppendBlob4096(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchBench(b, 4096, true) })
+	b.Run("snappy", func(b *testing.B) { batchBench(b, 4096, false) })
+}
 
-func BenchmarkBatchedAppendSnap32(b *testing.B)   { batchBench(b, 32, false) }
-func BenchmarkBatchedAppendSnap56(b *testing.B)   { batchBench(b, 256, false) }
-func BenchmarkBatchedAppendSnap1024(b *testing.B) { batchBench(b, 1024, false) }
-func BenchmarkBatchedAppendSnap4096(b *testing.B) { batchBench(b, 4096, false) }
-
-func BenchmarkBatchedAppendRLP32(b *testing.B)   { batchRlpBench(b, 32, true) }
-func BenchmarkBatchedAppendRLP256(b *testing.B)  { batchRlpBench(b, 256, true) }
-func BenchmarkBatchedAppendRLP1024(b *testing.B) { batchRlpBench(b, 1024, true) }
-func BenchmarkBatchedAppendRLP4096(b *testing.B) { batchRlpBench(b, 4096, true) }
-
-//func BenchmarkBatchedAppendSnappyRLP32(b *testing.B)   { batchRlpBench(b, 32, false) }
-//func BenchmarkBatchedAppendSnappyRLP256(b *testing.B)  { batchRlpBench(b, 256, false) }
-//func BenchmarkBatchedAppendSnappyRLP1024(b *testing.B) { batchRlpBench(b, 1024, false) }
-//func BenchmarkBatchedAppendSnappyRLP4096(b *testing.B) { batchRlpBench(b, 4096, false) }
+func BenchmarkBatchAppendRLP32(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 32, true) })
+	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 32, false) })
+}
+func BenchmarkBatchAppendRLP256(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 256, true) })
+	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 265, false) })
+}
+func BenchmarkBatchAppendRLP1024(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 1024, true) })
+	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 1024, false) })
+}
+func BenchmarkBatchAppendRLP4096(b *testing.B) {
+	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 4096, true) })
+	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 4096, false) })
+}
 
 func tableBench(b *testing.B, nbytes int, noCompression bool) {
 	dir, err := ioutil.TempDir("./", "freezer-benchmark")
