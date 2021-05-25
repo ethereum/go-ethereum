@@ -30,7 +30,7 @@ const (
 	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
 )
 
-// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929"
+// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 //
 // When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
 // If it is not, charge an additional COLD_SLOAD_COST gas, and add the pair to accessed_storage_keys.
@@ -177,10 +177,15 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		addr := common.Address(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
-		if !evm.StateDB.AddressInAccessList(addr) {
+		warmAccess := evm.StateDB.AddressInAccessList(addr)
+		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
+		// the cost to charge for cold access, if any, is Cold - Warm
+		coldCost := ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929
+		if !warmAccess {
 			evm.StateDB.AddAddressToAccessList(addr)
-			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost
-			if !contract.UseGas(ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929) {
+			// Charge the remaining difference here already, to correctly calculate available
+			// gas for call
+			if !contract.UseGas(coldCost) {
 				return 0, ErrOutOfGas
 			}
 		}
@@ -189,7 +194,16 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 		// - transfer value
 		// - memory expansion
 		// - 63/64ths rule
-		return oldCalculator(evm, contract, stack, mem, memorySize)
+		gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
+		if warmAccess || err != nil {
+			return gas, err
+		}
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		contract.Gas += coldCost
+		return gas + coldCost, nil
 	}
 }
 

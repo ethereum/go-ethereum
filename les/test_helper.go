@@ -45,10 +45,10 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -189,7 +189,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) *clientHandler {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -245,10 +245,12 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		client.oracle.Start(backend)
 	}
 	client.handler.start()
-	return client.handler
+	return client.handler, func() {
+		client.handler.stop()
+	}
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend, func()) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
@@ -284,7 +286,6 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		}
 		oracle = checkpointoracle.New(checkpointConfig, getLocal)
 	}
-	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	server := &LesServer{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),
@@ -296,8 +297,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			oracle:      oracle,
 			closeCh:     make(chan struct{}),
 		},
-		ns:           ns,
-		broadcaster:  newBroadcaster(ns),
+		peers:        newClientPeerSet(),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -307,16 +307,21 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	}
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
-	server.clientPool = newClientPool(ns, db, testBufRecharge, defaultConnectedBias, clock, func(id enode.ID) {})
-	server.clientPool.setLimits(10000, 10000) // Assign enough capacity for clientpool
+	server.clientPool = vfs.NewClientPool(db, testBufRecharge, defaultConnectedBias, clock, alwaysTrueFn)
+	server.clientPool.Start()
+	server.clientPool.SetLimits(10000, 10000) // Assign enough capacity for clientpool
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
 	}
 	server.servingQueue.setThreads(4)
-	ns.Start()
 	server.handler.start()
-	return server.handler, simulation
+	closer := func() { server.Stop() }
+	return server.handler, simulation, closer
+}
+
+func alwaysTrueFn() bool {
+	return true
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.
@@ -598,8 +603,8 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b := newTestServerHandler(config.blocks, sindexers, sdb, clock)
-	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
+	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
+	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
@@ -656,11 +661,18 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		cbIndexer.Close()
 		scIndexer.Close()
 		sbIndexer.Close()
+		dist.close()
+		serverClose()
 		b.Close()
+		clientClose()
 	}
 	return s, c, teardown
 }
 
-func NewFuzzerPeer(version int) *clientPeer {
-	return newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+// NewFuzzerPeer creates a client peer for test purposes, and also returns
+// a function to close the peer: this is needed to avoid goroutine leaks in the
+// exec queue.
+func NewFuzzerPeer(version int) (p *clientPeer, closer func()) {
+	p = newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+	return p, func() { p.peerCommons.close() }
 }

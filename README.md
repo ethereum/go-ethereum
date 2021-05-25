@@ -4,7 +4,7 @@ Official Golang implementation of the Matic protocol (fork of Go Ethereum - http
 
 ## Building the source
 
-Building `bor` requires both a Go (version 1.13 or later) and a C compiler. You can install
+Building `bor` requires both a Go (version 1.14 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
 ```shell
