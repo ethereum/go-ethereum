@@ -19,6 +19,7 @@ package ethtest
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -65,35 +66,73 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 	}, nil
 }
 
-func (s *Suite) EthTests() []utesting.Test {
+func (s *Suite) AllEthTests() []utesting.Test {
 	return []utesting.Test{
 		// status
-		{Name: "Status", Fn: s.TestStatus},
-		{Name: "Status_66", Fn: s.TestStatus_66},
+		{Name: "TestStatus", Fn: s.TestStatus},
+		{Name: "TestStatus_66", Fn: s.TestStatus_66},
 		// get block headers
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestGetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
 		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
 		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
 		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
 		// get block bodies
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestGetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
 		// broadcast
-		{Name: "Broadcast", Fn: s.TestBroadcast},
-		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
+		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestBroadcast_66", Fn: s.TestBroadcast_66},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestOldAnnounce_66", Fn: s.TestOldAnnounce_66},
 		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
-		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
 		// test transactions
-		{Name: "TestTransactions", Fn: s.TestTransaction},
-		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
-		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
-		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
+		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestLargeTxRequest_66", Fn: s.TestLargeTxRequest_66},
+		{Name: "TestNewPooledTxs_66", Fn: s.TestNewPooledTxs_66},
+	}
+}
+
+func (s *Suite) EthTests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "TestStatus", Fn: s.TestStatus},
+		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+	}
+}
+
+func (s *Suite) Eth66Tests() []utesting.Test {
+	return []utesting.Test{
+		// only proceed with eth66 test suite if node supports eth 66 protocol
+		{Name: "TestStatus_66", Fn: s.TestStatus_66},
+		{Name: "TestGetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		{Name: "TestGetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		{Name: "TestBroadcast_66", Fn: s.TestBroadcast_66},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus_66},
+		{Name: "TestTransaction_66", Fn: s.TestTransaction_66},
+		{Name: "TestMaliciousTx_66", Fn: s.TestMaliciousTx_66},
+		{Name: "TestLargeTxRequest_66", Fn: s.TestLargeTxRequest_66},
+		{Name: "TestNewPooledTxs_66", Fn: s.TestNewPooledTxs_66},
 	}
 }
 
@@ -105,6 +144,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
+	defer conn.Close()
 	// get protoHandshake
 	conn.handshake(t)
 	// get status
@@ -122,10 +162,11 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
+	defer conn.Close()
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
-		ProtocolVersion: uint32(conn.ethProtocolVersion),
+		ProtocolVersion: uint32(conn.negotiatedProtoVersion),
 		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
 		TD:              largeNumber(2),
 		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
@@ -156,6 +197,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
+	defer conn.Close()
 
 	conn.handshake(t)
 	conn.statusExchange(t, s.chain, nil)
@@ -194,6 +236,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
+	defer conn.Close()
 
 	conn.handshake(t)
 	conn.statusExchange(t, s.chain, nil)
@@ -217,19 +260,28 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // TestBroadcast tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
+	s.sendNextBlock(t)
+}
+
+func (s *Suite) sendNextBlock(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
+	defer sendConn.Close()
+	defer receiveConn.Close()
+
+	// create new block announcement
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[nextBlock],
 		TD:    s.fullChain.TD(nextBlock + 1),
 	}
+	// send announcement and wait for node to request the header
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
+	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 }
 
 // TestMaliciousHandshake tries to send malicious data during the handshake.
@@ -238,6 +290,7 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
+	defer conn.Close()
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&conn.ourKey.PublicKey)[1:]
 	handshakes := []*Hello{
@@ -337,23 +390,58 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		switch msg := sendConn.ReadAndServe(s.chain, timeout).(type) {
+		switch msg := sendConn.ReadAndServe(s.chain, time.Second*8).(type) {
 		case *Disconnect:
 		case *Error:
 			break
 		default:
 			t.Fatalf("unexpected: %s wanted disconnect", pretty.Sdump(msg))
 		}
+		sendConn.Close()
 	}
 	// Test the last block as a valid block
-	sendConn := s.setupConnection(t)
-	receiveConn := s.setupConnection(t)
-	s.testAnnounce(t, sendConn, receiveConn, blocks[3])
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
-	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
-		t.Fatal(err)
+	s.sendNextBlock(t)
+}
+
+func (s *Suite) TestOldAnnounce(t *utesting.T) {
+	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	defer sendConn.Close()
+	defer recvConn.Close()
+
+	s.oldAnnounce(t, sendConn, recvConn)
+}
+
+func (s *Suite) oldAnnounce(t *utesting.T, sendConn, receiveConn *Conn) {
+	oldBlockAnnounce := &NewBlock{
+		Block: s.chain.blocks[len(s.chain.blocks)/2],
+		TD:    s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
+	}
+
+	if err := sendConn.Write(oldBlockAnnounce); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+
+	switch msg := receiveConn.ReadAndServe(s.chain, time.Second*8).(type) {
+	case *NewBlock:
+		block := *msg
+		if block.Block.Hash() == oldBlockAnnounce.Block.Hash() {
+			t.Fatalf("unexpected: block propagated: %s", pretty.Sdump(msg))
+		}
+	case *NewBlockHashes:
+		hashes := *msg
+		for _, hash := range hashes {
+			if hash.Hash == oldBlockAnnounce.Block.Hash() {
+				t.Fatalf("unexpected: block announced: %s", pretty.Sdump(msg))
+			}
+		}
+	case *Error:
+		errMsg := *msg
+		// check to make sure error is timeout (propagation didn't come through == test successful)
+		if !strings.Contains(errMsg.String(), "timeout") {
+			t.Fatalf("unexpected error: %v", pretty.Sdump(msg))
+		}
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -366,7 +454,6 @@ func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAn
 }
 
 func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
-	timeout := 20 * time.Second
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
 		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
@@ -421,6 +508,7 @@ func (s *Suite) dial() (*Conn, error) {
 		{Name: "eth", Version: 64},
 		{Name: "eth", Version: 65},
 	}
+	conn.ourHighestProtoVersion = 65
 	return &conn, nil
 }
 
@@ -436,15 +524,27 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 }
 
 func (s *Suite) TestMaliciousTx(t *utesting.T) {
-	tests := []*types.Transaction{
+	badTxs := []*types.Transaction{
 		getOldTxFromChain(t, s),
 		invalidNonceTx(t, s),
 		hugeAmount(t, s),
 		hugeGasPrice(t, s),
 		hugeData(t, s),
 	}
-	for i, tx := range tests {
+	sendConn := s.setupConnection(t)
+	defer sendConn.Close()
+	// set up receiving connection before sending txs to make sure
+	// no announcements are missed
+	recvConn := s.setupConnection(t)
+	defer recvConn.Close()
+
+	for i, tx := range badTxs {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
-		sendFailingTx(t, s, tx)
+		if err := sendConn.Write(&Transactions{tx}); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+
 	}
+	// check to make sure bad txs aren't propagated
+	waitForTxPropagation(t, s, badTxs, recvConn)
 }

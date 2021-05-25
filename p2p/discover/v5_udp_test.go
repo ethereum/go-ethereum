@@ -597,6 +597,38 @@ func TestUDPv5_LocalNode(t *testing.T) {
 	}
 }
 
+func TestUDPv5_PingWithIPV4MappedAddress(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	rawIP := net.IPv4(0xFF, 0x12, 0x33, 0xE5)
+	test.remoteaddr = &net.UDPAddr{
+		IP:   rawIP.To16(),
+		Port: 0,
+	}
+	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
+	done := make(chan struct{}, 1)
+
+	// This handler will truncate the ipv4-mapped in ipv6 address.
+	go func() {
+		test.udp.handlePing(&v5wire.Ping{ENRSeq: 1}, remote.ID(), test.remoteaddr)
+		done <- struct{}{}
+	}()
+	test.waitPacketOut(func(p *v5wire.Pong, addr *net.UDPAddr, _ v5wire.Nonce) {
+		if len(p.ToIP) == net.IPv6len {
+			t.Error("Received untruncated ip address")
+		}
+		if len(p.ToIP) != net.IPv4len {
+			t.Errorf("Received ip address with incorrect length: %d", len(p.ToIP))
+		}
+		if !p.ToIP.Equal(rawIP) {
+			t.Errorf("Received incorrect ip address: wanted %s but received %s", rawIP.String(), p.ToIP.String())
+		}
+	})
+	<-done
+}
+
 // udpV5Test is the framework for all tests above.
 // It runs the UDPv5 transport on a virtual socket and allows testing outgoing packets.
 type udpV5Test struct {

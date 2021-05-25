@@ -256,9 +256,9 @@ Error code: 4
 Another thing that can be done, is to chain invocations:
 ```
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [01-21|22:41:22.963] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [01-21|22:41:22.966] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [01-21|22:41:22.967] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [01-21|22:41:22.963] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [01-21|22:41:22.966] rejected tx                              index=0 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [01-21|22:41:22.967] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
