@@ -301,6 +301,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		accountSnaps    stat
 		storageSnaps    stat
 		preimages       stat
+		configs		stat
 		bloomBits       stat
 		cliqueSnaps     stat
 
@@ -355,6 +356,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			storageSnaps.Add(size)
 		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
 			preimages.Add(size)
+		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
+			configs.Add(size)
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
@@ -421,6 +424,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Trie nodes", tries.Size(), tries.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
+		{"Key-Value store", "Database config", configs.Size(), configs.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
