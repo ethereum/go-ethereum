@@ -36,6 +36,7 @@ import (
 var testTxPoolConfig = TxPoolConfig{
 	minGasPrice:      big.NewInt(1),
 	MaxTxCount:       1000,
+	MinTxCount:       750,
 	pendingBlockSize: 16,
 	dbPath:           os.TempDir() + "/geth-test",
 }

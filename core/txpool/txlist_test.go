@@ -251,6 +251,7 @@ func TestTxListPrune(t *testing.T) {
 	if txlist.Len() != 101 {
 		t.Fatal("TxList has invalid length")
 	}
+	printTxList(*txlist)
 	// Prune me baby one more time
 	pruned := txlist.Prune()
 	if txlist.Len() != 75 {
@@ -265,6 +266,24 @@ func TestTxListPrune(t *testing.T) {
 	}
 	assertTxListOrder(t, txlist)
 	assertTxListOrder(t, pruned)
+
+	printTxList(*txlist)
+	printTxList(*pruned)
+	txs := txlist.Peek(txlist.Len())
+	for _, tx := range txs {
+		fmt.Println(tx.Nonce())
+	}
+	if len(txs) != 75 {
+		t.Fatalf("Invalid length: %v", len(txs))
+	}
+	fmt.Println("")
+	txs = pruned.Peek(pruned.Len())
+	for _, tx := range txs {
+		fmt.Println(tx.Nonce())
+	}
+	if len(txs) != 26 {
+		t.Fatalf("Invalid length: %v", len(txs))
+	}
 }
 
 func filledRndTxList(N int) *txList {

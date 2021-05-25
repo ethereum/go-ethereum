@@ -223,8 +223,10 @@ func (l *txList) Peek(len int) types.Transactions {
 		size = l.len
 	}
 	t := make(types.Transactions, 0, size)
-	for new := l.head; new != nil; new = new.next {
+	i := 0
+	for new := l.head; new != nil && i <= size; new = new.next {
 		t = append(t, new.tx)
+		i++
 	}
 	return t
 }
@@ -239,12 +241,13 @@ func (l *txList) Prune() *txList {
 	l.lowestEntry = nil
 	res := newTxList(l.maxLen)
 	old := l.head
-	for i := 0; i < len; i++ {
+	for i := 0; i < len-1; i++ {
 		old = old.next
 	}
 	res.head = old.next
 	res.bottom = l.bottom
 	l.bottom = old
+	l.bottom.next = nil
 	res.len = l.len - len
 	l.len = len
 	return &res

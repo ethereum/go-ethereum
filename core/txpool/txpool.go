@@ -66,7 +66,8 @@ type TxPoolConfig struct {
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 
 	PriceBump  int
-	MaxTxCount int
+	MaxTxCount int // Max amount of transactions held in memory
+	MinTxCount int // Amount of transactions that should be held in memory
 	NoLocals   bool
 	dbPath     string
 
@@ -105,7 +106,7 @@ type TxPool struct {
 	localTxs     txList
 	remoteTxs    txList
 	gappedTxs    map[common.Address]*txHeap
-	dbTxs        map[common.Address]nonceHeap
+	dbTxs        dbHeap
 	database     bagdb.Database
 	// global txpool mutex
 	mu sync.RWMutex
@@ -130,11 +131,13 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		all:                newTxLookup(),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		ungappedAccountsCh: make(chan *txEntry, txEntryChanSize),
-		pruneCh:            make(chan struct{}),
+		pruneCh:            make(chan struct{}, 1),
+		unPruneCh:          make(chan struct{}),
 		localSenders:       newSenderSet(),
 		gappedTxs:          make(map[common.Address]*txHeap),
 		localTxs:           newTxList(config.MaxTxCount),
 		remoteTxs:          newTxList(config.MaxTxCount),
+		dbTxs:              newDbHeap(),
 		database:           db,
 	}
 
@@ -172,7 +175,9 @@ func (pool *TxPool) loop() {
 			// TODO properly lock the pool
 			pool.addUngappedTx(entry.tx.Nonce()+1, entry.sender)
 		// prune in memory transactions to disk
-		case <-pool.pruneCh:
+		case e := <-pool.pruneCh:
+			_ = e
+			fmt.Print("Tick\n")
 			pool.mu.Lock()
 			txs := pool.remoteTxs.Prune()
 			pool.mu.Unlock()
@@ -180,32 +185,45 @@ func (pool *TxPool) loop() {
 				// already pruned, continue
 				continue
 			}
-			fmt.Print("Pruning\n")
-			for _, t := range txs.Peek(txs.Len()) {
+			fmt.Printf("Pruning: %v, remotetx: %v\n", txs.Len(), pool.remoteTxs.Len())
+			transactions := txs.Peek(txs.Len() + 1)
+			for _, t := range transactions {
 				marshalled, err := t.MarshalBinary()
 				if err != nil {
 					panic(err)
 				}
 				key := pool.database.Put(marshalled)
 				pool.all.Update(t.Hash(), transactionOrNumber{number: &key}, false)
+				entry, _ := pool.txToTxEntry(t)
+				pool.dbTxs.Add(entry, key)
 			}
+			fmt.Printf("Pruned: %v\n", pool.dbTxs.Len())
 		case <-pool.unPruneCh:
-			for _, t := range pool.all.remotes {
-				if i, ok := t.Number(); ok {
-					val, err := pool.database.Get(i)
-					if err != nil {
-						panic(err)
-					}
-					pool.database.Delete(i)
-					var tx *types.Transaction
-					if err := tx.UnmarshalBinary(val); err != nil {
-						panic(err)
-					}
-					pool.all.Update(tx.Hash(), transactionOrNumber{tx: t.tx}, false)
-					pool.remoteTxs.Add(&txEntry{})
-				}
+			fmt.Printf("UnPrune: %v\n", pool.remoteTxs.Len())
+			toFetch := pool.config.MinTxCount - pool.remoteTxs.Len()
+			if toFetch <= 0 {
+				// nothing to unprune anymore
+				continue
 			}
-			// TODO handle reads from disk
+			pool.mu.Lock()
+			fmt.Printf("Fetching: %v from %v\n", toFetch, pool.dbTxs.Len())
+			elements := pool.dbTxs.Pop(toFetch)
+			for _, t := range elements {
+				val, err := pool.database.Get(t)
+				if err != nil {
+					panic(err)
+				}
+				tx := new(types.Transaction)
+				if err := tx.UnmarshalBinary(val); err != nil {
+					panic(err)
+				}
+				entry, _ := pool.txToTxEntry(tx)
+				pool.remoteTxs.Add(entry)
+				pool.all.Update(tx.Hash(), transactionOrNumber{tx: tx}, false)
+				pool.database.Delete(t)
+			}
+			fmt.Printf("done: %v, elements %v\n", pool.remoteTxs.Len(), len(elements))
+			pool.mu.Unlock()
 		}
 	}
 }
@@ -233,7 +251,8 @@ func (pool *TxPool) runReorg(oldHead, newHead *types.Header) {
 
 	// Demote unexecutables
 	maxNonces := make(map[common.Address]uint64)
-	for i := 0; i < pool.remoteTxs.Len(); i++ {
+	length := pool.remoteTxs.Len()
+	for i := 0; i < length; i++ {
 		// Remove all txs with low nonces
 		if e := pool.remoteTxs.Delete(func(e *txEntry) bool {
 			nonce := pool.pendingNonces.get(e.sender)
@@ -257,6 +276,9 @@ func (pool *TxPool) runReorg(oldHead, newHead *types.Header) {
 	// Update pending nonces
 	for addr, nonce := range maxNonces {
 		pool.pendingNonces.set(addr, nonce+1)
+	}
+	if pool.remoteTxs.Len() < pool.config.MinTxCount {
+		pool.unPruneCh <- struct{}{}
 	}
 
 	// TODO maybe truncate here
@@ -505,19 +527,26 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
+// If the transactions triggered a prune request, this triggers a pruning.
 func (pool *TxPool) addTxsLocked(txs []*txEntry, local bool) []error {
-	errs := make([]error, len(txs))
-
-	var succTxs []*types.Transaction
+	var (
+		errs    = make([]error, len(txs))
+		succTxs []*types.Transaction
+		prune   = false
+	)
 	for i, tx := range txs {
-		_, err := pool.add(tx, local)
+		_, shouldPrune, err := pool.add(tx, local)
 		errs[i] = err
 		if err != nil {
 			succTxs = append(succTxs, tx.tx)
 		}
+		prune = prune || shouldPrune
 	}
 	if len(succTxs) > 0 {
 		pool.txFeed.Send(core.NewTxsEvent{Txs: succTxs})
+	}
+	if prune {
+		pool.triggerPrune()
 	}
 	return errs
 }
@@ -529,12 +558,12 @@ func (pool *TxPool) addTxsLocked(txs []*txEntry, local bool) []error {
 // If a newly added transaction is marked as local, its sending account will be
 // whitelisted, preventing any associated transaction from being dropped out of the pool
 // due to pricing constraints.
-func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
+func (pool *TxPool) add(tx *txEntry, local bool) (replaced bool, shouldPrune bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.tx.Hash()
 	if pool.all.Has(hash) {
 		log.Trace("Discarding already known transaction", "hash", hash)
-		return false, core.ErrAlreadyKnown
+		return false, false, core.ErrAlreadyKnown
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
@@ -544,7 +573,7 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx.tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
-		return false, err
+		return false, false, err
 	}
 
 	// If the sender was not in the local senders,
@@ -568,7 +597,7 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// If it is a queued transaction, we can write it to disk
 	if isGapped {
 		fmt.Println("3")
-		return false, pool.addGapped(tx, isLocal)
+		return false, false, pool.addGapped(tx, isLocal)
 	}
 	// If this is a replacement transaction, we have to replace it
 	if isReplacement {
@@ -579,10 +608,11 @@ func (pool *TxPool) add(tx *txEntry, local bool) (bool, error) {
 	// we need to insert it and maybe add some now valid transactions
 	// from the queued list into the pool
 	fmt.Println("4")
-	return false, pool.addContinuousTx(tx, isLocal)
+	shouldPrune, err = pool.addContinuousTx(tx, isLocal)
+	return false, shouldPrune, err
 }
 
-func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
+func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, bool, error) {
 	// If the transaction is local, insert it into the local pool
 	if isLocal {
 		replaced := false
@@ -598,12 +628,12 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 				// Re-add the deleted tx to the pool
 				pool.localTxs.Add(entry)
 				log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-				return false, core.ErrReplaceUnderpriced
+				return false, false, core.ErrReplaceUnderpriced
 			}
 		}
 		pool.localTxs.Add(tx)
 		pool.all.Add(tx.tx, true)
-		return replaced, nil
+		return replaced, false, nil
 	}
 	// If the tx pays less than what we have in memory
 	// we can directly replace it on disk.
@@ -623,15 +653,12 @@ func (pool *TxPool) addReplacementTx(tx *txEntry, isLocal bool) (bool, error) {
 			// Re-add the deleted tx to the pool
 			pool.remoteTxs.Add(entry)
 			log.Trace("Discarding underpriced transaction", "hash", tx.tx.Hash(), "price", tx.tx.GasPrice())
-			return false, core.ErrReplaceUnderpriced
+			return false, false, core.ErrReplaceUnderpriced
 		}
 	}
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
-	if shouldPrune {
-		pool.pruneCh <- struct{}{}
-	}
-	return replaced, nil
+	return replaced, shouldPrune, nil
 }
 
 func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
@@ -652,20 +679,25 @@ func (pool *TxPool) addGapped(tx *txEntry, local bool) error {
 	return nil
 }
 
-func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) error {
+func (pool *TxPool) addContinuousTx(tx *txEntry, local bool) (bool, error) {
 	if local {
 		pool.localTxs.Add(tx)
 		pool.all.Add(tx.tx, true)
 		pool.pendingNonces.set(tx.sender, tx.tx.Nonce()+1)
-		return nil
+		return false, nil
 	}
 	shouldPrune := pool.remoteTxs.Add(tx)
 	pool.all.Add(tx.tx, false)
-	if shouldPrune {
-		pool.pruneCh <- struct{}{}
-	}
 	// TODO schedule the pool to add the ungapped transactions (and wait for them if sync is true)
-	return pool.addUngappedTx(tx.tx.Nonce()+1, tx.sender)
+	return shouldPrune, pool.addUngappedTx(tx.tx.Nonce()+1, tx.sender)
+}
+
+func (pool *TxPool) triggerPrune() {
+	fmt.Println("Triggering pruning")
+	select {
+	case pool.pruneCh <- struct{}{}:
+	default:
+	}
 }
 
 func (pool *TxPool) addUngappedTx(nonce uint64, sender common.Address) error {

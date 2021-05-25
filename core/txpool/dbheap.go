@@ -27,7 +27,7 @@ type dbTx struct {
 	nonce uint64
 	price *big.Int
 	slot  uint64
-	addr  *common.Address
+	addr  common.Address
 }
 
 type dbNonceList []dbTx
@@ -55,7 +55,12 @@ type dbHeap struct {
 	m map[common.Address]dbNonceList
 }
 
-// Add adds a new entry to the heap
+func newDbHeap() dbHeap {
+	return dbHeap{m: make(map[common.Address]dbNonceList)}
+}
+
+// Add adds a new entry to the heap.
+// Expects the transactions to be ordered between calls.
 func (h *dbHeap) Add(entry *txEntry, dbSlot uint64) {
 	h.m[entry.sender] = append(h.m[entry.sender], dbTx{nonce: entry.tx.Nonce(), price: entry.price, slot: dbSlot})
 }
@@ -67,20 +72,36 @@ func (h *dbHeap) Pop(length int) []uint64 {
 	heads := make(dbNonceList, 0, len(h.m))
 	for sender, list := range h.m {
 		elem := list[0]
-		elem.addr = &sender
+		elem.addr = sender
 		heads = append(heads, elem)
 		h.m[sender] = list[1:]
 	}
 	heap.Init(&heads)
-	for i := 0; i < length && len(h.m) != 0; i++ {
+	for i := 0; i < length && len(h.m) > 0 && len(heads) > 0; i++ {
 		acc := heads[0].addr
-		if txs, ok := h.m[*acc]; ok && len(txs) > 0 {
-			heads[0], h.m[*acc] = txs[0], txs[1:]
+		results = append(results, heads[0].slot)
+		if txs, ok := h.m[acc]; ok && len(txs) > 0 {
+			heads[0], h.m[acc] = txs[0], txs[1:]
+			heads[0].addr = acc
 			heap.Fix(&heads, 0)
 		} else {
-			delete(h.m, *acc)
+			delete(h.m, acc)
 			heap.Pop(&heads)
 		}
 	}
+	// Write back heads for next pop operation
+	for _, head := range heads {
+		h.m[head.addr] = append(h.m[head.addr], dbTx{})
+		copy(h.m[head.addr][1:], h.m[head.addr])
+		h.m[head.addr][0] = head
+	}
 	return results
+}
+
+func (h *dbHeap) Len() int {
+	len := 0
+	for _, list := range h.m {
+		len += list.Len()
+	}
+	return len
 }
