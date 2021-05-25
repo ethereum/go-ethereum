@@ -290,12 +290,16 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk trashing
-	preimages := make(map[common.Hash][]byte)
-
+	// Import the snapshot in batches to prevent disk trashing
+	var (
+		count     int64
+		start     = time.Now()
+		logged    = time.Now()
+		preimages = make(map[common.Hash][]byte)
+	)
 	for {
 		// Read the next entry and ensure it's not junk
 		var blob []byte
-
 		if err := stream.Decode(&blob); err != nil {
 			if err == io.EOF {
 				break
@@ -308,50 +312,23 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[common.Hash][]byte)
 		}
+		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+			log.Info("Importing preimage data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+		count += 1
 	}
 	// Flush the last batch preimage data
 	if len(preimages) > 0 {
 		rawdb.WritePreimages(db, preimages)
 	}
-	log.Info("Imported preimages", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
-}
-
-// ExportPreimages exports all known hash preimages into the specified file,
-// truncating any data already present in the file.
-func ExportPreimages(db ethdb.Database, fn string) error {
-	log.Info("Exporting preimages", "file", fn)
-	start := time.Now()
-
-	// Open the file handle and potentially wrap with a gzip stream
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	var writer io.Writer = fh
-	if strings.HasSuffix(fn, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
-	}
-	// Iterate over the preimages and export them
-	it := db.NewIterator([]byte("secure-key-"), nil)
-	defer it.Release()
-
-	for it.Next() {
-		if err := rlp.Encode(writer, it.Value()); err != nil {
-			return err
-		}
-	}
-	log.Info("Exported preimages", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Imported preimages", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 // ImportSnapshot imports a batch of snapshot data into the database
 func ImportSnapshot(db ethdb.Database, fn string) error {
 	log.Info("Importing snapshot data", "file", fn)
-	start := time.Now()
 
 	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
@@ -369,7 +346,12 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the snapshot in batches to prevent disk trashing
-	batch := db.NewBatch()
+	var (
+		count  int64
+		start  = time.Now()
+		logged = time.Now()
+		batch  = db.NewBatch()
+	)
 	for {
 		// Read the next entry and ensure it's not junk
 		var blob []byte
@@ -379,11 +361,23 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 			}
 			return err
 		}
-		if len(blob) < common.HashLength+1 {
+		if len(blob) == 0 {
 			continue
 		}
-		key := blob[:common.HashLength+1]
-		val := blob[common.HashLength+1:]
+		var key, val []byte
+		if blob[0] == byte(0) {
+			if len(blob) < common.HashLength+len(rawdb.SnapshotAccountPrefix)+1 {
+				continue
+			}
+			key = blob[1 : common.HashLength+2]
+			val = blob[common.HashLength+2:]
+		} else {
+			if len(blob) < 2*common.HashLength+len(rawdb.SnapshotStoragePrefix)+1 {
+				continue
+			}
+			key = blob[1 : common.HashLength*2+2]
+			val = blob[common.HashLength*2+2:]
+		}
 		batch.Put(key, val)
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -391,6 +385,11 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 			}
 			batch.Reset()
 		}
+		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+			log.Info("Importing snapshot data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+		count += 1
 	}
 	// Flush the last batch snapshot data
 	if batch.ValueSize() > 0 {
@@ -398,15 +397,14 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 			return err
 		}
 	}
-	log.Info("Imported snapshot data", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Imported snapshot data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
-// ExportSnapshot exports all known snapshot data into the given file,
+// ExportChaindata exports all known chain data into the given file,
 // truncating any data already present in the file.
-func ExportSnapshot(db ethdb.Database, fn string) error {
-	log.Info("Exporting snapshot data", "file", fn)
-	start := time.Now()
+func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key, val []byte) []byte, prefixes [][]byte) error {
+	log.Info("Exporting chain data", "file", fn, "kind", kind)
 
 	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -420,23 +418,26 @@ func ExportSnapshot(db ethdb.Database, fn string) error {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-	// Iterate over the snapshot and export them
-	it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	for it.Next() {
-		if err := rlp.Encode(writer, append(it.Key(), it.Value()...)); err != nil {
-			return err
+	var (
+		count  int64
+		start  = time.Now()
+		logged = time.Now()
+	)
+	for _, prefix := range prefixes {
+		it := db.NewIterator(prefix, nil)
+		for it.Next() {
+			blob := encode(it.Key(), it.Value())
+			if err := rlp.Encode(writer, blob); err != nil {
+				return err
+			}
+			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+				log.Info("Exporting chain data", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+			count += 1
 		}
+		it.Release()
 	}
-	it.Release()
-
-	it = db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
-	for it.Next() {
-		if err := rlp.Encode(writer, append(it.Key(), it.Value()...)); err != nil {
-			return err
-		}
-	}
-	it.Release()
-
-	log.Info("Exported snapshot data", "file", fn, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

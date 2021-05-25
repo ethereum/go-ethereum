@@ -366,12 +366,12 @@ func exportPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
+	exporter := chainExporters["preimage"]
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return utils.ExportPreimages(db, ctx.Args().First())
+	return utils.ExportChaindata(db, ctx.Args().First(), "preimage", exporter.encoder, exporter.prefixes)
 }
 
 func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {

@@ -552,12 +552,6 @@ var importFuncs = map[string]func(db ethdb.Database, fn string) error{
 	"snapshot": utils.ImportSnapshot,
 }
 
-// exportFuncs defines all supported chain data export functions.
-var exportFuncs = map[string]func(db ethdb.Database, fn string) error{
-	"preimage": utils.ExportPreimages,
-	"snapshot": utils.ExportSnapshot,
-}
-
 func importChaindata(ctx *cli.Context) error {
 	if ctx.NArg() < 2 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
@@ -571,13 +565,40 @@ func importChaindata(ctx *cli.Context) error {
 		for key := range importFuncs {
 			keys = append(keys, key)
 		}
-		return fmt.Errorf("invalid data type %s, all supported types: %s", kind, strings.Join(keys, ", "))
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(keys, ", "))
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	return fn(db, ctx.Args().Get(1))
+}
+
+// exporter defines all the necessary information for chain data export.
+type exporter struct {
+	encoder  func(key []byte, val []byte) []byte
+	prefixes [][]byte
+}
+
+// chainExporters defines the export scheme for all exportable chain data.
+var chainExporters = map[string]*exporter{
+	"preimage": {
+		encoder: func(key []byte, val []byte) []byte {
+			return val // The key can be derived by keccak56(val).
+		},
+		prefixes: [][]byte{rawdb.PreimagePrefix},
+	},
+	"snapshot": {
+		encoder: func(key []byte, val []byte) []byte {
+			// The prefix used to identify the snapshot data type,
+			// account snapshot or storage snapshot.
+			if len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+				return append([]byte{0}, append(key, val...))
+			}
+			return append([]byte{1}, append(key, val...))
+		},
+		prefixes: [][]byte{rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix},
+	},
 }
 
 func exportChaindata(ctx *cli.Context) error {
@@ -587,17 +608,17 @@ func exportChaindata(ctx *cli.Context) error {
 	// Parse the required chain data type, make sure it's supported.
 	kind := ctx.Args().Get(0)
 	kind = strings.ToLower(strings.Trim(kind, " "))
-	fn, ok := exportFuncs[kind]
+	exporter, ok := chainExporters[kind]
 	if !ok {
-		var keys []string
-		for key := range exportFuncs {
-			keys = append(keys, key)
+		var kinds []string
+		for kind := range chainExporters {
+			kinds = append(kinds, kind)
 		}
-		return fmt.Errorf("invalid data type %s, all supported types: %s", kind, strings.Join(keys, ", "))
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return fn(db, ctx.Args().Get(1))
+	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.encoder, exporter.prefixes)
 }
