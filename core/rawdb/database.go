@@ -301,7 +301,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		accountSnaps    stat
 		storageSnaps    stat
 		preimages       stat
-		configs		stat
+		configs         stat
 		bloomBits       stat
 		cliqueSnaps     stat
 
