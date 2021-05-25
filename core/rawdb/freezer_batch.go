@@ -63,11 +63,17 @@ func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
 	s0 := batch.buf.Len()
 	if batch.sb != nil {
 		// RLP-encode
-		rlp.Encode(batch.sb, data)
-		// Pass to
-		batch.sb.WriteTo(&batch.buf)
+		if err := rlp.Encode(batch.sb, data); err != nil {
+			return err
+		}
+		// Snappy-encode to our buf
+		if err := batch.sb.WriteTo(&batch.buf); err != nil {
+			return err
+		}
 	} else {
-		rlp.Encode(&batch.buf, data)
+		if err := rlp.Encode(&batch.buf, data); err != nil {
+			return err
+		}
 	}
 	s1 := batch.buf.Len()
 	batch.sizes = append(batch.sizes, uint32(s1-s0))
@@ -87,9 +93,13 @@ func (batch *freezerBatch) Append(item uint64, blob []byte) error {
 	}
 	s0 := batch.buf.Len()
 	if batch.sb != nil {
-		batch.sb.WriteDirectTo(&batch.buf, blob)
+		if err := batch.sb.WriteDirectTo(&batch.buf, blob); err != nil {
+			return err
+		}
 	} else {
-		batch.buf.Write(blob)
+		if _, err := batch.buf.Write(blob); err != nil {
+			return err
+		}
 	}
 	s1 := batch.buf.Len()
 	batch.sizes = append(batch.sizes, uint32(s1-s0))

@@ -37,14 +37,14 @@ func (s *BufferedSnapWriter) Write(p []byte) (n int, err error) {
 
 // WriteTo snappy-compresses the data, writes to the given writer and truncates
 // instantiated buffers.
-func (s *BufferedSnapWriter) WriteTo(w io.Writer) {
-	s.WriteDirectTo(w, s.buf.Bytes())
-	s.buf.Reset()
+func (s *BufferedSnapWriter) WriteTo(w io.Writer) error {
+	defer s.buf.Reset()
+	return s.WriteDirectTo(w, s.buf.Bytes())
 }
 
 // WriteDirectTo snappy-compresses the data, writes to the given writer.
 // This method writes _only_ the input 'buf'.
-func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) {
+func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) error {
 	// The snappy library does not care what the capacity of the buffer is,
 	// but only checks the length. If the length is too small, it will
 	// allocate a brand new buffer.
@@ -57,6 +57,7 @@ func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) {
 		s.dst = s.dst[:n]
 	}
 	s.dst = snappy.Encode(s.dst, data)
-	w.Write(s.dst)
+	_, err := w.Write(s.dst)
 	s.dst = s.dst[:0]
+	return err
 }
