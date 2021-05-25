@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	syscall "golang.org/x/sys/unix"
 	"io"
 	"net"
 	"net/http"
@@ -32,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"

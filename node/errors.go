@@ -19,8 +19,8 @@ package node
 import (
 	"errors"
 	"fmt"
-	syscall "golang.org/x/sys/unix"
 	"reflect"
+	"syscall"
 )
 
 var (

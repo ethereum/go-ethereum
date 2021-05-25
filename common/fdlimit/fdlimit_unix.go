@@ -18,7 +18,7 @@
 
 package fdlimit
 
-import syscall "golang.org/x/sys/unix"
+import "syscall"
 
 // Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.

@@ -19,9 +19,9 @@
 package netutil
 
 import (
-	syscall "golang.org/x/sys/unix"
 	"net"
 	"os"
+	"syscall"
 )
 
 const _WSAEMSGSIZE = syscall.Errno(10040)
