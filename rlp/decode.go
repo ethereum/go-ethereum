@@ -220,20 +220,51 @@ func decodeBigIntNoPtr(s *Stream, val reflect.Value) error {
 }
 
 func decodeBigInt(s *Stream, val reflect.Value) error {
-	b, err := s.Bytes()
-	if err != nil {
+	var buffer []byte
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
 		return wrapStreamError(err, val.Type())
+	case kind == List:
+		return wrapStreamError(ErrExpectedString, val.Type())
+	case kind == Byte:
+		buffer = s.uintbuf[:1]
+		buffer[0] = s.byteval
+		s.kind = -1 // re-arm Kind
+	case size == 0:
+		// Avoid zero-length read.
+		s.kind = -1
+	case size <= uint64(len(s.uintbuf)):
+		// For integers smaller than s.uintbuf, allocating a buffer
+		// can be avoided.
+		buffer = s.uintbuf[:size]
+		if err := s.readFull(buffer); err != nil {
+			return wrapStreamError(err, val.Type())
+		}
+		// Reject inputs where single byte encoding should have been used.
+		if size == 1 && buffer[0] < 128 {
+			return wrapStreamError(ErrCanonSize, val.Type())
+		}
+	default:
+		// For large integers, a temporary buffer is needed.
+		buffer = make([]byte, size)
+		if err := s.readFull(buffer); err != nil {
+			return wrapStreamError(err, val.Type())
+		}
 	}
+
+	// Reject leading zero bytes.
+	if len(buffer) > 0 && buffer[0] == 0 {
+		return wrapStreamError(ErrCanonInt, val.Type())
+	}
+
+	// Set the integer bytes.
 	i := val.Interface().(*big.Int)
 	if i == nil {
 		i = new(big.Int)
 		val.Set(reflect.ValueOf(i))
 	}
-	// Reject leading zero bytes.
-	if len(b) > 0 && b[0] == 0 {
-		return wrapStreamError(ErrCanonInt, val.Type())
-	}
-	i.SetBytes(b)
+	i.SetBytes(buffer)
 	return nil
 }
 
@@ -563,7 +594,7 @@ type Stream struct {
 	size      uint64   // size of value ahead
 	kinderr   error    // error from last readKind
 	stack     []uint64 // list sizes
-	uintbuf   [8]byte  // auxiliary buffer for integer decoding
+	uintbuf   [32]byte // auxiliary buffer for integer decoding
 	kind      Kind     // kind of value ahead
 	byteval   byte     // value of single byte in type tag
 	limited   bool     // true if input limit is in effect
@@ -817,7 +848,7 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 	s.kind = -1
 	s.kinderr = nil
 	s.byteval = 0
-	s.uintbuf = [8]byte{}
+	s.uintbuf = [32]byte{}
 }
 
 // Kind returns the kind and size of the next value in the
@@ -927,17 +958,20 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 		b, err := s.readByte()
 		return uint64(b), err
 	default:
+		buffer := s.uintbuf[:8]
+		for i := range buffer {
+			buffer[i] = 0
+		}
 		start := int(8 - size)
-		s.uintbuf = [8]byte{}
-		if err := s.readFull(s.uintbuf[start:]); err != nil {
+		if err := s.readFull(buffer[start:]); err != nil {
 			return 0, err
 		}
-		if s.uintbuf[start] == 0 {
+		if buffer[start] == 0 {
 			// Note: readUint is also used to decode integer values.
 			// The error needs to be adjusted to become ErrCanonInt in this case.
 			return 0, ErrCanonSize
 		}
-		return binary.BigEndian.Uint64(s.uintbuf[:]), nil
+		return binary.BigEndian.Uint64(buffer[:]), nil
 	}
 }
 

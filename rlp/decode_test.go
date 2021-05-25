@@ -329,6 +329,11 @@ type recstruct struct {
 	Child *recstruct `rlp:"nil"`
 }
 
+type bigIntStruct struct {
+	I *big.Int
+	B string
+}
+
 type invalidNilTag struct {
 	X []byte `rlp:"nil"`
 }
@@ -405,10 +410,11 @@ type ignoredField struct {
 }
 
 var (
-	veryBigInt = big.NewInt(0).Add(
+	veryBigInt = new(big.Int).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
 		big.NewInt(0xFFFF),
 	)
+	veryVeryBigInt = new(big.Int).Exp(veryBigInt, big.NewInt(8), nil)
 )
 
 var decodeTests = []decodeTest{
@@ -479,12 +485,15 @@ var decodeTests = []decodeTest{
 	{input: "C0", ptr: new(string), error: "rlp: expected input string or byte for string"},
 
 	// big ints
+	{input: "80", ptr: new(*big.Int), value: big.NewInt(0)},
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
+	{input: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001", ptr: new(*big.Int), value: veryVeryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
-	{input: "820001", ptr: new(big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
-	{input: "8105", ptr: new(big.Int), error: "rlp: non-canonical size information for *big.Int"},
+	{input: "00", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
+	{input: "820001", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
+	{input: "8105", ptr: new(*big.Int), error: "rlp: non-canonical size information for *big.Int"},
 
 	// structs
 	{
@@ -496,6 +505,13 @@ var decodeTests = []decodeTest{
 		input: "C601C402C203C0",
 		ptr:   new(recstruct),
 		value: recstruct{1, &recstruct{2, &recstruct{3, nil}}},
+	},
+	{
+		// This checks that empty big.Int works correctly in struct context. It's easy to
+		// miss the update of s.kind for this case, so it needs its own test.
+		input: "C58083343434",
+		ptr:   new(bigIntStruct),
+		value: bigIntStruct{new(big.Int), "444"},
 	},
 
 	// struct errors
