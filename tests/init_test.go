@@ -167,10 +167,9 @@ func (tm *testMatcher) findSkip(name string) (reason string, skipload bool) {
 }
 
 // findConfig returns the chain config matching defined patterns.
-func (tm *testMatcher) findConfig(name string) *params.ChainConfig {
-	// TODO(fjl): name can be derived from testing.T when min Go version is 1.8
+func (tm *testMatcher) findConfig(t *testing.T) *params.ChainConfig {
 	for _, m := range tm.configpat {
-		if m.p.MatchString(name) {
+		if m.p.MatchString(t.Name()) {
 			return &m.config
 		}
 	}
@@ -178,11 +177,10 @@ func (tm *testMatcher) findConfig(name string) *params.ChainConfig {
 }
 
 // checkFailure checks whether a failure is expected.
-func (tm *testMatcher) checkFailure(t *testing.T, name string, err error) error {
-	// TODO(fjl): name can be derived from t when min Go version is 1.8
+func (tm *testMatcher) checkFailure(t *testing.T, err error) error {
 	failReason := ""
 	for _, m := range tm.failpat {
-		if m.p.MatchString(name) {
+		if m.p.MatchString(t.Name()) {
 			failReason = m.reason
 			break
 		}
