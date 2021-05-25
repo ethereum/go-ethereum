@@ -115,6 +115,9 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 
 // Error returns the error status of the iterator.
 func (it *verkleNodeIterator) Error() error {
+	if it.lastErr == errIteratorEnd {
+		return nil
+	}
 	return it.lastErr
 }
 
