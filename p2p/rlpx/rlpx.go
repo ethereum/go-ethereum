@@ -169,7 +169,7 @@ func (h *sessionState) readFrame(conn io.Reader) ([]byte, error) {
 	}
 
 	// Verify header MAC.
-	wantHeaderMAC := h.ingressMAC.compute(header[:16])
+	wantHeaderMAC := h.ingressMAC.computeHeader(header[:16])
 	if !hmac.Equal(wantHeaderMAC, header[16:]) {
 		return nil, errors.New("bad header MAC")
 	}
@@ -242,7 +242,7 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 	h.enc.XORKeyStream(header, header)
 
 	// Write header MAC.
-	h.wbuf.Write(h.egressMAC.compute(header))
+	h.wbuf.Write(h.egressMAC.computeHeader(header))
 
 	// Encode and encrypt the frame data.
 	offset := len(h.wbuf.data)
@@ -261,19 +261,31 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 	return err
 }
 
-// frame computes the MAC of a 16-byte 'seed'.
+// computeHeader computes the MAC of a frame header.
+func (m *hashMAC) computeHeader(header []byte) []byte {
+	sum1 := m.hash.Sum(m.hashBuffer[:0])
+	return m.compute(sum1, header)
+}
+
+// computeFrame computes the MAC of framedata.
+func (m *hashMAC) computeFrame(framedata []byte) []byte {
+	m.hash.Write(framedata)
+	seed := m.hash.Sum(m.seedBuffer[:0])
+	return m.compute(seed, seed[:16])
+}
+
+// compute computes the MAC of a 16-byte 'seed'.
 //
 // To do this, it encrypts the current value of the hash state, then XORs the ciphertext
 // with seed. The obtained value is written back into the hash state and hash output is
 // taken again. The first 16 bytes of the resulting sum are the MAC value.
 //
 // This MAC construction is a horrible, legacy thing.
-func (m *hashMAC) compute(seed []byte) []byte {
+func (m *hashMAC) compute(sum1, seed []byte) []byte {
 	if len(seed) != len(m.aesBuffer) {
 		panic("invalid MAC seed")
 	}
 
-	sum1 := m.hash.Sum(m.hashBuffer[:0])
 	m.cipher.Encrypt(m.aesBuffer[:], sum1)
 	for i := range m.aesBuffer {
 		m.aesBuffer[i] ^= seed[i]
@@ -281,13 +293,6 @@ func (m *hashMAC) compute(seed []byte) []byte {
 	m.hash.Write(m.aesBuffer[:])
 	sum2 := m.hash.Sum(m.hashBuffer[:0])
 	return sum2[:16]
-}
-
-// computeFrame computes the MAC of framedata.
-func (m *hashMAC) computeFrame(framedata []byte) []byte {
-	m.hash.Write(framedata)
-	seed := m.hash.Sum(m.seedBuffer[:0])
-	return m.compute(seed[:16])
 }
 
 // Handshake performs the handshake. This must be called before any data is written
