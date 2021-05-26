@@ -94,8 +94,7 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, error) {
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
 // starts at the key after the given start key.
 func (trie *VerkleTrie) NodeIterator(startKey []byte) NodeIterator {
-	it := &verkleNodeIterator{trie: trie, current: trie.root, stack: []verkleNodeIteratorState{verkleNodeIteratorState{Node: trie.root, Index: -1}}}
-	it.Next(false)
+	it := &verkleNodeIterator{trie: trie}
 	return it
 }
 
