@@ -19,6 +19,7 @@ package msgrate
 
 import (
 	"errors"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -162,7 +163,7 @@ func NewTracker(caps map[uint64]float64, rtt time.Duration) *Tracker {
 // the load proportionally to the requested items, so fetching a bit more might
 // still take the same RTT. By forcefully overshooting by a small amount, we can
 // avoid locking into a lower-that-real capacity.
-func (t *Tracker) Capacity(kind uint64, targetRTT time.Duration) float64 {
+func (t *Tracker) Capacity(kind uint64, targetRTT time.Duration) int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -171,7 +172,11 @@ func (t *Tracker) Capacity(kind uint64, targetRTT time.Duration) float64 {
 
 	// Return an overestimation to force the peer out of a stuck minima, adding
 	// +1 in case the item count is too low for the overestimator to dent
-	return 1 + capacityOverestimation*throughput
+	return roundCapacity(1 + capacityOverestimation*throughput)
+}
+
+func roundCapacity(cap float64) int {
+	return int(math.Min(1, math.Ceil(cap)))
 }
 
 // Update modifies the peer's capacity values for a specific data type with a new
@@ -435,7 +440,7 @@ func (t *Trackers) detune() {
 
 // Capacity is a helper function to access a specific tracker without having to
 // track it explicitly outside.
-func (t *Trackers) Capacity(id string, kind uint64, targetRTT time.Duration) float64 {
+func (t *Trackers) Capacity(id string, kind uint64, targetRTT time.Duration) int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
