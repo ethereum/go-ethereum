@@ -483,6 +483,12 @@ type txPricedList struct {
 	stales           int       // Number of stale price points to (re-heap trigger)
 }
 
+const (
+	// urgentRatio : floatingRatio is the capacity ratio of the two queues
+	urgentRatio   = 4
+	floatingRatio = 1
+)
+
 // newTxPricedList creates a new price-sorted transaction heap.
 func newTxPricedList(all *txLookup) *txPricedList {
 	return &txPricedList{
@@ -533,7 +539,10 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool 
 	}
 	// Check if the transaction is underpriced or not
 	if len(h.list) == 0 {
-		return false // There is no remote transaction at all.
+		// Note: since Underpriced is only called when the pool is full, this case is only
+		// possible if one of the queues has a zero capacity. In this case we should report
+		// that the transaction in question will not fit in this queue.
+		return true // There is no remote transaction at all.
 	}
 	// If the remote transaction is even cheaper than the
 	// cheapest one tracked locally, reject it.
@@ -547,7 +556,7 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool 
 func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
-		if len(l.urgent.list) > len(l.floating.list) {
+		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio || floatingRatio == 0 {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
@@ -598,7 +607,7 @@ func (l *txPricedList) Reheap() {
 	// Note: Discard would also do this before the first eviction but Reheap can do
 	// is more efficiently. Also, Underpriced would work suboptimally the first time
 	// if the floating queue was empty.
-	floatingCount := len(l.urgent.list) / 2
+	floatingCount := len(l.urgent.list) * floatingRatio / (urgentRatio + floatingRatio)
 	l.floating.list = make([]*types.Transaction, floatingCount)
 	for i := 0; i < floatingCount; i++ {
 		l.floating.list[i] = heap.Pop(&l.urgent).(*types.Transaction)

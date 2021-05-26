@@ -1905,8 +1905,8 @@ func TestDualHeapEviction(t *testing.T) {
 	pool, _ := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
 
-	pool.config.GlobalSlots = 5
-	pool.config.GlobalQueue = 5
+	pool.config.GlobalSlots = 10
+	pool.config.GlobalQueue = 10
 
 	var (
 		highTip, highCap *types.Transaction
@@ -1920,7 +1920,7 @@ func TestDualHeapEviction(t *testing.T) {
 	}
 
 	add := func(urgent bool) {
-		txs := make([]*types.Transaction, 10)
+		txs := make([]*types.Transaction, 20)
 		for i := range txs {
 			// Create a test accounts and fund it
 			key, _ := crypto.GenerateKey()
@@ -1935,7 +1935,7 @@ func TestDualHeapEviction(t *testing.T) {
 		}
 		pool.AddRemotes(txs)
 		pending, queued := pool.Stats()
-		if pending+queued != 10 {
+		if pending+queued != 20 {
 			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 10)
 		}
 	}
