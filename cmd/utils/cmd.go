@@ -272,7 +272,6 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 // ImportPreimages imports a batch of exported hash preimages into the database.
 func ImportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Importing preimages", "file", fn)
-	start := time.Now()
 
 	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
@@ -313,7 +312,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			preimages = make(map[common.Hash][]byte)
 		}
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Importing preimage data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Importing preimages", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 		count += 1
@@ -366,17 +365,19 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 		}
 		var key, val []byte
 		if blob[0] == byte(0) {
-			if len(blob) < common.HashLength+len(rawdb.SnapshotAccountPrefix)+1 {
+			keylen := common.HashLength + len(rawdb.SnapshotAccountPrefix) + 1
+			if len(blob) <= keylen {
 				continue
 			}
-			key = blob[1 : common.HashLength+2]
-			val = blob[common.HashLength+2:]
+			key = blob[1:keylen]
+			val = blob[keylen:]
 		} else {
-			if len(blob) < 2*common.HashLength+len(rawdb.SnapshotStoragePrefix)+1 {
+			keylen := 2*common.HashLength + len(rawdb.SnapshotStoragePrefix) + 1
+			if len(blob) <= keylen {
 				continue
 			}
-			key = blob[1 : common.HashLength*2+2]
-			val = blob[common.HashLength*2+2:]
+			key = blob[1:keylen]
+			val = blob[keylen:]
 		}
 		batch.Put(key, val)
 		if batch.ValueSize() > ethdb.IdealBatchSize {
