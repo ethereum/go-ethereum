@@ -353,7 +353,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 // it, if they themselves are requests it initiates a reply, and lastly it drops
 // unknown packets.
 func (s *Service) readLoop(conn *connWrapper) {
-	// If the read loop exists, close the connection
+	// If the read loop exits, close the connection
 	defer conn.Close()
 
 	for {
