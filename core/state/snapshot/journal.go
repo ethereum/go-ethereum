@@ -140,7 +140,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common
 	}
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.Warn("Failed to load new-format journal", "error", err)
+		log.Warn("Failed to load journal", "error", err)
 		return nil, false, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
