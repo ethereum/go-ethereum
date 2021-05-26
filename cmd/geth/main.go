@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -54,149 +54,149 @@ var (
 	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
-		utils.IdentityFlag,
-		utils.UnlockedAccountFlag,
-		utils.PasswordFileFlag,
-		utils.BootnodesFlag,
-		utils.DataDirFlag,
-		utils.AncientFlag,
-		utils.MinFreeDiskSpaceFlag,
-		utils.KeyStoreDirFlag,
-		utils.ExternalSignerFlag,
-		utils.NoUSBFlag,
-		utils.USBFlag,
-		utils.SmartCardDaemonPathFlag,
-		utils.OverrideLondonFlag,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashCachesLockMmapFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
-		utils.EthashDatasetsLockMmapFlag,
-		utils.TxPoolLocalsFlag,
-		utils.TxPoolNoLocalsFlag,
-		utils.TxPoolJournalFlag,
-		utils.TxPoolRejournalFlag,
-		utils.TxPoolPriceLimitFlag,
-		utils.TxPoolPriceBumpFlag,
-		utils.TxPoolAccountSlotsFlag,
-		utils.TxPoolGlobalSlotsFlag,
-		utils.TxPoolAccountQueueFlag,
-		utils.TxPoolGlobalQueueFlag,
-		utils.TxPoolLifetimeFlag,
-		utils.SyncModeFlag,
-		utils.ExitWhenSyncedFlag,
-		utils.GCModeFlag,
-		utils.SnapshotFlag,
-		utils.TxLookupLimitFlag,
-		utils.LightServeFlag,
-		utils.LightIngressFlag,
-		utils.LightEgressFlag,
-		utils.LightMaxPeersFlag,
-		utils.LightNoPruneFlag,
-		utils.LightKDFFlag,
-		utils.UltraLightServersFlag,
-		utils.UltraLightFractionFlag,
-		utils.UltraLightOnlyAnnounceFlag,
-		utils.LightNoSyncServeFlag,
-		utils.WhitelistFlag,
-		utils.BloomFilterSizeFlag,
-		utils.CacheFlag,
-		utils.CacheDatabaseFlag,
-		utils.CacheTrieFlag,
-		utils.CacheTrieJournalFlag,
-		utils.CacheTrieRejournalFlag,
-		utils.CacheGCFlag,
-		utils.CacheSnapshotFlag,
-		utils.CacheNoPrefetchFlag,
-		utils.CachePreimagesFlag,
-		utils.ListenPortFlag,
-		utils.MaxPeersFlag,
-		utils.MaxPendingPeersFlag,
-		utils.MiningEnabledFlag,
-		utils.MinerThreadsFlag,
-		utils.MinerNotifyFlag,
-		utils.MinerGasTargetFlag,
-		utils.MinerGasLimitFlag,
-		utils.MinerGasPriceFlag,
-		utils.MinerEtherbaseFlag,
-		utils.MinerExtraDataFlag,
-		utils.MinerRecommitIntervalFlag,
-		utils.MinerNoVerfiyFlag,
-		utils.NATFlag,
-		utils.NoDiscoverFlag,
-		utils.DiscoveryV5Flag,
-		utils.NetrestrictFlag,
-		utils.NodeKeyFileFlag,
-		utils.NodeKeyHexFlag,
-		utils.DNSDiscoveryFlag,
-		utils.MainnetFlag,
-		utils.DeveloperFlag,
-		utils.DeveloperPeriodFlag,
-		utils.RopstenFlag,
-		utils.RinkebyFlag,
-		utils.GoerliFlag,
-		utils.BaikalFlag,
-		utils.VMEnableDebugFlag,
-		utils.NetworkIdFlag,
-		utils.EthStatsURLFlag,
-		utils.FakePoWFlag,
-		utils.NoCompactionFlag,
-		utils.GpoBlocksFlag,
-		utils.GpoPercentileFlag,
-		utils.GpoMaxGasPriceFlag,
-		utils.GpoIgnoreGasPriceFlag,
-		utils.EWASMInterpreterFlag,
-		utils.EVMInterpreterFlag,
-		utils.MinerNotifyFullFlag,
+		&utils.IdentityFlag,
+		&utils.UnlockedAccountFlag,
+		&utils.PasswordFileFlag,
+		&utils.BootnodesFlag,
+		&utils.DataDirFlag,
+		&utils.AncientFlag,
+		&utils.MinFreeDiskSpaceFlag,
+		&utils.KeyStoreDirFlag,
+		&utils.ExternalSignerFlag,
+		&utils.NoUSBFlag,
+		&utils.USBFlag,
+		&utils.SmartCardDaemonPathFlag,
+		&utils.OverrideLondonFlag,
+		&utils.EthashCacheDirFlag,
+		&utils.EthashCachesInMemoryFlag,
+		&utils.EthashCachesOnDiskFlag,
+		&utils.EthashCachesLockMmapFlag,
+		&utils.EthashDatasetDirFlag,
+		&utils.EthashDatasetsInMemoryFlag,
+		&utils.EthashDatasetsOnDiskFlag,
+		&utils.EthashDatasetsLockMmapFlag,
+		&utils.TxPoolLocalsFlag,
+		&utils.TxPoolNoLocalsFlag,
+		&utils.TxPoolJournalFlag,
+		&utils.TxPoolRejournalFlag,
+		&utils.TxPoolPriceLimitFlag,
+		&utils.TxPoolPriceBumpFlag,
+		&utils.TxPoolAccountSlotsFlag,
+		&utils.TxPoolGlobalSlotsFlag,
+		&utils.TxPoolAccountQueueFlag,
+		&utils.TxPoolGlobalQueueFlag,
+		&utils.TxPoolLifetimeFlag,
+		&utils.SyncModeFlag,
+		&utils.ExitWhenSyncedFlag,
+		&utils.GCModeFlag,
+		&utils.SnapshotFlag,
+		&utils.TxLookupLimitFlag,
+		&utils.LightServeFlag,
+		&utils.LightIngressFlag,
+		&utils.LightEgressFlag,
+		&utils.LightMaxPeersFlag,
+		&utils.LightNoPruneFlag,
+		&utils.LightKDFFlag,
+		&utils.UltraLightServersFlag,
+		&utils.UltraLightFractionFlag,
+		&utils.UltraLightOnlyAnnounceFlag,
+		&utils.LightNoSyncServeFlag,
+		&utils.WhitelistFlag,
+		&utils.BloomFilterSizeFlag,
+		&utils.CacheFlag,
+		&utils.CacheDatabaseFlag,
+		&utils.CacheTrieFlag,
+		&utils.CacheTrieJournalFlag,
+		&utils.CacheTrieRejournalFlag,
+		&utils.CacheGCFlag,
+		&utils.CacheSnapshotFlag,
+		&utils.CacheNoPrefetchFlag,
+		&utils.CachePreimagesFlag,
+		&utils.ListenPortFlag,
+		&utils.MaxPeersFlag,
+		&utils.MaxPendingPeersFlag,
+		&utils.MiningEnabledFlag,
+		&utils.MinerThreadsFlag,
+		&utils.MinerNotifyFlag,
+		&utils.MinerGasTargetFlag,
+		&utils.MinerGasLimitFlag,
+		&utils.MinerGasPriceFlag,
+		&utils.MinerEtherbaseFlag,
+		&utils.MinerExtraDataFlag,
+		&utils.MinerRecommitIntervalFlag,
+		&utils.MinerNoVerfiyFlag,
+		&utils.NATFlag,
+		&utils.NoDiscoverFlag,
+		&utils.DiscoveryV5Flag,
+		&utils.NetrestrictFlag,
+		&utils.NodeKeyFileFlag,
+		&utils.NodeKeyHexFlag,
+		&utils.DNSDiscoveryFlag,
+		&utils.MainnetFlag,
+		&utils.DeveloperFlag,
+		&utils.DeveloperPeriodFlag,
+		&utils.RopstenFlag,
+		&utils.RinkebyFlag,
+		&utils.GoerliFlag,
+		&utils.BaikalFlag,
+		&utils.VMEnableDebugFlag,
+		&utils.NetworkIdFlag,
+		&utils.EthStatsURLFlag,
+		&utils.FakePoWFlag,
+		&utils.NoCompactionFlag,
+		&utils.GpoBlocksFlag,
+		&utils.GpoPercentileFlag,
+		&utils.GpoMaxGasPriceFlag,
+		&utils.GpoIgnoreGasPriceFlag,
+		&utils.EWASMInterpreterFlag,
+		&utils.EVMInterpreterFlag,
+		&utils.MinerNotifyFullFlag,
 		configFileFlag,
-		utils.CatalystFlag,
+		&utils.CatalystFlag,
 	}
 
 	rpcFlags = []cli.Flag{
-		utils.HTTPEnabledFlag,
-		utils.HTTPListenAddrFlag,
-		utils.HTTPPortFlag,
-		utils.HTTPCORSDomainFlag,
-		utils.HTTPVirtualHostsFlag,
-		utils.LegacyRPCEnabledFlag,
-		utils.LegacyRPCListenAddrFlag,
-		utils.LegacyRPCPortFlag,
-		utils.LegacyRPCCORSDomainFlag,
-		utils.LegacyRPCVirtualHostsFlag,
-		utils.LegacyRPCApiFlag,
-		utils.GraphQLEnabledFlag,
-		utils.GraphQLCORSDomainFlag,
-		utils.GraphQLVirtualHostsFlag,
-		utils.HTTPApiFlag,
-		utils.HTTPPathPrefixFlag,
-		utils.WSEnabledFlag,
-		utils.WSListenAddrFlag,
-		utils.WSPortFlag,
-		utils.WSApiFlag,
-		utils.WSAllowedOriginsFlag,
-		utils.WSPathPrefixFlag,
-		utils.IPCDisabledFlag,
-		utils.IPCPathFlag,
-		utils.InsecureUnlockAllowedFlag,
-		utils.RPCGlobalGasCapFlag,
-		utils.RPCGlobalTxFeeCapFlag,
-		utils.AllowUnprotectedTxs,
+		&utils.HTTPEnabledFlag,
+		&utils.HTTPListenAddrFlag,
+		&utils.HTTPPortFlag,
+		&utils.HTTPCORSDomainFlag,
+		&utils.HTTPVirtualHostsFlag,
+		&utils.LegacyRPCEnabledFlag,
+		&utils.LegacyRPCListenAddrFlag,
+		&utils.LegacyRPCPortFlag,
+		&utils.LegacyRPCCORSDomainFlag,
+		&utils.LegacyRPCVirtualHostsFlag,
+		&utils.LegacyRPCApiFlag,
+		&utils.GraphQLEnabledFlag,
+		&utils.GraphQLCORSDomainFlag,
+		&utils.GraphQLVirtualHostsFlag,
+		&utils.HTTPApiFlag,
+		&utils.HTTPPathPrefixFlag,
+		&utils.WSEnabledFlag,
+		&utils.WSListenAddrFlag,
+		&utils.WSPortFlag,
+		&utils.WSApiFlag,
+		&utils.WSAllowedOriginsFlag,
+		&utils.WSPathPrefixFlag,
+		&utils.IPCDisabledFlag,
+		&utils.IPCPathFlag,
+		&utils.InsecureUnlockAllowedFlag,
+		&utils.RPCGlobalGasCapFlag,
+		&utils.RPCGlobalTxFeeCapFlag,
+		&utils.AllowUnprotectedTxs,
 	}
 
 	metricsFlags = []cli.Flag{
-		utils.MetricsEnabledFlag,
-		utils.MetricsEnabledExpensiveFlag,
-		utils.MetricsHTTPFlag,
-		utils.MetricsPortFlag,
-		utils.MetricsEnableInfluxDBFlag,
-		utils.MetricsInfluxDBEndpointFlag,
-		utils.MetricsInfluxDBDatabaseFlag,
-		utils.MetricsInfluxDBUsernameFlag,
-		utils.MetricsInfluxDBPasswordFlag,
-		utils.MetricsInfluxDBTagsFlag,
+		&utils.MetricsEnabledFlag,
+		&utils.MetricsEnabledExpensiveFlag,
+		&utils.MetricsHTTPFlag,
+		&utils.MetricsPortFlag,
+		&utils.MetricsEnableInfluxDBFlag,
+		&utils.MetricsInfluxDBEndpointFlag,
+		&utils.MetricsInfluxDBDatabaseFlag,
+		&utils.MetricsInfluxDBUsernameFlag,
+		&utils.MetricsInfluxDBPasswordFlag,
+		&utils.MetricsInfluxDBTagsFlag,
 	}
 )
 
@@ -205,37 +205,37 @@ func init() {
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2021 The go-ethereum Authors"
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		// See chaincmd.go:
-		initCommand,
-		importCommand,
-		exportCommand,
-		importPreimagesCommand,
-		exportPreimagesCommand,
-		removedbCommand,
-		dumpCommand,
-		dumpGenesisCommand,
+		&initCommand,
+		&importCommand,
+		&exportCommand,
+		&importPreimagesCommand,
+		&exportPreimagesCommand,
+		&removedbCommand,
+		&dumpCommand,
+		&dumpGenesisCommand,
 		// See accountcmd.go:
-		accountCommand,
-		walletCommand,
+		&accountCommand,
+		&walletCommand,
 		// See consolecmd.go:
-		consoleCommand,
-		attachCommand,
-		javascriptCommand,
+		&consoleCommand,
+		&attachCommand,
+		&javascriptCommand,
 		// See misccmd.go:
-		makecacheCommand,
-		makedagCommand,
-		versionCommand,
-		versionCheckCommand,
-		licenseCommand,
+		&makecacheCommand,
+		&makedagCommand,
+		&versionCommand,
+		&versionCheckCommand,
+		&licenseCommand,
 		// See config.go
 		dumpConfigCommand,
 		// see dbcmd.go
-		dbCommand,
+		&dbCommand,
 		// See cmd/utils/flags_legacy.go
-		utils.ShowDeprecated,
+		&utils.ShowDeprecated,
 		// See snapshot.go
-		snapshotCommand,
+		&snapshotCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -267,37 +267,37 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
+	case ctx.IsSet(utils.RopstenFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
 
-	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
+	case ctx.IsSet(utils.RinkebyFlag.Name):
 		log.Info("Starting Geth on Rinkeby testnet...")
 
-	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
+	case ctx.IsSet(utils.GoerliFlag.Name):
 		log.Info("Starting Geth on Görli testnet...")
 
-	case ctx.GlobalIsSet(utils.BaikalFlag.Name):
+	case ctx.IsSet(utils.BaikalFlag.Name):
 		log.Info("Starting Geth on Baikal testnet...")
 
-	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
+	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 
-	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
+	case !ctx.IsSet(utils.NetworkIdFlag.Name):
 		log.Info("Starting Geth on Ethereum mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
-	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
+	if ctx.String(utils.SyncModeFlag.Name) != "light" && !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.GlobalIsSet(utils.RopstenFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+		if !ctx.IsSet(utils.RopstenFlag.Name) && !ctx.IsSet(utils.RinkebyFlag.Name) && !ctx.IsSet(utils.GoerliFlag.Name) && !ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
-			log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
-			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
+			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
+			ctx.Set(utils.CacheFlag.Name, strconv.Itoa(4096))
 		}
 	}
 	// If we're running a light client on any network, drop the cache to some meaningfully low amount
-	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {
-		log.Info("Dropping default light client cache", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 128)
-		ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
+	if ctx.String(utils.SyncModeFlag.Name) == "light" && !ctx.IsSet(utils.CacheFlag.Name) {
+		log.Info("Dropping default light client cache", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 128)
+		ctx.Set(utils.CacheFlag.Name, strconv.Itoa(128))
 	}
 
 	// Start metrics export if enabled
@@ -311,7 +311,7 @@ func prepare(ctx *cli.Context) {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
-	if args := ctx.Args(); len(args) > 0 {
+	if args := ctx.Args().Slice(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
@@ -382,7 +382,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 
 	// Spawn a standalone goroutine for status synchronization monitoring,
 	// close the node when synchronization is complete if user required.
-	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
+	if ctx.Bool(utils.ExitWhenSyncedFlag.Name) {
 		go func() {
 			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
 			defer sub.Unsubscribe()
@@ -405,9 +405,9 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	}
 
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
+	if ctx.Bool(utils.MiningEnabledFlag.Name) || ctx.Bool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
-		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		if ctx.String(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
 		ethBackend, ok := backend.(*eth.EthAPIBackend)
@@ -418,7 +418,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		ethBackend.TxPool().SetGasPrice(gasprice)
 		// start mining
-		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		threads := ctx.Int(utils.MinerThreadsFlag.Name)
 		if err := ethBackend.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
@@ -428,7 +428,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 // unlockAccounts unlocks any account specifically requested.
 func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 	var unlocks []string
-	inputs := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	inputs := strings.Split(ctx.String(utils.UnlockedAccountFlag.Name), ",")
 	for _, input := range inputs {
 		if trimmed := strings.TrimSpace(input); trimmed != "" {
 			unlocks = append(unlocks, trimmed)

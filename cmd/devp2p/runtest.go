@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -53,7 +53,7 @@ func runTests(ctx *cli.Context, tests []utesting.Test) error {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
 	// Disable logging unless explicitly enabled.
-	if !ctx.GlobalIsSet("verbosity") && !ctx.GlobalIsSet("vmodule") {
+	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
 		log.Root().SetHandler(log.DiscardHandler())
 	}
 	// Run the tests.

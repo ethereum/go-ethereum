@@ -28,20 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	discv4Command = cli.Command{
 		Name:  "discv4",
 		Usage: "Node Discovery v4 tools",
-		Subcommands: []cli.Command{
-			discv4PingCommand,
-			discv4RequestRecordCommand,
-			discv4ResolveCommand,
-			discv4ResolveJSONCommand,
-			discv4CrawlCommand,
-			discv4TestCommand,
+		Subcommands: []*cli.Command{
+			&discv4PingCommand,
+			&discv4RequestRecordCommand,
+			&discv4ResolveCommand,
+			&discv4ResolveJSONCommand,
+			&discv4CrawlCommand,
+			&discv4TestCommand,
 		},
 	}
 	discv4PingCommand = cli.Command{
@@ -61,31 +61,31 @@ var (
 		Usage:     "Finds a node in the DHT",
 		Action:    discv4Resolve,
 		ArgsUsage: "<node>",
-		Flags:     []cli.Flag{bootnodesFlag},
+		Flags:     []cli.Flag{&bootnodesFlag},
 	}
 	discv4ResolveJSONCommand = cli.Command{
 		Name:      "resolve-json",
 		Usage:     "Re-resolves nodes in a nodes.json file",
 		Action:    discv4ResolveJSON,
-		Flags:     []cli.Flag{bootnodesFlag},
+		Flags:     []cli.Flag{&bootnodesFlag},
 		ArgsUsage: "<nodes.json file>",
 	}
 	discv4CrawlCommand = cli.Command{
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
-		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
+		Flags:  []cli.Flag{&bootnodesFlag, &crawlTimeoutFlag},
 	}
 	discv4TestCommand = cli.Command{
 		Name:   "test",
 		Usage:  "Runs tests against a node",
 		Action: discv4Test,
 		Flags: []cli.Flag{
-			remoteEnodeFlag,
-			testPatternFlag,
-			testTAPFlag,
-			testListen1Flag,
-			testListen2Flag,
+			&remoteEnodeFlag,
+			&testPatternFlag,
+			&testTAPFlag,
+			&testListen1Flag,
+			&testListen2Flag,
 		},
 	}
 )
@@ -113,9 +113,9 @@ var (
 		Value: 30 * time.Minute,
 	}
 	remoteEnodeFlag = cli.StringFlag{
-		Name:   "remote",
-		Usage:  "Enode of the remote node under test",
-		EnvVar: "REMOTE_ENODE",
+		Name:    "remote",
+		Usage:   "Enode of the remote node under test",
+		EnvVars: []string{"REMOTE_ENODE"},
 	}
 )
 
@@ -207,7 +207,7 @@ func discv4Crawl(ctx *cli.Context) error {
 func discv4Test(ctx *cli.Context) error {
 	// Configure test package globals.
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
-		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
+		return fmt.Errorf("missing -%v", remoteEnodeFlag.Name)
 	}
 	v4test.Remote = ctx.String(remoteEnodeFlag.Name)
 	v4test.Listen1 = ctx.String(testListen1Flag.Name)
@@ -239,7 +239,7 @@ func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
 		cfg.PrivateKey, _ = crypto.GenerateKey()
 	}
 
-	if commandHasFlag(ctx, bootnodesFlag) {
+	if commandHasFlag(ctx, &bootnodesFlag) {
 		bn, err := parseBootnodes(ctx)
 		if err != nil {
 			exit(err)

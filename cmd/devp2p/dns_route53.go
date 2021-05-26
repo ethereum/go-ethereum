@@ -32,7 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -46,14 +46,14 @@ const (
 
 var (
 	route53AccessKeyFlag = cli.StringFlag{
-		Name:   "access-key-id",
-		Usage:  "AWS Access Key ID",
-		EnvVar: "AWS_ACCESS_KEY_ID",
+		Name:    "access-key-id",
+		Usage:   "AWS Access Key ID",
+		EnvVars: []string{"AWS_ACCESS_KEY_ID"},
 	}
 	route53AccessSecretFlag = cli.StringFlag{
-		Name:   "access-key-secret",
-		Usage:  "AWS Access Key Secret",
-		EnvVar: "AWS_SECRET_ACCESS_KEY",
+		Name:    "access-key-secret",
+		Usage:   "AWS Access Key Secret",
+		EnvVars: []string{"AWS_SECRET_ACCESS_KEY"},
 	}
 	route53ZoneIDFlag = cli.StringFlag{
 		Name:  "zone-id",

@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var runCommand = cli.Command{
@@ -53,7 +53,7 @@ var runCommand = cli.Command{
 // the initialized Genesis structure
 func readGenesis(genesisPath string) *core.Genesis {
 	// Make sure we have a valid genesis JSON
-	//genesisPath := ctx.Args().First()
+	// genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("Must supply path to genesis JSON file")
 	}
@@ -105,14 +105,14 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 
 func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
+	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 	logconfig := &vm.LogConfig{
-		DisableMemory:     ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack:      ctx.GlobalBool(DisableStackFlag.Name),
-		DisableStorage:    ctx.GlobalBool(DisableStorageFlag.Name),
-		DisableReturnData: ctx.GlobalBool(DisableReturnDataFlag.Name),
-		Debug:             ctx.GlobalBool(DebugFlag.Name),
+		DisableMemory:     ctx.Bool(DisableMemoryFlag.Name),
+		DisableStack:      ctx.Bool(DisableStackFlag.Name),
+		DisableStorage:    ctx.Bool(DisableStorageFlag.Name),
+		DisableReturnData: ctx.Bool(DisableReturnDataFlag.Name),
+		Debug:             ctx.Bool(DebugFlag.Name),
 	}
 
 	var (
@@ -124,16 +124,16 @@ func runCmd(ctx *cli.Context) error {
 		receiver      = common.BytesToAddress([]byte("receiver"))
 		genesisConfig *core.Genesis
 	)
-	if ctx.GlobalBool(MachineFlag.Name) {
+	if ctx.Bool(MachineFlag.Name) {
 		tracer = vm.NewJSONLogger(logconfig, os.Stdout)
-	} else if ctx.GlobalBool(DebugFlag.Name) {
+	} else if ctx.Bool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
 	} else {
 		debugLogger = vm.NewStructLogger(logconfig)
 	}
-	if ctx.GlobalString(GenesisFlag.Name) != "" {
-		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
+	if ctx.String(GenesisFlag.Name) != "" {
+		gen := readGenesis(ctx.String(GenesisFlag.Name))
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
 		genesis := gen.ToBlock(db)
@@ -143,18 +143,18 @@ func runCmd(ctx *cli.Context) error {
 		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		genesisConfig = new(core.Genesis)
 	}
-	if ctx.GlobalString(SenderFlag.Name) != "" {
-		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
+	if ctx.String(SenderFlag.Name) != "" {
+		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
 	statedb.CreateAccount(sender)
 
-	if ctx.GlobalString(ReceiverFlag.Name) != "" {
-		receiver = common.HexToAddress(ctx.GlobalString(ReceiverFlag.Name))
+	if ctx.String(ReceiverFlag.Name) != "" {
+		receiver = common.HexToAddress(ctx.String(ReceiverFlag.Name))
 	}
 
 	var code []byte
-	codeFileFlag := ctx.GlobalString(CodeFileFlag.Name)
-	codeFlag := ctx.GlobalString(CodeFlag.Name)
+	codeFileFlag := ctx.String(CodeFileFlag.Name)
+	codeFlag := ctx.String(CodeFlag.Name)
 
 	// The '--code' or '--codefile' flag overrides code in state
 	if codeFileFlag != "" || codeFlag != "" {
@@ -163,7 +163,7 @@ func runCmd(ctx *cli.Context) error {
 			var err error
 			// If - is specified, it means that code comes from stdin
 			if codeFileFlag == "-" {
-				//Try reading from stdin
+				// Try reading from stdin
 				if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
 					fmt.Printf("Could not load code from stdin: %v\n", err)
 					os.Exit(1)
@@ -196,7 +196,7 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(bin)
 	}
-	initialGas := ctx.GlobalUint64(GasFlag.Name)
+	initialGas := ctx.Uint64(GasFlag.Name)
 	if genesisConfig.GasLimit != 0 {
 		initialGas = genesisConfig.GasLimit
 	}
@@ -212,12 +212,12 @@ func runCmd(ctx *cli.Context) error {
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
 			Tracer:         tracer,
-			Debug:          ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
-			EVMInterpreter: ctx.GlobalString(EVMInterpreterFlag.Name),
+			Debug:          ctx.Bool(DebugFlag.Name) || ctx.Bool(MachineFlag.Name),
+			EVMInterpreter: ctx.String(EVMInterpreterFlag.Name),
 		},
 	}
 
-	if cpuProfilePath := ctx.GlobalString(CPUProfileFlag.Name); cpuProfilePath != "" {
+	if cpuProfilePath := ctx.String(CPUProfileFlag.Name); cpuProfilePath != "" {
 		f, err := os.Create(cpuProfilePath)
 		if err != nil {
 			fmt.Println("could not create CPU profile: ", err)
@@ -237,19 +237,19 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var hexInput []byte
-	if inputFileFlag := ctx.GlobalString(InputFileFlag.Name); inputFileFlag != "" {
+	if inputFileFlag := ctx.String(InputFileFlag.Name); inputFileFlag != "" {
 		var err error
 		if hexInput, err = ioutil.ReadFile(inputFileFlag); err != nil {
 			fmt.Printf("could not load input from file: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
-		hexInput = []byte(ctx.GlobalString(InputFlag.Name))
+		hexInput = []byte(ctx.String(InputFlag.Name))
 	}
 	input := common.FromHex(string(bytes.TrimSpace(hexInput)))
 
 	var execFunc func() ([]byte, uint64, error)
-	if ctx.GlobalBool(CreateFlag.Name) {
+	if ctx.Bool(CreateFlag.Name) {
 		input = append(code, input...)
 		execFunc = func() ([]byte, uint64, error) {
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
@@ -264,16 +264,16 @@ func runCmd(ctx *cli.Context) error {
 		}
 	}
 
-	bench := ctx.GlobalBool(BenchFlag.Name)
+	bench := ctx.Bool(BenchFlag.Name)
 	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
-	if ctx.GlobalBool(DumpFlag.Name) {
+	if ctx.Bool(DumpFlag.Name) {
 		statedb.Commit(true)
 		statedb.IntermediateRoot(true)
 		fmt.Println(string(statedb.Dump(nil)))
 	}
 
-	if memProfilePath := ctx.GlobalString(MemProfileFlag.Name); memProfilePath != "" {
+	if memProfilePath := ctx.String(MemProfileFlag.Name); memProfilePath != "" {
 		f, err := os.Create(memProfilePath)
 		if err != nil {
 			fmt.Println("could not create memory profile: ", err)
@@ -286,7 +286,7 @@ func runCmd(ctx *cli.Context) error {
 		f.Close()
 	}
 
-	if ctx.GlobalBool(DebugFlag.Name) {
+	if ctx.Bool(DebugFlag.Name) {
 		if debugLogger != nil {
 			fmt.Fprintln(os.Stderr, "#### TRACE ####")
 			vm.WriteTrace(os.Stderr, debugLogger.StructLogs())
@@ -295,7 +295,7 @@ func runCmd(ctx *cli.Context) error {
 		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
-	if bench || ctx.GlobalBool(StatDumpFlag.Name) {
+	if bench || ctx.Bool(StatDumpFlag.Name) {
 		fmt.Fprintf(os.Stderr, `EVM gas used:    %d
 execution time:  %v
 allocations:     %d

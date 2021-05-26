@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -40,7 +40,7 @@ var (
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 
 				Name:      "import",
@@ -49,10 +49,10 @@ passwordfile as argument containing the wallet password in plaintext.`,
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.KeyStoreDirFlag,
-					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
+					&utils.DataDirFlag,
+					&utils.KeyStoreDirFlag,
+					&utils.PasswordFileFlag,
+					&utils.LightKDFFlag,
 				},
 				Description: `
 	geth wallet [options] /path/to/my/presale.wallet
@@ -88,7 +88,7 @@ It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 
 Make sure you backup your keys regularly.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "Print summary of existing accounts",
@@ -105,10 +105,10 @@ Print a short summary of all accounts`,
 				Usage:  "Create a new account",
 				Action: utils.MigrateFlags(accountCreate),
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.KeyStoreDirFlag,
-					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
+					&utils.DataDirFlag,
+					&utils.KeyStoreDirFlag,
+					&utils.PasswordFileFlag,
+					&utils.LightKDFFlag,
 				},
 				Description: `
     geth account new
@@ -131,9 +131,9 @@ password to file or expose in any other way.
 				Action:    utils.MigrateFlags(accountUpdate),
 				ArgsUsage: "<address>",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.KeyStoreDirFlag,
-					utils.LightKDFFlag,
+					&utils.DataDirFlag,
+					&utils.KeyStoreDirFlag,
+					&utils.LightKDFFlag,
 				},
 				Description: `
     geth account update <address>
@@ -159,10 +159,10 @@ changing your password is only possible interactively.
 				Usage:  "Import a private key into a new account",
 				Action: utils.MigrateFlags(accountImport),
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.KeyStoreDirFlag,
-					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
+					&utils.DataDirFlag,
+					&utils.KeyStoreDirFlag,
+					&utils.PasswordFileFlag,
+					&utils.LightKDFFlag,
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
@@ -262,7 +262,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 func accountCreate(ctx *cli.Context) error {
 	cfg := gethConfig{Node: defaultNodeConfig()}
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
@@ -294,13 +294,13 @@ func accountCreate(ctx *cli.Context) error {
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
-	if len(ctx.Args()) == 0 {
+	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
 	stack, _ := makeConfigNode(ctx)
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	for _, addr := range ctx.Args() {
+	for _, addr := range ctx.Args().Slice() {
 		account, oldPassword := unlockAccount(ks, addr, 0, nil)
 		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {

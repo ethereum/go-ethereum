@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -81,8 +81,8 @@ The output of this command is supposed to be machine-readable.
 	versionCheckCommand = cli.Command{
 		Action: utils.MigrateFlags(versionCheck),
 		Flags: []cli.Flag{
-			VersionCheckUrlFlag,
-			VersionCheckVersionFlag,
+			&VersionCheckUrlFlag,
+			&VersionCheckVersionFlag,
 		},
 		Name:      "version-check",
 		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
@@ -104,7 +104,7 @@ and displays information about any security vulnerabilities that affect the curr
 
 // makecache generates an ethash verification cache into the provided folder.
 func makecache(ctx *cli.Context) error {
-	args := ctx.Args()
+	args := ctx.Args().Slice()
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: geth makecache <block number> <outputdir>`)
 	}
@@ -119,7 +119,7 @@ func makecache(ctx *cli.Context) error {
 
 // makedag generates an ethash mining DAG into the provided folder.
 func makedag(ctx *cli.Context) error {
-	args := ctx.Args()
+	args := ctx.Args().Slice()
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
 	}

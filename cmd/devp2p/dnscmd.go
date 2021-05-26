@@ -30,20 +30,20 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	dnsCommand = cli.Command{
 		Name:  "dns",
 		Usage: "DNS Discovery Commands",
-		Subcommands: []cli.Command{
-			dnsSyncCommand,
-			dnsSignCommand,
-			dnsTXTCommand,
-			dnsCloudflareCommand,
-			dnsRoute53Command,
-			dnsRoute53NukeCommand,
+		Subcommands: []*cli.Command{
+			&dnsSyncCommand,
+			&dnsSignCommand,
+			&dnsTXTCommand,
+			&dnsCloudflareCommand,
+			&dnsRoute53Command,
+			&dnsRoute53NukeCommand,
 		},
 	}
 	dnsSyncCommand = cli.Command{
@@ -51,14 +51,14 @@ var (
 		Usage:     "Download a DNS discovery tree",
 		ArgsUsage: "<url> [ <directory> ]",
 		Action:    dnsSync,
-		Flags:     []cli.Flag{dnsTimeoutFlag},
+		Flags:     []cli.Flag{&dnsTimeoutFlag},
 	}
 	dnsSignCommand = cli.Command{
 		Name:      "sign",
 		Usage:     "Sign a DNS discovery tree",
 		ArgsUsage: "<tree-directory> <key-file>",
 		Action:    dnsSign,
-		Flags:     []cli.Flag{dnsDomainFlag, dnsSeqFlag},
+		Flags:     []cli.Flag{&dnsDomainFlag, &dnsSeqFlag},
 	}
 	dnsTXTCommand = cli.Command{
 		Name:      "to-txt",
@@ -71,7 +71,7 @@ var (
 		Usage:     "Deploy DNS TXT records to CloudFlare",
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToCloudflare,
-		Flags:     []cli.Flag{cloudflareTokenFlag, cloudflareZoneIDFlag},
+		Flags:     []cli.Flag{&cloudflareTokenFlag, &cloudflareZoneIDFlag},
 	}
 	dnsRoute53Command = cli.Command{
 		Name:      "to-route53",
@@ -79,10 +79,10 @@ var (
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToRoute53,
 		Flags: []cli.Flag{
-			route53AccessKeyFlag,
-			route53AccessSecretFlag,
-			route53ZoneIDFlag,
-			route53RegionFlag,
+			&route53AccessKeyFlag,
+			&route53AccessSecretFlag,
+			&route53ZoneIDFlag,
+			&route53RegionFlag,
 		},
 	}
 	dnsRoute53NukeCommand = cli.Command{
@@ -91,10 +91,10 @@ var (
 		ArgsUsage: "<domain>",
 		Action:    dnsNukeRoute53,
 		Flags: []cli.Flag{
-			route53AccessKeyFlag,
-			route53AccessSecretFlag,
-			route53ZoneIDFlag,
-			route53RegionFlag,
+			&route53AccessKeyFlag,
+			&route53AccessSecretFlag,
+			&route53ZoneIDFlag,
+			&route53RegionFlag,
 		},
 	}
 )
@@ -267,7 +267,7 @@ func loadSigningKey(keyfile string) *ecdsa.PrivateKey {
 // dnsClient configures the DNS discovery client from command line flags.
 func dnsClient(ctx *cli.Context) *dnsdisc.Client {
 	var cfg dnsdisc.Config
-	if commandHasFlag(ctx, dnsTimeoutFlag) {
+	if commandHasFlag(ctx, &dnsTimeoutFlag) {
 		cfg.Timeout = ctx.Duration(dnsTimeoutFlag.Name)
 	}
 	return dnsdisc.NewClient(cfg)

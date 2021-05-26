@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 type outputInspect struct {
@@ -43,9 +43,9 @@ Print various information about the keyfile.
 Private key information can be printed by using the --private flag;
 make sure to use this feature with great caution!`,
 	Flags: []cli.Flag{
-		passphraseFlag,
-		jsonFlag,
-		cli.BoolFlag{
+		&passphraseFlag,
+		&jsonFlag,
+		&cli.BoolFlag{
 			Name:  "private",
 			Usage: "include the private key in the output",
 		},
