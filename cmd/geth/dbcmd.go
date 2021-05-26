@@ -561,11 +561,11 @@ func importChaindata(ctx *cli.Context) error {
 	kind = strings.ToLower(strings.Trim(kind, " "))
 	fn, ok := importFuncs[kind]
 	if !ok {
-		var keys []string
+		var kinds []string
 		for key := range importFuncs {
-			keys = append(keys, key)
+			kinds = append(kinds, key)
 		}
-		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(keys, ", "))
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -591,11 +591,12 @@ var chainExporters = map[string]*exporter{
 	"snapshot": {
 		encoder: func(key []byte, val []byte) []byte {
 			// The prefix used to identify the snapshot data type,
-			// account snapshot or storage snapshot.
+			// 0: account snapshot
+			// 1: storage snapshot
 			if len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
-				return append([]byte{0}, append(key, val...))
+				return append([]byte{0}, append(key, val...)...)
 			}
-			return append([]byte{1}, append(key, val...))
+			return append([]byte{1}, append(key, val...)...)
 		},
 		prefixes: [][]byte{rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix},
 	},
