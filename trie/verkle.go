@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"crypto/sha256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/gballet/go-verkle"
@@ -114,4 +116,82 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 		root: trie.root.Copy(),
 		db:   db,
 	}
+}
+
+type VerkleStorageAdapter struct {
+	trie *VerkleTrie
+	addr common.Hash
+}
+
+func NewVerkleStorageAdapter(trie *VerkleTrie, addr common.Hash) *VerkleStorageAdapter {
+	return &VerkleStorageAdapter{
+		trie: trie,
+		addr: addr,
+	}
+}
+
+func (adapter *VerkleStorageAdapter) key2Storage(key []byte) []byte {
+	h := sha256.Sum256(append(key, adapter.addr[:]...))
+	return h[:]
+}
+
+// GetKey returns the sha3 preimage of a hashed key that was previously used
+// to store a value.
+func (adapter *VerkleStorageAdapter) GetKey(key []byte) []byte {
+	return key
+}
+
+// TryGet returns the value for key stored in the trie. The value bytes must
+// not be modified by the caller. If a node was not found in the database, a
+// trie.MissingNodeError is returned.
+func (adapter *VerkleStorageAdapter) TryGet(key []byte) ([]byte, error) {
+	return adapter.trie.root.Get(adapter.key2Storage(key), adapter.trie.db.DiskDB().Get)
+}
+
+// TryUpdate associates key with value in the trie. If value has length zero, any
+// existing value is deleted from the trie. The value bytes must not be modified
+// by the caller while they are stored in the trie. If a node was not found in the
+// database, a trie.MissingNodeError is returned.
+func (adapter *VerkleStorageAdapter) TryUpdate(key, value []byte) error {
+	return adapter.trie.root.Insert(adapter.key2Storage(key), value)
+}
+
+// TryDelete removes any existing value for key from the trie. If a node was not
+// found in the database, a trie.MissingNodeError is returned.
+func (adapter *VerkleStorageAdapter) TryDelete(key []byte) error {
+	return adapter.trie.root.Delete(key)
+}
+
+// Hash returns the root hash of the trie. It does not write to the database and
+// can be used even if the trie doesn't have one.
+func (adapter *VerkleStorageAdapter) Hash() common.Hash {
+	return adapter.trie.Hash()
+}
+
+// Commit writes all nodes to the trie's memory database, tracking the internal
+// and external (for account tries) references.
+func (adapter *VerkleStorageAdapter) Commit(onleaf LeafCallback) (common.Hash, error) {
+	return adapter.trie.Commit(onleaf)
+}
+
+// NodeIterator returns an iterator that returns nodes of the trie. Iteration
+// starts at the key after the given start key.
+func (adapter *VerkleStorageAdapter) NodeIterator(startKey []byte) NodeIterator {
+	// Returns a dummy value
+	return dummy{}
+}
+
+// Prove constructs a Merkle proof for key. The result contains all encoded nodes
+// on the path to the value at key. The value itself is also included in the last
+// node and can be retrieved by verifying the proof.
+//
+// If the trie does not contain a value for key, the returned proof contains all
+// nodes of the longest existing prefix of the key (at least the root), ending
+// with the node that proves the absence of the key.
+func (adapter *VerkleStorageAdapter) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+	panic("not implemented")
+}
+
+func (adapter *VerkleStorageAdapter) Copy(db *Database) *VerkleStorageAdapter {
+	return &VerkleStorageAdapter{adapter.trie, adapter.addr}
 }
