@@ -406,7 +406,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt account trie")
 
-	case <-time.After(3 * time.Second):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
@@ -466,7 +466,7 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(3 * time.Second):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
@@ -525,7 +525,7 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(3 * time.Second):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
