@@ -270,7 +270,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
-func ImportPreimages(db ethdb.Database, fn string) error {
+func ImportPreimages(db ethdb.Database, fn string, interrupt chan struct{}) error {
 	log.Info("Importing preimages", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -289,7 +289,6 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk trashing
-	// Import the snapshot in batches to prevent disk trashing
 	var (
 		count     int64
 		start     = time.Now()
@@ -311,6 +310,16 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[common.Hash][]byte)
 		}
+		// Check interruption emitted by ctrl+c
+		if count%1000 == 0 {
+			select {
+			case <-interrupt:
+				rawdb.WritePreimages(db, preimages)
+				log.Info("Preimages importing interruptted")
+				return nil
+			default:
+			}
+		}
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 			log.Info("Importing preimages", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
@@ -326,7 +335,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 }
 
 // ImportSnapshot imports a batch of snapshot data into the database
-func ImportSnapshot(db ethdb.Database, fn string) error {
+func ImportSnapshot(db ethdb.Database, fn string, interrupt chan struct{}) error {
 	log.Info("Importing snapshot data", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -386,6 +395,18 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 			}
 			batch.Reset()
 		}
+		// Check interruption emitted by ctrl+c
+		if count%1000 == 0 {
+			select {
+			case <-interrupt:
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				log.Info("Snapshot data importing interruptted")
+				return nil
+			default:
+			}
+		}
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 			log.Info("Importing snapshot data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
@@ -404,7 +425,7 @@ func ImportSnapshot(db ethdb.Database, fn string) error {
 
 // ExportChaindata exports all known chain data into the given file,
 // truncating any data already present in the file.
-func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key, val []byte) []byte, prefixes [][]byte) error {
+func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key, val []byte) []byte, prefixes [][]byte, interrupt chan struct{}) error {
 	log.Info("Exporting chain data", "file", fn, "kind", kind)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -430,6 +451,16 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key,
 			blob := encode(it.Key(), it.Value())
 			if err := rlp.Encode(writer, blob); err != nil {
 				return err
+			}
+			// Check interruption emitted by ctrl+c
+			if count%1000 == 0 {
+				select {
+				case <-interrupt:
+					it.Release()
+					log.Info("Chain data exporting interruptted")
+					return nil
+				default:
+				}
 			}
 			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 				log.Info("Exporting chain data", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))

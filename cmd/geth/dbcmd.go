@@ -19,10 +19,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -544,7 +546,7 @@ func freezerInspect(ctx *cli.Context) error {
 }
 
 // importFuncs defines all supported chain data import functions.
-var importFuncs = map[string]func(db ethdb.Database, fn string) error{
+var importFuncs = map[string]func(db ethdb.Database, fn string, interrupt chan struct{}) error{
 	"preimage": utils.ImportPreimages,
 	"snapshot": utils.ImportSnapshot,
 }
@@ -567,8 +569,26 @@ func importChaindata(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
+	var (
+		interrupted bool
+		interrupt   = make(chan struct{})
+	)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+
+		for {
+			<-sigc
+			if interrupted {
+				interrupted = true
+				close(interrupt)
+			}
+			log.Info("Got interrupt, shutting down...")
+		}
+	}()
 	db := utils.MakeChainDatabase(ctx, stack, false)
-	return fn(db, ctx.Args().Get(1))
+	return fn(db, ctx.Args().Get(1), interrupt)
 }
 
 // exporter defines all the necessary information for chain data export.
@@ -617,6 +637,24 @@ func exportChaindata(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
+	var (
+		interrupted bool
+		interrupt   = make(chan struct{})
+	)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+
+		for {
+			<-sigc
+			if interrupted {
+				interrupted = true
+				close(interrupt)
+			}
+			log.Info("Got interrupt, shutting down...")
+		}
+	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.encoder, exporter.prefixes)
+	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.encoder, exporter.prefixes, interrupt)
 }
