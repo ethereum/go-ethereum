@@ -50,27 +50,29 @@ func newVerkleNodeIterator(trie *VerkleTrie, start []byte) NodeIterator {
 // Next moves the iterator to the next node. If the parameter is false, any child
 // nodes will be skipped.
 func (it *verkleNodeIterator) Next(descend bool) bool {
-	if it.lastErr == errIteratorEnd || len(it.stack) == 0 {
+	if it.lastErr == errIteratorEnd {
 		it.lastErr = errIteratorEnd
 		return false
+	}
+
+	if len(it.stack) == 0 {
+		it.stack = append(it.stack, verkleNodeIteratorState{Node: it.trie.root, Index: 0})
+		it.current = it.trie.root
+
+		return true
 	}
 
 	switch node := it.current.(type) {
 	case *verkle.InternalNode:
 		context := &it.stack[len(it.stack)-1]
-		if context.Index == -1 {
-			// Stop on this internal node
-			context.Index++
-			return true
-		}
 
 		// Look for the next non-empty child
 		children := node.Children()
 		for ; context.Index < len(children); context.Index++ {
 			if _, ok := children[context.Index].(verkle.Empty); !ok {
-				it.stack = append(it.stack, verkleNodeIteratorState{Node: children[context.Index], Index: -1})
+				it.stack = append(it.stack, verkleNodeIteratorState{Node: children[context.Index], Index: 0})
 				it.current = children[context.Index]
-				return true
+				return it.Next(descend)
 			}
 		}
 
@@ -80,18 +82,18 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 			it.lastErr = errIteratorEnd
 			return false
 		}
-		it.current = it.stack[len(it.stack)-1].Node
 		it.stack = it.stack[:len(it.stack)-1]
+		it.current = it.stack[len(it.stack)-1].Node
 		it.stack[len(it.stack)-1].Index++
 		return it.Next(descend)
 	case *verkle.LeafNode:
 		// go back to parent to get the next leaf
-		it.current = it.stack[len(it.stack)-2].Node
 		it.stack = it.stack[:len(it.stack)-1]
+		it.current = it.stack[len(it.stack)-1].Node
 		it.stack[len(it.stack)-1].Index++
-		return true
+		return it.Next(descend)
 	case *verkle.HashedNode:
-		// resolve the trie
+		// resolve the node
 		h := node.Hash()
 		data, err := it.trie.db.diskdb.Get(h[:])
 		if err != nil {
@@ -102,7 +104,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 			panic(err)
 		}
 
-		// update the parent with the resolved node
+		// update the stack and parent with the resolved node
 		it.stack[len(it.stack)-1].Node = it.current
 		parent := &it.stack[len(it.stack)-2]
 		parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
@@ -112,6 +114,69 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		panic("invalid node type")
 	}
 }
+
+//func (it *verkleNodeIterator) Next(descend bool) bool {
+//if it.lastErr == errIteratorEnd || len(it.stack) == 0 {
+//it.lastErr = errIteratorEnd
+//return false
+//}
+
+//switch node := it.current.(type) {
+//case *verkle.InternalNode:
+//context := &it.stack[len(it.stack)-1]
+//if context.Index == -1 {
+//// Stop on this internal node
+//context.Index++
+//return true
+//}
+
+//// Look for the next non-empty child
+//children := node.Children()
+//for ; context.Index < len(children); context.Index++ {
+//if _, ok := children[context.Index].(verkle.Empty); !ok {
+//it.stack = append(it.stack, verkleNodeIteratorState{Node: children[context.Index], Index: -1})
+//it.current = children[context.Index]
+//return true
+//}
+//}
+
+//// Reached the end of this node, go back to the parent, if
+//// this isn't root.
+//if len(it.stack) == 1 {
+//it.lastErr = errIteratorEnd
+//return false
+//}
+//it.current = it.stack[len(it.stack)-1].Node
+//it.stack = it.stack[:len(it.stack)-1]
+//it.stack[len(it.stack)-1].Index++
+//return it.Next(descend)
+//case *verkle.LeafNode:
+//// go back to parent to get the next leaf
+//it.current = it.stack[len(it.stack)-2].Node
+//it.stack = it.stack[:len(it.stack)-1]
+//it.stack[len(it.stack)-1].Index++
+//return it.Next(descend)
+//case *verkle.HashedNode:
+//// resolve the trie
+//data, err := it.trie.db.diskdb.Get(h[:])
+//if err != nil {
+//panic(err)
+//}
+//it.current, err = verkle.ParseNode(data, len(it.stack)-1, 8)
+//if err != nil {
+//panic(err)
+//}
+
+//// update the parent with the resolved node
+//it.stack[len(it.stack)-1].Node = it.current
+//parent := &it.stack[len(it.stack)-2]
+//parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
+//return true
+//default:
+//fmt.Println(node)
+//panic("invalid node type")
+//}
+//}
 
 // Error returns the error status of the iterator.
 func (it *verkleNodeIterator) Error() error {
