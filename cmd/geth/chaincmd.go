@@ -358,7 +358,7 @@ func importPreimages(ctx *cli.Context) error {
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
-	return utils.ImportPreimages(db, ctx.Args().First())
+	return utils.ImportPreimages(db, ctx.Args().First(), nil)
 }
 
 // exportPreimages dumps the preimage data to specified json file in streaming way.
@@ -371,7 +371,7 @@ func exportPreimages(ctx *cli.Context) error {
 
 	exporter := chainExporters["preimage"]
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return utils.ExportChaindata(db, ctx.Args().First(), "preimage", exporter.encoder, exporter.prefixes)
+	return utils.ExportChaindata(db, ctx.Args().First(), "preimage", exporter.encoder, exporter.prefixes, nil)
 }
 
 func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
