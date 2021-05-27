@@ -243,8 +243,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
 	}
-
-	log.Crit("THE-INDEX","execution", vmContext.BlockNumber)
 	return statedb, execRs, nil
 }
 

@@ -23,7 +23,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -1444,39 +1443,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
 }
 
-//// -------------------
-//
-//type BlobFileStorage struct {
-//}
-//
-//func NewBlobStorage() *BlobFileStorage {
-//
-//	return &BlobFileStorage{}
-//}
-//
-//func (v BlobFileStorage) Put(key []byte, value []byte) error {
-//	file, err := os.OpenFile("./blob.rlp", os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-//	if err != nil {
-//		log.Crit("THE-INDEX", "error", err)
-//	}
-//
-//	_, err = file.Write(value)
-//	if err != nil {
-//		log.Crit("THE-INDEX", "error", err)
-//	}
-//
-//	defer file.Close()
-//
-//	return err
-//}
-//func (v BlobFileStorage) Delete(key []byte) error {
-//	return nil
-//}
-//var db = NewBlobStorage()
-//// -------------------
-
-var once = true
-
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
@@ -1484,32 +1450,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	defer bc.wg.Done()
 
 	// -------------------
-
-	log.Error("THE-INDEX start", "blockchain: block number", block.Header().Number)
-
-	if once {
-
-		file, err := os.OpenFile("./blob.rlp", os.O_WRONLY, os.ModeAppend)
-		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
-		}
-
-
-		err = rlp.Encode(file, block.Header().Number)
-		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
-		}
-
-		err = rlp.Encode(file, block.Header().Time)
-		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
-		}
-
-		defer file.Close()
-		once = false
-	}
-	log.Error("THE-INDEX end", "blockchain: block number", block.Header().Number)
-
+	bc.theIndex_Hook_WriteBlockHeader(block)
 	// -------------------
 
 	// Calculate the total difficulty of the block
