@@ -99,8 +99,9 @@ func (it *NodeIterator) step() error {
 		it.state, it.stateIt = nil, nil
 		return nil
 	}
-	// If the state trie node is an internal entry, leave as is
-	if !it.stateIt.Leaf() {
+	// If the state trie node is an internal entry, or if it is a
+	// a storage leaf, leave as is.
+	if !it.stateIt.Leaf() || len(it.stateIt.LeafBlob()) == 33 {
 		return nil
 	}
 	// Otherwise we've reached an account node, initiate data iteration
