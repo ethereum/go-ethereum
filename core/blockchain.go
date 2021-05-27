@@ -1449,10 +1449,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	// -------------------
-	bc.theIndex_Hook_WriteBlockHeader(block)
-	// -------------------
-
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1462,6 +1458,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	currentBlock := bc.CurrentBlock()
 	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
+
+	// -------------------
+	bc.theIndex_Hook_WriteBlockHeader(block)
+	bc.theIndex_Hook_WriteContractsStorage(block, logs)
+	// -------------------
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
