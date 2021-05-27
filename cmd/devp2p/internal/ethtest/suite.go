@@ -70,6 +70,8 @@ func (s *Suite) AllEthTests() []utesting.Test {
 		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce66},
 		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
 		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce66},
+		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
+		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce66},
 		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
@@ -93,6 +95,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestBroadcast", Fn: s.TestBroadcast},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		{Name: "TestTransaction", Fn: s.TestTransaction},
@@ -112,6 +115,7 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 		{Name: "TestBroadcast66", Fn: s.TestBroadcast66},
 		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce66},
 		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce66},
+		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce66},
 		{Name: "TestMaliciousHandshake66", Fn: s.TestMaliciousHandshake66},
 		{Name: "TestMaliciousStatus66", Fn: s.TestMaliciousStatus66},
 		{Name: "TestTransaction66", Fn: s.TestTransaction66},
@@ -577,6 +581,22 @@ func (s *Suite) TestOldAnnounce(t *utesting.T) {
 func (s *Suite) TestOldAnnounce66(t *utesting.T) {
 	if err := s.oldAnnounce(eth66); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestBlockHashAnnounce sends a new block hash announcement and expects
+// the node to perform a `GetBlockHeaders` request.
+func (s *Suite) TestBlockHashAnnounce(t *utesting.T) {
+	if err := s.hashAnnounce(eth65); err != nil {
+		t.Fatalf("block hash announcement failed: %v", err)
+	}
+}
+
+// TestBlockHashAnnounce66 sends a new block hash announcement and expects
+// the node to perform a `GetBlockHeaders` request.
+func (s *Suite) TestBlockHashAnnounce66(t *utesting.T) {
+	if err := s.hashAnnounce(eth66); err != nil {
+		t.Fatalf("block hash announcement failed: %v", err)
 	}
 }
 
