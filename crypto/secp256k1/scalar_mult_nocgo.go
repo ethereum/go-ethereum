@@ -6,12 +6,8 @@
 
 package secp256k1
 
-import (
-	"math/big"
+import "math/big"
 
-	"github.com/btcsuite/btcd/btcec"
-)
-
-func ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
-	return btcec.S256().ScalarMult(Bx, By, scalar)
+func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
+	panic("ScalarMult is not available when secp256k1 is built without cgo")
 }

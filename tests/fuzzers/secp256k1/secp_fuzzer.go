@@ -15,6 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // build +gofuzz
+
 package secp256k1
 
 import (

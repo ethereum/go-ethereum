@@ -246,10 +246,6 @@ func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 	return x3, y3, z3
 }
 
-func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
-	return ScalarMult(Bx, By, scalar)
-}
-
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
 // an integer in big-endian form.
 func (BitCurve *BitCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {

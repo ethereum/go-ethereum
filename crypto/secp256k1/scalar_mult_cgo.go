@@ -12,12 +12,15 @@ import (
 )
 
 /*
+
 #include "libsecp256k1/include/secp256k1.h"
+
 extern int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
+
 */
 import "C"
 
-func ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
+func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
 	// Ensure scalar is exactly 32 bytes. We pad always, even if
 	// scalar is 32 bytes long, to avoid a timing side channel.
 	if len(scalar) > 32 {
