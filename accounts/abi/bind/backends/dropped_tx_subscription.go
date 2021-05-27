@@ -2,7 +2,9 @@ package backends
 
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -13,4 +15,8 @@ func (fb *filterBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) even
 
 func (fb *filterBackend) SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription {
 	return nullSubscription()
+}
+
+func (fb *filterBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
+	return nil
 }

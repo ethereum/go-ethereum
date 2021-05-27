@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 	"sync"
+	"time"
 )
 
 var (
@@ -103,6 +104,7 @@ func dropPeerID(peerid string) {
 type withPeer struct {
 	Value interface{} `json:"value"`
 	Peer interface{} `json:"peer"`
+	Time int64 `json:"ts"`
 }
 
 // NewHeadsWithPeers send a notification each time a new (header) block is
@@ -127,7 +129,7 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 				peerid, _ := blockPeerMap.Get(h.Hash())
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewHeadsWithPeers", "hash", h.Hash(), "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer} )
+				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano()} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -164,7 +166,7 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 				for _, h := range hashes {
 					peerid, _ := txPeerMap.Get(h)
 					peer, _ := peerIDMap.Load(peerid)
-					notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer})
+					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano()})
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()
