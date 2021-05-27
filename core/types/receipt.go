@@ -207,13 +207,13 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errEmptyTypedReceipt
 	}
 	switch b[0] {
-	case AccessListTxType:
+	case DynamicFeeTxType, AccessListTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
 			return err
 		}
-		r.Type = AccessListTxType
+		r.Type = b[0]
 		return r.setFromRLP(data)
 	default:
 		return ErrTxTypeNotSupported
