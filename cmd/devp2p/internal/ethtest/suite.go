@@ -732,17 +732,20 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
+
 	// generate 50 txs
 	hashMap, _, err := generateTxs(s, 50)
 	if err != nil {
 		t.Fatalf("failed to generate transactions: %v", err)
 	}
+
 	// create new pooled tx hashes announcement
 	hashes := make([]common.Hash, 0)
 	for _, hash := range hashMap {
 		hashes = append(hashes, hash)
 	}
 	announce := NewPooledTransactionHashes(hashes)
+
 	// send announcement
 	conn, err := s.dial66()
 	if err != nil {
@@ -755,6 +758,7 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	if err = conn.Write(announce); err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
+
 	// wait for GetPooledTxs request
 	for {
 		_, msg := conn.readAndServe66(s.chain, timeout)
@@ -764,8 +768,13 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg))
 			}
 			return
+		// ignore propagated txs from previous tests
 		case *NewPooledTransactionHashes:
-			// ignore propagated txs from old tests
+			continue
+		// ignore block announcements from previous tests
+		case *NewBlockHashes:
+			continue
+		case *NewBlock:
 			continue
 		default:
 			t.Fatalf("unexpected %s", pretty.Sdump(msg))
