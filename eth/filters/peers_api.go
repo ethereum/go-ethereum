@@ -28,6 +28,7 @@ import (
 var (
 	blockPeerMap *lru.Cache
 	txPeerMap *lru.Cache
+	tsMap *lru.Cache
 	peerIDMap *sync.Map
 )
 
@@ -42,8 +43,10 @@ type peerInfo struct {
 func SetBlockPeer(hash common.Hash, peer string) {
 	log.Debug("Recording block peer", "hash", hash, "peer", peer)
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	if _, ok := blockPeerMap.Get(hash); !ok {
 		blockPeerMap.Add(hash, peer)
+		tsMap.Add(hash, time.Now().UnixNano())
 	}
 }
 
@@ -52,8 +55,10 @@ func SetBlockPeer(hash common.Hash, peer string) {
 // which peer was the first to provide a given transaction
 func SetTxPeer(hash common.Hash, peer string) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	if _, ok := txPeerMap.Get(hash); !ok {
 		txPeerMap.Add(hash, peer)
+		tsMap.Add(hash, time.Now().UnixNano())
 	}
 }
 
@@ -105,6 +110,7 @@ type withPeer struct {
 	Value interface{} `json:"value"`
 	Peer interface{} `json:"peer"`
 	Time int64 `json:"ts"`
+	P2PTime int64 `json:"p2pts,omitempty"`
 }
 
 // NewHeadsWithPeers send a notification each time a new (header) block is
@@ -127,9 +133,10 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 			select {
 			case h := <-headers:
 				peerid, _ := blockPeerMap.Get(h.Hash())
+				p2pts, _ := tsMap.Get(h.Hash())
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewHeadsWithPeers", "hash", h.Hash(), "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano()} )
+				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts.(int64)} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -165,8 +172,9 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 			case hashes := <-txHashes:
 				for _, h := range hashes {
 					peerid, _ := txPeerMap.Get(h)
+					p2pts, _ := tsMap.Get(h)
 					peer, _ := peerIDMap.Load(peerid)
-					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano()})
+					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts.(int64)})
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()
