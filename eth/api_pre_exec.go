@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash"
+	"math/big"
+	"time"
+
+	"github.com/DeBankDeFi/eth/txtrace"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -14,9 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/sha3"
-	"hash"
-	"math/big"
-	"time"
 )
 
 type helpHash struct {
@@ -136,7 +138,8 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	return receipt, nil
 }
 
-func (api *PreExecAPI) TraceTx(ctx context.Context, origin *PreExecTx, config *tracers.TraceConfig) (interface{}, error) {
+// TraceTransaction tracing pre-exec transaction object.
+func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, config *tracers.TraceConfig) (interface{}, error) {
 	var (
 		bc     = api.e.blockchain
 		tracer vm.Tracer
@@ -163,25 +166,25 @@ func (api *PreExecAPI) TraceTx(ctx context.Context, origin *PreExecTx, config *t
 		}
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
 		go func() {
 			<-deadlineCtx.Done()
 			if deadlineCtx.Err() == context.DeadlineExceeded {
 				tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
 			}
 		}()
-		defer cancel()
-
 	case config == nil:
-		tracer = vm.NewStructLogger(nil)
-
+		fallthrough
 	default:
-		tracer = vm.NewStructLogger(config.LogConfig)
+		// Constuct the txtrace.StructLogger tracer to execute with
+		tracer = txtrace.NewTraceStructLogger(nil)
 	}
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
 
+	txIndex := 0
 	// Call Prepare to clear out the statedb access list
-	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), 0)
+	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), txIndex)
 
 	result, err := core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
 	if err != nil {
@@ -201,10 +204,11 @@ func (api *PreExecAPI) TraceTx(ctx context.Context, origin *PreExecTx, config *t
 			ReturnValue: returnVal,
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
-
 	case *tracers.Tracer:
 		return tracer.GetResult()
-
+	case *txtrace.StructLogger:
+		tracer.ProcessTx()
+		return tracer.GetTraceActions(), nil
 	default:
 		panic(fmt.Sprintf("bad tracer type %T", tracer))
 	}
