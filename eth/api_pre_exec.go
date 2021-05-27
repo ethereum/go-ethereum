@@ -186,6 +186,21 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	// Call Prepare to clear out the statedb access list
 	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), txIndex)
 
+	// check if type of tracer is txtrace.StructLogger, in that case, fill info.
+	var traceLogger *txtrace.StructLogger
+	switch tracer.(type) {
+	case *txtrace.StructLogger:
+		traceLogger = tracer.(*txtrace.StructLogger)
+		traceLogger.SetFrom(d.msg.From())
+		traceLogger.SetTo(d.msg.To())
+		traceLogger.SetValue(*d.msg.Value())
+		traceLogger.SetGasUsed(d.tx.Gas())
+		traceLogger.SetBlockHash(d.block.Hash())
+		traceLogger.SetBlockNumber(d.block.Number())
+		traceLogger.SetTx(d.tx.Hash())
+		traceLogger.SetTxIndex(uint(txIndex))
+	}
+
 	result, err := core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
