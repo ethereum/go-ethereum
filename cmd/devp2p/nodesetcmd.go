@@ -29,16 +29,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	nodesetCommand = cli.Command{
 		Name:  "nodeset",
 		Usage: "Node set tools",
-		Subcommands: []cli.Command{
-			nodesetInfoCommand,
-			nodesetFilterCommand,
+		Subcommands: []*cli.Command{
+			&nodesetInfoCommand,
+			&nodesetFilterCommand,
 		},
 	}
 	nodesetInfoCommand = cli.Command{

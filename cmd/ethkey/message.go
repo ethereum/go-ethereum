@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 type outputSign struct {
@@ -47,9 +47,9 @@ Sign the message with a keyfile.
 To sign a message contained in a file, use the --msgfile flag.
 `,
 	Flags: []cli.Flag{
-		passphraseFlag,
-		jsonFlag,
-		msgfileFlag,
+		&passphraseFlag,
+		&jsonFlag,
+		&msgfileFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		message := getMessage(ctx, 1)
@@ -96,8 +96,8 @@ var commandVerifyMessage = cli.Command{
 Verify the signature of the message.
 It is possible to refer to a file containing the message.`,
 	Flags: []cli.Flag{
-		jsonFlag,
-		msgfileFlag,
+		&jsonFlag,
+		&msgfileFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		addressStr := ctx.Args().First()
@@ -143,7 +143,7 @@ It is possible to refer to a file containing the message.`,
 
 func getMessage(ctx *cli.Context, msgarg int) []byte {
 	if file := ctx.String("msgfile"); file != "" {
-		if len(ctx.Args()) > msgarg {
+		if ctx.Args().Len() > msgarg {
 			utils.Fatalf("Can't use --msgfile and message argument at the same time.")
 		}
 		msg, err := ioutil.ReadFile(file)
@@ -151,9 +151,9 @@ func getMessage(ctx *cli.Context, msgarg int) []byte {
 			utils.Fatalf("Can't read message file: %v", err)
 		}
 		return msg
-	} else if len(ctx.Args()) == msgarg+1 {
+	} else if ctx.Args().Len() == msgarg+1 {
 		return []byte(ctx.Args().Get(msgarg))
 	}
-	utils.Fatalf("Invalid number of arguments: want %d, got %d", msgarg+1, len(ctx.Args()))
+	utils.Fatalf("Invalid number of arguments: want %d, got %d", msgarg+1, ctx.Args().Len())
 	return nil
 }

@@ -27,15 +27,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var gethPubKeys []string = []string{
-	//@holiman, minisign public key FB1D084D39BAEC24
+var gethPubKeys = []string{
+	// @holiman, minisign public key FB1D084D39BAEC24
 	"RWQk7Lo5TQgd+wxBNZM+Zoy+7UhhMHaWKzqoes9tvSbFLJYZhNTbrIjx",
-	//minisign public key 138B1CA303E51687
+	// minisign public key 138B1CA303E51687
 	"RWSHFuUDoxyLEzjszuWZI1xStS66QTyXFFZG18uDfO26CuCsbckX1e9J",
-	//minisign public key FD9813B2D2098484
+	// minisign public key FD9813B2D2098484
 	"RWSEhAnSshOY/b+GmaiDkObbCWefsAoavjoLcPjBo1xn71yuOH5I+Lts",
 }
 

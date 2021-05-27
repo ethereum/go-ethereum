@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var newPassphraseFlag = cli.StringFlag{
@@ -38,8 +38,8 @@ var commandChangePassphrase = cli.Command{
 	Description: `
 Change the password of a keyfile.`,
 	Flags: []cli.Flag{
-		passphraseFlag,
-		newPassphraseFlag,
+		&passphraseFlag,
+		&newPassphraseFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		keyfilepath := ctx.Args().First()

@@ -23,19 +23,19 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	discv5Command = cli.Command{
 		Name:  "discv5",
 		Usage: "Node Discovery v5 tools",
-		Subcommands: []cli.Command{
-			discv5PingCommand,
-			discv5ResolveCommand,
-			discv5CrawlCommand,
-			discv5TestCommand,
-			discv5ListenCommand,
+		Subcommands: []*cli.Command{
+			&discv5PingCommand,
+			&discv5ResolveCommand,
+			&discv5CrawlCommand,
+			&discv5TestCommand,
+			&discv5ListenCommand,
 		},
 	}
 	discv5PingCommand = cli.Command{
@@ -47,23 +47,23 @@ var (
 		Name:   "resolve",
 		Usage:  "Finds a node in the DHT",
 		Action: discv5Resolve,
-		Flags:  []cli.Flag{bootnodesFlag},
+		Flags:  []cli.Flag{&bootnodesFlag},
 	}
 	discv5CrawlCommand = cli.Command{
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv5Crawl,
-		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
+		Flags:  []cli.Flag{&bootnodesFlag, &crawlTimeoutFlag},
 	}
 	discv5TestCommand = cli.Command{
 		Name:   "test",
 		Usage:  "Runs protocol tests against a node",
 		Action: discv5Test,
 		Flags: []cli.Flag{
-			testPatternFlag,
-			testTAPFlag,
-			testListen1Flag,
-			testListen2Flag,
+			&testPatternFlag,
+			&testTAPFlag,
+			&testListen1Flag,
+			&testListen2Flag,
 		},
 	}
 	discv5ListenCommand = cli.Command{
@@ -71,10 +71,10 @@ var (
 		Usage:  "Runs a node",
 		Action: discv5Listen,
 		Flags: []cli.Flag{
-			bootnodesFlag,
-			nodekeyFlag,
-			nodedbFlag,
-			listenAddrFlag,
+			&bootnodesFlag,
+			&nodekeyFlag,
+			&nodedbFlag,
+			&listenAddrFlag,
 		},
 	}
 )

@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -50,7 +50,7 @@ var (
 		Usage:       "A set of commands based on the snapshot",
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: "",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:      "prune-state",
 				Usage:     "Prune stale ethereum state data based on the snapshot",
@@ -58,13 +58,13 @@ var (
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-					utils.CacheTrieJournalFlag,
-					utils.BloomFilterSizeFlag,
+					&utils.DataDirFlag,
+					&utils.AncientFlag,
+					&utils.RopstenFlag,
+					&utils.RinkebyFlag,
+					&utils.GoerliFlag,
+					&utils.CacheTrieJournalFlag,
+					&utils.BloomFilterSizeFlag,
 				},
 				Description: `
 geth snapshot prune-state <state-root>
@@ -88,11 +88,11 @@ the trie clean cache with default directory will be deleted.
 				Action:    utils.MigrateFlags(verifyState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					&utils.DataDirFlag,
+					&utils.AncientFlag,
+					&utils.RopstenFlag,
+					&utils.RinkebyFlag,
+					&utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -108,11 +108,11 @@ In other words, this command does the snapshot to trie conversion.
 				Action:    utils.MigrateFlags(traverseState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					&utils.DataDirFlag,
+					&utils.AncientFlag,
+					&utils.RopstenFlag,
+					&utils.RinkebyFlag,
+					&utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -130,11 +130,11 @@ It's also usable without snapshot enabled.
 				Action:    utils.MigrateFlags(traverseRawState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					&utils.DataDirFlag,
+					&utils.AncientFlag,
+					&utils.RopstenFlag,
+					&utils.RinkebyFlag,
+					&utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -153,15 +153,15 @@ It's also usable without snapshot enabled.
 				Action:    utils.MigrateFlags(dumpState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-					utils.ExcludeCodeFlag,
-					utils.ExcludeStorageFlag,
-					utils.StartKeyFlag,
-					utils.DumpLimitFlag,
+					&utils.DataDirFlag,
+					&utils.AncientFlag,
+					&utils.RopstenFlag,
+					&utils.RinkebyFlag,
+					&utils.GoerliFlag,
+					&utils.ExcludeCodeFlag,
+					&utils.ExcludeStorageFlag,
+					&utils.StartKeyFlag,
+					&utils.DumpLimitFlag,
 				},
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
@@ -180,7 +180,7 @@ func pruneState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
-	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.GlobalUint64(utils.BloomFilterSizeFlag.Name))
+	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.Uint64(utils.BloomFilterSizeFlag.Name))
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -191,7 +191,7 @@ func pruneState(ctx *cli.Context) error {
 	}
 	var targetRoot common.Hash
 	if ctx.NArg() == 1 {
-		targetRoot, err = parseRoot(ctx.Args()[0])
+		targetRoot, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -225,7 +225,7 @@ func verifyState(ctx *cli.Context) error {
 	}
 	var root = headBlock.Root()
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -261,7 +261,7 @@ func traverseState(ctx *cli.Context) error {
 		err  error
 	)
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -351,7 +351,7 @@ func traverseRawState(ctx *cli.Context) error {
 		err  error
 	)
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err

@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -38,15 +38,15 @@ var app *cli.App
 
 func init() {
 	app = flags.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
-	app.Commands = []cli.Command{
-		commandStatus,
-		commandDeploy,
-		commandSign,
-		commandPublish,
+	app.Commands = []*cli.Command{
+		&commandStatus,
+		&commandDeploy,
+		&commandSign,
+		&commandPublish,
 	}
 	app.Flags = []cli.Flag{
-		oracleFlag,
-		nodeURLFlag,
+		&oracleFlag,
+		&nodeURLFlag,
 	}
 	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }

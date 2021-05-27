@@ -22,8 +22,7 @@ import (
 	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
-
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var compileCommand = cli.Command{
@@ -34,7 +33,7 @@ var compileCommand = cli.Command{
 }
 
 func compileCmd(ctx *cli.Context) error {
-	debug := ctx.GlobalBool(DebugFlag.Name)
+	debug := ctx.Bool(DebugFlag.Name)
 
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("filename required")

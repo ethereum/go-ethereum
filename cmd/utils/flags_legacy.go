@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var ShowDeprecated = cli.Command{
@@ -33,7 +33,7 @@ var ShowDeprecated = cli.Command{
 	Description: "Show flags that have been deprecated and will soon be removed",
 }
 
-var DeprecatedFlags = []cli.Flag{}
+var DeprecatedFlags []cli.Flag
 
 var (
 	// (Deprecated May 2020, shown in aliased flags section)
@@ -69,7 +69,7 @@ var (
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
-func showDeprecated(*cli.Context) {
+func showDeprecated(*cli.Context) error {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
@@ -77,4 +77,5 @@ func showDeprecated(*cli.Context) {
 	// TODO remove when there are newly deprecated flags
 	fmt.Println("no deprecated flags to show at this time")
 	fmt.Println()
+	return nil
 }

@@ -21,7 +21,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -36,12 +36,12 @@ var app *cli.App
 
 func init() {
 	app = flags.NewApp(gitCommit, gitDate, "an Ethereum key manager")
-	app.Commands = []cli.Command{
-		commandGenerate,
-		commandInspect,
-		commandChangePassphrase,
-		commandSignMessage,
-		commandVerifyMessage,
+	app.Commands = []*cli.Command{
+		&commandGenerate,
+		&commandInspect,
+		&commandChangePassphrase,
+		&commandSignMessage,
+		&commandVerifyMessage,
 	}
 	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }

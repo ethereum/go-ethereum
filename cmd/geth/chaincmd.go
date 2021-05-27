@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -64,11 +64,11 @@ It expects the genesis file as argument.`,
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
 		Flags: []cli.Flag{
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.BaikalFlag,
+			&utils.MainnetFlag,
+			&utils.RopstenFlag,
+			&utils.RinkebyFlag,
+			&utils.GoerliFlag,
+			&utils.BaikalFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -80,24 +80,24 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.SyncModeFlag,
-			utils.GCModeFlag,
-			utils.SnapshotFlag,
-			utils.CacheDatabaseFlag,
-			utils.CacheGCFlag,
-			utils.MetricsEnabledFlag,
-			utils.MetricsEnabledExpensiveFlag,
-			utils.MetricsHTTPFlag,
-			utils.MetricsPortFlag,
-			utils.MetricsEnableInfluxDBFlag,
-			utils.MetricsInfluxDBEndpointFlag,
-			utils.MetricsInfluxDBDatabaseFlag,
-			utils.MetricsInfluxDBUsernameFlag,
-			utils.MetricsInfluxDBPasswordFlag,
-			utils.MetricsInfluxDBTagsFlag,
-			utils.TxLookupLimitFlag,
+			&utils.DataDirFlag,
+			&utils.CacheFlag,
+			&utils.SyncModeFlag,
+			&utils.GCModeFlag,
+			&utils.SnapshotFlag,
+			&utils.CacheDatabaseFlag,
+			&utils.CacheGCFlag,
+			&utils.MetricsEnabledFlag,
+			&utils.MetricsEnabledExpensiveFlag,
+			&utils.MetricsHTTPFlag,
+			&utils.MetricsPortFlag,
+			&utils.MetricsEnableInfluxDBFlag,
+			&utils.MetricsInfluxDBEndpointFlag,
+			&utils.MetricsInfluxDBDatabaseFlag,
+			&utils.MetricsInfluxDBUsernameFlag,
+			&utils.MetricsInfluxDBPasswordFlag,
+			&utils.MetricsInfluxDBTagsFlag,
+			&utils.TxLookupLimitFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -113,9 +113,9 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.SyncModeFlag,
+			&utils.DataDirFlag,
+			&utils.CacheFlag,
+			&utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -131,9 +131,9 @@ be gzipped.`,
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.SyncModeFlag,
+			&utils.DataDirFlag,
+			&utils.CacheFlag,
+			&utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -145,9 +145,9 @@ be gzipped.`,
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.SyncModeFlag,
+			&utils.DataDirFlag,
+			&utils.CacheFlag,
+			&utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -159,14 +159,14 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[? <blockHash> | <blockNum>]",
 		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.IterativeOutputFlag,
-			utils.ExcludeCodeFlag,
-			utils.ExcludeStorageFlag,
-			utils.IncludeIncompletesFlag,
-			utils.StartKeyFlag,
-			utils.DumpLimitFlag,
+			&utils.DataDirFlag,
+			&utils.CacheFlag,
+			&utils.IterativeOutputFlag,
+			&utils.ExcludeCodeFlag,
+			&utils.ExcludeStorageFlag,
+			&utils.IncludeIncompletesFlag,
+			&utils.StartKeyFlag,
+			&utils.DumpLimitFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -225,7 +225,7 @@ func dumpGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	// Start metrics export if enabled
@@ -259,13 +259,13 @@ func importChain(ctx *cli.Context) error {
 
 	var importErr error
 
-	if len(ctx.Args()) == 1 {
+	if ctx.Args().Len() == 1 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			importErr = err
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for _, arg := range ctx.Args().Slice() {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
@@ -287,7 +287,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
-	if ctx.GlobalBool(utils.NoCompactionFlag.Name) {
+	if ctx.Bool(utils.NoCompactionFlag.Name) {
 		return nil
 	}
 
@@ -304,7 +304,7 @@ func importChain(ctx *cli.Context) error {
 }
 
 func exportChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
@@ -316,7 +316,7 @@ func exportChain(ctx *cli.Context) error {
 
 	var err error
 	fp := ctx.Args().First()
-	if len(ctx.Args()) < 3 {
+	if ctx.Args().Len() < 3 {
 		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
@@ -343,7 +343,7 @@ func exportChain(ctx *cli.Context) error {
 
 // importPreimages imports preimage data from the specified file.
 func importPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
@@ -362,7 +362,7 @@ func importPreimages(ctx *cli.Context) error {
 
 // exportPreimages dumps the preimage data to specified json file in streaming way.
 func exportPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
