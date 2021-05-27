@@ -193,6 +193,10 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 	return 0, errUnknownTable
 }
 
+func (f *freezer) NewAncientBatch() ethdb.AncientBatch {
+	return newFreezerBatch(f)
+}
+
 // AppendAncient injects all binary blobs belong to block at the end of the
 // append-only immutable table files.
 //

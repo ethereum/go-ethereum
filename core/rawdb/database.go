@@ -99,9 +99,8 @@ func (db *nofreezedb) AncientSize(kind string) (uint64, error) {
 	return 0, errNotSupported
 }
 
-// AppendAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AppendAncient(number uint64, hash, header, body, receipts, td []byte) error {
-	return errNotSupported
+func (db *nofreezedb) NewAncientBatch() ethdb.AncientBatch {
+	return nil
 }
 
 // TruncateAncients returns an error as we don't have a backing chain freezer.

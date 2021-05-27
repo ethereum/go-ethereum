@@ -25,8 +25,53 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// freezerBatch is a batch for a freezer table.
+// freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
+	f      *freezer
+	tables map[string]*freezerTableBatch
+}
+
+func newFreezerBatch(f *freezer) *freezerBatch {
+	batch := &freezerBatch{
+		f:      f,
+		tables: make(map[string]*freezerTableBatch, len(f.tables)),
+	}
+	for kind, table := range f.tables {
+		batch.tables[kind] = table.newBatch()
+	}
+	return batch
+}
+
+// Append adds an RLP-encoded item of the given kind.
+func (batch *freezerBatch) Append(kind string, num uint64, item interface{}) error {
+	return batch.tables[kind].Append(num, item)
+}
+
+// AppendRaw adds an item of the given kind.
+func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error {
+	return batch.tables[kind].AppendRaw(num, item)
+}
+
+func (batch *freezerBatch) Commit() error {
+	// TODO: check that count agrees on all batches.
+	var count uint64
+	for _, tb := range batch.tables {
+		count = tb.count
+	}
+
+	for _, tb := range batch.tables {
+		if err := tb.Commit(); err != nil {
+			return err
+		}
+	}
+
+	// Bump frozen block index.
+	atomic.AddUint64(&batch.f.frozen, count)
+	return nil
+}
+
+// freezerTableBatch is a batch for a freezer table.
+type freezerTableBatch struct {
 	t   *freezerTable
 	buf bytes.Buffer
 	sb  *BufferedSnapWriter
@@ -38,9 +83,9 @@ type freezerBatch struct {
 	headBytes uint32
 }
 
-// NewBatch creates a new batch for the freezer table.
-func (t *freezerTable) NewBatch() *freezerBatch {
-	batch := &freezerBatch{
+// newBatch creates a new batch for the freezer table.
+func (t *freezerTable) newBatch() *freezerTableBatch {
+	batch := &freezerTableBatch{
 		t:        t,
 		firstIdx: math.MaxUint64,
 	}
@@ -51,7 +96,7 @@ func (t *freezerTable) NewBatch() *freezerBatch {
 }
 
 // Reset clears the batch for reuse.
-func (batch *freezerBatch) Reset() {
+func (batch *freezerTableBatch) Reset() {
 	batch.firstIdx = math.MaxUint64
 	batch.buf.Reset()
 	if batch.sb != nil {
@@ -62,10 +107,10 @@ func (batch *freezerBatch) Reset() {
 	batch.headBytes = 0
 }
 
-// AppendRLP rlp-encodes and adds data at the end of the freezer table. The item number
-// is a precautionary parameter to ensure data correctness, but the table will
-// reject already existing data.
-func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
+// Append rlp-encodes and adds data at the end of the freezer table. The item number is a
+// precautionary parameter to ensure data correctness, but the table will reject already
+// existing data.
+func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if batch.firstIdx == math.MaxUint64 {
 		batch.firstIdx = item
 	}
@@ -93,10 +138,10 @@ func (batch *freezerBatch) AppendRLP(item uint64, data interface{}) error {
 	return nil
 }
 
-// Append injects a binary blob at the end of the freezer table. The item number
-// is a precautionary parameter to ensure data correctness, but the table will
-// reject already existing data.
-func (batch *freezerBatch) Append(item uint64, blob []byte) error {
+// AppendRaw injects a binary blob at the end of the freezer table. The item number is a
+// precautionary parameter to ensure data correctness, but the table will reject already
+// existing data.
+func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	if batch.firstIdx == math.MaxUint64 {
 		batch.firstIdx = item
 	}
@@ -120,7 +165,7 @@ func (batch *freezerBatch) Append(item uint64, blob []byte) error {
 }
 
 // Write writes the batched items to the backing freezerTable.
-func (batch *freezerBatch) Write() error {
+func (batch *freezerTableBatch) Commit() error {
 	var (
 		retry = false
 		err   error
@@ -140,7 +185,7 @@ func (batch *freezerBatch) Write() error {
 // table. It will only ever write as many items as fits into one table: if
 // the backing table needs to open a new file, this method will return with a
 // (true, nil), to signify that it needs to be invoked again.
-func (batch *freezerBatch) write(newHead bool) (bool, error) {
+func (batch *freezerTableBatch) write(newHead bool) (bool, error) {
 	if !newHead {
 		batch.t.lock.RLock()
 		defer batch.t.lock.RUnlock()
@@ -151,6 +196,7 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 	if batch.t.index == nil || batch.t.head == nil {
 		return false, errClosed
 	}
+
 	// Ensure we're in sync with the data
 	if atomic.LoadUint64(&batch.t.items) != batch.firstIdx {
 		return false, fmt.Errorf("appending unexpected item: want %d, have %d", batch.t.items, batch.firstIdx)
@@ -211,6 +257,6 @@ func (batch *freezerBatch) write(newHead bool) (bool, error) {
 	return false, nil
 }
 
-func (batch *freezerBatch) Size() int {
+func (batch *freezerTableBatch) Size() int {
 	return batch.buf.Len()
 }

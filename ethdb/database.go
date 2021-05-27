@@ -85,15 +85,20 @@ type AncientReader interface {
 
 // AncientWriter contains the methods required to write to immutable ancient data.
 type AncientWriter interface {
-	// AppendAncient injects all binary blobs belong to block at the end of the
-	// append-only immutable table files.
-	AppendAncient(number uint64, hash, header, body, receipt, td []byte) error
+	NewAncientBatch() AncientBatch
 
 	// TruncateAncients discards all but the first n ancient data from the ancient store.
 	TruncateAncients(n uint64) error
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
+}
+
+type AncientBatch interface {
+	Append(kind string, number uint64, item interface{}) error
+	AppendRaw(kind string, number uint64, item []byte) error
+
+	Commit() error
 }
 
 // Reader contains the methods required to read data from both key-value as well as

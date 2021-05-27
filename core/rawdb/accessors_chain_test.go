@@ -467,8 +467,10 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadTdRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent td returned")
 	}
+
 	// Write and verify the header in the database
 	WriteAncientBlock(db, block, nil, big.NewInt(100))
+
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
 	}
@@ -481,6 +483,7 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadTdRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no td returned")
 	}
+
 	// Use a fake hash for data retrieval, nothing should be returned.
 	fakeHash := common.BytesToHash([]byte{0x01, 0x02, 0x03})
 	if blob := ReadHeaderRLP(db, fakeHash, number); len(blob) != 0 {

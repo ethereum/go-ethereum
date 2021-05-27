@@ -50,13 +50,13 @@ func setupBatch(t *testing.T, name string, maxFilesize uint32, noCompression boo
 func TestBatch(t *testing.T) {
 	f, cleanup := setupBatch(t, "freezer", 31, true)
 	defer cleanup()
-	batch := f.NewBatch()
+	batch := f.newBatch()
 	// Write 15 bytes 30 times
 	for x := 0; x < 30; x++ {
 		data := getChunk(15, x)
 		batch.Append(uint64(x), data)
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	f.DumpIndex(0, 30)
@@ -70,14 +70,14 @@ func TestBatch(t *testing.T) {
 func TestBatchRLP(t *testing.T) {
 	f, cleanup := setupBatch(t, "freezer-rlp", 31, true)
 	defer cleanup()
-	batch := f.NewBatch()
+	batch := f.newBatch()
 	// Write 15 bytes 30 times
 	for x := 0; x < 30; x++ {
 		data := big.NewInt(int64(x))
 		data = data.Exp(data, data, nil)
-		batch.AppendRLP(uint64(x), data)
+		batch.Append(uint64(x), data)
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	f.DumpIndex(0, 30)
@@ -91,36 +91,36 @@ func TestBatchRLP(t *testing.T) {
 func TestBatchSequence(t *testing.T) {
 	f, cleanup := setupBatch(t, "freezer-batchid", 31, true)
 	defer cleanup()
-	batch := f.NewBatch()
-	if err := batch.Append(2, []byte{0}); err != nil {
+	batch := f.newBatch()
+	if err := batch.AppendRaw(2, []byte{0}); err != nil {
 		// The validity of the first ID is not checked until later
 		t.Fatalf("expected no error, got %v", err)
 	}
 	// We've written '2', writing below that should error
-	if err := batch.Append(0, []byte{0}); err == nil {
+	if err := batch.AppendRaw(0, []byte{0}); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := batch.Append(2, []byte{0}); err == nil {
+	if err := batch.AppendRaw(2, []byte{0}); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := batch.Write(); err == nil {
+	if err := batch.Commit(); err == nil {
 		t.Fatal("expected error")
 	}
 	if have, want := batch.headBytes, uint32(0); have != want {
 		t.Fatalf("have %d, want %d", have, want)
 	}
 	// Add some dummy data that we then clear out
-	if err := batch.Append(1000, []byte{1, 1, 1, 1, 1}); err == nil {
+	if err := batch.AppendRaw(1000, []byte{1, 1, 1, 1, 1}); err == nil {
 		t.Fatal("expected error")
 	}
 	batch.Reset() // Clear it out
-	if err := batch.Append(0, []byte{0}); err != nil {
+	if err := batch.AppendRaw(0, []byte{0}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if err := batch.Append(1, []byte{0}); err != nil {
+	if err := batch.AppendRaw(1, []byte{0}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
@@ -173,7 +173,7 @@ func batchBench(b *testing.B, nbytes int, noCompression bool) {
 	}
 	data := make([]byte, nbytes)
 	rand.Read(data)
-	batch := f.NewBatch()
+	batch := f.newBatch()
 	rlpData, _ := rlp.EncodeToBytes(data)
 	b.SetBytes(int64(len(rlpData)))
 	b.ResetTimer()
@@ -184,12 +184,12 @@ func batchBench(b *testing.B, nbytes int, noCompression bool) {
 			b.Fatal(err)
 		}
 		if batch.Size() > 1*1024*1024 {
-			if err := batch.Write(); err != nil {
+			if err := batch.Commit(); err != nil {
 				b.Fatal(err)
 			}
 		}
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		b.Fatal(err)
 	}
 	b.StopTimer() // Stop timer before deleting the files
@@ -211,21 +211,21 @@ func batchRlpBench(b *testing.B, nbytes int, noCompression bool) {
 	rlpData, _ := rlp.EncodeToBytes(data)
 	b.SetBytes(int64(len(rlpData)))
 
-	batch := f.NewBatch()
+	batch := f.newBatch()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if err := batch.AppendRLP(uint64(i), data); err != nil {
+		if err := batch.Append(uint64(i), data); err != nil {
 			b.Fatal(err)
 		}
 		if batch.Size() > 1*1024*1024 {
-			if err := batch.Write(); err != nil {
+			if err := batch.Commit(); err != nil {
 				b.Fatal(err)
 			}
 		}
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		b.Fatal(err)
 	}
 	b.StopTimer() // Stop timer before deleting the files
