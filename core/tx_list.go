@@ -521,7 +521,11 @@ func (l *txPricedList) Removed(count int) {
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
 func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
-	return l.underpricedFor(&l.urgent, tx) && l.underpricedFor(&l.floating, tx)
+	// Note: with two queues, being underpriced is defined as being worse than the worst item
+	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
+	return (l.underpricedFor(&l.urgent, tx) || len(l.urgent.list) == 0) &&
+		(l.underpricedFor(&l.floating, tx) || len(l.floating.list) == 0) &&
+		(len(l.urgent.list) != 0 || len(l.floating.list) != 0)
 }
 
 // underpricedFor checks whether a transaction is cheaper than (or as cheap as) the
@@ -539,10 +543,7 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool 
 	}
 	// Check if the transaction is underpriced or not
 	if len(h.list) == 0 {
-		// Note: since Underpriced is only called when the pool is full, this case is only
-		// possible if one of the queues has a zero capacity. In this case we should report
-		// that the transaction in question will not fit in this queue.
-		return true // There is no remote transaction at all.
+		return false // There is no remote transaction at all.
 	}
 	// If the remote transaction is even cheaper than the
 	// cheapest one tracked locally, reject it.
