@@ -43,6 +43,18 @@ func (w *multiWorker) isRunning() bool {
 	return false
 }
 
+// pendingBlockAndReceipts returns pending block and corresponding receipts from the `regularWorker`
+func (w *multiWorker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	// return a snapshot to avoid contention on currentMu mutex
+	return w.regularWorker.pendingBlockAndReceipts()
+}
+
+func (w *multiWorker) setGasCeil(ceil uint64) {
+	for _, worker := range w.workers {
+		worker.setGasCeil(ceil)
+	}
+}
+
 func (w *multiWorker) setExtra(extra []byte) {
 	for _, worker := range w.workers {
 		worker.setExtra(extra)
