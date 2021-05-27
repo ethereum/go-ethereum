@@ -2123,19 +2123,33 @@ func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 	return &BundleAPI{b, chain}
 }
 
+// SendBundleArgs represents the arguments for a call.
+type CallBundleArgs struct {
+	Txs                    []hexutil.Bytes       `json:"txs"`
+	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
+	Coinbase               *string               `json:"coinbase"`
+	Timestamp              *uint64               `json:"timestamp"`
+	Timeout                *int64                `json:"timeout"`
+}
+
 // CallBundle will simulate a bundle of transactions at the top of a given block
 // number with the state of another (or the same) block. This can be used to
 // simulate future blocks with the current state, or it can be used to simulate
 // a past block.
 // The sender is responsible for signing the transactions and using the correct
 // nonce and ensuring validity
-func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNr rpc.BlockNumber, stateBlockNumberOrHash rpc.BlockNumberOrHash, coinbaseArg *string, blockTimestamp *uint64, timeoutMilliSecondsPtr *int64) (map[string]interface{}, error) {
-	if len(encodedTxs) == 0 {
-		return nil, nil
+func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
+	if len(args.Txs) == 0 {
+		return nil, errors.New("bundle missing txs")
 	}
+	if args.BlockNumber == 0 {
+		return nil, errors.New("bundle missing blockNumber")
+	}
+
 	var txs types.Transactions
 
-	for _, encodedTx := range encodedTxs {
+	for _, encodedTx := range args.Txs {
 		tx := new(types.Transaction)
 		if err := tx.UnmarshalBinary(encodedTx); err != nil {
 			return nil, err
@@ -2145,23 +2159,23 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	timeoutMilliSeconds := int64(5000)
-	if timeoutMilliSecondsPtr != nil {
-		timeoutMilliSeconds = *timeoutMilliSecondsPtr
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
 	}
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
-	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, stateBlockNumberOrHash)
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	blockNumber := big.NewInt(int64(blockNr))
+	blockNumber := big.NewInt(int64(args.BlockNumber))
 
 	timestamp := parent.Time + 1
-	if blockTimestamp != nil {
-		timestamp = *blockTimestamp
+	if args.Timestamp != nil {
+		timestamp = *args.Timestamp
 	}
 	coinbase := parent.Coinbase
-	if coinbaseArg != nil {
-		coinbase = common.HexToAddress(*coinbaseArg)
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
 	}
 	header := &types.Header{
 		ParentHash: parent.Hash(),
