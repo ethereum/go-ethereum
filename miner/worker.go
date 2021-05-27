@@ -808,6 +808,11 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
+	gasPrice, err := tx.EffectiveGasTip(w.current.header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
@@ -817,7 +822,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	w.current.receipts = append(w.current.receipts, receipt)
 
 	gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
-	w.current.profit.Add(w.current.profit, gasUsed.Mul(gasUsed, tx.GasPrice()))
+	w.current.profit.Add(w.current.profit, gasUsed.Mul(gasUsed, gasPrice))
 
 	return receipt.Logs, nil
 }
@@ -874,7 +879,7 @@ func (w *worker) commitBundle(txs types.Transactions, coinbase common.Address, i
 			return true
 		}
 		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
+		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
 		logs, err := w.commitTransaction(tx, coinbase)
 		switch {
@@ -1363,7 +1368,21 @@ func (w *worker) computeBundleGas(bundle types.MevBundle, parent *types.Block, h
 	ethSentToCoinbase := new(big.Int)
 
 	for i, tx := range bundle.Txs {
-		state.Prepare(tx.Hash(), common.Hash{}, i+currentTxCount)
+		if header.BaseFee != nil && tx.Type() == 2 {
+			// Sanity check for extremely large numbers
+			if tx.GasFeeCap().BitLen() > 256 {
+				return simulatedBundle{}, core.ErrFeeCapVeryHigh
+			}
+			if tx.GasTipCap().BitLen() > 256 {
+				return simulatedBundle{}, core.ErrTipVeryHigh
+			}
+			// Ensure gasFeeCap is greater than or equal to gasTipCap.
+			if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
+				return simulatedBundle{}, core.ErrTipAboveFeeCap
+			}
+		}
+
+		state.Prepare(tx.Hash(), i+currentTxCount)
 		coinbaseBalanceBefore := state.GetBalance(w.coinbase)
 
 		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &w.coinbase, gasPool, state, header, tx, &tempGasUsed, *w.chain.GetVMConfig())
@@ -1395,7 +1414,11 @@ func (w *worker) computeBundleGas(bundle types.MevBundle, parent *types.Block, h
 		}
 
 		gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
-		gasFeesTx := gasUsed.Mul(gasUsed, tx.GasPrice())
+		gasPrice, err := tx.EffectiveGasTip(header.BaseFee)
+		if err != nil {
+			return simulatedBundle{}, err
+		}
+		gasFeesTx := gasUsed.Mul(gasUsed, gasPrice)
 		coinbaseBalanceAfter := state.GetBalance(w.coinbase)
 		coinbaseDelta := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
 		coinbaseDelta.Sub(coinbaseDelta, gasFeesTx)
