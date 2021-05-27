@@ -36,21 +36,16 @@ const (
 	iptrackMinStatements = 10
 	iptrackWindow        = 5 * time.Minute
 	iptrackContactWindow = 10 * time.Minute
-)
 
-var (
-	// recordUpdateThrottle is the time needed to wait between two updates to an ENR
-	// record. Modifications in between are queued up and published together.
-	recordUpdateThrottle = time.Second
+	// time needed to wait between two updates to the local ENR
+	recordUpdateThrottle = time.Millisecond
 )
 
 // LocalNode produces the signed node record of a local node, i.e. a node run in the
 // current process. Setting ENR entries via the Set method updates the record. A new version
 // of the record is signed on demand when the Node method is called.
 type LocalNode struct {
-	cur    atomic.Value // holds a non-nil node pointer while the record is up-to-date
-	prev   atomic.Value // holds a non-nil node pointer while the record is thottled on an update
-	update time.Time    // timestamp when the record was last updated to prevent sequence number bloat
+	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date
 
 	id  ID
 	key *ecdsa.PrivateKey
@@ -59,6 +54,7 @@ type LocalNode struct {
 	// everything below is protected by a lock
 	mu        sync.RWMutex
 	seq       uint64
+	update    time.Time // timestamp when the record was last updated
 	entries   map[string]enr.Entry
 	endpoint4 lnEndpoint
 	endpoint6 lnEndpoint
@@ -85,9 +81,8 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 		},
 	}
 	ln.seq = db.localSeq(ln.id)
-	ln.prev.Store((*Node)(nil))
+	ln.update = time.Now()
 	ln.cur.Store((*Node)(nil))
-
 	return ln
 }
 
@@ -103,18 +98,8 @@ func (ln *LocalNode) Node() *Node {
 	if n != nil {
 		return n
 	}
-	// Record was invalidated, check for a previous version and use that unless we
-	// are allowed to update.
-	if n = ln.prev.Load().(*Node); n != nil {
-		ln.mu.RLock()
-		throttle := time.Since(ln.update) < recordUpdateThrottle
-		ln.mu.RUnlock()
 
-		if throttle {
-			return n
-		}
-	}
-	// Record was invalidated a long time ago, sign a new copy
+	// Record was invalidated, sign a new copy.
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
@@ -123,9 +108,19 @@ func (ln *LocalNode) Node() *Node {
 	if n = ln.cur.Load().(*Node); n != nil {
 		return n
 	}
+
+	// The initial sequence number is the current timestamp in milliseconds. To ensure
+	// that the initial sequence number will always be higher than any previous sequence
+	// number (assuming the clock is correct), we want to avoid updating the record faster
+	// than once per ms. So we need to sleep here until the next possible update time has
+	// arrived.
+	lastChange := time.Since(ln.update)
+	if lastChange < recordUpdateThrottle {
+		time.Sleep(recordUpdateThrottle - lastChange)
+	}
+
 	ln.sign()
 	ln.update = time.Now()
-
 	return ln.cur.Load().(*Node)
 }
 
@@ -294,9 +289,6 @@ func predictAddr(t *netutil.IPTracker) (net.IP, int) {
 }
 
 func (ln *LocalNode) invalidate() {
-	if n := ln.cur.Load().(*Node); n != nil {
-		ln.prev.Store(n)
-	}
 	ln.cur.Store((*Node)(nil))
 }
 
@@ -325,4 +317,13 @@ func (ln *LocalNode) sign() {
 func (ln *LocalNode) bumpSeq() {
 	ln.seq++
 	ln.db.storeLocalSeq(ln.id, ln.seq)
+}
+
+// nowMilliseconds gives the current timestamp at millisecond precision.
+func nowMilliseconds() uint64 {
+	ns := time.Now().UnixNano()
+	if ns < 0 {
+		return 0
+	}
+	return uint64(ns / 1000 / 1000)
 }

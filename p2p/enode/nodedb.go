@@ -434,7 +434,7 @@ func (db *DB) localSeq(id ID) uint64 {
 	if seq := db.fetchUint64(localItemKey(id, dbLocalSeq)); seq > 0 {
 		return seq
 	}
-	return uint64(time.Now().Unix())
+	return nowMilliseconds()
 }
 
 // storeLocalSeq stores the local record sequence counter.
