@@ -1,0 +1,70 @@
+## EIP-1559 malicious bloat
+
+This test contains testcases for EIP-1559, which tests an attack where transactions are bloated.
+The transactions uses a `1Mb`-sized integer to specify either `max_priority_fee_per_gas` or `max_fee_per_gas`.
+
+What they actually pay is
+
+            priority_fee_per_gas = min(transaction.max_priority_fee_per_gas, transaction.max_fee_per_gas - block.base_fee_per_gas)
+
+So it is possible to dump huge amount of data into one of the fields. 
+A user can maliciously bombard blocks with no penalty, and a miner can create basically arbitrary large blocks.
+
+There are two transactions in `txs.rlp`, the first one with `512K` `max_fee_per_gas` (a.k.a `feeCap`), the second with `512K` `max_priority_fee_per_gas` (a.k.a `tip`). 
+The `txs.json` is what was used to generate the two malicious ones. 
+
+This attack is a bit hard to pull off, even on a testnet. In various json-conversions, go-ethereum does not allow
+marshallling integers above `256` bits. Further, the txpool rejects oversized transactions, and is also erroneously 
+calculating the `cost` of a transaction. 
+
+This PoC shows that the _consensus engine_ accepts such bloated transactions. This means that a valid block, post 1559, can be arbitrarily
+large, _without_ that extra bloat costing anything (except for the miner who increases the chance to be uncled). 
+
+
+```
+$ dir=./testdata/12 && ./evm t8n --state.fork=London --input.alloc=$dir/alloc.json --input.txs=$dir/txs.rlp --input.env=$dir/env.json  --output.result=stdout --verbosity 5 
+INFO [05-28|09:32:06.392] Trie dumping started                     root=12d94e..ef3b17
+INFO [05-28|09:32:06.392] Trie dumping complete                    accounts=4 elapsed="282.184µs"
+INFO [05-28|09:32:06.392] Wrote file                               file=alloc.json
+```
+Output:
+```json
+{
+ "result": {
+  "stateRoot": "0x12d94ef874c8ae6aaf016f24398f2ba5344b07d787038afb17d54432e8ef3b17",
+  "txRoot": "0x0037cd520bc14053499608731ebb11974ae4ca10150f2f9f4caa76e478cb56d8",
+  "receiptRoot": "0xa532a08aa9f62431d6fe5d924951b8efb86ed3c54d06fee77788c3767dd13420",
+  "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+  "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "receipts": [
+   {
+    "type": "0x2",
+    "root": "0x",
+    "status": "0x0",
+    "cumulativeGasUsed": "0x84d0",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "logs": null,
+    "transactionHash": "0x5dd0bd036f9d2dfdc92bb94377194fd13c6ae55b022d546942b1b3e60e46a2c2",
+    "contractAddress": "0x0000000000000000000000000000000000000000",
+    "gasUsed": "0x84d0",
+    "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "transactionIndex": "0x0"
+   },
+   {
+    "type": "0x2",
+    "root": "0x",
+    "status": "0x0",
+    "cumulativeGasUsed": "0x109a0",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "logs": null,
+    "transactionHash": "0x493a42e091d6b01e5df82238933fb4429b582f6b62b339db2062ab69092bce19",
+    "contractAddress": "0x0000000000000000000000000000000000000000",
+    "gasUsed": "0x84d0",
+    "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "transactionIndex": "0x1"
+   }
+  ]
+ }
+}
+```
+
