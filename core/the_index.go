@@ -18,7 +18,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
 	}
 
 	if theIndexVerbose {
-		log.Info("THE-INDEX:blocks", "num", block.Header().Number, "hash", block.Hash())
+		log.Info("THE-INDEX:blocks", "num", block.Header().Number)
 	}
 
 	file, err := os.OpenFile("./the-index/blocks.rlp", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
@@ -27,7 +27,14 @@ func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
 	}
 	defer file.Close()
 
-	err = rlp.Encode(file, rlp.TheIndex_rlpBlock{BlockNumber: block.Header().Number, Time: block.Header().Time})
+	err = rlp.Encode(file, rlp.TheIndex_rlpBlock{
+		BlockNumber: block.Header().Number,
+		Time:        block.Header().Time,
+		Hash:        block.Hash(),
+		Coinbase:    block.Header().Coinbase,
+		Difficulty:  block.Header().Difficulty,
+		GasLimit:    block.Header().GasLimit,
+	})
 	if err != nil {
 		log.Crit("THE-INDEX", "error", err)
 	}

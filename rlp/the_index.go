@@ -9,6 +9,10 @@ import (
 type TheIndex_rlpBlock struct {
 	BlockNumber *big.Int
 	Time        uint64
+	Hash        common.Hash
+	Coinbase    common.Address
+	Difficulty  *big.Int
+	GasLimit    uint64
 }
 
 type TheIndex_rlpLog struct {
