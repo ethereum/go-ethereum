@@ -55,6 +55,7 @@ var (
 	app = flags.NewApp(gitCommit, gitDate, fmt.Sprintf("the %s command line interface", repositoryIdentifier))
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
+		utils.BorLogsFlag,
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,

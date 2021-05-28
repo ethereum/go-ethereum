@@ -373,6 +373,10 @@ var (
 		Value: ethconfig.Defaults.TxPool.Lifetime,
 	}
 	// Performance tuning settings
+	BorLogsFlag = cli.BoolFlag{
+		Name:  "bor.logs",
+		Usage: "Enable bor logs retrieval",
+	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
@@ -1482,7 +1486,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
 
-	// Cap the cache allowance and tune the garbage collector
+	if ctx.GlobalIsSet(BorLogsFlag.Name) {
+		cfg.BorLogs = ctx.GlobalBool(BorLogsFlag.Name)
+	}
+
+  // Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
 		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
