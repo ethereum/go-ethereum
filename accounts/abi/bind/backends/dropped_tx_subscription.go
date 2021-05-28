@@ -2,6 +2,7 @@ package backends
 
 
 import (
+	"context"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -19,4 +20,7 @@ func (fb *filterBackend) SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent
 
 func (fb *filterBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
 	return nil
+}
+func (fb *filterBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return nil, nil
 }
