@@ -146,7 +146,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 }
 
 // ToMessage converts TransactionArgs to the Message type used by the core evm
-func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) types.Message {
 	// Set sender address or use zero address if none specified.
 	addr := args.from()
 

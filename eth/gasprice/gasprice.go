@@ -192,19 +192,19 @@ type SortableTxs interface {
 	EffectiveTip(int, *big.Int) *big.Int
 }
 
-type transactionsByGasPrice []*types.Transaction
+type transactionsByFeeCap []*types.Transaction
 
-func (t transactionsByGasPrice) Len() int                                { return len(t) }
-func (t transactionsByGasPrice) Swap(i, j int)                           { t[i], t[j] = t[j], t[i] }
-func (t transactionsByGasPrice) Less(i, j int) bool                      { return t[i].GasPriceCmp(t[j]) < 0 }
-func (t transactionsByGasPrice) GasPrice(i int) *big.Int                 { return t[i].GasPrice() }
-func (t transactionsByGasPrice) EffectiveTip(i int, b *big.Int) *big.Int { return nil }
+func (t transactionsByFeeCap) Len() int                                { return len(t) }
+func (t transactionsByFeeCap) Swap(i, j int)                           { t[i], t[j] = t[j], t[i] }
+func (t transactionsByFeeCap) Less(i, j int) bool                      { return t[i].FeeCapCmp(t[j]) < 0 }
+func (t transactionsByFeeCap) GasPrice(i int) *big.Int                 { return t[i].GasPrice() }
+func (t transactionsByFeeCap) EffectiveTip(i int, b *big.Int) *big.Int { return nil }
 
 type transactionsByTip []*types.Transaction
 
 func (t transactionsByTip) Len() int                { return len(t) }
 func (t transactionsByTip) Swap(i, j int)           { t[i], t[j] = t[j], t[i] }
-func (t transactionsByTip) Less(i, j int) bool      { return t[i].GasPriceCmp(t[j]) < 0 }
+func (t transactionsByTip) Less(i, j int) bool      { return t[i].TipCmp(t[j]) < 0 }
 func (t transactionsByTip) GasPrice(i int) *big.Int { return nil }
 func (t transactionsByTip) EffectiveTip(i int, b *big.Int) *big.Int {
 	// It's okay to discard the error because a tx would never be accepted into
@@ -233,7 +233,7 @@ func (gpo *Oracle) getBlockValues(ctx context.Context, tip bool, signer types.Si
 	if tip {
 		sort.Sort(transactionsByTip(txs))
 	} else {
-		sort.Sort(transactionsByGasPrice(txs))
+		sort.Sort(transactionsByFeeCap(txs))
 	}
 
 	var prices []*big.Int
