@@ -300,33 +300,60 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
-// EffectiveTip returns the effective miner tip for the given base fee.
-// Returns error in case of a negative effective miner tip.
-func (tx *Transaction) EffectiveTip(baseFee *big.Int) (*big.Int, error) {
-	if baseFee == nil {
-		return tx.Tip(), nil
-	}
-	feeCap := tx.FeeCap()
-	if feeCap.Cmp(baseFee) == -1 {
-		return nil, ErrFeeCapTooLow
-	}
-	return math.BigMin(tx.Tip(), feeCap.Sub(feeCap, baseFee)), nil
-}
-
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
-// GasPriceCmp compares the gas prices of two transactions.
-func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.inner.gasPrice().Cmp(other.inner.gasPrice())
+// FeeCapCmp compares the fee cap of two transactions.
+func (tx *Transaction) FeeCapCmp(other *Transaction) int {
+	return tx.inner.feeCap().Cmp(other.inner.feeCap())
 }
 
-// GasPriceIntCmp compares the gas price of the transaction against the given price.
-func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
-	return tx.inner.gasPrice().Cmp(other)
+// FeeCapIntCmp compares the fee cap of the transaction against the given fee cap.
+func (tx *Transaction) FeeCapIntCmp(other *big.Int) int {
+	return tx.inner.feeCap().Cmp(other)
+}
+
+// TipCmp compares the tip of two transactions.
+func (tx *Transaction) TipCmp(other *Transaction) int {
+	return tx.inner.tip().Cmp(other.inner.tip())
+}
+
+// TipIntCmp compares the tip of the transaction against the given tip.
+func (tx *Transaction) TipIntCmp(other *big.Int) int {
+	return tx.inner.tip().Cmp(other)
+}
+
+// EffectiveTip returns the effective miner tip for the given base fee.
+// Note: if the effective tip is negative, this method returns both error
+// the actual negative value, _and_ ErrFeeCapTooLow
+func (tx *Transaction) EffectiveTip(baseFee *big.Int) (*big.Int, error) {
+	if baseFee == nil {
+		return tx.Tip(), nil
+	}
+	var err error
+	feeCap := tx.FeeCap()
+	if feeCap.Cmp(baseFee) == -1 {
+		err = ErrFeeCapTooLow
+	}
+	return math.BigMin(tx.Tip(), feeCap.Sub(feeCap, baseFee)), err
+}
+
+// EffectiveTipValue is identical to EffectiveTip, but does not return an
+// error in case the effective tip is negative
+func (tx *Transaction) EffectiveTipValue(baseFee *big.Int) *big.Int {
+	effectiveTip, _ := tx.EffectiveTip(baseFee)
+	return effectiveTip
+}
+
+// EffectiveTipCmp compares the effective tip of two transactions assuming the given base fee.
+func (tx *Transaction) EffectiveTipCmp(other *Transaction, baseFee *big.Int) int {
+	if baseFee == nil {
+		return tx.TipCmp(other)
+	}
+	return tx.EffectiveTipValue(baseFee).Cmp(other.EffectiveTipValue(baseFee))
 }
 
 // Hash returns the transaction hash.

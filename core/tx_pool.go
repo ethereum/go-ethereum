@@ -83,6 +83,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
+	// transaction with a tip higher than the total fee cap.
+	ErrTipAboveFeeCap = errors.New("tip higher than fee cap")
 )
 
 var (
@@ -115,6 +119,8 @@ var (
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
 	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
+
+	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -165,7 +171,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	PriceBump:  10,
 
 	AccountSlots: 16,
-	GlobalSlots:  4096,
+	GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	AccountQueue: 64,
 	GlobalQueue:  1024,
 
@@ -230,6 +236,7 @@ type TxPool struct {
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
+	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -426,10 +433,18 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	old := pool.gasPrice
 	pool.gasPrice = price
-	for _, tx := range pool.priced.Cap(price) {
-		pool.removeTx(tx.Hash(), false)
+	// if the min miner fee increased, remove transactions below the new threshold
+	if price.Cmp(old) > 0 {
+		// pool.priced is sorted by FeeCap, so we have to iterate through pool.all instead
+		drop := pool.all.RemotesBelowTip(price)
+		for _, tx := range drop {
+			pool.removeTx(tx.Hash(), false)
+		}
+		pool.priced.Removed(len(drop))
 	}
+
 	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
@@ -527,6 +542,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
 		return ErrTxTypeNotSupported
 	}
+	// Reject dynamic fee transactions until EIP-1559 activates.
+	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
+		return ErrTxTypeNotSupported
+	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -540,13 +559,17 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
+	// Ensure feeCap is less than or equal to tip.
+	if tx.FeeCapIntCmp(tx.Tip()) < 0 {
+		return ErrTipAboveFeeCap
+	}
 	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
 	}
-	// Drop non-local transactions under our own minimal accepted gas price
-	if !local && tx.GasPriceIntCmp(pool.gasPrice) < 0 {
+	// Drop non-local transactions under our own minimal accepted gas price or tip
+	if !local && tx.TipIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -598,7 +621,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
-			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
+			log.Trace("Discarding underpriced transaction", "hash", hash, "tip", tx.Tip(), "feeCap", tx.FeeCap())
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
@@ -615,7 +638,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
-			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
+			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "tip", tx.Tip(), "feeCap", tx.FeeCap())
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
@@ -1088,6 +1111,9 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
+		if reset.newHead != nil {
+			pool.priced.SetBaseFee(reset.newHead.BaseFee)
+		}
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
 	pool.truncatePending()
@@ -1205,6 +1231,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
+	pool.eip1559 = pool.chainconfig.IsLondon(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the
@@ -1408,6 +1435,10 @@ func (pool *TxPool) truncateQueue() {
 // demoteUnexecutables removes invalid and processed transactions from the pools
 // executable/pending queue and any subsequent transactions that become unexecutable
 // are moved back into the future queue.
+//
+// Note: transactions are not marked as removed in the priced list because re-heaping
+// is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
+// to trigger a re-heap is this function
 func (pool *TxPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
@@ -1427,7 +1458,6 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
 			pool.all.Remove(hash)
 		}
-		pool.priced.Removed(len(olds) + len(drops))
 		pendingNofundsMeter.Mark(int64(len(drops)))
 
 		for _, tx := range invalids {
@@ -1707,6 +1737,18 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 		}
 	}
 	return migrated
+}
+
+// RemotesBelowTip finds all remote transactions below the given tip threshold.
+func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
+	found := make(types.Transactions, 0, 128)
+	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+		if tx.TipIntCmp(threshold) < 0 {
+			found = append(found, tx)
+		}
+		return true
+	}, false, true) // Only iterate remotes
+	return found
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
