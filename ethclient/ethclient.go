@@ -515,7 +515,8 @@ func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64
 	return uint64(hex), nil
 }
 
-// CreateAccessList tries to create an access list for a specific transaction.
+// CreateAccessList tries to create an access list for a specific transaction based on the
+// current pending state of the blockchain.
 func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*types.AccessList, uint64, string, error) {
 	type accessListResult struct {
 		Accesslist *types.AccessList `json:"accessList"`
