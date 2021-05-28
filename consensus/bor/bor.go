@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1123,6 +1124,11 @@ func (c *Bor) CommitStates(
 		"fromID", lastStateID+1,
 		"to", to.Format(time.RFC3339))
 	eventRecords, err := c.HeimdallClient.FetchStateSyncEvents(lastStateID+1, to.Unix())
+	if c.config.OverrideStateSyncRecords != nil {
+		if val, ok := c.config.OverrideStateSyncRecords[strconv.FormatUint(number, 10)]; ok {
+			eventRecords = eventRecords[0:val]
+		}
+	}
 
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
