@@ -16,7 +16,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/log"
@@ -110,7 +112,7 @@ type withPeer struct {
 	Value interface{} `json:"value"`
 	Peer interface{} `json:"peer"`
 	Time int64 `json:"ts"`
-	P2PTime int64 `json:"p2pts,omitempty"`
+	P2PTime interface{} `json:"p2pts,omitempty"`
 }
 
 // NewHeadsWithPeers send a notification each time a new (header) block is
@@ -118,6 +120,7 @@ type withPeer struct {
 func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -136,7 +139,79 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 				p2pts, _ := tsMap.Get(h.Hash())
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewHeadsWithPeers", "hash", h.Hash(), "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts.(int64)} )
+				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts} )
+			case <-rpcSub.Err():
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// NewFullBlocksWithPeers send a notification each time a new full block plus
+// transactions and receipts is appended to the chain, and includes the peer
+// that first provided the block
+func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Subscription, error) {
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		headers := make(chan *types.Header)
+		headersSub := api.events.SubscribeNewHeads(headers)
+
+		for {
+			select {
+			case h := <-headers:
+				hash := h.Hash()
+				peerid, _ := blockPeerMap.Get(hash)
+
+				block, err := api.backend.BlockByHash(ctx, hash)
+				if err != nil { continue }
+				marshalBlock, err := ethapi.RPCMarshalBlock(block, true, true)
+				if err != nil { continue }
+
+				marshalReceipts := make(map[common.Hash]map[string]interface{})
+				receipts, err := api.backend.GetReceipts(ctx, hash)
+				if err != nil {
+					continue
+				}
+				for index, receipt := range receipts {
+					fields := map[string]interface{}{
+						"transactionIndex":  hexutil.Uint64(index),
+						"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+						"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+						"contractAddress":   nil,
+						"logs":              receipt.Logs,
+						"logsBloom":         receipt.Bloom,
+					}
+					if receipt.Logs == nil {
+						fields["logs"] = [][]*types.Log{}
+					}
+					// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+					if receipt.ContractAddress != (common.Address{}) {
+						fields["contractAddress"] = receipt.ContractAddress
+					}
+					marshalReceipts[receipt.TxHash] = fields
+				}
+				marshalBlock["receipts"] = marshalReceipts
+
+
+				p2pts, _ := tsMap.Get(hash)
+				peer, _ := peerIDMap.Load(peerid)
+				log.Debug("NewFullBlocksWithPeers", "hash", hash, "peer", peerid, "peer", peer)
+				notifier.Notify(rpcSub.ID, withPeer{Value: marshalBlock, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -156,6 +231,7 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -174,7 +250,7 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 					peerid, _ := txPeerMap.Get(h)
 					p2pts, _ := tsMap.Get(h)
 					peer, _ := peerIDMap.Load(peerid)
-					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts.(int64)})
+					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts})
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()

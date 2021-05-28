@@ -49,6 +49,7 @@ type Backend interface {
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 }
 
 // Filter can be used to retrieve and filter logs.
