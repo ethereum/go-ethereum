@@ -1460,8 +1460,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	// -------------------
-	bc.theIndex_Hook_WriteBlockHeader(block)
-	bc.theIndex_Hook_WriteContractsStorage(block, logs)
+	bc.TheIndex_Hook_WriteBlockHeader(block)
+	bc.TheIndex_Hook_WriteContractsStorage(block, logs, state)
 	// -------------------
 
 	// Irrelevant of the canonical status, write the block itself to the database.

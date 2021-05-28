@@ -18,7 +18,9 @@
 
 3. to delete old index data run `rm -rf ./the-index/*.rlp`
 
-4. run `./build/bin/geth --rinkeby --syncmode=full` --port 0
+4. to reset the chain run `./build/bin/geth --rinkeby removedb`
+
+5. run `./build/bin/geth --rinkeby --syncmode=full --port 0`
 
 ## Run
 
