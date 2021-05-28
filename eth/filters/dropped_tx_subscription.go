@@ -84,6 +84,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			select {
 			case d := <-dropped:
 				for _, tx := range d.Txs {
+					h := tx.Hash()
 					notification := &dropNotification{
 						Tx: newRPCPendingTransaction(tx),
 						Reason: d.Reason,
@@ -91,10 +92,12 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 						Time: time.Now().UnixNano(),
 					}
 					if d.Replacement != nil {
-						peerid, _ := txPeerMap.Get(tx.Hash())
+						peerid, _ := txPeerMap.Get(h)
 						notification.Peer, _ = peerIDMap.Load(peerid)
 					}
 					notifier.Notify(rpcSub.ID, notification)
+					tsMap.Remove(h)
+					txPeerMap.Remove(h)
 				}
 			case <-rpcSub.Err():
 				droppedSub.Unsubscribe()
