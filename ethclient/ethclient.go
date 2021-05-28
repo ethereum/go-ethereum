@@ -515,6 +515,20 @@ func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64
 	return uint64(hex), nil
 }
 
+// CreateAccessList tries to create an access list for a specific transaction.
+func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*types.AccessList, uint64, string, error) {
+	type accessListResult struct {
+		Accesslist *types.AccessList `json:"accessList"`
+		Error      string            `json:"error,omitempty"`
+		GasUsed    hexutil.Uint64    `json:"gasUsed"`
+	}
+	var result accessListResult
+	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
+		return nil, 0, "", err
+	}
+	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
+}
+
 // SendTransaction injects a signed transaction into the pending pool for execution.
 //
 // If the transaction was a contract creation use the TransactionReceipt method to get the

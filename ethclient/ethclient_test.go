@@ -265,6 +265,9 @@ func TestEthClient(t *testing.T) {
 		"TestAtFunctions": {
 			func(t *testing.T) { testAtFunctions(t, client) },
 		},
+		"TestAccessList": {
+			func(t *testing.T) { testAccessList(t, client) },
+		},
 	}
 
 	t.Parallel()
@@ -572,4 +575,63 @@ func sendTransaction(ec *Client) error {
 	}
 	// Send transaction
 	return ec.SendTransaction(context.Background(), signedTx)
+}
+
+func testAccessList(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	// Test transfer
+	msg := ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      21000,
+		GasPrice: big.NewInt(1),
+		Value:    big.NewInt(1),
+	}
+	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vmErr != "" {
+		t.Fatalf("unexpected vm error: %v", vmErr)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas used: %v", gas)
+	}
+	if len(*al) != 0 {
+		t.Fatalf("unexpected length of accesslist: %v", len(*al))
+	}
+	// Test reverting transaction
+	msg = ethereum.CallMsg{
+		From:     testAddr,
+		To:       nil,
+		Gas:      100000,
+		GasPrice: big.NewInt(1),
+		Value:    big.NewInt(1),
+		Data:     common.FromHex("0x608060806080608155fd"),
+	}
+	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vmErr == "" {
+		t.Fatalf("wanted vmErr, got none")
+	}
+	if gas == 21000 {
+		t.Fatalf("unexpected gas used: %v", gas)
+	}
+	if len(*al) != 1 || al.StorageKeys() != 1 {
+		t.Fatalf("unexpected length of accesslist: %v", len(*al))
+	}
+	/*
+		accessList: [{
+			address: "0x3A220f351252089D385b29beca14e27F204c296A",
+			storageKeys: ["0x0000000000000000000000000000000000000000000000000000000000000081"]
+		}],
+	*/
+	if (*al)[0].Address == common.HexToAddress("0x0") {
+		t.Fatalf("unexpected address: %v", (*al)[0].Address)
+	}
+	if (*al)[0].StorageKeys[0] != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000081") {
+		t.Fatalf("unexpected storage key: %v", (*al)[0].StorageKeys[0])
+	}
 }
