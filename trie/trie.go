@@ -415,13 +415,17 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// value that is left in n or -2 if n contains at least two
 		// values.
 		pos := -1
-		for i, cld := range &n.Children {
-			if cld != nil {
-				if pos == -1 {
-					pos = i
-				} else {
-					pos = -2
-					break
+		if nn != nil {
+			pos = -2
+		} else {
+			for i, cld := range &n.Children {
+				if cld != nil {
+					if pos == -1 {
+						pos = i
+					} else {
+						pos = -2
+						break
+					}
 				}
 			}
 		}
