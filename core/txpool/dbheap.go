@@ -68,6 +68,9 @@ func (h *dbHeap) Add(entry *txEntry, dbSlot uint64) {
 // Pop removes len elements from the heap.
 // The elements are sorted by gas price and executable
 func (h *dbHeap) Pop(length int) []uint64 {
+	if length > len(h.m) {
+		length = len(h.m)
+	}
 	results := make([]uint64, 0, length)
 	heads := make(dbNonceList, 0, len(h.m))
 	for sender, list := range h.m {
