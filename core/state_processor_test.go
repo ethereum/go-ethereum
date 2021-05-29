@@ -85,7 +85,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(NewBlockChainConfig(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil), nil)
 		)
 		defer blockchain.Stop()
 
@@ -183,7 +183,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(NewBlockChainConfig(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil), nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {

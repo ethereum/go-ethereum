@@ -211,13 +211,37 @@ type BlockChain struct {
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 }
 
+type BlockChainConfig struct {
+	Db            ethdb.Database
+	CacheConfig   *CacheConfig
+	ChainConfig   *params.ChainConfig
+	Engine        consensus.Engine
+	VmConfig      vm.Config
+	TxLookupLimit *uint64
+}
+
+func NewBlockChainConfig(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) BlockChainConfig {
+	return BlockChainConfig{
+		Db:            db,
+		CacheConfig:   cacheConfig,
+		ChainConfig:   chainConfig,
+		Engine:        engine,
+		VmConfig:      vmConfig,
+		TxLookupLimit: txLookupLimit,
+	}
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
-	if cacheConfig == nil {
+func NewBlockChain(config BlockChainConfig, shouldPreserve func(block *types.Block) bool) (*BlockChain, error) {
+	var cacheConfig *CacheConfig
+	if config.CacheConfig == nil {
 		cacheConfig = defaultCacheConfig
+	} else {
+		cacheConfig = config.CacheConfig
 	}
+
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -226,11 +250,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
 	bc := &BlockChain{
-		chainConfig: chainConfig,
+		chainConfig: config.ChainConfig,
 		cacheConfig: cacheConfig,
-		db:          db,
+		db:          config.Db,
 		triegc:      prque.New(nil),
-		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
+		stateCache: state.NewDatabaseWithConfig(config.Db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
@@ -243,15 +267,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		blockCache:     blockCache,
 		txLookupCache:  txLookupCache,
 		futureBlocks:   futureBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		engine:         config.Engine,
+		vmConfig:       config.VmConfig,
 	}
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+	bc.validator = NewBlockValidator(config.ChainConfig, bc, config.Engine)
+	bc.prefetcher = newStatePrefetcher(config.ChainConfig, bc, config.Engine)
+	bc.processor = NewStateProcessor(config.ChainConfig, bc, config.Engine)
 
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
+	bc.hc, err = NewHeaderChain(config.Db, config.ChainConfig, config.Engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +399,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
+	if config.TxLookupLimit != nil {
+		bc.txLookupLimit = *config.TxLookupLimit
 
 		bc.wg.Add(1)
 		go bc.maintainTxIndex(txIndexBlock)
