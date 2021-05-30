@@ -88,9 +88,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
-
-		veryBigNumber := big.NewInt(1)
-		veryBigNumber.Lsh(veryBigNumber, 300)
+		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+		tooBigNumber := new(big.Int).Set(bigNumber)
+		tooBigNumber.Add(tooBigNumber, common.Big1)
 		for i, tt := range []struct {
 			txs  []*types.Transaction
 			want string
@@ -150,15 +150,15 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, veryBigNumber, big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
 				},
-				want: "could not apply tx 0 [0x56a98c4e7714c63ebd41e56c7ab399e237a690b68139f2a9e3bfeab01ade8473]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip bit length: 301",
+				want: "could not apply tx 0 [0x15b8391b9981f266b32f3ab7da564bbeb3d6c21628364ea9b32a21139f89f712]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip bit length: 257",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), veryBigNumber),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
 				},
-				want: "could not apply tx 0 [0x41dcd104694d9ed0cd2a7957707483939eae5f57d8de625f56e75b88a7709ac0]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap bit length: 301",
+				want: "could not apply tx 0 [0x48bc299b83fdb345c57478f239e89814bb3063eb4e4b49f3b6057a69255c16bd]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap bit length: 257",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
@@ -167,12 +167,23 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0xf987a31ff0c71895780a7612f965a0c8b056deb54e020bb44fa478092f14c9b4]: tip higher than fee cap: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip: 1, feeCap: 2",
 			},
 			{ // ErrInsufficientFunds
+				// Available balance:           1000000000000000000
+				// Effective cost:                   18375000021000
+				// FeeCap * gas:                1050000000000000000
+				// This test is designed to have the effective cost be covered by the balance, but
+				// the extended requirement on FeeCap*gas < balance to fail
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1000000000000000000)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(50000000000000)),
 				},
-				want: "could not apply tx 0 [0xbe93a7a024ea94e4156851ceab721dd300abd8509a6fa4216a58152982619973]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 21000000000000000000000",
+				want: "could not apply tx 0 [0x413603cd096a87f41b1660d3ed3e27d62e1da78eac138961c0a1314ed43bd129]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 1050000000000000000",
 			},
-		} {
+			{ // Another ErrInsufficientFunds, this one to ensure that feecap/tip of max u256 is allowed
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, bigNumber, bigNumber),
+				},
+				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
+			},
+		}[8:] {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
