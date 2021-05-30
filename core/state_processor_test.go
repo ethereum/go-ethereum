@@ -66,7 +66,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			Nonce:  nonce,
 			Tip:    tip,
 			FeeCap: feeCap,
-			Gas:    0,
+			Gas:    gasLimit,
 			To:     &to,
 			Value:  big.NewInt(0),
 		}), signer, testKey)
@@ -144,27 +144,33 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0x21e9b9015150fc7f6bd5059890a5e1727f2452df285e8a84f4ca61a74c159ded]: fee cap less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap: 0 baseFee: 875000000",
+				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: fee cap less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap: 0 baseFee: 875000000",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, veryBigNumber, big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, veryBigNumber, big.NewInt(1)),
 				},
-				want: "could not apply tx 0 [0xf1d416d1f548bb9ea84cdd8d1c6ad370caa8f670b831dd8048f71d52e43c5e2b]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip byte length: 38",
+				want: "could not apply tx 0 [0x56a98c4e7714c63ebd41e56c7ab399e237a690b68139f2a9e3bfeab01ade8473]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip byte length: 38",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(1), veryBigNumber),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), veryBigNumber),
 				},
-				want: "could not apply tx 0 [0x6d1cba2357c510a18eee03894057c3acaad2db6624080467da3e3a3ba84ec7ca]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap byte length: 38",
+				want: "could not apply tx 0 [0x41dcd104694d9ed0cd2a7957707483939eae5f57d8de625f56e75b88a7709ac0]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap byte length: 38",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(2), big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
 				},
-				want: "could not apply tx 0 [0xa7ef91f7636e56676ba73f16e14e74d5556d3def48819a77217962580b19339f]: tip higher than fee cap: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip: 1, feeCap: 2",
+				want: "could not apply tx 0 [0xf987a31ff0c71895780a7612f965a0c8b056deb54e020bb44fa478092f14c9b4]: tip higher than fee cap: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip: 1, feeCap: 2",
+			},
+			{ // ErrInsufficientFunds
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1000000000000000000)),
+				},
+				want: "could not apply tx 0 [0xbe93a7a024ea94e4156851ceab721dd300abd8509a6fa4216a58152982619973]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 21000000000000000000000",
 			},
 		} {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
@@ -214,7 +220,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0x21e9b9015150fc7f6bd5059890a5e1727f2452df285e8a84f4ca61a74c159ded]: transaction type not supported",
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 			},
 		} {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
