@@ -83,10 +83,6 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
-
-	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
-	// transaction with a tip higher than the total fee cap.
-	ErrTipAboveFeeCap = errors.New("tip higher than fee cap")
 )
 
 var (
@@ -558,6 +554,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
+	}
+	// Sanity check for extremely large numbers
+	if tx.FeeCap().BitLen() > 256 {
+		return ErrFeeCapVeryHigh
+	}
+	if tx.Tip().BitLen() > 256 {
+		return ErrTipVeryHigh
 	}
 	// Ensure feeCap is less than or equal to tip.
 	if tx.FeeCapIntCmp(tx.Tip()) < 0 {

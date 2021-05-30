@@ -395,6 +395,26 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 	}
 }
 
+func TestTransactionVeryHighValues(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPoolWithConfig(eip1559Config)
+	defer pool.Stop()
+
+	veryBigNumber := big.NewInt(1)
+	veryBigNumber.Lsh(veryBigNumber, 300)
+
+	tx := dynamicFeeTx(0, 100, big.NewInt(1), veryBigNumber, key)
+	if err := pool.AddRemote(tx); err != ErrTipVeryHigh {
+		t.Error("expected", ErrTipVeryHigh, "got", err)
+	}
+
+	tx2 := dynamicFeeTx(0, 100, veryBigNumber, big.NewInt(1), key)
+	if err := pool.AddRemote(tx2); err != ErrFeeCapVeryHigh {
+		t.Error("expected", ErrFeeCapVeryHigh, "got", err)
+	}
+}
+
 func TestTransactionChainFork(t *testing.T) {
 	t.Parallel()
 

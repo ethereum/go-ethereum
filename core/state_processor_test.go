@@ -66,7 +66,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			Nonce:  nonce,
 			Tip:    tip,
 			FeeCap: feeCap,
-			Gas:    0,
+			Gas:    gasLimit,
 			To:     &to,
 			Value:  big.NewInt(0),
 		}), signer, testKey)
@@ -88,7 +88,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
-
+		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+		tooBigNumber := new(big.Int).Set(bigNumber)
+		tooBigNumber.Add(tooBigNumber, common.Big1)
 		for i, tt := range []struct {
 			txs  []*types.Transaction
 			want string
@@ -142,11 +144,46 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0x21e9b9015150fc7f6bd5059890a5e1727f2452df285e8a84f4ca61a74c159ded]: fee cap less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap: 0 baseFee: 875000000",
+				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: fee cap less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap: 0 baseFee: 875000000",
 			},
-		} {
+			{ // ErrTipVeryHigh
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
+				},
+				want: "could not apply tx 0 [0x15b8391b9981f266b32f3ab7da564bbeb3d6c21628364ea9b32a21139f89f712]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip bit length: 257",
+			},
+			{ // ErrFeeCapVeryHigh
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
+				},
+				want: "could not apply tx 0 [0x48bc299b83fdb345c57478f239e89814bb3063eb4e4b49f3b6057a69255c16bd]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap bit length: 257",
+			},
+			{ // ErrTipAboveFeeCap
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
+				},
+				want: "could not apply tx 0 [0xf987a31ff0c71895780a7612f965a0c8b056deb54e020bb44fa478092f14c9b4]: tip higher than fee cap: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip: 1, feeCap: 2",
+			},
+			{ // ErrInsufficientFunds
+				// Available balance:           1000000000000000000
+				// Effective cost:                   18375000021000
+				// FeeCap * gas:                1050000000000000000
+				// This test is designed to have the effective cost be covered by the balance, but
+				// the extended requirement on FeeCap*gas < balance to fail
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(50000000000000)),
+				},
+				want: "could not apply tx 0 [0x413603cd096a87f41b1660d3ed3e27d62e1da78eac138961c0a1314ed43bd129]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 1050000000000000000",
+			},
+			{ // Another ErrInsufficientFunds, this one to ensure that feecap/tip of max u256 is allowed
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas, bigNumber, bigNumber),
+				},
+				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
+			},
+		}[8:] {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
@@ -194,7 +231,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0x21e9b9015150fc7f6bd5059890a5e1727f2452df285e8a84f4ca61a74c159ded]: transaction type not supported",
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 			},
 		} {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
