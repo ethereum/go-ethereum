@@ -74,6 +74,10 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// After london, default to 1559 unless gasPrice is set
 	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
 		if args.Tip == nil {
 			tip, err := b.SuggestTip(ctx)
@@ -92,6 +96,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// Don't let tip exceed feeCap.
 		args.FeeCap = (*hexutil.Big)(math.BigMax(args.FeeCap.ToInt(), args.Tip.ToInt()))
 	} else {
+		if args.FeeCap != nil || args.Tip != nil {
+			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+		}
 		if args.GasPrice == nil {
 			price, err := b.SuggestPrice(ctx)
 			if err != nil {
@@ -221,16 +228,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Data:       args.data(),
 			AccessList: al,
 		}
-	case args.AccessList == nil:
-		data = &types.LegacyTx{
-			To:       args.To,
-			Nonce:    uint64(*args.Nonce),
-			Gas:      uint64(*args.Gas),
-			GasPrice: (*big.Int)(args.GasPrice),
-			Value:    (*big.Int)(args.Value),
-			Data:     args.data(),
-		}
-	default:
+	case args.AccessList != nil:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
@@ -240,6 +238,15 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: *args.AccessList,
+		}
+	default:
+		data = &types.LegacyTx{
+			To:       args.To,
+			Nonce:    uint64(*args.Nonce),
+			Gas:      uint64(*args.Gas),
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(args.Value),
+			Data:     args.data(),
 		}
 	}
 	return types.NewTx(data)

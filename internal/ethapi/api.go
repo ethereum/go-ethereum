@@ -1473,11 +1473,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		return nil, err
 	}
 	if tx != nil {
-		block, err := s.b.BlockByHash(ctx, blockHash)
+		header, err := s.b.HeaderByHash(ctx, blockHash)
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, block.BaseFee()), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
