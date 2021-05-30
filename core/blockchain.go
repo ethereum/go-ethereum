@@ -1461,8 +1461,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// -------------------
 	bc.TheIndex_Hook_WriteBlockHeader(block)
-	bc.TheIndex_Hook_WriteContractsStorage(block, logs, state)
-	bc.TheIndex_Hook_WriteAccountChanges(block, state)
+	bc.TheIndex_Hook_WriteContractsAndAccounts(block, logs, state)
 	// -------------------
 
 	// Irrelevant of the canonical status, write the block itself to the database.

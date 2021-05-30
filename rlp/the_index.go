@@ -29,24 +29,25 @@ type TheIndex_rlpState struct {
 }
 
 type TheIndex_rlpContract struct {
-	BlockNumber *big.Int
-	Logs        []TheIndex_rlpLog
-	Code        []byte
-	States      []TheIndex_rlpState
+	Address common.Address
+	Logs    []TheIndex_rlpLog
+	Code    []byte
+	States  []TheIndex_rlpState
+	Balance *big.Int
 }
 
-type TheIndex_rplAccount struct {
+type TheIndex_rlpContractsForBlock struct {
+	BlockNumber *big.Int
+	Contracts   []TheIndex_rlpContract
+}
+
+type TheIndex_rlpAccount struct {
 	Address  common.Address
 	Balance  *big.Int
 	CodeHash []byte
 }
 
-type TheIndex_rplAccountChanges struct {
+type TheIndex_rlpAccountsForBlock struct {
 	BlockNumber *big.Int
-	Accounts    []TheIndex_rplAccount
-}
-
-type TheIndex_rplContractAccountChange struct {
-	BlockNumber *big.Int
-	Balance     *big.Int
+	Accounts    []TheIndex_rlpAccount
 }
