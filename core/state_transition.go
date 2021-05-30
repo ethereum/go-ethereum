@@ -215,6 +215,18 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction feeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
+		if l := len(st.feeCap.Bytes()); l > 32 {
+			return fmt.Errorf("%w: address %v, feeCap byte length: %d", ErrFeeCapVeryHigh,
+				st.msg.From().Hex(), l)
+		}
+		if l := len(st.tip.Bytes()); l > 32 {
+			return fmt.Errorf("%w: address %v, tip byte length: %d", ErrTipVeryHigh,
+				st.msg.From().Hex(), l)
+		}
+		if st.feeCap.Cmp(st.tip) < 0 {
+			return fmt.Errorf("%w: address %v, tip: %s, feeCap: %s", ErrTipAboveFeeCap,
+				st.msg.From().Hex(), st.feeCap, st.tip)
+		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
 		if st.feeCap.Cmp(st.evm.Context.BaseFee) < 0 {
