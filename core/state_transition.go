@@ -216,12 +216,12 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction feeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		if l := len(st.feeCap.Bytes()); l > 32 {
-			return fmt.Errorf("%w: address %v, feeCap byte length: %d", ErrFeeCapVeryHigh,
+		if l := st.feeCap.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, feeCap bit length: %d", ErrFeeCapVeryHigh,
 				st.msg.From().Hex(), l)
 		}
-		if l := len(st.tip.Bytes()); l > 32 {
-			return fmt.Errorf("%w: address %v, tip byte length: %d", ErrTipVeryHigh,
+		if l := st.tip.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, tip bit length: %d", ErrTipVeryHigh,
 				st.msg.From().Hex(), l)
 		}
 		if st.feeCap.Cmp(st.tip) < 0 {

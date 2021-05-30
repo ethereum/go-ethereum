@@ -556,10 +556,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
-	if len(tx.FeeCap().Bytes()) > 32 {
+	if tx.FeeCap().BitLen() > 256 {
 		return ErrFeeCapVeryHigh
 	}
-	if len(tx.Tip().Bytes()) > 32 {
+	if tx.Tip().BitLen() > 256 {
 		return ErrTipVeryHigh
 	}
 	// Ensure feeCap is less than or equal to tip.

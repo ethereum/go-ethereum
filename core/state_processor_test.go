@@ -152,13 +152,13 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, veryBigNumber, big.NewInt(1)),
 				},
-				want: "could not apply tx 0 [0x56a98c4e7714c63ebd41e56c7ab399e237a690b68139f2a9e3bfeab01ade8473]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip byte length: 38",
+				want: "could not apply tx 0 [0x56a98c4e7714c63ebd41e56c7ab399e237a690b68139f2a9e3bfeab01ade8473]: tip higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tip bit length: 301",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), veryBigNumber),
 				},
-				want: "could not apply tx 0 [0x41dcd104694d9ed0cd2a7957707483939eae5f57d8de625f56e75b88a7709ac0]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap byte length: 38",
+				want: "could not apply tx 0 [0x41dcd104694d9ed0cd2a7957707483939eae5f57d8de625f56e75b88a7709ac0]: fee cap higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, feeCap bit length: 301",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
