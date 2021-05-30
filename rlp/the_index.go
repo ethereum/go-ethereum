@@ -1,3 +1,6 @@
+// Copyright 2021 orbs-network
+// No license
+
 package rlp
 
 import (
@@ -30,4 +33,20 @@ type TheIndex_rlpContract struct {
 	Logs        []TheIndex_rlpLog
 	Code        []byte
 	States      []TheIndex_rlpState
+}
+
+type TheIndex_rplAccount struct {
+	Address  common.Address
+	Balance  *big.Int
+	CodeHash []byte
+}
+
+type TheIndex_rplAccountChanges struct {
+	BlockNumber *big.Int
+	Accounts    []TheIndex_rplAccount
+}
+
+type TheIndex_rplContractAccountChange struct {
+	BlockNumber *big.Int
+	Balance     *big.Int
 }
