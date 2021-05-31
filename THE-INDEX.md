@@ -20,14 +20,14 @@
 
 4. to reset the chain run `./build/bin/geth --rinkeby removedb`
 
-5. run `./build/bin/geth --rinkeby --syncmode=full --port 0`
+5. run `export THEINDEX_PATH=./the-index/; ./build/bin/geth --rinkeby --syncmode=full --port 0`
 
 ## Run
 
 1. go into the repo directory
 
-2. make sure `./the-index` directory for index outputs is created
+2. choose a directory for index output and make sure it is created, for example `./the-index`
 
-3. run `./build/bin/geth --cache=4096 --maxpeers=50 --syncmode=full`
+3. run `export THEINDEX_PATH=./the-index/; ./build/bin/geth --cache=4096 --maxpeers=50 --syncmode=full`
 
 4. chaindata is in `~/Library/Ethereum/geth/chaindata`

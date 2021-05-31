@@ -9,6 +9,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type TheIndex_rlpCursor struct {
+	BlockNumber *big.Int
+	Time        uint64
+}
+
 type TheIndex_rlpBlock struct {
 	BlockNumber *big.Int
 	Time        uint64
