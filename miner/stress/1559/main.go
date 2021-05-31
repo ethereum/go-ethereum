@@ -105,6 +105,9 @@ func main() {
 	// Start injecting transactions from the faucets like crazy
 	var (
 		nonces = make([]uint64, len(faucets))
+
+		// The signer activates the 1559 features even before the fork,
+		// so the new 1559 txs can be created with this signer.
 		signer = types.LatestSignerForChainID(genesis.Config.ChainID)
 	)
 	for {
@@ -115,10 +118,12 @@ func main() {
 		headHeader := backend.BlockChain().CurrentHeader()
 		baseFee := headHeader.BaseFee
 
-		// Create a self transaction and inject into the pool
+		// Create a self transaction and inject into the pool. The legacy
+		// and 1559 transactions can all be created by random even if the
+		// fork is not happened.
 		tx := makeTransaction(nonces[index], faucets[index], signer, baseFee)
 		if err := backend.TxPool().AddLocal(tx); err != nil {
-			panic(err)
+			continue
 		}
 		nonces[index]++
 
@@ -145,18 +150,31 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	}
 	// Generate eip 1559 transaction
 	recipient := crypto.PubkeyToAddress(privKey.PublicKey)
-	tip := new(big.Int).SetInt64(int64(rand.Int31()))
+
+	// Feecap and feetip are limited to 32 bytes. Offer a sightly
+	// larger buffer for creating both valid and invalid transactions.
+	var buf = make([]byte, 32+5)
+	rand.Read(buf)
+	tip := new(big.Int).SetBytes(buf)
 
 	// If the given base fee is nil(the 1559 is still not available),
 	// generate a fake base fee in order to create 1559 tx forcibly.
 	if baseFee == nil {
 		baseFee = new(big.Int).SetInt64(int64(rand.Int31()))
 	}
+	// Generate the feecap, 75% valid feecap and 25% unguaranted.
+	var feeCap *big.Int
+	if rand.Intn(4) == 0 {
+		rand.Read(buf)
+		feeCap = new(big.Int).SetBytes(buf)
+	} else {
+		feeCap = new(big.Int).Add(baseFee, tip)
+	}
 	return types.MustSignNewTx(privKey, signer, &types.DynamicFeeTx{
 		ChainID:    signer.ChainID(),
 		Nonce:      nonce,
 		Tip:        tip,
-		FeeCap:     new(big.Int).Add(baseFee, tip),
+		FeeCap:     feeCap,
 		Gas:        21000,
 		To:         &recipient,
 		Value:      big.NewInt(100),
@@ -173,7 +191,9 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis.Config = params.AllEthashProtocolChanges
 	genesis.Config.LondonBlock = londonBlock
 	genesis.Difficulty = params.MinimumDifficulty
-	genesis.GasLimit = 15_000_000
+
+	// Small gaslimit for easier basefee moving testing.
+	genesis.GasLimit = 8_000_000
 
 	genesis.Config.ChainID = big.NewInt(18)
 	genesis.Config.EIP150Hash = common.Hash{}
