@@ -489,16 +489,14 @@ func (pool *TxPool) ContentByAccount(addr common.Address) (pending, queued types
 	defer pool.mu.Unlock()
 
 	list, ok := pool.pending[addr]
-	if !ok {
-		return nil, nil
+	if ok {
+		pending = list.Flatten()
 	}
-	pending = list.Flatten()
 
 	list, ok = pool.queue[addr]
-	if !ok {
-		return nil, nil
+	if ok {
+		queued = list.Flatten()
 	}
-	queued = list.Flatten()
 
 	return
 }
