@@ -42,8 +42,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -71,7 +71,7 @@ var (
 	statsFlag   = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 
 	netnameFlag = flag.String("faucet.name", "", "Network name to assign to the faucet")
-	payoutFlag  = flag.Int("faucet.amount", 1, "Number of Ethers to pay out per user request")
+	payoutFlag  = flag.Int("faucet.amount", 1, "Number of tCETs to pay out per user request")
 	minutesFlag = flag.Int("faucet.minutes", 1440, "Number of minutes to wait between funding rounds")
 	tiersFlag   = flag.Int("faucet.tiers", 3, "Number of funding tiers to enable (x3 time, x2.5 funds)")
 
@@ -83,10 +83,17 @@ var (
 
 	noauthFlag = flag.Bool("noauth", false, "Enables funding requests without authentication")
 	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
+
+	crc20ContractFlag = flag.String("crc20TokenContracts", "", "the list of crc20 token contracts")
+	crc20SymbolFlag   = flag.String("crc20TokenSymbols", "", "the symbol of crc20 tokens")
+	crc20AmountFlag   = flag.String("crc20TokenAmounts", "", "the amount of crc20 tokens")
+
+	datadirFlag = flag.String("datadir", "", "Data directory for the databases")
 )
 
 var (
-	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	ether    = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	crc20ABI = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function","stateMutability":"view"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function","stateMutability":"nonpayable"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function","stateMutability":"view"},{"constant":false,"inputs":[{"name":"_from","type":"address"},{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function","stateMutability":"nonpayable"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function","stateMutability":"view"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function","stateMutability":"view"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function","stateMutability":"view"},{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function","stateMutability":"nonpayable"},{"constant":true,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function","stateMutability":"view"},{"inputs":[{"name":"_totalSupply","type":"uint256"}],"payable":false,"type":"constructor","stateMutability":"nonpayable"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"owner","type":"address"},{"indexed":true,"name":"spender","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Approval","type":"event"}]`
 )
 
 var (
@@ -105,7 +112,7 @@ func main() {
 	for i := 0; i < *tiersFlag; i++ {
 		// Calculate the amount for the next tier and format it
 		amount := float64(*payoutFlag) * math.Pow(2.5, float64(i))
-		amounts[i] = fmt.Sprintf("%s Ethers", strconv.FormatFloat(amount, 'f', -1, 64))
+		amounts[i] = fmt.Sprintf("%s tCET", strconv.FormatFloat(amount, 'f', -1, 64))
 		if amount == 1 {
 			amounts[i] = strings.TrimSuffix(amounts[i], "s")
 		}
@@ -125,6 +132,41 @@ func main() {
 			periods[i] = strings.TrimSuffix(periods[i], "s")
 		}
 	}
+
+	var crc20TokenSymbols []string
+	if crc20SymbolFlag != nil && len(*crc20SymbolFlag) > 0 {
+		crc20TokenSymbols = strings.Split(*crc20SymbolFlag, ",")
+	}
+
+	var crc20TokenContracts []string
+	if crc20ContractFlag != nil && len(*crc20ContractFlag) > 0 {
+		crc20TokenContracts = strings.Split(*crc20ContractFlag, ",")
+	}
+
+	var crc20TokenAmounts []string
+	if crc20AmountFlag != nil && len(*crc20AmountFlag) > 0 {
+		crc20TokenAmounts = strings.Split(*crc20AmountFlag, ",")
+	}
+
+	if len(crc20TokenSymbols) != len(crc20TokenContracts) || len(crc20TokenSymbols) != len(crc20TokenAmounts) {
+		log.Crit("Length of crc20TokenContracts crc20TokenSymbols crc20TokenAmounts must equals")
+	}
+
+	// crc20 token config for faucet
+	crc20TokenInfo := make(map[string]crc20Info, 0)
+	for index, symbol := range crc20TokenSymbols {
+		amount, ok := big.NewInt(0).SetString(crc20TokenAmounts[index], 10)
+		if !ok {
+			log.Crit("Failed to parse crc20 token amount")
+		}
+		amountStr := big.NewFloat(0).Quo(big.NewFloat(0).SetInt(amount), big.NewFloat(0).SetInt64(params.Ether)).String()
+		crc20TokenInfo[symbol] = crc20Info{
+			Contract:  common.HexToAddress(crc20TokenContracts[index]),
+			Amount:    *amount,
+			AmountStr: amountStr,
+		}
+	}
+
 	// Load up and render the faucet website
 	tmpl, err := Asset("faucet.html")
 	if err != nil {
@@ -132,11 +174,12 @@ func main() {
 	}
 	website := new(bytes.Buffer)
 	err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
-		"Network":   *netnameFlag,
-		"Amounts":   amounts,
-		"Periods":   periods,
-		"Recaptcha": *captchaToken,
-		"NoAuth":    *noauthFlag,
+		"Network":        *netnameFlag,
+		"Amounts":        amounts,
+		"Periods":        periods,
+		"Recaptcha":      *captchaToken,
+		"NoAuth":         *noauthFlag,
+		"Crc20TokenInfo": crc20TokenInfo,
 	})
 	if err != nil {
 		log.Crit("Failed to render the faucet template", "err", err)
@@ -177,7 +220,7 @@ func main() {
 		log.Crit("Failed to unlock faucet signer account", "err", err)
 	}
 	// Assemble and start the faucet light service
-	faucet, err := newFaucet(genesis, *ethPortFlag, enodes, *netFlag, *statsFlag, ks, website.Bytes())
+	faucet, err := newFaucet(genesis, *ethPortFlag, enodes, *netFlag, *statsFlag, ks, website.Bytes(), crc20TokenInfo, *datadirFlag)
 	if err != nil {
 		log.Crit("Failed to start faucet", "err", err)
 	}
@@ -194,6 +237,13 @@ type request struct {
 	Account common.Address     `json:"account"` // Ethereum address being funded
 	Time    time.Time          `json:"time"`    // Timestamp when the request was accepted
 	Tx      *types.Transaction `json:"tx"`      // Transaction funding the account
+}
+
+// crc20Info faucet support crc20 token info
+type crc20Info struct {
+	Contract  common.Address
+	Amount    big.Int
+	AmountStr string
 }
 
 // faucet represents a crypto faucet backed by an Ethereum light client.
@@ -216,14 +266,21 @@ type faucet struct {
 	update   chan struct{}        // Channel to signal request updates
 
 	lock sync.RWMutex // Lock protecting the faucet's internals
+
+	crc20Tokens map[string]crc20Info
+	crc20AbiObj abi.ABI
 }
 
-func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
+func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte, crc20Tokens map[string]crc20Info, datadir string) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
+	log.Info("Enodes", "nodes", enodes)
+	if datadir == "" {
+		datadir = filepath.Join(os.Getenv("HOME"), ".faucet")
+	}
 	stack, err := node.New(&node.Config{
-		Name:    "geth",
+		Name:    "cetd",
 		Version: params.VersionWithCommit(gitCommit, gitDate),
-		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
+		DataDir: datadir,
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
 			NoDiscovery:      true,
@@ -237,15 +294,20 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 
+	crc20AbiObj, err := abi.JSON(strings.NewReader(crc20ABI))
+	if err != nil {
+		return nil, err
+	}
+
 	// Assemble the Ethereum light client protocol
-	cfg := eth.DefaultConfig
+	cfg := eth.DefaultTestnetConfig
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
-	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
+	//utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
+		return nil, fmt.Errorf("Failed to register the CSC service: %w", err)
 	}
 
 	// Assemble the ethstats monitoring and reporting service'
@@ -273,14 +335,16 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	client := ethclient.NewClient(api)
 
 	return &faucet{
-		config:   genesis.Config,
-		stack:    stack,
-		client:   client,
-		index:    index,
-		keystore: ks,
-		account:  ks.Accounts()[0],
-		timeouts: make(map[string]time.Time),
-		update:   make(chan struct{}, 1),
+		config:      genesis.Config,
+		stack:       stack,
+		client:      client,
+		index:       index,
+		keystore:    ks,
+		account:     ks.Accounts()[0],
+		timeouts:    make(map[string]time.Time),
+		update:      make(chan struct{}, 1),
+		crc20AbiObj: crc20AbiObj,
+		crc20Tokens: crc20Tokens,
 	}, nil
 }
 
@@ -382,6 +446,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			URL     string `json:"url"`
 			Tier    uint   `json:"tier"`
 			Captcha string `json:"captcha"`
+			Symbol  string `json:"symbol"`
 		}
 		if err = conn.ReadJSON(&msg); err != nil {
 			return
@@ -487,12 +552,30 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			timeout time.Time
 		)
 		if timeout = f.timeouts[username]; time.Now().After(timeout) {
-			// User wasn't funded recently, create the funding transaction
-			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether)
-			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
-			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
+			var tx *types.Transaction
+			if msg.Symbol == "tCET" {
+				// User wasn't funded recently, create the funding transaction
+				amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether)
+				amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
+				amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
-			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, 21000, f.price, nil)
+				tx = types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, 21000, f.price, nil)
+			} else {
+				crc20TokenInfo, ok := f.crc20Tokens[msg.Symbol]
+				if !ok {
+					f.lock.Unlock()
+					log.Warn("Not support symbol", "symbol", msg.Symbol)
+					continue
+				}
+				input, err := f.crc20AbiObj.Pack("transfer", address, &crc20TokenInfo.Amount)
+				if err != nil {
+					f.lock.Unlock()
+					log.Warn("Failed to pack transfer transaction", "err", err)
+					continue
+				}
+				tx = types.NewTransaction(f.nonce+uint64(len(f.reqs)), crc20TokenInfo.Contract, nil, 420000, f.price, input)
+			}
+
 			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainID)
 			if err != nil {
 				f.lock.Unlock()
@@ -719,7 +802,7 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Coinex Smart Chain address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -758,7 +841,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Coinex Smart Chain address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -774,7 +857,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(url))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Coinex Smart Chain address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
 }
