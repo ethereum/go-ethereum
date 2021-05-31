@@ -97,6 +97,12 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
 
+// I know this shouldn't be a global, but I'm
+// not sure where the appropriate place would be to put
+// the chan, maybe in handler in the Ethereum struct, but
+// that doesn't seem appropriate to me?
+var stopUncleanShutdownUpdateCh chan bool = make(chan bool)
+
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
@@ -271,6 +277,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
+	// starts a goroutine to update the unclean shutdown marker
+	// every five minutes, so the user can get an approximate time of
+	// the previous crash upon startup
+	go rawdb.UpdateUncleanShutdownMarker(chainDb, stopUncleanShutdownUpdateCh)
 	return eth, nil
 }
 
@@ -559,7 +569,7 @@ func (s *Ethereum) Stop() error {
 	s.miner.Stop()
 	s.blockchain.Stop()
 	s.engine.Close()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	rawdb.PopUncleanShutdownMarker(s.chainDb, stopUncleanShutdownUpdateCh)
 	s.chainDb.Close()
 	s.eventMux.Stop()
 

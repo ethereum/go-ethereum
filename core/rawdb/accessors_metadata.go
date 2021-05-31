@@ -121,8 +121,11 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	return previous, discarded, nil
 }
 
-// PopUncleanShutdownMarker removes the last unclean shutdown marker
-func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
+// PopUncleanShutdownMarker removes the last unclean shutdown marker and stops
+// the function updating the marker (UpdateUncleanShutdownMarker)
+func PopUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpdateCh chan bool) {
+	// stop the unclean shutdown marker update first
+	stopUncleanShutdownUpdateCh <- true
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -136,5 +139,39 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to clear unclean-shutdown marker", "err", err)
+	}
+}
+
+// UpdateUncleanShutdownMarker updates the current unclean shutdown marker
+// every 5 minutes
+func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpdateCh chan bool) {
+	var uncleanShutdowns crashList
+	// Read old data
+	if previous, err := db.Get(uncleanShutdownKey); err != nil {
+		log.Warn("Error reading unclean shutdown markers", "error", err)
+	} else if err := rlp.DecodeBytes(previous, &uncleanShutdowns); err != nil {
+		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
+	}
+	l := len(uncleanShutdowns.Recent)
+	// uncleanShutdowns.Recent should not be empty in this context,
+	// unless PushUncleanShutdownMarker fails.
+	if l == 0 {
+		log.Warn("recent unclean shutdown markers is empty. Stopping marker update")
+		return
+	}
+	// update marker every five minutes
+	ticker := time.NewTicker(300 * time.Second)
+	defer func() { ticker.Stop() }()
+	for {
+		select {
+		case <-ticker.C:
+			uncleanShutdowns.Recent[l] = uint64(time.Now().Unix())
+			data, _ := rlp.EncodeToBytes(uncleanShutdowns)
+			if err := db.Put(uncleanShutdownKey, data); err != nil {
+				log.Warn("Failed to update unclean-shutdown marker", "err", err)
+			}
+		case <-stopUncleanShutdownUpdateCh:
+			return
+		}
 	}
 }

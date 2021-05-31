@@ -78,6 +78,12 @@ type LightEthereum struct {
 	udpEnabled bool
 }
 
+// I know this shouldn't be a global, but I'm
+// not sure where the appropriate place would be to put
+// the chan, maybe in handler in the Ethereum struct, but
+// that doesn't seem appropriate to me?
+var stopUncleanShutdownUpdateCh chan bool = make(chan bool)
+
 // New creates an instance of the light client.
 func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
@@ -195,6 +201,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
+	// starts a goroutine to update the unclean shutdown marker
+	// every five minutes, so the user can get an approximate time of
+	// the previous crash upon startup
+	go rawdb.UpdateUncleanShutdownMarker(chainDb, stopUncleanShutdownUpdateCh)
 	return leth, nil
 }
 
@@ -383,7 +393,7 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	rawdb.PopUncleanShutdownMarker(s.chainDb, stopUncleanShutdownUpdateCh)
 	s.chainDb.Close()
 	s.lesDb.Close()
 	s.wg.Wait()
