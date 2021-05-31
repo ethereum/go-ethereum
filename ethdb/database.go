@@ -94,10 +94,16 @@ type AncientWriter interface {
 	Sync() error
 }
 
+// AncientBatch is a write operation on the ancient store.
 type AncientBatch interface {
+	// Append adds an RLP-encoded item.
 	Append(kind string, number uint64, item interface{}) error
+
+	// AppendRaw adds an item without RLP-encoding it.
 	AppendRaw(kind string, number uint64, item []byte) error
 
+	// Commit writes any remaining data. This must be called after
+	// appending all items.
 	Commit() error
 }
 
