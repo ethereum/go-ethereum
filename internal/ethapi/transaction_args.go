@@ -153,7 +153,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 }
 
 // ToMessage converts TransactionArgs to the Message type used by the core evm
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) types.Message {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+	// Reject invalid combinations of pre- and post-1559 fee styles
+	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
 	// Set sender address or use zero address if none specified.
 	addr := args.from()
 
@@ -169,39 +173,23 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) ty
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
-	var gasPrice *big.Int
+	var (
+		gasPrice *big.Int
+		feeCap   *big.Int
+		tip      *big.Int
+	)
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
-	}
-	var feeCap *big.Int
-	if args.FeeCap != nil {
-		feeCap = args.FeeCap.ToInt()
-	}
-	var tip *big.Int
-	if args.Tip != nil {
-		tip = args.Tip.ToInt()
-	}
-	if gasPrice == nil && feeCap == nil && tip == nil {
-		log.Warn("At least one of gasPrice, feeCap, tip should be set. Defaulting to 0 gas price.")
-		gasPrice = new(big.Int)
-	}
-	if gasPrice != nil && (feeCap != nil || tip != nil) {
-		log.Warn("Only one of gasPrice or feeCap+tip should be set. Ignoring gasPrice, using feeCap+tip")
-		gasPrice = nil
-	}
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
-	if baseFee != nil {
-		if tip == nil {
-			log.Warn("Basefee provided, but tip not set")
-			tip = new(big.Int)
+	} else {
+		feeCap = new(big.Int)
+		if args.FeeCap != nil {
+			feeCap = args.FeeCap.ToInt()
 		}
-		if feeCap == nil {
-			log.Warn("Basefee provided, but feeCap not set")
-			feeCap = new(big.Int)
+		tip = new(big.Int)
+		if args.Tip != nil {
+			tip = args.Tip.ToInt()
 		}
-		gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
 	}
-
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -212,7 +200,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) ty
 		accessList = *args.AccessList
 	}
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, feeCap, tip, data, accessList, false)
-	return msg
+	return msg, nil
 }
 
 // toTransaction converts the arguments to a transaction.
