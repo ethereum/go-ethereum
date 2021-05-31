@@ -53,12 +53,16 @@ func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error
 }
 
 func (batch *freezerBatch) Commit() error {
-	// TODO: check that count agrees on all batches.
-	var count uint64
-	for _, tb := range batch.tables {
+	// Check that count agrees on all batches.
+	count := -1
+	for name, tb := range batch.tables {
+		if count >= 0 && tb.count != count {
+			return fmt.Errorf("batch %s has count %d, want %d", name, tb.count, count)
+		}
 		count = tb.count
 	}
 
+	// Commit all table batches.
 	for _, tb := range batch.tables {
 		if err := tb.Commit(); err != nil {
 			return err
@@ -66,7 +70,7 @@ func (batch *freezerBatch) Commit() error {
 	}
 
 	// Bump frozen block index.
-	atomic.AddUint64(&batch.f.frozen, count)
+	atomic.AddUint64(&batch.f.frozen, uint64(count))
 	return nil
 }
 
@@ -77,7 +81,7 @@ type freezerTableBatch struct {
 	sb  *BufferedSnapWriter
 
 	firstIdx uint64
-	count    uint64
+	count    int
 	sizes    []uint32
 
 	headBytes uint32
@@ -114,7 +118,7 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if batch.firstIdx == math.MaxUint64 {
 		batch.firstIdx = item
 	}
-	if have, want := item, batch.firstIdx+batch.count; have != want {
+	if have, want := item, batch.firstIdx+uint64(batch.count); have != want {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
 	s0 := batch.buf.Len()
@@ -145,7 +149,7 @@ func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	if batch.firstIdx == math.MaxUint64 {
 		batch.firstIdx = item
 	}
-	if have, want := item, batch.firstIdx+batch.count; have != want {
+	if have, want := item, batch.firstIdx+uint64(batch.count); have != want {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
 	}
 	s0 := batch.buf.Len()
@@ -211,7 +215,7 @@ func (batch *freezerTableBatch) write(newHead bool) (bool, error) {
 	var (
 		filenum         = atomic.LoadUint32(&batch.t.headId)
 		indexData       = make([]byte, 0, len(batch.sizes)*indexEntrySize)
-		count           uint64
+		count           int
 		writtenDataSize int
 	)
 	for _, size := range batch.sizes {
@@ -243,8 +247,8 @@ func (batch *freezerTableBatch) write(newHead bool) (bool, error) {
 	}
 	batch.t.writeMeter.Mark(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
 	batch.t.sizeGauge.Inc(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
-	atomic.AddUint64(&batch.t.items, count)
-	batch.firstIdx += count
+	atomic.AddUint64(&batch.t.items, uint64(count))
+	batch.firstIdx += uint64(count)
 	batch.count -= count
 
 	if batch.count > 0 {
