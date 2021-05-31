@@ -157,7 +157,6 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 	// unless PushUncleanShutdownMarker fails.
 	if l == 0 {
 		log.Warn("recent unclean shutdown markers is empty. Stopping marker update")
-		return
 	}
 	// update marker every five minutes
 	ticker := time.NewTicker(300 * time.Second)
