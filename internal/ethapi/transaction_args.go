@@ -185,8 +185,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) ty
 		log.Warn("At least one of gasPrice, feeCap, tip should be set. Defaulting to 0 gas price.")
 		gasPrice = new(big.Int)
 	}
-	if gasPrice != nil && feeCap != nil && tip != nil {
-		log.Warn("Only one of gasPrice, feeCap, tip should be set. Defaulting to feeCap+tip")
+	if gasPrice != nil && (feeCap != nil || tip != nil) {
+		log.Warn("Only one of gasPrice or feeCap+tip should be set. Ignoring gasPrice, using feeCap+tip")
 		gasPrice = nil
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
