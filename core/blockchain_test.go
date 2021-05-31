@@ -2140,7 +2140,7 @@ func TestTransactionIndices(t *testing.T) {
 
 	// Import all blocks into ancient db
 	l := uint64(0)
-	chain, err := NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil), &l)
+	chain, err := NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, &l), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2165,7 +2165,7 @@ func TestTransactionIndices(t *testing.T) {
 			t.Fatalf("failed to create temp freezer db: %v", err)
 		}
 		gspec.MustCommit(ancientDb)
-		chain, err = NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil), &l)
+		chain, err := NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, &l), nil)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
@@ -2189,7 +2189,7 @@ func TestTransactionIndices(t *testing.T) {
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
 	tails := []uint64{0, 67 /* 130 - 64 + 1 */, 100 /* 131 - 32 + 1 */, 69 /* 132 - 64 + 1 */, 0}
 	for i, l := range limit {
-		chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, &l)
+		chain, err := NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, &l), nil)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
@@ -2267,7 +2267,7 @@ func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
 
 	// Import all blocks into ancient db, only HEAD-32 indices are kept.
 	l := uint64(32)
-	chain, err := NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, &l)
+	chain, err := NewBlockChain(NewBlockChainConfig(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, &l), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2331,7 +2331,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 		diskdb := rawdb.NewMemoryDatabase()
 		gspec.MustCommit(diskdb)
 
-		chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+		chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil), nil)
 		if err != nil {
 			b.Fatalf("failed to create tester chain: %v", err)
 		}
@@ -2413,7 +2413,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, nil)
 	diskdb := rawdb.NewMemoryDatabase()
 	new(Genesis).MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2507,7 +2507,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2618,10 +2618,10 @@ func TestDeleteRecreateSlots(t *testing.T) {
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{
 		Debug:  true,
 		Tracer: vm.NewJSONLogger(nil, os.Stdout),
-	}, nil, nil)
+	}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2698,10 +2698,10 @@ func TestDeleteRecreateAccount(t *testing.T) {
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{
 		Debug:  true,
 		Tracer: vm.NewJSONLogger(nil, os.Stdout),
-	}, nil, nil)
+	}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -2871,10 +2871,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
-		//Debug:  true,
-		//Tracer: vm.NewJSONLogger(nil, os.Stdout),
-	}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -3005,10 +3002,7 @@ func TestInitThenFailCreateContract(t *testing.T) {
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
-		//Debug:  true,
-		//Tracer: vm.NewJSONLogger(nil, os.Stdout),
-	}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -3095,7 +3089,7 @@ func TestEIP2718Transition(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, gspec.Config, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -3190,7 +3184,7 @@ func TestEIP1559Transition(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(NewBlockChainConfig(diskdb, nil, gspec.Config, engine, vm.Config{}, nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
