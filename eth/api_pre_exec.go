@@ -222,8 +222,8 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	case *tracers.Tracer:
 		return tracer.GetResult()
 	case *txtrace.StructLogger:
-		tracer.ProcessTx()
-		return tracer.GetTraceActions(), nil
+		tracer.Finalize()
+		return tracer.GetResult(), nil
 	default:
 		panic(fmt.Sprintf("bad tracer type %T", tracer))
 	}
