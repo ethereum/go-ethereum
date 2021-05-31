@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -19,12 +18,8 @@ func (s *StateDB) TheIndex_indexContractsState(contracts map[common.Address]*rlp
 		if !exist {
 			continue
 		}
-		// TODO: we might need to look in obj.pendingStorage and obj.dirtyStorage too (although they seem to always be empty)
-		if len(obj.pendingStorage) > 0 || len(obj.dirtyStorage) > 0 {
-			log.Warn("THE-INDEX:assert", "pendingStorage", len(obj.pendingStorage), "dirtyStorage", len(obj.dirtyStorage))
-		}
 		// make sure this state object is interesting
-		if !((obj.code != nil && obj.dirtyCode) || (len(obj.originStorage) > 0)) {
+		if !((obj.code != nil && obj.dirtyCode) || (len(obj.originStorage) > 0 || len(obj.dirtyStorage) > 0)) {
 			continue
 		}
 		// new contract address, add it to the map
@@ -36,9 +31,12 @@ func (s *StateDB) TheIndex_indexContractsState(contracts map[common.Address]*rlp
 			contracts[obj.address].Code = obj.code
 		}
 		// add the modified state keys, we might need to look in obj.pendingStorage and obj.dirtyStorage too (although they seem to always be empty)
-		if len(obj.originStorage) > 0 {
-			contracts[obj.address].States = make([]rlp.TheIndex_rlpState, 0, len(obj.originStorage))
+		if len(obj.originStorage) > 0 || len(obj.dirtyStorage) > 0 {
+			contracts[obj.address].States = make([]rlp.TheIndex_rlpState, 0, len(obj.originStorage)+len(obj.dirtyStorage))
 			for key, value := range obj.originStorage {
+				contracts[obj.address].States = append(contracts[obj.address].States, rlp.TheIndex_rlpState{Key: key, Value: value})
+			}
+			for key, value := range obj.dirtyStorage {
 				contracts[obj.address].States = append(contracts[obj.address].States, rlp.TheIndex_rlpState{Key: key, Value: value})
 			}
 		}
