@@ -50,6 +50,18 @@ func (t *freezerTable) NewBatch() *freezerBatch {
 	return batch
 }
 
+// Reset clears the batch for reuse.
+func (batch *freezerBatch) Reset() {
+	batch.firstIdx = math.MaxUint64
+	batch.buf.Reset()
+	if batch.sb != nil {
+		batch.sb.Reset()
+	}
+	batch.count = 0
+	batch.sizes = batch.sizes[:0]
+	batch.headBytes = 0
+}
+
 // AppendRLP rlp-encodes and adds data at the end of the freezer table. The item number
 // is a precautionary parameter to ensure data correctness, but the table will
 // reject already existing data.

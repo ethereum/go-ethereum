@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -29,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -713,41 +711,6 @@ func BenchmarkAppend4096(b *testing.B) {
 	b.Run("snappy", func(b *testing.B) { tableBench(b, 4096, false) })
 }
 
-func BenchmarkBatchAppendBlob32(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchBench(b, 32, true) })
-	b.Run("snappy", func(b *testing.B) { batchBench(b, 32, false) })
-}
-
-func BenchmarkBatchAppendBlob256(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchBench(b, 256, true) })
-	b.Run("snappy", func(b *testing.B) { batchBench(b, 256, false) })
-}
-func BenchmarkBatchAppendBlob1024(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchBench(b, 1024, true) })
-	b.Run("snappy", func(b *testing.B) { batchBench(b, 1024, false) })
-}
-func BenchmarkBatchAppendBlob4096(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchBench(b, 4096, true) })
-	b.Run("snappy", func(b *testing.B) { batchBench(b, 4096, false) })
-}
-
-func BenchmarkBatchAppendRLP32(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 32, true) })
-	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 32, false) })
-}
-func BenchmarkBatchAppendRLP256(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 256, true) })
-	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 265, false) })
-}
-func BenchmarkBatchAppendRLP1024(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 1024, true) })
-	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 1024, false) })
-}
-func BenchmarkBatchAppendRLP4096(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { batchRlpBench(b, 4096, true) })
-	b.Run("snappy", func(b *testing.B) { batchRlpBench(b, 4096, false) })
-}
-
 func tableBench(b *testing.B, nbytes int, noCompression bool) {
 	dir, err := ioutil.TempDir("./", "freezer-benchmark")
 	if err != nil {
@@ -774,132 +737,4 @@ func tableBench(b *testing.B, nbytes int, noCompression bool) {
 		}
 	}
 	b.StopTimer() // Stop timer before deleting the files
-}
-
-func batchBench(b *testing.B, nbytes int, noCompression bool) {
-	dir, err := ioutil.TempDir("./", "freezer-batch-benchmark")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
-	if err != nil {
-		b.Fatal(err)
-	}
-	data := make([]byte, nbytes)
-	rand.Read(data)
-	batch := f.NewBatch()
-	rlpData, _ := rlp.EncodeToBytes(data)
-	b.SetBytes(int64(len(rlpData)))
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		rlpData, _ := rlp.EncodeToBytes(data)
-		if err := batch.Append(uint64(i), rlpData); err != nil {
-			b.Fatal(err)
-		}
-		if batch.Size() > 1*1024*1024 {
-			if err := batch.Write(); err != nil {
-				b.Fatal(err)
-			}
-		}
-	}
-	if err := batch.Write(); err != nil {
-		b.Fatal(err)
-	}
-	b.StopTimer() // Stop timer before deleting the files
-}
-
-func batchRlpBench(b *testing.B, nbytes int, noCompression bool) {
-	dir, err := ioutil.TempDir("./", "freezer-rlp-batch-benchmark")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
-	if err != nil {
-		b.Fatal(err)
-	}
-	data := make([]byte, nbytes)
-	rand.Read(data)
-	rlpData, _ := rlp.EncodeToBytes(data)
-	b.SetBytes(int64(len(rlpData)))
-
-	batch := f.NewBatch()
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		if err := batch.AppendRLP(uint64(i), data); err != nil {
-			b.Fatal(err)
-		}
-		if batch.Size() > 1*1024*1024 {
-			if err := batch.Write(); err != nil {
-				b.Fatal(err)
-			}
-		}
-	}
-	if err := batch.Write(); err != nil {
-		b.Fatal(err)
-	}
-	b.StopTimer() // Stop timer before deleting the files
-}
-
-func TestBatch(t *testing.T) {
-	dir, err := ioutil.TempDir("./", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 31, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	batch := f.NewBatch()
-	// Write 15 bytes 30 times
-	for x := 0; x < 30; x++ {
-		data := getChunk(15, x)
-		batch.Append(uint64(x), data)
-	}
-	if err := batch.Write(); err != nil {
-		t.Fatal(err)
-	}
-	f.DumpIndex(0, 30)
-	if got, err := f.Retrieve(29); err != nil {
-		t.Fatal(err)
-	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
-		t.Fatalf("expected %x got %x", exp, got)
-	}
-}
-
-func TestBatchRLP(t *testing.T) {
-	dir, err := ioutil.TempDir("./", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 31, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	batch := f.NewBatch()
-	// Write 15 bytes 30 times
-	for x := 0; x < 30; x++ {
-		data := big.NewInt(int64(x))
-		data = data.Exp(data, data, nil)
-		batch.AppendRLP(uint64(x), data)
-	}
-	if err := batch.Write(); err != nil {
-		t.Fatal(err)
-	}
-	f.DumpIndex(0, 30)
-	if got, err := f.Retrieve(29); err != nil {
-		t.Fatal(err)
-	} else if exp := common.FromHex("921d79c05d04235e8807c34cbc36a8b48a4c0d"); !bytes.Equal(got, exp) {
-		t.Fatalf("expected %x got %x", exp, got)
-	}
 }

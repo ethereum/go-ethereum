@@ -61,3 +61,10 @@ func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) error {
 	s.dst = s.dst[:0]
 	return err
 }
+
+// Reset resets the buffer to be empty,
+// but it retains the underlying storage for use by future writes.
+func (s *BufferedSnapWriter) Reset() {
+	s.dst = s.dst[:0]
+	s.buf.Reset()
+}
