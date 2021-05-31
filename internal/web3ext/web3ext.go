@@ -773,7 +773,15 @@ web3._extend({
 const TxpoolJs = `
 web3._extend({
 	property: 'txpool',
-	methods: [],
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'contentByAccount',
+			call: 'txpool_contentByAccount',
+			params: 1,
+			inputFormatter: [null]
+		}),
+	],
 	properties:
 	[
 		new web3._extend.Property({
