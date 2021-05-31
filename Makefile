@@ -12,13 +12,15 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
 
-geth:
+cetd:
 	$(GORUN) build/ci.go install ./cmd/geth
+	mv $(GOBIN)/geth $(GOBIN)/cetd
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/cetd\" to launch cetd."
 
 all:
-	$(GORUN) build/ci.go install
+	$(GORUN) build/ci.go install ./cmd/geth
+	mv $(GOBIN)/geth $(GOBIN)/cetd
 
 android:
 	$(GORUN) build/ci.go aar --local

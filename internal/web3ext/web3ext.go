@@ -22,6 +22,7 @@ var Modules = map[string]string{
 	"admin":      AdminJs,
 	"chequebook": ChequebookJs,
 	"clique":     CliqueJs,
+	"senatus":    SenatusJs,
 	"ethash":     EthashJs,
 	"debug":      DebugJs,
 	"eth":        EthJs,
@@ -113,6 +114,36 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'proposals',
 			getter: 'clique_proposals'
+		}),
+	]
+});
+`
+
+const SenatusJs = `
+web3._extend({
+	property: 'senatus',
+	methods: [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'senatus_getSnapshot',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'senatus_getSnapshotAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'senatus_getValidators',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsAtHash',
+			call: 'senatus_getValidatorsAtHash',
+			params: 1
 		}),
 	]
 });

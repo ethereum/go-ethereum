@@ -111,7 +111,7 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
-	cfg.IPCPath = "geth.ipc"
+	cfg.IPCPath = clientIdentifier + ".ipc"
 	return cfg
 }
 
@@ -129,6 +129,13 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 			utils.Fatalf("%v", err)
 		}
 
+		if cfg.Shh != (whisperDeprecatedConfig{}) {
+			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
+		}
+	} else {
+		if err := loadDefaultConfig(&cfg, ctx.GlobalIsSet(utils.TestnetFlag.Name)); err != nil {
+			utils.Fatalf("%v", err)
+		}
 		if cfg.Shh != (whisperDeprecatedConfig{}) {
 			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
 		}

@@ -28,197 +28,23 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
-	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	// TODO: update with yolov2 values
-	YoloV2GenesisHash = common.HexToHash("0x498a7239036dd2cd09e2bb8a80922b78632017958c332b42044c250d603a8a3e")
+	TestnetGenesisHash = common.HexToHash("0xc0bd9490ba15494037ff183e046e53e48a3639419366d0922a0c5edc114d97a3")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
-var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash: MainnetTrustedCheckpoint,
-	RopstenGenesisHash: RopstenTrustedCheckpoint,
-	RinkebyGenesisHash: RinkebyTrustedCheckpoint,
-	GoerliGenesisHash:  GoerliTrustedCheckpoint,
-}
+var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{}
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
 // the chain it belongs to.
-var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	MainnetGenesisHash: MainnetCheckpointOracle,
-	RopstenGenesisHash: RopstenCheckpointOracle,
-	RinkebyGenesisHash: RinkebyCheckpointOracle,
-	GoerliGenesisHash:  GoerliCheckpointOracle,
-}
+var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{}
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(1150000),
-		DAOForkBlock:        big.NewInt(1920000),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2463000),
-		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:         big.NewInt(2675000),
-		EIP158Block:         big.NewInt(2675000),
-		ByzantiumBlock:      big.NewInt(4370000),
-		ConstantinopleBlock: big.NewInt(7280000),
-		PetersburgBlock:     big.NewInt(7280000),
-		IstanbulBlock:       big.NewInt(9069000),
-		MuirGlacierBlock:    big.NewInt(9200000),
-		Ethash:              new(EthashConfig),
-	}
-
-	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
-	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 345,
-		SectionHead:  common.HexToHash("0x5453bab878704adebc934b41fd214a07ea7a72b8572ff088dca7f7956cd0ef28"),
-		CHTRoot:      common.HexToHash("0x7693d432595846c094f47cb37f5c868b0b7b1968fc6b0fc411ded1345fdaffab"),
-		BloomRoot:    common.HexToHash("0x8b0e7895bc39840d8dac857e26bdf3d0a07684b0b962b252546659e0337a9f70"),
-	}
-
-	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
-	MainnetCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
-		Signers: []common.Address{
-			common.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
-	}
-
-	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
-	RopstenChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(3),
+		ChainID:             big.NewInt(52),
 		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:         big.NewInt(10),
-		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(1700000),
-		ConstantinopleBlock: big.NewInt(4230000),
-		PetersburgBlock:     big.NewInt(4939394),
-		IstanbulBlock:       big.NewInt(6485846),
-		MuirGlacierBlock:    big.NewInt(7117117),
-		Ethash:              new(EthashConfig),
-	}
-
-	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
-	RopstenTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 279,
-		SectionHead:  common.HexToHash("0x4a4912848d4c06090097073357c10015d11c6f4544a0f93cbdd584701c3b7d58"),
-		CHTRoot:      common.HexToHash("0x9053b7867ae921e80a4e2f5a4b15212e4af3d691ca712fb33dc150e9c6ea221c"),
-		BloomRoot:    common.HexToHash("0x3dc04cb1be7ddc271f3f83469b47b76184a79d7209ef51d85b1539ea6d25a645"),
-	}
-
-	// RopstenCheckpointOracle contains a set of configs for the Ropsten test network oracle.
-	RopstenCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
-		Signers: []common.Address{
-			common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
-	}
-
-	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
-	RinkebyChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(4),
-		HomesteadBlock:      big.NewInt(1),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2),
-		EIP150Hash:          common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:         big.NewInt(3),
-		EIP158Block:         big.NewInt(3),
-		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: big.NewInt(3660663),
-		PetersburgBlock:     big.NewInt(4321234),
-		IstanbulBlock:       big.NewInt(5435345),
-		MuirGlacierBlock:    nil,
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
-	}
-
-	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
-	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 232,
-		SectionHead:  common.HexToHash("0x8170fca4039b11a008c11f9996ff112151cbb17411437bb2f86288e11158b2f0"),
-		CHTRoot:      common.HexToHash("0x4526560d92ae1b3a6d3ee780c3ad289ba2bbf1b5da58d9ea107f2f26412b631f"),
-		BloomRoot:    common.HexToHash("0x82a889098a35d6a21ea8894d35a1db69b94bad61b988bbe5ae4601437320e331"),
-	}
-
-	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
-	RinkebyCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0xebe8eFA441B9302A0d7eaECc277c09d20D684540"),
-		Signers: []common.Address{
-			common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-		},
-		Threshold: 2,
-	}
-
-	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
-	GoerliChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(5),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(1561651),
-		MuirGlacierBlock:    nil,
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
-	}
-
-	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
-	GoerliTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 116,
-		SectionHead:  common.HexToHash("0xf2d200f636f213c9c7bb4e747ff564813da7708253037103aef3d8be5203c5e1"),
-		CHTRoot:      common.HexToHash("0xb0ac83e2ccf6c2776945e099c4e3df50fe6200499c8b2045c34cafdf57d15087"),
-		BloomRoot:    common.HexToHash("0xfb580ad1c611230a4bfc56534f58bcb156d028bc6ce70e35403dc019c7c02d90"),
-	}
-
-	// GoerliCheckpointOracle contains a set of configs for the Goerli test network oracle.
-	GoerliCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x18CA0E045F0D772a851BC7e48357Bcaab0a0795D"),
-		Signers: []common.Address{
-			common.HexToAddress("0x4769bcaD07e3b938B7f43EB7D278Bc7Cb9efFb38"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
-	}
-
-	// YoloV2ChainConfig contains the chain parameters to run a node on the YOLOv2 test network.
-	YoloV2ChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(133519467574834),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
+		DAOForkBlock:        big.NewInt(0),
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
@@ -227,29 +53,59 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    nil,
-		YoloV2Block:         big.NewInt(0),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
+		MuirGlacierBlock:    big.NewInt(0),
+		Ethash:              new(EthashConfig),
+		Senatus: &SenatusConfig{
+			Period: 3,
+			Epoch:  200,
 		},
 	}
+
+	// TestnetChainConfig is the chain parameters to run a node on the main network.
+	TestnetChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(53),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		Ethash:              new(EthashConfig),
+		Senatus: &SenatusConfig{
+			Period: 3,
+			Epoch:  200,
+		},
+	}
+
+	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
+	MainnetTrustedCheckpoint = &TrustedCheckpoint{}
+
+	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
+	MainnetCheckpointOracle = &CheckpointOracleConfig{}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil}
+
+	// AllSenatusProtocolChanges copies from senatus protocol.
+	AllSenatusProtocolChanges = &ChainConfig{big.NewInt(52), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, &SenatusConfig{Period: 3, Epoch: 200}}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(53), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, &SenatusConfig{Period: 3, Epoch: 200}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -325,8 +181,9 @@ type ChainConfig struct {
 	EWASMBlock  *big.Int `json:"ewasmBlock,omitempty"`  // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
+	Ethash  *EthashConfig  `json:"ethash,omitempty"`
+	Clique  *CliqueConfig  `json:"clique,omitempty"`
+	Senatus *SenatusConfig `json:"senatus,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -348,6 +205,16 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
+type SenatusConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to update validatorSet
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *SenatusConfig) String() string {
+	return "senatus"
+}
+
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	var engine interface{}
@@ -356,6 +223,8 @@ func (c *ChainConfig) String() string {
 		engine = c.Ethash
 	case c.Clique != nil:
 		engine = c.Clique
+	case c.Senatus != nil:
+		engine = c.Senatus
 	default:
 		engine = "unknown"
 	}

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/senatus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -98,10 +99,21 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", DefaultConfig.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(DefaultConfig.Miner.GasPrice)
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(params.MinimalGasPrice) < 0 {
+		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", params.MinimalGasPrice.String())
+		config.Miner.GasPrice = new(big.Int).Set(params.MinimalGasPrice)
 	}
+
+	if config.Miner.GasCeil > params.MaxGasTarget {
+		log.Warn("Miner gas ceil invalid", "provided", config.Miner.GasCeil, "updated", params.MaxGasTarget)
+		config.Miner.GasCeil = params.MaxGasTarget
+	}
+
+	if config.Miner.GasFloor < params.MinGasTarget {
+		log.Warn("Miner gas floor invalid", "provided", config.Miner.GasFloor, "updated", params.MinGasTarget)
+		config.Miner.GasFloor = params.MinGasTarget
+	}
+
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -129,7 +141,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            CreateConsensusEngine(stack, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -138,6 +149,9 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 	}
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
+	ethAPI := ethapi.NewPublicBlockChainAPI(eth.APIBackend)
+	eth.engine = CreateConsensusEngine(stack, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb, ethAPI)
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -241,10 +255,13 @@ func makeExtraData(extra []byte) []byte {
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ethAPI *ethapi.PublicBlockChainAPI) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
+	}
+	if chainConfig.Senatus != nil {
+		return senatus.New(chainConfig, db, ethAPI)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
@@ -408,6 +425,9 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	if _, ok := s.engine.(*clique.Clique); ok {
 		return false
 	}
+	if _, ok := s.engine.(*senatus.Senatus); ok {
+		return false
+	}
 	return s.isLocalBlock(block)
 }
 
@@ -456,6 +476,14 @@ func (s *Ethereum) StartMining(threads int) error {
 				return fmt.Errorf("signer missing: %v", err)
 			}
 			clique.Authorize(eb, wallet.SignData)
+		}
+		if senatus, ok := s.engine.(*senatus.Senatus); ok {
+			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+			if wallet == nil || err != nil {
+				log.Error("Etherbase account unavailable locally", "err", err)
+				return fmt.Errorf("signer missing: %v", err)
+			}
+			senatus.Authorize(eb, wallet.SignData, wallet.SignTx)
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -30,6 +31,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/senatus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -497,7 +500,20 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer)
 		txContext := core.NewEVMTxContext(msg)
-
+		if pos, ok := api.eth.engine.(consensus.PoS); ok {
+			if isSystemTx, _ := pos.IsSystemTransaction(tx, block.Header()); isSystemTx {
+				balance := statedb.GetBalance(consensus.FeeRecoder)
+				if balance.Cmp(common.Big0) > 0 {
+					statedb.SetBalance(consensus.FeeRecoder, big.NewInt(0))
+				}
+				blockReward := senatus.CalcBlockReward(api.eth.blockchain.Config(), block.Number())
+				reward := big.NewInt(0).Set(balance)
+				reward = reward.Add(reward, blockReward)
+				if reward.Cmp(common.Big0) > 0 {
+					statedb.AddBalance(block.Header().Coinbase, reward)
+				}
+			}
+		}
 		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.eth.blockchain.Config(), vm.Config{})
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
@@ -813,7 +829,19 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	}
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.eth.blockchain.Config(), vm.Config{Debug: true, Tracer: tracer})
-
+	if pos, ok := api.eth.engine.(consensus.PoS); ok && pos.IsSystemContract(message.To()) && message.From() == vmctx.Coinbase && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
+		balance := statedb.GetBalance(consensus.FeeRecoder)
+		reward := big.NewInt(0)
+		if balance.Cmp(common.Big0) > 0 {
+			statedb.SetBalance(consensus.FeeRecoder, big.NewInt(0))
+			reward = reward.Add(reward, balance)
+		}
+		blockReward := senatus.CalcBlockReward(api.eth.blockchain.Config(), vmctx.BlockNumber)
+		reward = reward.Add(reward, blockReward)
+		if reward.Cmp(common.Big0) > 0 {
+			statedb.AddBalance(vmctx.Coinbase, reward)
+		}
+	}
 	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
@@ -864,6 +892,20 @@ func (api *PrivateDebugAPI) computeTxEnv(block *types.Block, txIndex int, reexec
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer)
 		txContext := core.NewEVMTxContext(msg)
+		if pos, ok := api.eth.engine.(consensus.PoS); ok {
+			if isSystemTx, _ := pos.IsSystemTransaction(tx, block.Header()); isSystemTx {
+				balance := statedb.GetBalance(consensus.FeeRecoder)
+				if balance.Cmp(common.Big0) > 0 {
+					statedb.SetBalance(consensus.FeeRecoder, big.NewInt(0))
+				}
+				blockReward := senatus.CalcBlockReward(api.eth.blockchain.Config(), block.Number())
+				reward := big.NewInt(0).Set(balance)
+				reward = reward.Add(reward, blockReward)
+				if reward.Cmp(common.Big0) > 0 {
+					statedb.AddBalance(block.Header().Coinbase, reward)
+				}
+			}
+		}
 		context := core.NewEVMBlockContext(block.Header(), api.eth.blockchain, nil)
 		if idx == txIndex {
 			return msg, context, statedb, nil

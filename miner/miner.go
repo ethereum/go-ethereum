@@ -72,7 +72,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, false),
 	}
 	go miner.update()
 
@@ -181,7 +181,18 @@ func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 
 // Pending returns the currently pending block and associated state.
 func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
-	return miner.worker.pending()
+	if miner.worker.isRunning() {
+		return miner.worker.pending()
+	}
+	block := miner.worker.chain.CurrentBlock()
+	if block == nil {
+		return nil, nil
+	}
+	stateDb, err := miner.worker.chain.StateAt(block.Root())
+	if err != nil {
+		return nil, nil
+	}
+	return block, stateDb
 }
 
 // PendingBlock returns the currently pending block.
@@ -190,7 +201,10 @@ func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 // simultaneously, please use Pending(), as the pending state can
 // change between multiple method calls
 func (miner *Miner) PendingBlock() *types.Block {
-	return miner.worker.pendingBlock()
+	if miner.worker.isRunning() {
+		return miner.worker.pendingBlock()
+	}
+	return miner.worker.chain.CurrentBlock()
 }
 
 func (miner *Miner) SetEtherbase(addr common.Address) {

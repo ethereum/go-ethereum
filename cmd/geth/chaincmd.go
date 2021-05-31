@@ -49,6 +49,7 @@ var (
 		ArgsUsage: "<genesisPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.TestnetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -76,6 +77,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Flags: []cli.Flag{
+			utils.TestnetFlag,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
@@ -112,6 +114,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
+			utils.TestnetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -159,12 +162,8 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.FakePoWFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
 			utils.TxLookupLimitFlag,
-			utils.GoerliFlag,
-			utils.YoloV2Flag,
-			utils.LegacyTestnetFlag,
+			utils.TestnetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -210,11 +209,7 @@ Use "ethereum dump 0" to dump the genesis block.`,
 			utils.DataDirFlag,
 			utils.AncientFlag,
 			utils.CacheFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV2Flag,
-			utils.LegacyTestnetFlag,
+			utils.TestnetFlag,
 			utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
@@ -226,19 +221,29 @@ Use "ethereum dump 0" to dump the genesis block.`,
 func initGenesis(ctx *cli.Context) error {
 	// Make sure we have a valid genesis JSON
 	genesisPath := ctx.Args().First()
-	if len(genesisPath) == 0 {
-		utils.Fatalf("Must supply path to genesis JSON file")
-	}
-	file, err := os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("Failed to read genesis file: %v", err)
-	}
-	defer file.Close()
-
 	genesis := new(core.Genesis)
-	if err := json.NewDecoder(file).Decode(genesis); err != nil {
-		utils.Fatalf("invalid genesis file: %v", err)
+	if len(genesisPath) != 0 {
+
+		file, err := os.Open(genesisPath)
+		if err != nil {
+			utils.Fatalf("Failed to read genesis file: %v", err)
+		}
+		defer file.Close()
+		if err := json.NewDecoder(file).Decode(genesis); err != nil {
+			utils.Fatalf("invalid genesis file: %v", err)
+		}
+	} else {
+		var err error
+		if ctx.GlobalIsSet(utils.TestnetFlag.Name) {
+			err = core.DefaultTestnetGenesis(genesis)
+		} else {
+			err = core.DefaultMainnetGenesis(genesis)
+		}
+		if err != nil {
+			utils.Fatalf("invalid genesis config: %v", err)
+		}
 	}
+
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -278,10 +283,10 @@ func importChain(ctx *cli.Context) error {
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
-	stack, _ := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack, false)
+	chain, db := utils.MakeChain(ctx, stack, &cfg.Eth, false)
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
@@ -303,7 +308,6 @@ func importChain(ctx *cli.Context) error {
 	start := time.Now()
 
 	var importErr error
-
 	if len(ctx.Args()) == 1 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			importErr = err
@@ -372,11 +376,10 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
-	stack, _ := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack, true)
+	chain, _ := utils.MakeChain(ctx, stack, &cfg.Eth, true)
 	start := time.Now()
 
 	var err error
@@ -450,10 +453,10 @@ func copyDb(ctx *cli.Context) error {
 		utils.Fatalf("Source ancient chain directory path argument missing")
 	}
 	// Initialize a new chain for the running node to sync into
-	stack, _ := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack, false)
+	chain, chainDb := utils.MakeChain(ctx, stack, &cfg.Eth, false)
 	syncMode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 
 	var syncBloom *trie.SyncBloom
@@ -558,10 +561,10 @@ func confirmAndRemoveDB(database string, kind string) {
 }
 
 func dump(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack, true)
+	chain, chainDb := utils.MakeChain(ctx, stack, &cfg.Eth, true)
 	defer chainDb.Close()
 	for _, arg := range ctx.Args() {
 		var block *types.Block
@@ -597,10 +600,10 @@ func dump(ctx *cli.Context) error {
 }
 
 func inspect(ctx *cli.Context) error {
-	node, _ := makeConfigNode(ctx)
+	node, cfg := makeConfigNode(ctx)
 	defer node.Close()
 
-	_, chainDb := utils.MakeChain(ctx, node, true)
+	_, chainDb := utils.MakeChain(ctx, node, &cfg.Eth, true)
 	defer chainDb.Close()
 
 	return rawdb.InspectDatabase(chainDb)

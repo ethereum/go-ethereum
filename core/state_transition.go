@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -263,7 +264,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	st.refundGas()
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+
+	if st.evm.ChainConfig().Senatus != nil {
+		st.state.AddBalance(consensus.FeeRecoder, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	} else {
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),

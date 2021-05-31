@@ -27,6 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	FeeRecoder = common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+)
+
 // ChainHeaderReader defines a small collection of methods needed to access the local
 // blockchain during header verification.
 type ChainHeaderReader interface {
@@ -90,8 +94,8 @@ type Engine interface {
 	//
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		uncles []*types.Header)
+	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
+		uncles []*types.Header, allLogs *[]*types.Log, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards) and assembles the final block.
@@ -99,7 +103,7 @@ type Engine interface {
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
+		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
@@ -128,4 +132,10 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
+}
+
+type PoS interface {
+	Engine
+	IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error)
+	IsSystemContract(to *common.Address) bool
 }

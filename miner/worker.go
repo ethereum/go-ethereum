@@ -370,6 +370,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
+			if !w.isRunning() {
+				continue
+			}
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
@@ -377,7 +380,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
+			if w.isRunning() && ((w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) || (w.chainConfig.Senatus == nil || w.chainConfig.Senatus.Period > 0)) {
 				// Short circuit if no new transaction arrives.
 				if atomic.LoadInt32(&w.newTxs) == 0 {
 					timer.Reset(recommit)
@@ -504,7 +507,7 @@ func (w *worker) mainLoop() {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit mining work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
-				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
+				if (w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0) || (w.chainConfig.Senatus != nil && w.chainConfig.Senatus.Period == 0) {
 					w.commitNewWork(nil, true, time.Now().Unix())
 				}
 			}
@@ -741,6 +744,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 	if w.current.gasPool == nil {
 		w.current.gasPool = new(core.GasPool).AddGas(w.current.header.GasLimit)
+		w.current.gasPool.SubGas(params.SystemTxsGas)
 	}
 
 	var coalescedLogs []*types.Log
@@ -979,9 +983,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 // and commits new work if consensus engine is running.
 func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
-	receipts := copyReceipts(w.current.receipts)
+	orgReceipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
+	h := types.CopyHeader(w.current.header)
+	block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, h, s, w.current.txs, uncles, orgReceipts)
 	if err != nil {
 		return err
 	}

@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "cetd" // Client identifier to advertise over the network
 )
 
 var (
@@ -54,7 +54,7 @@ var (
 	gitCommit = ""
 	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
+	app = flags.NewApp(gitCommit, gitDate, "the cetd command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -141,11 +141,7 @@ var (
 		utils.DNSDiscoveryFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
-		utils.LegacyTestnetFlag,
-		utils.RopstenFlag,
-		utils.RinkebyFlag,
-		utils.GoerliFlag,
-		utils.YoloV2Flag,
+		utils.TestnetFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -212,13 +208,28 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBTagsFlag,
 	}
+
+	validatorsFlag = []cli.Flag{
+		utils.FromAddressFlag,
+		utils.ValidatorAddressFlag,
+		utils.ValidatorRewardAddrFlag,
+		utils.ValidatorMonikerFlag,
+		utils.ValidatorWebsiteFlag,
+		utils.ValidatorEmailFlag,
+		utils.ValidatorDetailFlag,
+		utils.ValidatorStakingFlag,
+		utils.StakerAddressFlag,
+		utils.NodeEndpointFlag,
+		utils.GasLimitFlag,
+		utils.GasPriceFlag,
+	}
 )
 
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2020 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2020 The go-ethereum Authors and CSC Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -244,6 +255,19 @@ func init() {
 		versionCommand,
 		versionCheckCommand,
 		licenseCommand,
+		createValidatorCommand,
+		editValidatorCommand,
+		stakingCommand,
+		unstakingCommand,
+		withdrawRewardCommand,
+		withdrawStakingCommand,
+		unjailCommand,
+		validatorDespQueryCommand,
+		validatorInfoQueryCommand,
+		activatedValidatorsListCommand,
+		validatorCandidatorsListCommand,
+		stakingInfoQueryCommand,
+		slashRecordQueryCommand,
 		// See config.go
 		dumpConfigCommand,
 		// See cmd/utils/flags_legacy.go
@@ -258,6 +282,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.DeprecatedFlags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, validatorsFlag...)
 
 	app.Before = func(ctx *cli.Context) error {
 		return debug.Setup(ctx)
@@ -281,30 +306,19 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.GlobalIsSet(utils.LegacyTestnetFlag.Name):
-		log.Info("Starting Geth on Ropsten testnet...")
-		log.Warn("The --testnet flag is ambiguous! Please specify one of --goerli, --rinkeby, or --ropsten.")
-		log.Warn("The generic --testnet flag is deprecated and will be removed in the future!")
-
-	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
-		log.Info("Starting Geth on Ropsten testnet...")
-
-	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
-		log.Info("Starting Geth on Rinkeby testnet...")
-
-	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
-		log.Info("Starting Geth on Görli testnet...")
+	case ctx.GlobalIsSet(utils.TestnetFlag.Name):
+		log.Info("Starting cetd on testnet...")
 
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
-		log.Info("Starting Geth in ephemeral dev mode...")
+		log.Info("Starting cetd in ephemeral dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting cetd on mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.GlobalIsSet(utils.LegacyTestnetFlag.Name) && !ctx.GlobalIsSet(utils.RopstenFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+		if !ctx.GlobalIsSet(utils.TestnetFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
 			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
@@ -364,7 +378,6 @@ func geth(ctx *cli.Context) error {
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	debug.Memsize.Add("node", stack)
-
 	// Start up the node itself
 	utils.StartNode(stack)
 

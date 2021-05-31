@@ -136,5 +136,14 @@ func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
 			limit = gasCeil
 		}
 	}
+
+	if limit < params.MinGasTarget {
+		limit = params.MinGasTarget
+	}
+
+	if limit > params.MaxGasTarget {
+		limit = params.MaxGasTarget
+	}
+
 	return limit
 }
