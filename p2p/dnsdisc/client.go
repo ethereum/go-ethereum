@@ -32,14 +32,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
 
 // Client discovers nodes by querying DNS servers.
 type Client struct {
-	cfg     Config
-	clock   mclock.Clock
-	entries *lru.Cache
+	cfg          Config
+	clock        mclock.Clock
+	entries      *lru.Cache
+	ratelimit    *rate.Limiter
+	singleflight singleflight.Group
 }
 
 // Config holds configuration options for the client.
@@ -97,8 +100,12 @@ func NewClient(cfg Config) *Client {
 		panic(err)
 	}
 	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
-	cfg.Resolver = &rateLimitResolver{cfg.Resolver, rlimit}
-	return &Client{cfg: cfg, entries: cache, clock: mclock.System{}}
+	return &Client{
+		cfg:       cfg,
+		entries:   cache,
+		clock:     mclock.System{},
+		ratelimit: rlimit,
+	}
 }
 
 // SyncTree downloads the entire node tree at the given URL.
@@ -130,17 +137,20 @@ func (c *Client) NewIterator(urls ...string) (enode.Iterator, error) {
 
 // resolveRoot retrieves a root entry via DNS.
 func (c *Client) resolveRoot(ctx context.Context, loc *linkEntry) (rootEntry, error) {
-	txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
-	c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
-	if err != nil {
-		return rootEntry{}, err
-	}
-	for _, txt := range txts {
-		if strings.HasPrefix(txt, rootPrefix) {
-			return parseAndVerifyRoot(txt, loc)
+	e, err, _ := c.singleflight.Do(loc.str, func() (interface{}, error) {
+		txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
+		c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
+		if err != nil {
+			return rootEntry{}, err
 		}
-	}
-	return rootEntry{}, nameError{loc.domain, errNoRoot}
+		for _, txt := range txts {
+			if strings.HasPrefix(txt, rootPrefix) {
+				return parseAndVerifyRoot(txt, loc)
+			}
+		}
+		return rootEntry{}, nameError{loc.domain, errNoRoot}
+	})
+	return e.(rootEntry), err
 }
 
 func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
@@ -157,16 +167,27 @@ func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
 // resolveEntry retrieves an entry from the cache or fetches it from the network
 // if it isn't cached.
 func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, error) {
+	// The rate limit always applies, even when the result might be cached. This is
+	// important because it avoids hot-spinning in consumers of node iterators created on
+	// this client.
+	if err := c.ratelimit.Wait(ctx); err != nil {
+		return nil, err
+	}
 	cacheKey := truncateHash(hash)
 	if e, ok := c.entries.Get(cacheKey); ok {
 		return e.(entry), nil
 	}
-	e, err := c.doResolveEntry(ctx, domain, hash)
-	if err != nil {
-		return nil, err
-	}
-	c.entries.Add(cacheKey, e)
-	return e, nil
+
+	ei, err, _ := c.singleflight.Do(cacheKey, func() (interface{}, error) {
+		e, err := c.doResolveEntry(ctx, domain, hash)
+		if err != nil {
+			return nil, err
+		}
+		c.entries.Add(cacheKey, e)
+		return e, nil
+	})
+	e, _ := ei.(entry)
+	return e, err
 }
 
 // doResolveEntry fetches an entry via DNS.
@@ -194,19 +215,6 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 		return e, err
 	}
 	return nil, nameError{name, errNoEntry}
-}
-
-// rateLimitResolver applies a rate limit to a Resolver.
-type rateLimitResolver struct {
-	r       Resolver
-	limiter *rate.Limiter
-}
-
-func (r *rateLimitResolver) LookupTXT(ctx context.Context, domain string) ([]string, error) {
-	if err := r.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return r.r.LookupTXT(ctx, domain)
 }
 
 // randomIterator traverses a set of trees and returns nodes found in them.

@@ -83,7 +83,7 @@ type Database struct {
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
 	return NewCustom(file, namespace, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
@@ -96,6 +96,9 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		options.OpenFilesCacheCapacity = handles
 		options.BlockCacheCapacity = cache / 2 * opt.MiB
 		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
+		if readonly {
+			options.ReadOnly = true
+		}
 	})
 }
 
@@ -458,7 +461,7 @@ func (b *batch) Put(key, value []byte) error {
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
-	b.size++
+	b.size += len(key)
 	return nil
 }
 

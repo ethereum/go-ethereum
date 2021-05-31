@@ -57,26 +57,28 @@ type PublicFilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
+	borLogs   bool
 
 	chainConfig *params.ChainConfig
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, borLogs bool) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend: backend,
 		chainDb: backend.ChainDb(),
 		events:  NewEventSystem(backend, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: timeout,
+		borLogs: borLogs,
 	}
 	go api.timeoutLoop(timeout)
 
 	return api
 }
 
-// timeoutLoop runs every 5 minutes and deletes filters that have not been recently used.
-// Tt is started when the api is created.
+// timeoutLoop runs at the interval set by 'timeout' and deletes filters
+// that have not been recently used. It is started when the API is created.
 func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 	var toUninstall []*Subscription
 	ticker := time.NewTicker(timeout)
@@ -347,7 +349,9 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 		// Block bor filter
-		borLogsFilter = NewBorBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
+		if api.borLogs {
+			borLogsFilter = NewBorBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
+		}
 	} else {
 		// Convert the RPC block numbers into internal representations
 		begin := rpc.LatestBlockNumber.Int64()
@@ -361,7 +365,9 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 		// Block bor filter
-		borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
+		if api.borLogs {
+			borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
+		}
 	}
 
 	// Run the filter and return all the logs
@@ -369,14 +375,19 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 	if err != nil {
 		return nil, err
 	}
-	// Run the filter and return all the logs
-	borBlockLogs, err := borLogsFilter.Logs(ctx)
-	if err != nil {
-		return nil, err
+
+	if borLogsFilter != nil {
+		// Run the filter and return all the logs
+		borBlockLogs, err := borLogsFilter.Logs(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
 	}
 
 	// merge bor block logs and receipt logs and return it
-	return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
+	return returnLogs(logs), err
 }
 
 // UninstallFilter removes the filter with the given filter id.

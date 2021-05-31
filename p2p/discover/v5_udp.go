@@ -763,9 +763,16 @@ func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, err
 
 // handlePing sends a PONG response.
 func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAddr) {
+	remoteIP := fromAddr.IP
+	// Handle IPv4 mapped IPv6 addresses in the
+	// event the local node is binded to an
+	// ipv6 interface.
+	if remoteIP.To4() != nil {
+		remoteIP = remoteIP.To4()
+	}
 	t.sendResponse(fromID, fromAddr, &v5wire.Pong{
 		ReqID:  p.ReqID,
-		ToIP:   fromAddr.IP,
+		ToIP:   remoteIP,
 		ToPort: uint16(fromAddr.Port),
 		ENRSeq: t.localNode.Node().Seq(),
 	})

@@ -40,6 +40,7 @@ type twoOperandParams struct {
 	y string
 }
 
+var alphabetSoup = "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 var commonParams []*twoOperandParams
 var twoOpMethods map[string]executionFunc
 
@@ -104,7 +105,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, evmInterpreter, &callCtx{nil, stack, nil})
+		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
 		}
@@ -219,7 +220,7 @@ func TestAddMod(t *testing.T) {
 		stack.push(z)
 		stack.push(y)
 		stack.push(x)
-		opAddmod(&pc, evmInterpreter, &callCtx{nil, stack, nil})
+		opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
@@ -241,7 +242,7 @@ func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcas
 		y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, interpreter, &callCtx{nil, stack, nil})
+		opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
 		actual := stack.pop()
 		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 	}
@@ -299,7 +300,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 			a.SetBytes(arg)
 			stack.push(a)
 		}
-		op(&pc, evmInterpreter, &callCtx{nil, stack, nil})
+		op(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		stack.pop()
 	}
 }
@@ -347,8 +348,8 @@ func BenchmarkOpSub256(b *testing.B) {
 }
 
 func BenchmarkOpMul(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opMul, x, y)
 }
@@ -379,64 +380,64 @@ func BenchmarkOpSdiv(b *testing.B) {
 }
 
 func BenchmarkOpMod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opMod, x, y)
 }
 
 func BenchmarkOpSmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSmod, x, y)
 }
 
 func BenchmarkOpExp(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opExp, x, y)
 }
 
 func BenchmarkOpSignExtend(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSignExtend, x, y)
 }
 
 func BenchmarkOpLt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opLt, x, y)
 }
 
 func BenchmarkOpGt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opGt, x, y)
 }
 
 func BenchmarkOpSlt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSlt, x, y)
 }
 
 func BenchmarkOpSgt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSgt, x, y)
 }
 
 func BenchmarkOpEq(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opEq, x, y)
 }
@@ -446,45 +447,45 @@ func BenchmarkOpEq2(b *testing.B) {
 	opBenchmark(b, opEq, x, y)
 }
 func BenchmarkOpAnd(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opAnd, x, y)
 }
 
 func BenchmarkOpOr(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opOr, x, y)
 }
 
 func BenchmarkOpXor(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opXor, x, y)
 }
 
 func BenchmarkOpByte(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opByte, x, y)
 }
 
 func BenchmarkOpAddmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
+	z := alphabetSoup
 
 	opBenchmark(b, opAddmod, x, y, z)
 }
 
 func BenchmarkOpMulmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
+	z := alphabetSoup
 
 	opBenchmark(b, opMulmod, x, y, z)
 }
@@ -525,12 +526,12 @@ func TestOpMstore(t *testing.T) {
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.pushN(*new(uint256.Int).SetBytes(common.Hex2Bytes(v)), *new(uint256.Int))
-	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.pushN(*new(uint256.Int).SetUint64(0x1), *new(uint256.Int))
-	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
@@ -553,7 +554,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(*value, *memStart)
-		opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 
@@ -572,7 +573,7 @@ func BenchmarkOpSHA3(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(*uint256.NewInt().SetUint64(32), *start)
-		opSha3(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+		opSha3(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 

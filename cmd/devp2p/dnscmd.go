@@ -43,6 +43,7 @@ var (
 			dnsTXTCommand,
 			dnsCloudflareCommand,
 			dnsRoute53Command,
+			dnsRoute53NukeCommand,
 		},
 	}
 	dnsSyncCommand = cli.Command{
@@ -77,7 +78,24 @@ var (
 		Usage:     "Deploy DNS TXT records to Amazon Route53",
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToRoute53,
-		Flags:     []cli.Flag{route53AccessKeyFlag, route53AccessSecretFlag, route53ZoneIDFlag},
+		Flags: []cli.Flag{
+			route53AccessKeyFlag,
+			route53AccessSecretFlag,
+			route53ZoneIDFlag,
+			route53RegionFlag,
+		},
+	}
+	dnsRoute53NukeCommand = cli.Command{
+		Name:      "nuke-route53",
+		Usage:     "Deletes DNS TXT records of a subdomain on Amazon Route53",
+		ArgsUsage: "<domain>",
+		Action:    dnsNukeRoute53,
+		Flags: []cli.Flag{
+			route53AccessKeyFlag,
+			route53AccessSecretFlag,
+			route53ZoneIDFlag,
+			route53RegionFlag,
+		},
 	}
 )
 
@@ -169,6 +187,9 @@ func dnsSign(ctx *cli.Context) error {
 	return nil
 }
 
+// directoryName returns the directory name of the given path.
+// For example, when dir is "foo/bar", it returns "bar".
+// When dir is ".", and the working directory is "example/foo", it returns "foo".
 func directoryName(dir string) string {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -177,7 +198,7 @@ func directoryName(dir string) string {
 	return filepath.Base(abs)
 }
 
-// dnsToTXT peforms dnsTXTCommand.
+// dnsToTXT performs dnsTXTCommand.
 func dnsToTXT(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need tree definition directory as argument")
@@ -194,9 +215,9 @@ func dnsToTXT(ctx *cli.Context) error {
 	return nil
 }
 
-// dnsToCloudflare peforms dnsCloudflareCommand.
+// dnsToCloudflare performs dnsCloudflareCommand.
 func dnsToCloudflare(ctx *cli.Context) error {
-	if ctx.NArg() < 1 {
+	if ctx.NArg() != 1 {
 		return fmt.Errorf("need tree definition directory as argument")
 	}
 	domain, t, err := loadTreeDefinitionForExport(ctx.Args().Get(0))
@@ -207,9 +228,9 @@ func dnsToCloudflare(ctx *cli.Context) error {
 	return client.deploy(domain, t)
 }
 
-// dnsToRoute53 peforms dnsRoute53Command.
+// dnsToRoute53 performs dnsRoute53Command.
 func dnsToRoute53(ctx *cli.Context) error {
-	if ctx.NArg() < 1 {
+	if ctx.NArg() != 1 {
 		return fmt.Errorf("need tree definition directory as argument")
 	}
 	domain, t, err := loadTreeDefinitionForExport(ctx.Args().Get(0))
@@ -218,6 +239,15 @@ func dnsToRoute53(ctx *cli.Context) error {
 	}
 	client := newRoute53Client(ctx)
 	return client.deploy(domain, t)
+}
+
+// dnsNukeRoute53 performs dnsRoute53NukeCommand.
+func dnsNukeRoute53(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("need domain name as argument")
+	}
+	client := newRoute53Client(ctx)
+	return client.deleteDomain(ctx.Args().First())
 }
 
 // loadSigningKey loads a private key in Ethereum keystore format.

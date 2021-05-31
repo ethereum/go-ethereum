@@ -120,12 +120,21 @@ type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
 
 func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
+type GetPooledTransactions eth.GetPooledTransactionsPacket
+
+func (gpt GetPooledTransactions) Code() int { return 25 }
+
+type PooledTransactions eth.PooledTransactionsPacket
+
+func (pt PooledTransactions) Code() int { return 26 }
+
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
-	ourKey             *ecdsa.PrivateKey
-	ethProtocolVersion uint
-	caps               []p2p.Cap
+	ourKey                 *ecdsa.PrivateKey
+	negotiatedProtoVersion uint
+	ourHighestProtoVersion uint
+	caps                   []p2p.Cap
 }
 
 func (c *Conn) Read() Message {
@@ -162,6 +171,10 @@ func (c *Conn) Read() Message {
 		msg = new(Transactions)
 	case (NewPooledTransactionHashes{}).Code():
 		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		msg = new(GetPooledTransactions)
+	case (PooledTransactions{}.Code()):
+		msg = new(PooledTransactions)
 	default:
 		return errorf("invalid message code: %d", code)
 	}
@@ -177,8 +190,7 @@ func (c *Conn) Read() Message {
 func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
 	for time.Since(start) < timeout {
-		timeout := time.Now().Add(10 * time.Second)
-		c.SetReadDeadline(timeout)
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
 		switch msg := c.Read().(type) {
 		case *Ping:
 			c.Write(&Pong{})
@@ -236,7 +248,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 			c.SetSnappy(true)
 		}
 		c.negotiateEthProtocol(msg.Caps)
-		if c.ethProtocolVersion == 0 {
+		if c.negotiatedProtoVersion == 0 {
 			t.Fatalf("unexpected eth protocol version")
 		}
 		return msg
@@ -254,11 +266,11 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 		if capability.Name != "eth" {
 			continue
 		}
-		if capability.Version > highestEthVersion && capability.Version <= 65 {
+		if capability.Version > highestEthVersion && capability.Version <= c.ourHighestProtoVersion {
 			highestEthVersion = capability.Version
 		}
 	}
-	c.ethProtocolVersion = highestEthVersion
+	c.negotiatedProtoVersion = highestEthVersion
 }
 
 // statusExchange performs a `Status` message exchange with the given
@@ -273,14 +285,15 @@ loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
-			if msg.Head != chain.blocks[chain.Len()-1].Hash() {
-				t.Fatalf("wrong head block in status: %s", msg.Head.String())
+			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
+				t.Fatalf("wrong head block in status, want:  %#x (block %d) have %#x",
+					want, chain.blocks[chain.Len()-1].NumberU64(), have)
 			}
-			if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
-				t.Fatalf("wrong TD in status: %v", msg.TD)
+			if have, want := msg.TD.Cmp(chain.TD(chain.Len())), 0; have != want {
+				t.Fatalf("wrong TD in status: have %v want %v", have, want)
 			}
-			if !reflect.DeepEqual(msg.ForkID, chain.ForkID()) {
-				t.Fatalf("wrong fork ID in status: %v", msg.ForkID)
+			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
+				t.Fatalf("wrong fork ID in status: have %v, want %v", have, want)
 			}
 			message = msg
 			break loop
@@ -294,13 +307,13 @@ loop:
 		}
 	}
 	// make sure eth protocol version is set for negotiation
-	if c.ethProtocolVersion == 0 {
+	if c.negotiatedProtoVersion == 0 {
 		t.Fatalf("eth protocol version must be set in Conn")
 	}
 	if status == nil {
 		// write status message to client
 		status = &Status{
-			ProtocolVersion: uint32(c.ethProtocolVersion),
+			ProtocolVersion: uint32(c.negotiatedProtoVersion),
 			NetworkID:       chain.chainConfig.ChainID.Uint64(),
 			TD:              chain.TD(chain.Len()),
 			Head:            chain.blocks[chain.Len()-1].Hash(),
@@ -321,8 +334,11 @@ loop:
 func (c *Conn) waitForBlock(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
-	c.SetReadDeadline(timeout)
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// note: if the node has not yet imported the block, it will respond
+	// to the GetBlockHeaders request with an empty BlockHeaders response,
+	// so the GetBlockHeaders request must be sent again until the BlockHeaders
+	// response contains the desired header.
 	for {
 		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
@@ -330,8 +346,10 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 		}
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
-			if len(*msg) > 0 {
-				return nil
+			for _, header := range *msg {
+				if header.Number.Uint64() == block.NumberU64() {
+					return nil
+				}
 			}
 			time.Sleep(100 * time.Millisecond)
 		default:

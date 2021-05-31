@@ -177,7 +177,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	if atomic.LoadUint32(&h.fastSync) == 1 {
+	// Note: we don't enable it if snap-sync is performed, since it's very heavy
+	// and the heal-portion of the snap sync is much lighter than fast. What we particularly
+	// want to avoid, is a 90%-finished (but restarted) snap-sync to begin
+	// indexing the entire trie
+	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
 		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
 	}
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
@@ -492,11 +496,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	for peer, hashes := range annos {
 		annoPeers++
 		annoCount += len(hashes)
-		if peer.Version() >= eth.ETH65 {
-			peer.AsyncSendPooledTransactionHashes(hashes)
-		} else {
-			peer.AsyncSendTransactions(hashes)
-		}
+		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,

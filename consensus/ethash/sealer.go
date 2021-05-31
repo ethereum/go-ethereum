@@ -358,7 +358,16 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 // new work to be processed.
 func (s *remoteSealer) notifyWork() {
 	work := s.currentWork
-	blob, _ := json.Marshal(work)
+
+	// Encode the JSON payload of the notification. When NotifyFull is set,
+	// this is the complete block header, otherwise it is a JSON array.
+	var blob []byte
+	if s.ethash.config.NotifyFull {
+		blob, _ = json.Marshal(s.currentBlock.Header())
+	} else {
+		blob, _ = json.Marshal(work)
+	}
+
 	s.reqWG.Add(len(s.notifyURLs))
 	for _, url := range s.notifyURLs {
 		go s.sendNotification(s.notifyCtx, url, blob, work)

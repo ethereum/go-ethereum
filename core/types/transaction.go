@@ -293,7 +293,7 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 
 // GasPriceCmp compares the gas prices of two transactions.
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.inner.gasPrice().Cmp(other.GasPrice())
+	return tx.inner.gasPrice().Cmp(other.inner.gasPrice())
 }
 
 // GasPriceIntCmp compares the gas price of the transaction against the given price.

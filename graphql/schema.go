@@ -69,6 +69,12 @@ const schema string = `
         transaction: Transaction!
     }
 
+    #EIP-2718 
+    type AccessTuple{
+        address: Address!
+        storageKeys : [Bytes32!]
+    }
+
     # Transaction is an Ethereum transaction.
     type Transaction {
         # Hash is the hash of this transaction.
@@ -118,6 +124,9 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
+        #Envelope transaction support
+        type: Int
+        accessList: [AccessTuple!]
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied

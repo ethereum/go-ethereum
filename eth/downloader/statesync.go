@@ -298,7 +298,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:         d,
 		root:      root,
-		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom),
+		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom, nil),
 		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		trieTasks: make(map[common.Hash]*trieTask),
 		codeTasks: make(map[common.Hash]*codeTask),

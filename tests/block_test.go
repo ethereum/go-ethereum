@@ -28,7 +28,7 @@ func TestBlockchain(t *testing.T) {
 	// For speedier CI-runs, the line below can be uncommented, so those are skipped.
 	// For now, in hardfork-times (Berlin), we run the tests both as StateTests and
 	// as blockchain tests, since the latter also covers things like receipt root
-	//bt.skipLoad(`^GeneralStateTests/`)
+	bt.skipLoad(`^GeneralStateTests/`)
 
 	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)

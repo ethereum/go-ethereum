@@ -28,18 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-var (
-	testSetup         = &nodestate.Setup{}
-	ppTestClientFlag  = testSetup.NewFlag("ppTestClientFlag")
-	ppTestClientField = testSetup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
-	ppUpdateFlag      = testSetup.NewFlag("ppUpdateFlag")
-	ppTestSetup       = NewPriorityPoolSetup(testSetup)
-)
-
-func init() {
-	ppTestSetup.Connect(ppTestClientField, ppUpdateFlag)
-}
-
 const (
 	testCapacityStepDiv      = 100
 	testCapacityToleranceDiv = 10
@@ -51,25 +39,27 @@ type ppTestClient struct {
 	balance, cap uint64
 }
 
-func (c *ppTestClient) Priority(cap uint64) int64 {
+func (c *ppTestClient) priority(cap uint64) int64 {
 	return int64(c.balance / cap)
 }
 
-func (c *ppTestClient) EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
+func (c *ppTestClient) estimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	return int64(c.balance / cap)
 }
 
 func TestPriorityPool(t *testing.T) {
 	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
+	setup := newServerSetup()
+	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 
-	ns.SubscribeField(ppTestSetup.CapacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		if n := ns.GetField(node, ppTestSetup.priorityField); n != nil {
+	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if n := ns.GetField(node, setup.balanceField); n != nil {
 			c := n.(*ppTestClient)
 			c.cap = newValue.(uint64)
 		}
 	})
-	pp := NewPriorityPool(ns, ppTestSetup, clock, testMinCap, 0, testCapacityStepDiv)
+	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv, testCapacityStepDiv)
 	ns.Start()
 	pp.SetLimits(100, 1000000)
 	clients := make([]*ppTestClient, 100)
@@ -77,7 +67,8 @@ func TestPriorityPool(t *testing.T) {
 		for {
 			var ok bool
 			ns.Operation(func() {
-				_, ok = pp.RequestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0, true)
+				newCap := c.cap + c.cap/testCapacityStepDiv
+				ok = pp.requestCapacity(c.node, newCap, newCap, 0) == newCap
 			})
 			if !ok {
 				return
@@ -101,9 +92,8 @@ func TestPriorityPool(t *testing.T) {
 		}
 		sumBalance += c.balance
 		clients[i] = c
-		ns.SetState(c.node, ppTestClientFlag, nodestate.Flags{}, 0)
-		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
+		ns.SetField(c.node, setup.balanceField, c)
+		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		raise(c)
 		check(c)
 	}
@@ -113,8 +103,8 @@ func TestPriorityPool(t *testing.T) {
 		oldBalance := c.balance
 		c.balance = uint64(rand.Int63n(100000000000) + 100000000000)
 		sumBalance += c.balance - oldBalance
-		pp.ns.SetState(c.node, ppUpdateFlag, nodestate.Flags{}, 0)
-		pp.ns.SetState(c.node, nodestate.Flags{}, ppUpdateFlag, 0)
+		pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
+		pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
 		if c.balance > oldBalance {
 			raise(c)
 		} else {
@@ -129,32 +119,28 @@ func TestPriorityPool(t *testing.T) {
 		if count%10 == 0 {
 			// test available capacity calculation with capacity curve
 			c = clients[rand.Intn(len(clients))]
-			curve := pp.GetCapacityCurve().Exclude(c.node.ID())
+			curve := pp.getCapacityCurve().exclude(c.node.ID())
 
 			add := uint64(rand.Int63n(10000000000000))
 			c.balance += add
 			sumBalance += add
-			expCap := curve.MaxCapacity(func(cap uint64) int64 {
+			expCap := curve.maxCapacity(func(cap uint64) int64 {
 				return int64(c.balance / cap)
 			})
-			//fmt.Println(expCap, c.balance, sumBalance)
-			/*for i, cp := range curve.points {
-				fmt.Println("cp", i, cp, "ex", curve.getPoint(i))
-			}*/
 			var ok bool
-			expFail := expCap + 1
+			expFail := expCap + 10
 			if expFail < testMinCap {
 				expFail = testMinCap
 			}
 			ns.Operation(func() {
-				_, ok = pp.RequestCapacity(c.node, expFail, 0, true)
+				ok = pp.requestCapacity(c.node, expFail, expFail, 0) == expFail
 			})
 			if ok {
 				t.Errorf("Request for more than expected available capacity succeeded")
 			}
 			if expCap >= testMinCap {
 				ns.Operation(func() {
-					_, ok = pp.RequestCapacity(c.node, expCap, 0, true)
+					ok = pp.requestCapacity(c.node, expCap, expCap, 0) == expCap
 				})
 				if !ok {
 					t.Errorf("Request for expected available capacity failed")
@@ -162,8 +148,8 @@ func TestPriorityPool(t *testing.T) {
 			}
 			c.balance -= add
 			sumBalance -= add
-			pp.ns.SetState(c.node, ppUpdateFlag, nodestate.Flags{}, 0)
-			pp.ns.SetState(c.node, nodestate.Flags{}, ppUpdateFlag, 0)
+			pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
+			pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
 			for _, c := range clients {
 				raise(c)
 			}
@@ -175,8 +161,11 @@ func TestPriorityPool(t *testing.T) {
 
 func TestCapacityCurve(t *testing.T) {
 	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
-	pp := NewPriorityPool(ns, ppTestSetup, clock, 400000, 0, 2)
+	setup := newServerSetup()
+	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
+
+	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2, 2)
 	ns.Start()
 	pp.SetLimits(10, 10000000)
 	clients := make([]*ppTestClient, 10)
@@ -188,17 +177,16 @@ func TestCapacityCurve(t *testing.T) {
 			cap:     1000000,
 		}
 		clients[i] = c
-		ns.SetState(c.node, ppTestClientFlag, nodestate.Flags{}, 0)
-		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
+		ns.SetField(c.node, setup.balanceField, c)
+		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {
-			pp.RequestCapacity(c.node, c.cap, 0, true)
+			pp.requestCapacity(c.node, c.cap, c.cap, 0)
 		})
 	}
 
-	curve := pp.GetCapacityCurve()
+	curve := pp.getCapacityCurve()
 	check := func(balance, expCap uint64) {
-		cap := curve.MaxCapacity(func(cap uint64) int64 {
+		cap := curve.maxCapacity(func(cap uint64) int64 {
 			return int64(balance / cap)
 		})
 		var fail bool
@@ -226,7 +214,7 @@ func TestCapacityCurve(t *testing.T) {
 	check(1000000000000, 2500000)
 
 	pp.SetLimits(11, 10000000)
-	curve = pp.GetCapacityCurve()
+	curve = pp.getCapacityCurve()
 
 	check(0, 0)
 	check(10000000000, 100000)

@@ -672,7 +672,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	// Create an initial state with a single contract
 	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
 
-	addr := toAddr([]byte("so"))
+	addr := common.BytesToAddress([]byte("so"))
 	state.SetBalance(addr, big.NewInt(1))
 
 	root, _ := state.Commit(false)
@@ -705,11 +705,11 @@ func TestMissingTrieNodes(t *testing.T) {
 	db := NewDatabase(memDb)
 	var root common.Hash
 	state, _ := New(common.Hash{}, db, nil)
-	addr := toAddr([]byte("so"))
+	addr := common.BytesToAddress([]byte("so"))
 	{
 		state.SetBalance(addr, big.NewInt(1))
 		state.SetCode(addr, []byte{1, 2, 3})
-		a2 := toAddr([]byte("another"))
+		a2 := common.BytesToAddress([]byte("another"))
 		state.SetBalance(a2, big.NewInt(100))
 		state.SetCode(a2, []byte{1, 2, 4})
 		root, _ = state.Commit(false)
