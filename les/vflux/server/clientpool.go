@@ -146,7 +146,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		activeCount, activeCap := cp.Active()
 		totalActiveCountGauge.Update(int64(activeCount))
 		totalActiveCapacityGauge.Update(int64(activeCap))
-		totalActiveCapacityGauge.Update(int64(cp.Inactive()))
+		totalInactiveCountGauge.Update(int64(cp.Inactive()))
 	})
 	return cp
 }
