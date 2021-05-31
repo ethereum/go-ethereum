@@ -191,6 +191,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) ty
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
+		if tip == nil {
+			log.Warn("Basefee provided, but tip not set")
+			tip = new(big.Int)
+		}
+		if feeCap == nil {
+			log.Warn("Basefee provided, but feeCap not set")
+			feeCap = new(big.Int)
+		}
 		gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
 	}
 
