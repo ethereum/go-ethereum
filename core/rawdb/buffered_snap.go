@@ -52,7 +52,7 @@ func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) error {
 	// buffer to utilize the full capacity.
 	if n := snappy.MaxEncodedLen(len(data)); len(s.dst) < n {
 		if cap(s.dst) < n {
-			s.dst = make([]byte, n, n)
+			s.dst = make([]byte, n)
 		}
 		s.dst = s.dst[:n]
 	}

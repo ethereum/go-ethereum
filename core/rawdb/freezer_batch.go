@@ -19,10 +19,10 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
-	"sync/atomic"
 )
 
 // freezerBatch is a batch for a freezer table.
