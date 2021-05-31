@@ -80,7 +80,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	// After london, default to 1559 unless gasPrice is set
 	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
 		if args.Tip == nil {
-			tip, err := b.SuggestTip(ctx)
+			tip, err := b.SuggestPrice(ctx)
 			if err != nil {
 				return err
 			}

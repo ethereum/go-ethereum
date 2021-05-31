@@ -252,11 +252,7 @@ func (b *LesApiBackend) ProtocolVersion() int {
 }
 
 func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx, false)
-}
-
-func (b *LesApiBackend) SuggestTip(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx, true)
+	return b.gpo.SuggestPrice(ctx)
 }
 
 func (b *LesApiBackend) SuggestFeeCap(ctx context.Context) (*big.Int, error) {

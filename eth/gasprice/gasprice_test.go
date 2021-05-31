@@ -55,7 +55,7 @@ func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chain.Config()
 }
 
-func newTestBackend(t *testing.T, isEIP1559 bool) *testBackend {
+func newTestBackend(t *testing.T, londonBlock *big.Int) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
@@ -65,8 +65,8 @@ func newTestBackend(t *testing.T, isEIP1559 bool) *testBackend {
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	if isEIP1559 {
-		gspec.Config.LondonBlock = common.Big0
+	if londonBlock != nil {
+		gspec.Config.LondonBlock = londonBlock
 		signer = types.LatestSigner(gspec.Config)
 	}
 	engine := ethash.NewFaker()
@@ -74,18 +74,18 @@ func newTestBackend(t *testing.T, isEIP1559 bool) *testBackend {
 	genesis, _ := gspec.Commit(db)
 
 	// Generate testing blocks
-	blocks, _ := core.GenerateChain(params.TestChainConfig, genesis, engine, db, 32, func(i int, b *core.BlockGen) {
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, 32, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		var tx *types.Transaction
-		if isEIP1559 {
+		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
 			txdata := &types.DynamicFeeTx{
 				ChainID: gspec.Config.ChainID,
 				Nonce:   b.TxNonce(addr),
 				To:      &common.Address{},
 				Gas:     30000,
 				FeeCap:  big.NewInt(100 * params.GWei),
-				Tip:     big.NewInt(int64(i+1) * params.GWei * 2),
+				Tip:     big.NewInt(int64(i+1) * params.GWei),
 				Data:    []byte{},
 			}
 			tx = types.NewTx(txdata)
@@ -100,7 +100,6 @@ func newTestBackend(t *testing.T, isEIP1559 bool) *testBackend {
 			}
 			tx = types.NewTx(txdata)
 		}
-
 		tx, err := types.SignTx(tx, signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
@@ -110,7 +109,7 @@ func newTestBackend(t *testing.T, isEIP1559 bool) *testBackend {
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
@@ -132,36 +131,27 @@ func TestSuggestPrice(t *testing.T) {
 		Percentile: 60,
 		Default:    big.NewInt(params.GWei),
 	}
-	backend := newTestBackend(t, false)
-	oracle := NewOracle(backend, config)
+	var cases = []struct {
+		fork   *big.Int // London fork number
+		expect *big.Int // Expected gasprice suggestion
+	}{
+		{nil, big.NewInt(params.GWei * int64(30))},
+		{big.NewInt(0), big.NewInt(params.GWei * int64(30))},  // Fork point in genesis
+		{big.NewInt(1), big.NewInt(params.GWei * int64(30))},  // Fork point in first block
+		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
+		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
+	}
+	for _, c := range cases {
+		backend := newTestBackend(t, c.fork)
+		oracle := NewOracle(backend, config)
 
-	// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
-	got, err := oracle.SuggestPrice(context.Background(), false)
-	if err != nil {
-		t.Fatalf("Failed to retrieve recommended gas price: %v", err)
-	}
-	expect := big.NewInt(params.GWei * int64(30))
-	if got.Cmp(expect) != 0 {
-		t.Fatalf("Gas price mismatch, want %d, got %d", expect, got)
-	}
-}
-
-func TestSuggestTip(t *testing.T) {
-	config := Config{
-		Blocks:     3,
-		Percentile: 60,
-		Default:    big.NewInt(params.GWei),
-	}
-	backend := newTestBackend(t, true)
-	oracle := NewOracle(backend, config)
-
-	// The gas price sampled is: 62G, 61G, 60G, 59G, 58G, 57G
-	got, err := oracle.SuggestPrice(context.Background(), false)
-	if err != nil {
-		t.Fatalf("Failed to retrieve recommended gas price: %v", err)
-	}
-	expect := big.NewInt(params.GWei * int64(60))
-	if got.Cmp(expect) != 0 {
-		t.Fatalf("Gas price mismatch, want %d, got %d", expect, got)
+		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
+		got, err := oracle.SuggestPrice(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to retrieve recommended gas price: %v", err)
+		}
+		if got.Cmp(c.expect) != 0 {
+			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
+		}
 	}
 }

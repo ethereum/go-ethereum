@@ -42,7 +42,6 @@ type Backend interface {
 	// General Ethereum API
 	Downloader() *downloader.Downloader
 	SuggestPrice(ctx context.Context) (*big.Int, error)
-	SuggestTip(ctx context.Context) (*big.Int, error)
 	SuggestFeeCap(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager

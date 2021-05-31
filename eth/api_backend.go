@@ -276,11 +276,7 @@ func (b *EthAPIBackend) Downloader() *downloader.Downloader {
 }
 
 func (b *EthAPIBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx, false)
-}
-
-func (b *EthAPIBackend) SuggestTip(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx, true)
+	return b.gpo.SuggestPrice(ctx)
 }
 
 func (b *EthAPIBackend) SuggestFeeCap(ctx context.Context) (*big.Int, error) {
