@@ -322,9 +322,10 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		if limit-first > freezerBatchLimit {
 			limit = first + freezerBatchLimit
 		}
-		ancients, err := f.freezeRange(db, first, limit)
+		ancients, err := f.freezeRange(nfdb, first, limit)
 		if err != nil {
 			log.Error("Error in block freeze operation", "err", err)
+			backoff = true
 			continue
 		}
 
@@ -414,14 +415,22 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	}
 }
 
-func (f *freezer) freezeRange(db ethdb.KeyValueStore, number, limit uint64) ([]common.Hash, error) {
-	var (
-		nfdb   = &nofreezedb{KeyValueStore: db}
-		hashes = make([]common.Hash, 0, limit-number)
-		batch  = f.NewAncientBatch()
-	)
+func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
+	batch := f.NewAncientBatch()
+	hashes = make([]common.Hash, 0, limit-number)
 
-	for number <= limit {
+	// Roll back all tables in case of error.
+	defer func() {
+		if err != nil {
+			rerr := f.repair()
+			if rerr != nil {
+				log.Crit("Failed to repair freezer", "err", rerr)
+			}
+			log.Info("Append ancient failed", "number", number, "err", err)
+		}
+	}()
+
+	for ; number <= limit; number++ {
 		// Retrieve all the components of the canonical block.
 		hash := ReadCanonicalHash(nfdb, number)
 		if hash == (common.Hash{}) {
