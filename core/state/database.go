@@ -232,10 +232,16 @@ func (db *VerkleDB) OpenStorageTrie(accTrie Trie, addrHash, root common.Hash) (T
 // CopyTrie returns an independent copy of the given trie.
 func (db *VerkleDB) CopyTrie(tr Trie) Trie {
 	t, ok := tr.(*trie.VerkleTrie)
-	if !ok {
-		panic("invalid tree type != VerkleTrie")
+	if ok {
+		return t.Copy(db.db)
 	}
-	return t.Copy(db.db)
+
+	s, ok := tr.(*trie.VerkleStorageAdapter)
+	if ok {
+		return s.Copy(db.db)
+	}
+
+			panic("invalid tree type != VerkleTrie")
 }
 
 // ContractCode retrieves a particular contract's code.
