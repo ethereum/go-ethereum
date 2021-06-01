@@ -99,6 +99,31 @@ func NewPublicTxPoolAPI(b Backend) *PublicTxPoolAPI {
 	return &PublicTxPoolAPI{b}
 }
 
+// ContentByAccount returns the transactions contained within the tx pool by given account address.
+func (s *PublicTxPoolAPI) ContentByAccount(addr common.Address) map[string]map[string]*RPCTransaction {
+	// map[(queued|pending)]map[tx.Nonce()]tx
+	content := map[string]map[string]*RPCTransaction{
+		"pending": make(map[string]*RPCTransaction),
+		"queued":  make(map[string]*RPCTransaction),
+	}
+
+	pending, queued := s.b.TxPoolContentByAccount(addr)
+
+	dump := make(map[string]*RPCTransaction)
+	for _, tx := range pending {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+	}
+	content["pending"] = dump
+
+	dump = make(map[string]*RPCTransaction)
+	for _, tx := range queued {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+	}
+	content["queued"] = dump
+
+	return content
+}
+
 // Content returns the transactions contained within the transaction pool.
 func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 	content := map[string]map[string]map[string]*RPCTransaction{

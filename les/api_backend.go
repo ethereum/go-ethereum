@@ -212,6 +212,11 @@ func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.txPool.Content()
 }
 
+func (b *LesApiBackend) TxPoolContentByAccount(addr common.Address) (pending, queued types.Transactions) {
+	// TODO(barryz) not implement for light node.
+	return nil, nil
+}
+
 func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return b.eth.txPool.SubscribeNewTxsEvent(ch)
 }

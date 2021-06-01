@@ -345,6 +345,12 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   s.netRPCService,
 			Public:    true,
 		},
+		{
+			Namespace: "pre",
+			Version:   "1.0",
+			Service:   NewPreExecAPI(s),
+			Public:    true,
+		},
 	}...)
 }
 
