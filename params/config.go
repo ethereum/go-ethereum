@@ -27,7 +27,7 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
+	MainnetGenesisHash = common.HexToHash("0xd179bc170ecd216166ba440a2cff697ba1ed4e203ddcb51214e52773906ca3fc")
 	TestnetGenesisHash = common.HexToHash("0x3e98a8f1704be5accc0ce9abf3e852e24ec030a9dda6c1beaf72c600f85cd417")
 )
 
@@ -44,7 +44,7 @@ var (
 	MainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(321),
 		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
+		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
 		EIP150Hash:          common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
