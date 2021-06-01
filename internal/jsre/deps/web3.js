@@ -3825,8 +3825,10 @@ var outputTransactionReceiptFormatter = function (receipt){
  * @returns {Object}
 */
 var outputBlockFormatter = function(block) {
-
     // transform to number
+    if (block.baseFeePerGas !== null) {
+      block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
+    }
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
