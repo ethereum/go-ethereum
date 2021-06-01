@@ -59,7 +59,8 @@ func TestBatch(t *testing.T) {
 	if err := batch.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	f.DumpIndex(0, 30)
+	t.Log(f.dumpIndexString(0, 30))
+
 	if got, err := f.Retrieve(29); err != nil {
 		t.Fatal(err)
 	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
@@ -80,7 +81,8 @@ func TestBatchRLP(t *testing.T) {
 	if err := batch.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	f.DumpIndex(0, 30)
+	t.Log(f.dumpIndexString(0, 30))
+
 	if got, err := f.Retrieve(29); err != nil {
 		t.Fatal(err)
 	} else if exp := common.FromHex("921d79c05d04235e8807c34cbc36a8b48a4c0d"); !bytes.Equal(got, exp) {
