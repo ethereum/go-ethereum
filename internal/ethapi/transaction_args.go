@@ -180,6 +180,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	)
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
+		feeCap, tip = gasPrice, gasPrice
 	} else {
 		feeCap = new(big.Int)
 		if args.FeeCap != nil {
