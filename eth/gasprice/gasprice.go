@@ -18,7 +18,6 @@ package gasprice
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"sort"
 	"sync"
@@ -167,7 +166,6 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		}
 		results = append(results, res.values...)
 	}
-	fmt.Println(results)
 	price := lastPrice
 	if len(results) > 0 {
 		sort.Sort(bigIntArray(results))
