@@ -316,8 +316,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		bloomTrieNodes stat
 
 		// Meta- and unaccounted data
-		metadata     stat
-		unaccounted  stat
+		metadata    stat
+		unaccounted stat
 
 		// Totals
 		total common.StorageSize
