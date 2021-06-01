@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -458,82 +459,6 @@ func (t *freezerTable) releaseFilesAfter(num uint32, remove bool) {
 	}
 }
 
-// Append injects a binary blob at the end of the freezer table. The item number
-// is a precautionary parameter to ensure data correctness, but the table will
-// reject already existing data.
-//
-// Note, this method will *not* flush any data to disk so be sure to explicitly
-// fsync before irreversibly deleting data from the database.
-func (t *freezerTable) Append(item uint64, blob []byte) error {
-	// Encode the blob before the lock portion
-	if !t.noCompression {
-		blob = snappy.Encode(nil, blob)
-	}
-	// Read lock prevents competition with truncate
-	retry, err := t.append(item, blob, false)
-	if err != nil {
-		return err
-	}
-	if retry {
-		// Read lock was insufficient, retry with a writelock
-		_, err = t.append(item, blob, true)
-	}
-	return err
-}
-
-// append injects a binary blob at the end of the freezer table.
-// Normally, inserts do not require holding the write-lock, so it should be invoked with 'wlock' set to
-// false.
-// However, if the data will grown the current file out of bounds, then this
-// method will return 'true, nil', indicating that the caller should retry, this time
-// with 'wlock' set to true.
-func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool, error) {
-	if wlock {
-		t.lock.Lock()
-		defer t.lock.Unlock()
-	} else {
-		t.lock.RLock()
-		defer t.lock.RUnlock()
-	}
-	// Ensure the table is still accessible
-	if t.index == nil || t.head == nil {
-		return false, errClosed
-	}
-	// Ensure only the next item can be written, nothing else
-	if atomic.LoadUint64(&t.items) != item {
-		return false, fmt.Errorf("appending unexpected item: want %d, have %d", t.items, item)
-	}
-	bLen := uint32(len(encodedBlob))
-	if t.headBytes+bLen < bLen ||
-		t.headBytes+bLen > t.maxFileSize {
-		// Writing would overflow, so we need to open a new data file.
-		// If we don't already hold the writelock, abort and let the caller
-		// invoke this method a second time.
-		if !wlock {
-			return true, nil
-		}
-		if err := t.advanceHead(); err != nil {
-			return false, err
-		}
-	}
-	if _, err := t.head.Write(encodedBlob); err != nil {
-		return false, err
-	}
-	newOffset := atomic.AddUint32(&t.headBytes, bLen)
-	idx := indexEntry{
-		filenum: atomic.LoadUint32(&t.headId),
-		offset:  newOffset,
-	}
-	// Write indexEntry
-	t.index.Write(idx.marshallBinary())
-
-	t.writeMeter.Mark(int64(bLen + indexEntrySize))
-	t.sizeGauge.Inc(int64(bLen + indexEntrySize))
-
-	atomic.AddUint64(&t.items, 1)
-	return false, nil
-}
-
 // getBounds returns the indexes for the item
 // returns start, end, filenumber and error
 func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
@@ -672,10 +597,21 @@ func (t *freezerTable) Sync() error {
 // DumpIndex is a debug print utility function, mainly for testing. It can also
 // be used to analyse a live freezer table index.
 func (t *freezerTable) DumpIndex(start, stop int64) {
+	t.dumpIndex(os.Stdout, start, stop)
+}
+
+func (t *freezerTable) dumpIndexString(start, stop int64) string {
+	var out bytes.Buffer
+	out.WriteString("\n")
+	t.dumpIndex(&out, start, stop)
+	return out.String()
+}
+
+func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 	buf := make([]byte, indexEntrySize)
 
-	fmt.Printf("| number | fileno | offset |\n")
-	fmt.Printf("|--------|--------|--------|\n")
+	fmt.Fprintf(w, "| number | fileno | offset |\n")
+	fmt.Fprintf(w, "|--------|--------|--------|\n")
 
 	for i := uint64(start); ; i++ {
 		if _, err := t.index.ReadAt(buf, int64(i*indexEntrySize)); err != nil {
@@ -683,10 +619,10 @@ func (t *freezerTable) DumpIndex(start, stop int64) {
 		}
 		var entry indexEntry
 		entry.unmarshalBinary(buf)
-		fmt.Printf("|  %03d   |  %03d   |  %03d   | \n", i, entry.filenum, entry.offset)
+		fmt.Fprintf(w, "|  %03d   |  %03d   |  %03d   | \n", i, entry.filenum, entry.offset)
 		if stop > 0 && i >= uint64(stop) {
 			break
 		}
 	}
-	fmt.Printf("|--------------------------|\n")
+	fmt.Fprintf(w, "|--------------------------|\n")
 }

@@ -29,7 +29,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -57,11 +58,9 @@ func TestFreezerBasics(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
+
 	// Write 15 bytes 255 times, results in 85 files
-	for x := 0; x < 255; x++ {
-		data := getChunk(15, x)
-		f.Append(uint64(x), data)
-	}
+	writeChunks(t, f, 255, 15)
 
 	//print(t, f, 0)
 	//print(t, f, 1)
@@ -103,11 +102,16 @@ func TestFreezerBasicsClosing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Write 15 bytes 255 times, results in 85 files
+
+	// Write 15 bytes 255 times, results in 85 files.
+	// In-between writes, the table is closed and re-opened.
 	for x := 0; x < 255; x++ {
 		data := getChunk(15, x)
-		f.Append(uint64(x), data)
+		batch := f.newBatch()
+		require.NoError(t, batch.AppendRaw(uint64(x), data))
+		require.NoError(t, batch.Commit())
 		f.Close()
+
 		f, err = newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
@@ -138,22 +142,22 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("dangling_headtest-%d", rand.Uint64())
 
-	{ // Fill table
+	// Fill table
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := 0; x < 255; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 255, 15)
+
 		// The last item should be there
 		if _, err = f.Retrieve(0xfe); err != nil {
 			t.Fatal(err)
 		}
 		f.Close()
 	}
+
 	// open the index
 	idxFile, err := os.OpenFile(filepath.Join(os.TempDir(), fmt.Sprintf("%s.ridx", fname)), os.O_RDWR, 0644)
 	if err != nil {
@@ -166,6 +170,7 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	}
 	idxFile.Truncate(stat.Size() - 4)
 	idxFile.Close()
+
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -189,22 +194,22 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("dangling_headtest-%d", rand.Uint64())
 
-	{ // Fill a table and close it
+	// Fill a table and close it
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := 0; x < 0xff; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 255, 15)
+
 		// The last item should be there
 		if _, err = f.Retrieve(f.items - 1); err != nil {
 			t.Fatal(err)
 		}
 		f.Close()
 	}
+
 	// open the index
 	idxFile, err := os.OpenFile(filepath.Join(os.TempDir(), fmt.Sprintf("%s.ridx", fname)), os.O_RDWR, 0644)
 	if err != nil {
@@ -214,6 +219,7 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	// 0-indexEntry, 1-indexEntry, corrupt-indexEntry
 	idxFile.Truncate(indexEntrySize + indexEntrySize + indexEntrySize/2)
 	idxFile.Close()
+
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -229,12 +235,14 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 			t.Errorf("Expected error for missing index entry")
 		}
 		// We should now be able to store items again, from item = 1
+		batch := f.newBatch()
 		for x := 1; x < 0xff; x++ {
-			data := getChunk(15, ^x)
-			f.Append(uint64(x), data)
+			require.NoError(t, batch.AppendRaw(uint64(x), getChunk(15, ^x)))
 		}
+		require.NoError(t, batch.Commit())
 		f.Close()
 	}
+
 	// And if we open it, we should now be able to read all of them (new values)
 	{
 		f, _ := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -263,10 +271,7 @@ func TestSnappyDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := 0; x < 0xff; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 255, 15)
 		f.Close()
 	}
 	// Open without snappy
@@ -314,16 +319,15 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("dangling_indextest-%d", rand.Uint64())
 
-	{ // Fill a table and close it
+	// Fill a table and close it
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 9 times : 150 bytes
-		for x := 0; x < 9; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 9, 15)
+
 		// The last item should be there
 		if _, err = f.Retrieve(f.items - 1); err != nil {
 			f.Close()
@@ -332,6 +336,7 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 		f.Close()
 		// File sizes should be 45, 45, 45 : items[3, 3, 3)
 	}
+
 	// Crop third file
 	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.0002.rdat", fname))
 	// Truncate third file: 45 ,45, 20
@@ -346,6 +351,7 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 		file.Truncate(20)
 		file.Close()
 	}
+
 	// Open db it again
 	// It should restore the file(s) to
 	// 45, 45, 15
@@ -366,27 +372,26 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 }
 
 func TestFreezerTruncate(t *testing.T) {
-
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("truncation-%d", rand.Uint64())
 
-	{ // Fill table
+	// Fill table
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 30 times
-		for x := 0; x < 30; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 30, 15)
+
 		// The last item should be there
 		if _, err = f.Retrieve(f.items - 1); err != nil {
 			t.Fatal(err)
 		}
 		f.Close()
 	}
+
 	// Reopen, truncate
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -413,20 +418,26 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("truncationfirst-%d", rand.Uint64())
-	{ // Fill table
+
+	// Fill table
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 80 bytes, splitting out into two files
-		f.Append(0, getChunk(40, 0xFF))
-		f.Append(1, getChunk(40, 0xEE))
+		batch := f.newBatch()
+		require.NoError(t, batch.AppendRaw(0, getChunk(40, 0xFF)))
+		require.NoError(t, batch.AppendRaw(1, getChunk(40, 0xEE)))
+		require.NoError(t, batch.Commit())
+
 		// The last item should be there
-		if _, err = f.Retrieve(f.items - 1); err != nil {
+		if _, err = f.Retrieve(1); err != nil {
 			t.Fatal(err)
 		}
 		f.Close()
 	}
+
 	// Truncate the file in half
 	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.0001.rdat", fname))
 	{
@@ -440,6 +451,7 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 		file.Truncate(20)
 		file.Close()
 	}
+
 	// Reopen
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -450,9 +462,13 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 			f.Close()
 			t.Fatalf("expected %d items, got %d", 0, f.items)
 		}
+
 		// Write 40 bytes
-		f.Append(1, getChunk(40, 0xDD))
+		batch := f.newBatch()
+		require.NoError(t, batch.AppendRaw(1, getChunk(40, 0xDD)))
+		require.NoError(t, batch.Commit())
 		f.Close()
+
 		// Should have been truncated down to zero and then 40 written
 		if err := assertFileSize(fileToCrop, 40); err != nil {
 			t.Fatal(err)
@@ -469,22 +485,23 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("read_truncate-%d", rand.Uint64())
-	{ // Fill table
+
+	// Fill table
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 30 times
-		for x := 0; x < 30; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 30, 15)
+
 		// The last item should be there
 		if _, err = f.Retrieve(f.items - 1); err != nil {
 			t.Fatal(err)
 		}
 		f.Close()
 	}
+
 	// Reopen and read all files
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -498,15 +515,16 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		for y := byte(0); y < 30; y++ {
 			f.Retrieve(uint64(y))
 		}
+
 		// Now, truncate back to zero
 		f.truncate(0)
+
 		// Write the data again
+		batch := f.newBatch()
 		for x := 0; x < 30; x++ {
-			data := getChunk(15, ^x)
-			if err := f.Append(uint64(x), data); err != nil {
-				t.Fatalf("error %v", err)
-			}
+			require.NoError(t, batch.AppendRaw(uint64(x), getChunk(15, ^x)))
 		}
+		require.NoError(t, batch.Commit())
 		f.Close()
 	}
 }
@@ -515,23 +533,30 @@ func TestOffset(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("offset-%d", rand.Uint64())
-	{ // Fill table
+
+	// Fill table
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// Write 6 x 20 bytes, splitting out into three files
-		f.Append(0, getChunk(20, 0xFF))
-		f.Append(1, getChunk(20, 0xEE))
+		batch := f.newBatch()
+		require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
+		require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
 
-		f.Append(2, getChunk(20, 0xdd))
-		f.Append(3, getChunk(20, 0xcc))
+		require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
+		require.NoError(t, batch.AppendRaw(3, getChunk(20, 0xcc)))
 
-		f.Append(4, getChunk(20, 0xbb))
-		f.Append(5, getChunk(20, 0xaa))
-		f.DumpIndex(0, 100)
+		require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
+		require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
+		require.NoError(t, batch.Commit())
+
+		t.Log(f.dumpIndexString(0, 100))
 		f.Close()
 	}
+
 	// Now crop it.
 	{
 		// delete files 0 and 1
@@ -568,17 +593,20 @@ func TestOffset(t *testing.T) {
 		// Need to truncate the moved index items
 		indexFile.Truncate(indexEntrySize * (1 + 2))
 		indexFile.Close()
-
 	}
+
 	// Now open again
 	checkPresent := func(numDeleted uint64) {
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.DumpIndex(0, 100)
+		t.Log(f.dumpIndexString(0, 100))
+
 		// It should allow writing item 6
-		f.Append(numDeleted+2, getChunk(20, 0x99))
+		batch := f.newBatch()
+		require.NoError(t, batch.AppendRaw(numDeleted+2, getChunk(20, 0x99)))
+		require.NoError(t, batch.Commit())
 
 		// It should be fine to fetch 4,5,6
 		if got, err := f.Retrieve(numDeleted); err != nil {
@@ -592,7 +620,7 @@ func TestOffset(t *testing.T) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
 		if got, err := f.Retrieve(numDeleted + 2); err != nil {
-			t.Fatal(err)
+			t.Fatal("Retrieve error:", err)
 		} else if exp := getChunk(20, 0x99); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
@@ -605,6 +633,7 @@ func TestOffset(t *testing.T) {
 		}
 	}
 	checkPresent(4)
+
 	// Now, let's pretend we have deleted 1M items
 	{
 		// Read the index file
@@ -651,6 +680,8 @@ func TestOffset(t *testing.T) {
 // The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is dependent
 // on timing rather than 'clever' input -- there's no determinism.
 func TestAppendTruncateParallel(t *testing.T) {
+	t.Skip()
+
 	dir, err := ioutil.TempDir("", "freezer")
 	if err != nil {
 		t.Fatal(err)
@@ -669,19 +700,26 @@ func TestAppendTruncateParallel(t *testing.T) {
 	}
 
 	for i := 0; i < 5000; i++ {
-		f.truncate(0)
-		data0 := fill(0)
-		f.Append(0, data0)
-		data1 := fill(1)
+		require.NoError(t, f.truncate(0))
+
+		var (
+			data0 = fill(0)
+			data1 = fill(1)
+			batch = f.newBatch()
+		)
+		require.NoError(t, batch.AppendRaw(0, data0))
+		require.NoError(t, batch.Commit())
 
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
-			f.truncate(0)
+			assert.NoError(t, f.truncate(0))
 			wg.Done()
 		}()
 		go func() {
-			f.Append(1, data1)
+			batch := f.newBatch()
+			assert.NoError(t, batch.AppendRaw(1, data1))
+			assert.NoError(t, batch.Commit())
 			wg.Done()
 		}()
 		wg.Wait()
@@ -694,47 +732,16 @@ func TestAppendTruncateParallel(t *testing.T) {
 	}
 }
 
-func BenchmarkAppend32(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { tableBench(b, 32, true) })
-	b.Run("snappy", func(b *testing.B) { tableBench(b, 32, false) })
-}
-func BenchmarkAppend256(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { tableBench(b, 256, true) })
-	b.Run("snappy", func(b *testing.B) { tableBench(b, 256, false) })
-}
-func BenchmarkAppend1024(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { tableBench(b, 1024, true) })
-	b.Run("snappy", func(b *testing.B) { tableBench(b, 1024, false) })
-}
-func BenchmarkAppend4096(b *testing.B) {
-	b.Run("raw", func(b *testing.B) { tableBench(b, 4096, true) })
-	b.Run("snappy", func(b *testing.B) { tableBench(b, 4096, false) })
-}
+func writeChunks(t *testing.T, ft *freezerTable, n int, length int) {
+	t.Helper()
 
-func tableBench(b *testing.B, nbytes int, noCompression bool) {
-	dir, err := ioutil.TempDir("./", "freezer-benchmark")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
-	if err != nil {
-		b.Fatal(err)
-	}
-	data := make([]byte, nbytes)
-	rlpData, _ := rlp.EncodeToBytes(data)
-	b.SetBytes(int64(len(rlpData)))
-	rand.Read(data)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	b.SetBytes(int64(len(data)))
-	for i := 0; i < b.N; i++ {
-		rlpData, _ := rlp.EncodeToBytes(data)
-		if err := f.Append(uint64(i), rlpData); err != nil {
-			b.Fatal(err)
+	batch := ft.newBatch()
+	for i := 0; i < n; i++ {
+		if err := batch.AppendRaw(uint64(i), getChunk(length, i)); err != nil {
+			t.Fatalf("AppendRaw(%d, ...) returned error: %v", i, err)
 		}
 	}
-	b.StopTimer() // Stop timer before deleting the files
+	if err := batch.Commit(); err != nil {
+		t.Fatalf("Commit returned error: %v", err)
+	}
 }

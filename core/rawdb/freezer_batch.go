@@ -27,14 +27,14 @@ import (
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
-	f      *freezer
-	tables map[string]*freezerTableBatch
+	freezer *freezer
+	tables  map[string]*freezerTableBatch
 }
 
 func newFreezerBatch(f *freezer) *freezerBatch {
 	batch := &freezerBatch{
-		f:      f,
-		tables: make(map[string]*freezerTableBatch, len(f.tables)),
+		freezer: f,
+		tables:  make(map[string]*freezerTableBatch, len(f.tables)),
 	}
 	for kind, table := range f.tables {
 		batch.tables[kind] = table.newBatch()
@@ -70,7 +70,7 @@ func (batch *freezerBatch) Commit() error {
 	}
 
 	// Bump frozen block index.
-	atomic.AddUint64(&batch.f.frozen, uint64(count))
+	atomic.AddUint64(&batch.freezer.frozen, uint64(count))
 	return nil
 }
 
