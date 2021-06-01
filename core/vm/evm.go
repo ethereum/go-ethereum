@@ -108,9 +108,7 @@ type TxContext struct {
 // the necessary tools to run a contract on the given state with
 // the provided context. It should be noted that any error
 // generated through any of the calls should be considered a
-// revert-state-and-consume-all-gas operation, no checks on
-// specific errors should ever be performed. The interpreter makes
-// sure that any errors generated are to be considered faulty code.
+// revert-state-and-consume-all-gas operation, except for ErrExecutionReverted.
 //
 // The EVM should never be reused and is not thread safe.
 type EVM struct {
