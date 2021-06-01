@@ -53,7 +53,7 @@ func TestHashRanges(t *testing.T) {
 			head:   common.HexToHash("0x2000000000000000000000000000000000000000000000000000000000000000"),
 			chunks: 2,
 			starts: []common.Hash{
-				common.Hash{},
+				{},
 				common.HexToHash("0x9000000000000000000000000000000000000000000000000000000000000000"),
 			},
 			ends: []common.Hash{

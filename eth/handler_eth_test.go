@@ -106,8 +106,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		genesisNoFork  = gspecNoFork.MustCommit(dbNoFork)
 		genesisProFork = gspecProFork.MustCommit(dbProFork)
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil)
+		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil, core.NewMerger(rawdb.NewMemoryDatabase()))
+		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil, core.NewMerger(rawdb.NewMemoryDatabase()))
 
 		blocksNoFork, _  = core.GenerateChain(configNoFork, genesisNoFork, engine, dbNoFork, 2, nil)
 		blocksProFork, _ = core.GenerateChain(configProFork, genesisProFork, engine, dbProFork, 2, nil)
@@ -116,6 +116,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			Database:   dbNoFork,
 			Chain:      chainNoFork,
 			TxPool:     newTestTxPool(),
+			Merger:     core.NewMerger(rawdb.NewMemoryDatabase()),
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,
@@ -124,6 +125,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			Database:   dbProFork,
 			Chain:      chainProFork,
 			TxPool:     newTestTxPool(),
+			Merger:     core.NewMerger(rawdb.NewMemoryDatabase()),
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,

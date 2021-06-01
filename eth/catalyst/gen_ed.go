@@ -13,8 +13,8 @@ import (
 var _ = (*executableDataMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (e executableData) MarshalJSON() ([]byte, error) {
-	type executableData struct {
+func (e ExecutableData) MarshalJSON() ([]byte, error) {
+	type ExecutableData struct {
 		BlockHash    common.Hash     `json:"blockHash"     gencodec:"required"`
 		ParentHash   common.Hash     `json:"parentHash"    gencodec:"required"`
 		Miner        common.Address  `json:"miner"         gencodec:"required"`
@@ -27,7 +27,7 @@ func (e executableData) MarshalJSON() ([]byte, error) {
 		LogsBloom    hexutil.Bytes   `json:"logsBloom"     gencodec:"required"`
 		Transactions []hexutil.Bytes `json:"transactions"  gencodec:"required"`
 	}
-	var enc executableData
+	var enc ExecutableData
 	enc.BlockHash = e.BlockHash
 	enc.ParentHash = e.ParentHash
 	enc.Miner = e.Miner
@@ -48,8 +48,8 @@ func (e executableData) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (e *executableData) UnmarshalJSON(input []byte) error {
-	type executableData struct {
+func (e *ExecutableData) UnmarshalJSON(input []byte) error {
+	type ExecutableData struct {
 		BlockHash    *common.Hash    `json:"blockHash"     gencodec:"required"`
 		ParentHash   *common.Hash    `json:"parentHash"    gencodec:"required"`
 		Miner        *common.Address `json:"miner"         gencodec:"required"`
@@ -62,52 +62,52 @@ func (e *executableData) UnmarshalJSON(input []byte) error {
 		LogsBloom    *hexutil.Bytes  `json:"logsBloom"     gencodec:"required"`
 		Transactions []hexutil.Bytes `json:"transactions"  gencodec:"required"`
 	}
-	var dec executableData
+	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	if dec.BlockHash == nil {
-		return errors.New("missing required field 'blockHash' for executableData")
+		return errors.New("missing required field 'blockHash' for ExecutableData")
 	}
 	e.BlockHash = *dec.BlockHash
 	if dec.ParentHash == nil {
-		return errors.New("missing required field 'parentHash' for executableData")
+		return errors.New("missing required field 'parentHash' for ExecutableData")
 	}
 	e.ParentHash = *dec.ParentHash
 	if dec.Miner == nil {
-		return errors.New("missing required field 'miner' for executableData")
+		return errors.New("missing required field 'miner' for ExecutableData")
 	}
 	e.Miner = *dec.Miner
 	if dec.StateRoot == nil {
-		return errors.New("missing required field 'stateRoot' for executableData")
+		return errors.New("missing required field 'stateRoot' for ExecutableData")
 	}
 	e.StateRoot = *dec.StateRoot
 	if dec.Number == nil {
-		return errors.New("missing required field 'number' for executableData")
+		return errors.New("missing required field 'number' for ExecutableData")
 	}
 	e.Number = uint64(*dec.Number)
 	if dec.GasLimit == nil {
-		return errors.New("missing required field 'gasLimit' for executableData")
+		return errors.New("missing required field 'gasLimit' for ExecutableData")
 	}
 	e.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed == nil {
-		return errors.New("missing required field 'gasUsed' for executableData")
+		return errors.New("missing required field 'gasUsed' for ExecutableData")
 	}
 	e.GasUsed = uint64(*dec.GasUsed)
 	if dec.Timestamp == nil {
-		return errors.New("missing required field 'timestamp' for executableData")
+		return errors.New("missing required field 'timestamp' for ExecutableData")
 	}
 	e.Timestamp = uint64(*dec.Timestamp)
 	if dec.ReceiptRoot == nil {
-		return errors.New("missing required field 'receiptsRoot' for executableData")
+		return errors.New("missing required field 'receiptsRoot' for ExecutableData")
 	}
 	e.ReceiptRoot = *dec.ReceiptRoot
 	if dec.LogsBloom == nil {
-		return errors.New("missing required field 'logsBloom' for executableData")
+		return errors.New("missing required field 'logsBloom' for ExecutableData")
 	}
 	e.LogsBloom = *dec.LogsBloom
 	if dec.Transactions == nil {
-		return errors.New("missing required field 'transactions' for executableData")
+		return errors.New("missing required field 'transactions' for ExecutableData")
 	}
 	e.Transactions = make([][]byte, len(dec.Transactions))
 	for k, v := range dec.Transactions {

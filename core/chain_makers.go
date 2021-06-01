@@ -200,6 +200,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
+		// Set the difficulty for clique block. The chain maker doesn't have access
+		// to a chain, so the difficulty will be lets unset (nil). Set it here to the
+		// correct value.
+		if b.header.Difficulty == nil {
+			b.header.Difficulty = big.NewInt(2)
+		}
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)

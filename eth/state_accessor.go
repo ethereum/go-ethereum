@@ -30,12 +30,12 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// stateAtBlock retrieves the state database associated with a certain block.
+// StateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks
 // are attempted to be reexecuted to generate the desired state. The optional
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
-func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
+func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
 		database state.Database
@@ -151,7 +151,7 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, err := eth.stateAtBlock(parent, reexec, nil, true)
+	statedb, err := eth.StateAtBlock(parent, reexec, nil, true)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, err
 	}

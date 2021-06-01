@@ -71,6 +71,7 @@ type Ethereum struct {
 	handler            *handler
 	ethDialCandidates  enode.Iterator
 	snapDialCandidates enode.Iterator
+	merger             *core.Merger
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -140,12 +141,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
+	merger := core.NewMerger(chainDb)
 	eth := &Ethereum{
 		config:            config,
+		merger:            merger,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
+		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, merger),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -190,7 +193,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +220,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Database:   chainDb,
 		Chain:      eth.blockchain,
 		TxPool:     eth.txPool,
+		Merger:     merger,
 		Network:    config.NetworkId,
 		Sync:       config.SyncMode,
 		BloomCache: uint64(cacheLimit),
@@ -227,7 +231,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, merger)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
@@ -258,6 +262,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
@@ -380,10 +385,10 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 //
 // We regard two types of accounts as local miner account: etherbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(block *types.Block) bool {
-	author, err := s.engine.Author(block.Header())
+func (s *Ethereum) isLocalBlock(header *types.Header) bool {
+	author, err := s.engine.Author(header)
 	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
+		log.Warn("Failed to retrieve block author", "number", header.Number.Uint64(), "hash", header.Hash(), "err", err)
 		return false
 	}
 	// Check whether the given address is etherbase.
@@ -406,7 +411,7 @@ func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 // shouldPreserve checks whether we should preserve the given block
 // during the chain reorg depending on whether the author of block
 // is a local account.
-func (s *Ethereum) shouldPreserve(block *types.Block) bool {
+func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	// The reason we need to disable the self-reorg preserving for clique
 	// is it can be probable to introduce a deadlock.
 	//
@@ -426,7 +431,7 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	if _, ok := s.engine.(*clique.Clique); ok {
 		return false
 	}
-	return s.isLocalBlock(block)
+	return s.isLocalBlock(header)
 }
 
 // SetEtherbase sets the mining reward address.
@@ -510,8 +515,10 @@ func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
+func (s *Ethereum) SetSynced()                         { atomic.StoreUint32(&s.handler.acceptTxs, 1) }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
+func (s *Ethereum) Merger() *core.Merger               { return s.merger }
 
 // Protocols returns all the currently configured
 // network protocols to start.

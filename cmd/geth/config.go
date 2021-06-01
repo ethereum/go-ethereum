@@ -28,7 +28,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -144,17 +143,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
 		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Configure catalyst.
-	if ctx.GlobalBool(utils.CatalystFlag.Name) {
-		if eth == nil {
-			utils.Fatalf("Catalyst does not work in light client mode.")
-		}
-		if err := catalyst.Register(stack, eth); err != nil {
-			utils.Fatalf("%v", err)
-		}
-	}
+	backend, _ := utils.RegisterEthService(stack, &cfg.Eth, ctx.GlobalBool(utils.CatalystFlag.Name))
 
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
