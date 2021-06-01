@@ -54,7 +54,7 @@ func TestBatch(t *testing.T) {
 	// Write 15 bytes 30 times
 	for x := 0; x < 30; x++ {
 		data := getChunk(15, x)
-		batch.Append(uint64(x), data)
+		batch.AppendRaw(uint64(x), data)
 	}
 	if err := batch.Commit(); err != nil {
 		t.Fatal(err)
