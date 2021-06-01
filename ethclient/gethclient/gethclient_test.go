@@ -1,6 +1,7 @@
 package gethclient
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -72,15 +74,34 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 
 func TestEthClient(t *testing.T) {
 	backend, _ := newTestBackend(t)
-	client, _ := backend.Attach()
+	client, err := backend.Attach()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer backend.Close()
 	defer client.Close()
 
 	tests := map[string]struct {
 		test func(t *testing.T)
-	}{"TestAccessList": {
-		func(t *testing.T) { testAccessList(t, client) },
-	},
+	}{
+		"TestAccessList": {
+			func(t *testing.T) { testAccessList(t, client) },
+		},
+		"TestGetProof": {
+			func(t *testing.T) { testGetProof(t, client) },
+		},
+		"TestGCStats": {
+			func(t *testing.T) { testGCStats(t, client) },
+		},
+		"TestMemStats": {
+			func(t *testing.T) { testMemStats(t, client) },
+		},
+		"TestGetNodeInfo": {
+			func(t *testing.T) { testGetNodeInfo(t, client) },
+		},
+		"TestSetHead": {
+			func(t *testing.T) { testSetHead(t, client) },
+		},
 	}
 	t.Parallel()
 	for name, tt := range tests {
@@ -139,5 +160,66 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}
 	if (*al)[0].StorageKeys[0] != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000081") {
 		t.Fatalf("unexpected storage key: %v", (*al)[0].StorageKeys[0])
+	}
+}
+
+func testGetProof(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	ethcl := ethclient.NewClient(client)
+	result, err := ec.GetProof(context.Background(), testAddr, []string{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(result.Address[:], testAddr[:]) {
+		t.Fatalf("unexpected address, want: %v got: %v", testAddr, result.Address)
+	}
+	// test nonce
+	nonce, _ := ethcl.NonceAt(context.Background(), result.Address, nil)
+	if uint64(result.Nonce) != nonce {
+		t.Fatalf("invalid nonce, want: %v got: %v", nonce, result.Nonce)
+	}
+	// test balance
+	balance, _ := ethcl.BalanceAt(context.Background(), result.Address, nil)
+	if result.Balance.ToInt().Cmp(balance) != 0 {
+		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
+	}
+}
+
+func testGCStats(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	_, err := ec.GCStats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testMemStats(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	stats, err := ec.MemStats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Alloc == 0 {
+		t.Fatal("Invalid mem stats retrieved")
+	}
+}
+
+func testGetNodeInfo(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	info, err := ec.GetNodeInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if info.Name == "" {
+		t.Fatal("Invalid node info retrieved")
+	}
+}
+
+func testSetHead(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+	err := ec.SetHead(context.Background(), big.NewInt(0))
+	if err != nil {
+		t.Fatal(err)
 	}
 }

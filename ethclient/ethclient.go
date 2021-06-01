@@ -84,7 +84,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
 func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
-	return ec.getBlock(ctx, "eth_getBlockByNumber", ToBlockNumArg(number), true)
+	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
 // BlockNumber returns the most recent block number
@@ -179,7 +179,7 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.He
 // nil, the latest known header is returned.
 func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	var head *types.Header
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", ToBlockNumArg(number), false)
+	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = ethereum.NotFound
 	}
@@ -342,7 +342,7 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, toBlockNumArg(blockNumber))
 	return (*big.Int)(&result), err
 }
 
@@ -350,7 +350,7 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNu
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -358,7 +358,7 @@ func (ec *Client) StorageAt(ctx context.Context, account common.Address, key com
 // The block number can be nil, in which case the code is taken from the latest known block.
 func (ec *Client) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -366,7 +366,7 @@ func (ec *Client) CodeAt(ctx context.Context, account common.Address, blockNumbe
 // The block number can be nil, in which case the nonce is taken from the latest known block.
 func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, toBlockNumArg(blockNumber))
 	return uint64(result), err
 }
 
@@ -406,9 +406,9 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 		if q.FromBlock == nil {
 			arg["fromBlock"] = "0x0"
 		} else {
-			arg["fromBlock"] = ToBlockNumArg(q.FromBlock)
+			arg["fromBlock"] = toBlockNumArg(q.FromBlock)
 		}
-		arg["toBlock"] = ToBlockNumArg(q.ToBlock)
+		arg["toBlock"] = toBlockNumArg(q.ToBlock)
 	}
 	return arg, nil
 }
@@ -463,7 +463,7 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 // blocks might not be available.
 func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", ToCallArg(msg), ToBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +474,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 // The state seen by the contract call is the pending state.
 func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", ToCallArg(msg), "pending")
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +497,7 @@ func (ec *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 // but it should provide a basis for setting a reasonable default.
 func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64, error) {
 	var hex hexutil.Uint64
-	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", ToCallArg(msg))
+	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg))
 	if err != nil {
 		return 0, err
 	}
@@ -516,7 +516,7 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
-func ToBlockNumArg(number *big.Int) string {
+func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
@@ -527,7 +527,7 @@ func ToBlockNumArg(number *big.Int) string {
 	return hexutil.EncodeBig(number)
 }
 
-func ToCallArg(msg ethereum.CallMsg) interface{} {
+func toCallArg(msg ethereum.CallMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,
 		"to":   msg.To,
