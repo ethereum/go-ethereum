@@ -153,18 +153,13 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
 	}
 	l := len(uncleanShutdowns.Recent)
-	// uncleanShutdowns.Recent should not be empty in this context,
-	// unless PushUncleanShutdownMarker fails.
-	if l == 0 {
-		log.Warn("recent unclean shutdown markers is empty. Stopping marker update")
-	}
 	// update marker every five minutes
 	ticker := time.NewTicker(300 * time.Second)
 	defer func() { ticker.Stop() }()
 	for {
 		select {
 		case <-ticker.C:
-			uncleanShutdowns.Recent[l] = uint64(time.Now().Unix())
+			uncleanShutdowns.Recent[l-1] = uint64(time.Now().Unix())
 			data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 			if err := db.Put(uncleanShutdownKey, data); err != nil {
 				log.Warn("Failed to update unclean-shutdown marker", "err", err)
