@@ -38,7 +38,7 @@ type TheIndex_rlpContract struct {
 	Logs    []TheIndex_rlpLog
 	Code    []byte
 	States  []TheIndex_rlpState
-	Balance *big.Int
+	Balance []*big.Int
 }
 
 type TheIndex_rlpContractsForBlock struct {

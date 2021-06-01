@@ -5,6 +5,7 @@ package core
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -171,7 +172,7 @@ func TheIndex_addAccountsToContracts(accounts []rlp.TheIndex_rlpAccount, contrac
 				contracts[account.Address] = &rlp.TheIndex_rlpContract{Address: account.Address}
 			}
 			// add the account to the contract
-			contracts[account.Address].Balance = account.Balance
+			contracts[account.Address].Balance = []*big.Int{account.Balance}
 		}
 	}
 }
