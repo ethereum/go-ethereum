@@ -110,7 +110,7 @@ func TestEthClient(t *testing.T) {
 }
 
 func testAccessList(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	// Test transfer
 	msg := ethereum.CallMsg{
 		From:     testAddr,
@@ -164,7 +164,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 }
 
 func testGetProof(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	result, err := ec.GetProof(context.Background(), testAddr, []string{}, nil)
 	if err != nil {
@@ -186,7 +186,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 }
 
 func testGCStats(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	_, err := ec.GCStats(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +194,7 @@ func testGCStats(t *testing.T, client *rpc.Client) {
 }
 
 func testMemStats(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	stats, err := ec.MemStats(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -205,7 +205,7 @@ func testMemStats(t *testing.T, client *rpc.Client) {
 }
 
 func testGetNodeInfo(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	info, err := ec.GetNodeInfo(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func testGetNodeInfo(t *testing.T, client *rpc.Client) {
 }
 
 func testSetHead(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := New(client)
 	err := ec.SetHead(context.Background(), big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
