@@ -317,10 +317,13 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 	gasPrice := tx.GasPrice
 	if baseFee != nil {
 		if tx.MaxFeePerGas == nil {
+			tx.MaxFeePerGas = gasPrice
+		}
+		if tx.MaxFeePerGas == nil {
 			tx.MaxFeePerGas = new(big.Int)
 		}
 		if tx.MaxPriorityFeePerGas == nil {
-			tx.MaxPriorityFeePerGas = new(big.Int)
+			tx.MaxPriorityFeePerGas = tx.MaxFeePerGas
 		}
 		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
 			tx.MaxFeePerGas)
