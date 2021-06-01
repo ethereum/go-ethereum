@@ -29,16 +29,17 @@ const cursorFileName = "cursor"
 
 var theIndexVerbose = os.Getenv("THEINDEX_VERBOSE")
 var indexPath = os.Getenv("THEINDEX_PATH") // eg: "./the-index/"
-var maxFileIndex map[string]int = theIndex_getCurrentMaxFileIndexes()
+var maxFileIndex map[string]int = theIndex_getCurrentMaxFileIndexesOnInit()
+var startIndexAfterBlock = theIndex_getCurrentCursorBlockOnInit()
 
 func (bc *BlockChain) TheIndex_Hook_UpdateCursor(block *types.Block) {
-	if !theIndex_isEnabled() {
+	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
 	file, err := theIndex_openFileReplace(cursorFileName)
 	if err != nil {
-		log.Crit("THE-INDEX", "error", err)
+		bc.theIndex_criticalError(err)
 	}
 	defer file.Close()
 
@@ -47,12 +48,12 @@ func (bc *BlockChain) TheIndex_Hook_UpdateCursor(block *types.Block) {
 		Time:        block.Header().Time,
 	})
 	if err != nil {
-		log.Crit("THE-INDEX", "error", err)
+		bc.theIndex_criticalError(err)
 	}
 }
 
 func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
-	if !theIndex_isEnabled() {
+	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
@@ -63,7 +64,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
 	// write block header to blob
 	file, err := theIndex_openFileAppendWithPaging(blocksFilePrefix)
 	if err != nil {
-		log.Crit("THE-INDEX", "error", err)
+		bc.theIndex_criticalError(err)
 	}
 	defer file.Close()
 
@@ -76,12 +77,12 @@ func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
 		GasLimit:    block.Header().GasLimit,
 	})
 	if err != nil {
-		log.Crit("THE-INDEX", "error", err)
+		bc.theIndex_criticalError(err)
 	}
 }
 
 func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block, logs []*types.Log, state *state.StateDB) {
-	if !theIndex_isEnabled() {
+	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
@@ -115,7 +116,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block
 		// write contract to blob
 		file, err := theIndex_openFileAppendWithPaging(fmt.Sprintf(contractsShardFilePrefix, shard))
 		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
+			bc.theIndex_criticalError(err)
 		}
 		defer file.Close()
 
@@ -124,7 +125,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block
 			Contracts:   contractsInTheShard,
 		})
 		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
+			bc.theIndex_criticalError(err)
 		}
 	}
 
@@ -137,7 +138,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block
 		// write combined accounts (all users) to blob
 		file, err := theIndex_openFileAppendWithPaging(accountsFilePrefix)
 		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
+			bc.theIndex_criticalError(err)
 		}
 		defer file.Close()
 
@@ -146,7 +147,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block
 			Accounts:    accounts,
 		})
 		if err != nil {
-			log.Crit("THE-INDEX", "error", err)
+			bc.theIndex_criticalError(err)
 		}
 	}
 }
@@ -175,11 +176,11 @@ func TheIndex_addAccountsToContracts(accounts []rlp.TheIndex_rlpAccount, contrac
 	}
 }
 
-func theIndex_getCurrentMaxFileIndexes() map[string]int {
+func theIndex_getCurrentMaxFileIndexesOnInit() map[string]int {
 	res := map[string]int{}
 
 	if theIndex_isEnabled() {
-		fmt.Println("THE-INDEX:status", "enabled", indexPath)
+		fmt.Println("THE-INDEX:init", "enabled", indexPath)
 
 		res[blocksFilePrefix] = theIndex_getCurrentMaxFileIndex(blocksFilePrefix)
 		res[accountsFilePrefix] = theIndex_getCurrentMaxFileIndex(accountsFilePrefix)
@@ -189,7 +190,7 @@ func theIndex_getCurrentMaxFileIndexes() map[string]int {
 		}
 
 	} else {
-		fmt.Println("THE-INDEX:status", "disabled", indexPath)
+		fmt.Println("THE-INDEX:init", "disabled", indexPath)
 	}
 	return res
 }
@@ -202,6 +203,10 @@ func theIndex_isEnabled() bool {
 		return false
 	}
 	return true
+}
+
+func theIndex_shouldIndexBlock(block *types.Block) bool {
+	return (block.NumberU64() > startIndexAfterBlock)
 }
 
 func theIndex_getCurrentMaxFileIndex(prefix string) int {
@@ -227,6 +232,25 @@ func theIndex_getCurrentMaxFileIndex(prefix string) int {
 	return res
 }
 
+func theIndex_getCurrentCursorBlockOnInit() uint64 {
+	file, err := theIndex_openFileRead(cursorFileName)
+	if err != nil {
+		fmt.Println("THE-INDEX:init", "cursor not found")
+		return 0
+	}
+	defer file.Close()
+
+	cursorData := new(rlp.TheIndex_rlpCursor)
+	err = rlp.Decode(file, cursorData)
+	if err != nil {
+		fmt.Println("THE-INDEX:init", "cursor corrupt")
+		return 0
+	}
+
+	fmt.Println("THE-INDEX:init", "cursor found", cursorData.BlockNumber.Uint64())
+	return cursorData.BlockNumber.Uint64()
+}
+
 func theIndex_openFileAppendWithPaging(prefix string) (*os.File, error) {
 	filePath := fmt.Sprintf(indexPath+prefix+fileIndexFormat+".rlp", maxFileIndex[prefix])
 	stat, err := os.Stat(filePath)
@@ -242,4 +266,15 @@ func theIndex_openFileAppendWithPaging(prefix string) (*os.File, error) {
 func theIndex_openFileReplace(name string) (*os.File, error) {
 	filePath := indexPath + name + ".rlp"
 	return os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0755)
+}
+
+func theIndex_openFileRead(name string) (*os.File, error) {
+	filePath := indexPath + name + ".rlp"
+	return os.OpenFile(filePath, os.O_RDONLY, 0755)
+}
+
+func (bc *BlockChain) theIndex_criticalError(err error) {
+	bc.Stop()
+	bc.db.Close()
+	log.Crit("THE-INDEX:critical", "error", err)
 }
