@@ -319,6 +319,9 @@ const schema string = `
         # GasPrice returns the node's estimate of a gas price sufficient to
         # ensure a transaction is mined in a timely fashion.
         gasPrice: BigInt!
+        # MaxPriorityFeePerGas returns the node's estimate of a gas tip sufficient
+        # to ensure a transaction is mined in a timely fashion.
+        maxPriorityFeePerGas: BigInt!
         # Syncing returns information on the current synchronisation state.
         syncing: SyncState
         # ChainID returns the current chain ID for transaction replay protection.

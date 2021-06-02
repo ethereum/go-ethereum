@@ -1105,15 +1105,23 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	return runFilter(ctx, r.backend, filter)
 }
 
-func (r *Resolver) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	tipcap, err := r.backend.SuggestGasTipCap(ctx)
 	if err != nil {
-		return nil, err
+		return hexutil.Big{}, err
 	}
 	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
 		tipcap.Add(tipcap, head.BaseFee)
 	}
-	return (*hexutil.Big)(tipcap), err
+	return (hexutil.Big)(*tipcap), nil
+}
+
+func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error) {
+	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	return (hexutil.Big)(*tipcap), nil
 }
 
 func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
