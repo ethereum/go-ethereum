@@ -3,12 +3,10 @@ CoinEx is committed to product development and service improvement, and contribu
 
 CoinEx Smart Chain (CSC) is a smart contract chain that supports up to 101 validators. Aside from shorter time for block generation and lower fees for transactions, `CSC` is also fully compatible with Ethereum virtual machine(EVM) and protocols while supporting high-performance transactions. And to achieve that, the easiest solution is to develop based on go-ethereum fork, as we respect the great work of Ethereum very much.
 
-CoinEx Smart Chain starts its development based on go-ethereum fork. So you may see many toolings, binaries and also docs are based on Ethereum ones. And we respect the great work of Ethereum very much.
-
 ## CSC Features
 
 * Decentralization: Permission-free, anyone can become a validator by staking `CET`.
-* EVM compatibility: Fully compatible with Ethereum virtual machine(EVM), which means that almost all DApps, ecosystem components and tools on Ethereum can be migrated to CSC directly or with very small changes.
+* EVM compatibility: Fully compatible with Ethereum virtual machine(EVM), which means that almost all DApps, ecosystem components and tools on Ethereum can be migrated to `CSC` directly or with very small changes.
 * High performance: 600+ TPS, 3s block time
 
 ## Native Token
@@ -124,7 +122,7 @@ from anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to `csc`, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit
-more complex changes though, please contact to [the core developer](`developer@coinex.org`)
+more complex changes though, please contact to [the core developer](`mailto:developer@coinex.org`)
 to ensure those changes are in line with the general philosophy of the project and/or get
 some early feedback which can make both your efforts much lighter as well as our review
 and merge procedures quick and simple.

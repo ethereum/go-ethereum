@@ -55,7 +55,7 @@ HTTPPort = 8545
 HTTPVirtualHosts = ["localhost"]
 HTTPModules = ["eth", "net", "web3", "txpool", "senatus"]
 WSPort = 8546
-WSModules = ["net", "web3", "eth"]
+WSModules = ["eth", "net", "web3", "txpool", "senatus"]
 
 [Node.P2P]
 MaxPeers = 200
@@ -113,14 +113,14 @@ Percentile = 60
 
 [Node]
 IPCPath = "cetd.ipc"
-HTTPHost = "0.0.0.0"
+HTTPHost = "localhost"
 NoUSB = true
 InsecureUnlockAllowed = false
 HTTPPort = 8545
 HTTPVirtualHosts = ["localhost"]
 HTTPModules = ["eth", "net", "web3", "txpool", "senatus"]
 WSPort = 8546
-WSModules = ["net", "web3", "eth"]
+WSModules = ["eth", "net", "web3", "txpool", "senatus"]
 
 [Node.P2P]
 MaxPeers = 200
