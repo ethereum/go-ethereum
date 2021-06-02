@@ -141,10 +141,11 @@ type blockChain interface {
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
-	Locals    []common.Address // Addresses that should be treated by default as local
-	NoLocals  bool             // Whether local transaction handling should be disabled
-	Journal   string           // Journal of local transactions to survive node restarts
-	Rejournal time.Duration    // Time interval to regenerate the local transaction journal
+	Locals          []common.Address // Addresses that should be treated by default as local
+	NoLocals        bool             // Whether local transaction handling should be disabled
+	NoReinjectReorg bool
+	Journal         string        // Journal of local transactions to survive node restarts
+	Rejournal       time.Duration // Time interval to regenerate the local transaction journal
 
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
@@ -1225,10 +1226,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
 
-	// Inject any transactions discarded due to reorgs
-	log.Debug("Reinjecting stale transactions", "count", len(reinject))
-	senderCacher.recover(pool.signer, reinject)
-	pool.addTxsLocked(reinject, false)
+	if !pool.config.NoReinjectReorg {
+		// Inject any transactions discarded due to reorgs
+		log.Debug("Reinjecting stale transactions", "count", len(reinject))
+		senderCacher.recover(pool.signer, reinject)
+		pool.addTxsLocked(reinject, false)
+	}
 
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))

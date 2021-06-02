@@ -337,6 +337,10 @@ var (
 		Name:  "txpool.nolocals",
 		Usage: "Disables price exemptions for locally submitted transactions",
 	}
+	TxPoolNoReinjectReorgFlag = cli.BoolFlag{
+		Name:  "txpool.noreinjectreorg",
+		Usage: "Disables price exemptions for locally submitted transactions",
+	}
 	TxPoolJournalFlag = cli.StringFlag{
 		Name:  "txpool.journal",
 		Usage: "Disk journal for local transaction to survive node restarts",
@@ -1332,6 +1336,9 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 	if ctx.GlobalIsSet(TxPoolNoLocalsFlag.Name) {
 		cfg.NoLocals = ctx.GlobalBool(TxPoolNoLocalsFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolNoReinjectReorgFlag.Name) {
+		cfg.NoReinjectReorg = ctx.GlobalBool(TxPoolNoReinjectReorgFlag.Name)
 	}
 	if ctx.GlobalIsSet(TxPoolJournalFlag.Name) {
 		cfg.Journal = ctx.GlobalString(TxPoolJournalFlag.Name)

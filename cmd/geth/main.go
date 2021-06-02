@@ -76,6 +76,7 @@ var (
 		utils.EthashDatasetsOnDiskFlag,
 		utils.EthashDatasetsLockMmapFlag,
 		utils.TxPoolLocalsFlag,
+		utils.TxPoolNoReinjectReorgFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
