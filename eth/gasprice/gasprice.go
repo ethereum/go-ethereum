@@ -105,9 +105,13 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	}
 }
 
-// SuggestPrice returns a gasprice or tip so that newly created transaction
-// can have a very high chance to be included in the following blocks.
-func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
+// SuggestTipCap returns a tip cap so that newly created transaction can have a
+// very high chance to be included in the following blocks.
+//
+// Note, for legacy transactions and the legacy eth_gasPrice RPC call, it will be
+// necessary to add the basefee to the returned number to fall bac to the legacy
+// behavior.
+func (gpo *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	headHash := head.Hash()
 
@@ -116,7 +120,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	lastHead, lastPrice := gpo.lastHead, gpo.lastPrice
 	gpo.cacheLock.RUnlock()
 	if headHash == lastHead {
-		return lastPrice, nil
+		return new(big.Int).Set(lastPrice), nil
 	}
 	gpo.fetchLock.Lock()
 	defer gpo.fetchLock.Unlock()
@@ -126,7 +130,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	lastHead, lastPrice = gpo.lastHead, gpo.lastPrice
 	gpo.cacheLock.RUnlock()
 	if headHash == lastHead {
-		return lastPrice, nil
+		return new(big.Int).Set(lastPrice), nil
 	}
 	var (
 		sent, exp int
@@ -145,7 +149,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		res := <-result
 		if res.err != nil {
 			close(quit)
-			return lastPrice, res.err
+			return new(big.Int).Set(lastPrice), res.err
 		}
 		exp--
 		// Nothing returned. There are two special cases here:
@@ -178,7 +182,8 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	gpo.lastHead = headHash
 	gpo.lastPrice = price
 	gpo.cacheLock.Unlock()
-	return price, nil
+
+	return new(big.Int).Set(price), nil
 }
 
 type results struct {

@@ -125,7 +125,7 @@ func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
 	return b.chain.GetBlockByNumber(number)
 }
 
-func TestSuggestPrice(t *testing.T) {
+func TestSuggestTipCap(t *testing.T) {
 	config := Config{
 		Blocks:     3,
 		Percentile: 60,
@@ -146,7 +146,7 @@ func TestSuggestPrice(t *testing.T) {
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
-		got, err := oracle.SuggestPrice(context.Background())
+		got, err := oracle.SuggestTipCap(context.Background())
 		if err != nil {
 			t.Fatalf("Failed to retrieve recommended gas price: %v", err)
 		}

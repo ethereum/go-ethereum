@@ -3783,10 +3783,10 @@ var outputTransactionFormatter = function (tx){
     tx.nonce = utils.toDecimal(tx.nonce);
     tx.gas = utils.toDecimal(tx.gas);
     tx.gasPrice = utils.toBigNumber(tx.gasPrice);
-    if(tx.maxFeePerGas !== null) {
+    if(tx.maxFeePerGas !== undefined) {
       tx.maxFeePerGas = utils.toBigNumber(tx.maxFeePerGas);
     }
-    if(tx.maxPriorityFeePerGas !== null) {
+    if(tx.maxPriorityFeePerGas !== undefined) {
       tx.maxPriorityFeePerGas = utils.toBigNumber(tx.maxPriorityFeePerGas);
     }
     tx.value = utils.toBigNumber(tx.value);
@@ -3826,7 +3826,7 @@ var outputTransactionReceiptFormatter = function (receipt){
 */
 var outputBlockFormatter = function(block) {
     // transform to number
-    if (block.baseFeePerGas !== null) {
+    if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
     block.gasLimit = utils.toDecimal(block.gasLimit);

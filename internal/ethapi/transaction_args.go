@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -78,31 +79,33 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// After london, default to 1559 unless gasPrice is set
-	if b.ChainConfig().IsLondon(b.CurrentBlock().Number()) && args.GasPrice == nil {
+	head := b.CurrentHeader()
+	if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
 		if args.Tip == nil {
-			tip, err := b.SuggestPrice(ctx)
+			tip, err := b.SuggestGasTipCap(ctx)
 			if err != nil {
 				return err
 			}
 			args.Tip = (*hexutil.Big)(tip)
 		}
 		if args.FeeCap == nil {
-			feeCap, err := b.SuggestFeeCap(ctx)
-			if err != nil {
-				return err
-			}
+			feeCap := new(big.Int).Add((*big.Int)(args.Tip), head.BaseFee)
 			args.FeeCap = (*hexutil.Big)(feeCap)
 		}
-		// Don't let tip exceed feeCap.
-		args.FeeCap = (*hexutil.Big)(math.BigMax(args.FeeCap.ToInt(), args.Tip.ToInt()))
+		if args.FeeCap.ToInt().Cmp(args.Tip.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.FeeCap, args.Tip)
+		}
 	} else {
 		if args.FeeCap != nil || args.Tip != nil {
 			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 		}
 		if args.GasPrice == nil {
-			price, err := b.SuggestPrice(ctx)
+			price, err := b.SuggestGasTipCap(ctx)
 			if err != nil {
 				return err
+			}
+			if b.ChainConfig().IsLondon(head.Number) {
+				price.Add(price, head.BaseFee)
 			}
 			args.GasPrice = (*hexutil.Big)(price)
 		}

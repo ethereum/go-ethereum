@@ -275,12 +275,8 @@ func (b *EthAPIBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
 }
 
-func (b *EthAPIBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
-}
-
-func (b *EthAPIBackend) SuggestFeeCap(ctx context.Context) (*big.Int, error) {
-	return new(big.Int).Mul(b.CurrentBlock().BaseFee(), common.Big2), nil
+func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestTipCap(ctx)
 }
 
 func (b *EthAPIBackend) ChainDb() ethdb.Database {
