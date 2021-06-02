@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -43,10 +42,28 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
 }
 
+// AccountResult is the result of a GetProof operation.
+type AccountResult struct {
+	Address      common.Address  `json:"address"`
+	AccountProof []string        `json:"accountProof"`
+	Balance      *hexutil.Big    `json:"balance"`
+	CodeHash     common.Hash     `json:"codeHash"`
+	Nonce        hexutil.Uint64  `json:"nonce"`
+	StorageHash  common.Hash     `json:"storageHash"`
+	StorageProof []StorageResult `json:"storageProof"`
+}
+
+// StorageResult provides a proof for a key-value pair.
+type StorageResult struct {
+	Key   string       `json:"key"`
+	Value *hexutil.Big `json:"value"`
+	Proof []string     `json:"proof"`
+}
+
 // GetProof returns the account and storage values of the specified account including the Merkle-proof.
 // The block number can be nil, in which case the value is taken from the latest known block.
-func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*ethapi.AccountResult, error) {
-	var result ethapi.AccountResult
+func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*AccountResult, error) {
+	var result AccountResult
 	err := ec.c.CallContext(ctx, &result, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
 	return &result, err
 }
@@ -105,6 +122,11 @@ func (ec *Client) GetNodeInfo(ctx context.Context) (*p2p.NodeInfo, error) {
 	var result p2p.NodeInfo
 	err := ec.c.CallContext(ctx, &result, "admin_nodeInfo")
 	return &result, err
+}
+
+// SubscribePendingTransactions subscribes to new pending transactions.
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
 func toBlockNumArg(number *big.Int) string {
