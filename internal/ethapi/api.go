@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -804,6 +805,58 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		}
 	}
 	return nil
+}
+
+type MultiContract struct {
+	fnSig       [][]byte
+	contracts   []vm.Contract
+	targetArgs  map[common.Address][][]byte
+	blocknumber rpc.BlockNumberOrHash
+}
+
+type MultiContractTask interface {
+	MultiContractCall(ctx context.Context, multiCall MultiContract, globalGasCap uint64)
+}
+
+type MultiContractResult [][]byte
+
+func (s *PublicBlockChainAPI) MultiContractCall(ctx context.Context, args TransactionArgs, multiContract MultiContract, globalGasCap uint64) (MultiContractResult, error) {
+
+	var resultData [][]byte
+
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, multiContract.blocknumber)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	modArgs := args
+	for _, vc := range multiContract.contracts {
+		i := 0
+		for ia, va := range multiContract.targetArgs {
+			if ia == *vc.CodeAddr {
+				modCallData := bytes.Join(multiContract.fnSig, va[i])
+				modArgs.To = vc.CodeAddr
+				modArgs.Data = (*hexutil.Bytes)(&modCallData)
+				//Get a new instance of the EVM.
+				msg := modArgs.ToMessage(globalGasCap)
+				evm, vmError, err := s.b.GetEVM(ctx, msg, state, header, nil)
+				if err != nil {
+					return nil, err
+				}
+				// Execute the message.
+				gp := new(core.GasPool).AddGas(math.MaxUint64)
+				result, err := core.ApplyMessage(evm, msg, gp)
+				if err := vmError(); err != nil {
+					return nil, err
+				}
+				response := *result
+				resultData = append(resultData, response.ReturnData)
+				i++
+			} else {
+				return nil, fmt.Errorf("no match in contract arguments founds")
+			}
+		}
+	}
+	return resultData, nil
 }
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
