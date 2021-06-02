@@ -109,7 +109,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 // very high chance to be included in the following blocks.
 //
 // Note, for legacy transactions and the legacy eth_gasPrice RPC call, it will be
-// necessary to add the basefee to the returned number to fall bac to the legacy
+// necessary to add the basefee to the returned number to fall back to the legacy
 // behavior.
 func (gpo *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)

@@ -89,7 +89,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			args.Tip = (*hexutil.Big)(tip)
 		}
 		if args.FeeCap == nil {
-			feeCap := new(big.Int).Add((*big.Int)(args.Tip), head.BaseFee)
+			feeCap := new(big.Int).Add(
+				(*big.Int)(args.Tip),
+				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+			)
 			args.FeeCap = (*hexutil.Big)(feeCap)
 		}
 		if args.FeeCap.ToInt().Cmp(args.Tip.ToInt()) < 0 {
