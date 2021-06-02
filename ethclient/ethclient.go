@@ -451,7 +451,9 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	return uint(num), err
 }
 
-// TODO: SubscribePendingTransactions (needs server side)
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, incoming chan common.Hash) (*rpc.ClientSubscription, error) {
+	return ec.c.EthSubscribe(ctx, incoming, "newPendingTransactions")
+}
 
 // Contract Calling
 
