@@ -31,8 +31,10 @@ import (
 
 const sampleNumber = 3 // Number of transactions sampled in a block
 
-var DefaultMaxPrice = big.NewInt(500 * params.GWei)
-var DefaultIgnorePrice = big.NewInt(2 * params.Wei)
+var (
+	DefaultMaxPrice    = big.NewInt(500 * params.GWei)
+	DefaultIgnorePrice = big.NewInt(2 * params.Wei)
+)
 
 type Config struct {
 	Blocks      int
@@ -103,9 +105,13 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	}
 }
 
-// SuggestPrice returns a gasprice so that newly created transaction can
-// have a very high chance to be included in the following blocks.
-func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
+// SuggestTipCap returns a tip cap so that newly created transaction can have a
+// very high chance to be included in the following blocks.
+//
+// Note, for legacy transactions and the legacy eth_gasPrice RPC call, it will be
+// necessary to add the basefee to the returned number to fall back to the legacy
+// behavior.
+func (gpo *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	headHash := head.Hash()
 
@@ -114,7 +120,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	lastHead, lastPrice := gpo.lastHead, gpo.lastPrice
 	gpo.cacheLock.RUnlock()
 	if headHash == lastHead {
-		return lastPrice, nil
+		return new(big.Int).Set(lastPrice), nil
 	}
 	gpo.fetchLock.Lock()
 	defer gpo.fetchLock.Unlock()
@@ -124,17 +130,17 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	lastHead, lastPrice = gpo.lastHead, gpo.lastPrice
 	gpo.cacheLock.RUnlock()
 	if headHash == lastHead {
-		return lastPrice, nil
+		return new(big.Int).Set(lastPrice), nil
 	}
 	var (
 		sent, exp int
 		number    = head.Number.Uint64()
-		result    = make(chan getBlockPricesResult, gpo.checkBlocks)
+		result    = make(chan results, gpo.checkBlocks)
 		quit      = make(chan struct{})
-		txPrices  []*big.Int
+		results   []*big.Int
 	)
 	for sent < gpo.checkBlocks && number > 0 {
-		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
+		go gpo.getBlockValues(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
 		sent++
 		exp++
 		number--
@@ -143,31 +149,31 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		res := <-result
 		if res.err != nil {
 			close(quit)
-			return lastPrice, res.err
+			return new(big.Int).Set(lastPrice), res.err
 		}
 		exp--
 		// Nothing returned. There are two special cases here:
 		// - The block is empty
 		// - All the transactions included are sent by the miner itself.
 		// In these cases, use the latest calculated price for samping.
-		if len(res.prices) == 0 {
-			res.prices = []*big.Int{lastPrice}
+		if len(res.values) == 0 {
+			res.values = []*big.Int{lastPrice}
 		}
 		// Besides, in order to collect enough data for sampling, if nothing
 		// meaningful returned, try to query more blocks. But the maximum
 		// is 2*checkBlocks.
-		if len(res.prices) == 1 && len(txPrices)+1+exp < gpo.checkBlocks*2 && number > 0 {
-			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
+		if len(res.values) == 1 && len(results)+1+exp < gpo.checkBlocks*2 && number > 0 {
+			go gpo.getBlockValues(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, gpo.ignorePrice, result, quit)
 			sent++
 			exp++
 			number--
 		}
-		txPrices = append(txPrices, res.prices...)
+		results = append(results, res.values...)
 	}
 	price := lastPrice
-	if len(txPrices) > 0 {
-		sort.Sort(bigIntArray(txPrices))
-		price = txPrices[(len(txPrices)-1)*gpo.percentile/100]
+	if len(results) > 0 {
+		sort.Sort(bigIntArray(results))
+		price = results[(len(results)-1)*gpo.percentile/100]
 	}
 	if price.Cmp(gpo.maxPrice) > 0 {
 		price = new(big.Int).Set(gpo.maxPrice)
@@ -176,53 +182,74 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	gpo.lastHead = headHash
 	gpo.lastPrice = price
 	gpo.cacheLock.Unlock()
-	return price, nil
+
+	return new(big.Int).Set(price), nil
 }
 
-type getBlockPricesResult struct {
-	prices []*big.Int
+type results struct {
+	values []*big.Int
 	err    error
 }
 
-type transactionsByGasPrice []*types.Transaction
+type txSorter struct {
+	txs     []*types.Transaction
+	baseFee *big.Int
+}
 
-func (t transactionsByGasPrice) Len() int           { return len(t) }
-func (t transactionsByGasPrice) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].FeeCapCmp(t[j]) < 0 }
+func newSorter(txs []*types.Transaction, baseFee *big.Int) *txSorter {
+	return &txSorter{
+		txs:     txs,
+		baseFee: baseFee,
+	}
+}
+
+func (s *txSorter) Len() int { return len(s.txs) }
+func (s *txSorter) Swap(i, j int) {
+	s.txs[i], s.txs[j] = s.txs[j], s.txs[i]
+}
+func (s *txSorter) Less(i, j int) bool {
+	// It's okay to discard the error because a tx would never be
+	// accepted into a block with an invalid effective tip.
+	tip1, _ := s.txs[i].EffectiveTip(s.baseFee)
+	tip2, _ := s.txs[j].EffectiveTip(s.baseFee)
+	return tip1.Cmp(tip2) < 0
+}
 
 // getBlockPrices calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty or all transactions
 // are sent by the miner itself(it doesn't make any sense to include this kind of
 // transaction prices for sampling), nil gasprice is returned.
-func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, limit int, ignoreUnder *big.Int, result chan getBlockPricesResult, quit chan struct{}) {
+func (gpo *Oracle) getBlockValues(ctx context.Context, signer types.Signer, blockNum uint64, limit int, ignoreUnder *big.Int, result chan results, quit chan struct{}) {
 	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
 		select {
-		case result <- getBlockPricesResult{nil, err}:
+		case result <- results{nil, err}:
 		case <-quit:
 		}
 		return
 	}
-	blockTxs := block.Transactions()
-	txs := make([]*types.Transaction, len(blockTxs))
-	copy(txs, blockTxs)
-	sort.Sort(transactionsByGasPrice(txs))
+	// Sort the transaction by effective tip in ascending sort.
+	txs := make([]*types.Transaction, len(block.Transactions()))
+	copy(txs, block.Transactions())
+	sorter := newSorter(txs, block.BaseFee())
+	sort.Sort(sorter)
 
 	var prices []*big.Int
-	for _, tx := range txs {
-		if ignoreUnder != nil && tx.GasPrice().Cmp(ignoreUnder) == -1 {
+	for _, tx := range sorter.txs {
+		tip, _ := tx.EffectiveTip(block.BaseFee())
+		if ignoreUnder != nil && tip.Cmp(ignoreUnder) == -1 {
 			continue
 		}
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			prices = append(prices, tx.GasPrice())
+			prices = append(prices, tip)
 			if len(prices) >= limit {
 				break
 			}
 		}
 	}
 	select {
-	case result <- getBlockPricesResult{prices, nil}:
+	case result <- results{prices, nil}:
 	case <-quit:
 	}
 }

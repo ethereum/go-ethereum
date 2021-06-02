@@ -1106,8 +1106,22 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 }
 
 func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
-	price, err := r.backend.SuggestPrice(ctx)
-	return hexutil.Big(*price), err
+	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
+		tipcap.Add(tipcap, head.BaseFee)
+	}
+	return (hexutil.Big)(*tipcap), nil
+}
+
+func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error) {
+	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	return (hexutil.Big)(*tipcap), nil
 }
 
 func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {

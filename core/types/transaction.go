@@ -604,12 +604,10 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		accessList: tx.AccessList(),
 		checkNonce: true,
 	}
-
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.tip, baseFee), msg.feeCap)
 	}
-
 	var err error
 	msg.from, err = Sender(s, tx)
 	return msg, err

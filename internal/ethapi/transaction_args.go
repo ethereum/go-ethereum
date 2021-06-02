@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,6 +38,8 @@ type TransactionArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
+	FeeCap   *hexutil.Big    `json:"maxFeePerGas"`
+	Tip      *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 
@@ -72,12 +75,43 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice == nil {
-		price, err := b.SuggestPrice(ctx)
-		if err != nil {
-			return err
+	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// After london, default to 1559 unless gasPrice is set
+	head := b.CurrentHeader()
+	if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
+		if args.Tip == nil {
+			tip, err := b.SuggestGasTipCap(ctx)
+			if err != nil {
+				return err
+			}
+			args.Tip = (*hexutil.Big)(tip)
 		}
-		args.GasPrice = (*hexutil.Big)(price)
+		if args.FeeCap == nil {
+			feeCap := new(big.Int).Add(
+				(*big.Int)(args.Tip),
+				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+			)
+			args.FeeCap = (*hexutil.Big)(feeCap)
+		}
+		if args.FeeCap.ToInt().Cmp(args.Tip.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.FeeCap, args.Tip)
+		}
+	} else {
+		if args.FeeCap != nil || args.Tip != nil {
+			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+		}
+		if args.GasPrice == nil {
+			price, err := b.SuggestGasTipCap(ctx)
+			if err != nil {
+				return err
+			}
+			if b.ChainConfig().IsLondon(head.Number) {
+				price.Add(price, head.BaseFee)
+			}
+			args.GasPrice = (*hexutil.Big)(price)
+		}
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -103,6 +137,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			From:       args.From,
 			To:         args.To,
 			GasPrice:   args.GasPrice,
+			FeeCap:     args.FeeCap,
+			Tip:        args.Tip,
 			Value:      args.Value,
 			Data:       args.Data,
 			AccessList: args.AccessList,
@@ -123,7 +159,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 }
 
 // ToMessage converts TransactionArgs to the Message type used by the core evm
-func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+	// Reject invalid combinations of pre- and post-1559 fee styles
+	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
 	// Set sender address or use zero address if none specified.
 	addr := args.from()
 
@@ -139,9 +179,34 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
-	gasPrice := new(big.Int)
-	if args.GasPrice != nil {
-		gasPrice = args.GasPrice.ToInt()
+	var (
+		gasPrice *big.Int
+		feeCap   *big.Int
+		tip      *big.Int
+	)
+	if baseFee == nil {
+		// If there's no basefee, then it must be a non-1559 execution
+		gasPrice = new(big.Int)
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+		}
+		feeCap, tip = gasPrice, gasPrice
+	} else {
+		// A basefee is provided, necessitating 1559-type execution
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+			feeCap, tip = gasPrice, gasPrice
+		} else {
+			feeCap = new(big.Int)
+			if args.FeeCap != nil {
+				feeCap = args.FeeCap.ToInt()
+			}
+			tip = new(big.Int)
+			if args.Tip != nil {
+				tip = args.Tip.ToInt()
+			}
+			gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
+		}
 	}
 	value := new(big.Int)
 	if args.Value != nil {
@@ -152,24 +217,32 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) types.Message {
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, accessList, false)
-	return msg
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, feeCap, tip, data, accessList, false)
+	return msg, nil
 }
 
 // toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
-	if args.AccessList == nil {
-		data = &types.LegacyTx{
-			To:       args.To,
-			Nonce:    uint64(*args.Nonce),
-			Gas:      uint64(*args.Gas),
-			GasPrice: (*big.Int)(args.GasPrice),
-			Value:    (*big.Int)(args.Value),
-			Data:     args.data(),
+	switch {
+	case args.FeeCap != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
 		}
-	} else {
+		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			FeeCap:     (*big.Int)(args.FeeCap),
+			Tip:        (*big.Int)(args.Tip),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.data(),
+			AccessList: al,
+		}
+	case args.AccessList != nil:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
@@ -179,6 +252,15 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: *args.AccessList,
+		}
+	default:
+		data = &types.LegacyTx{
+			To:       args.To,
+			Nonce:    uint64(*args.Nonce),
+			Gas:      uint64(*args.Gas),
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(args.Value),
+			Data:     args.data(),
 		}
 	}
 	return types.NewTx(data)
