@@ -3759,7 +3759,7 @@ var inputTransactionFormatter = function (options){
         options.to = inputAddressFormatter(options.to);
     }
 
-    ['gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
+    ['maxFeePerGas', 'maxPriorityFeePerGas', 'gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
         return options[key] !== undefined;
     }).forEach(function(key){
         options[key] = utils.fromDecimal(options[key]);
