@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -174,4 +175,22 @@ func (api *API) Status() (*status, error) {
 		SigningStatus: signStatus,
 		NumBlocks:     numBlocks,
 	}, nil
+}
+
+func (api *API) GetSignerForBlock(number *rpc.BlockNumber) (common.Address, error) {
+	var header *types.Header
+	if number == nil || *number == rpc.LatestBlockNumber {
+		header = api.chain.CurrentHeader()
+	} else {
+		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+	signature := header.Extra[len(header.Extra)-extraSeal:]
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	return signer, nil
 }
