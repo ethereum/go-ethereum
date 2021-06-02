@@ -1284,8 +1284,12 @@ func (w *worker) mergeBundles(bundles []simulatedBundle, parent *types.Block, he
 		prevState = state.Copy()
 		prevGasPool = new(core.GasPool).AddGas(gasPool.Gas())
 
+		// the floor gas price is 99/100 what was simulated at the top of the block
+		floorGasPrice := new(big.Int).Mul(bundle.mevGasPrice, big.NewInt(99))
+		floorGasPrice = floorGasPrice.Div(floorGasPrice, big.NewInt(100))
+
 		simmed, err := w.computeBundleGas(bundle.originalBundle, parent, header, state, gasPool, pendingTxs, len(finalBundle))
-		if err != nil || simmed.totalEth.Cmp(new(big.Int)) <= 0 {
+		if err != nil || simmed.mevGasPrice.Cmp(floorGasPrice) <= 0 {
 			state = prevState
 			gasPool = prevGasPool
 			continue
