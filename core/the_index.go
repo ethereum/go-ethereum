@@ -19,13 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const contractShards byte = 64
+const contractShards int = 256
 const maxFileSizeMb = 1024
 const fileIndexFormat = "%05d"
 
 const blocksFilePrefix = "blocks-"
 const accountsFilePrefix = "accounts-"
-const contractsShardFilePrefix = "contracts%02d-"
+const contractsShardFilePrefix = "contracts-%02x-"
 const cursorFileName = "cursor"
 
 var theIndexVerbose = os.Getenv("THEINDEX_VERBOSE")
@@ -100,7 +100,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block
 	// shard the contracts
 	contractsPerShard := map[byte][]rlp.TheIndex_rlpContract{}
 	for address, contract := range contracts {
-		shard := address[0] % contractShards
+		shard := address[0]
 		// new shard, add it to the map
 		if _, ok := contractsPerShard[shard]; !ok {
 			contractsPerShard[shard] = make([]rlp.TheIndex_rlpContract, 0)
