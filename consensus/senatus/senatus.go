@@ -719,7 +719,7 @@ func (s *Senatus) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 		log.Trace("out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: validator}, accounts.MimetypeClique, SenatusRLP(header, s.chainConfig.ChainID))
+	sighash, err := signFn(accounts.Account{Address: validator}, accounts.MimetypeSenatus, SenatusRLP(header, s.chainConfig.ChainID))
 	if err != nil {
 		return err
 	}
@@ -767,7 +767,7 @@ func (s *Senatus) SealHash(header *types.Header) common.Hash {
 	return SealHash(header, s.chainConfig.ChainID)
 }
 
-// Close implements consensus.Engine. It's a noop for clique as there are no background threads.
+// Close implements consensus.Engine. It's a noop for senatus as there are no background threads.
 func (s *Senatus) Close() error {
 	return nil
 }

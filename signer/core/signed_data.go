@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/senatus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -57,6 +58,10 @@ var (
 	ApplicationClique = SigFormat{
 		accounts.MimetypeClique,
 		0x02,
+	}
+	ApplicationSenatus = SigFormat{
+		accounts.MimetypeSenatus,
+		0x03,
 	}
 	TextPlain = SigFormat{
 		accounts.MimetypeTextPlain,
@@ -258,6 +263,41 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Clique uses V on the form 0 or 1
 		useEthereumV = false
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}
+	case ApplicationSenatus.Mime:
+		stringData, ok := data.(string)
+		if !ok {
+			return nil, useEthereumV, fmt.Errorf("input for %v must be an hex-encoded string", ApplicationSenatus.Mime)
+		}
+		senatusData, err := hexutil.Decode(stringData)
+		if err != nil {
+			return nil, useEthereumV, err
+		}
+		header := &types.Header{}
+		if err := rlp.DecodeBytes(senatusData, header); err != nil {
+			return nil, useEthereumV, err
+		}
+		// The incoming senatus header is already truncated, sent to us with a extradata already shortened
+		if len(header.Extra) < 65 {
+			// Need to add it back, to get a suitable length for hashing
+			newExtra := make([]byte, len(header.Extra)+65)
+			copy(newExtra, header.Extra)
+			header.Extra = newExtra
+		}
+		// Get back the rlp data, encoded by us
+		sighash, senatusRlp, err := senatusHeaderHashAndRlp(header, api.chainID)
+		if err != nil {
+			return nil, useEthereumV, err
+		}
+		messages := []*NameValueType{
+			{
+				Name:  "Senatus header",
+				Typ:   "senatus",
+				Value: fmt.Sprintf("senatus header %d [0x%x]", header.Number, header.Hash()),
+			},
+		}
+		// Senatus uses V on the form 0 or 1
+		useEthereumV = false
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: senatusRlp, Messages: messages, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
@@ -307,6 +347,16 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 	}
 	rlp = clique.CliqueRLP(header)
 	hash = clique.SealHash(header).Bytes()
+	return hash, rlp, err
+}
+
+func senatusHeaderHashAndRlp(header *types.Header, chainId *big.Int) (hash, rlp []byte, err error) {
+	if len(header.Extra) < 65 {
+		err = fmt.Errorf("senatus header extradata too short, %d < 65", len(header.Extra))
+		return
+	}
+	rlp = senatus.SenatusRLP(header, chainId)
+	hash = senatus.SealHash(header, chainId).Bytes()
 	return hash, rlp, err
 }
 
