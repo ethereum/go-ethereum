@@ -184,19 +184,29 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		feeCap   *big.Int
 		tip      *big.Int
 	)
-	if args.GasPrice != nil {
+	if baseFee == nil {
+		// If there's no basefee, then it must be a non-1559 execution
 		gasPrice = args.GasPrice.ToInt()
+		if gasPrice == nil {
+			gasPrice = new(big.Int)
+		}
 		feeCap, tip = gasPrice, gasPrice
 	} else {
-		feeCap = new(big.Int)
-		if args.FeeCap != nil {
-			feeCap = args.FeeCap.ToInt()
+		// A basefee is provided, necessitating 1559-type execution
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+			feeCap, tip = gasPrice, gasPrice
+		} else {
+			feeCap = new(big.Int)
+			if args.FeeCap != nil {
+				feeCap = args.FeeCap.ToInt()
+			}
+			tip = new(big.Int)
+			if args.Tip != nil {
+				tip = args.Tip.ToInt()
+			}
+			gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
 		}
-		tip = new(big.Int)
-		if args.Tip != nil {
-			tip = args.Tip.ToInt()
-		}
-		gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
 	}
 	value := new(big.Int)
 	if args.Value != nil {
