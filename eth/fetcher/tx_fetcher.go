@@ -283,6 +283,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	errs := f.addTxs(txs)
 	for i, err := range errs {
 		if err != nil {
+			filters.ClearTxTimestamp(txs[i].Hash())
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.

@@ -64,6 +64,10 @@ func SetTxPeer(hash common.Hash, peer string) {
 	}
 }
 
+func ClearTxTimestamp(hash common.Hash) {
+	tsMap.Remove(hash)
+}
+
 // SubscribePeerIDs tracks and populates the peerID map with the ID and enode,
 // so that they can be provided in responses with transaction and block
 // information

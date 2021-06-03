@@ -84,7 +84,6 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			select {
 			case d := <-dropped:
 				for _, tx := range d.Txs {
-					h := tx.Hash()
 					notification := &dropNotification{
 						Tx: newRPCPendingTransaction(tx),
 						Reason: d.Reason,
@@ -92,12 +91,10 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 						Time: time.Now().UnixNano(),
 					}
 					if d.Replacement != nil {
-						peerid, _ := txPeerMap.Get(h)
+						peerid, _ := txPeerMap.Get(tx.Hash())
 						notification.Peer, _ = peerIDMap.Load(peerid)
 					}
 					notifier.Notify(rpcSub.ID, notification)
-					tsMap.Remove(h)
-					txPeerMap.Remove(h)
 				}
 			case <-rpcSub.Err():
 				droppedSub.Unsubscribe()
@@ -110,6 +107,19 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 	}()
 
 	return rpcSub, nil
+}
+
+func (api *PublicFilterAPI) dropLoop() {
+	dropped := make(chan core.DropTxsEvent)
+	droppedSub := api.backend.SubscribeDropTxsEvent(dropped)
+	defer droppedSub.Unsubscribe()
+	for d := range dropped {
+		for _, tx := range d.Txs {
+			h := tx.Hash()
+			if tsMap != nil { tsMap.Remove(h) }
+			if txPeerMap != nil { txPeerMap.Remove(h) }
+		}
+	}
 }
 
 // RejectedTransactions send a notification each time a transaction is rejected from entering the mempool
