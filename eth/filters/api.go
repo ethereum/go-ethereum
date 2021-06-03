@@ -68,6 +68,7 @@ func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) 
 		timeout: timeout,
 	}
 	go api.timeoutLoop(timeout)
+	go api.dropLoop()
 
 	return api
 }
