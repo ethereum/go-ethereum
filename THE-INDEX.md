@@ -26,7 +26,7 @@
 
 1. Create a new EFS disk for the index data (one zone, no backups, no encryption)
 
-2. Create a i3.xlarge machine without an EBS drive with Ubuntu 20
+2. Create a i3.2xlarge machine without an EBS drive with Ubuntu 20
 
 3. Mount the NVMe disk:
 
