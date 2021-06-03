@@ -14,6 +14,7 @@ package filters
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -206,6 +207,9 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 					// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 					if receipt.ContractAddress != (common.Address{}) {
 						fields["contractAddress"] = receipt.ContractAddress
+					}
+					if reason, ok := core.GetRevertReason(receipt.TxHash); ok {
+						fields["revertReason"] = reason
 					}
 					marshalReceipts[receipt.TxHash] = fields
 				}

@@ -100,6 +100,10 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		return nil, err
 	}
 
+	if revert := result.Revert(); revert != nil {
+		CacheRevertReason(tx.Hash(), revert)
+	}
+
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
