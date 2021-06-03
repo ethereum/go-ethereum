@@ -467,6 +467,7 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 		batch := f.newBatch()
 		require.NoError(t, batch.AppendRaw(1, getChunk(40, 0xDD)))
 		require.NoError(t, batch.Commit())
+
 		f.Close()
 
 		// Should have been truncated down to zero and then 40 written
@@ -584,7 +585,7 @@ func TestOffset(t *testing.T) {
 			filenum: tailId,
 			offset:  itemOffset,
 		}
-		buf := zeroIndex.marshallBinary()
+		buf := zeroIndex.append(nil)
 		// Overwrite index zero
 		copy(indexBuf, buf)
 		// Remove the four next indices by overwriting
@@ -654,7 +655,7 @@ func TestOffset(t *testing.T) {
 			offset:  itemOffset,
 			filenum: tailId,
 		}
-		buf := zeroIndex.marshallBinary()
+		buf := zeroIndex.append(nil)
 		// Overwrite index zero
 		copy(indexBuf, buf)
 		indexFile.WriteAt(indexBuf, 0)

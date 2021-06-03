@@ -56,19 +56,20 @@ type indexEntry struct {
 
 const indexEntrySize = 6
 
-// unmarshallBinary deserializes binary b into the rawIndex entry.
+// unmarshalBinary deserializes binary b into the rawIndex entry.
 func (i *indexEntry) unmarshalBinary(b []byte) error {
 	i.filenum = uint32(binary.BigEndian.Uint16(b[:2]))
 	i.offset = binary.BigEndian.Uint32(b[2:6])
 	return nil
 }
 
-// marshallBinary serializes the rawIndex entry into binary.
-func (i *indexEntry) marshallBinary() []byte {
-	b := make([]byte, indexEntrySize)
-	binary.BigEndian.PutUint16(b[:2], uint16(i.filenum))
-	binary.BigEndian.PutUint32(b[2:6], i.offset)
-	return b
+// append adds the encoded entry to the end of b.
+func (i *indexEntry) append(b []byte) []byte {
+	offset := len(b)
+	out := append(b, make([]byte, indexEntrySize)...)
+	binary.BigEndian.PutUint16(out[offset:], uint16(i.filenum))
+	binary.BigEndian.PutUint32(out[offset+2:], i.offset)
+	return out
 }
 
 // freezerTable represents a single chained data table within the freezer (e.g. blocks).

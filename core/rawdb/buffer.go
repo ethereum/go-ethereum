@@ -68,3 +68,16 @@ func (s *BufferedSnapWriter) Reset() {
 	s.dst = s.dst[:0]
 	s.buf.Reset()
 }
+
+type writeBuffer struct {
+	data []byte
+}
+
+func (wb *writeBuffer) Write(data []byte) (int, error) {
+	wb.data = append(wb.data, data...)
+	return len(data), nil
+}
+
+func (wb *writeBuffer) Reset() {
+	wb.data = wb.data[:0]
+}

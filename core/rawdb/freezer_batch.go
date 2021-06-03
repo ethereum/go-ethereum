@@ -17,7 +17,6 @@
 package rawdb
 
 import (
-	"bytes"
 	"fmt"
 	"sync/atomic"
 
@@ -54,12 +53,14 @@ func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error
 
 func (batch *freezerBatch) Commit() error {
 	// Check that count agrees on all batches.
-	count := -1
+	item := uint64(math.MaxUint64)
+	count := 0
 	for name, tb := range batch.tables {
-		if count >= 0 && tb.count != count {
-			return fmt.Errorf("batch %s has count %d, want %d", name, tb.count, count)
+		if item < math.MaxUint64 && tb.curItem != item {
+			return fmt.Errorf("batch %s is at item %d, want %d", name, tb.curItem, item)
 		}
-		count = tb.count
+		item = tb.curItem
+		count++
 	}
 
 	// Commit all table batches.
@@ -74,193 +75,146 @@ func (batch *freezerBatch) Commit() error {
 	return nil
 }
 
+const (
+	freezerBatchBufferLimit = 2 * 1024 * 1024
+)
+
 // freezerTableBatch is a batch for a freezer table.
 type freezerTableBatch struct {
-	t   *freezerTable
-	buf bytes.Buffer
-	sb  *BufferedSnapWriter
+	t *freezerTable
 
-	firstIdx uint64
-	count    int
-	sizes    []uint32
+	sb          *BufferedSnapWriter
+	encBuffer   writeBuffer
+	dataBuffer  []byte
+	indexBuffer []byte
 
-	headBytes uint32
+	curItem   uint64
+	headBytes uint32 // number of bytes in head file.
 }
 
 // newBatch creates a new batch for the freezer table.
 func (t *freezerTable) newBatch() *freezerTableBatch {
-	batch := &freezerTableBatch{
-		t:        t,
-		firstIdx: math.MaxUint64,
-	}
-	if !t.noCompression {
-		batch.sb = new(BufferedSnapWriter)
-	}
+	batch := &freezerTableBatch{t: t}
+	batch.Reset()
 	return batch
 }
 
 // Reset clears the batch for reuse.
 func (batch *freezerTableBatch) Reset() {
-	batch.firstIdx = math.MaxUint64
-	batch.buf.Reset()
-	if batch.sb != nil {
-		batch.sb.Reset()
+	if !batch.t.noCompression {
+		batch.sb = new(BufferedSnapWriter)
+	} else {
+		batch.sb = nil
 	}
-	batch.count = 0
-	batch.sizes = batch.sizes[:0]
-	batch.headBytes = 0
+	batch.encBuffer.Reset()
+	batch.dataBuffer = batch.dataBuffer[:0]
+	batch.indexBuffer = batch.indexBuffer[:0]
+	batch.curItem = atomic.LoadUint64(&batch.t.items)
+	batch.headBytes = batch.t.headBytes
 }
 
 // Append rlp-encodes and adds data at the end of the freezer table. The item number is a
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
 func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
-	if batch.firstIdx == math.MaxUint64 {
-		batch.firstIdx = item
+	if item != batch.curItem {
+		return fmt.Errorf("appending unexpected item: want %d, have %d", batch.curItem, item)
 	}
-	if have, want := item, batch.firstIdx+uint64(batch.count); have != want {
-		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
-	}
-	s0 := batch.buf.Len()
+
+	// Encode the item.
+	batch.encBuffer.Reset()
 	if batch.sb != nil {
 		// RLP-encode
 		if err := rlp.Encode(batch.sb, data); err != nil {
 			return err
 		}
 		// Snappy-encode to our buf
-		if err := batch.sb.WriteTo(&batch.buf); err != nil {
+		if err := batch.sb.WriteTo(&batch.encBuffer); err != nil {
 			return err
 		}
 	} else {
-		if err := rlp.Encode(&batch.buf, data); err != nil {
+		if err := rlp.Encode(&batch.encBuffer, data); err != nil {
 			return err
 		}
 	}
-	s1 := batch.buf.Len()
-	batch.sizes = append(batch.sizes, uint32(s1-s0))
-	batch.count++
-	return nil
+
+	return batch.appendItem(batch.encBuffer.data)
 }
 
 // AppendRaw injects a binary blob at the end of the freezer table. The item number is a
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
 func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
-	if batch.firstIdx == math.MaxUint64 {
-		batch.firstIdx = item
+	if item != batch.curItem {
+		return fmt.Errorf("appending unexpected item: want %d, have %d", batch.curItem, item)
 	}
-	if have, want := item, batch.firstIdx+uint64(batch.count); have != want {
-		return fmt.Errorf("appending unexpected item: want %d, have %d", want, have)
-	}
-	s0 := batch.buf.Len()
+
+	data := blob
 	if batch.sb != nil {
-		if err := batch.sb.WriteDirectTo(&batch.buf, blob); err != nil {
-			return err
-		}
-	} else {
-		if _, err := batch.buf.Write(blob); err != nil {
-			return err
-		}
+		batch.encBuffer.Reset()
+		batch.sb.WriteDirectTo(&batch.encBuffer, blob)
+		data = batch.encBuffer.data
 	}
-	s1 := batch.buf.Len()
-	batch.sizes = append(batch.sizes, uint32(s1-s0))
-	batch.count++
+	return batch.appendItem(data)
+}
+
+func (batch *freezerTableBatch) appendItem(data []byte) error {
+	itemSize := uint32(len(data))
+
+	// Check if item fits into current data file.
+	if batch.headBytes+itemSize > batch.t.maxFileSize {
+		// It doesn't fit, go to next file first.
+		if err := batch.commit(); err != nil {
+			return err
+		}
+		if err := batch.t.advanceHead(); err != nil {
+			return err
+		}
+		batch.headBytes = 0
+	}
+
+	// Put data to buffer.
+	batch.dataBuffer = append(batch.dataBuffer, data...)
+
+	// Put index entry to buffer.
+	batch.headBytes += itemSize
+	entry := indexEntry{filenum: batch.t.headId, offset: batch.headBytes}
+	batch.indexBuffer = entry.append(batch.indexBuffer)
+	batch.curItem++
+
+	return batch.maybeCommit()
+}
+
+// Commit writes the batched items to the backing freezerTable.
+func (batch *freezerTableBatch) Commit() error {
+	if err := batch.commit(); err != nil {
+		return err
+	}
+	atomic.StoreUint64(&batch.t.items, batch.curItem)
 	return nil
 }
 
-// Write writes the batched items to the backing freezerTable.
-func (batch *freezerTableBatch) Commit() error {
-	var (
-		retry = false
-		err   error
-	)
-	for {
-		retry, err = batch.write(retry)
-		if err != nil {
-			return err
-		}
-		if !retry {
-			return nil
-		}
+// maybeCommit writes the buffered data if the buffer is full enough.
+func (batch *freezerTableBatch) maybeCommit() error {
+	if len(batch.dataBuffer) > freezerBatchBufferLimit {
+		return batch.commit()
 	}
+	return nil
 }
 
-// write is the internal implementation which writes the batch to the backing
-// table. It will only ever write as many items as fits into one table: if
-// the backing table needs to open a new file, this method will return with a
-// (true, nil), to signify that it needs to be invoked again.
-func (batch *freezerTableBatch) write(newHead bool) (bool, error) {
-	if !newHead {
-		batch.t.lock.RLock()
-		defer batch.t.lock.RUnlock()
-	} else {
-		batch.t.lock.Lock()
-		defer batch.t.lock.Unlock()
+func (batch *freezerTableBatch) commit() error {
+	// Write data.
+	_, err := batch.t.head.Write(batch.dataBuffer)
+	if err != nil {
+		return err
 	}
-	if batch.t.index == nil || batch.t.head == nil {
-		return false, errClosed
-	}
+	batch.dataBuffer = batch.dataBuffer[:0]
 
-	// Ensure we're in sync with the data
-	if atomic.LoadUint64(&batch.t.items) != batch.firstIdx {
-		return false, fmt.Errorf("appending unexpected item: want %d, have %d", batch.t.items, batch.firstIdx)
+	// Write index.
+	_, err = batch.t.index.Write(batch.indexBuffer)
+	if err != nil {
+		return err
 	}
-	if newHead {
-		if err := batch.t.advanceHead(); err != nil {
-			return false, err
-		}
-		// And update the batch to point to the new file
-		batch.headBytes = 0
-	}
-	var (
-		filenum         = atomic.LoadUint32(&batch.t.headId)
-		indexData       = make([]byte, 0, len(batch.sizes)*indexEntrySize)
-		count           int
-		writtenDataSize int
-	)
-	for _, size := range batch.sizes {
-		if batch.headBytes+size <= batch.t.maxFileSize {
-			writtenDataSize += int(size)
-			idx := indexEntry{
-				filenum: filenum,
-				offset:  batch.headBytes + size,
-			}
-			batch.headBytes += size
-			idxData := idx.marshallBinary()
-			indexData = append(indexData, idxData...)
-		} else {
-			// Writing will overflow, need to chunk up the batch into several writes
-			break
-		}
-		count++
-	}
-	if writtenDataSize == 0 {
-		return batch.count > 0, nil
-	}
-	// Write the actual data
-	if _, err := batch.t.head.Write(batch.buf.Next(writtenDataSize)); err != nil {
-		return false, err
-	}
-	// Write the new indexdata
-	if _, err := batch.t.index.Write(indexData); err != nil {
-		return false, err
-	}
-	batch.t.writeMeter.Mark(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
-	batch.t.sizeGauge.Inc(int64(batch.buf.Len()) + int64(batch.count)*int64(indexEntrySize))
-	atomic.AddUint64(&batch.t.items, uint64(count))
-	batch.firstIdx += uint64(count)
-	batch.count -= count
-
-	if batch.count > 0 {
-		// Some data left to write on a retry.
-		batch.sizes = batch.sizes[count:]
-		return true, nil
-	}
-	// All data written. We can simply truncate and keep using the buffer
-	batch.sizes = batch.sizes[:0]
-	return false, nil
-}
-
-func (batch *freezerTableBatch) Size() int {
-	return batch.buf.Len()
+	batch.indexBuffer = batch.indexBuffer[:0]
+	return nil
 }

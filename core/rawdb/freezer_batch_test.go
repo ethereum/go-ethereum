@@ -185,11 +185,6 @@ func batchBench(b *testing.B, nbytes int, noCompression bool) {
 		if err := batch.Append(uint64(i), rlpData); err != nil {
 			b.Fatal(err)
 		}
-		if batch.Size() > 1*1024*1024 {
-			if err := batch.Commit(); err != nil {
-				b.Fatal(err)
-			}
-		}
 	}
 	if err := batch.Commit(); err != nil {
 		b.Fatal(err)
@@ -220,11 +215,6 @@ func batchRlpBench(b *testing.B, nbytes int, noCompression bool) {
 	for i := 0; i < b.N; i++ {
 		if err := batch.Append(uint64(i), data); err != nil {
 			b.Fatal(err)
-		}
-		if batch.Size() > 1*1024*1024 {
-			if err := batch.Commit(); err != nil {
-				b.Fatal(err)
-			}
 		}
 	}
 	if err := batch.Commit(); err != nil {
