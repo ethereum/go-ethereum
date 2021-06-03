@@ -116,8 +116,8 @@ func (api *PublicFilterAPI) dropLoop() {
 	for d := range dropped {
 		for _, tx := range d.Txs {
 			h := tx.Hash()
-			tsMap.Remove(h)
-			txPeerMap.Remove(h)
+			if tsMap != nil { tsMap.Remove(h) }
+			if txPeerMap != nil { txPeerMap.Remove(h) }
 		}
 	}
 }
