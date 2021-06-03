@@ -241,7 +241,7 @@ func (db *VerkleDB) CopyTrie(tr Trie) Trie {
 		return s.Copy(db.db)
 	}
 
-			panic("invalid tree type != VerkleTrie")
+	panic("invalid tree type != VerkleTrie")
 }
 
 // ContractCode retrieves a particular contract's code.
