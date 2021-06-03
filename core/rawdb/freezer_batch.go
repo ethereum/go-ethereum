@@ -191,6 +191,9 @@ func (batch *freezerTableBatch) Commit() error {
 		return err
 	}
 	atomic.StoreUint64(&batch.t.items, batch.curItem)
+
+	// TODO: update the head bytes of the table
+	batch.t.headBytes = batch.headBytes
 	return nil
 }
 
