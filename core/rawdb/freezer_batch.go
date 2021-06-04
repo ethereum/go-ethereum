@@ -51,28 +51,30 @@ func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error
 	return batch.tables[kind].AppendRaw(num, item)
 }
 
-func (batch *freezerBatch) Commit() error {
+func (batch *freezerBatch) commit() (int, error) {
 	// Check that count agrees on all batches.
 	item := uint64(math.MaxUint64)
 	count := 0
 	for name, tb := range batch.tables {
 		if item < math.MaxUint64 && tb.curItem != item {
-			return fmt.Errorf("batch %s is at item %d, want %d", name, tb.curItem, item)
+			return 0, fmt.Errorf("batch %s is at item %d, want %d", name, tb.curItem, item)
 		}
 		item = tb.curItem
 		count++
 	}
 
 	// Commit all table batches.
+	writeSize := 0
 	for _, tb := range batch.tables {
 		if err := tb.Commit(); err != nil {
-			return err
+			return 0, err
 		}
+		writeSize += tb.totalBytes
 	}
 
 	// Bump frozen block index.
 	atomic.AddUint64(&batch.freezer.frozen, uint64(count))
-	return nil
+	return writeSize, nil
 }
 
 const (
@@ -88,8 +90,9 @@ type freezerTableBatch struct {
 	dataBuffer  []byte
 	indexBuffer []byte
 
-	curItem   uint64
-	headBytes uint32 // number of bytes in head file.
+	curItem    uint64
+	headBytes  uint32 // number of bytes in head file.
+	totalBytes int    // counts written bytes since reset
 }
 
 // newBatch creates a new batch for the freezer table.
@@ -108,6 +111,7 @@ func (batch *freezerTableBatch) Reset() {
 	batch.indexBuffer = batch.indexBuffer[:0]
 	batch.curItem = atomic.LoadUint64(&batch.t.items)
 	batch.headBytes = batch.t.headBytes
+	batch.totalBytes = 0
 }
 
 // Append rlp-encodes and adds data at the end of the freezer table. The item number is a
@@ -163,6 +167,7 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 
 	// Put data to buffer.
 	batch.dataBuffer = append(batch.dataBuffer, data...)
+	batch.totalBytes += len(data)
 
 	// Put index entry to buffer.
 	batch.headBytes += itemSize

@@ -193,8 +193,18 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 	return 0, errUnknownTable
 }
 
-func (f *freezer) NewAncientBatch() ethdb.AncientBatch {
-	return newFreezerBatch(f)
+// ModifyAncients runs the given write operation.
+// If the operation returns an error, the results are not committed.
+func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, error) {
+	if f.readonly {
+		return 0, errReadOnly
+	}
+	batch := newFreezerBatch(f)
+	if err := fn(batch); err != nil {
+		// TODO: truncate here?
+		return 0, err
+	}
+	return batch.commit()
 }
 
 // TruncateAncients discards any recent data above the provided threshold number.
@@ -416,7 +426,6 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 }
 
 func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
-	batch := f.NewAncientBatch()
 	hashes = make([]common.Hash, 0, limit-number)
 
 	// Roll back all tables in case of error.
@@ -430,51 +439,51 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 		}
 	}()
 
-	for ; number <= limit; number++ {
-		// Retrieve all the components of the canonical block.
-		hash := ReadCanonicalHash(nfdb, number)
-		if hash == (common.Hash{}) {
-			return hashes, fmt.Errorf("canonical hash missing, can't freeze block %d", number)
-		}
-		header := ReadHeaderRLP(nfdb, hash, number)
-		if len(header) == 0 {
-			return hashes, fmt.Errorf("block header missing, can't freeze block %d", number)
-		}
-		body := ReadBodyRLP(nfdb, hash, number)
-		if len(body) == 0 {
-			return hashes, fmt.Errorf("block body missing, can't freeze block %d", number)
-		}
-		receipts := ReadReceiptsRLP(nfdb, hash, number)
-		if len(receipts) == 0 {
-			return hashes, fmt.Errorf("block receipts missing, can't freeze block %d", number)
-		}
-		td := ReadTdRLP(nfdb, hash, number)
-		if len(td) == 0 {
-			return hashes, fmt.Errorf("total difficulty missing, can't freeze block %d", number)
-		}
+	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for ; number <= limit; number++ {
+			// Retrieve all the components of the canonical block.
+			hash := ReadCanonicalHash(nfdb, number)
+			if hash == (common.Hash{}) {
+				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
+			}
+			header := ReadHeaderRLP(nfdb, hash, number)
+			if len(header) == 0 {
+				return fmt.Errorf("block header missing, can't freeze block %d", number)
+			}
+			body := ReadBodyRLP(nfdb, hash, number)
+			if len(body) == 0 {
+				return fmt.Errorf("block body missing, can't freeze block %d", number)
+			}
+			receipts := ReadReceiptsRLP(nfdb, hash, number)
+			if len(receipts) == 0 {
+				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
+			}
+			td := ReadTdRLP(nfdb, hash, number)
+			if len(td) == 0 {
+				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
+			}
 
-		// Write to the batch.
-		if err := batch.AppendRaw(freezerHashTable, number, hash[:]); err != nil {
-			return hashes, fmt.Errorf("can't write hash to freezer: %v", err)
-		}
-		if err := batch.AppendRaw(freezerHeaderTable, number, header); err != nil {
-			return hashes, fmt.Errorf("can't write header to freezer: %v", err)
-		}
-		if err := batch.AppendRaw(freezerBodiesTable, number, body); err != nil {
-			return hashes, fmt.Errorf("can't write body to freezer: %v", err)
-		}
-		if err := batch.AppendRaw(freezerReceiptTable, number, receipts); err != nil {
-			return hashes, fmt.Errorf("can't write receipts to freezer: %v", err)
-		}
-		if err := batch.AppendRaw(freezerDifficultyTable, number, td); err != nil {
-			return hashes, fmt.Errorf("can't write td to freezer: %v", err)
-		}
+			// Write to the batch.
+			if err := op.AppendRaw(freezerHashTable, number, hash[:]); err != nil {
+				return fmt.Errorf("can't write hash to freezer: %v", err)
+			}
+			if err := op.AppendRaw(freezerHeaderTable, number, header); err != nil {
+				return fmt.Errorf("can't write header to freezer: %v", err)
+			}
+			if err := op.AppendRaw(freezerBodiesTable, number, body); err != nil {
+				return fmt.Errorf("can't write body to freezer: %v", err)
+			}
+			if err := op.AppendRaw(freezerReceiptTable, number, receipts); err != nil {
+				return fmt.Errorf("can't write receipts to freezer: %v", err)
+			}
+			if err := op.AppendRaw(freezerDifficultyTable, number, td); err != nil {
+				return fmt.Errorf("can't write td to freezer: %v", err)
+			}
 
-		hashes = append(hashes, hash)
-	}
+			hashes = append(hashes, hash)
+		}
+		return nil
+	})
 
-	if err := batch.Commit(); err != nil {
-		return hashes, err
-	}
-	return hashes, nil
+	return hashes, err
 }

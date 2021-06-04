@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"sort"
 
@@ -657,35 +658,34 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
 func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int) int {
-	batch := db.NewAncientBatch()
-
 	num := block.NumberU64()
-	if err := batch.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
-		panic("Failed to RLP encode block hash: " + err.Error())
-	}
-	if err := batch.Append(freezerHeaderTable, num, block.Header()); err != nil {
-		panic("Failed to RLP encode block header: " + err.Error())
-	}
-	if err := batch.Append(freezerBodiesTable, num, block.Body()); err != nil {
-		panic("Failed to RLP encode body: " + err.Error())
-	}
-	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-	for i, receipt := range receipts {
-		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-	}
-	if err := batch.Append(freezerReceiptTable, num, storageReceipts); err != nil {
-		panic("Failed to RLP encode block receipts: " + err.Error())
-	}
-	if err := batch.Append(freezerDifficultyTable, num, td); err != nil {
-		panic("Failed to RLP encode block total difficulty: " + err.Error())
-	}
+	writeSize, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
+			return fmt.Errorf("can't add block %d hash: %v", num, err)
+		}
+		if err := op.Append(freezerHeaderTable, num, block.Header()); err != nil {
+			return fmt.Errorf("can't append block header %d: %v", num, err)
+		}
+		if err := op.Append(freezerBodiesTable, num, block.Body()); err != nil {
+			return fmt.Errorf("can't append block body %d: %v", num, err)
+		}
+		storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+		for i, receipt := range receipts {
+			storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+		}
+		if err := op.Append(freezerReceiptTable, num, storageReceipts); err != nil {
+			return fmt.Errorf("can't append block %d receipts: %v", num, err)
+		}
+		if err := op.Append(freezerDifficultyTable, num, td); err != nil {
+			return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
+		}
+		return nil
+	})
 
-	if err := batch.Commit(); err != nil {
-		panic("Failed to commit ancient batch: " + err.Error())
+	if err != nil {
+		log.Crit("Ancients write operation failed", "block", num, "err", err)
 	}
-
-	// TODO: collect item size in batch
-	return 0
+	return writeSize
 }
 
 // DeleteBlock removes all block data associated with a hash.
