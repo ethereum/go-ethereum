@@ -252,7 +252,7 @@ func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
 	trigger = true
 	<-pool.requestReset(nil, nil)
 
-	_, err := pool.Pending()
+	_, err := pool.Pending(false)
 	if err != nil {
 		t.Fatalf("Could not fetch pending transactions: %v", err)
 	}

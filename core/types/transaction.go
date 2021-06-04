@@ -356,6 +356,14 @@ func (tx *Transaction) EffectiveTipCmp(other *Transaction, baseFee *big.Int) int
 	return tx.EffectiveTipValue(baseFee).Cmp(other.EffectiveTipValue(baseFee))
 }
 
+// EffectiveTipIntCmp compares the effective tip of a transaction to the given tip.
+func (tx *Transaction) EffectiveTipIntCmp(other *big.Int, baseFee *big.Int) int {
+	if baseFee == nil {
+		return tx.TipIntCmp(other)
+	}
+	return tx.EffectiveTipValue(baseFee).Cmp(other)
+}
+
 // Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
