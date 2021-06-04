@@ -109,8 +109,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'getSignerForBlock',
-			call: 'clique_getSignerForBlock',
+			name: 'getSigner',
+			call: 'clique_getSigner',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),

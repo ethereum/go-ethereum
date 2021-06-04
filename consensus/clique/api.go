@@ -17,6 +17,7 @@
 package clique
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -178,16 +180,40 @@ func (api *API) Status() (*status, error) {
 	}, nil
 }
 
-// GetSignerForBlock returns the signer for a specific clique block.
-func (api *API) GetSignerForBlock(blockNrOrHash *rpc.BlockNumberOrHash) (common.Address, error) {
-	var header *types.Header
-	if blockNrOrHash == nil {
-		header = api.chain.CurrentHeader()
-	} else if hash, ok := blockNrOrHash.Hash(); ok {
-		header = api.chain.GetHeaderByHash(hash)
-	} else if number, ok := blockNrOrHash.Number(); ok {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+type SignerBlock struct {
+	*rpc.BlockNumberOrHash
+	RLP string `json:"rlp,omitempty"`
+}
+
+// GetSigner returns the signer for a specific clique block.
+// Can be called with either a blocknumber, blockhash or an rlp encoded blob.
+// The RLP encoded blob can either be a block or a header.
+func (api *API) GetSigner(rlpOrBlockNr *SignerBlock) (common.Address, error) {
+	if len(rlpOrBlockNr.RLP) == 0 {
+		blockNrOrHash := rlpOrBlockNr.BlockNumberOrHash
+		var header *types.Header
+		if blockNrOrHash == nil {
+			header = api.chain.CurrentHeader()
+		} else if hash, ok := blockNrOrHash.Hash(); ok {
+			header = api.chain.GetHeaderByHash(hash)
+		} else if number, ok := blockNrOrHash.Number(); ok {
+			header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+		}
+		return getSigner(header)
 	}
+	blob := common.Hex2Bytes(rlpOrBlockNr.RLP)
+	block := new(types.Block)
+	if err := rlp.Decode(bytes.NewReader(blob), block); err == nil {
+		return getSigner(block.Header())
+	}
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(blob), header); err == nil {
+		return getSigner(header)
+	}
+	return common.Address{}, fmt.Errorf("could not decode rlp")
+}
+
+func getSigner(header *types.Header) (common.Address, error) {
 	if header == nil {
 		return common.Address{}, errors.New("could not find header")
 	}
