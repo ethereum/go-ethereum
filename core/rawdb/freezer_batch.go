@@ -83,7 +83,7 @@ const (
 type freezerTableBatch struct {
 	t *freezerTable
 
-	sb          *BufferedSnapWriter
+	sb          *snappyBuffer
 	encBuffer   writeBuffer
 	dataBuffer  []byte
 	indexBuffer []byte
@@ -95,18 +95,15 @@ type freezerTableBatch struct {
 // newBatch creates a new batch for the freezer table.
 func (t *freezerTable) newBatch() *freezerTableBatch {
 	batch := &freezerTableBatch{t: t}
+	if !t.noCompression {
+		batch.sb = new(snappyBuffer)
+	}
 	batch.Reset()
 	return batch
 }
 
 // Reset clears the batch for reuse.
 func (batch *freezerTableBatch) Reset() {
-	if !batch.t.noCompression {
-		batch.sb = new(BufferedSnapWriter)
-	} else {
-		batch.sb = nil
-	}
-	batch.encBuffer.Reset()
 	batch.dataBuffer = batch.dataBuffer[:0]
 	batch.indexBuffer = batch.indexBuffer[:0]
 	batch.curItem = atomic.LoadUint64(&batch.t.items)
@@ -123,22 +120,15 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 
 	// Encode the item.
 	batch.encBuffer.Reset()
+	if err := rlp.Encode(&batch.encBuffer, data); err != nil {
+		return err
+	}
+	encItem := batch.encBuffer.data
 	if batch.sb != nil {
-		// RLP-encode
-		if err := rlp.Encode(batch.sb, data); err != nil {
-			return err
-		}
-		// Snappy-encode to our buf
-		if err := batch.sb.WriteTo(&batch.encBuffer); err != nil {
-			return err
-		}
-	} else {
-		if err := rlp.Encode(&batch.encBuffer, data); err != nil {
-			return err
-		}
+		encItem = batch.sb.compress(encItem)
 	}
 
-	return batch.appendItem(batch.encBuffer.data)
+	return batch.appendItem(encItem)
 }
 
 // AppendRaw injects a binary blob at the end of the freezer table. The item number is a
@@ -149,13 +139,11 @@ func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 		return fmt.Errorf("appending unexpected item: want %d, have %d", batch.curItem, item)
 	}
 
-	data := blob
+	encItem := blob
 	if batch.sb != nil {
-		batch.encBuffer.Reset()
-		batch.sb.WriteDirectTo(&batch.encBuffer, blob)
-		data = batch.encBuffer.data
+		encItem = batch.sb.compress(blob)
 	}
-	return batch.appendItem(data)
+	return batch.appendItem(encItem)
 }
 
 func (batch *freezerTableBatch) appendItem(data []byte) error {

@@ -17,34 +17,17 @@
 package rawdb
 
 import (
-	"bytes"
-	"io"
-
 	"github.com/golang/snappy"
 )
 
-// BufferedSnapWriter writes snappy in block format, and can be reused. It is
+// snappyBuffer writes snappy in block format, and can be reused. It is
 // reset when WriteTo is called.
-type BufferedSnapWriter struct {
-	buf bytes.Buffer
+type snappyBuffer struct {
 	dst []byte
 }
 
-// Write appends the contents of p to the buffer.
-func (s *BufferedSnapWriter) Write(p []byte) (n int, err error) {
-	return s.buf.Write(p)
-}
-
-// WriteTo snappy-compresses the data, writes to the given writer and truncates
-// instantiated buffers.
-func (s *BufferedSnapWriter) WriteTo(w io.Writer) error {
-	defer s.buf.Reset()
-	return s.WriteDirectTo(w, s.buf.Bytes())
-}
-
-// WriteDirectTo snappy-compresses the data, writes to the given writer.
-// This method writes _only_ the input 'buf'.
-func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) error {
+// compress snappy-compresses the data.
+func (s *snappyBuffer) compress(data []byte) []byte {
 	// The snappy library does not care what the capacity of the buffer is,
 	// but only checks the length. If the length is too small, it will
 	// allocate a brand new buffer.
@@ -56,17 +39,9 @@ func (s *BufferedSnapWriter) WriteDirectTo(w io.Writer, data []byte) error {
 		}
 		s.dst = s.dst[:n]
 	}
-	s.dst = snappy.Encode(s.dst, data)
-	_, err := w.Write(s.dst)
-	s.dst = s.dst[:0]
-	return err
-}
 
-// Reset resets the buffer to be empty,
-// but it retains the underlying storage for use by future writes.
-func (s *BufferedSnapWriter) Reset() {
-	s.dst = s.dst[:0]
-	s.buf.Reset()
+	s.dst = snappy.Encode(s.dst, data)
+	return s.dst
 }
 
 type writeBuffer struct {
