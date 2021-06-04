@@ -163,6 +163,10 @@ func TestValidation(t *testing.T) {
 		// neither forks passed at neither nodes, they may mismatch, but we still connect for now.
 		{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: math.MaxUint64}, nil},
 
+		// Local is mainnet exactly on Petersburg, remote announces Byzantium + knowledge about Petersburg. Remote
+		// is simply out of sync, accept.
+		{7280000, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
+
 		// Local is mainnet Petersburg, remote announces Byzantium + knowledge about Petersburg. Remote
 		// is simply out of sync, accept.
 		{7987396, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},

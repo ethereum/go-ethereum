@@ -84,6 +84,7 @@ type freezer struct {
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 
 	quit      chan struct{}
+	wg        sync.WaitGroup
 	closeOnce sync.Once
 }
 
@@ -145,6 +146,8 @@ func (f *freezer) Close() error {
 	var errs []error
 	f.closeOnce.Do(func() {
 		close(f.quit)
+		// Wait for any background freezing to stop
+		f.wg.Wait()
 		for _, table := range f.tables {
 			if err := table.Close(); err != nil {
 				errs = append(errs, err)

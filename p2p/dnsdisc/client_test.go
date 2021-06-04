@@ -115,6 +115,21 @@ func TestIterator(t *testing.T) {
 	checkIterator(t, it, nodes)
 }
 
+func TestIteratorCloseWithoutNext(t *testing.T) {
+	tree1, url1 := makeTestTree("t1", nil, nil)
+	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
+	it, err := c.NewIterator(url1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	it.Close()
+	ok := it.Next()
+	if ok {
+		t.Fatal("Next returned true after Close")
+	}
+}
+
 // This test checks if closing randomIterator races.
 func TestIteratorClose(t *testing.T) {
 	nodes := testNodes(nodesSeed1, 500)

@@ -50,6 +50,8 @@ type (
 		Version    uint
 		From, To   Endpoint
 		Expiration uint64
+		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -62,6 +64,8 @@ type (
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -162,13 +166,11 @@ type Packet interface {
 	Kind() byte
 }
 
-func (req *Ping) Name() string   { return "PING/v4" }
-func (req *Ping) Kind() byte     { return PingPacket }
-func (req *Ping) ENRSeq() uint64 { return seqFromTail(req.Rest) }
+func (req *Ping) Name() string { return "PING/v4" }
+func (req *Ping) Kind() byte   { return PingPacket }
 
-func (req *Pong) Name() string   { return "PONG/v4" }
-func (req *Pong) Kind() byte     { return PongPacket }
-func (req *Pong) ENRSeq() uint64 { return seqFromTail(req.Rest) }
+func (req *Pong) Name() string { return "PONG/v4" }
+func (req *Pong) Kind() byte   { return PongPacket }
 
 func (req *Findnode) Name() string { return "FINDNODE/v4" }
 func (req *Findnode) Kind() byte   { return FindnodePacket }
@@ -185,15 +187,6 @@ func (req *ENRResponse) Kind() byte   { return ENRResponsePacket }
 // Expired checks whether the given UNIX time stamp is in the past.
 func Expired(ts uint64) bool {
 	return time.Unix(int64(ts), 0).Before(time.Now())
-}
-
-func seqFromTail(tail []rlp.RawValue) uint64 {
-	if len(tail) == 0 {
-		return 0
-	}
-	var seq uint64
-	rlp.DecodeBytes(tail[0], &seq)
-	return seq
 }
 
 // Encoder/decoder.

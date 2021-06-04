@@ -94,7 +94,6 @@ func (tx *AccessListTx) copy() TxData {
 }
 
 // accessors for innerTx.
-
 func (tx *AccessListTx) txType() byte           { return AccessListTxType }
 func (tx *AccessListTx) chainID() *big.Int      { return tx.ChainID }
 func (tx *AccessListTx) protected() bool        { return true }
@@ -102,6 +101,8 @@ func (tx *AccessListTx) accessList() AccessList { return tx.AccessList }
 func (tx *AccessListTx) data() []byte           { return tx.Data }
 func (tx *AccessListTx) gas() uint64            { return tx.Gas }
 func (tx *AccessListTx) gasPrice() *big.Int     { return tx.GasPrice }
+func (tx *AccessListTx) tip() *big.Int          { return tx.GasPrice }
+func (tx *AccessListTx) feeCap() *big.Int       { return tx.GasPrice }
 func (tx *AccessListTx) value() *big.Int        { return tx.Value }
 func (tx *AccessListTx) nonce() uint64          { return tx.Nonce }
 func (tx *AccessListTx) to() *common.Address    { return tx.To }

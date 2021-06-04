@@ -307,19 +307,19 @@ func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
 // DecodeRLP is a specialized decoder for hashOrNumber to decode the contents
 // into either a block hash or a block number.
 func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	origin, err := s.Raw()
-	if err == nil {
-		switch {
-		case size == 32:
-			err = rlp.DecodeBytes(origin, &hn.Hash)
-		case size <= 8:
-			err = rlp.DecodeBytes(origin, &hn.Number)
-		default:
-			err = fmt.Errorf("invalid input size %d for origin", size)
-		}
+	_, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case size == 32:
+		hn.Number = 0
+		return s.Decode(&hn.Hash)
+	case size <= 8:
+		hn.Hash = common.Hash{}
+		return s.Decode(&hn.Number)
+	default:
+		return fmt.Errorf("invalid input size %d for origin", size)
 	}
-	return err
 }
 
 // CodeData is the network response packet for a node data retrieval.

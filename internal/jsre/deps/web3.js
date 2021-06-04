@@ -3759,7 +3759,7 @@ var inputTransactionFormatter = function (options){
         options.to = inputAddressFormatter(options.to);
     }
 
-    ['gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
+    ['maxFeePerGas', 'maxPriorityFeePerGas', 'gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
         return options[key] !== undefined;
     }).forEach(function(key){
         options[key] = utils.fromDecimal(options[key]);
@@ -3783,6 +3783,12 @@ var outputTransactionFormatter = function (tx){
     tx.nonce = utils.toDecimal(tx.nonce);
     tx.gas = utils.toDecimal(tx.gas);
     tx.gasPrice = utils.toBigNumber(tx.gasPrice);
+    if(tx.maxFeePerGas !== undefined) {
+      tx.maxFeePerGas = utils.toBigNumber(tx.maxFeePerGas);
+    }
+    if(tx.maxPriorityFeePerGas !== undefined) {
+      tx.maxPriorityFeePerGas = utils.toBigNumber(tx.maxPriorityFeePerGas);
+    }
     tx.value = utils.toBigNumber(tx.value);
     return tx;
 };
@@ -3819,8 +3825,10 @@ var outputTransactionReceiptFormatter = function (receipt){
  * @returns {Object}
 */
 var outputBlockFormatter = function(block) {
-
     // transform to number
+    if (block.baseFeePerGas !== undefined) {
+      block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
+    }
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);

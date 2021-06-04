@@ -21,13 +21,10 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
-var (
-	typeCacheMutex sync.RWMutex
-	typeCache      = make(map[typekey]*typeinfo)
-)
-
+// typeinfo is an entry in the type cache.
 type typeinfo struct {
 	decoder    decoder
 	decoderErr error // error from makeDecoder
@@ -65,41 +62,76 @@ type decoder func(*Stream, reflect.Value) error
 
 type writer func(reflect.Value, *encbuf) error
 
+var theTC = newTypeCache()
+
+type typeCache struct {
+	cur atomic.Value
+
+	// This lock synchronizes writers.
+	mu   sync.Mutex
+	next map[typekey]*typeinfo
+}
+
+func newTypeCache() *typeCache {
+	c := new(typeCache)
+	c.cur.Store(make(map[typekey]*typeinfo))
+	return c
+}
+
 func cachedDecoder(typ reflect.Type) (decoder, error) {
-	info := cachedTypeInfo(typ, tags{})
+	info := theTC.info(typ)
 	return info.decoder, info.decoderErr
 }
 
 func cachedWriter(typ reflect.Type) (writer, error) {
-	info := cachedTypeInfo(typ, tags{})
+	info := theTC.info(typ)
 	return info.writer, info.writerErr
 }
 
-func cachedTypeInfo(typ reflect.Type, tags tags) *typeinfo {
-	typeCacheMutex.RLock()
-	info := typeCache[typekey{typ, tags}]
-	typeCacheMutex.RUnlock()
-	if info != nil {
+func (c *typeCache) info(typ reflect.Type) *typeinfo {
+	key := typekey{Type: typ}
+	if info := c.cur.Load().(map[typekey]*typeinfo)[key]; info != nil {
 		return info
 	}
-	// not in the cache, need to generate info for this type.
-	typeCacheMutex.Lock()
-	defer typeCacheMutex.Unlock()
-	return cachedTypeInfo1(typ, tags)
+
+	// Not in the cache, need to generate info for this type.
+	return c.generate(typ, tags{})
 }
 
-func cachedTypeInfo1(typ reflect.Type, tags tags) *typeinfo {
-	key := typekey{typ, tags}
-	info := typeCache[key]
-	if info != nil {
-		// another goroutine got the write lock first
+func (c *typeCache) generate(typ reflect.Type, tags tags) *typeinfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cur := c.cur.Load().(map[typekey]*typeinfo)
+	if info := cur[typekey{typ, tags}]; info != nil {
 		return info
 	}
-	// put a dummy value into the cache before generating.
-	// if the generator tries to lookup itself, it will get
+
+	// Copy cur to next.
+	c.next = make(map[typekey]*typeinfo, len(cur)+1)
+	for k, v := range cur {
+		c.next[k] = v
+	}
+
+	// Generate.
+	info := c.infoWhileGenerating(typ, tags)
+
+	// next -> cur
+	c.cur.Store(c.next)
+	c.next = nil
+	return info
+}
+
+func (c *typeCache) infoWhileGenerating(typ reflect.Type, tags tags) *typeinfo {
+	key := typekey{typ, tags}
+	if info := c.next[key]; info != nil {
+		return info
+	}
+	// Put a dummy value into the cache before generating.
+	// If the generator tries to lookup itself, it will get
 	// the dummy value and won't call itself recursively.
-	info = new(typeinfo)
-	typeCache[key] = info
+	info := new(typeinfo)
+	c.next[key] = info
 	info.generate(typ, tags)
 	return info
 }
@@ -133,7 +165,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			} else if anyOptional {
 				return nil, fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
 			}
-			info := cachedTypeInfo1(f.Type, tags)
+			info := theTC.infoWhileGenerating(f.Type, tags)
 			fields = append(fields, field{i, info, tags.optional})
 		}
 	}

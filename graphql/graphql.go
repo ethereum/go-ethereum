@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -862,7 +861,7 @@ func (c *CallResult) Status() Long {
 }
 
 func (b *Block) Call(ctx context.Context, args struct {
-	Data ethapi.CallArgs
+	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	if b.numberOrHash == nil {
 		_, err := b.resolve(ctx)
@@ -870,7 +869,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 			return nil, err
 		}
 	}
-	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, vm.Config{}, 5*time.Second, b.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, 5*time.Second, b.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -887,7 +886,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 }
 
 func (b *Block) EstimateGas(ctx context.Context, args struct {
-	Data ethapi.CallArgs
+	Data ethapi.TransactionArgs
 }) (Long, error) {
 	if b.numberOrHash == nil {
 		_, err := b.resolveHeader(ctx)
@@ -937,10 +936,10 @@ func (p *Pending) Account(ctx context.Context, args struct {
 }
 
 func (p *Pending) Call(ctx context.Context, args struct {
-	Data ethapi.CallArgs
+	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, vm.Config{}, 5*time.Second, p.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, 5*time.Second, p.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -957,7 +956,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 }
 
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
-	Data ethapi.CallArgs
+	Data ethapi.TransactionArgs
 }) (Long, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	gas, err := ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
@@ -1107,8 +1106,22 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 }
 
 func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
-	price, err := r.backend.SuggestPrice(ctx)
-	return hexutil.Big(*price), err
+	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
+		tipcap.Add(tipcap, head.BaseFee)
+	}
+	return (hexutil.Big)(*tipcap), nil
+}
+
+func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error) {
+	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	return (hexutil.Big)(*tipcap), nil
 }
 
 func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {

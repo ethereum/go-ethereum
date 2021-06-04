@@ -120,6 +120,9 @@ type CallMsg struct {
 	Value    *big.Int        // amount of wei sent along with the call
 	Data     []byte          // input data, usually an ABI-encoded contract method invocation
 
+	FeeCap *big.Int // EIP-1559 fee cap per gas.
+	Tip    *big.Int // EIP-1559 tip per gas.
+
 	AccessList types.AccessList // EIP-2930 access list.
 }
 

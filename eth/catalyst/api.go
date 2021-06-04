@@ -79,8 +79,10 @@ type blockExecutionEnv struct {
 
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	vmconfig := *env.chain.GetVMConfig()
+	snap := env.state.Snapshot()
 	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
 	if err != nil {
+		env.state.RevertToSnapshot(snap)
 		return err
 	}
 	env.txs = append(env.txs, tx)
@@ -125,7 +127,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		time.Sleep(wait)
 	}
 
-	pending, err := pool.Pending()
+	pending, err := pool.Pending(true)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +157,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 	var (
 		signer       = types.MakeSigner(bc.Config(), header.Number)
-		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending)
+		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending, nil)
 		transactions []*types.Transaction
 	)
 	for {

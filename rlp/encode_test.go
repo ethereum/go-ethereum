@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -129,6 +130,14 @@ var encTests = []encTest{
 	{
 		val:    big.NewInt(0).SetBytes(unhex("010000000000000000000000000000000000000000000000000000000000000000")),
 		output: "A1010000000000000000000000000000000000000000000000000000000000000000",
+	},
+	{
+		val:    veryBigInt,
+		output: "89FFFFFFFFFFFFFFFFFF",
+	},
+	{
+		val:    veryVeryBigInt,
+		output: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001",
 	},
 
 	// non-pointer big.Int
@@ -476,6 +485,57 @@ func BenchmarkEncodeBigInts(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out.Reset()
 		if err := Encode(out, ints); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEncodeConcurrentInterface(b *testing.B) {
+	type struct1 struct {
+		A string
+		B *big.Int
+		C [20]byte
+	}
+	value := []interface{}{
+		uint(999),
+		&struct1{A: "hello", B: big.NewInt(0xFFFFFFFF)},
+		[10]byte{1, 2, 3, 4, 5, 6},
+		[]string{"yeah", "yeah", "yeah"},
+	}
+
+	var wg sync.WaitGroup
+	for cpu := 0; cpu < runtime.NumCPU(); cpu++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var buffer bytes.Buffer
+			for i := 0; i < b.N; i++ {
+				buffer.Reset()
+				err := Encode(&buffer, value)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+type byteArrayStruct struct {
+	A [20]byte
+	B [32]byte
+	C [32]byte
+}
+
+func BenchmarkEncodeByteArrayStruct(b *testing.B) {
+	var out bytes.Buffer
+	var value byteArrayStruct
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		out.Reset()
+		if err := Encode(&out, &value); err != nil {
 			b.Fatal(err)
 		}
 	}
