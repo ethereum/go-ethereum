@@ -361,8 +361,8 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		if f.items != 7 {
-			f.Close()
 			t.Fatalf("expected %d items, got %d", 7, f.items)
 		}
 		if err := assertFileSize(fileToCrop, 15); err != nil {
@@ -407,9 +407,7 @@ func TestFreezerTruncate(t *testing.T) {
 		if f.headBytes != 15 {
 			t.Fatalf("expected %d bytes, got %d", 15, f.headBytes)
 		}
-
 	}
-
 }
 
 // TestFreezerRepairFirstFile tests a head file with the very first item only half-written.
@@ -602,6 +600,7 @@ func TestOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		t.Log(f.dumpIndexString(0, 100))
 
 		// It should allow writing item 6
