@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -60,7 +62,7 @@ func TestSimulatedBackend(t *testing.T) {
 	// generate a transaction and confirm you can retrieve it
 	code := `6060604052600a8060106000396000f360606040526008565b00`
 	var gas uint64 = 3000000
-	tx := types.NewContractCreation(0, big.NewInt(0), gas, big.NewInt(1), common.FromHex(code))
+	tx := types.NewContractCreation(0, big.NewInt(0), gas, big.NewInt(params.InitialBaseFee), common.FromHex(code))
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, key)
 
 	err = sim.SendTransaction(context.Background(), tx)
@@ -89,7 +91,6 @@ func TestSimulatedBackend(t *testing.T) {
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-//  the following is based on this contract:
 //  contract T {
 //  	event received(address sender, uint amount, bytes memo);
 //  	event receivedAddr(address sender);
@@ -110,14 +111,14 @@ var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
+			testAddr: {Balance: big.NewInt(100000000000000)},
 		}, 10000000,
 	)
 }
 
 func TestNewSimulatedBackend(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := big.NewInt(10000000000)
+	expectedBal := big.NewInt(100000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
@@ -157,7 +158,7 @@ func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	// Create tx and send
-	tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -178,7 +179,7 @@ func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
 		t.Errorf("adjusted time not equal to a minute. prev: %v, new: %v", prevTime, newTime)
 	}
 	// Put a transaction after adjusting time
-	tx2 := types.NewTransaction(1, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx2 := types.NewTransaction(1, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx2, err := types.SignTx(tx2, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -193,7 +194,7 @@ func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
 
 func TestSimulatedBackend_BalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := big.NewInt(10000000000)
+	expectedBal := big.NewInt(100000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -281,7 +282,7 @@ func TestSimulatedBackend_NonceAt(t *testing.T) {
 	}
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(nonce, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(nonce, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -322,7 +323,7 @@ func TestSimulatedBackend_SendTransaction(t *testing.T) {
 	bgCtx := context.Background()
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -350,14 +351,14 @@ func TestSimulatedBackend_TransactionByHash(t *testing.T) {
 
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
+			testAddr: {Balance: big.NewInt(21000000001000)},
 		}, 10000000,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -428,69 +429,47 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 		expectData  interface{}
 	}{
 		{"plain transfer(valid)", ethereum.CallMsg{
-			From:     addr,
-			To:       &addr,
-			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    big.NewInt(1),
-			Data:     nil,
+			To:    &addr,
+			Value: big.NewInt(1),
 		}, params.TxGas, nil, nil},
 
 		{"plain transfer(invalid)", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    big.NewInt(1),
-			Data:     nil,
+			To:    &contractAddr,
+			Value: big.NewInt(1),
 		}, 0, errors.New("execution reverted"), nil},
 
 		{"Revert", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    nil,
-			Data:     common.Hex2Bytes("d8b98391"),
+			To:   &contractAddr,
+			Data: common.Hex2Bytes("d8b98391"),
 		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
 		{"PureRevert", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    nil,
-			Data:     common.Hex2Bytes("aa8b1d30"),
+			To:   &contractAddr,
+			Gas:  0,
+			Data: common.Hex2Bytes("aa8b1d30"),
 		}, 0, errors.New("execution reverted"), nil},
 
 		{"OOG", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      100000,
-			GasPrice: big.NewInt(0),
-			Value:    nil,
-			Data:     common.Hex2Bytes("50f6fe34"),
+			To:   &contractAddr,
+			Gas:  100000,
+			Data: common.Hex2Bytes("50f6fe34"),
 		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
 
 		{"Assert", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      100000,
-			GasPrice: big.NewInt(0),
-			Value:    nil,
-			Data:     common.Hex2Bytes("b9b046f9"),
+			To:   &contractAddr,
+			Gas:  100000,
+			Data: common.Hex2Bytes("b9b046f9"),
 		}, 0, errors.New("invalid opcode: opcode 0xfe not defined"), nil},
 
 		{"Valid", ethereum.CallMsg{
-			From:     addr,
-			To:       &contractAddr,
-			Gas:      100000,
-			GasPrice: big.NewInt(0),
-			Value:    nil,
-			Data:     common.Hex2Bytes("e09fface"),
+			To:   &contractAddr,
+			Gas:  100000,
+			Data: common.Hex2Bytes("e09fface"),
 		}, 21275, nil, nil},
 	}
 	for _, c := range cases {
+		c.message.GasPrice = big.NewInt(params.InitialBaseFee)
+		c.message.From = addr
 		got, err := sim.EstimateGas(context.Background(), c.message)
 		if c.expectError != nil {
 			if err == nil {
@@ -515,68 +494,51 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 }
 
 func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
-	key, _ := crypto.GenerateKey()
+	key, _ := crypto.HexToECDSA("1111111111111111111111111111111111111111111111111111111111111111")
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
 	defer sim.Close()
 
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
 	recipient := common.HexToAddress("deadbeef")
 	var cases = []struct {
 		name        string
-		message     ethereum.CallMsg
+		gasPrice    int64
+		value       int64
 		expect      uint64
-		expectError error
+		expectError string
 	}{
-		{"EstimateWithoutPrice", ethereum.CallMsg{
-			From:     addr,
-			To:       &recipient,
-			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    big.NewInt(1000),
-			Data:     nil,
-		}, 21000, nil},
-
-		{"EstimateWithPrice", ethereum.CallMsg{
-			From:     addr,
-			To:       &recipient,
-			Gas:      0,
-			GasPrice: big.NewInt(1000),
-			Value:    big.NewInt(1000),
-			Data:     nil,
-		}, 21000, nil},
-
-		{"EstimateWithVeryHighPrice", ethereum.CallMsg{
-			From:     addr,
-			To:       &recipient,
-			Gas:      0,
-			GasPrice: big.NewInt(1e14), // gascost = 2.1ether
-			Value:    big.NewInt(1e17), // the remaining balance for fee is 2.1ether
-			Data:     nil,
-		}, 21000, nil},
-
-		{"EstimateWithSuperhighPrice", ethereum.CallMsg{
-			From:     addr,
-			To:       &recipient,
-			Gas:      0,
-			GasPrice: big.NewInt(2e14), // gascost = 4.2ether
-			Value:    big.NewInt(1000),
-			Data:     nil,
-		}, 21000, errors.New("gas required exceeds allowance (10999)")}, // 10999=(2.2ether-1000wei)/(2e14)
+		{"EstimateWithoutPrice", 0, 1000, 0, "fee cap less than block base fee: address 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A, feeCap: 0 baseFee: 875000000"},
+		{"EstimateWithPrice", 875000000, 1000, 21000, ""},
+		// gascost = 2.1ether
+		// the remaining balance for fee is 2.1ether
+		{"EstimateWithVeryHighPrice", 1e14, 1e17, 21000, ""},
+		// gascost = 4.2ether
+		// 10999=(2.2ether-1000wei)/(2e14)
+		{"EstimateWithSuperhighPrice", 2e14, 1000, 0, "gas required exceeds allowance (10999)"},
 	}
-	for _, c := range cases {
-		got, err := sim.EstimateGas(context.Background(), c.message)
-		if c.expectError != nil {
-			if err == nil {
-				t.Fatalf("Expect error, got nil")
-			}
-			if c.expectError.Error() != err.Error() {
-				t.Fatalf("Expect error, want %v, got %v", c.expectError, err)
-			}
-			continue
+	for i, c := range cases {
+		message := ethereum.CallMsg{
+			From:       addr,
+			To:         &recipient,
+			GasPrice:   big.NewInt(c.gasPrice),
+			Value:      big.NewInt(c.value),
+			FeeCap:     big.NewInt(c.gasPrice),
+			Tip:        big.NewInt(c.gasPrice),
+			AccessList: nil,
 		}
-		if got != c.expect {
-			t.Fatalf("Gas estimation mismatch, want %d, got %d", c.expect, got)
+		got, err := sim.EstimateGas(context.Background(), message)
+		switch {
+		case c.expectError != "" && err == nil:
+			t.Errorf("test %d-'%v': expected error, got none", i, c.name)
+		case err != nil && c.expectError == "":
+			t.Errorf("test %d-'%v': expected no error, got \"%v\"", i, c.name, err)
+		case c.expectError != "" && c.expectError != err.Error():
+			t.Errorf("test %d-'%v': expect error, want \n%v\n got \n%v", i, c.name, c.expectError, err.Error())
+		case got != c.expect:
+			t.Errorf("test %d-'%v': gas estimation mismatch, want %d, got \"%d\"", i, c.name, c.expect, got)
 		}
 	}
 }
@@ -670,7 +632,7 @@ func TestSimulatedBackend_TransactionCount(t *testing.T) {
 	}
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -725,7 +687,7 @@ func TestSimulatedBackend_TransactionInBlock(t *testing.T) {
 	}
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -780,7 +742,7 @@ func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 	}
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -803,7 +765,7 @@ func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 	}
 
 	// make a new transaction with a nonce of 1
-	tx = types.NewTransaction(uint64(1), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx = types.NewTransaction(uint64(1), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -832,7 +794,7 @@ func TestSimulatedBackend_TransactionReceipt(t *testing.T) {
 	bgCtx := context.Background()
 
 	// create a signed transaction to send
-	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	if err != nil {
 		t.Errorf("could not sign tx: %v", err)
@@ -866,7 +828,7 @@ func TestSimulatedBackend_SuggestGasPrice(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get gas price: %v", err)
 	}
-	if gasPrice.Uint64() != uint64(1) {
+	if gasPrice.Uint64() != uint64(params.InitialBaseFee) {
 		t.Errorf("gas price was not expected value of 1. actual: %v", gasPrice.Uint64())
 	}
 }
@@ -878,32 +840,32 @@ func TestSimulatedBackend_PendingCodeAt(t *testing.T) {
 	bgCtx := context.Background()
 	code, err := sim.CodeAt(bgCtx, testAddr, nil)
 	if err != nil {
-		t.Errorf("could not get code at test addr: %v", err)
+		t.Fatalf("could not get code at test addr: %v", err)
 	}
 	if len(code) != 0 {
-		t.Errorf("got code for account that does not have contract code")
+		t.Fatalf("got code for account that does not have contract code")
 	}
 
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		t.Errorf("could not get code at test addr: %v", err)
+		t.Fatalf("could not get code at test addr: %v", err)
 	}
 	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
 	contractAddr, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(abiBin), sim)
 	if err != nil {
-		t.Errorf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
+		t.Fatalf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
 	}
 
 	code, err = sim.PendingCodeAt(bgCtx, contractAddr)
 	if err != nil {
-		t.Errorf("could not get code at test addr: %v", err)
+		t.Fatalf("could not get code at test addr: %v", err)
 	}
 	if len(code) == 0 {
-		t.Errorf("did not get code for account that has contract code")
+		t.Fatalf("did not get code for account that has contract code")
 	}
 	// ensure code received equals code deployed
 	if !bytes.Equal(code, common.FromHex(deployedCode)) {
-		t.Errorf("code received did not match expected deployed code:\n expected %v\n actual %v", common.FromHex(deployedCode), code)
+		t.Fatalf("code received did not match expected deployed code:\n expected %v\n actual %v", common.FromHex(deployedCode), code)
 	}
 }
 
@@ -922,25 +884,25 @@ func TestSimulatedBackend_CodeAt(t *testing.T) {
 
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		t.Errorf("could not get code at test addr: %v", err)
+		t.Fatalf("could not get code at test addr: %v", err)
 	}
 	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
 	contractAddr, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(abiBin), sim)
 	if err != nil {
-		t.Errorf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
+		t.Fatalf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
 	}
 
 	sim.Commit()
 	code, err = sim.CodeAt(bgCtx, contractAddr, nil)
 	if err != nil {
-		t.Errorf("could not get code at test addr: %v", err)
+		t.Fatalf("could not get code at test addr: %v", err)
 	}
 	if len(code) == 0 {
-		t.Errorf("did not get code for account that has contract code")
+		t.Fatalf("did not get code for account that has contract code")
 	}
 	// ensure code received equals code deployed
 	if !bytes.Equal(code, common.FromHex(deployedCode)) {
-		t.Errorf("code received did not match expected deployed code:\n expected %v\n actual %v", common.FromHex(deployedCode), code)
+		t.Fatalf("code received did not match expected deployed code:\n expected %v\n actual %v", common.FromHex(deployedCode), code)
 	}
 }
 

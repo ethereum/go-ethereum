@@ -425,10 +425,12 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
 }
 
-// SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
-// chain doesn't have miners, we just return a gas price of 875000000 (initial basefee) for any call.
+// SuggestGasPrice implements ContractTransactor.SuggestGasPrice.
 func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(params.InitialBaseFee), nil
+	if baseFee := b.pendingBlock.BaseFee(); baseFee != nil {
+		return baseFee, nil
+	}
+	return big.NewInt(1), nil
 }
 
 // EstimateGas executes the requested code against the currently pending block/state and
@@ -437,6 +439,40 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Fix up the callmsg
+	baseFee := b.pendingBlock.BaseFee()
+	var (
+		gasPrice *big.Int
+		feeCap   *big.Int
+		tip      *big.Int
+	)
+	if baseFee == nil {
+		// If there's no basefee, then it must be a non-1559 execution
+		gasPrice = new(big.Int)
+		if call.GasPrice != nil {
+			gasPrice = call.GasPrice
+		}
+		feeCap, tip = gasPrice, gasPrice
+	} else {
+		// A basefee is provided, necessitating 1559-type execution
+		if call.GasPrice != nil {
+			gasPrice = call.GasPrice
+			feeCap, tip = gasPrice, gasPrice
+		} else {
+			feeCap = new(big.Int)
+			if call.FeeCap != nil {
+				feeCap = call.FeeCap
+			}
+			tip = new(big.Int)
+			if call.Tip != nil {
+				tip = call.Tip
+			}
+			gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
+		}
+	}
+	call.FeeCap = feeCap
+	call.Tip = tip
+	call.GasPrice = gasPrice
 	// Determine the lowest and highest possible gas limits to binary search in between
 	var (
 		lo  uint64 = params.TxGas - 1
