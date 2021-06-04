@@ -17,6 +17,7 @@
 package clique
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -177,12 +178,21 @@ func (api *API) Status() (*status, error) {
 	}, nil
 }
 
-func (api *API) GetSignerForBlock(number *rpc.BlockNumber) (common.Address, error) {
+// GetSignerForBlock returns the signer for a specific clique block.
+func (api *API) GetSignerForBlock(blockNrOrHash *rpc.BlockNumberOrHash) (common.Address, error) {
 	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
+	if blockNrOrHash == nil {
 		header = api.chain.CurrentHeader()
-	} else {
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		header = api.chain.GetHeaderByHash(hash)
+	} else if number, ok := blockNrOrHash.Number(); ok {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+	if header == nil {
+		return common.Address{}, errors.New("could not find header")
+	}
+	if len(header.Extra)-extraSeal < 0 {
+		return common.Address{}, errors.New("invalid extra data in header")
 	}
 	signature := header.Extra[len(header.Extra)-extraSeal:]
 	// Recover the public key and the Ethereum address
