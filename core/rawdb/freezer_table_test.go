@@ -37,15 +37,6 @@ func init() {
 	rand.Seed(time.Now().Unix())
 }
 
-// Gets a chunk of data, filled with 'b'
-func getChunk(size int, b int) []byte {
-	data := make([]byte, size)
-	for i := range data {
-		data[i] = byte(b)
-	}
-	return data
-}
-
 // TestFreezerBasics test initializing a freezertable from scratch, writing to the table,
 // and reading it back.
 func TestFreezerBasics(t *testing.T) {
@@ -264,6 +255,7 @@ func TestSnappyDetection(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("snappytest-%d", rand.Uint64())
+
 	// Open with snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -274,6 +266,7 @@ func TestSnappyDetection(t *testing.T) {
 		writeChunks(t, f, 255, 15)
 		f.Close()
 	}
+
 	// Open without snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, false)
@@ -298,8 +291,8 @@ func TestSnappyDetection(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	}
-
 }
+
 func assertFileSize(f string, size int64) error {
 	stat, err := os.Stat(f)
 	if err != nil {
@@ -309,7 +302,6 @@ func assertFileSize(f string, size int64) error {
 		return fmt.Errorf("error, expected size %d, got %d", size, stat.Size())
 	}
 	return nil
-
 }
 
 // TestFreezerRepairDanglingIndex checks that if the index has more entries than there are data,
@@ -528,7 +520,7 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 	}
 }
 
-func TestOffset(t *testing.T) {
+func TestFreezerOffset(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("offset-%d", rand.Uint64())
@@ -595,7 +587,7 @@ func TestOffset(t *testing.T) {
 	}
 
 	// Now open again
-	checkPresent := func(numDeleted uint64) {
+	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
@@ -603,38 +595,25 @@ func TestOffset(t *testing.T) {
 		defer f.Close()
 		t.Log(f.dumpIndexString(0, 100))
 
-		// It should allow writing item 6
+		// It should allow writing item 6.
 		batch := f.newBatch()
-		require.NoError(t, batch.AppendRaw(numDeleted+2, getChunk(20, 0x99)))
+		require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x99)))
 		require.NoError(t, batch.Commit())
 
-		// It should be fine to fetch 4,5,6
-		if got, err := f.Retrieve(numDeleted); err != nil {
-			t.Fatal(err)
-		} else if exp := getChunk(20, 0xbb); !bytes.Equal(got, exp) {
-			t.Fatalf("expected %x got %x", exp, got)
-		}
-		if got, err := f.Retrieve(numDeleted + 1); err != nil {
-			t.Fatal(err)
-		} else if exp := getChunk(20, 0xaa); !bytes.Equal(got, exp) {
-			t.Fatalf("expected %x got %x", exp, got)
-		}
-		if got, err := f.Retrieve(numDeleted + 2); err != nil {
-			t.Fatal("Retrieve error:", err)
-		} else if exp := getChunk(20, 0x99); !bytes.Equal(got, exp) {
-			t.Fatalf("expected %x got %x", exp, got)
-		}
-
-		// It should error at 0, 1,2,3
-		for i := numDeleted - 1; i > numDeleted-10; i-- {
-			if _, err := f.Retrieve(i); err == nil {
-				t.Fatal("expected err")
-			}
-		}
+		checkRetrieveError(t, f, map[uint64]error{
+			0: errOutOfBounds,
+			1: errOutOfBounds,
+			2: errOutOfBounds,
+			3: errOutOfBounds,
+		})
+		checkRetrieve(t, f, map[uint64][]byte{
+			4: getChunk(20, 0xbb),
+			5: getChunk(20, 0xaa),
+			6: getChunk(20, 0x99),
+		})
 	}
-	checkPresent(4)
 
-	// Now, let's pretend we have deleted 1M items
+	// Edit the index again, with a much larger initial offset of 1M.
 	{
 		// Read the index file
 		p := filepath.Join(os.TempDir(), fmt.Sprintf("%v.ridx", fname))
@@ -660,7 +639,65 @@ func TestOffset(t *testing.T) {
 		indexFile.WriteAt(indexBuf, 0)
 		indexFile.Close()
 	}
-	checkPresent(1000000)
+
+	// Check that existing items have been moved to index 1M.
+	{
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		t.Log(f.dumpIndexString(0, 100))
+
+		checkRetrieveError(t, f, map[uint64]error{
+			0:      errOutOfBounds,
+			1:      errOutOfBounds,
+			2:      errOutOfBounds,
+			3:      errOutOfBounds,
+			999999: errOutOfBounds,
+		})
+		checkRetrieve(t, f, map[uint64][]byte{
+			1000000: getChunk(20, 0xbb),
+			1000001: getChunk(20, 0xaa),
+		})
+	}
+}
+
+func checkRetrieve(t *testing.T, f *freezerTable, items map[uint64][]byte) {
+	t.Helper()
+
+	for item, wantBytes := range items {
+		value, err := f.Retrieve(item)
+		if err != nil {
+			t.Fatalf("can't get expected item %d: %v", item, err)
+		}
+		if !bytes.Equal(value, wantBytes) {
+			t.Fatalf("item %d has wrong value %x (want %x)", item, value, wantBytes)
+		}
+	}
+}
+
+func checkRetrieveError(t *testing.T, f *freezerTable, items map[uint64]error) {
+	t.Helper()
+
+	for item, wantError := range items {
+		value, err := f.Retrieve(item)
+		if err == nil {
+			t.Fatalf("unexpected value %x for item %d, want error %v", item, value, wantError)
+		}
+		if err != wantError {
+			t.Fatalf("wrong error for item %d: %v", item, err)
+		}
+	}
+}
+
+// Gets a chunk of data, filled with 'b'
+func getChunk(size int, b int) []byte {
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(b)
+	}
+	return data
 }
 
 // TODO (?)
