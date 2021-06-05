@@ -110,7 +110,9 @@ func (h *hasher) hashShortNodeChildren(n *shortNode) (collapsed, cached *shortNo
 	collapsed.Key = hexToCompact(n.Key)
 	// Unless the child is a valuenode or hashnode, hash it
 	switch n.Val.(type) {
-	case *fullNode, *shortNode:
+	case *shortNode:
+		panic("Continuous shortNode")
+	case *fullNode:
 		collapsed.Val, cached.Val = h.hash(n.Val, false)
 	}
 	return collapsed, cached
