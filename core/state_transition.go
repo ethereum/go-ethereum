@@ -220,6 +220,11 @@ func (st *StateTransition) preCheck() error {
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
 	}
+	// Make sure the sender is an EOA
+	if codesize := st.state.GetCodeSize(st.msg.From()); codesize != 0 {
+		return fmt.Errorf("%w: address %v, codesize: %d", ErrSenderNoEOA,
+			st.msg.From().Hex(), codesize)
+	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
