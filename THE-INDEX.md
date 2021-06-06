@@ -98,13 +98,22 @@
     ```
     mkdir /data/the-index
     export THEINDEX_PATH=/data/the-index/
-    ./build/bin/geth --exitwhensynced --datadir /data/ --cache=4096 --maxpeers=50 --syncmode=full
+    nohup ./build/bin/geth --exitwhensynced --datadir /data/ --cache=4096 --maxpeers=50 --syncmode=full &
+    tail -f nohup.out
     mv /data/the-index/* /mnt/efs/fs1/the-index/
+    ```
+
+    Check sync status:
+
+    ```
+    ./build/bin/geth attach --datadir /data/
+    eth.syncing
     ```
 
     Live sync (close to the tip):
 
     ```
     export THEINDEX_PATH=/mnt/efs/fs1/the-index/
-    ./build/bin/geth --datadir /data/ --cache=4096 --maxpeers=50 --syncmode=full
+    nohup ./build/bin/geth --datadir /data/ --cache=4096 --maxpeers=50 --syncmode=full &
+    tail -f nohup.out
     ```
