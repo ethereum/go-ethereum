@@ -220,8 +220,8 @@ Stops writing the Go runtime trace.
 ### debug_traceBlock
 
 The `traceBlock` method will return a full stack trace of all invoked opcodes of all transaction
-that were included included in this block. **Note**, the parent of this block must be present or
-it will fail.
+that were included in this block. **Note**, the parent of this block must be present or it will
+fail.
 
 | Client  | Method invocation                                                        |
 |:--------|--------------------------------------------------------------------------|
