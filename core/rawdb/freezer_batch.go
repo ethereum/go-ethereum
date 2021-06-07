@@ -203,7 +203,7 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
-	newHeadBytes := batch.t.headBytes + int64(len(batch.dataBuffer))
+	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
 	// Write index.
@@ -211,7 +211,14 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
+	indexSize := int64(len(batch.indexBuffer))
 	batch.indexBuffer = batch.indexBuffer[:0]
-	batch.t.headBytes = newHeadBytes
+
+	// Update headBytes of table.
+	batch.t.headBytes += dataSize
+
+	// Update metrics.
+	batch.t.sizeGauge.Inc(dataSize + indexSize)
+	batch.t.writeMeter.Mark(dataSize + indexSize)
 	return nil
 }
