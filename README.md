@@ -1,4 +1,4 @@
-## Go Ethereum
+## Go Ethereum (Ethane)
 
 Official Golang implementation of the Ethereum protocol.
 
