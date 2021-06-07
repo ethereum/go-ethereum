@@ -31,6 +31,7 @@
 3. Mount the NVMe disk:
 
     ```
+    lbldsk //find out what is the device name either nvme0n1 or nvme1n1 
     sudo mkfs -t xfs /dev/nvme0n1
     sudo mkdir /data
     sudo mount /dev/nvme0n1 /data
@@ -117,3 +118,16 @@
     nohup ./build/bin/geth --datadir /data/ --cache=4096 --maxpeers=50 --syncmode=full &
     tail -f nohup.out
     ```
+8. Sync data folders between two different machines
+    
+    copy the /data/the-index folder between source(`source-machine.compute.amazonaws.com`) machine and target machine  
+    ```
+    scp -i secret-key.pem -rp  ubuntu@source-machine.compute.amazonaws.com:/data/the-index /data/the-index/
+    ```
+
+    copy the /data/geth folder between source(`source-machine.compute.amazonaws.com`) machine and target machine  
+    ```
+    scp -i secret-key.pem -rp  ubuntu@source-machine.compute.amazonaws.com:/data/geth /data/geth
+    ```
+
+  
