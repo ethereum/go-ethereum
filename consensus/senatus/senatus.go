@@ -50,8 +50,8 @@ const (
 
 	validatorBytesLength = common.AddressLength
 	wiggleTime           = 500 * time.Millisecond // Random delay (per validator) to allow concurrent validators
-
-	maxValidatorNum = 101 // Max validators allowed to seal.
+	fixedWiggleTime      = 200 * time.Millisecond // Fixed delay time for out-of-turn validator
+	maxValidatorNum      = 101                    // Max validators allowed to seal.
 )
 
 var (
@@ -713,7 +713,7 @@ func (s *Senatus) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTime
+		wiggle := time.Duration(len(snap.Validators)/2+1)*wiggleTime + fixedWiggleTime
 		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Trace("out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
