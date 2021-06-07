@@ -78,7 +78,8 @@ type freezer struct {
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	// This lock synchronizes writers and the truncate operation.
-	writeLock sync.Mutex
+	writeLock  sync.Mutex
+	writeBatch *freezerBatch
 
 	readonly     bool
 	tables       map[string]*freezerTable // Data tables for storing everything
@@ -136,6 +137,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		freezer.tables[name] = table
 	}
 
+	// Truncate all tables to common length.
 	if err := freezer.repair(); err != nil {
 		for _, table := range freezer.tables {
 			table.Close()
@@ -143,6 +145,10 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		lock.Release()
 		return nil, err
 	}
+
+	// Create the write batch.
+	freezer.writeBatch = newFreezerBatch(freezer)
+
 	log.Info("Opened ancient database", "database", datadir, "readonly", readonly)
 	return freezer, nil
 }
@@ -211,12 +217,12 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, erro
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	batch := newFreezerBatch(f)
-	if err := fn(batch); err != nil {
+	f.writeBatch.reset()
+	if err := fn(f.writeBatch); err != nil {
 		// TODO: truncate here?
 		return 0, err
 	}
-	return batch.commit()
+	return f.writeBatch.commit()
 }
 
 // TruncateAncients discards any recent data above the provided threshold number.

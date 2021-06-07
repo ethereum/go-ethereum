@@ -51,6 +51,13 @@ func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error
 	return batch.tables[kind].AppendRaw(num, item)
 }
 
+// reset initializes the batch.
+func (batch *freezerBatch) reset() {
+	for _, tb := range batch.tables {
+		tb.Reset()
+	}
+}
+
 func (batch *freezerBatch) commit() (int, error) {
 	// Check that count agrees on all batches.
 	item := uint64(math.MaxUint64)
