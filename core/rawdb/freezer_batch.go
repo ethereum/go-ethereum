@@ -64,7 +64,7 @@ func (batch *freezerBatch) commit() (int, error) {
 	}
 
 	// Commit all table batches.
-	writeSize := 0
+	writeSize := int64(0)
 	for _, tb := range batch.tables {
 		if err := tb.Commit(); err != nil {
 			return 0, err
@@ -74,7 +74,7 @@ func (batch *freezerBatch) commit() (int, error) {
 
 	// Bump frozen block index.
 	atomic.AddUint64(&batch.freezer.frozen, uint64(count))
-	return writeSize, nil
+	return int(writeSize), nil
 }
 
 const (
@@ -89,10 +89,8 @@ type freezerTableBatch struct {
 	encBuffer   writeBuffer
 	dataBuffer  []byte
 	indexBuffer []byte
-
-	curItem    uint64
-	headBytes  uint32 // number of bytes in head file.
-	totalBytes int    // counts written bytes since reset
+	curItem     uint64 // expected index of next append
+	totalBytes  int64  // counts written bytes since reset
 }
 
 // newBatch creates a new batch for the freezer table.
@@ -110,7 +108,6 @@ func (batch *freezerTableBatch) Reset() {
 	batch.dataBuffer = batch.dataBuffer[:0]
 	batch.indexBuffer = batch.indexBuffer[:0]
 	batch.curItem = atomic.LoadUint64(&batch.t.items)
-	batch.headBytes = batch.t.headBytes
 	batch.totalBytes = 0
 }
 
@@ -131,7 +128,6 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if batch.sb != nil {
 		encItem = batch.sb.compress(encItem)
 	}
-
 	return batch.appendItem(encItem)
 }
 
@@ -151,10 +147,10 @@ func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 }
 
 func (batch *freezerTableBatch) appendItem(data []byte) error {
-	itemSize := uint32(len(data))
-
 	// Check if item fits into current data file.
-	if batch.headBytes+itemSize > batch.t.maxFileSize {
+	itemSize := int64(len(data))
+	itemOffset := batch.t.headBytes + int64(len(batch.dataBuffer))
+	if itemOffset+itemSize > int64(batch.t.maxFileSize) {
 		// It doesn't fit, go to next file first.
 		if err := batch.commit(); err != nil {
 			return err
@@ -162,16 +158,15 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 		if err := batch.t.advanceHead(); err != nil {
 			return err
 		}
-		batch.headBytes = 0
+		itemOffset = 0
 	}
 
 	// Put data to buffer.
 	batch.dataBuffer = append(batch.dataBuffer, data...)
-	batch.totalBytes += len(data)
+	batch.totalBytes += itemSize
 
 	// Put index entry to buffer.
-	batch.headBytes += itemSize
-	entry := indexEntry{filenum: batch.t.headId, offset: batch.headBytes}
+	entry := indexEntry{filenum: batch.t.headId, offset: uint32(itemOffset + itemSize)}
 	batch.indexBuffer = entry.append(batch.indexBuffer)
 	batch.curItem++
 
@@ -184,9 +179,6 @@ func (batch *freezerTableBatch) Commit() error {
 		return err
 	}
 	atomic.StoreUint64(&batch.t.items, batch.curItem)
-
-	// TODO: update the head bytes of the table
-	batch.t.headBytes = batch.headBytes
 	return nil
 }
 
@@ -204,6 +196,7 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
+	newHeadBytes := batch.t.headBytes + int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
 	// Write index.
@@ -212,5 +205,6 @@ func (batch *freezerTableBatch) commit() error {
 		return err
 	}
 	batch.indexBuffer = batch.indexBuffer[:0]
+	batch.t.headBytes = newHeadBytes
 	return nil
 }

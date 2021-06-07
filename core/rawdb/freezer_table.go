@@ -96,7 +96,7 @@ type freezerTable struct {
 	// to count how many historic items have gone missing.
 	itemOffset uint32 // Offset (number of discarded items)
 
-	headBytes  uint32        // Number of bytes written to the head file
+	headBytes  int64         // Number of bytes written to the head file
 	readMeter  metrics.Meter // Meter for measuring the effective amount of data read
 	writeMeter metrics.Meter // Meter for measuring the effective amount of data written
 	sizeGauge  metrics.Gauge // Gauge for tracking the combined size of all freezer tables
@@ -302,7 +302,7 @@ func (t *freezerTable) repair() error {
 	}
 	// Update the item and byte counters and return
 	t.items = uint64(t.itemOffset) + uint64(offsetsSize/indexEntrySize-1) // last indexEntry points to the end of the data file
-	t.headBytes = uint32(contentSize)
+	t.headBytes = contentSize
 	t.headId = lastIndex.filenum
 
 	// Close opened files and preopen all files
@@ -382,8 +382,8 @@ func (t *freezerTable) truncate(items uint64) error {
 		return err
 	}
 	// All data files truncated, set internal counters and return
+	t.headBytes = int64(expected.offset)
 	atomic.StoreUint64(&t.items, items)
-	atomic.StoreUint32(&t.headBytes, expected.offset)
 
 	// Retrieve the new size and update the total size counter
 	newSize, err := t.sizeNolock()
@@ -581,7 +581,7 @@ func (t *freezerTable) advanceHead() error {
 	t.openFile(t.headId, openFreezerFileForReadOnly)
 	// Swap out the current head
 	t.head = newHead
-	atomic.StoreUint32(&t.headBytes, 0)
+	t.headBytes = 0
 	atomic.StoreUint32(&t.headId, nextID)
 	return nil
 }
