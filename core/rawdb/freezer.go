@@ -77,6 +77,9 @@ type freezer struct {
 	frozen    uint64 // Number of blocks already frozen
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
+	// This lock synchronizes writers and the truncate operation.
+	writeLock sync.Mutex
+
 	readonly     bool
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
@@ -119,6 +122,8 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
 	}
+
+	// Create the tables.
 	for name, disableSnappy := range FreezerNoSnappy {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
 		if err != nil {
@@ -130,6 +135,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		}
 		freezer.tables[name] = table
 	}
+
 	if err := freezer.repair(); err != nil {
 		for _, table := range freezer.tables {
 			table.Close()
@@ -143,6 +149,9 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 
 // Close terminates the chain freezer, unmapping all the data files.
 func (f *freezer) Close() error {
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
 	var errs []error
 	f.closeOnce.Do(func() {
 		close(f.quit)
@@ -199,6 +208,9 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, erro
 	if f.readonly {
 		return 0, errReadOnly
 	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
 	batch := newFreezerBatch(f)
 	if err := fn(batch); err != nil {
 		// TODO: truncate here?
@@ -212,6 +224,9 @@ func (f *freezer) TruncateAncients(items uint64) error {
 	if f.readonly {
 		return errReadOnly
 	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
 	if atomic.LoadUint64(&f.frozen) <= items {
 		return nil
 	}
