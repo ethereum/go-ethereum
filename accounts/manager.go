@@ -93,6 +93,35 @@ func (am *Manager) Config() *Config {
 	return am.config
 }
 
+// AddBackends starts the tracking of additional backends for wallet updates.
+func (am *Manager) AddBackends(backends ...Backend) error {
+	// Tear down event loop to update channels
+	if err := am.Close(); err != nil {
+		return err
+	}
+
+	for _, backend := range backends {
+		am.wallets = merge(am.wallets, backend.Wallets()...)
+	}
+	// Subscribe to wallet notifications from all backends
+	am.updates = make(chan WalletEvent, 4*(len(backends)+len(am.backends)))
+
+	subs := make([]event.Subscription, len(backends))
+	for i, backend := range backends {
+		subs[i] = backend.Subscribe(am.updates)
+	}
+	am.updaters = append(am.updaters, subs...)
+
+	for _, backend := range backends {
+		kind := reflect.TypeOf(backend)
+		am.backends[kind] = append(am.backends[kind], backend)
+	}
+
+	// Restart event loop
+	go am.update()
+	return nil
+}
+
 // update is the wallet event loop listening for notifications from the backends
 // and updating the cache of wallets.
 func (am *Manager) update() {
