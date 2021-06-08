@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+const managerSubBufferSize = 50
+
 // Config contains the settings of the global account manager.
 //
 // TODO(rjl493456442, karalabe, holiman): Get rid of this when account management
@@ -57,7 +59,7 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 		wallets = merge(wallets, backend.Wallets()...)
 	}
 	// Subscribe to wallet notifications from all backends
-	updates := make(chan WalletEvent, 4*len(backends))
+	updates := make(chan WalletEvent, managerSubBufferSize)
 
 	subs := make([]event.Subscription, len(backends))
 	for i, backend := range backends {
@@ -103,8 +105,6 @@ func (am *Manager) AddBackends(backends ...Backend) error {
 	for _, backend := range backends {
 		am.wallets = merge(am.wallets, backend.Wallets()...)
 	}
-	// Subscribe to wallet notifications from all backends
-	am.updates = make(chan WalletEvent, 4*(len(backends)+len(am.backends)))
 
 	subs := make([]event.Subscription, len(backends))
 	for i, backend := range backends {
