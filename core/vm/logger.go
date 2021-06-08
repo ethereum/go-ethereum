@@ -135,6 +135,13 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
+func (l *StructLogger) Reset() {
+	l.storage = make(map[common.Address]Storage)
+	l.output = make([]byte, 0)
+	l.logs = l.logs[:0]
+	l.err = nil
+}
+
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
