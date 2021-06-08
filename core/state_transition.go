@@ -222,21 +222,21 @@ func (st *StateTransition) preCheck() error {
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		if l := st.gasFeeCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, gasFeeCap bit length: %d", ErrFeeCapVeryHigh,
+			return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 				st.msg.From().Hex(), l)
 		}
 		if l := st.gasTipCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, gasTipCap bit length: %d", ErrTipVeryHigh,
+			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
 				st.msg.From().Hex(), l)
 		}
 		if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
-			return fmt.Errorf("%w: address %v, gasTipCap: %s, gasFeeCap: %s", ErrTipAboveFeeCap,
+			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
 				st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
 		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-			return fmt.Errorf("%w: address %v, gasFeeCap: %s baseFee: %s", ErrFeeCapTooLow,
+			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 		}
 	}
