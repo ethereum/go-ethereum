@@ -67,7 +67,7 @@ type StructLog struct {
 	GasCost       uint64                      `json:"gasCost"`
 	Memory        []byte                      `json:"memory"`
 	MemorySize    int                         `json:"memSize"`
-	Stack         []*uint256.Int              `json:"stack"`
+	Stack         []uint256.Int               `json:"stack"`
 	ReturnData    []byte                      `json:"returnData"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
@@ -77,7 +77,6 @@ type StructLog struct {
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	//Stack       []*math.HexOrDecimal256
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
@@ -165,11 +164,11 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		copy(mem, memory.Data())
 	}
 	// Copy a snapshot of the current stack state to a new buffer
-	var stck []*uint256.Int
+	var stck []uint256.Int
 	if !l.cfg.DisableStack {
-		stck = make([]*uint256.Int, len(stack.Data()))
+		stck = make([]uint256.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
-			stck[i] = item.Clone()
+			stck[i] = item
 		}
 	}
 	// Copy a snapshot of the current storage to a new container

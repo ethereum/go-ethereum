@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/holiman/uint256"
 )
 
 type JSONLogger struct {
@@ -58,7 +57,6 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 		Gas:           gas,
 		GasCost:       cost,
 		MemorySize:    memory.Len(),
-		Storage:       nil,
 		Depth:         depth,
 		RefundCounter: env.StateDB.GetRefund(),
 		Err:           err,
@@ -67,11 +65,7 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 		log.Memory = memory.Data()
 	}
 	if !l.cfg.DisableStack {
-		logstack := make([]*uint256.Int, len(stack.Data()))
-		for i, item := range stack.Data() {
-			logstack[i] = item.Clone()
-		}
-		log.Stack = logstack
+		log.Stack = stack.data
 	}
 	if !l.cfg.DisableReturnData {
 		log.ReturnData = rData
