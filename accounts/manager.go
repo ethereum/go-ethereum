@@ -35,14 +35,22 @@ type Config struct {
 	InsecureUnlockAllowed bool // Whether account unlocking in insecure environment is allowed
 }
 
+// NewBackendEvent lets the manager know it should
+// track the given backend for wallet updates.
+type NewBackendEvent struct {
+	backend Backend
+	wg      *sync.WaitGroup
+}
+
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config   *Config                    // Global account manager configurations
-	backends map[reflect.Type][]Backend // Index of backends currently registered
-	updaters []event.Subscription       // Wallet update subscriptions for all backends
-	updates  chan WalletEvent           // Subscription sink for backend wallet changes
-	wallets  []Wallet                   // Cache of all wallets from all registered backends
+	config      *Config                    // Global account manager configurations
+	backends    map[reflect.Type][]Backend // Index of backends currently registered
+	updaters    []event.Subscription       // Wallet update subscriptions for all backends
+	updates     chan WalletEvent           // Subscription sink for backend wallet changes
+	newBackends chan NewBackendEvent       // Incoming backends to be tracked by the manager
+	wallets     []Wallet                   // Cache of all wallets from all registered backends
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
@@ -67,12 +75,13 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 	}
 	// Assemble the account manager and return
 	am := &Manager{
-		config:   config,
-		backends: make(map[reflect.Type][]Backend),
-		updaters: subs,
-		updates:  updates,
-		wallets:  wallets,
-		quit:     make(chan chan error),
+		config:      config,
+		backends:    make(map[reflect.Type][]Backend),
+		updaters:    subs,
+		updates:     updates,
+		newBackends: make(chan NewBackendEvent),
+		wallets:     wallets,
+		quit:        make(chan chan error),
 	}
 	for _, backend := range backends {
 		kind := reflect.TypeOf(backend)
@@ -96,30 +105,15 @@ func (am *Manager) Config() *Config {
 }
 
 // AddBackends starts the tracking of additional backends for wallet updates.
-func (am *Manager) AddBackends(backends ...Backend) error {
-	// Tear down event loop to update channels
-	if err := am.Close(); err != nil {
-		return err
-	}
-
+func (am *Manager) AddBackends(backends ...Backend) {
+	var wg sync.WaitGroup
 	for _, backend := range backends {
-		am.wallets = merge(am.wallets, backend.Wallets()...)
+		wg.Add(1)
+		am.newBackends <- NewBackendEvent{backend, &wg}
 	}
-
-	subs := make([]event.Subscription, len(backends))
-	for i, backend := range backends {
-		subs[i] = backend.Subscribe(am.updates)
-	}
-	am.updaters = append(am.updaters, subs...)
-
-	for _, backend := range backends {
-		kind := reflect.TypeOf(backend)
-		am.backends[kind] = append(am.backends[kind], backend)
-	}
-
-	// Restart event loop
-	go am.update()
-	return nil
+	// cmd/geth assumes after the invocation of AddBackends
+	// manager is already tracking those backends.
+	wg.Wait()
 }
 
 // update is the wallet event loop listening for notifications from the backends
@@ -151,7 +145,16 @@ func (am *Manager) update() {
 
 			// Notify any listeners of the event
 			am.feed.Send(event)
-
+		case event := <-am.newBackends:
+			am.lock.Lock()
+			// Update caches
+			backend := event.backend
+			am.wallets = merge(am.wallets, backend.Wallets()...)
+			am.updaters = append(am.updaters, backend.Subscribe(am.updates))
+			kind := reflect.TypeOf(backend)
+			am.backends[kind] = append(am.backends[kind], backend)
+			am.lock.Unlock()
+			event.wg.Done()
 		case errc := <-am.quit:
 			// Manager terminating, return
 			errc <- nil
@@ -162,6 +165,9 @@ func (am *Manager) update() {
 
 // Backends retrieves the backend(s) with the given type from the account manager.
 func (am *Manager) Backends(kind reflect.Type) []Backend {
+	am.lock.RLock()
+	defer am.lock.RUnlock()
+
 	return am.backends[kind]
 }
 
