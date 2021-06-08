@@ -19,7 +19,6 @@ package vm
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/holiman/uint256"
 	"io"
 	"math/big"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Storage represents a contract's storage.
@@ -135,6 +135,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
+// Reset clears the data held by the logger.
 func (l *StructLogger) Reset() {
 	l.storage = make(map[common.Address]Storage)
 	l.output = make([]byte, 0)
@@ -245,7 +246,7 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
 			for i := len(log.Stack) - 1; i >= 0; i-- {
-				fmt.Fprintf(writer, "%08d  %v\n", len(log.Stack)-i-1, log.Stack[i].Hex())
+				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
 		if len(log.Memory) > 0 {
