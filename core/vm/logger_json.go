@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 type JSONLogger struct {
@@ -66,10 +67,9 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 		log.Memory = memory.Data()
 	}
 	if !l.cfg.DisableStack {
-		//TODO(@holiman) improve this
-		logstack := make([]*big.Int, len(stack.Data()))
+		logstack := make([]*uint256.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
-			logstack[i] = item.ToBig()
+			logstack[i] = item.Clone()
 		}
 		log.Stack = logstack
 	}
