@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -425,10 +424,8 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	return nodes
 }
 
-// AccountConfig determines the settings for scrypt and keydirectory
-func (c *Config) AccountConfig() (int, int, string, error) {
-	scryptN, scryptP := c.ScryptConfig()
-
+// KeyDirConfig determines the settings for keydirectory
+func (c *Config) KeyDirConfig() (string, error) {
 	var (
 		keydir string
 		err    error
@@ -445,22 +442,14 @@ func (c *Config) AccountConfig() (int, int, string, error) {
 	case c.KeyStoreDir != "":
 		keydir, err = filepath.Abs(c.KeyStoreDir)
 	}
-	return scryptN, scryptP, keydir, err
-}
-
-// ScryptConfig determines the settings for scrypt
-func (c *Config) ScryptConfig() (int, int) {
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if c.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
-	return scryptN, scryptP
+	return keydir, err
 }
 
 func getKeyStoreDir(conf *Config) (string, bool, error) {
-	_, _, keydir, err := conf.AccountConfig()
+	keydir, err := conf.KeyDirConfig()
+	if err != nil {
+		return "", false, err
+	}
 	isEphemeral := false
 	if keydir == "" {
 		// There is no datadir.
