@@ -445,6 +445,8 @@ func (c *Config) KeyDirConfig() (string, error) {
 	return keydir, err
 }
 
+// getKeyStoreDir retrieves the key directory and will create
+// and ephemeral one if necessary.
 func getKeyStoreDir(conf *Config) (string, bool, error) {
 	keydir, err := conf.KeyDirConfig()
 	if err != nil {

@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// managerSubBufferSize determines how many incoming wallet events
+// the manager will buffer in its channel.
 const managerSubBufferSize = 50
 
 // Config contains the settings of the global account manager.
