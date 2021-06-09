@@ -228,6 +228,11 @@ func (b *SimulatedBackend) BlockByHash(ctx context.Context, hash common.Hash) (*
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	return b.blockByHashNoLock(ctx, hash)
+}
+
+// blockByHashNoLock retrieves a block based on the block hash without Locking.
+func (b *SimulatedBackend) blockByHashNoLock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if hash == b.pendingBlock.Hash() {
 		return b.pendingBlock, nil
 	}
