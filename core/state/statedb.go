@@ -600,7 +600,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 
 	// insert to map to make compactTrie (jmlee)
 	_, doExist := common.AddrToKey[addr]
-	if !doExist {
+	if !doExist && addr != common.ZeroAddress {
 		fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", common.HexToHash(strconv.FormatInt(common.AccountCounter, 16)))
 		common.AddrToKey[addr] = common.HexToHash(strconv.FormatInt(common.AccountCounter, 16))
 		common.AccountCounter += 1

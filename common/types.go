@@ -47,8 +47,9 @@ var (
 	// temp map for verifying compactTrie idea (address: real address of the account / hash: specific key for the account in the state trie)
 	AddrToKey = make(map[Address]Hash)
 	// temp var to make compactTrie
-	AccountCounter = int64(1)
+	AccountCounter = int64(0)
 	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever
+	ZeroAddress = HexToAddress("0x0")
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
