@@ -109,8 +109,8 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 		Nonce:      0,
 		To:         &to,
 		Gas:        123457,
-		FeeCap:     new(big.Int).Set(block.BaseFee()),
-		Tip:        big.NewInt(0),
+		GasFeeCap:  new(big.Int).Set(block.BaseFee()),
+		GasTipCap:  big.NewInt(0),
 		AccessList: accesses,
 		Data:       []byte{},
 	}
