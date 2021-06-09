@@ -32,6 +32,9 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+// GlobalDB is a variable to access leveldb at everywhere (jmlee)
+var GlobalDB ethdb.Database
+
 // freezerdb is a database wrapper that enabled freezer data retrievals.
 type freezerdb struct {
 	ethdb.KeyValueStore
@@ -240,6 +243,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 		kvdb.Close()
 		return nil, err
 	}
+	GlobalDB = frdb // set globaldb (jmlee)
 	return frdb, nil
 }
 

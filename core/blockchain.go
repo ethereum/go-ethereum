@@ -1581,6 +1581,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
+
+	// print database inspect result (jmlee)
+	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
+	if block.Header().Number.Int64() % 505 == 0 {
+		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
+	}
+
 	return status, nil
 }
 
@@ -1603,6 +1610,9 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+
+	fmt.Println("InsertChain() executed")
+
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil
@@ -1634,6 +1644,10 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	n, err := bc.insertChain(chain, true)
 	bc.chainmu.Unlock()
 	bc.wg.Done()
+
+	// print database inspection (jmlee)
+	fmt.Println("block inserted -> blocknumber:", chain[len(chain)-1].Header().Number.Int64())
+
 
 	return n, err
 }
