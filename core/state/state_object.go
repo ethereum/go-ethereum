@@ -117,15 +117,27 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
 	}
+	
+	// change addrHash: addressHash->specificKeyValue, to make compactTrie (jmlee)
 	return &stateObject{
 		db:             db,
 		address:        address,
-		addrHash:       crypto.Keccak256Hash(address[:]),
+		addrHash:       common.AddrToKey[address],
 		data:           data,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
 	}
+	// original code
+	// return &stateObject{
+	// 	db:             db,
+	// 	address:        address,
+	// 	addrHash:       crypto.Keccak256Hash(address[:]),
+	// 	data:           data,
+	// 	originStorage:  make(Storage),
+	// 	pendingStorage: make(Storage),
+	// 	dirtyStorage:   make(Storage),
+	// }
 }
 
 // EncodeRLP implements rlp.Encoder.

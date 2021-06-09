@@ -182,12 +182,20 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
-	h := newHasher(false)
-	h.sha.Reset()
-	h.sha.Write(key)
-	h.sha.Read(t.hashKeyBuf[:])
-	returnHasherToPool(h)
-	return t.hashKeyBuf[:]
+	// change keys of a secure trie to make compactTrie (jmlee)
+	hash, doExist := common.AddrToKey[common.BytesToAddress(key)]
+	if doExist {
+		return hash[:]
+	} else {
+		return common.NoExistKey[:]
+	}
+	// original code
+	// h := newHasher(false)
+	// h.sha.Reset()
+	// h.sha.Write(key)
+	// h.sha.Read(t.hashKeyBuf[:])
+	// returnHasherToPool(h)
+	// return t.hashKeyBuf[:]
 }
 
 // getSecKeyCache returns the current secure key cache, creating a new one if
