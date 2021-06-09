@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 var (
@@ -574,4 +575,21 @@ func (t *Trie) Reset() {
 // print trie nodes details in human readable form (jmlee)
 func (t *Trie) Print() {
 	fmt.Println(t.root.toString("", t.db))
+}
+
+// get trie's db size (jmlee)
+func (t *Trie) Size() common.StorageSize {
+	size, _ := t.db.Size()
+	return size
+}
+
+// make empty trie (jmlee)
+func NewEmpty() *Trie {
+	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	return trie
+}
+
+func (t *Trie) MyCommit() {
+	// triedb.Commit(root, false, nil)
+	t.db.Commit(t.Hash(), false, nil)
 }

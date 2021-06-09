@@ -568,3 +568,21 @@ func (s *stateObject) Nonce() uint64 {
 func (s *stateObject) Value() *big.Int {
 	panic("Value on stateObject should never be called")
 }
+
+// NewObject creates a state object, just for experiment (jmlee)
+func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
+	if data.Balance == nil {
+		data.Balance = new(big.Int)
+	}
+	if data.CodeHash == nil {
+		data.CodeHash = emptyCodeHash
+	}
+	return &stateObject{
+		db:            db,
+		address:       address,
+		addrHash:      crypto.Keccak256Hash(address[:]),
+		data:          data,
+		originStorage: make(Storage),
+		dirtyStorage:  make(Storage),
+	}
+}
