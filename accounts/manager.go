@@ -37,9 +37,9 @@ type Config struct {
 	InsecureUnlockAllowed bool // Whether account unlocking in insecure environment is allowed
 }
 
-// NewBackendEvent lets the manager know it should
+// newBackendEvent lets the manager know it should
 // track the given backend for wallet updates.
-type NewBackendEvent struct {
+type newBackendEvent struct {
 	backend Backend
 	wg      *sync.WaitGroup
 }
@@ -51,7 +51,7 @@ type Manager struct {
 	backends    map[reflect.Type][]Backend // Index of backends currently registered
 	updaters    []event.Subscription       // Wallet update subscriptions for all backends
 	updates     chan WalletEvent           // Subscription sink for backend wallet changes
-	newBackends chan NewBackendEvent       // Incoming backends to be tracked by the manager
+	newBackends chan newBackendEvent       // Incoming backends to be tracked by the manager
 	wallets     []Wallet                   // Cache of all wallets from all registered backends
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
@@ -81,7 +81,7 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 		backends:    make(map[reflect.Type][]Backend),
 		updaters:    subs,
 		updates:     updates,
-		newBackends: make(chan NewBackendEvent),
+		newBackends: make(chan newBackendEvent),
 		wallets:     wallets,
 		quit:        make(chan chan error),
 	}
@@ -111,7 +111,7 @@ func (am *Manager) AddBackends(backends ...Backend) {
 	var wg sync.WaitGroup
 	for _, backend := range backends {
 		wg.Add(1)
-		am.newBackends <- NewBackendEvent{backend, &wg}
+		am.newBackends <- newBackendEvent{backend, &wg}
 	}
 	// cmd/geth assumes after the invocation of AddBackends
 	// manager is already tracking those backends.
