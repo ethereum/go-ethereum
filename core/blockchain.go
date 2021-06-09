@@ -1583,9 +1583,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// print database inspect result (jmlee)
-	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
-	if block.Header().Number.Int64() % 505 == 0 {
+	if block.Header().Number.Int64() % 1 == 0 {
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
+
+		// print state trie (jmlee)
+		fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
+		ldb := trie.NewDatabase(bc.db)
+		stateTrie, _ := trie.New(bc.CurrentBlock().Root(), ldb)
+		stateTrie.Print()
 	}
 
 	return status, nil

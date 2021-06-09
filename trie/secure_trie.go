@@ -208,3 +208,8 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
+
+// print trie nodes details in human readable form (jmlee)
+func (t *SecureTrie) Print() {
+	t.trie.Print()
+}
