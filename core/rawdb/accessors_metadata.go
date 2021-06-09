@@ -123,6 +123,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return nil, 0, err
 	}
+	fmt.Println(db.Get(uncleanShutdownKey))
 	return previous, discarded, nil
 }
 
