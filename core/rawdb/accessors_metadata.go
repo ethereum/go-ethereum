@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -118,12 +117,10 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	}
 	// And save it again
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
-	fmt.Println(data)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return nil, 0, err
 	}
-	fmt.Println(db.Get(uncleanShutdownKey))
 	return previous, discarded, nil
 }
 
@@ -156,7 +153,6 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 	} else if err := rlp.DecodeBytes(previous, &uncleanShutdowns); err != nil {
 		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
 	}
-	fmt.Println(uncleanShutdowns)
 	l := len(uncleanShutdowns.Recent)
 	if l == 0 {
 		l++
