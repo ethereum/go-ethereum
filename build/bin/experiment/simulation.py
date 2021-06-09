@@ -73,9 +73,9 @@ def sendTransaction(to):
 
 def sendTransactions(num):
     for i in range(int(num)):
+        to = makeRandHex()
         while True:
             try:
-                to = makeRandHex()
                 fullnode.eth.sendTransaction(
                     {'to': to, 'from': fullnode.eth.coinbase, 'value': '1', 'gas': '21000', 'data': ""})
                 break
