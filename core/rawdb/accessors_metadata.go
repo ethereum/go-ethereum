@@ -90,11 +90,13 @@ type crashList struct {
 
 const crashesToKeep = 10
 
+func StartUncleanMarkerMonitor()
+
 // PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
+func PushUncleanShutdownMarker(isFreezer bool, db ethdb.KeyValueStore) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -120,6 +122,11 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return nil, 0, err
+	}
+	if isFreezer {
+		go UpdateUncleanShutdownMarker(db, db.(*freezerdb).stopUncleanMarkerUpdateCh)
+	} else {
+		go UpdateUncleanShutdownMarker(db, db.(*nofreezedb).stopUncleanMarkerUpdateCh)
 	}
 	return previous, discarded, nil
 }
@@ -157,7 +164,7 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 		l++
 	}
 	// update marker every five minutes
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer func() { ticker.Stop() }()
 	for {
 		select {
