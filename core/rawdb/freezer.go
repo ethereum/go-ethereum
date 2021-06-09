@@ -225,7 +225,12 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, erro
 		// TODO: truncate here?
 		return 0, err
 	}
-	return f.writeBatch.commit()
+	item, writeSize, err := f.writeBatch.commit()
+	if err != nil {
+		return 0, err
+	}
+	atomic.StoreUint64(&f.frozen, item)
+	return int(writeSize), nil
 }
 
 // TruncateAncients discards any recent data above the provided threshold number.

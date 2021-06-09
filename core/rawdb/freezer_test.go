@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+// This test runs ModifyAncients and TruncateAncients concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	dir, err := ioutil.TempDir("", "freezer")
 	if err != nil {
@@ -42,10 +43,6 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	var item = make([]byte, 256)
 
 	for i := 0; i < 5000; i++ {
-		// First reset, and write 100 items.
-		if err := f.TruncateAncients(0); err != nil {
-			t.Fatal("truncate failed:", err)
-		}
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for i := uint64(0); i < 100; i++ {
 				if err := op.AppendRaw("test", i, item); err != nil {
@@ -57,6 +54,9 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if err != nil {
 			t.Fatal("modify failed:", err)
 		}
+		if frozen, _ := f.Ancients(); frozen != 100 {
+			t.Fatalf("wrong ancients count %d, want 100", frozen)
+		}
 
 		// Now append 100 more items and truncate concurrently.
 		var (
@@ -65,10 +65,6 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			modifyErr   error
 		)
 		wg.Add(2)
-		go func() {
-			truncateErr = f.TruncateAncients(0)
-			wg.Done()
-		}()
 		go func() {
 			_, modifyErr = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(100); i < 200; i++ {
@@ -80,81 +76,23 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			})
 			wg.Done()
 		}()
+		go func() {
+			truncateErr = f.TruncateAncients(0)
+			wg.Done()
+		}()
 		wg.Wait()
 
-		// Now check the outcome. If the truncate operation went through first,
-		// the append fails, otherwise it succeeds. In either case, the freezer
-		// should be positioned at zero.
+		// Now check the outcome. If the truncate operation went through first, the append
+		// fails, otherwise it succeeds. In either case, the freezer should be positioned
+		// at zero after both operations are done.
 		if truncateErr != nil {
 			t.Fatal("concurrent truncate failed:", err)
 		}
-		if modifyErr != nil && modifyErr != errOutOfBounds {
-			t.Fatal("wrong error from modify:", modifyErr)
+		if modifyErr != nil && modifyErr != errOutOrderInsertion {
+			t.Fatal("wrong error from concurrent modify:", modifyErr)
 		}
-		index, err := f.Ancients()
-		if err != nil {
-			t.Fatal("error from Ancients:", err)
-		}
-		if index != 0 {
-			t.Fatalf("Ancients returned %d, want 0", index)
+		if frozen, _ := f.Ancients(); frozen != 0 {
+			t.Fatalf("Ancients returned %d, want 0", frozen)
 		}
 	}
 }
-
-// // TestAppendTruncateParallel is a test to check if the Append/truncate operations are
-// // racy.
-// //
-// // The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is dependent
-// // on timing rather than 'clever' input -- there's no determinism.
-// func TestAppendTruncateParallel(t *testing.T) {
-// 	t.Skip()
-//
-// 	dir, err := ioutil.TempDir("", "freezer")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	defer os.RemoveAll(dir)
-//
-// 	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-//
-// 	fill := func(mark uint64) []byte {
-// 		data := make([]byte, 8)
-// 		binary.LittleEndian.PutUint64(data, mark)
-// 		return data
-// 	}
-//
-// 	for i := 0; i < 5000; i++ {
-// 		require.NoError(t, f.truncate(0))
-//
-// 		var (
-// 			data0 = fill(0)
-// 			data1 = fill(1)
-// 			batch = f.newBatch()
-// 		)
-// 		require.NoError(t, batch.AppendRaw(0, data0))
-// 		require.NoError(t, batch.Commit())
-//
-// 		var wg sync.WaitGroup
-// 		wg.Add(2)
-// 		go func() {
-// 			assert.NoError(t, f.truncate(0))
-// 			wg.Done()
-// 		}()
-// 		go func() {
-// 			batch := f.newBatch()
-// 			assert.NoError(t, batch.AppendRaw(1, data1))
-// 			assert.NoError(t, batch.Commit())
-// 			wg.Done()
-// 		}()
-// 		wg.Wait()
-//
-// 		if have, err := f.Retrieve(0); err == nil {
-// 			if !bytes.Equal(have, data0) {
-// 				t.Fatalf("have %x want %x", have, data0)
-// 			}
-// 		}
-// 	}
-// }

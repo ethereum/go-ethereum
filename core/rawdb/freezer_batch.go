@@ -26,15 +26,11 @@ import (
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
-	freezer *freezer
-	tables  map[string]*freezerTableBatch
+	tables map[string]*freezerTableBatch
 }
 
 func newFreezerBatch(f *freezer) *freezerBatch {
-	batch := &freezerBatch{
-		freezer: f,
-		tables:  make(map[string]*freezerTableBatch, len(f.tables)),
-	}
+	batch := &freezerBatch{tables: make(map[string]*freezerTableBatch, len(f.tables))}
 	for kind, table := range f.tables {
 		batch.tables[kind] = table.newBatch()
 	}
@@ -58,30 +54,24 @@ func (batch *freezerBatch) reset() {
 	}
 }
 
-func (batch *freezerBatch) commit() (int, error) {
+func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 	// Check that count agrees on all batches.
-	item := uint64(math.MaxUint64)
-	count := 0
+	item = uint64(math.MaxUint64)
 	for name, tb := range batch.tables {
 		if item < math.MaxUint64 && tb.curItem != item {
-			return 0, fmt.Errorf("batch %s is at item %d, want %d", name, tb.curItem, item)
+			return 0, 0, fmt.Errorf("table %s is at item %d, want %d", name, tb.curItem, item)
 		}
 		item = tb.curItem
-		count++
 	}
 
 	// Commit all table batches.
-	writeSize := int64(0)
 	for _, tb := range batch.tables {
 		if err := tb.Commit(); err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 		writeSize += tb.totalBytes
 	}
-
-	// Bump frozen block index.
-	atomic.AddUint64(&batch.freezer.frozen, uint64(count))
-	return int(writeSize), nil
+	return item, writeSize, nil
 }
 
 const (
@@ -123,7 +113,7 @@ func (batch *freezerTableBatch) Reset() {
 // existing data.
 func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if item != batch.curItem {
-		return fmt.Errorf("appending unexpected item: want %d, have %d", batch.curItem, item)
+		return errOutOrderInsertion
 	}
 
 	// Encode the item.
@@ -143,7 +133,7 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 // existing data.
 func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	if item != batch.curItem {
-		return fmt.Errorf("appending unexpected item: want %d, have %d", batch.curItem, item)
+		return errOutOrderInsertion
 	}
 
 	encItem := blob
