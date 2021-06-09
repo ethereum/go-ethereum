@@ -39,7 +39,7 @@ func setupBatch(t *testing.T, name string, maxFilesize uint32, noCompression boo
 		os.RemoveAll(dir)
 	}
 
-	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{},
+	f, err := newTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{},
 		metrics.NilGauge{}, maxFilesize, noCompression)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +167,7 @@ func batchBench(b *testing.B, nbytes int, noCompression bool) {
 	}
 	defer os.RemoveAll(dir)
 
-	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
+	f, err := newTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func batchRlpBench(b *testing.B, nbytes int, noCompression bool) {
 	}
 	defer os.RemoveAll(dir)
 
-	f, err := newCustomTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
+	f, err := newTable(dir, "table", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 20*1024*1024, noCompression)
 	if err != nil {
 		b.Fatal(err)
 	}

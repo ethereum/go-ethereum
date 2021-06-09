@@ -36,7 +36,7 @@ func newFreezerForTesting(t *testing.T) (*freezer, string) {
 		t.Fatal(err)
 	}
 	tables := map[string]bool{"test": true}
-	f, err := newFreezer(dir, "", false, tables)
+	f, err := newFreezer(dir, "", false, 257, tables) // note: super low max table size
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
