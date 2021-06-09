@@ -40,8 +40,8 @@ type Config struct {
 // newBackendEvent lets the manager know it should
 // track the given backend for wallet updates.
 type newBackendEvent struct {
-	backend Backend
-	wg      *sync.WaitGroup
+	backend   Backend
+	processed chan struct{} // Informs event emitter that backend has been integrated
 }
 
 // Manager is an overarching account manager that can communicate with various
@@ -107,15 +107,13 @@ func (am *Manager) Config() *Config {
 }
 
 // AddBackends starts the tracking of additional backends for wallet updates.
+// cmd/geth assumes once this func returns the backends have been already integrated.
 func (am *Manager) AddBackends(backends ...Backend) {
-	var wg sync.WaitGroup
+	done := make(chan struct{}, len(backends))
 	for _, backend := range backends {
-		wg.Add(1)
-		am.newBackends <- newBackendEvent{backend, &wg}
+		am.newBackends <- newBackendEvent{backend, done}
+		<-done
 	}
-	// cmd/geth assumes after the invocation of AddBackends
-	// manager is already tracking those backends.
-	wg.Wait()
 }
 
 // update is the wallet event loop listening for notifications from the backends
@@ -156,7 +154,7 @@ func (am *Manager) update() {
 			kind := reflect.TypeOf(backend)
 			am.backends[kind] = append(am.backends[kind], backend)
 			am.lock.Unlock()
-			event.wg.Done()
+			event.processed <- struct{}{}
 		case errc := <-am.quit:
 			// Manager terminating, return
 			errc <- nil
