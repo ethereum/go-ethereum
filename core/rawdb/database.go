@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	log2 "log"
 	"os"
 	"sync/atomic"
 	"time"
@@ -130,22 +129,6 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 		KeyValueStore:             db,
 		stopUncleanMarkerUpdateCh: make(chan bool),
 	}
-	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(frdb); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
-	fmt.Println(">>>>????>>>>")
-	log2.Panic("WF")
-	go UpdateUncleanShutdownMarker(frdb, frdb.stopUncleanMarkerUpdateCh)
 	return frdb
 }
 
