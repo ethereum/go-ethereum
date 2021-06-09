@@ -156,6 +156,7 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 	} else if err := rlp.DecodeBytes(previous, &uncleanShutdowns); err != nil {
 		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
 	}
+	fmt.Println(uncleanShutdowns)
 	l := len(uncleanShutdowns.Recent)
 	if l == 0 {
 		l++
