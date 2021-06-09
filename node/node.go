@@ -25,10 +25,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -558,26 +556,13 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 
 	var db ethdb.Database
 	var err error
+	fmt.Println(n.config.DataDir)
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
 		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
 	}
-	if name == "lightchaindata" {
-		if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(false, db); err != nil {
-			log.Error("Could not update unclean-shutdown-marker list", "error", err)
-		} else {
-			if discards > 0 {
-				log.Warn("Old unclean shutdowns found", "count", discards)
-			}
-			for _, tstamp := range uncleanShutdowns {
-				t := time.Unix(int64(tstamp), 0)
-				log.Warn("Unclean shutdown detected", "booted", t,
-					"age", common.PrettyAge(t))
-			}
-		}
-	}
-
+	rawdb.StartUncleanShutdownMarker(name, db)
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
@@ -600,6 +585,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
+		rawdb.StartUncleanShutdownMarker("", db)
 	} else {
 		root := n.ResolvePath(name)
 		switch {
@@ -609,20 +595,8 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 			freezer = n.ResolvePath(freezer)
 		}
 		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		rawdb.StartUncleanShutdownMarker(name, db)
 	}
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(true, db); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
-
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}

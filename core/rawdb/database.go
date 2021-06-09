@@ -85,15 +85,23 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 type nofreezedb struct {
 	ethdb.KeyValueStore
 	stopUncleanMarkerUpdateCh chan bool
+	isChainDb                 bool
 }
 
 func (db *nofreezedb) Close() error {
-	db.stopUncleanMarkerUpdateCh <- true
-	PopUncleanShutdownMarker(db.KeyValueStore)
-	if err := db.KeyValueStore.Close(); err != nil {
-		return err
+	if db.isChainDb {
+		db.stopUncleanMarkerUpdateCh <- true
+		PopUncleanShutdownMarker(db.KeyValueStore)
+		if err := db.KeyValueStore.Close(); err != nil {
+			return err
+		}
+		return nil
+	} else {
+		if err := db.KeyValueStore.Close(); err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.

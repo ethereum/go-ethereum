@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -91,8 +90,60 @@ type crashList struct {
 
 const crashesToKeep = 10
 
-// PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
-// the previous data
+func StartUncleanShutdownMarker(name string, db ethdb.KeyValueStore) {
+	if name == "lightchaindata" {
+		db.(*nofreezedb).isChainDb = true
+		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(false, db); err != nil {
+			log.Error("Could not update unclean-shutdown-marker list", "error", err)
+		} else {
+			if discards > 0 {
+				log.Warn("Old unclean shutdowns found", "count", discards)
+			}
+			for _, tstamp := range uncleanShutdowns {
+				t := time.Unix(int64(tstamp), 0)
+				log.Warn("Unclean shutdown detected", "booted", t,
+					"age", common.PrettyAge(t))
+			}
+		}
+		return
+	} else if name == "les.client" {
+		db.(*nofreezedb).isChainDb = false
+		return
+	} else if name == "chaindata" {
+		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(true, db); err != nil {
+			log.Error("Could not update unclean-shutdown-marker list", "error", err)
+		} else {
+			if discards > 0 {
+				log.Warn("Old unclean shutdowns found", "count", discards)
+			}
+			for _, tstamp := range uncleanShutdowns {
+				t := time.Unix(int64(tstamp), 0)
+				log.Warn("Unclean shutdown detected", "booted", t,
+					"age", common.PrettyAge(t))
+			}
+			return
+		}
+	} else if name == "" {
+		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(false, db); err != nil {
+			log.Error("Could not update unclean-shutdown-marker list", "error", err)
+		} else {
+			if discards > 0 {
+				log.Warn("Old unclean shutdowns found", "count", discards)
+			}
+			for _, tstamp := range uncleanShutdowns {
+				t := time.Unix(int64(tstamp), 0)
+				log.Warn("Unclean shutdown detected", "booted", t,
+					"age", common.PrettyAge(t))
+			}
+			return
+		}
+	}
+	return
+}
+
+// PushUncleanShutdownMarker appends a new unclean shutdown marker and starts a goroutine
+// to update the unclean shutdown marker every five minutes. It returns
+// the previous unclean shutdown
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
 func PushUncleanShutdownMarker(isFreezer bool, db ethdb.KeyValueStore) ([]uint64, uint64, error) {
@@ -100,7 +151,7 @@ func PushUncleanShutdownMarker(isFreezer bool, db ethdb.KeyValueStore) ([]uint64
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
 		// don't want to warn if there were no unclean shutdowns
-		if err.Error() != "not found" {
+		if err.Error() != "leveldb: not found" {
 			log.Warn("Error reading unclean shutdown markers", "error", err)
 		}
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
@@ -174,7 +225,6 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 				log.Warn("Failed to update unclean-shutdown marker", "err", err)
 			}
 		case <-stopUncleanShutdownUpdateCh:
-			fmt.Println("GOT HERE")
 			return
 		}
 	}
