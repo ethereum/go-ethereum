@@ -86,7 +86,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 		config:     genesis.Config,
 		events:     filters.NewEventSystem(&filterBackend{database, blockchain}, false),
 	}
-	backend.rollback()
+	backend.rollback(blockchain.CurrentBlock())
 	return backend
 }
 
@@ -112,7 +112,9 @@ func (b *SimulatedBackend) Commit() {
 	if _, err := b.blockchain.InsertChain([]*types.Block{b.pendingBlock}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
-	b.rollback()
+	// Using the last inserted block here makes it possible to build on a side
+	// chain after a fork.
+	b.rollback(b.pendingBlock)
 }
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
@@ -120,11 +122,14 @@ func (b *SimulatedBackend) Rollback() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.rollback()
+	b.rollback(b.blockchain.CurrentBlock())
 }
 
-func (b *SimulatedBackend) rollback() {
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
+func (b *SimulatedBackend) rollback(parent *types.Block) {
+	if parent == nil {
+		panic("parent cannot be nil")
+	}
+	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
