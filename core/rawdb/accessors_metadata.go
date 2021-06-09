@@ -98,7 +98,10 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading unclean shutdown markers", "error", err)
+		// don't want to warn if there were no unclean shutdowns
+		if err.Error() != "not found" {
+			log.Warn("Error reading unclean shutdown markers", "error", err)
+		}
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
 		return nil, 0, err
 	}
@@ -123,9 +126,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 
 // PopUncleanShutdownMarker removes the last unclean shutdown marker and stops
 // the function updating the marker (UpdateUncleanShutdownMarker)
-func PopUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpdateCh chan bool) {
-	// stop the unclean shutdown marker update first
-	stopUncleanShutdownUpdateCh <- true
+func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
