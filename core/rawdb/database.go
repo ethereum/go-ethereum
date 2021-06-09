@@ -87,6 +87,15 @@ type nofreezedb struct {
 	stopUncleanMarkerUpdateCh chan bool
 }
 
+func (db *nofreezedb) Close() error {
+	db.stopUncleanMarkerUpdateCh <- true
+	PopUncleanShutdownMarker(db.KeyValueStore)
+	if err := db.KeyValueStore.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // HasAncient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
 	return false, errNotSupported
