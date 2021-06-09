@@ -255,6 +255,18 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 		kvdb.Close()
 		return nil, err
 	}
+	if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(frdb); err != nil {
+		log.Error("Could not update unclean-shutdown-marker list", "error", err)
+	} else {
+		if discards > 0 {
+			log.Warn("Old unclean shutdowns found", "count", discards)
+		}
+		for _, tstamp := range uncleanShutdowns {
+			t := time.Unix(int64(tstamp), 0)
+			log.Warn("Unclean shutdown detected", "booted", t,
+				"age", common.PrettyAge(t))
+		}
+	}
 	go UpdateUncleanShutdownMarker(frdb, frdb.(*freezerdb).stopUncleanMarkerUpdateCh)
 	return frdb, nil
 }
