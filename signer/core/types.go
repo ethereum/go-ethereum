@@ -19,12 +19,12 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type ValidationInfo struct {
@@ -66,14 +66,21 @@ func (v *ValidationMessages) getWarnings() error {
 }
 
 // SendTxArgs represents the arguments to submit a transaction
+// This struct is identical to ethapi.TransactionArgs, except for the usage of
+// common.MixedcaseAddress in From and To
 type SendTxArgs struct {
-	From     common.MixedcaseAddress  `json:"from"`
-	To       *common.MixedcaseAddress `json:"to"`
-	Gas      hexutil.Uint64           `json:"gas"`
-	GasPrice hexutil.Big              `json:"gasPrice"`
-	Value    hexutil.Big              `json:"value"`
-	Nonce    hexutil.Uint64           `json:"nonce"`
+	From                 common.MixedcaseAddress  `json:"from"`
+	To                   *common.MixedcaseAddress `json:"to"`
+	Gas                  hexutil.Uint64           `json:"gas"`
+	GasPrice             *hexutil.Big             `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big             `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big             `json:"maxPriorityFeePerGas"`
+	Value                hexutil.Big              `json:"value"`
+	Nonce                hexutil.Uint64           `json:"nonce"`
+
 	// We accept "data" and "input" for backwards-compatibility reasons.
+	// "input" is the newer name and should be preferred by clients.
+	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
 
@@ -91,38 +98,22 @@ func (args SendTxArgs) String() string {
 }
 
 func (args *SendTxArgs) toTransaction() *types.Transaction {
-	var input []byte
-	if args.Data != nil {
-		input = *args.Data
-	} else if args.Input != nil {
-		input = *args.Input
+	txArgs := ethapi.TransactionArgs{
+		Gas:                  &args.Gas,
+		GasPrice:             args.GasPrice,
+		MaxFeePerGas:         args.MaxFeePerGas,
+		MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+		Value:                &args.Value,
+		Nonce:                &args.Nonce,
+		Data:                 args.Data,
+		Input:                args.Input,
+		AccessList:           args.AccessList,
+		ChainID:              args.ChainID,
 	}
-	var to *common.Address
+	// Add the To-field, if specified
 	if args.To != nil {
-		_to := args.To.Address()
-		to = &_to
+		to := args.To.Address()
+		txArgs.To = &to
 	}
-	var data types.TxData
-	if args.AccessList == nil {
-		data = &types.LegacyTx{
-			To:       to,
-			Nonce:    uint64(args.Nonce),
-			Gas:      uint64(args.Gas),
-			GasPrice: (*big.Int)(&args.GasPrice),
-			Value:    (*big.Int)(&args.Value),
-			Data:     input,
-		}
-	} else {
-		data = &types.AccessListTx{
-			To:         to,
-			ChainID:    (*big.Int)(args.ChainID),
-			Nonce:      uint64(args.Nonce),
-			Gas:        uint64(args.Gas),
-			GasPrice:   (*big.Int)(&args.GasPrice),
-			Value:      (*big.Int)(&args.Value),
-			Data:       input,
-			AccessList: *args.AccessList,
-		}
-	}
-	return types.NewTx(data)
+	return txArgs.ToTransaction()
 }
