@@ -142,6 +142,7 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 				"age", common.PrettyAge(t))
 		}
 	}
+	fmt.Println(">>>>????>>>>")
 	go UpdateUncleanShutdownMarker(frdb, frdb.stopUncleanMarkerUpdateCh)
 	return frdb
 }
