@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
@@ -1112,5 +1113,174 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 			t.Errorf("result from noRevert was nil")
 		}
 		sim.Commit()
+	}
+}
+
+// TestSimulatedBackend_Fork check that the chain length after a reorg is correct.
+// Steps:
+//  1. Save the current block which will serve as parent for the fork.
+//  2. Mine n blocks with n ∈ [0, 20].
+//  3. Assert that the chain length is n.
+//  4. Fork by using the parent block as ancestor.
+//  5. Mine n+1 blocks which should trigger a reorg.
+//  6. Assert that the chain length is n+1.
+//     Since Commit() was called 2n+1 times in total,
+//     having a chain length of just n+1 means that a reorg occurred.
+func TestSimulatedBackend_Fork(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parent := sim.blockchain.CurrentBlock()
+	// 2.
+	n := int(rand.Int31n(21))
+	for i := 0; i < n; i++ {
+		sim.Commit()
+	}
+	// 3.
+	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n) {
+		t.Error("wrong chain length")
+	}
+	// 4.
+	sim.Fork(context.Background(), parent.Hash())
+	// 5.
+	for i := 0; i < n+1; i++ {
+		sim.Commit()
+	}
+	// 6.
+	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n+1) {
+		t.Error("wrong chain length")
+	}
+}
+
+/*
+Example contract to test event emission:
+
+pragma solidity >=0.7.0 <0.9.0;
+contract Callable {
+    event Called();
+    function Call() public { emit Called(); }
+}
+*/
+const callableAbi = "[{\"anonymous\":false,\"inputs\":[],\"name\":\"Called\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"Call\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+
+const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806334e2292114602d575b600080fd5b60336035565b005b7f81fab7a4a0aa961db47eefc81f143a5220e8c8495260dd65b1356f1d19d3c7b860405160405180910390a156fea2646970667358221220029436d24f3ac598ceca41d4d712e13ced6d70727f4cdc580667de66d2f51d8b64736f6c63430008010033"
+
+// TestSimulatedBackend_ForkLogsReborn check that the simulated reorgs
+// correctly remove and reborn logs.
+// Steps:
+//  1. Deploy the Callable contract.
+//  2. Set up an event subscription.
+//  3. Save the current block which will serve as parent for the fork.
+//  4. Send a transaction.
+//  5. Check that the event was included.
+//  6. Fork by using the parent block as ancestor.
+//  7. Mine two blocks to trigger a reorg.
+//  8. Check that the event was removed.
+//  9. Re-send the transaction and mine a block.
+// 10. Check that the event was reborn.
+func TestSimulatedBackend_ForkLogsReborn(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parsed, _ := abi.JSON(strings.NewReader(callableAbi))
+	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
+	_, _, contract, err := bind.DeployContract(auth, parsed, common.FromHex(callableBin), sim)
+	if err != nil {
+		t.Errorf("deploying contract: %v", err)
+	}
+	sim.Commit()
+	// 2.
+	logs, sub, err := contract.WatchLogs(nil, "Called")
+	if err != nil {
+		t.Errorf("watching logs: %v", err)
+	}
+	defer sub.Unsubscribe()
+	// 3.
+	parent := sim.blockchain.CurrentBlock()
+	// 4.
+	tx, err := contract.Transact(auth, "Call")
+	if err != nil {
+		t.Errorf("transacting: %v", err)
+	}
+	sim.Commit()
+	// 5.
+	log := <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+	// 6.
+	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+	// 7.
+	sim.Commit()
+	sim.Commit()
+	// 8.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if !log.Removed {
+		t.Error("Event should be removed")
+	}
+	// 9.
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+	sim.Commit()
+	// 10.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+}
+
+// TestSimulatedBackend_ForkResendTx checks that re-sending a TX after a fork
+// is possible and does not cause a "nonce mismatch" panic.
+// Steps:
+//  1. Save the current block which will serve as parent for the fork.
+//  2. Send a transaction.
+//  3. Check that the TX is included in block 1.
+//  4. Fork by using the parent block as ancestor.
+//  5. Mine a block, Re-send the transaction and mine another one.
+//  6. Check that the TX is now included in block 2.
+func TestSimulatedBackend_ForkResendTx(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parent := sim.blockchain.CurrentBlock()
+	// 2.
+	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
+	sim.SendTransaction(context.Background(), tx)
+	sim.Commit()
+	// 3.
+	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
+	if h := receipt.BlockNumber.Uint64(); h != 1 {
+		t.Errorf("TX included in wrong block: %d", h)
+	}
+	// 4.
+	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+	// 5.
+	sim.Commit()
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+	sim.Commit()
+	// 6.
+	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
+	if h := receipt.BlockNumber.Uint64(); h != 2 {
+		t.Errorf("TX included in wrong block: %d", h)
 	}
 }

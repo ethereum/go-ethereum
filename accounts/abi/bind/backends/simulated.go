@@ -135,6 +135,34 @@ func (b *SimulatedBackend) rollback(parent *types.Block) {
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
 }
 
+// Fork creates a side-chain that can be used to simulate reorgs.
+// Call this function with the parent block that should still be included in
+// the side-chain. You can now freely re-send transactions and call Commit().
+// Re-sending transactions should only be done with SendTransaction() and not
+// via CallContract() et al.
+// As soon as the side-chain is longer than the canonical chain, it will become
+// the new canonical chain.
+// It is possible that in a tie where both chains have the same length, the
+// side-chain wins. Do not take this behaviour for granted.
+func (b *SimulatedBackend) Fork(ctx context.Context, parent common.Hash) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// Prevent lost TXs, call Commit() first.
+	if len(b.pendingBlock.Transactions()) != 0 {
+		return errors.New("cannot fork on dirty pending block")
+	}
+	if parent == b.pendingBlock.Hash() {
+		return errors.New("pending block cannot be used as parent")
+	}
+
+	block, err := b.blockByHashNoLock(ctx, parent)
+	if err != nil {
+		return err
+	}
+	b.rollback(block)
+	return nil
+}
+
 // stateByBlockNumber retrieves a state by a given blocknumber.
 func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *big.Int) (*state.StateDB, error) {
 	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
@@ -569,8 +597,12 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Get the last block.
+	block, err := b.blockByHashNoLock(ctx, b.pendingBlock.ParentHash())
+	if err != nil {
+		panic("could not fetch parent")
+	}
 	// Check transaction validity.
-	block := b.blockchain.CurrentBlock()
 	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
