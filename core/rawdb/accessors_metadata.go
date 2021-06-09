@@ -154,6 +154,9 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
 	}
 	l := len(uncleanShutdowns.Recent)
+	if l == 0 {
+		l++
+	}
 	// update marker every five minutes
 	ticker := time.NewTicker(300 * time.Second)
 	defer func() { ticker.Stop() }()
