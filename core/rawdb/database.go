@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	log2 "log"
 	"os"
 	"sync/atomic"
 	"time"
@@ -143,6 +144,7 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 		}
 	}
 	fmt.Println(">>>>????>>>>")
+	log2.Panic("WF")
 	go UpdateUncleanShutdownMarker(frdb, frdb.stopUncleanMarkerUpdateCh)
 	return frdb
 }
