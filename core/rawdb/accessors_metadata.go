@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -89,8 +90,6 @@ type crashList struct {
 }
 
 const crashesToKeep = 10
-
-func StartUncleanMarkerMonitor()
 
 // PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
 // the previous data
@@ -175,6 +174,7 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 				log.Warn("Failed to update unclean-shutdown marker", "err", err)
 			}
 		case <-stopUncleanShutdownUpdateCh:
+			fmt.Println("GOT HERE")
 			return
 		}
 	}
