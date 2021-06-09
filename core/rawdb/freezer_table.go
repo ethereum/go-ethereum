@@ -371,7 +371,7 @@ func (t *freezerTable) truncate(items uint64) error {
 		t.releaseFilesAfter(expected.filenum, true)
 		// Set back the historic head
 		t.head = newHead
-		atomic.StoreUint32(&t.headId, expected.filenum)
+		t.headId = expected.filenum
 	}
 	if err := truncateFreezerFile(t.head, int64(expected.offset)); err != nil {
 		return err
@@ -568,20 +568,22 @@ func (t *freezerTable) advanceHead() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	nextID := atomic.LoadUint32(&t.headId) + 1
 	// We open the next file in truncated mode -- if this file already
-	// exists, we need to start over from scratch on it
+	// exists, we need to start over from scratch on it.
+	nextID := t.headId + 1
 	newHead, err := t.openFile(nextID, openFreezerFileTruncated)
 	if err != nil {
 		return err
 	}
-	// Close old file, and reopen in RDONLY mode
+
+	// Close old file, and reopen in RDONLY mode.
 	t.releaseFile(t.headId)
 	t.openFile(t.headId, openFreezerFileForReadOnly)
-	// Swap out the current head
+
+	// Swap out the current head.
 	t.head = newHead
 	t.headBytes = 0
-	atomic.StoreUint32(&t.headId, nextID)
+	t.headId = nextID
 	return nil
 }
 
