@@ -124,8 +124,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	return previous, discarded, nil
 }
 
-// PopUncleanShutdownMarker removes the last unclean shutdown marker and stops
-// the function updating the marker (UpdateUncleanShutdownMarker)
+// PopUncleanShutdownMarker removes the last unclean shutdown marker
 func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
