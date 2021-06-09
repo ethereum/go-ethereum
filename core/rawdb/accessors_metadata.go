@@ -214,7 +214,7 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpda
 		l++
 	}
 	// update marker every five minutes
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(300 * time.Second)
 	defer func() { ticker.Stop() }()
 	for {
 		select {
