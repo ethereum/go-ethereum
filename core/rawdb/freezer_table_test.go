@@ -18,18 +18,14 @@ package rawdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -710,64 +706,6 @@ func getChunk(size int, b int) []byte {
 // However, all 'normal' failure modes arising due to failing to sync() or save a file
 // should be handled already, and the case described above can only (?) happen if an
 // external process/user deletes files from the filesystem.
-
-// TestAppendTruncateParallel is a test to check if the Append/truncate operations are
-// racy.
-//
-// The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is dependent
-// on timing rather than 'clever' input -- there's no determinism.
-func TestAppendTruncateParallel(t *testing.T) {
-	t.Skip()
-
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fill := func(mark uint64) []byte {
-		data := make([]byte, 8)
-		binary.LittleEndian.PutUint64(data, mark)
-		return data
-	}
-
-	for i := 0; i < 5000; i++ {
-		require.NoError(t, f.truncate(0))
-
-		var (
-			data0 = fill(0)
-			data1 = fill(1)
-			batch = f.newBatch()
-		)
-		require.NoError(t, batch.AppendRaw(0, data0))
-		require.NoError(t, batch.Commit())
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			assert.NoError(t, f.truncate(0))
-			wg.Done()
-		}()
-		go func() {
-			batch := f.newBatch()
-			assert.NoError(t, batch.AppendRaw(1, data1))
-			assert.NoError(t, batch.Commit())
-			wg.Done()
-		}()
-		wg.Wait()
-
-		if have, err := f.Retrieve(0); err == nil {
-			if !bytes.Equal(have, data0) {
-				t.Fatalf("have %x want %x", have, data0)
-			}
-		}
-	}
-}
 
 func writeChunks(t *testing.T, ft *freezerTable, n int, length int) {
 	t.Helper()

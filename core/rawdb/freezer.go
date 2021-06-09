@@ -94,7 +94,10 @@ type freezer struct {
 
 // newFreezer creates a chain freezer that moves ancient chain data into
 // append-only flat file containers.
-func newFreezer(datadir string, namespace string, readonly bool) (*freezer, error) {
+//
+// The 'tables' argument defines the data tables. If the value of a map
+// entry is true, snappy compression is disabled for the table.
+func newFreezer(datadir string, namespace string, readonly bool, tables map[string]bool) (*freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -125,7 +128,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 	}
 
 	// Create the tables.
-	for name, disableSnappy := range FreezerNoSnappy {
+	for name, disableSnappy := range tables {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
 		if err != nil {
 			for _, table := range freezer.tables {

@@ -512,6 +512,7 @@ func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
 func (t *freezerTable) retrieve(item uint64) ([]byte, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
+
 	// Ensure the table and the item is accessible
 	if t.index == nil || t.head == nil {
 		return nil, errClosed
