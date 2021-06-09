@@ -565,6 +565,9 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 // and a new file must be opened. The caller of this method must hold the write-lock
 // before calling this method.
 func (t *freezerTable) advanceHead() error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	nextID := atomic.LoadUint32(&t.headId) + 1
 	// We open the next file in truncated mode -- if this file already
 	// exists, we need to start over from scratch on it

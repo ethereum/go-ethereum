@@ -36,7 +36,9 @@ func newFreezerForTesting(t *testing.T) (*freezer, string) {
 		t.Fatal(err)
 	}
 	tables := map[string]bool{"test": true}
-	f, err := newFreezer(dir, "", false, 257, tables) // note: super low max table size
+	// note: using low max table size here to ensure the tests actually
+	// switch between multiple files.
+	f, err := newFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -112,7 +114,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	var item = make([]byte, 256)
 
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 1000; i++ {
 		// First reset, and write 100 items.
 		if err := f.TruncateAncients(0); err != nil {
 			t.Fatal("truncate failed:", err)
