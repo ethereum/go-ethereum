@@ -158,7 +158,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	return nil
 }
 
-// ToMessage converts TransactionArgs to the Message type used by the core evm
+// ToMessage converts th transaction arguments to the Message type used by the
+// core evm. This method is used in calls and traces that do not require a real
+// live transaction.
 func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
@@ -194,9 +196,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	} else {
 		// A basefee is provided, necessitating 1559-type execution
 		if args.GasPrice != nil {
+			// User specified the legacy gas field, convert to 1559 gas typing
 			gasPrice = args.GasPrice.ToInt()
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
+			// User specified 1559 gas feilds (or none), use those
 			gasFeeCap = new(big.Int)
 			if args.MaxFeePerGas != nil {
 				gasFeeCap = args.MaxFeePerGas.ToInt()
@@ -205,7 +209,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 			if args.MaxPriorityFeePerGas != nil {
 				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
 			}
-			gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
+			gasPrice = new(big.Int)
+			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
+				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+			}
 		}
 	}
 	value := new(big.Int)
