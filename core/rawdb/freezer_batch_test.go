@@ -17,14 +17,11 @@
 package rawdb
 
 import (
-	"bytes"
 	"io/ioutil"
-	"math/big"
 	"math/rand"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -45,84 +42,6 @@ func setupBatch(t *testing.T, name string, maxFilesize uint32, noCompression boo
 		t.Fatal(err)
 	}
 	return f, cleanup
-}
-
-func TestBatch(t *testing.T) {
-	f, cleanup := setupBatch(t, "freezer", 31, true)
-	defer cleanup()
-	batch := f.newBatch()
-	// Write 15 bytes 30 times
-	for x := 0; x < 30; x++ {
-		data := getChunk(15, x)
-		batch.AppendRaw(uint64(x), data)
-	}
-	if err := batch.commit(); err != nil {
-		t.Fatal(err)
-	}
-	t.Log(f.dumpIndexString(0, 30))
-
-	if got, err := f.Retrieve(29); err != nil {
-		t.Fatal(err)
-	} else if exp := getChunk(15, 29); !bytes.Equal(got, exp) {
-		t.Fatalf("expected %x got %x", exp, got)
-	}
-}
-
-func TestBatchRLP(t *testing.T) {
-	f, cleanup := setupBatch(t, "freezer-rlp", 31, true)
-	defer cleanup()
-	batch := f.newBatch()
-	// Write 15 bytes 30 times
-	for x := 0; x < 30; x++ {
-		data := big.NewInt(int64(x))
-		data = data.Exp(data, data, nil)
-		batch.Append(uint64(x), data)
-	}
-	if err := batch.commit(); err != nil {
-		t.Fatal(err)
-	}
-	t.Log(f.dumpIndexString(0, 30))
-
-	if got, err := f.Retrieve(29); err != nil {
-		t.Fatal(err)
-	} else if exp := common.FromHex("921d79c05d04235e8807c34cbc36a8b48a4c0d"); !bytes.Equal(got, exp) {
-		t.Fatalf("expected %x got %x", exp, got)
-	}
-}
-
-func TestBatchSequence(t *testing.T) {
-	f, cleanup := setupBatch(t, "freezer-batchid", 31, true)
-	defer cleanup()
-	batch := f.newBatch()
-	if err := batch.AppendRaw(2, []byte{0}); err == nil {
-		t.Fatal("expected error")
-	}
-	if err := batch.AppendRaw(0, []byte{0}); err != nil {
-		t.Fatal("error from AppendRaw(0, ...):", err)
-	}
-	if err := batch.AppendRaw(2, []byte{0}); err == nil {
-		t.Fatal("expected error")
-	}
-	if err := batch.commit(); err != nil {
-		t.Fatal("error from Commit:", err)
-	}
-	// if have, want := batch.headBytes, uint32(1); have != want {
-	// 	t.Fatalf("have %d, want %d", have, want)
-	// }
-	// Add some dummy data that we then clear out
-	// if err := batch.AppendRaw(1000, []byte{1, 1, 1, 1, 1}); err == nil {
-	// 	t.Fatal("expected error")
-	// }
-	// batch.Reset() // Clear it out
-	// if err := batch.AppendRaw(0, []byte{0}); err != nil {
-	// 	t.Fatalf("expected no error, got %v", err)
-	// }
-	// if err := batch.AppendRaw(1, []byte{0}); err != nil {
-	// 	t.Fatalf("expected no error, got %v", err)
-	// }
-	// if err := batch.Commit(); err != nil {
-	// 	t.Fatalf("expected no error, got %v", err)
-	// }
 }
 
 func BenchmarkBatchAppendBlob32(b *testing.B) {

@@ -21,36 +21,79 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 )
 
-func newFreezerForTesting(t *testing.T) (*freezer, string) {
-	t.Helper()
+var freezerTestTableDef = map[string]bool{"test": true}
 
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
+func TestFreezerModify(t *testing.T) {
+	t.Parallel()
+
+	// Create test data.
+	var valuesRaw [][]byte
+	var valuesRLP []*big.Int
+	for x := 0; x < 100; x++ {
+		v := getChunk(256, x)
+		valuesRaw = append(valuesRaw, v)
+		iv := big.NewInt(int64(x))
+		iv = iv.Exp(iv, iv, nil)
+		valuesRLP = append(valuesRLP, iv)
 	}
-	// note: using low max table size here to ensure the tests actually
-	// switch between multiple files.
-	tables := map[string]bool{"test": true}
-	f, err := newFreezer(dir, "", false, 2049, tables)
+
+	tables := map[string]bool{"raw": true, "rlp": false}
+	f, dir := newFreezerForTesting(t, tables)
+	defer os.RemoveAll(dir)
+	defer f.Close()
+
+	// Commit test data.
+	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for i := range valuesRaw {
+			if err := op.AppendRaw("raw", uint64(i), valuesRaw[i]); err != nil {
+				return err
+			}
+			if err := op.Append("rlp", uint64(i), valuesRLP[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatal("can't open freezer", err)
+		t.Fatal("ModifyAncients failed:", err)
 	}
-	return f, dir
+
+	// Dump indexes.
+	for _, table := range f.tables {
+		t.Log(table.name, "index:", table.dumpIndexString(0, int64(len(valuesRaw))))
+	}
+
+	// Read back test data.
+	checkAncientCount(t, f, "raw", uint64(len(valuesRaw)))
+	checkAncientCount(t, f, "rlp", uint64(len(valuesRLP)))
+	for i := range valuesRaw {
+		v, _ := f.Ancient("raw", uint64(i))
+		if !bytes.Equal(v, valuesRaw[i]) {
+			t.Fatalf("wrong raw value at %d: %x", i, v)
+		}
+		ivEnc, _ := f.Ancient("rlp", uint64(i))
+		want, _ := rlp.EncodeToBytes(valuesRLP[i])
+		if !bytes.Equal(ivEnc, want) {
+			t.Fatalf("wrong RLP value at %d: %x", i, ivEnc)
+		}
+	}
 }
 
 // This checks that ModifyAncients rolls back freezer updates
 // when the function passed to it returns an error.
 func TestFreezerModifyRollback(t *testing.T) {
-	f, dir := newFreezerForTesting(t)
+	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
 
 	theError := errors.New("oops")
@@ -80,7 +123,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 // This test runs ModifyAncients and Ancient concurrently with each other.
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
-	f, dir := newFreezerForTesting(t)
+	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
 	defer f.Close()
 
@@ -141,7 +184,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 
 // This test runs ModifyAncients and TruncateAncients concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
-	f, dir := newFreezerForTesting(t)
+	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
 	defer f.Close()
 
@@ -200,6 +243,22 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		}
 		checkAncientCount(t, f, "test", 10)
 	}
+}
+
+func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
+	t.Helper()
+
+	dir, err := ioutil.TempDir("", "freezer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// note: using low max table size here to ensure the tests actually
+	// switch between multiple files.
+	f, err := newFreezer(dir, "", false, 2049, tables)
+	if err != nil {
+		t.Fatal("can't open freezer", err)
+	}
+	return f, dir
 }
 
 // checkAncientCount verifies that the freezer contains n items.
