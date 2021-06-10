@@ -105,6 +105,9 @@ func TestEthClient(t *testing.T) {
 		"TestSubscribePendingTxs": {
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		},
+		"TestCallContract": {
+			func(t *testing.T) { testCallContract(t, client) },
+		},
 	}
 	t.Parallel()
 	for name, tt := range tests {
@@ -183,7 +186,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	}
 	// test balance
 	balance, _ := ethcl.BalanceAt(context.Background(), result.Address, nil)
-	if result.Balance.ToInt().Cmp(balance) != 0 {
+	if result.Balance.Cmp(balance) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
 	}
 }
@@ -258,5 +261,29 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	hash := <-ch
 	if hash != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	}
+}
+
+func testCallContract(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	msg := ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      21000,
+		GasPrice: big.NewInt(1),
+		Value:    big.NewInt(1),
+	}
+	// CallContract without override
+	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// CallContract with override
+	override := OverrideAccount{
+		Nonce: 1,
+	}
+	mapAcc := make(map[common.Address]OverrideAccount)
+	mapAcc[testAddr] = override
+	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
