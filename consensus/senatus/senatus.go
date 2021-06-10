@@ -713,8 +713,8 @@ func (s *Senatus) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Validators)/2+1)*wiggleTime + fixedWiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
+		wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTime
+		delay += time.Duration(rand.Int63n(int64(wiggle))) + fixedWiggleTime
 
 		log.Trace("out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
