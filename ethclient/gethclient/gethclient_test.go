@@ -181,7 +181,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	}
 	// test nonce
 	nonce, _ := ethcl.NonceAt(context.Background(), result.Address, nil)
-	if uint64(result.Nonce) != nonce {
+	if result.Nonce != nonce {
 		t.Fatalf("invalid nonce, want: %v got: %v", nonce, result.Nonce)
 	}
 	// test balance
