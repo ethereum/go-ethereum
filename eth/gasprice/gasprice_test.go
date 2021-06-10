@@ -33,20 +33,43 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const testHead = 32
+
 type testBackend struct {
-	chain *core.BlockChain
+	chain   *core.BlockChain
+	pending bool // pending block available
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number > testHead {
+		return nil, nil
+	}
 	if number == rpc.LatestBlockNumber {
-		return b.chain.CurrentBlock().Header(), nil
+		number = testHead
+	}
+	if number == rpc.PendingBlockNumber {
+		if b.pending {
+			number = testHead + 1
+		} else {
+			return nil, nil
+		}
 	}
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
 func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+	if number > testHead {
+		return nil, nil
+	}
 	if number == rpc.LatestBlockNumber {
-		return b.chain.CurrentBlock(), nil
+		number = testHead
+	}
+	if number == rpc.PendingBlockNumber {
+		if b.pending {
+			number = testHead + 1
+		} else {
+			return nil, nil
+		}
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
@@ -55,7 +78,7 @@ func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chain.Config()
 }
 
-func newTestBackend(t *testing.T, londonBlock *big.Int) *testBackend {
+func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
@@ -76,7 +99,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int) *testBackend {
 	genesis, _ := gspec.Commit(db)
 
 	// Generate testing blocks
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, 32, func(i int, b *core.BlockGen) {
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		var tx *types.Transaction
@@ -116,7 +139,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int) *testBackend {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
 	chain.InsertChain(blocks)
-	return &testBackend{chain: chain}
+	return &testBackend{chain: chain, pending: pending}
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
@@ -144,7 +167,7 @@ func TestSuggestTipCap(t *testing.T) {
 		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
 	}
 	for _, c := range cases {
-		backend := newTestBackend(t, c.fork)
+		backend := newTestBackend(t, c.fork, false)
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G

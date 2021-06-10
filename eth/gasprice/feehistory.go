@@ -1,0 +1,251 @@
+// Copyright 2021 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package gasprice
+
+import (
+	"context"
+	"errors"
+	"math/big"
+	"sort"
+	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var errInvalidPercentiles = errors.New("Invalid reward percentiles")
+
+const maxBlockCount = 1024 // number of blocks retrievable with a single query
+
+// blockFees represents a single block for processing
+type blockFees struct {
+	// set by the caller
+	blockNumber rpc.BlockNumber
+	header      *types.Header
+	block       *types.Block // only set if reward percentiles are requested
+	// filled by processBlock
+	reward               []*big.Int
+	baseFee, nextBaseFee *big.Int
+	gasUsedRatio         float64
+	err                  error
+}
+
+// processBlock takes a blockFees structure with the blockNumber, the header and optionally
+// the block field filled in, retrieves the block from the backend if not present yet and
+// fills in the rest of the fields.
+func (f *Oracle) processBlock(bf *blockFees, percentiles []float64) {
+	chainconfig := f.backend.ChainConfig()
+	if bf.baseFee = bf.header.BaseFee; bf.baseFee == nil {
+		bf.baseFee = new(big.Int)
+	}
+	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
+		bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+	} else {
+		bf.nextBaseFee = new(big.Int)
+	}
+	bf.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
+	if len(percentiles) == 0 {
+		// rewards were not requested, return null
+		return
+	}
+
+	bf.reward = make([]*big.Int, len(percentiles))
+	if len(bf.block.Transactions()) == 0 {
+		// return an all zero row if there are no transactions to gather data from
+		for i := range bf.reward {
+			bf.reward[i] = new(big.Int)
+		}
+		return
+	}
+	txs := make([]*types.Transaction, len(bf.block.Transactions()))
+	copy(txs, bf.block.Transactions())
+	sorter := newSorter(txs, bf.block.BaseFee())
+	sort.Sort(sorter)
+
+	var txIndex int
+	sumGasUsed := txs[0].Gas()
+
+	for i, p := range percentiles {
+		thresholdGasUsed := uint64(float64(bf.block.GasUsed()) * p / 100)
+		for sumGasUsed < thresholdGasUsed && txIndex < len(bf.block.Transactions())-1 {
+			txIndex++
+			sumGasUsed += txs[txIndex].Gas()
+		}
+		bf.reward[i], _ = txs[txIndex].EffectiveGasTip(bf.block.BaseFee())
+	}
+}
+
+// FeeHistory returns data relevant for fee estimation based on the specified range of blocks.
+// The range can be specified either with absolute block numbers or ending with the latest
+// or pending block. Backends may or may not support gathering data from the pending block
+// or blocks older than a certain age (specified in maxHistory). The first block of the
+// actually processed range is returned to avoid ambiguity when parts of the requested range
+// are not available or when the head has changed during processing this request.
+// Three arrays are returned based on the processed blocks:
+// - reward: the requested percentiles of effective priority fees per gas of transactions in each
+//   block, sorted in ascending order and weighted by gas used.
+// - baseFee: base fee per gas in the given block
+// - gasUsedRatio: gasUsed/gasLimit in the given block
+// Note: baseFee includes the next block after the newest of the returned range, because this
+// value can be derived from the newest block.
+func (f *Oracle) FeeHistory(ctx context.Context, blockCount int, lastBlockNumber rpc.BlockNumber, rewardPercentiles []float64) (firstBlockNumber rpc.BlockNumber, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
+	if blockCount < 1 {
+		// returning with no data and no error means there are no retrievable blocks
+		return
+	}
+	if blockCount > maxBlockCount {
+		blockCount = maxBlockCount
+	}
+	for i, p := range rewardPercentiles {
+		if p < 0 || p > 100 || (i > 0 && p < rewardPercentiles[i-1]) {
+			return 0, nil, nil, nil, errInvalidPercentiles
+		}
+	}
+	var (
+		headBlockNumber rpc.BlockNumber
+		pendingBlock    *types.Block
+		latestHeader    *types.Header
+	)
+
+	// query either pending block or head header and set headBlockNumber
+	if lastBlockNumber == rpc.PendingBlockNumber {
+		if pendingBlock, _ = f.backend.BlockByNumber(ctx, lastBlockNumber); pendingBlock != nil {
+			lastBlockNumber = rpc.BlockNumber(pendingBlock.NumberU64())
+			headBlockNumber = lastBlockNumber - 1
+		} else {
+			// pending block not supported by backend, process until latest block
+			lastBlockNumber = rpc.LatestBlockNumber
+			blockCount--
+			if blockCount == 0 {
+				return
+			}
+		}
+	}
+	if pendingBlock == nil {
+		// if pending block is not fetched then we retrieve the head header to get the head block number
+		var err error
+		if latestHeader, err = f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err == nil {
+			headBlockNumber = rpc.BlockNumber(latestHeader.Number.Uint64())
+		} else {
+			return 0, nil, nil, nil, err
+		}
+	}
+
+	if lastBlockNumber == rpc.LatestBlockNumber {
+		lastBlockNumber = headBlockNumber
+	}
+	processBlocks := len(rewardPercentiles) != 0
+	// limit retrieval to maxHistory if set
+	var maxHistory int
+	if processBlocks {
+		maxHistory = f.maxBlockHistory
+	} else {
+		maxHistory = f.maxHeaderHistory
+	}
+	if maxHistory != 0 {
+		if tooOldCount := int64(headBlockNumber) - int64(maxHistory) - int64(lastBlockNumber) + int64(blockCount); tooOldCount > 0 {
+			// tooOldCount is the number of requested blocks that are too old to be served
+			if int64(blockCount) > tooOldCount {
+				blockCount -= int(tooOldCount)
+			} else {
+				// returning with no data and no error means there are no retrievable blocks in the specified range
+				return
+			}
+		}
+	}
+	// ensure not trying to retrieve before genesis
+	if rpc.BlockNumber(blockCount) > lastBlockNumber+1 {
+		blockCount = int(lastBlockNumber + 1)
+	}
+
+	firstBlockNumber = lastBlockNumber + 1 - rpc.BlockNumber(blockCount)
+	processNext := int64(firstBlockNumber)
+	resultCh := make(chan *blockFees, blockCount)
+	threadCount := 4
+	if blockCount < threadCount {
+		threadCount = blockCount
+	}
+	for i := 0; i < threadCount; i++ {
+		go func() {
+			for {
+				blockNumber := rpc.BlockNumber(atomic.AddInt64(&processNext, 1) - 1)
+				if blockNumber > lastBlockNumber {
+					return
+				}
+
+				bf := &blockFees{blockNumber: blockNumber}
+				if blockNumber <= headBlockNumber {
+					if processBlocks {
+						bf.block, bf.err = f.backend.BlockByNumber(ctx, blockNumber)
+					} else {
+						if blockNumber == headBlockNumber && latestHeader != nil {
+							// do not request again if we already have it
+							bf.header = latestHeader
+						} else {
+							bf.header, bf.err = f.backend.HeaderByNumber(ctx, blockNumber)
+						}
+					}
+				} else {
+					if blockNumber == headBlockNumber+1 && pendingBlock != nil {
+						bf.block = pendingBlock
+					}
+				}
+
+				if bf.block != nil {
+					bf.header = bf.block.Header()
+				}
+				if bf.header != nil {
+					f.processBlock(bf, rewardPercentiles)
+				}
+				// send to resultCh even if empty to guarantee that blockCount items are sent in total
+				resultCh <- bf
+			}
+		}()
+	}
+
+	reward = make([][]*big.Int, blockCount)
+	baseFee = make([]*big.Int, blockCount+1)
+	gasUsedRatio = make([]float64, blockCount)
+	firstMissing := blockCount
+
+	for ; blockCount > 0; blockCount-- {
+		bf := <-resultCh
+		if bf.err != nil {
+			return 0, nil, nil, nil, err
+		}
+		i := int(rpc.BlockNumber(bf.blockNumber) - firstBlockNumber)
+		if bf.header != nil {
+			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = bf.reward, bf.baseFee, bf.nextBaseFee, bf.gasUsedRatio
+		} else {
+			// getting no block and no error means we are requesting into the future (might happen because of a reorg)
+			if i < firstMissing {
+				firstMissing = i
+			}
+		}
+	}
+	if firstMissing == 0 {
+		return 0, nil, nil, nil, nil
+	}
+	if processBlocks {
+		reward = reward[:firstMissing]
+	} else {
+		reward = nil
+	}
+	baseFee, gasUsedRatio = baseFee[:firstMissing+1], gasUsedRatio[:firstMissing]
+	return
+}

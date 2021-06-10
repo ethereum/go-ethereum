@@ -37,11 +37,13 @@ var (
 )
 
 type Config struct {
-	Blocks      int
-	Percentile  int
-	Default     *big.Int `toml:",omitempty"`
-	MaxPrice    *big.Int `toml:",omitempty"`
-	IgnorePrice *big.Int `toml:",omitempty"`
+	Blocks           int
+	Percentile       int
+	MaxHeaderHistory int
+	MaxBlockHistory  int
+	Default          *big.Int `toml:",omitempty"`
+	MaxPrice         *big.Int `toml:",omitempty"`
+	IgnorePrice      *big.Int `toml:",omitempty"`
 }
 
 // OracleBackend includes all necessary background APIs for oracle.
@@ -62,8 +64,8 @@ type Oracle struct {
 	cacheLock   sync.RWMutex
 	fetchLock   sync.Mutex
 
-	checkBlocks int
-	percentile  int
+	checkBlocks, percentile           int
+	maxHeaderHistory, maxBlockHistory int
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
@@ -96,12 +98,14 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
 	}
 	return &Oracle{
-		backend:     backend,
-		lastPrice:   params.Default,
-		maxPrice:    maxPrice,
-		ignorePrice: ignorePrice,
-		checkBlocks: blocks,
-		percentile:  percent,
+		backend:          backend,
+		lastPrice:        params.Default,
+		maxPrice:         maxPrice,
+		ignorePrice:      ignorePrice,
+		checkBlocks:      blocks,
+		percentile:       percent,
+		maxHeaderHistory: params.MaxHeaderHistory,
+		maxBlockHistory:  params.MaxBlockHistory,
 	}
 }
 

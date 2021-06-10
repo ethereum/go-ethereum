@@ -80,6 +80,19 @@ func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.
 	return (*hexutil.Big)(tipcap), err
 }
 
+type feeHistoryResults struct {
+	FirstBlock   rpc.BlockNumber
+	Reward       [][]*big.Int //hexutil.Big
+	BaseFee      []*big.Int   //hexutil.Big
+	GasUsedRatio []float64
+}
+
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (feeHistoryResults, error) {
+	//	return s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
+	firstBlock, reward, baseFee, gasUsedRatio, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+	return feeHistoryResults{firstBlock, reward, baseFee, gasUsedRatio}, err
+}
+
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronise from
