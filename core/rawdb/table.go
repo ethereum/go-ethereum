@@ -75,7 +75,7 @@ func (t *table) AncientSize(kind string) (uint64, error) {
 }
 
 // ModifyAncients runs an ancient write operation on the underlying database.
-func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, error) {
+func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {
 	return t.db.ModifyAncients(fn)
 }
 

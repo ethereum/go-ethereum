@@ -216,7 +216,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 
 // ModifyAncients runs the given write operation.
 // If the operation returns an error, the results are not committed.
-func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, error) {
+func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
@@ -233,7 +233,7 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int, erro
 		return 0, err
 	}
 	atomic.StoreUint64(&f.frozen, item)
-	return int(writeSize), nil
+	return writeSize, nil
 }
 
 // TruncateAncients discards any recent data above the provided threshold number.
