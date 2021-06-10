@@ -1759,7 +1759,6 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, cfg node.C
 
 func SetupMetrics(ctx *cli.Context) {
 	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
 
 		var (
 			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
@@ -1767,21 +1766,31 @@ func SetupMetrics(ctx *cli.Context) {
 			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
 			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
 			password     = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+			influxDBTags = ctx.GlobalString(MetricsInfluxDBTagsFlag.Name)
+
+			enableHTTP = ctx.GlobalIsSet(MetricsHTTPFlag.Name)
+			host       = ctx.GlobalString(MetricsHTTPFlag.Name)
+			port       = ctx.GlobalInt(MetricsPortFlag.Name)
 		)
+		SetupMetricsLiterally(enableExport, endpoint, database, username, password, influxDBTags, enableHTTP, host, port)
+	}
+}
 
-		if enableExport {
-			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
+func SetupMetricsLiterally(enableExport bool, endpoint, database, username, password, influxDBTags string, enableHTTP bool, host string, port int) {
+	log.Info("Enabling metrics collection")
 
-			log.Info("Enabling metrics export to InfluxDB")
+	if enableExport {
+		tagsMap := SplitTagsFlag(influxDBTags)
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
-		}
+		log.Info("Enabling metrics export to InfluxDB")
 
-		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
-			address := fmt.Sprintf("%s:%d", ctx.GlobalString(MetricsHTTPFlag.Name), ctx.GlobalInt(MetricsPortFlag.Name))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		}
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+	}
+
+	if enableHTTP {
+		address := fmt.Sprintf("%s:%d", host, port)
+		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+		exp.Setup(address)
 	}
 }
 

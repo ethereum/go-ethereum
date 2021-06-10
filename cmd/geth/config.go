@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"time"
 	"unicode"
 
 	"gopkg.in/urfave/cli.v1"
@@ -197,6 +198,7 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
+	configFileMetricsEnabled := cfg.Metrics.Enabled
 	if ctx.GlobalIsSet(utils.MetricsEnabledFlag.Name) {
 		cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
 	}
@@ -227,4 +229,22 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 	if ctx.GlobalIsSet(utils.MetricsInfluxDBTagsFlag.Name) {
 		cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
 	}
+	// Try to setup metrics here
+	if cfg.Metrics.Enabled {
+		metrics.Enabled = true
+		var (
+			enableExport = cfg.Metrics.EnableInfluxDB
+			endpoint     = cfg.Metrics.InfluxDBEndpoint
+			database     = cfg.Metrics.InfluxDBDatabase
+			username     = cfg.Metrics.InfluxDBUsername
+			password     = cfg.Metrics.InfluxDBPassword
+			influxDBTags = cfg.Metrics.InfluxDBTags
+
+			enableHTTP = configFileMetricsEnabled || ctx.GlobalIsSet(utils.MetricsHTTPFlag.Name)
+			host       = cfg.Metrics.HTTP
+			port       = cfg.Metrics.Port
+		)
+		utils.SetupMetricsLiterally(enableExport, endpoint, database, username, password, influxDBTags, enableHTTP, host, port)
+	}
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
