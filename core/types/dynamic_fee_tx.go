@@ -25,8 +25,8 @@ import (
 type DynamicFeeTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
-	Tip        *big.Int
-	FeeCap     *big.Int
+	GasTipCap  *big.Int
+	GasFeeCap  *big.Int
 	Gas        uint64
 	To         *common.Address `rlp:"nil"` // nil means contract creation
 	Value      *big.Int
@@ -50,8 +50,8 @@ func (tx *DynamicFeeTx) copy() TxData {
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
 		ChainID:    new(big.Int),
-		Tip:        new(big.Int),
-		FeeCap:     new(big.Int),
+		GasTipCap:  new(big.Int),
+		GasFeeCap:  new(big.Int),
 		V:          new(big.Int),
 		R:          new(big.Int),
 		S:          new(big.Int),
@@ -63,11 +63,11 @@ func (tx *DynamicFeeTx) copy() TxData {
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	if tx.Tip != nil {
-		cpy.Tip.Set(tx.Tip)
+	if tx.GasTipCap != nil {
+		cpy.GasTipCap.Set(tx.GasTipCap)
 	}
-	if tx.FeeCap != nil {
-		cpy.FeeCap.Set(tx.FeeCap)
+	if tx.GasFeeCap != nil {
+		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
@@ -88,9 +88,9 @@ func (tx *DynamicFeeTx) protected() bool        { return true }
 func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DynamicFeeTx) feeCap() *big.Int       { return tx.FeeCap }
-func (tx *DynamicFeeTx) tip() *big.Int          { return tx.Tip }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.FeeCap }
+func (tx *DynamicFeeTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) gasTipCap() *big.Int    { return tx.GasTipCap }
+func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }

@@ -3116,13 +3116,13 @@ func TestEIP2718Transition(t *testing.T) {
 
 // TestEIP1559Transition tests the following:
 //
-// 1. A tranaction whose feeCap is greater than the baseFee is valid.
+// 1. A transaction whose gasFeeCap is greater than the baseFee is valid.
 // 2. Gas accounting for access lists on EIP-1559 transactions is correct.
 // 3. Only the transaction's tip will be received by the coinbase.
 // 4. The transaction sender pays for both the tip and baseFee.
 // 5. The coinbase receives only the partially realized tip when
-//    feeCap - tip < baseFee.
-// 6. Legacy transaction behave as expected (e.g. gasPrice = feeCap = tip).
+//    gasFeeCap - gasTipCap < baseFee.
+// 6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
 func TestEIP1559Transition(t *testing.T) {
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
@@ -3176,8 +3176,8 @@ func TestEIP1559Transition(t *testing.T) {
 			Nonce:      0,
 			To:         &aa,
 			Gas:        30000,
-			FeeCap:     newGwei(5),
-			Tip:        big.NewInt(2),
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
 			AccessList: accesses,
 			Data:       []byte{},
 		}
@@ -3212,7 +3212,7 @@ func TestEIP1559Transition(t *testing.T) {
 	// 3: Ensure that miner received only the tx's tip.
 	actual := state.GetBalance(block.Coinbase())
 	expected := new(big.Int).Add(
-		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].Tip().Uint64()),
+		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].GasTipCap().Uint64()),
 		ethash.ConstantinopleBlockReward,
 	)
 	if actual.Cmp(expected) != 0 {
@@ -3221,7 +3221,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
 	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
-	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].Tip().Uint64() + block.BaseFee().Uint64()))
+	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
@@ -3247,7 +3247,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 	block = chain.GetBlockByNumber(2)
 	state, _ = chain.State()
-	effectiveTip := block.Transactions()[0].Tip().Uint64() - block.BaseFee().Uint64()
+	effectiveTip := block.Transactions()[0].GasTipCap().Uint64() - block.BaseFee().Uint64()
 
 	// 6+5: Ensure that miner received only the tx's effective tip.
 	actual = state.GetBalance(block.Coinbase())

@@ -234,7 +234,7 @@ func mkTestTx(from common.MixedcaseAddress) core.SendTxArgs {
 		From:     from,
 		To:       &to,
 		Gas:      gas,
-		GasPrice: gasPrice,
+		GasPrice: &gasPrice,
 		Value:    value,
 		Data:     &data,
 		Nonce:    nonce}

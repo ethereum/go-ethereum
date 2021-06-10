@@ -101,8 +101,8 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 	tx, _ := types.SignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.DynamicFeeTx{
 		ChainID:    params.TestChainConfig.ChainID,
 		Nonce:      nonce,
-		Tip:        tip,
-		FeeCap:     gasFee,
+		GasTipCap:  tip,
+		GasFeeCap:  gasFee,
 		Gas:        gaslimit,
 		To:         &common.Address{},
 		Value:      big.NewInt(100),
@@ -2141,17 +2141,17 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Add pending transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
-	feeCap := int64(100)
-	feeCapThreshold := (feeCap * (100 + int64(testTxPoolConfig.PriceBump))) / 100
-	tip := int64(60)
-	tipThreshold := (tip * (100 + int64(testTxPoolConfig.PriceBump))) / 100
+	gasFeeCap := int64(100)
+	feeCapThreshold := (gasFeeCap * (100 + int64(testTxPoolConfig.PriceBump))) / 100
+	gasTipCap := int64(60)
+	tipThreshold := (gasTipCap * (100 + int64(testTxPoolConfig.PriceBump))) / 100
 
 	// Run the following identical checks for both the pending and queue pools:
 	//	1.  Send initial tx => accept
 	//	2.  Don't bump tip or fee cap => discard
 	//	3.  Bump both more than min => accept
 	//	4.  Check events match expected (2 new executable txs during pending, 0 during queue)
-	//	5.  Send new tx with larger tip and feeCap => accept
+	//	5.  Send new tx with larger tip and gasFeeCap => accept
 	//	6.  Bump tip max allowed so it's still underpriced => discard
 	//	7.  Bump fee cap max allowed so it's still underpriced => discard
 	//	8.  Bump tip min for acceptance => discard
@@ -2191,27 +2191,27 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 			t.Fatalf("cheap %s replacement event firing failed: %v", stage, err)
 		}
 		// 5.  Send new tx with larger tip and feeCap => accept
-		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(tip), key)
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(gasTipCap), key)
 		if err := pool.addRemoteSync(tx); err != nil {
 			t.Fatalf("failed to add original proper %s transaction: %v", stage, err)
 		}
 		// 6.  Bump tip max allowed so it's still underpriced => discard
-		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(tipThreshold-1), key)
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold-1), key)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 7.  Bump fee cap max allowed so it's still underpriced => discard
-		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold-1), big.NewInt(tip), key)
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold-1), big.NewInt(gasTipCap), key)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 8.  Bump tip min for acceptance => accept
-		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(tipThreshold), key)
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold), key)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 9.  Bump fee cap min for acceptance => accept
-		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(tip), key)
+		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(gasTipCap), key)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}

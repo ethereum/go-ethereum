@@ -280,13 +280,13 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		if old.FeeCapCmp(tx) >= 0 || old.TipCmp(tx) >= 0 {
+		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
 			return false, nil
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
-		aFeeCap := new(big.Int).Mul(a, old.FeeCap())
-		aTip := a.Mul(a, old.Tip())
+		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
+		aTip := a.Mul(a, old.GasTipCap())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
 		b := big.NewInt(100)
@@ -296,7 +296,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 		// Have to ensure that either the new fee cap or tip is higher than the
 		// old ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if tx.FeeCapIntCmp(thresholdFeeCap) < 0 || tx.TipIntCmp(thresholdTip) < 0 {
+		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
 	}
@@ -417,7 +417,7 @@ func (l *txList) LastElement() *types.Transaction {
 // priceHeap is a heap.Interface implementation over transactions for retrieving
 // price-sorted transactions to discard when the pool fills up. If baseFee is set
 // then the heap is sorted based on the effective tip based on the given base fee.
-// If baseFee is nil then the sorting is based on feeCap.
+// If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
 	baseFee *big.Int // heap should always be re-sorted after baseFee is changed
 	list    []*types.Transaction
@@ -440,16 +440,16 @@ func (h *priceHeap) Less(i, j int) bool {
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
-		if c := a.EffectiveTipCmp(b, h.baseFee); c != 0 {
+		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
 			return c
 		}
 	}
 	// Compare fee caps if baseFee is not specified or effective tips are equal
-	if c := a.FeeCapCmp(b); c != 0 {
+	if c := a.GasFeeCapCmp(b); c != 0 {
 		return c
 	}
 	// Compare tips if effective tips and fee caps are equal
-	return a.TipCmp(b)
+	return a.GasTipCapCmp(b)
 }
 
 func (h *priceHeap) Push(x interface{}) {
@@ -472,7 +472,7 @@ func (h *priceHeap) Pop() interface{} {
 // will be considered for tracking, sorting, eviction, etc.
 //
 // Two heaps are used for sorting: the urgent heap (based on effective tip in the next
-// block) and the floating heap (based on feeCap). Always the bigger heap is chosen for
+// block) and the floating heap (based on gasFeeCap). Always the bigger heap is chosen for
 // eviction. Transactions evicted from the urgent heap are first demoted into the floating heap.
 // In some cases (during a congestion, when blocks are full) the urgent heap can provide
 // better candidates for inclusion while in other cases (at the top of the baseFee peak)

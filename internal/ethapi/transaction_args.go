@@ -34,14 +34,14 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
-	From     *common.Address `json:"from"`
-	To       *common.Address `json:"to"`
-	Gas      *hexutil.Uint64 `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	FeeCap   *hexutil.Big    `json:"maxFeePerGas"`
-	Tip      *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	Value    *hexutil.Big    `json:"value"`
-	Nonce    *hexutil.Uint64 `json:"nonce"`
+	From                 *common.Address `json:"from"`
+	To                   *common.Address `json:"to"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	Value                *hexutil.Big    `json:"value"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -75,31 +75,31 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// After london, default to 1559 unless gasPrice is set
 	head := b.CurrentHeader()
 	if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
-		if args.Tip == nil {
+		if args.MaxPriorityFeePerGas == nil {
 			tip, err := b.SuggestGasTipCap(ctx)
 			if err != nil {
 				return err
 			}
-			args.Tip = (*hexutil.Big)(tip)
+			args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 		}
-		if args.FeeCap == nil {
-			feeCap := new(big.Int).Add(
-				(*big.Int)(args.Tip),
+		if args.MaxFeePerGas == nil {
+			gasFeeCap := new(big.Int).Add(
+				(*big.Int)(args.MaxPriorityFeePerGas),
 				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 			)
-			args.FeeCap = (*hexutil.Big)(feeCap)
+			args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
 		}
-		if args.FeeCap.ToInt().Cmp(args.Tip.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.FeeCap, args.Tip)
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
 	} else {
-		if args.FeeCap != nil || args.Tip != nil {
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
 			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 		}
 		if args.GasPrice == nil {
@@ -134,14 +134,14 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
 		callArgs := TransactionArgs{
-			From:       args.From,
-			To:         args.To,
-			GasPrice:   args.GasPrice,
-			FeeCap:     args.FeeCap,
-			Tip:        args.Tip,
-			Value:      args.Value,
-			Data:       args.Data,
-			AccessList: args.AccessList,
+			From:                 args.From,
+			To:                   args.To,
+			GasPrice:             args.GasPrice,
+			MaxFeePerGas:         args.MaxFeePerGas,
+			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+			Value:                args.Value,
+			Data:                 args.Data,
+			AccessList:           args.AccessList,
 		}
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
@@ -161,7 +161,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // ToMessage converts TransactionArgs to the Message type used by the core evm
 func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
-	if args.GasPrice != nil && (args.FeeCap != nil || args.Tip != nil) {
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Set sender address or use zero address if none specified.
@@ -180,9 +180,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		gas = globalGasCap
 	}
 	var (
-		gasPrice *big.Int
-		feeCap   *big.Int
-		tip      *big.Int
+		gasPrice  *big.Int
+		gasFeeCap *big.Int
+		gasTipCap *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -190,22 +190,22 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		if args.GasPrice != nil {
 			gasPrice = args.GasPrice.ToInt()
 		}
-		feeCap, tip = gasPrice, gasPrice
+		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
 		// A basefee is provided, necessitating 1559-type execution
 		if args.GasPrice != nil {
 			gasPrice = args.GasPrice.ToInt()
-			feeCap, tip = gasPrice, gasPrice
+			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
-			feeCap = new(big.Int)
-			if args.FeeCap != nil {
-				feeCap = args.FeeCap.ToInt()
+			gasFeeCap = new(big.Int)
+			if args.MaxFeePerGas != nil {
+				gasFeeCap = args.MaxFeePerGas.ToInt()
 			}
-			tip = new(big.Int)
-			if args.Tip != nil {
-				tip = args.Tip.ToInt()
+			gasTipCap = new(big.Int)
+			if args.MaxPriorityFeePerGas != nil {
+				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
 			}
-			gasPrice = math.BigMin(new(big.Int).Add(tip, baseFee), feeCap)
+			gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 		}
 	}
 	value := new(big.Int)
@@ -217,7 +217,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, feeCap, tip, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, false)
 	return msg, nil
 }
 
@@ -226,7 +226,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.FeeCap != nil:
+	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -236,8 +236,8 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(*args.Nonce),
 			Gas:        uint64(*args.Gas),
-			FeeCap:     (*big.Int)(args.FeeCap),
-			Tip:        (*big.Int)(args.Tip),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: al,
@@ -264,4 +264,10 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		}
 	}
 	return types.NewTx(data)
+}
+
+// ToTransaction converts the arguments to a transaction.
+// This assumes that setDefaults has been called.
+func (args *TransactionArgs) ToTransaction() *types.Transaction {
+	return args.toTransaction()
 }

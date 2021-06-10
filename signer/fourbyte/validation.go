@@ -73,6 +73,16 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 	if bytes.Equal(tx.To.Address().Bytes(), common.Address{}.Bytes()) {
 		messages.Crit("Transaction recipient is the zero address")
 	}
+	switch {
+	case tx.GasPrice == nil && tx.MaxFeePerGas == nil:
+		messages.Crit("Neither 'gasPrice' nor 'maxFeePerGas' specified.")
+	case tx.GasPrice == nil && tx.MaxPriorityFeePerGas == nil:
+		messages.Crit("Neither 'gasPrice' nor 'maxPriorityFeePerGas' specified.")
+	case tx.GasPrice != nil && tx.MaxFeePerGas != nil:
+		messages.Crit("Both 'gasPrice' and 'maxFeePerGas' specified.")
+	case tx.GasPrice != nil && tx.MaxPriorityFeePerGas != nil:
+		messages.Crit("Both 'gasPrice' and 'maxPriorityFeePerGas' specified.")
+	}
 	// Semantic fields validated, try to make heads or tails of the call data
 	db.ValidateCallData(selector, data, messages)
 	return messages, nil

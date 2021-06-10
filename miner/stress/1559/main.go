@@ -155,7 +155,7 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	// larger buffer for creating both valid and invalid transactions.
 	var buf = make([]byte, 32+5)
 	rand.Read(buf)
-	tip := new(big.Int).SetBytes(buf)
+	gasTipCap := new(big.Int).SetBytes(buf)
 
 	// If the given base fee is nil(the 1559 is still not available),
 	// generate a fake base fee in order to create 1559 tx forcibly.
@@ -163,18 +163,18 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 		baseFee = new(big.Int).SetInt64(int64(rand.Int31()))
 	}
 	// Generate the feecap, 75% valid feecap and 25% unguaranted.
-	var feeCap *big.Int
+	var gasFeeCap *big.Int
 	if rand.Intn(4) == 0 {
 		rand.Read(buf)
-		feeCap = new(big.Int).SetBytes(buf)
+		gasFeeCap = new(big.Int).SetBytes(buf)
 	} else {
-		feeCap = new(big.Int).Add(baseFee, tip)
+		gasFeeCap = new(big.Int).Add(baseFee, gasTipCap)
 	}
 	return types.MustSignNewTx(privKey, signer, &types.DynamicFeeTx{
 		ChainID:    signer.ChainID(),
 		Nonce:      nonce,
-		Tip:        tip,
-		FeeCap:     feeCap,
+		GasTipCap:  gasTipCap,
+		GasFeeCap:  gasFeeCap,
 		Gas:        21000,
 		To:         &recipient,
 		Value:      big.NewInt(100),
