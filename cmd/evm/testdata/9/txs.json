@@ -1,8 +1,8 @@
 [
   {
     "gas": "0x4ef00",
-    "tip": "0x2",
-    "feeCap": "0x12A05F200",
+    "maxPriorityFeePerGas": "0x2",
+    "maxFeePerGas": "0x12A05F200",
     "chainId": "0x1",
     "input": "0x",
     "nonce": "0x0",

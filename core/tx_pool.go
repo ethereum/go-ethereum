@@ -434,7 +434,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.gasPrice = price
 	// if the min miner fee increased, remove transactions below the new threshold
 	if price.Cmp(old) > 0 {
-		// pool.priced is sorted by FeeCap, so we have to iterate through pool.all instead
+		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
 		drop := pool.all.RemotesBelowTip(price)
 		for _, tx := range drop {
 			pool.removeTx(tx.Hash(), false)
@@ -574,14 +574,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
-	if tx.FeeCap().BitLen() > 256 {
+	if tx.GasFeeCap().BitLen() > 256 {
 		return ErrFeeCapVeryHigh
 	}
-	if tx.Tip().BitLen() > 256 {
+	if tx.GasTipCap().BitLen() > 256 {
 		return ErrTipVeryHigh
 	}
-	// Ensure feeCap is greater than or equal to tip.
-	if tx.FeeCapIntCmp(tx.Tip()) < 0 {
+	// Ensure gasFeeCap is greater than or equal to gasTipCap.
+	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
 		return ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
@@ -590,7 +590,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.TipIntCmp(pool.gasPrice) < 0 {
+	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -642,7 +642,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
-			log.Trace("Discarding underpriced transaction", "hash", hash, "tip", tx.Tip(), "feeCap", tx.FeeCap())
+			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
@@ -659,7 +659,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
-			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "tip", tx.Tip(), "feeCap", tx.FeeCap())
+			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
@@ -1765,7 +1765,7 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
 	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-		if tx.TipIntCmp(threshold) < 0 {
+		if tx.GasTipCapIntCmp(threshold) < 0 {
 			found = append(found, tx)
 		}
 		return true
