@@ -96,7 +96,7 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		data := getChunk(15, x)
 		batch := f.newBatch()
 		require.NoError(t, batch.AppendRaw(uint64(x), data))
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 		f.Close()
 
 		f, err = newTable(os.TempDir(), fname, rm, wm, sg, 50, true)
@@ -226,7 +226,7 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 		for x := 1; x < 0xff; x++ {
 			require.NoError(t, batch.AppendRaw(uint64(x), getChunk(15, ^x)))
 		}
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 		f.Close()
 	}
 
@@ -415,7 +415,7 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 		batch := f.newBatch()
 		require.NoError(t, batch.AppendRaw(0, getChunk(40, 0xFF)))
 		require.NoError(t, batch.AppendRaw(1, getChunk(40, 0xEE)))
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 
 		// The last item should be there
 		if _, err = f.Retrieve(1); err != nil {
@@ -452,7 +452,7 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 		// Write 40 bytes
 		batch := f.newBatch()
 		require.NoError(t, batch.AppendRaw(1, getChunk(40, 0xDD)))
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 
 		f.Close()
 
@@ -511,7 +511,7 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		for x := 0; x < 30; x++ {
 			require.NoError(t, batch.AppendRaw(uint64(x), getChunk(15, ^x)))
 		}
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 		f.Close()
 	}
 }
@@ -538,7 +538,7 @@ func TestFreezerOffset(t *testing.T) {
 
 		require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
 		require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 
 		t.Log(f.dumpIndexString(0, 100))
 		f.Close()
@@ -594,7 +594,7 @@ func TestFreezerOffset(t *testing.T) {
 		// It should allow writing item 6.
 		batch := f.newBatch()
 		require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x99)))
-		require.NoError(t, batch.Commit())
+		require.NoError(t, batch.commit())
 
 		checkRetrieveError(t, f, map[uint64]error{
 			0: errOutOfBounds,
@@ -716,7 +716,7 @@ func writeChunks(t *testing.T, ft *freezerTable, n int, length int) {
 			t.Fatalf("AppendRaw(%d, ...) returned error: %v", i, err)
 		}
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		t.Fatalf("Commit returned error: %v", err)
 	}
 }

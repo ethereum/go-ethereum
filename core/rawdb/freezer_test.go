@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -26,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/stretchr/testify/require"
 )
 
 func newFreezerForTesting(t *testing.T) (*freezer, string) {
@@ -35,9 +37,9 @@ func newFreezerForTesting(t *testing.T) (*freezer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tables := map[string]bool{"test": true}
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
+	tables := map[string]bool{"test": true}
 	f, err := newFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
@@ -45,7 +47,38 @@ func newFreezerForTesting(t *testing.T) (*freezer, string) {
 	return f, dir
 }
 
-// This test runs ModifyAncients and TruncateAncients concurrently with each other.
+// This checks that ModifyAncients rolls back freezer updates
+// when the function passed to it returns an error.
+func TestFreezerModifyRollback(t *testing.T) {
+	f, dir := newFreezerForTesting(t)
+	defer os.RemoveAll(dir)
+
+	theError := errors.New("oops")
+	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		// Append three items. This creates two files immediately,
+		// because the table size limit of the test freezer is 2048.
+		require.NoError(t, op.AppendRaw("test", 0, make([]byte, 2048)))
+		require.NoError(t, op.AppendRaw("test", 1, make([]byte, 2048)))
+		require.NoError(t, op.AppendRaw("test", 2, make([]byte, 2048)))
+		return theError
+	})
+	if err != theError {
+		t.Errorf("ModifyAncients returned wrong error %q", err)
+	}
+	checkAncientCount(t, f, "test", 0)
+	f.Close()
+
+	// Reopen and check that the rolled-back data doesn't reappear.
+	tables := map[string]bool{"test": true}
+	f2, err := newFreezer(dir, "", false, 2049, tables)
+	if err != nil {
+		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
+	}
+	defer f2.Close()
+	checkAncientCount(t, f2, "test", 0)
+}
+
+// This test runs ModifyAncients and Ancient concurrently with each other.
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	f, dir := newFreezerForTesting(t)
 	defer os.RemoveAll(dir)
@@ -89,7 +122,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for frozen := range written {
-				for rc := 0; rc < 50; rc++ {
+				for rc := 0; rc < 80; rc++ {
 					num := uint64(rand.Intn(int(frozen)))
 					value, err := f.Ancient("test", num)
 					if err != nil {
@@ -115,7 +148,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	var item = make([]byte, 256)
 
 	for i := 0; i < 1000; i++ {
-		// First reset, and write 100 items.
+		// First reset and write 100 items.
 		if err := f.TruncateAncients(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
@@ -130,9 +163,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if err != nil {
 			t.Fatal("modify failed:", err)
 		}
-		if frozen, _ := f.Ancients(); frozen != 100 {
-			t.Fatalf("wrong ancients count %d, want 100", frozen)
-		}
+		checkAncientCount(t, f, "test", 100)
 
 		// Now append 100 more items and truncate concurrently.
 		var (
@@ -164,11 +195,40 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if truncateErr != nil {
 			t.Fatal("concurrent truncate failed:", err)
 		}
-		if modifyErr != nil && modifyErr != errOutOrderInsertion {
+		if !(modifyErr == nil || modifyErr == errOutOrderInsertion) {
 			t.Fatal("wrong error from concurrent modify:", modifyErr)
 		}
-		if frozen, _ := f.Ancients(); frozen != 10 {
-			t.Fatalf("Ancients returned %d, want 0", frozen)
+		checkAncientCount(t, f, "test", 10)
+	}
+}
+
+// checkAncientCount verifies that the freezer contains n items.
+func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
+	t.Helper()
+
+	if frozen, _ := f.Ancients(); frozen != n {
+		t.Fatalf("Ancients() returned %d, want %d", frozen, n)
+	}
+
+	// Check at index n-1.
+	if n > 0 {
+		index := n - 1
+		if ok, _ := f.HasAncient(kind, index); !ok {
+			t.Errorf("HasAncient(%q, %d) returned false unexpectedly", kind, index)
 		}
+		if _, err := f.Ancient(kind, index); err != nil {
+			t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
+		}
+	}
+
+	// Check at index n.
+	index := n
+	if ok, _ := f.HasAncient(kind, index); ok {
+		t.Errorf("HasAncient(%q, %d) returned true unexpectedly", kind, index)
+	}
+	if _, err := f.Ancient(kind, index); err == nil {
+		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
+	} else if err != errOutOfBounds {
+		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 	}
 }

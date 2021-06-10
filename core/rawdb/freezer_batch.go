@@ -24,6 +24,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const (
+	freezerBatchBufferLimit = 2 * 1024 * 1024
+)
+
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
 	tables map[string]*freezerTableBatch
@@ -54,6 +58,8 @@ func (batch *freezerBatch) reset() {
 	}
 }
 
+// commit is called at the end of a write operation and
+// writes all remaining data to tables.
 func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 	// Check that count agrees on all batches.
 	item = uint64(math.MaxUint64)
@@ -66,17 +72,13 @@ func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 
 	// Commit all table batches.
 	for _, tb := range batch.tables {
-		if err := tb.Commit(); err != nil {
+		if err := tb.commit(); err != nil {
 			return 0, 0, err
 		}
 		writeSize += tb.totalBytes
 	}
 	return item, writeSize, nil
 }
-
-const (
-	freezerBatchBufferLimit = 2 * 1024 * 1024
-)
 
 // freezerTableBatch is a batch for a freezer table.
 type freezerTableBatch struct {
@@ -170,15 +172,6 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 	return batch.maybeCommit()
 }
 
-// Commit writes the batched items to the backing freezerTable.
-func (batch *freezerTableBatch) Commit() error {
-	if err := batch.commit(); err != nil {
-		return err
-	}
-	atomic.StoreUint64(&batch.t.items, batch.curItem)
-	return nil
-}
-
 // maybeCommit writes the buffered data if the buffer is full enough.
 func (batch *freezerTableBatch) maybeCommit() error {
 	if len(batch.dataBuffer) > freezerBatchBufferLimit {
@@ -187,6 +180,7 @@ func (batch *freezerTableBatch) maybeCommit() error {
 	return nil
 }
 
+// commit writes the batched items to the backing freezerTable.
 func (batch *freezerTableBatch) commit() error {
 	// Write data.
 	_, err := batch.t.head.Write(batch.dataBuffer)
@@ -206,6 +200,7 @@ func (batch *freezerTableBatch) commit() error {
 
 	// Update headBytes of table.
 	batch.t.headBytes += dataSize
+	atomic.StoreUint64(&batch.t.items, batch.curItem)
 
 	// Update metrics.
 	batch.t.sizeGauge.Inc(dataSize + indexSize)

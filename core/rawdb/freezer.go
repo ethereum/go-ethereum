@@ -215,17 +215,29 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 }
 
 // ModifyAncients runs the given write operation.
-// If the operation returns an error, the results are not committed.
-func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {
+func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
+	// Roll back all tables to the starting position in case of error.
+	prevItem := f.frozen
+	defer func() {
+		if err != nil {
+			// The write operation has failed. Go back to the previous item position.
+			for name, table := range f.tables {
+				err := table.truncate(prevItem)
+				if err != nil {
+					log.Error("Freezer table roll-back failed", "table", name, "index", prevItem, "err", err)
+				}
+			}
+		}
+	}()
+
 	f.writeBatch.reset()
 	if err := fn(f.writeBatch); err != nil {
-		// TODO: truncate here?
 		return 0, err
 	}
 	item, writeSize, err := f.writeBatch.commit()
@@ -459,17 +471,6 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
-
-	// Roll back all tables in case of error.
-	defer func() {
-		if err != nil {
-			rerr := f.repair()
-			if rerr != nil {
-				log.Crit("Failed to repair freezer", "err", rerr)
-			}
-			log.Info("Append ancient failed", "number", number, "err", err)
-		}
-	}()
 
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {

@@ -56,7 +56,7 @@ func TestBatch(t *testing.T) {
 		data := getChunk(15, x)
 		batch.AppendRaw(uint64(x), data)
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		t.Fatal(err)
 	}
 	t.Log(f.dumpIndexString(0, 30))
@@ -78,7 +78,7 @@ func TestBatchRLP(t *testing.T) {
 		data = data.Exp(data, data, nil)
 		batch.Append(uint64(x), data)
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		t.Fatal(err)
 	}
 	t.Log(f.dumpIndexString(0, 30))
@@ -103,7 +103,7 @@ func TestBatchSequence(t *testing.T) {
 	if err := batch.AppendRaw(2, []byte{0}); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		t.Fatal("error from Commit:", err)
 	}
 	// if have, want := batch.headBytes, uint32(1); have != want {
@@ -184,7 +184,7 @@ func batchBench(b *testing.B, nbytes int, noCompression bool) {
 			b.Fatal(err)
 		}
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		b.Fatal(err)
 	}
 	b.StopTimer() // Stop timer before deleting the files
@@ -215,7 +215,7 @@ func batchRlpBench(b *testing.B, nbytes int, noCompression bool) {
 			b.Fatal(err)
 		}
 	}
-	if err := batch.Commit(); err != nil {
+	if err := batch.commit(); err != nil {
 		b.Fatal(err)
 	}
 	b.StopTimer() // Stop timer before deleting the files
