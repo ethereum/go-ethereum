@@ -22,11 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/golang/snappy"
 )
 
-const (
-	freezerBatchBufferLimit = 2 * 1024 * 1024
-)
+// This is the maximum amount of data that will be buffered in memory
+// for a single freezer table batch.
+const freezerBatchBufferLimit = 2 * 1024 * 1024
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
@@ -54,7 +55,7 @@ func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error
 // reset initializes the batch.
 func (batch *freezerBatch) reset() {
 	for _, tb := range batch.tables {
-		tb.Reset()
+		tb.reset()
 	}
 }
 
@@ -98,12 +99,12 @@ func (t *freezerTable) newBatch() *freezerTableBatch {
 	if !t.noCompression {
 		batch.sb = new(snappyBuffer)
 	}
-	batch.Reset()
+	batch.reset()
 	return batch
 }
 
-// Reset clears the batch for reuse.
-func (batch *freezerTableBatch) Reset() {
+// reset clears the batch for reuse.
+func (batch *freezerTableBatch) reset() {
 	batch.dataBuffer = batch.dataBuffer[:0]
 	batch.indexBuffer = batch.indexBuffer[:0]
 	batch.curItem = atomic.LoadUint64(&batch.t.items)
@@ -206,4 +207,42 @@ func (batch *freezerTableBatch) commit() error {
 	batch.t.sizeGauge.Inc(dataSize + indexSize)
 	batch.t.writeMeter.Mark(dataSize + indexSize)
 	return nil
+}
+
+// snappyBuffer writes snappy in block format, and can be reused. It is
+// reset when WriteTo is called.
+type snappyBuffer struct {
+	dst []byte
+}
+
+// compress snappy-compresses the data.
+func (s *snappyBuffer) compress(data []byte) []byte {
+	// The snappy library does not care what the capacity of the buffer is,
+	// but only checks the length. If the length is too small, it will
+	// allocate a brand new buffer.
+	// To avoid that, we check the required size here, and grow the size of the
+	// buffer to utilize the full capacity.
+	if n := snappy.MaxEncodedLen(len(data)); len(s.dst) < n {
+		if cap(s.dst) < n {
+			s.dst = make([]byte, n)
+		}
+		s.dst = s.dst[:n]
+	}
+
+	s.dst = snappy.Encode(s.dst, data)
+	return s.dst
+}
+
+// writeBuffer implements io.Writer for a byte slice.
+type writeBuffer struct {
+	data []byte
+}
+
+func (wb *writeBuffer) Write(data []byte) (int, error) {
+	wb.data = append(wb.data, data...)
+	return len(data), nil
+}
+
+func (wb *writeBuffer) Reset() {
+	wb.data = wb.data[:0]
 }
