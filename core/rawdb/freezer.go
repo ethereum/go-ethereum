@@ -208,6 +208,11 @@ func (f *freezer) Ancients() (uint64, error) {
 
 // AncientSize returns the ancient size of the specified category.
 func (f *freezer) AncientSize(kind string) (uint64, error) {
+	// This needs the write lock to avoid data races on table fields.
+	// Speed doesn't matter here, AncientSize is for debugging.
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
 	if table := f.tables[kind]; table != nil {
 		return table.size()
 	}

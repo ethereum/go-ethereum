@@ -93,6 +93,8 @@ func TestFreezerModify(t *testing.T) {
 // This checks that ModifyAncients rolls back freezer updates
 // when the function passed to it returns an error.
 func TestFreezerModifyRollback(t *testing.T) {
+	t.Parallel()
+
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
 
@@ -123,6 +125,8 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 // This test runs ModifyAncients and Ancient concurrently with each other.
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
+	t.Parallel()
+
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
 	defer f.Close()
@@ -214,7 +218,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			truncateErr error
 			modifyErr   error
 		)
-		wg.Add(2)
+		wg.Add(3)
 		go func() {
 			_, modifyErr = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(100); i < 200; i++ {
@@ -228,6 +232,10 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		}()
 		go func() {
 			truncateErr = f.TruncateAncients(10)
+			wg.Done()
+		}()
+		go func() {
+			f.AncientSize("test")
 			wg.Done()
 		}()
 		wg.Wait()
