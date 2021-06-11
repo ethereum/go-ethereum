@@ -1153,6 +1153,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		first := blockChain[0]
 
 		// TODO: do we need to check this for all blocks?
+		// There seems to be no other check that the inserted blocks match the header chain!
+		// Maybe this should be checked in updateHead instead.
 		if !bc.HasHeader(first.Hash(), first.NumberU64()) {
 			return 0, fmt.Errorf("containing header #%d [%x..] unknown", first.Number(), first.Hash().Bytes()[:4])
 		}
@@ -1166,9 +1168,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Info("Wrote genesis to ancients")
 			}
 		}
-
-		// Get the current fast block head.
-		previousFastBlock := bc.CurrentFastBlock().NumberU64()
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
@@ -1194,12 +1193,14 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			}
 			stats.processed++
 		}
+
 		// Flush all tx-lookup index data.
 		size += int64(batch.ValueSize())
 		if err := batch.Write(); err != nil {
 			// The tx index data could not be written.
 			// Roll back the ancient store update.
-			if err := bc.db.TruncateAncients(previousFastBlock + 1); err != nil {
+			fastBlock := bc.CurrentFastBlock().NumberU64()
+			if err := bc.db.TruncateAncients(fastBlock + 1); err != nil {
 				log.Error("Can't truncate ancient store after failed insert", "err", err)
 			}
 			return 0, err
@@ -1210,6 +1211,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, err
 		}
 
+		// Update the current fast block because all block data is now present in DB.
+		previousFastBlock := bc.CurrentFastBlock().NumberU64()
 		if !updateHead(blockChain[len(blockChain)-1]) {
 			// We end up here if the header chain has reorg'ed, and the blocks/receipts
 			// don't match the canonical chain.
