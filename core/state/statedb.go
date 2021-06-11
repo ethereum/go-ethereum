@@ -18,6 +18,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -456,12 +457,39 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 
-	data, err := rlp.EncodeToBytes(obj)
-	if err != nil {
-		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
-	}
-	if err = s.trie.TryUpdate(addr[:], data); err != nil {
+	// TODO rewrite this code in go-verkle to have only verkle.TryUpdateAccount()
+	var err error
+	if err = s.trie.TryUpdate(trie.GetTreeKeyVersion(addr), []byte{0}); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+	nonce := make([]byte, 32)
+	binary.BigEndian.PutUint64(nonce, obj.data.Nonce)
+	if err = s.trie.TryUpdate(trie.GetTreeKeyNonce(addr), nonce); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+	if err = s.trie.TryUpdate(trie.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+	// XXX ensure code hash isn't empty
+	if err = s.trie.TryUpdate(trie.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+	cs := make([]byte, 32)
+	binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+	if err = s.trie.TryUpdate(trie.GetTreeKeyCodeSize(addr), cs); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+
+	// If the code has been modified, update the associated entries.
+	// TODO same thing with verkle.TryUpdateCode
+	// TODO it might make sense to do the storage updates here as well,
+	// since the prefetcher doesn't need to load the values anyway.
+	if obj.dirtyCode {
+		for i := 0; i < len(obj.code)/32; i++ {
+			if err = s.trie.TryUpdate(trie.GetTreeKeyCodeChunk(addr, i), obj.code[32*i:32*(i+1)]); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+			}
+		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -906,14 +934,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
+			// Write any storage changes in the state object to its storage trie
+			if err := obj.CommitTrie(s.db); err != nil {
+				return common.Hash{}, err
+			}
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
-			}
-			// Write any storage changes in the state object to its storage trie
-			if err := obj.CommitTrie(s.db); err != nil {
-				return common.Hash{}, err
 			}
 		}
 	}

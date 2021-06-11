@@ -24,6 +24,64 @@ import (
 	"github.com/gballet/go-verkle"
 )
 
+const (
+	VersionLeafKey      = 0
+	BalanceLeafKey      = 1
+	NonceLeafKey        = 2
+	CodeKeccakLeafKey   = 3
+	CodeSizeLeafKey     = 4
+	HeaderStorageOffset = 64
+	CodeOffset          = 128
+	VerkleNodeWidth     = 8
+	MainStorageOffset   = 256 // XXX use bigint
+)
+
+func GetTreeKey(address common.Address, treeIndex int, subIndex int) []byte {
+	digest := sha256.New()
+	digest.Write(address[:])
+	var payload [32]byte
+	for i := 0; i < 32; i++ {
+		payload[i] = byte(treeIndex >> (8 * i))
+	}
+	digest.Write(payload[:])
+	h := digest.Sum(nil)
+	h[31] = byte(subIndex)
+	return h
+}
+
+func GetTreeKeyVersion(address common.Address) []byte {
+	return GetTreeKey(address, 0, VersionLeafKey)
+}
+
+func GetTreeKeyBalance(address common.Address) []byte {
+	return GetTreeKey(address, 0, BalanceLeafKey)
+}
+
+func GetTreeKeyNonce(address common.Address) []byte {
+	return GetTreeKey(address, 0, NonceLeafKey)
+}
+
+func GetTreeKeyCodeKeccak(address common.Address) []byte {
+	return GetTreeKey(address, 0, CodeKeccakLeafKey)
+}
+
+func GetTreeKeyCodeSize(address common.Address) []byte {
+	return GetTreeKey(address, 0, CodeSizeLeafKey)
+}
+
+func GetTreeKeyCodeChunk(address common.Address, chunk int) []byte {
+	return GetTreeKey(address, (CodeOffset+chunk)/VerkleNodeWidth, (CodeOffset+chunk)%VerkleNodeWidth)
+}
+
+func GetTreeKeyStorageSlot(address common.Address, storageKey int) []byte {
+	if storageKey < (CodeOffset - HeaderStorageOffset) {
+		storageKey += HeaderStorageOffset
+	} else {
+		storageKey += MainStorageOffset
+	}
+	return GetTreeKey(address, storageKey/VerkleNodeWidth, storageKey%VerkleNodeWidth)
+}
+
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
 // interface so that Verkle trees can be reused verbatim.
 type VerkleTrie struct {
