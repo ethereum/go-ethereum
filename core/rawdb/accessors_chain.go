@@ -82,6 +82,37 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	return hashes
 }
 
+type NumberHash struct {
+	Number uint64
+	Hash   common.Hash
+}
+
+// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
+// both canonical and reorged forks included.
+// This method considers both limits to be _inclusive_.
+func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
+	var (
+		start     = encodeBlockNumber(first)
+		keyLength = len(headerPrefix) + 8 + 32
+		hashes    = make([]*NumberHash, 0, 1+last-first)
+		it        = db.NewIterator(headerPrefix, start)
+	)
+	defer it.Release()
+	for it.Next() {
+		key := it.Key()
+		if len(key) != keyLength {
+			continue
+		}
+		num := binary.BigEndian.Uint64(key[len(headerPrefix) : len(headerPrefix)+8])
+		if num > last {
+			break
+		}
+		hash := common.BytesToHash(key[len(key)-32:])
+		hashes = append(hashes, &NumberHash{num, hash})
+	}
+	return hashes
+}
+
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
 // certain chain range. If the accumulated entries reaches the given threshold,
 // abort the iteration and return the semi-finish result.
