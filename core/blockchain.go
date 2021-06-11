@@ -207,8 +207,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
 
-	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
-	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
+	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1085,38 +1084,6 @@ const (
 	SideStatTy
 )
 
-// truncateAncient rewinds the blockchain to the specified header and deletes all
-// data in the ancient store that exceeds the specified header.
-func (bc *BlockChain) truncateAncient(head uint64) error {
-	frozen, err := bc.db.Ancients()
-	if err != nil {
-		return err
-	}
-	// Short circuit if there is no data to truncate in ancient store.
-	if frozen <= head+1 {
-		return nil
-	}
-	// Truncate all the data in the freezer beyond the specified head
-	if err := bc.db.TruncateAncients(head + 1); err != nil {
-		return err
-	}
-	// Clear out any stale content from the caches
-	bc.hc.headerCache.Purge()
-	bc.hc.tdCache.Purge()
-	bc.hc.numberCache.Purge()
-
-	// Clear out any stale content from the caches
-	bc.bodyCache.Purge()
-	bc.bodyRLPCache.Purge()
-	bc.receiptsCache.Purge()
-	bc.blockCache.Purge()
-	bc.txLookupCache.Purge()
-	bc.futureBlocks.Purge()
-
-	log.Info("Rewind ancient data", "number", head)
-	return nil
-}
-
 // numberHash is just a container for a number and a hash, to represent a block
 type numberHash struct {
 	number uint64
@@ -1183,8 +1150,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// this function only accepts canonical chain data. All side chain will be reverted
 	// eventually.
 	writeAncient := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
-		var batch = bc.db.NewBatch()
 		first := blockChain[0]
+
+		// TODO: do we need to check this for all blocks?
 		if !bc.HasHeader(first.Hash(), first.NumberU64()) {
 			return 0, fmt.Errorf("containing header #%d [%x..] unknown", first.Number(), first.Hash().Bytes()[:4])
 		}
@@ -1198,6 +1166,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Info("Wrote genesis to ancients")
 			}
 		}
+
+		// Get the current fast block head.
+		previousFastBlock := bc.CurrentFastBlock().NumberU64()
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
@@ -1214,6 +1185,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// a background routine to re-indexed all indices in [ancients - txlookupLimit, ancients)
 		// range. In this case, all tx indices of newly imported blocks should be
 		// generated.
+		var batch = bc.db.NewBatch()
 		for _, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
@@ -1225,19 +1197,30 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// Flush all tx-lookup index data.
 		size += int64(batch.ValueSize())
 		if err := batch.Write(); err != nil {
+			// The tx index data could not be written.
+			// Roll back the ancient store update.
+			if err := bc.db.TruncateAncients(previousFastBlock + 1); err != nil {
+				log.Error("Can't truncate ancient store after failed insert", "err", err)
+			}
 			return 0, err
 		}
-		batch.Reset()
 
 		// Sync the ancient store explicitly to ensure all data has been flushed to disk.
 		if err := bc.db.Sync(); err != nil {
 			return 0, err
 		}
+
 		if !updateHead(blockChain[len(blockChain)-1]) {
-			return 0, errors.New("side blocks can't be accepted as the ancient chain data")
+			// We end up here if the header chain has reorg'ed, and the blocks/receipts
+			// don't match the canonical chain.
+			if err := bc.db.TruncateAncients(previousFastBlock + 1); err != nil {
+				log.Error("Can't truncate ancient store after failed insert", "err", err)
+			}
+			return 0, errSideChainReceipts
 		}
 
-		// Delete block data from the main DB.
+		// Delete block data from the main database.
+		batch.Reset()
 		for _, block := range blockChain {
 			if block.NumberU64() == 0 {
 				continue
