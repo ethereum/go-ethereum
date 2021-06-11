@@ -657,35 +657,51 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int) int64 {
-	num := block.NumberU64()
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, td *big.Int) int64 {
+	var (
+		tdSum      = new(big.Int).Set(td)
+		stReceipts []*types.ReceiptForStorage
+	)
 	writeSize, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
-			return fmt.Errorf("can't add block %d hash: %v", num, err)
-		}
-		if err := op.Append(freezerHeaderTable, num, block.Header()); err != nil {
-			return fmt.Errorf("can't append block header %d: %v", num, err)
-		}
-		if err := op.Append(freezerBodiesTable, num, block.Body()); err != nil {
-			return fmt.Errorf("can't append block body %d: %v", num, err)
-		}
-		storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-		for i, receipt := range receipts {
-			storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-		}
-		if err := op.Append(freezerReceiptTable, num, storageReceipts); err != nil {
-			return fmt.Errorf("can't append block %d receipts: %v", num, err)
-		}
-		if err := op.Append(freezerDifficultyTable, num, td); err != nil {
-			return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
+		for i, block := range blocks {
+			// Convert receipts to storage format and sum up total difficulty.
+			stReceipts = stReceipts[:0]
+			for _, receipt := range receipts[i] {
+				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
+			}
+			if i > 0 {
+				tdSum.Add(tdSum, block.Difficulty())
+			}
+			if err := writeAncientBlock(op, block, stReceipts, tdSum); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-
 	if err != nil {
-		log.Crit("Ancients write operation failed", "block", num, "err", err)
+		log.Crit("Ancients write operation failed", "err", err)
 	}
 	return writeSize
+}
+
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, receipts []*types.ReceiptForStorage, td *big.Int) error {
+	num := block.NumberU64()
+	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
+		return fmt.Errorf("can't add block %d hash: %v", num, err)
+	}
+	if err := op.Append(freezerHeaderTable, num, block.Header()); err != nil {
+		return fmt.Errorf("can't append block header %d: %v", num, err)
+	}
+	if err := op.Append(freezerBodiesTable, num, block.Body()); err != nil {
+		return fmt.Errorf("can't append block body %d: %v", num, err)
+	}
+	if err := op.Append(freezerReceiptTable, num, receipts); err != nil {
+		return fmt.Errorf("can't append block %d receipts: %v", num, err)
+	}
+	if err := op.Append(freezerDifficultyTable, num, td); err != nil {
+		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
+	}
+	return nil
 }
 
 // DeleteBlock removes all block data associated with a hash.
