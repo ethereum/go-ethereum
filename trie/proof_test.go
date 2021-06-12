@@ -65,7 +65,7 @@ func makeBadProver(trie *Trie) func(key []byte) *memorydb.Database {
 		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
 			for _, p := range it.Prove() {
 				last = crypto.Keccak256(p)
-				proof.Put(crypto.Keccak256(p), p)
+				proof.Put(last, p)
 			}
 			// make a wrong final value
 			p, _ := proof.Get(last)
