@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
@@ -110,6 +111,10 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
+		}
+		bufHash := crypto.Keccak256(buf)
+		if !bytes.Equal(wantHash[:], bufHash) {
+			return nil, fmt.Errorf("fake proof node %d: (want hash %064x, final hash %064x)", i, wantHash, bufHash)
 		}
 		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {

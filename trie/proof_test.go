@@ -58,6 +58,29 @@ func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
 	return provers
 }
 
+func makeBadProver(trie *Trie) func(key []byte) *memorydb.Database {
+	prover := func(key []byte) *memorydb.Database {
+		proof := memorydb.New()
+		last := []byte{}
+		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
+			for _, p := range it.Prove() {
+				last = crypto.Keccak256(p)
+				proof.Put(crypto.Keccak256(p), p)
+			}
+			// make a wrong final value
+			p, _ := proof.Get(last)
+			if p[len(p)-1] != 0 {
+				p[len(p)-1] = 0
+			} else {
+				p[len(p)-1] = 1
+			}
+			proof.Put(last, p)
+		}
+		return proof
+	}
+	return prover
+}
+
 func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
@@ -74,6 +97,21 @@ func TestProof(t *testing.T) {
 			if !bytes.Equal(val, kv.v) {
 				t.Fatalf("prover %d: verified value mismatch for key %x: have %x, want %x", i, kv.k, val, kv.v)
 			}
+		}
+	}
+}
+
+func TestBadProver(t *testing.T) {
+	trie, vals := randomTrie(800)
+	root := trie.Hash()
+	prover := makeBadProver(trie)
+	for _, kv := range vals {
+		proof := prover(kv.k)
+		if proof == nil {
+			t.Fatalf("bad prover: nil proof")
+		}
+		if _, err := VerifyProof(root, kv.k, proof); err == nil {
+			t.Fatalf("bad prover: expected proof to fail for key %x", kv.k)
 		}
 	}
 }
