@@ -1227,12 +1227,12 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		last := blockChain[len(blockChain)-1]
 		canonHashes := make(map[common.Hash]struct{})
 		for _, block := range blockChain {
+			canonHashes[block.Hash()] = struct{}{}
 			if block.NumberU64() == 0 {
 				continue
 			}
 			rawdb.DeleteCanonicalHash(batch, block.NumberU64())
 			rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
-			canonHashes[block.Hash()] = struct{}{}
 		}
 		// Delete side chain hash-to-number mappings.
 		for _, nh := range rawdb.ReadAllHashesInRange(bc.db, first.NumberU64(), last.NumberU64()) {
