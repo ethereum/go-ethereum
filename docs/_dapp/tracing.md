@@ -196,15 +196,3 @@ Here's what happens in each respective case:
 3. Same as 1)
 4. Does not need to replay anything, can immediately load up the state and serve the request. 
 
-There is one other option available to you, which may or may not suit your needs. That is
-to use [Go-evmlab](https://github.com/holiman/goevmlab).
-
-    docker pull holiman/evmlab && docker run -it holiman/evmlab
-
-There you can use the reproducer. The reproducer will incrementally fetch data from infura
-until it has all the information required to create the trace locally on an evm which is
-bundled with the image. It will create a custom genesis containing the state that the
-transaction touches (balances, code, nonce etc). It should be mentioned that the evmlab
-reproducer is strictly guaranteed to be totally exact with regards to gascosts incurred by
-the outer transaction, as evmlab does not fully calculate the gascosts for nonzero data
-etc, but is usually sufficient to analyze contracts and events.
