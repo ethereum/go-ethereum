@@ -1949,10 +1949,10 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
 }
 
-// BurnedETH returns the amount of burned ether for a specific
+// Burned returns the amount of burned ether for a specific
 // range of blocks under eip-1559.
 // The returned value is in denoted in Wei.
-func (api *PrivateDebugAPI) BurnedETH(start, end *hexutil.Uint64) (*hexutil.Big, error) {
+func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, error) {
 	burned := big.NewInt(0)
 	startBlock := 0
 	endBlock := int(api.b.CurrentHeader().Number.Int64())
@@ -1966,13 +1966,13 @@ func (api *PrivateDebugAPI) BurnedETH(start, end *hexutil.Uint64) (*hexutil.Big,
 		return (*hexutil.Big)(burned), errors.New("invalid range specified, start > end")
 	}
 	for i := startBlock; i < endBlock; i++ {
-		block, err := api.b.BlockByNumber(context.Background(), rpc.BlockNumber(i))
+		header, err := api.b.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil {
 			return (*hexutil.Big)(burned), err
 		}
-		txs := len(block.Transactions())
-		if basefee := block.Header().BaseFee; basefee != nil && basefee.Cmp(common.Big0) != 0 {
-			burnedBlock := new(big.Int).Mul(basefee, big.NewInt(int64(txs)))
+
+		if basefee := header.BaseFee; basefee != nil && basefee.Cmp(common.Big0) != 0 {
+			burnedBlock := new(big.Int).Mul(basefee, big.NewInt(int64(header.GasUsed)))
 			burned = new(big.Int).Add(burned, burnedBlock)
 		}
 	}

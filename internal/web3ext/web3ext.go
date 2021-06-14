@@ -269,8 +269,8 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'burnedETH',
-			call: 'debug_burnedETH',
+			name: 'burned',
+			call: 'debug_burned',
 			params: 2,
 			inputFormatter: [null, null],
 		}),
