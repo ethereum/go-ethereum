@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -70,13 +69,9 @@ type PendingContractCaller interface {
 // used when the user does not provide some needed values, but rather leaves it up
 // to the transactor to decide.
 type ContractTransactor interface {
-	// ChainConfig returns the chain's fork configurations to check if newer tx
-	// features are available already or not.
-	ChainConfig() *params.ChainConfig
-
-	// CurrentHeader returns the chain's head header to check against currently
-	// available transaction features.
-	CurrentHeader() *types.Header
+	// HeaderByNumber returns a block header from the current canonical chain. If
+	// number is nil, the latest known header is returned.
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 
 	// PendingCodeAt returns the code of the given account in the pending state.
 	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)

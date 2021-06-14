@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -63,10 +62,11 @@ func TestWaitDeployed(t *testing.T) {
 		)
 		defer backend.Close()
 
-		// Create the transaction.
-		baseFee := misc.CalcBaseFee(backend.ChainConfig(), backend.CurrentHeader())
+		// Create the transaction
+		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
-		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, new(big.Int).Add(baseFee, big.NewInt(1)), common.FromHex(test.code))
+		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		// Wait for it to get mined in the background.
@@ -108,8 +108,8 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	)
 	defer backend.Close()
 
-	baseFee := misc.CalcBaseFee(backend.ChainConfig(), backend.CurrentHeader())
-	gasPrice := new(big.Int).Add(baseFee, big.NewInt(1))
+	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	// Create a transaction to an account.
 	code := "6060604052600a8060106000396000f360606040526008565b00"

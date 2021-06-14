@@ -103,18 +103,6 @@ func (b *SimulatedBackend) Close() error {
 	return nil
 }
 
-// ChainConfig returns the chain's fork configurations to check if newer tx
-// features are available already or not.
-func (b *SimulatedBackend) ChainConfig() *params.ChainConfig {
-	return b.blockchain.Config()
-}
-
-// CurrentHeader returns the chain's head header to check against currently
-// available transaction features.
-func (b *SimulatedBackend) CurrentHeader() *types.Header {
-	return b.blockchain.CurrentHeader()
-}
-
 // Commit imports all the pending transactions as a single block and starts a
 // fresh new state.
 func (b *SimulatedBackend) Commit() {
