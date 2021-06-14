@@ -1972,8 +1972,8 @@ func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, er
 		}
 
 		if basefee := header.BaseFee; basefee != nil && basefee.Cmp(common.Big0) != 0 {
-			burnedBlock := new(big.Int).Mul(basefee, big.NewInt(int64(header.GasUsed)))
-			burned = new(big.Int).Add(burned, burnedBlock)
+			gasUsed := big.NewInt(int64(header.GasUsed))
+			burned.Add(burned, gasUsed.Mul(gasUsed, basefee))
 		}
 	}
 	return (*hexutil.Big)(burned), nil
