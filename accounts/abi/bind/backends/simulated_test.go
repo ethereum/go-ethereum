@@ -137,7 +137,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_AdjustTime(t *testing.T) {
+func TestAdjustTime(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{}, 10000000,
 	)
@@ -154,7 +154,7 @@ func TestSimulatedBackend_AdjustTime(t *testing.T) {
 	}
 }
 
-func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
+func TestNewAdjustTimeFail(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	// Create tx and send
@@ -192,7 +192,7 @@ func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_BalanceAt(t *testing.T) {
+func TestBalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	expectedBal := big.NewInt(10000000000)
 	sim := simTestBackend(testAddr)
@@ -209,7 +209,7 @@ func TestSimulatedBackend_BalanceAt(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_BlockByHash(t *testing.T) {
+func TestBlockByHash(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{}, 10000000,
 	)
@@ -230,7 +230,7 @@ func TestSimulatedBackend_BlockByHash(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_BlockByNumber(t *testing.T) {
+func TestBlockByNumber(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{}, 10000000,
 	)
@@ -265,7 +265,7 @@ func TestSimulatedBackend_BlockByNumber(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_NonceAt(t *testing.T) {
+func TestNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -315,7 +315,7 @@ func TestSimulatedBackend_NonceAt(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_SendTransaction(t *testing.T) {
+func TestSendTransaction(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -346,7 +346,7 @@ func TestSimulatedBackend_SendTransaction(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_TransactionByHash(t *testing.T) {
+func TestTransactionByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := NewSimulatedBackend(
@@ -397,7 +397,7 @@ func TestSimulatedBackend_TransactionByHash(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_EstimateGas(t *testing.T) {
+func TestEstimateGas(t *testing.T) {
 	/*
 		pragma solidity ^0.6.4;
 		contract GasEstimation {
@@ -515,7 +515,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
+func TestEstimateGasWithPrice(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
@@ -582,7 +582,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_HeaderByHash(t *testing.T) {
+func TestHeaderByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -603,7 +603,7 @@ func TestSimulatedBackend_HeaderByHash(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_HeaderByNumber(t *testing.T) {
+func TestHeaderByNumber(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -650,7 +650,7 @@ func TestSimulatedBackend_HeaderByNumber(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_TransactionCount(t *testing.T) {
+func TestTransactionCount(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -700,7 +700,7 @@ func TestSimulatedBackend_TransactionCount(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_TransactionInBlock(t *testing.T) {
+func TestTransactionInBlock(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -763,7 +763,7 @@ func TestSimulatedBackend_TransactionInBlock(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
+func TestPendingNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -825,7 +825,7 @@ func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_TransactionReceipt(t *testing.T) {
+func TestTransactionReceipt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := simTestBackend(testAddr)
@@ -856,7 +856,7 @@ func TestSimulatedBackend_TransactionReceipt(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_SuggestGasPrice(t *testing.T) {
+func TestSuggestGasPrice(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{},
 		10000000,
@@ -872,7 +872,7 @@ func TestSimulatedBackend_SuggestGasPrice(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_PendingCodeAt(t *testing.T) {
+func TestPendingCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -908,7 +908,7 @@ func TestSimulatedBackend_PendingCodeAt(t *testing.T) {
 	}
 }
 
-func TestSimulatedBackend_CodeAt(t *testing.T) {
+func TestCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -947,7 +947,7 @@ func TestSimulatedBackend_CodeAt(t *testing.T) {
 
 // When receive("X") is called with sender 0x00... and value 1, it produces this tx receipt:
 //   receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
-func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
+func TestPendingAndCallContract(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -1031,7 +1031,7 @@ contract Reverter {
         }
     }
 }*/
-func TestSimulatedBackend_CallContractRevert(t *testing.T) {
+func TestCallContractRevert(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -1116,7 +1116,7 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 	}
 }
 
-// TestSimulatedBackend_Fork check that the chain length after a reorg is correct.
+// TestFork check that the chain length after a reorg is correct.
 // Steps:
 //  1. Save the current block which will serve as parent for the fork.
 //  2. Mine n blocks with n ∈ [0, 20].
@@ -1126,7 +1126,7 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 //  6. Assert that the chain length is n+1.
 //     Since Commit() was called 2n+1 times in total,
 //     having a chain length of just n+1 means that a reorg occurred.
-func TestSimulatedBackend_Fork(t *testing.T) {
+func TestFork(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -1166,7 +1166,7 @@ const callableAbi = "[{\"anonymous\":false,\"inputs\":[],\"name\":\"Called\",\"t
 
 const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806334e2292114602d575b600080fd5b60336035565b005b7f81fab7a4a0aa961db47eefc81f143a5220e8c8495260dd65b1356f1d19d3c7b860405160405180910390a156fea2646970667358221220029436d24f3ac598ceca41d4d712e13ced6d70727f4cdc580667de66d2f51d8b64736f6c63430008010033"
 
-// TestSimulatedBackend_ForkLogsReborn check that the simulated reorgs
+// TestForkLogsReborn check that the simulated reorgs
 // correctly remove and reborn logs.
 // Steps:
 //  1. Deploy the Callable contract.
@@ -1179,7 +1179,7 @@ const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3f
 //  8. Check that the event was removed.
 //  9. Re-send the transaction and mine a block.
 // 10. Check that the event was reborn.
-func TestSimulatedBackend_ForkLogsReborn(t *testing.T) {
+func TestForkLogsReborn(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -1243,7 +1243,7 @@ func TestSimulatedBackend_ForkLogsReborn(t *testing.T) {
 	}
 }
 
-// TestSimulatedBackend_ForkResendTx checks that re-sending a TX after a fork
+// TestForkResendTx checks that re-sending a TX after a fork
 // is possible and does not cause a "nonce mismatch" panic.
 // Steps:
 //  1. Save the current block which will serve as parent for the fork.
@@ -1252,7 +1252,7 @@ func TestSimulatedBackend_ForkLogsReborn(t *testing.T) {
 //  4. Fork by using the parent block as ancestor.
 //  5. Mine a block, Re-send the transaction and mine another one.
 //  6. Check that the TX is now included in block 2.
-func TestSimulatedBackend_ForkResendTx(t *testing.T) {
+func TestForkResendTx(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()

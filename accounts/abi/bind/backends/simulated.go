@@ -136,26 +136,25 @@ func (b *SimulatedBackend) rollback(parent *types.Block) {
 }
 
 // Fork creates a side-chain that can be used to simulate reorgs.
-// Call this function with the parent block that should still be included in
-// the side-chain. You can now freely re-send transactions and call Commit().
-// Re-sending transactions should only be done with SendTransaction() and not
-// via CallContract() et al.
-// As soon as the side-chain is longer than the canonical chain, it will become
-// the new canonical chain.
-// It is possible that in a tie where both chains have the same length, the
-// side-chain wins. Do not take this behaviour for granted.
+//
+// This function should be called with the ancestor block where the new side
+// chain should be started. Transactions (old and new) can then be applied on
+// top and Commit-ed.
+//
+// Note, the side-chain will only become canonical (and trigger the events) when
+// it becomes longer. Until then CallContract will still operate on the current
+// canonical chain.
+//
+// There is a % chance that the side chain becomes canonical at the same length
+// to simulate live network behavior.
 func (b *SimulatedBackend) Fork(ctx context.Context, parent common.Hash) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	// Prevent lost TXs, call Commit() first.
-	if len(b.pendingBlock.Transactions()) != 0 {
-		return errors.New("cannot fork on dirty pending block")
-	}
-	if parent == b.pendingBlock.Hash() {
-		return errors.New("pending block cannot be used as parent")
-	}
 
-	block, err := b.blockByHashNoLock(ctx, parent)
+	if len(b.pendingBlock.Transactions()) != 0 {
+		return errors.New("pending block dirty")
+	}
+	block, err := b.blockByHash(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -168,7 +167,7 @@ func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *
 	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
 		return b.blockchain.State()
 	}
-	block, err := b.blockByNumberNoLock(ctx, blockNumber)
+	block, err := b.blockByNumber(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -261,11 +260,11 @@ func (b *SimulatedBackend) BlockByHash(ctx context.Context, hash common.Hash) (*
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.blockByHashNoLock(ctx, hash)
+	return b.blockByHash(ctx, hash)
 }
 
-// blockByHashNoLock retrieves a block based on the block hash without Locking.
-func (b *SimulatedBackend) blockByHashNoLock(ctx context.Context, hash common.Hash) (*types.Block, error) {
+// blockByHash retrieves a block based on the block hash without Locking.
+func (b *SimulatedBackend) blockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if hash == b.pendingBlock.Hash() {
 		return b.pendingBlock, nil
 	}
@@ -284,12 +283,12 @@ func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.blockByNumberNoLock(ctx, number)
+	return b.blockByNumber(ctx, number)
 }
 
-// blockByNumberNoLock retrieves a block from the database by number, caching it
+// blockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found without Lock.
-func (b *SimulatedBackend) blockByNumberNoLock(ctx context.Context, number *big.Int) (*types.Block, error) {
+func (b *SimulatedBackend) blockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
 	if number == nil || number.Cmp(b.pendingBlock.Number()) == 0 {
 		return b.blockchain.CurrentBlock(), nil
 	}
@@ -597,12 +596,12 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Get the last block.
-	block, err := b.blockByHashNoLock(ctx, b.pendingBlock.ParentHash())
+	// Get the last block
+	block, err := b.blockByHash(ctx, b.pendingBlock.ParentHash())
 	if err != nil {
 		panic("could not fetch parent")
 	}
-	// Check transaction validity.
+	// Check transaction validity
 	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
@@ -612,8 +611,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if tx.Nonce() != nonce {
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
-
-	// Include tx in chain.
+	// Include tx in chain
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
