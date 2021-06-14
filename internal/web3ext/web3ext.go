@@ -269,6 +269,12 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'burnedETH',
+			call: 'debug_burnedETH',
+			params: 2,
+			inputFormatter: [null, null],
+		}),
+		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1
