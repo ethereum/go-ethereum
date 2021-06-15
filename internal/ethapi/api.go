@@ -1965,7 +1965,7 @@ func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, er
 	if startBlock > endBlock {
 		return (*hexutil.Big)(burned), errors.New("invalid range specified, start > end")
 	}
-	for i := startBlock; i < endBlock; i++ {
+	for i := startBlock; i <= endBlock; i++ {
 		header, err := api.b.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil {
 			return (*hexutil.Big)(burned), err
