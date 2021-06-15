@@ -1394,16 +1394,16 @@ func (w *worker) computeBundleGas(bundle types.MevBundle, parent *types.Block, h
 			}
 		}
 
+		gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
+		gasFeesTx := gasUsed.Mul(gasUsed, tx.GasPrice())
+		coinbaseBalanceAfter := state.GetBalance(w.coinbase)
+		coinbaseDelta := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
+		coinbaseDelta.Sub(coinbaseDelta, gasFeesTx)
+		ethSentToCoinbase.Add(ethSentToCoinbase, coinbaseDelta)
+
 		if !txInPendingPool {
 			// If tx is not in pending pool, count the gas fees
-			gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
-			gasFeesTx := gasUsed.Mul(gasUsed, tx.GasPrice())
 			gasFees.Add(gasFees, gasFeesTx)
-
-			coinbaseBalanceAfter := state.GetBalance(w.coinbase)
-			coinbaseDelta := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
-			coinbaseDelta.Sub(coinbaseDelta, gasFeesTx)
-			ethSentToCoinbase.Add(ethSentToCoinbase, coinbaseDelta)
 		}
 	}
 
