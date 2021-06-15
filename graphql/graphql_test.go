@@ -176,7 +176,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	}{
 		{
 			body: `{"query": "{block {number transactions { from { address } to { address } value hash type accessList { address storageKeys } index}}}"}`,
-			want: `{"data":{"block":{"number":1,"transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0x4f7b8d718145233dcf7f29e34a969c63dd4de8715c054ea2af022b66c4f4633e","type":0,"accessList":[],"index":0},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x9c6c2c045b618fe87add0e49ba3ca00659076ecae00fd51de3ba5d4ccf9dbf40","type":1,"accessList":[{"address":"0x0000000000000000000000000000000000000dad","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"index":1}]}}}`,
+			want: `{"data":{"block":{"number":1,"transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b","type":0,"accessList":[],"index":0},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x19b35f8187b4e15fb59a9af469dca5dfa3cd363c11d372058c12f6482477b474","type":1,"accessList":[{"address":"0x0000000000000000000000000000000000000dad","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"index":1}]}}}`,
 			code: 200,
 		},
 	} {
@@ -275,7 +275,7 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 	// create backend
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	address := crypto.PubkeyToAddress(key.PublicKey)
-	funds := big.NewInt(1000000000)
+	funds := big.NewInt(1000000000000000)
 	dad := common.HexToAddress("0x0000000000000000000000000000000000000dad")
 
 	ethConf := &ethconfig.Config{
@@ -297,6 +297,7 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 					Balance: big.NewInt(0),
 				},
 			},
+			BaseFee: big.NewInt(params.InitialBaseFee),
 		},
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeFake,
@@ -321,14 +322,14 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 		To:       &dad,
 		Value:    big.NewInt(100),
 		Gas:      50000,
-		GasPrice: big.NewInt(1),
+		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
 	envelopTx, _ := types.SignNewTx(key, signer, &types.AccessListTx{
 		ChainID:  ethConf.Genesis.Config.ChainID,
 		Nonce:    uint64(1),
 		To:       &dad,
 		Gas:      30000,
-		GasPrice: big.NewInt(1),
+		GasPrice: big.NewInt(params.InitialBaseFee),
 		Value:    big.NewInt(50),
 		AccessList: types.AccessList{{
 			Address:     dad,

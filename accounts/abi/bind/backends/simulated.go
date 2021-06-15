@@ -465,6 +465,12 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 	return big.NewInt(1), nil
 }
 
+// SuggestGasTipCap implements ContractTransactor.SuggestGasTipCap. Since the simulated
+// chain doesn't have miners, we just return a gas tip of 1 for any call.
+func (b *SimulatedBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(1), nil
+}
+
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
@@ -561,10 +567,38 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
 func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
-	// Ensure message is initialized properly.
-	if call.GasPrice == nil {
-		call.GasPrice = big.NewInt(1)
+	// Gas prices post 1559 need to be initialized
+	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
+		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
+	head := b.blockchain.CurrentHeader()
+	if !b.blockchain.Config().IsLondon(head.Number) {
+		// If there's no basefee, then it must be a non-1559 execution
+		if call.GasPrice == nil {
+			call.GasPrice = new(big.Int)
+		}
+		call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
+	} else {
+		// A basefee is provided, necessitating 1559-type execution
+		if call.GasPrice != nil {
+			// User specified the legacy gas field, convert to 1559 gas typing
+			call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
+		} else {
+			// User specified 1559 gas feilds (or none), use those
+			if call.GasFeeCap == nil {
+				call.GasFeeCap = new(big.Int)
+			}
+			if call.GasTipCap == nil {
+				call.GasTipCap = new(big.Int)
+			}
+			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
+			call.GasPrice = new(big.Int)
+			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
+				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, head.BaseFee), call.GasFeeCap)
+			}
+		}
+	}
+	// Ensure message is initialized properly.
 	if call.Gas == 0 {
 		call.Gas = 50000000
 	}
@@ -581,7 +615,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
