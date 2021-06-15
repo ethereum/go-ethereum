@@ -68,6 +68,8 @@ func newTestBackend(t *testing.T, londonBlock *big.Int) *testBackend {
 	if londonBlock != nil {
 		gspec.Config.LondonBlock = londonBlock
 		signer = types.LatestSigner(gspec.Config)
+	} else {
+		gspec.Config.LondonBlock = nil
 	}
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
