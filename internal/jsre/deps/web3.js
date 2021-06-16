@@ -3807,7 +3807,9 @@ var outputTransactionReceiptFormatter = function (receipt){
         receipt.transactionIndex = utils.toDecimal(receipt.transactionIndex);
     receipt.cumulativeGasUsed = utils.toDecimal(receipt.cumulativeGasUsed);
     receipt.gasUsed = utils.toDecimal(receipt.gasUsed);
-
+    if(receipt.effectiveGasPrice !== undefined) {
+      receipt.effectiveGasPrice = utils.toBigNumber(receipt.effectiveGasPrice);
+    }
     if(utils.isArray(receipt.logs)) {
         receipt.logs = receipt.logs.map(function(log){
             return outputLogFormatter(log);

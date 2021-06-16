@@ -236,6 +236,21 @@ func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	}
 }
 
+func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+	header, err := t.block.resolveHeader(ctx)
+	if err != nil || header == nil {
+		return nil, err
+	}
+	if header.BaseFee == nil {
+		return (*hexutil.Big)(tx.GasPrice()), nil
+	}
+	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee), tx.GasFeeCap())), nil
+}
+
 func (t *Transaction) MaxFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
