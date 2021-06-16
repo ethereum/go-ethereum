@@ -243,6 +243,25 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
+// the list of logs.
+type ReceiptLogs struct {
+	Logs []*Log
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (r *ReceiptLogs) DecodeRLP(s *rlp.Stream) error {
+	var stored storedReceiptRLP
+	if err := s.Decode(&stored); err != nil {
+		return err
+	}
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
+	return nil
+}
+
 // Receipts implements DerivableList for receipts.
 type Receipts []*Receipt
 
@@ -307,6 +326,27 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 			r[i].Logs[j].TxHash = r[i].TxHash
 			r[i].Logs[j].TxIndex = uint(i)
 			r[i].Logs[j].Index = logIndex
+			logIndex++
+		}
+	}
+	return nil
+}
+
+// DeriveLogFields fills the logs in ReceiptLogs with information such as block number, txhash, etc.
+func DeriveLogFields(receipts []*ReceiptLogs, hash common.Hash, number uint64, txs Transactions) error {
+	logIndex := uint(0)
+	if len(txs) != len(receipts) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	for i := 0; i < len(receipts); i++ {
+		txHash := txs[i].Hash()
+		// The derived log fields can simply be set from the block and transaction
+		for j := 0; j < len(receipts[i].Logs); j++ {
+			receipts[i].Logs[j].BlockNumber = number
+			receipts[i].Logs[j].BlockHash = hash
+			receipts[i].Logs[j].TxHash = txHash
+			receipts[i].Logs[j].TxIndex = uint(i)
+			receipts[i].Logs[j].Index = logIndex
 			logIndex++
 		}
 	}
