@@ -1979,6 +1979,37 @@ func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, er
 	return (*hexutil.Big)(burned), nil
 }
 
+func (api *PrivateDebugAPI) GetBlockReward(numberOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	block, err := api.b.BlockByNumberOrHash(context.Background(), numberOrHash)
+	if err != nil {
+		return nil, err
+	}
+	config := api.b.ChainConfig()
+	// Select the correct block reward based on chain progression
+	blockReward := ethash.FrontierBlockReward
+	if config.IsByzantium(block.Number()) {
+		blockReward = ethash.ByzantiumBlockReward
+	}
+	if config.IsConstantinople(block.Number()) {
+		blockReward = ethash.ConstantinopleBlockReward
+	}
+	// Accumulate the rewards for the miner and any included uncles
+	reward := new(big.Int).Set(blockReward)
+	uncleMinerReward := big.NewInt(0)
+	r := new(big.Int)
+	for _, uncle := range block.Uncles() {
+		r.Add(uncle.Number, big.NewInt(8))
+		r.Sub(r, block.Number())
+		r.Mul(r, blockReward)
+		r.Div(r, big.NewInt(8))
+		uncleMinerReward.Add(uncleMinerReward, r)
+
+		r.Div(blockReward, big.NewInt(32))
+		reward.Add(reward, r)
+	}
+	return (*hexutil.Big)(new(big.Int).Add(reward, uncleMinerReward)), nil
+}
+
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	net            *p2p.Server

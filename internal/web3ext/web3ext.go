@@ -275,6 +275,12 @@ web3._extend({
 			inputFormatter: [null, null],
 		}),
 		new web3._extend.Method({
+			name: 'getBlockReward',
+			call: 'debug_getBlockReward',
+			params: 1,
+			inputFormatter: [null],
+		}),
+		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1
