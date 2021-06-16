@@ -67,7 +67,7 @@ func setDefaults(cfg *Config) {
 			IstanbulBlock:       new(big.Int),
 			MuirGlacierBlock:    new(big.Int),
 			BerlinBlock:         new(big.Int),
-			LondonBlock:         nil,
+			LondonBlock:         new(big.Int),
 		}
 	}
 
@@ -95,7 +95,7 @@ func setDefaults(cfg *Config) {
 		}
 	}
 	if cfg.BaseFee == nil {
-		cfg.BaseFee = new(big.Int)
+		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
 	}
 }
 
