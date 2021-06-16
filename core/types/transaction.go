@@ -356,8 +356,8 @@ func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) 
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other.EffectiveGasTipValue(baseFee))
 }
 
-// EffectiveTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
-func (tx *Transaction) EffectiveTipIntCmp(other *big.Int, baseFee *big.Int) int {
+// EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
+func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) int {
 	if baseFee == nil {
 		return tx.GasTipCapIntCmp(other)
 	}

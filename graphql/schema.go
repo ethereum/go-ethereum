@@ -118,6 +118,13 @@ const schema string = `
         # this transaction. If the transaction has not yet been mined, this field
         # will be null.
         cumulativeGasUsed: Long
+        # EffectiveGasPrice is actual value per gas deducted from the sender's
+        # account. Before EIP-1559, this is equal to the transaction's gas price.
+        # After EIP-1559, it is baseFeePerGas + min(maxFeePerGas - baseFeePerGas,
+        # maxPriorityFeePerGas). Legacy transactions and EIP-2930 transactions are
+        # coerced into the EIP-1559 format by setting both maxFeePerGas and
+        # maxPriorityFeePerGas as the transaction's gas price.
+        effectiveGasPrice: BigInt
         # CreatedContract is the account that was created by a contract creation
         # transaction. If the transaction was not a contract creation transaction,
         # or it has not yet been mined, this field will be null.
