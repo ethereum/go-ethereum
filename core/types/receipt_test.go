@@ -217,19 +217,19 @@ func TestDeriveLogFields(t *testing.T) {
 	}
 	// Create the corresponding receipts
 	receipts := []*ReceiptLogs{
-		&ReceiptLogs{
+		{
 			Logs: []*Log{
 				{Address: common.BytesToAddress([]byte{0x11})},
 				{Address: common.BytesToAddress([]byte{0x01, 0x11})},
 			},
 		},
-		&ReceiptLogs{
+		{
 			Logs: []*Log{
 				{Address: common.BytesToAddress([]byte{0x22})},
 				{Address: common.BytesToAddress([]byte{0x02, 0x22})},
 			},
 		},
-		&ReceiptLogs{
+		{
 			Logs: []*Log{
 				{Address: common.BytesToAddress([]byte{0x33})},
 				{Address: common.BytesToAddress([]byte{0x03, 0x33})},
