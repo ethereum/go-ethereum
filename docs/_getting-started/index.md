@@ -53,7 +53,7 @@ For this guide, we use the Görli network.
 Because of the peer to peer nature of Ethereum the system running Geth has to:
 
 1. Have a publicly accessible IP address (it does not have the be the same as the private IP)
-2. Be open to access on port 30303 (TCP and UDP)
+2. Be open to access on the sync port, which is by default port 30303 (TCP and UDP).
 
 
 ### Sync modes
@@ -68,6 +68,7 @@ These are:
 -   **Fast** (Default): Downloads all blocks (including headers, transactions and
     receipts), verifies all headers, and downloads the state and verifies it against the
     headers.
+-   **Snap**: Same functionality as fast, but with a faster algorithm.   
 -   **Light**: Downloads all block headers, block data, and verifies some randomly.
 
 For this tutorial, we use a `light` sync:
@@ -180,8 +181,8 @@ curl -X POST http://<GETH_IP_ADDRESS>:8545 \
    --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
 
-Getting the balance of an account does not require a signed transaction, so Clef does not ask for approval, and Geth returns the value.
-Note that the value returned is in hexadecimal and WEI. To get the ETH value, convert to decimal and divide by 10^18.
+Getting the balance of an account does not require a signed transaction, so Geth returns the value without invoking
+Clef. Note that the value returned is in hexadecimal and WEI. To get the ETH value, convert to decimal and divide by 10^18.
 
 ### Send ETH to accounts
 
