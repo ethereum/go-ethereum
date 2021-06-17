@@ -58,13 +58,13 @@ argument that determines what sort of node it is in the network.
 
 These are:
 
--   **Full**: Downloads all blocks (including headers, transactions, and receipts) and
-    generates the state of the blockchain incrementally by executing every block.
--   **Fast** (Default): Downloads all blocks (including headers, transactions and
-    receipts), verifies all headers, and downloads the state and verifies it against the
-    headers.
--   **Snap**: Same functionality as fast, but with a faster algorithm.   
--   **Light**: Downloads all block headers, block data, and verifies some randomly.
+- **Full**: Downloads all blocks (including headers, transactions, and receipts) and
+generates the state of the blockchain incrementally by executing every block.
+- **Fast** (Default): Downloads all blocks (including headers, transactions and
+receipts), verifies all headers, and downloads the state and verifies it against the
+headers.
+- **Snap**: Same functionality as fast, but with a faster algorithm.   
+- **Light**: Downloads all block headers, block data, and verifies some randomly.
 
 For this tutorial, we use a `light` sync:
 
