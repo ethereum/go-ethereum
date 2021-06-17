@@ -182,6 +182,8 @@ func main() {
 		doLint(os.Args[2:])
 	case "archive":
 		doArchive(os.Args[2:])
+	case "docker":
+		doDockerImage(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -449,6 +451,56 @@ func maybeSkipArchive(env build.Environment) {
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
+	}
+}
+
+// Builds the docker images and optionally uploads them to Docker Hub.
+func doDockerImage(cmdline []string) {
+	var (
+		upload = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	// Skip building and pushing docker images for PR builds
+	env := build.Env()
+	maybeSkipArchive(env)
+
+	// Retrieve the version infos to build and push to the following paths:
+	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
+	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
+	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
+	var tags []string
+
+	switch {
+	case env.Branch == "master":
+		tags = []string{"latest"}
+	case strings.HasPrefix(env.Tag, "v1."):
+		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), params.Version}
+	}
+	// Build the docker images via CLI (don't pull in the `moby` dep to call 3 commands)
+	build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
+	build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+
+	// Retrieve the upload credentials and authenticate
+	user := getenvBase64("DOCKER_HUB_USERNAME")
+	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+
+	if len(user) > 0 && len(pass) > 0 {
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
+	}
+	// Tag and upload the images to Docker Hub
+	for _, tag := range tags {
+		build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), fmt.Sprintf("%s:%s", *upload, tag))
+		build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), fmt.Sprintf("%s:alltools-%s", *upload, tag))
+		build.MustRunCommand("docker", "push", fmt.Sprintf("%s:%s", *upload, tag))
+		build.MustRunCommand("docker", "push", fmt.Sprintf("%s:alltools-%s", *upload, tag))
 	}
 }
 

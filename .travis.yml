@@ -24,6 +24,37 @@ jobs:
       script:
         - go run build/ci.go lint
 
+    # This builder does the Docker Hub build and upload for amd64
+    - stage: build
+      if: type = push
+      os: linux
+      dist: bionic
+      go: 1.16.x
+      env:
+        - docker
+      services:
+        - docker
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go docker -upload karalabe/geth-docker-test
+
+    # This builder does the Docker Hub build and upload for arm64
+    - stage: build
+      if: type = push
+      os: linux
+      arch: arm64
+      dist: bionic
+      go: 1.16.x
+      env:
+        - docker
+      services:
+        - docker
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go docker -upload karalabe/geth-docker-test
+
     # This builder does the Ubuntu PPA upload
     - stage: build
       if: type = push
