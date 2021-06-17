@@ -921,23 +921,18 @@ func (s *Senatus) getTopValidator(chain consensus.ChainHeaderReader, header *typ
 		return nil, err
 	}
 	candidatieSizeInt := int((*candidateSize).Int64())
-	validators := make([]validatorStaking, 0, candidatieSizeInt)
-	for i := 0; i < candidatieSizeInt; i++ {
-		validators = append(validators, validatorStaking{address: (*candidates)[i], stakingAmount: (*stakingAmounts)[i].Uint64()})
-	}
-	sort.Sort(validatorStakings(validators))
 	topValidatorNum := maxValidatorNum
-	if len(validators) < topValidatorNum {
-		topValidatorNum = len(validators)
+	if candidatieSizeInt < topValidatorNum {
+		topValidatorNum = candidatieSizeInt
 	}
-	topValidators := make([]common.Address, 0, topValidatorNum)
+	validators := make([]common.Address, 0, topValidatorNum)
 	for i := 0; i < topValidatorNum; i++ {
-		topValidators = append(topValidators, validators[i].address)
+		validators = append(validators, (*candidates)[i])
 	}
-	sort.Sort(validatorsAscending(topValidators))
+	sort.Sort(validatorsAscending(validators))
 	shuffleIndex := int(header.Number.Uint64() % uint64(topValidatorNum))
-	topValidators[shuffleIndex], topValidators[topValidatorNum-1] = topValidators[topValidatorNum-1], topValidators[shuffleIndex]
-	return topValidators, nil
+	validators[shuffleIndex], validators[topValidatorNum-1] = validators[topValidatorNum-1], validators[shuffleIndex]
+	return validators, nil
 }
 
 func (s *Senatus) slash(chain consensus.ChainHeaderReader, state *state.StateDB, header *types.Header, chainContext core.ChainContext,
@@ -1002,20 +997,21 @@ func (s *Senatus) distributeReward(chain consensus.ChainHeaderReader,
 func (s *Senatus) epochProcess(chain consensus.ChainHeaderReader,
 	state *state.StateDB, header *types.Header, chainContext core.ChainContext,
 	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) ([]common.Address, error) {
+
+	if err := s.updateActivatedValidators(chain,
+		state, header, chainContext,
+		txs, allLogs, receipts, receivedTxs, usedGas, mining); err != nil {
+		return []common.Address{}, err
+	}
+
 	newSortedValidators, err := s.getTopValidator(chain, header)
 	if err != nil {
 		return []common.Address{}, err
 	}
 
-	if err := s.updateActivatedValidators(chain,
-		state, header, chainContext,
-		txs, allLogs, receipts, receivedTxs, usedGas, newSortedValidators, mining); err != nil {
-		return []common.Address{}, err
-	}
-
 	if err := s.decreaseMissedBlocksCounter(chain,
 		state, header, chainContext,
-		txs, allLogs, receipts, receivedTxs, usedGas, newSortedValidators, mining); err != nil {
+		txs, allLogs, receipts, receivedTxs, usedGas, mining); err != nil {
 		return []common.Address{}, err
 	}
 
@@ -1024,9 +1020,9 @@ func (s *Senatus) epochProcess(chain consensus.ChainHeaderReader,
 
 func (s *Senatus) updateActivatedValidators(chain consensus.ChainHeaderReader,
 	state *state.StateDB, header *types.Header, chainContext core.ChainContext,
-	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, sortedValidator []common.Address, mining bool) error {
+	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	method := "updateActivatedValidators"
-	data, err := s.validatorABI.Pack(method, sortedValidator, new(big.Int).SetUint64(s.config.Epoch))
+	data, err := s.validatorABI.Pack(method)
 	if err != nil {
 		log.Error("unable to pack tx for updateActivatedValidators", "error", err)
 		return err
@@ -1037,9 +1033,9 @@ func (s *Senatus) updateActivatedValidators(chain consensus.ChainHeaderReader,
 
 func (s *Senatus) decreaseMissedBlocksCounter(chain consensus.ChainHeaderReader,
 	state *state.StateDB, header *types.Header, chainContext core.ChainContext,
-	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, sortedValidator []common.Address, mining bool) error {
+	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	method := "decreaseMissedBlocksCounter"
-	data, err := s.slashABI.Pack(method, sortedValidator, new(big.Int).SetUint64(s.config.Epoch))
+	data, err := s.slashABI.Pack(method)
 	if err != nil {
 		log.Error("unable to pack tx for decreaseMissedBlocksCounter", "error", err)
 		return err
