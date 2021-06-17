@@ -18,8 +18,11 @@ package clique
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -185,6 +188,23 @@ type SignerBlock struct {
 	RLP string `json:"rlp,omitempty"`
 }
 
+func (sb *SignerBlock) UnmarshalJSON(data []byte) error {
+	bnOrHash := new(rpc.BlockNumberOrHash)
+	// Try to unmarshal bNrOrHash
+	if err := bnOrHash.UnmarshalJSON(data); err == nil {
+		sb.BlockNumberOrHash = bnOrHash
+		return nil
+	}
+	// Try to unmarshal RLP
+	var input string
+	err := json.Unmarshal(data, &input)
+	if err != nil {
+		return err
+	}
+	sb.RLP = input
+	return nil
+}
+
 // GetSigner returns the signer for a specific clique block.
 // Can be called with either a blocknumber, blockhash or an rlp encoded blob.
 // The RLP encoded blob can either be a block or a header.
@@ -201,7 +221,10 @@ func (api *API) GetSigner(rlpOrBlockNr *SignerBlock) (common.Address, error) {
 		}
 		return getSigner(header)
 	}
-	blob := common.Hex2Bytes(rlpOrBlockNr.RLP)
+	blob, err := hex.DecodeString(strings.TrimLeft(rlpOrBlockNr.RLP, "0x"))
+	if err != nil {
+		return common.Address{}, err
+	}
 	block := new(types.Block)
 	if err := rlp.Decode(bytes.NewReader(blob), block); err == nil {
 		return getSigner(block.Header())

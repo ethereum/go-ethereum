@@ -112,7 +112,7 @@ web3._extend({
 			name: 'getSigner',
 			call: 'clique_getSigner',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 	],
 	properties: [
