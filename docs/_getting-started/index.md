@@ -48,13 +48,8 @@ and three test networks that use different consensus algorithms:
 -   **Rinkeby**: Proof-of-authority test network
 -   **Görli**: Proof-of-authority test network
 
-For this guide, we use the Görli network.
-
-Because of the peer to peer nature of Ethereum the system running Geth has to:
-
-1. Have a publicly accessible IP address (it does not have the be the same as the private IP)
-2. Be open to access on the sync port, which is by default port 30303 (TCP and UDP).
-
+For this guide, we use the Görli network. The default port is 30303, so you need to enable at least
+outgoing access from your node to that port.
 
 ### Sync modes
 
@@ -195,7 +190,7 @@ curl -X POST http://<GETH_IP_ADDRESS>:8545 \
 ```
 
 This action does require signing, so Clef prompts you to approve it, and if you do,
-asks you for the password you are sending the ETH from. If the password is correct,
+asks you for the password of the account from which you are sending the ETH. If the password is correct,
 Geth proceeds with the transaction.
 
 To check, get the account balance of the second account:
