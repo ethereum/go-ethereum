@@ -320,6 +320,9 @@ func InsertBlockParamsToBlock(params ExecutableData) (*types.Block, error) {
 		Time:        params.Timestamp,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	if block.Hash() != params.BlockHash {
+		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
+	}
 	return block, nil
 }
 
