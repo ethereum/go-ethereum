@@ -135,7 +135,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	if err != nil {
 		return nil, err
 	}
-	return receipt, nil
+	return receipt, receipt.Err
 }
 
 // TraceTransaction tracing pre-exec transaction object.
