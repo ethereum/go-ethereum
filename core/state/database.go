@@ -226,7 +226,8 @@ func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *VerkleDB) OpenStorageTrie(accTrie Trie, addrHash, root common.Hash) (Trie, error) {
-	return trie.NewVerkleStorageAdapter(accTrie.(*trie.VerkleTrie), addrHash), nil
+	// alternatively, return accTrie
+	panic("should not be called")
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -236,12 +237,7 @@ func (db *VerkleDB) CopyTrie(tr Trie) Trie {
 		return t.Copy(db.db)
 	}
 
-	s, ok := tr.(*trie.VerkleStorageAdapter)
-	if ok {
-		return s.Copy(db.db)
-	}
-
-			panic("invalid tree type != VerkleTrie")
+	panic("invalid tree type != VerkleTrie")
 }
 
 // ContractCode retrieves a particular contract's code.

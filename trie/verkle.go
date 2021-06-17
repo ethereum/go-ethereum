@@ -18,6 +18,7 @@ package trie
 
 import (
 	"crypto/sha256"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -25,24 +26,28 @@ import (
 )
 
 const (
-	VersionLeafKey      = 0
-	BalanceLeafKey      = 1
-	NonceLeafKey        = 2
-	CodeKeccakLeafKey   = 3
-	CodeSizeLeafKey     = 4
-	HeaderStorageOffset = 64
-	CodeOffset          = 128
-	VerkleNodeWidth     = 8
-	MainStorageOffset   = 256 // XXX use bigint
+	VersionLeafKey    = 0
+	BalanceLeafKey    = 1
+	NonceLeafKey      = 2
+	CodeKeccakLeafKey = 3
+	CodeSizeLeafKey   = 4
 )
 
-func GetTreeKey(address common.Address, treeIndex int, subIndex int) []byte {
+var (
+	zero                = big.NewInt(0)
+	HeaderStorageOffset = big.NewInt(64)
+	CodeOffset          = big.NewInt(128)
+	MainStorageOffset   = big.NewInt(0).Lsh(big.NewInt(256), 31)
+	VerkleNodeWidth     = big.NewInt(8)
+	codeStorageDelta    = big.NewInt(0).Sub(HeaderStorageOffset, CodeOffset)
+)
+
+func GetTreeKey(address common.Address, treeIndex *big.Int, subIndex byte) []byte {
 	digest := sha256.New()
 	digest.Write(address[:])
+	treeIndexBytes := treeIndex.Bytes()
 	var payload [32]byte
-	for i := 0; i < 32; i++ {
-		payload[i] = byte(treeIndex >> (8 * i))
-	}
+	copy(payload[:len(treeIndexBytes)], treeIndexBytes)
 	digest.Write(payload[:])
 	h := digest.Sum(nil)
 	h[31] = byte(subIndex)
@@ -50,36 +55,41 @@ func GetTreeKey(address common.Address, treeIndex int, subIndex int) []byte {
 }
 
 func GetTreeKeyVersion(address common.Address) []byte {
-	return GetTreeKey(address, 0, VersionLeafKey)
+	return GetTreeKey(address, zero, VersionLeafKey)
 }
 
 func GetTreeKeyBalance(address common.Address) []byte {
-	return GetTreeKey(address, 0, BalanceLeafKey)
+	return GetTreeKey(address, zero, BalanceLeafKey)
 }
 
 func GetTreeKeyNonce(address common.Address) []byte {
-	return GetTreeKey(address, 0, NonceLeafKey)
+	return GetTreeKey(address, zero, NonceLeafKey)
 }
 
 func GetTreeKeyCodeKeccak(address common.Address) []byte {
-	return GetTreeKey(address, 0, CodeKeccakLeafKey)
+	return GetTreeKey(address, zero, CodeKeccakLeafKey)
 }
 
 func GetTreeKeyCodeSize(address common.Address) []byte {
-	return GetTreeKey(address, 0, CodeSizeLeafKey)
+	return GetTreeKey(address, zero, CodeSizeLeafKey)
 }
 
-func GetTreeKeyCodeChunk(address common.Address, chunk int) []byte {
-	return GetTreeKey(address, (CodeOffset+chunk)/VerkleNodeWidth, (CodeOffset+chunk)%VerkleNodeWidth)
+func GetTreeKeyCodeChunk(address common.Address, chunk *big.Int) []byte {
+	chunkOffset := big.NewInt(0).Add(CodeOffset, chunk)
+	treeIndex := big.NewInt(0).Div(chunkOffset, VerkleNodeWidth)
+	subIndex := big.NewInt(0).Mod(chunkOffset, VerkleNodeWidth).Bytes()[0]
+	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-func GetTreeKeyStorageSlot(address common.Address, storageKey int) []byte {
-	if storageKey < (CodeOffset - HeaderStorageOffset) {
-		storageKey += HeaderStorageOffset
+func GetTreeKeyStorageSlot(address common.Address, storageKey *big.Int) []byte {
+	if storageKey.Cmp(codeStorageDelta) < 0 {
+		storageKey.Add(HeaderStorageOffset, storageKey)
 	} else {
-		storageKey += MainStorageOffset
+		storageKey.Add(MainStorageOffset, storageKey)
 	}
-	return GetTreeKey(address, storageKey/VerkleNodeWidth, storageKey%VerkleNodeWidth)
+	treeIndex := big.NewInt(0).Div(storageKey, VerkleNodeWidth)
+	subIndex := big.NewInt(0).Mod(storageKey, VerkleNodeWidth).Bytes()[0]
+	return GetTreeKey(address, treeIndex, subIndex)
 }
 
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
@@ -176,83 +186,3 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 	}
 }
 
-type VerkleStorageAdapter struct {
-	trie *VerkleTrie
-	addr common.Hash
-}
-
-func NewVerkleStorageAdapter(trie *VerkleTrie, addr common.Hash) *VerkleStorageAdapter {
-	return &VerkleStorageAdapter{
-		trie: trie,
-		addr: addr,
-	}
-}
-
-func (adapter *VerkleStorageAdapter) key2Storage(key []byte) []byte {
-	h := sha256.Sum256(append(key, adapter.addr[:]...))
-	return h[:]
-}
-
-// GetKey returns the sha3 preimage of a hashed key that was previously used
-// to store a value.
-func (adapter *VerkleStorageAdapter) GetKey(key []byte) []byte {
-	return key
-}
-
-// TryGet returns the value for key stored in the trie. The value bytes must
-// not be modified by the caller. If a node was not found in the database, a
-// trie.MissingNodeError is returned.
-func (adapter *VerkleStorageAdapter) TryGet(key []byte) ([]byte, error) {
-	return adapter.trie.root.Get(adapter.key2Storage(key), adapter.trie.db.DiskDB().Get)
-}
-
-// TryUpdate associates key with value in the trie. If value has length zero, any
-// existing value is deleted from the trie. The value bytes must not be modified
-// by the caller while they are stored in the trie. If a node was not found in the
-// database, a trie.MissingNodeError is returned.
-func (adapter *VerkleStorageAdapter) TryUpdate(key, value []byte) error {
-	return adapter.trie.root.Insert(adapter.key2Storage(key), value)
-}
-
-// TryDelete removes any existing value for key from the trie. If a node was not
-// found in the database, a trie.MissingNodeError is returned.
-func (adapter *VerkleStorageAdapter) TryDelete(key []byte) error {
-	return adapter.trie.root.Delete(adapter.key2Storage(key))
-}
-
-// Hash returns the root hash of the trie. It does not write to the database and
-// can be used even if the trie doesn't have one.
-func (adapter *VerkleStorageAdapter) Hash() common.Hash {
-	// Return an empty hash for the moment.
-	// XXX this could be the wrong value, but at this stage I don't
-	// want to send the signal that this account has no storage.
-	return common.Hash{}
-}
-
-// Commit writes all nodes to the trie's memory database, tracking the internal
-// and external (for account tries) references.
-func (adapter *VerkleStorageAdapter) Commit(onleaf LeafCallback) (common.Hash, error) {
-	return adapter.trie.Commit(onleaf)
-}
-
-// NodeIterator returns an iterator that returns nodes of the trie. Iteration
-// starts at the key after the given start key.
-func (adapter *VerkleStorageAdapter) NodeIterator(startKey []byte) NodeIterator {
-	// Returns a dummy value
-	return dummy{}
-}
-
-// Prove constructs a Merkle proof for key. The result contains all encoded nodes
-// on the path to the value at key. The value itself is also included in the last
-// node and can be retrieved by verifying the proof.
-//
-// If the trie does not contain a value for key, the returned proof contains all
-// nodes of the longest existing prefix of the key (at least the root), ending
-// with the node that proves the absence of the key.
-func (adapter *VerkleStorageAdapter) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
-	panic("not implemented")
-}
-
-func (adapter *VerkleStorageAdapter) Copy(db *Database) *VerkleStorageAdapter {
-	return &VerkleStorageAdapter{adapter.trie, adapter.addr}
-}

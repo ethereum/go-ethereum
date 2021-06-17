@@ -248,10 +248,8 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
-			s.setError(err)
-			return common.Hash{}
-		}
+		// Get the data from the db, not the trie.
+		s.db.db.TrieDB().DiskDB().Get(append(s.address[:], key[:]...))
 	}
 	var value common.Hash
 	if len(enc) > 0 {
@@ -341,7 +339,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	tr := trie.NewVerkleStorageAdapter(s.db.trie.(*trie.VerkleTrie), s.addrHash)
+	tr := s.db.trie.(*trie.VerkleTrie)
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
@@ -355,10 +353,18 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		var v []byte
 		if (value == common.Hash{}) {
 			s.setError(tr.TryDelete(key[:]))
+			s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+
+			// Update the trie, with v as a value
+			k := trie.GetTreeKeyStorageSlot(s.address, big.NewInt(0).SetBytes(key[:]))
+			s.setError(tr.TryUpdate(k, v))
+
+			// Also save the account data in a location that is easy to
+			// find, i.e. right after the account's key.
+			s.db.db.TrieDB().DiskDB().Put(append(s.address[:], key[:]...), v)
 		}
 		// If state snapshotting is active, cache the data til commit
 		if s.db.snap != nil {

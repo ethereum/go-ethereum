@@ -470,23 +470,24 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if err = s.trie.TryUpdate(trie.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
-	// XXX ensure code hash isn't empty
 	if err = s.trie.TryUpdate(trie.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
-	cs := make([]byte, 32)
-	binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
-	if err = s.trie.TryUpdate(trie.GetTreeKeyCodeSize(addr), cs); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	if len(obj.code) > 0 {
+		cs := make([]byte, 32)
+		binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+		if err = s.trie.TryUpdate(trie.GetTreeKeyCodeSize(addr), cs); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
 	}
 
 	// If the code has been modified, update the associated entries.
-	// TODO same thing with verkle.TryUpdateCode
 	// TODO it might make sense to do the storage updates here as well,
-	// since the prefetcher doesn't need to load the values anyway.
+	// since the prefetcher doesn't need to load the values from a
+	// different trie anyway.
 	if obj.dirtyCode {
 		for i := 0; i < len(obj.code)/32; i++ {
-			if err = s.trie.TryUpdate(trie.GetTreeKeyCodeChunk(addr, i), obj.code[32*i:32*(i+1)]); err != nil {
+			if err = s.trie.TryUpdate(trie.GetTreeKeyCodeChunk(addr, big.NewInt(int64(i))), obj.code[32*i:32*(i+1)]); err != nil {
 				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 			}
 		}
