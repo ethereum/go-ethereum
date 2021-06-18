@@ -411,7 +411,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// a short node.
 		if nn != nil {
 			return true, n, nil
-		}		
+		}
 		// Reduction:
 		// Check how many non-nil entries are left after deleting and
 		// reduce the full node to a short node if only one entry is
