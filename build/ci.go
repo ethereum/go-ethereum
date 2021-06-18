@@ -183,7 +183,7 @@ func main() {
 	case "archive":
 		doArchive(os.Args[2:])
 	case "docker":
-		doDockerImage(os.Args[2:])
+		doDocker(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -455,9 +455,11 @@ func maybeSkipArchive(env build.Environment) {
 }
 
 // Builds the docker images and optionally uploads them to Docker Hub.
-func doDockerImage(cmdline []string) {
+func doDocker(cmdline []string) {
 	var (
-		upload = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
+		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -465,6 +467,15 @@ func doDockerImage(cmdline []string) {
 	env := build.Env()
 	maybeSkipArchive(env)
 
+	// Retrieve the upload credentials and authenticate
+	user := getenvBase64("DOCKER_HUB_USERNAME")
+	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+
+	if len(user) > 0 && len(pass) > 0 {
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
+	}
 	// Retrieve the version infos to build and push to the following paths:
 	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
 	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
@@ -482,25 +493,46 @@ func doDockerImage(cmdline []string) {
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), params.Version}
 	}
-	// Build the docker images via CLI (don't pull in the `moby` dep to call 3 commands)
-	build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
-	build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+	// If architecture specific image builds are requested, build and push them
+	if *image {
+		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
+		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
 
-	// Retrieve the upload credentials and authenticate
-	user := getenvBase64("DOCKER_HUB_USERNAME")
-	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+		// Tag and upload the images to Docker Hub
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
+			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
 
-	if len(user) > 0 && len(pass) > 0 {
-		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
-		auther.Stdin = bytes.NewReader(pass)
-		build.MustRun(auther)
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
+			build.MustRunCommand("docker", "push", gethImage)
+			build.MustRunCommand("docker", "push", toolImage)
+		}
 	}
-	// Tag and upload the images to Docker Hub
-	for _, tag := range tags {
-		build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), fmt.Sprintf("%s:%s", *upload, tag))
-		build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), fmt.Sprintf("%s:alltools-%s", *upload, tag))
-		build.MustRunCommand("docker", "push", fmt.Sprintf("%s:%s", *upload, tag))
-		build.MustRunCommand("docker", "push", fmt.Sprintf("%s:alltools-%s", *upload, tag))
+	// If multi-arch image manifest push is requested, assemble it
+	if len(*manifest) != 0 {
+		// Assemble and push the Geth manifest image
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
+
+			var gethSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				gethSubImages = append(gethSubImages, gethImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", gethImage}, gethSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", gethImage)
+		}
+		// Assemble and push the alltools manifest image
+		for _, tag := range tags {
+			toolImage := fmt.Sprintf("%s:alltools-%s", *upload, tag)
+
+			var toolSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				toolSubImages = append(toolSubImages, toolImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", toolImage)
+		}
 	}
 }
 
