@@ -25,7 +25,7 @@ jobs:
         - go run build/ci.go lint
 
     # These builders create the Docker sub-images for multi-arch push
-    - stage: prebuild
+    - stage: build
       if: type = push
       os: linux
       arch: amd64
@@ -40,7 +40,7 @@ jobs:
       script:
         - go run build/ci.go docker -image -upload karalabe/geth-docker-test
 
-    - stage: prebuild
+    - stage: build
       if: type = push
       os: linux
       arch: arm64
@@ -56,7 +56,7 @@ jobs:
         - go run build/ci.go docker -image -upload karalabe/geth-docker-test
 
     # This builder does the Docker Hub multi-arch image
-    - stage: build
+    - stage: publish
       if: type = push
       os: linux
       dist: bionic
