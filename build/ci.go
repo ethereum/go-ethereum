@@ -182,6 +182,8 @@ func main() {
 		doLint(os.Args[2:])
 	case "archive":
 		doArchive(os.Args[2:])
+	case "docker":
+		doDocker(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -449,6 +451,88 @@ func maybeSkipArchive(env build.Environment) {
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
+	}
+}
+
+// Builds the docker images and optionally uploads them to Docker Hub.
+func doDocker(cmdline []string) {
+	var (
+		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
+		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	// Skip building and pushing docker images for PR builds
+	env := build.Env()
+	maybeSkipArchive(env)
+
+	// Retrieve the upload credentials and authenticate
+	user := getenvBase64("DOCKER_HUB_USERNAME")
+	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+
+	if len(user) > 0 && len(pass) > 0 {
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
+	}
+	// Retrieve the version infos to build and push to the following paths:
+	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
+	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
+	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
+	var tags []string
+
+	switch {
+	case env.Branch == "master":
+		tags = []string{"latest"}
+	case strings.HasPrefix(env.Tag, "v1."):
+		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), params.Version}
+	}
+	// If architecture specific image builds are requested, build and push them
+	if *image {
+		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
+		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+
+		// Tag and upload the images to Docker Hub
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
+			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
+
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
+			build.MustRunCommand("docker", "push", gethImage)
+			build.MustRunCommand("docker", "push", toolImage)
+		}
+	}
+	// If multi-arch image manifest push is requested, assemble it
+	if len(*manifest) != 0 {
+		// Assemble and push the Geth manifest image
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
+
+			var gethSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				gethSubImages = append(gethSubImages, gethImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", gethImage}, gethSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", gethImage)
+		}
+		// Assemble and push the alltools manifest image
+		for _, tag := range tags {
+			toolImage := fmt.Sprintf("%s:alltools-%s", *upload, tag)
+
+			var toolSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				toolSubImages = append(toolSubImages, toolImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", toolImage)
+		}
 	}
 }
 
