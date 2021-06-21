@@ -54,6 +54,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -495,14 +496,45 @@ func doDocker(cmdline []string) {
 	}
 	// If architecture specific image builds are requested, build and push them
 	if *image {
-		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
-		build.MustRunCommand("docker", "build", "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
+		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
 
 		// Tag and upload the images to Docker Hub
 		for _, tag := range tags {
 			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
 			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
 
+			// If the image already exists (non version tag), check the build
+			// number to prevent overwriting a newer commit if concurrent builds
+			// are running. This is still a tiny bit racey if two published are
+			// done at the same time, but that's extremely unlikely even on the
+			// master branch.
+			for _, img := range []string{gethImage, toolImage} {
+				if exec.Command("docker", "pull", img).Run() != nil {
+					continue // Generally the only failure is a missing image, which is good
+				}
+				buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
+				if err != nil {
+					log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
+				}
+				buildnum = bytes.TrimSpace(buildnum)
+
+				if len(buildnum) > 0 && len(env.Buildnum) > 0 {
+					oldnum, err := strconv.Atoi(string(buildnum))
+					if err != nil {
+						log.Fatalf("Failed to parse old image build number: %v", err)
+					}
+					newnum, err := strconv.Atoi(env.Buildnum)
+					if err != nil {
+						log.Fatalf("Failed to parse current build number: %v", err)
+					}
+					if oldnum > newnum {
+						log.Fatalf("Current build number %d not newer than existing %d", newnum, oldnum)
+					} else {
+						log.Printf("Updating %s from build %d to %d", img, oldnum, newnum)
+					}
+				}
+			}
 			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
 			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
 			build.MustRunCommand("docker", "push", gethImage)
@@ -511,6 +543,59 @@ func doDocker(cmdline []string) {
 	}
 	// If multi-arch image manifest push is requested, assemble it
 	if len(*manifest) != 0 {
+		// Since different architectures are pushed by different builders, wait
+		// until all required images are updated.
+		var mismatch bool
+		for i := 0; i < 2; i++ { // 2 attempts, second is race check
+			mismatch = false // hope there's no mismatch now
+
+			for _, tag := range tags {
+				for _, arch := range strings.Split(*manifest, ",") {
+					gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, arch)
+					toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, arch)
+
+					for _, img := range []string{gethImage, toolImage} {
+						if out, err := exec.Command("docker", "pull", img).CombinedOutput(); err != nil {
+							log.Printf("Required image %s unavailable: %v\nOutput: %s", img, err, out)
+							mismatch = true
+							break
+						}
+						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
+						if err != nil {
+							log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
+						}
+						buildnum = bytes.TrimSpace(buildnum)
+
+						if string(buildnum) != env.Buildnum {
+							log.Printf("Build number mismatch on %s: want %s, have %s", img, env.Buildnum, buildnum)
+							mismatch = true
+							break
+						}
+					}
+					if mismatch {
+						break
+					}
+				}
+				if mismatch {
+					break
+				}
+			}
+			if mismatch {
+				// Build numbers mismatching, retry in a short time to
+				// avoid concurrent failes in both publisher images. If
+				// however the retry failed too, it means the concurrent
+				// builder is still crunching, let that do the publish.
+				if i == 0 {
+					time.Sleep(30 * time.Second)
+				}
+				continue
+			}
+			break
+		}
+		if mismatch {
+			log.Println("Relinquishing publish to other builder")
+			return
+		}
 		// Assemble and push the Geth manifest image
 		for _, tag := range tags {
 			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
