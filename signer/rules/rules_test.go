@@ -437,7 +437,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			To:       to,
 			Value:    value,
 			Nonce:    n,
-			GasPrice: gasPrice,
+			GasPrice: &gasPrice,
 			Gas:      gas,
 		},
 		Callinfo: []core.ValidationInfo{

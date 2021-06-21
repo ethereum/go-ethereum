@@ -94,6 +94,10 @@ const schema string = `
         value: BigInt!
         # GasPrice is the price offered to miners for gas, in wei per unit.
         gasPrice: BigInt!
+        # MaxFeePerGas is the maximum fee per gas offered to include a transaction, in wei. 
+		maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei. 
+		maxPriorityFeePerGas: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
         gas: Long!
         # InputData is the data supplied to the target of the transaction.
@@ -114,6 +118,13 @@ const schema string = `
         # this transaction. If the transaction has not yet been mined, this field
         # will be null.
         cumulativeGasUsed: Long
+        # EffectiveGasPrice is actual value per gas deducted from the sender's
+        # account. Before EIP-1559, this is equal to the transaction's gas price.
+        # After EIP-1559, it is baseFeePerGas + min(maxFeePerGas - baseFeePerGas,
+        # maxPriorityFeePerGas). Legacy transactions and EIP-2930 transactions are
+        # coerced into the EIP-1559 format by setting both maxFeePerGas and
+        # maxPriorityFeePerGas as the transaction's gas price.
+        effectiveGasPrice: BigInt
         # CreatedContract is the account that was created by a contract creation
         # transaction. If the transaction was not a contract creation transaction,
         # or it has not yet been mined, this field will be null.
@@ -176,6 +187,8 @@ const schema string = `
         gasLimit: Long!
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
+        # BaseFeePerGas is the fee perunit of gas burned by the protocol in this block.
+		baseFeePerGas: BigInt
         # Timestamp is the unix timestamp at which this block was mined.
         timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
@@ -231,6 +244,10 @@ const schema string = `
         gas: Long
         # GasPrice is the price, in wei, offered for each unit of gas.
         gasPrice: BigInt
+        # MaxFeePerGas is the maximum fee per gas offered, in wei. 
+		maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered, in wei. 
+		maxPriorityFeePerGas: BigInt
         # Value is the value, in wei, sent along with the call.
         value: BigInt
         # Data is the data sent to the callee.
@@ -319,6 +336,9 @@ const schema string = `
         # GasPrice returns the node's estimate of a gas price sufficient to
         # ensure a transaction is mined in a timely fashion.
         gasPrice: BigInt!
+        # MaxPriorityFeePerGas returns the node's estimate of a gas tip sufficient
+        # to ensure a transaction is mined in a timely fashion.
+        maxPriorityFeePerGas: BigInt!
         # Syncing returns information on the current synchronisation state.
         syncing: SyncState
         # ChainID returns the current chain ID for transaction replay protection.

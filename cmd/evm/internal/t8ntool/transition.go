@@ -19,6 +19,7 @@ package t8ntool
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -142,7 +143,9 @@ func Main(ctx *cli.Context) error {
 	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		decoder.Decode(inputData)
+		if err := decoder.Decode(inputData); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
 	}
 	if allocStr != stdinSelector {
 		inFile, err := os.Open(allocStr)
@@ -152,7 +155,7 @@ func Main(ctx *cli.Context) error {
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
 		if err := decoder.Decode(&inputData.Alloc); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling alloc-file: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling alloc-file: %v", err))
 		}
 	}
 	prestate.Pre = inputData.Alloc
@@ -167,7 +170,7 @@ func Main(ctx *cli.Context) error {
 		decoder := json.NewDecoder(inFile)
 		var env stEnv
 		if err := decoder.Decode(&env); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling env-file: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling env-file: %v", err))
 		}
 		inputData.Env = &env
 	}
@@ -180,7 +183,7 @@ func Main(ctx *cli.Context) error {
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
-		return NewError(ErrorVMConfig, fmt.Errorf("Failed constructing chain configuration: %v", err))
+		return NewError(ErrorVMConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
 	} else {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
@@ -197,7 +200,7 @@ func Main(ctx *cli.Context) error {
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
 		if err := decoder.Decode(&txsWithKeys); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling txs-file: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
 		}
 	} else {
 		txsWithKeys = inputData.Txs
@@ -206,22 +209,24 @@ func Main(ctx *cli.Context) error {
 	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)))
 
 	if txs, err = signUnsignedTransactions(txsWithKeys, signer); err != nil {
-		return NewError(ErrorJson, fmt.Errorf("Failed signing transactions: %v", err))
+		return NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
 	}
-
-	// Iterate over all the tests, run them and aggregate the results
-
+	// Sanity check, to not `panic` in state_transition
+	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
+		if prestate.Env.BaseFee == nil {
+			return NewError(ErrorVMConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
+		}
+	}
 	// Run the test and aggregate the result
-	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}
 	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
-	state.DumpToCollector(collector, false, false, false, nil, -1)
+	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)
-
 }
 
 // txWithKey is a helper-struct, to allow us to use the types.Transaction along with
@@ -278,7 +283,7 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 			// This transaction needs to be signed
 			signed, err := types.SignTx(tx, signer, key)
 			if err != nil {
-				return nil, NewError(ErrorJson, fmt.Errorf("Tx %d: failed to sign tx: %v", i, err))
+				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
 			}
 			signedTxs = append(signedTxs, signed)
 		} else {
@@ -303,7 +308,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 		}
 	}
 	genesisAccount := core.GenesisAccount{
-		Code:    common.FromHex(dumpAccount.Code),
+		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,

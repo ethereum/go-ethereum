@@ -71,18 +71,6 @@ type rlpLog struct {
 // rlpStorageLog is the storage encoding of a log.
 type rlpStorageLog rlpLog
 
-// legacyRlpStorageLog is the previous storage encoding of a log including some redundant fields.
-type legacyRlpStorageLog struct {
-	Address     common.Address
-	Topics      []common.Hash
-	Data        []byte
-	BlockNumber uint64
-	TxHash      common.Hash
-	TxIndex     uint
-	BlockHash   common.Hash
-	Index       uint
-}
-
 // EncodeRLP implements rlp.Encoder.
 func (l *Log) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data})
@@ -115,29 +103,10 @@ func (l *LogForStorage) EncodeRLP(w io.Writer) error {
 //
 // Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
 func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
-	blob, err := s.Raw()
-	if err != nil {
+	var dec rlpStorageLog
+	if err := s.Decode(&dec); err != nil {
 		return err
 	}
-	var dec rlpStorageLog
-	err = rlp.DecodeBytes(blob, &dec)
-	if err == nil {
-		*l = LogForStorage{
-			Address: dec.Address,
-			Topics:  dec.Topics,
-			Data:    dec.Data,
-		}
-	} else {
-		// Try to decode log with previous definition.
-		var dec legacyRlpStorageLog
-		err = rlp.DecodeBytes(blob, &dec)
-		if err == nil {
-			*l = LogForStorage{
-				Address: dec.Address,
-				Topics:  dec.Topics,
-				Data:    dec.Data,
-			}
-		}
-	}
-	return err
+	*l = LogForStorage{Address: dec.Address, Topics: dec.Topics, Data: dec.Data}
+	return nil
 }
