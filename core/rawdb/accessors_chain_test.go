@@ -509,9 +509,16 @@ func TestReadLogs(t *testing.T) {
 	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
-	if !(len(logs) == 2 && len(logs[0]) == 2 && len(logs[1]) == 2) {
-		t.Fatalf("unexpected number of logs returned")
+	if have, want := len(logs), 2; have != want {
+		t.Fatalf("unexpected number of logs returned, have %d want %d", have, want)
 	}
+	if have, want := len(logs[0]), 2; have != want {
+		t.Fatalf("unexpected number of logs[0] returned, have %d want %d", have, want)
+	}
+	if have, want := len(logs[1]), 2; have != want {
+		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
+	}
+
 
 	// Fill in log fields so we can compare their rlp encoding
 	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
