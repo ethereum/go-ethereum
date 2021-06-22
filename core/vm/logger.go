@@ -106,6 +106,8 @@ func (s *StructLog) ErrorString() string {
 type Tracer interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
+	CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureExit(env *EVM, output []byte, gasUsed uint64)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
@@ -215,6 +217,14 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
+}
+
+func (l *StructLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	// TODO
+}
+
+func (l *StructLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64) {
+	// TODO
 }
 
 // StructLogs returns the captured log entries.
@@ -333,4 +343,12 @@ func (t *mdLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64
 func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) {
 	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
+}
+
+func (t *mdLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	// TODO
+}
+
+func (t *mdLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64) {
+	// TODO
 }
