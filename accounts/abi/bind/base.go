@@ -443,7 +443,7 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event strin
 // user specified it as such.
 func ensureContext(ctx context.Context) context.Context {
 	if ctx == nil {
-		return context.TODO()
+		return context.Background()
 	}
 	return ctx
 }
