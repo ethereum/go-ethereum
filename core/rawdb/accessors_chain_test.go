@@ -506,7 +506,7 @@ func TestReadLogs(t *testing.T) {
 	WriteReceipts(db, hash, 0, receipts)
 
 	logs := ReadLogs(db, hash, 0)
-	if logs == nil || len(logs) == 0 {
+	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
 	if !(len(logs) == 2 && len(logs[0]) == 2 && len(logs[1]) == 2) {
