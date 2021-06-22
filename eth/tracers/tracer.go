@@ -312,6 +312,7 @@ type Tracer struct {
 	reason    error  // Textual reason for the interruption
 
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
 }
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -464,6 +465,18 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		return nil, fmt.Errorf("trace object must expose a function result()")
 	}
 	tracer.vm.Pop()
+
+	hasEnter := tracer.vm.GetPropString(tracer.tracerObject, "enter")
+	tracer.vm.Pop()
+	hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
+	tracer.vm.Pop()
+	if hasEnter != hasExit {
+		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
+	}
+	// Maintain backwards-compatibility with old tracing scripts
+	if hasEnter {
+		tracer.traceCallFrames = true
+	}
 
 	// Tracer is valid, inject the big int library to access large numbers
 	tracer.vm.EvalString(bigIntegerJS)
@@ -646,6 +659,90 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 
 	if err != nil {
 		jst.ctx["error"] = err.Error()
+	}
+}
+
+func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	// TODO: Do we need env?
+
+	if !jst.traceCallFrames {
+		return
+	}
+	if jst.err != nil {
+		return
+	}
+	// If tracing was interrupted, set the error and stop
+	if atomic.LoadUint32(&jst.interrupt) > 0 {
+		jst.err = jst.reason
+		return
+	}
+
+	frame := make(map[string]interface{})
+	//frame["type"] = type_
+	frame["from"] = from
+	frame["to"] = to
+	frame["input"] = input
+	frame["gas"] = gas
+	frame["value"] = value
+	// Transform the context into a JavaScript object and inject into the state
+	obj := jst.vm.PushObject()
+
+	for key, val := range frame {
+		switch val := val.(type) {
+		case uint64:
+			jst.vm.PushUint(uint(val))
+
+		case string:
+			jst.vm.PushString(val)
+
+		case []byte:
+			ptr := jst.vm.PushFixedBuffer(len(val))
+			copy(makeSlice(ptr, uint(len(val))), val)
+
+		case common.Address:
+			ptr := jst.vm.PushFixedBuffer(20)
+			copy(makeSlice(ptr, 20), val[:])
+
+		case *big.Int:
+			pushBigInt(val, jst.vm)
+
+		default:
+			panic(fmt.Sprintf("unsupported type: %T", val))
+		}
+		jst.vm.PutPropString(obj, key)
+	}
+	jst.vm.PutPropString(jst.stateObject, "frame")
+
+	if _, err := jst.call(true, "enter", "frame"); err != nil {
+		jst.err = wrapError("enter", err)
+	}
+}
+
+func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64) {
+	if !jst.traceCallFrames {
+		return
+	}
+	if jst.err != nil {
+		return
+	}
+	// If tracing was interrupted, set the error and stop
+	if atomic.LoadUint32(&jst.interrupt) > 0 {
+		jst.err = jst.reason
+		return
+	}
+
+	obj := jst.vm.PushObject()
+
+	ptr := jst.vm.PushFixedBuffer(len(output))
+	copy(makeSlice(ptr, uint(len(output))), output)
+	jst.vm.PutPropString(obj, "output")
+
+	jst.vm.PushUint(uint(gasUsed))
+	jst.vm.PutPropString(obj, "gasUsed")
+
+	jst.vm.PutPropString(jst.stateObject, "frameResult")
+	if _, err := jst.call(true, "exit", "frameResult"); err != nil {
+		jst.err = wrapError("exit", err)
 	}
 }
 

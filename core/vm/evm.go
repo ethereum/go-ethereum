@@ -31,6 +31,18 @@ import (
 // deployed contract addresses (relevant after the account abstraction).
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
+// Type of an executing call frame
+type CallFrameType int
+
+const (
+	CallType CallFrameType = iota
+	CallCodeType
+	DelegateCallType
+	StaticCallType
+	// Init code execution for both CREATE and CREATE2
+	CreateType
+)
+
 type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
@@ -198,6 +210,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
 			evm.Config.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
 		}(gas, time.Now())
+	} else if evm.Config.Debug && evm.depth > 0 {
+		// Handle tracer events for entering and exiting a call frame
+		evm.Config.Tracer.CaptureEnter(evm, CallType, caller.Address(), addr, input, gas, value)
+		defer func(startGas uint64) {
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+		}(gas)
 	}
 
 	if isPrecompile {
@@ -257,6 +275,14 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 	var snapshot = evm.StateDB.Snapshot()
 
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.Config.Debug {
+		evm.Config.Tracer.CaptureEnter(evm, CallCodeType, caller.Address(), addr, input, gas, value)
+		defer func(startGas uint64) {
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+		}(gas)
+	}
+
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -292,6 +318,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
+
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.Config.Debug {
+		evm.Config.Tracer.CaptureEnter(evm, DelegateCallType, caller.Address(), addr, input, gas, nil)
+		defer func(startGas uint64) {
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+		}(gas)
+	}
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -337,6 +371,14 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
 	evm.StateDB.AddBalance(addr, big0)
+
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.Config.Debug {
+		evm.Config.Tracer.CaptureEnter(evm, StaticCallType, caller.Address(), addr, input, gas, nil)
+		defer func(startGas uint64) {
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+		}(gas)
+	}
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -417,7 +459,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
+	} else if evm.Config.Debug && evm.depth > 0 {
+		// TODO: Make sure we should capture init code's call frame for the tracer
+		evm.Config.Tracer.CaptureEnter(evm, CreateType, caller.Address(), address, codeAndHash.code, gas, value)
 	}
+
 	start := time.Now()
 
 	ret, err := evm.interpreter.Run(contract, nil, false)
@@ -457,6 +503,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
+	} else if evm.Config.Debug && evm.depth > 0 {
+		evm.Config.Tracer.CaptureExit(evm, ret, gas-contract.Gas)
 	}
 	return ret, address, contract.Gas, err
 }
