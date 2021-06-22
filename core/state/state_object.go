@@ -550,6 +550,10 @@ func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
 }
 
+func (s *stateObject) GetDirtyStorage() Storage {
+	return s.dirtyStorage
+}
+
 // Never called, but must be present to allow stateObject to be used
 // as a vm.Account interface that also satisfies the vm.ContractRef
 // interface. Interfaces are awesome.

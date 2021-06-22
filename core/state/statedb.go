@@ -119,6 +119,10 @@ type StateDB struct {
 	SnapshotCommits      time.Duration
 }
 
+func (s *StateDB) GetStateObjects() (map[common.Address]*stateObject, map[common.Address]struct{}, map[common.Address]struct{}) {
+	return s.stateObjects, s.stateObjectsPending, s.stateObjectsDirty
+}
+
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)

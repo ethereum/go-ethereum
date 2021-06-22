@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -95,7 +96,19 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
+	obj, pending, dirty := statedb.GetStateObjects()
+	log.Info("Before ApplyMessage", "obj", obj, "pending", pending, "dirty", dirty)
 	result, err := ApplyMessage(evm, msg, gp)
+	obj2, pending2, dirty2 := statedb.GetStateObjects()
+	log.Info("After ApplyMessage", "obj", obj2, "pending", pending2, "dirty", dirty2)
+	for stateAddr, stateObj := range obj2 {
+		log.Info("State Obj", "addr", stateAddr)
+		dirtyStorage := stateObj.GetDirtyStorage()
+		for slot, value := range dirtyStorage {
+			log.Info("Updated Value", "slot", slot.String(), "value", value.String())
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +153,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	log.Trace("APPLYING TRANSACTION", "msg", msg)
 	if err != nil {
 		return nil, err
 	}
