@@ -50,7 +50,7 @@ func TestFeeHistory(t *testing.T) {
 		{false, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 1, nil},
 		{true, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 2, nil},
 	}
-	for _, c := range cases {
+	for i, c := range cases {
 		config := Config{
 			MaxHeaderHistory: c.maxHeader,
 			MaxBlockHistory:  c.maxBlock,
@@ -70,19 +70,19 @@ func TestFeeHistory(t *testing.T) {
 		}
 
 		if first != c.expFirst {
-			t.Fatalf("First block mismatch, want %d, got %d", c.expFirst, first)
+			t.Fatalf("Test case %d: first block mismatch, want %d, got %d", i, c.expFirst, first)
 		}
 		if len(reward) != expReward {
-			t.Fatalf("Reward array length mismatch, want %d, got %d", expReward, len(reward))
+			t.Fatalf("Test case %d: reward array length mismatch, want %d, got %d", i, expReward, len(reward))
 		}
 		if len(baseFee) != expBaseFee {
-			t.Fatalf("BaseFee array length mismatch, want %d, got %d", expBaseFee, len(baseFee))
+			t.Fatalf("Test case %d: baseFee array length mismatch, want %d, got %d", i, expBaseFee, len(baseFee))
 		}
 		if len(ratio) != c.expCount {
-			t.Fatalf("GasUsedRatio array length mismatch, want %d, got %d", c.expCount, len(ratio))
+			t.Fatalf("Test case %d: gasUsedRatio array length mismatch, want %d, got %d", i, c.expCount, len(ratio))
 		}
 		if err != c.expErr {
-			t.Fatalf("Error mismatch, want %v, got %v", c.expErr, err)
+			t.Fatalf("Test case %d: error mismatch, want %v, got %v", i, c.expErr, err)
 		}
 	}
 }
