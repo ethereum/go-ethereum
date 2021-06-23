@@ -39,8 +39,9 @@ const (
 	CallCodeType
 	DelegateCallType
 	StaticCallType
-	// Init code execution for both CREATE and CREATE2
+	// Init code execution
 	CreateType
+	Create2Type
 )
 
 type (
@@ -419,7 +420,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, type_ CallFrameType) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -461,7 +462,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
 	} else if evm.Config.Debug && evm.depth > 0 {
 		// TODO: Make sure we should capture init code's call frame for the tracer
-		evm.Config.Tracer.CaptureEnter(evm, CreateType, caller.Address(), address, codeAndHash.code, gas, value)
+		evm.Config.Tracer.CaptureEnter(evm, type_, caller.Address(), address, codeAndHash.code, gas, value)
 	}
 
 	start := time.Now()
@@ -512,7 +513,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CreateType)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -522,7 +523,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, Create2Type)
 }
 
 // ChainConfig returns the environment's chain configuration
