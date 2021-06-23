@@ -98,12 +98,18 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	for it.Next() && atomic.LoadUint32(&b.closed) == 0 {
 		// If the database entry is a trie node, add it to the bloom
 		key := it.Key()
-		if len(key) == common.HashLength {
-			b.bloom.AddHash(binary.BigEndian.Uint64(key))
+		if ok, rawkey := rawdb.IsTrieNodeKey(key); ok {
+			if len(rawkey) <= 8 {
+				continue
+			}
+			b.bloom.AddHash(binary.BigEndian.Uint64(rawkey[len(rawkey)-8:]))
 			bloomLoadMeter.Mark(1)
 		} else if ok, hash := rawdb.IsCodeKey(key); ok {
+			if len(hash) <= 8 {
+				continue
+			}
 			// If the database entry is a contract code, add it to the bloom
-			b.bloom.AddHash(binary.BigEndian.Uint64(hash))
+			b.bloom.AddHash(binary.BigEndian.Uint64(hash[len(hash)-8:]))
 			bloomLoadMeter.Mark(1)
 		}
 		// If enough time elapsed since the last iterator swap, restart
@@ -161,20 +167,28 @@ func (b *SyncBloom) Close() error {
 }
 
 // Add inserts a new trie node hash into the bloom filter.
-func (b *SyncBloom) Add(hash []byte) {
+func (b *SyncBloom) Add(key []byte) {
+	// Filtered out invalid key, in theory it shouldn't happen.
+	if len(key) < 8 {
+		return
+	}
 	if atomic.LoadUint32(&b.closed) == 1 {
 		return
 	}
-	b.bloom.AddHash(binary.BigEndian.Uint64(hash))
+	b.bloom.AddHash(binary.BigEndian.Uint64(key[len(key)-8:]))
 	bloomAddMeter.Mark(1)
 }
 
-// Contains tests if the bloom filter contains the given hash:
-//   - false: the bloom definitely does not contain hash
-//   - true:  the bloom maybe contains hash
+// Contains tests if the bloom filter contains the given key:
+//   - false: the bloom definitely does not contain key
+//   - true:  the bloom maybe contains key
 //
 // While the bloom is being initialized, any query will return true.
-func (b *SyncBloom) Contains(hash []byte) bool {
+func (b *SyncBloom) Contains(key []byte) bool {
+	// Filtered out invalid key, in theory it shouldn't happen.
+	if len(key) < 8 {
+		return true
+	}
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As
@@ -183,7 +197,7 @@ func (b *SyncBloom) Contains(hash []byte) bool {
 		return true
 	}
 	// Bloom initialized, check the real one and report any successful misses
-	maybe := b.bloom.ContainsHash(binary.BigEndian.Uint64(hash))
+	maybe := b.bloom.ContainsHash(binary.BigEndian.Uint64(key[len(key)-8:]))
 	if !maybe {
 		bloomMissMeter.Mark(1)
 	}

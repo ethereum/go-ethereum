@@ -227,6 +227,14 @@ func (it *nodeIterator) do(fn func() error) {
 	}
 }
 
+func (it *nodeIterator) Owner() common.Hash {
+	return it.t.trie.Owner()
+}
+
+func (it *nodeIterator) ComposedKey() []byte {
+	panic("not implemented")
+}
+
 func (it *nodeIterator) Error() error {
 	if it.err != nil {
 		return it.err
