@@ -78,6 +78,14 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return b.chain.GetReceiptsByHash(hash), nil
 }
 
+func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	if b.pending {
+		block := b.chain.GetBlockByNumber(testHead + 1)
+		return block, b.chain.GetReceiptsByHash(block.Hash())
+	}
+	return nil, nil
+}
+
 func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chain.Config()
 }
