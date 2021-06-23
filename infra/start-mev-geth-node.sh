@@ -62,6 +62,7 @@ start_node() {
           --syncmode $syncmode \
           --gcmode archive \
           --cache 4096 \
+          --snapshot=false \
           --maxpeers $connections
         if [ $? -ne 0 ]
         then
