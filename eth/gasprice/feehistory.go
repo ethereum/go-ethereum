@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -61,6 +62,10 @@ func (f *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	bf.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null
+		return
+	}
+	if bf.block == nil {
+		log.Error("Block is missing while reward percentiles are requested")
 		return
 	}
 
