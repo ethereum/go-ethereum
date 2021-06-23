@@ -49,6 +49,7 @@ func TestFeeHistory(t *testing.T) {
 		{false, 0, 0, 1, rpc.PendingBlockNumber, nil, 0, 0, nil},
 		{false, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 1, nil},
 		{true, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 2, nil},
+		{true, 0, 0, 2, rpc.PendingBlockNumber, []float64{0, 10}, 32, 2, nil},
 	}
 	for i, c := range cases {
 		config := Config{

@@ -39,11 +39,29 @@ type blockFees struct {
 	blockNumber rpc.BlockNumber
 	header      *types.Header
 	block       *types.Block // only set if reward percentiles are requested
+	receipts    types.Receipts
 	// filled by processBlock
 	reward               []*big.Int
 	baseFee, nextBaseFee *big.Int
 	gasUsedRatio         float64
 	err                  error
+}
+
+// txGasAndReward is sorted in ascending order based on reward
+type (
+	txGasAndReward struct {
+		gasUsed uint64
+		reward  *big.Int
+	}
+	sortGasAndReward []txGasAndReward
+)
+
+func (s sortGasAndReward) Len() int { return len(s) }
+func (s sortGasAndReward) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s sortGasAndReward) Less(i, j int) bool {
+	return s[i].reward.Cmp(s[j].reward) < 0
 }
 
 // processBlock takes a blockFees structure with the blockNumber, the header and optionally
@@ -64,8 +82,8 @@ func (f *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		// rewards were not requested, return null
 		return
 	}
-	if bf.block == nil {
-		log.Error("Block is missing while reward percentiles are requested")
+	if bf.block == nil || bf.receipts == nil {
+		log.Error("Block or receipts are missing while reward percentiles are requested")
 		return
 	}
 
@@ -77,21 +95,24 @@ func (f *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		}
 		return
 	}
-	txs := make([]*types.Transaction, len(bf.block.Transactions()))
-	copy(txs, bf.block.Transactions())
-	sorter := newSorter(txs, bf.block.BaseFee())
+
+	sorter := make(sortGasAndReward, len(bf.block.Transactions()))
+	for i, tx := range bf.block.Transactions() {
+		reward, _ := tx.EffectiveGasTip(bf.block.BaseFee())
+		sorter[i] = txGasAndReward{gasUsed: bf.receipts[i].GasUsed, reward: reward}
+	}
 	sort.Sort(sorter)
 
 	var txIndex int
-	sumGasUsed := txs[0].Gas()
+	sumGasUsed := sorter[0].gasUsed
 
 	for i, p := range percentiles {
 		thresholdGasUsed := uint64(float64(bf.block.GasUsed()) * p / 100)
 		for sumGasUsed < thresholdGasUsed && txIndex < len(bf.block.Transactions())-1 {
 			txIndex++
-			sumGasUsed += txs[txIndex].Gas()
+			sumGasUsed += sorter[txIndex].gasUsed
 		}
-		bf.reward[i], _ = txs[txIndex].EffectiveGasTip(bf.block.BaseFee())
+		bf.reward[i] = sorter[txIndex].reward
 	}
 }
 
@@ -219,8 +240,8 @@ func (f *Oracle) FeeHistory(ctx context.Context, blockCount int, lastBlockNumber
 						bf.header, bf.err = f.backend.HeaderByNumber(ctx, blockNumber)
 					}
 				}
-
 				if bf.block != nil {
+					bf.receipts, bf.err = f.backend.GetReceipts(ctx, bf.block.Hash())
 					bf.header = bf.block.Header()
 				}
 				if bf.header != nil {
