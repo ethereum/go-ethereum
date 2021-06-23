@@ -89,6 +89,7 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+	TrieNodePrefix        = []byte("w") // TrieNodePrefix + node path + node hash -> trie node
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -222,6 +223,20 @@ func codeKey(hash common.Hash) []byte {
 func IsCodeKey(key []byte) (bool, []byte) {
 	if bytes.HasPrefix(key, CodePrefix) && len(key) == common.HashLength+len(CodePrefix) {
 		return true, key[len(CodePrefix):]
+	}
+	return false, nil
+}
+
+// trieNodeKey = TrieNodePrefix + encoded node key
+func trieNodeKey(key []byte) []byte {
+	return append(TrieNodePrefix, key...)
+}
+
+// IsTrieNodeKey reports whether the given byte slice is the key of trie node.
+// if so return the raw encoded trie key as well.
+func IsTrieNodeKey(key []byte) (bool, []byte) {
+	if bytes.HasPrefix(key, TrieNodePrefix) && len(key) > common.HashLength+len(TrieNodePrefix) {
+		return true, key[len(TrieNodePrefix):]
 	}
 	return false, nil
 }

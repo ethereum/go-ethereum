@@ -225,7 +225,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	if !c.disablePruning {
 		// Flush the triedb and track the latest trie nodes.
 		c.trieset.Clear()
-		c.triedb.Commit(root, false, func(hash common.Hash) { c.trieset.Add(hash) })
+		c.triedb.Commit(root, false, func(key []byte) { c.trieset.Add(key) })
 
 		it := c.trieTable.NewIterator(nil, nil)
 		defer it.Release()
@@ -237,11 +237,13 @@ func (c *ChtIndexerBackend) Commit() error {
 		)
 		for it.Next() {
 			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
-			if !c.trieset.Contains(common.BytesToHash(trimmed)) {
-				c.trieTable.Delete(trimmed)
-				deleted += 1
-			} else {
-				remaining += 1
+			if ok, rawkey := rawdb.IsTrieNodeKey(trimmed); ok {
+				if !c.trieset.Contains(rawkey) {
+					rawdb.DeleteTrieNode(c.trieTable, rawkey)
+					deleted += 1
+				} else {
+					remaining += 1
+				}
 			}
 		}
 		log.Debug("Prune historical CHT trie nodes", "deleted", deleted, "remaining", remaining, "elapsed", common.PrettyDuration(time.Since(t)))
@@ -462,7 +464,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	if !b.disablePruning {
 		// Flush the triedb and track the latest trie nodes.
 		b.trieset.Clear()
-		b.triedb.Commit(root, false, func(hash common.Hash) { b.trieset.Add(hash) })
+		b.triedb.Commit(root, false, func(key []byte) { b.trieset.Add(key) })
 
 		it := b.trieTable.NewIterator(nil, nil)
 		defer it.Release()
@@ -473,12 +475,14 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			t         = time.Now()
 		)
 		for it.Next() {
-			trimmed := bytes.TrimPrefix(it.Key(), []byte(BloomTrieTablePrefix))
-			if !b.trieset.Contains(common.BytesToHash(trimmed)) {
-				b.trieTable.Delete(trimmed)
-				deleted += 1
-			} else {
-				remaining += 1
+			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
+			if ok, rawkey := rawdb.IsTrieNodeKey(trimmed); ok {
+				if !b.trieset.Contains(rawkey) {
+					rawdb.DeleteTrieNode(b.trieTable, rawkey)
+					deleted += 1
+				} else {
+					remaining += 1
+				}
 			}
 		}
 		log.Debug("Prune historical bloom trie nodes", "deleted", deleted, "remaining", remaining, "elapsed", common.PrettyDuration(time.Since(t)))
