@@ -182,7 +182,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
-		td := cs.handler.chain.GetTdByHash(block.Hash())
+		td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
 		return downloader.FastSync, td
 	}
 	// We are probably in full sync, but we might have rewound to before the
@@ -190,7 +190,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
 		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
 			block := cs.handler.chain.CurrentFastBlock()
-			td := cs.handler.chain.GetTdByHash(block.Hash())
+			td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
 			return downloader.FastSync, td
 		}
 	}
