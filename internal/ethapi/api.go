@@ -1912,13 +1912,15 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
-	b Backend
+	b           Backend
+	burned      *big.Int
+	burnedBlock uint64
 }
 
 // NewPrivateDebugAPI creates a new API definition for the private debug methods
 // of the Ethereum service.
 func NewPrivateDebugAPI(b Backend) *PrivateDebugAPI {
-	return &PrivateDebugAPI{b: b}
+	return &PrivateDebugAPI{b: b, burned: big.NewInt(0)}
 }
 
 // ChaindbProperty returns leveldb properties of the key-value database.
@@ -1965,6 +1967,11 @@ func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, er
 	if startBlock > endBlock {
 		return (*hexutil.Big)(burned), errors.New("invalid range specified, start > end")
 	}
+	// If we don't calculate the burn for a single block, recompute from the given block.
+	if startBlock != endBlock {
+		startBlock = int(api.burnedBlock)
+		burned = api.burned
+	}
 	for i := startBlock; i <= endBlock; i++ {
 		header, err := api.b.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil {
@@ -1975,6 +1982,10 @@ func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, er
 			gasUsed := big.NewInt(int64(header.GasUsed))
 			burned.Add(burned, gasUsed.Mul(gasUsed, basefee))
 		}
+	}
+	if startBlock != endBlock {
+		api.burned = burned
+		api.burnedBlock = uint64(endBlock)
 	}
 	return (*hexutil.Big)(burned), nil
 }
