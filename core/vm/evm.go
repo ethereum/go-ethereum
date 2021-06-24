@@ -58,22 +58,12 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	return p, ok
 }
 
-// run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
+// run runs the given contract and takes care of running precompiles
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
-	for _, interpreter := range evm.interpreters {
-		if interpreter.CanRun(contract.Code) {
-			if evm.interpreter != interpreter {
-				// Ensure that the interpreter pointer is set back
-				// to its current value upon return.
-				defer func(i Interpreter) {
-					evm.interpreter = i
-				}(evm.interpreter)
-				evm.interpreter = interpreter
-			}
-			return interpreter.Run(contract, input, readOnly)
-		}
+	if !evm.interpreter.CanRun(contract.Code) {
+		return nil, errors.New("invalid code")
 	}
-	return nil, errors.New("no compatible interpreter")
+	return evm.interpreter.Run(contract, input, readOnly)
 }
 
 // BlockContext provides the EVM with auxiliary information. Once provided
@@ -131,8 +121,7 @@ type EVM struct {
 	Config Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
-	interpreters []Interpreter
-	interpreter  Interpreter
+	interpreter Interpreter
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
@@ -146,36 +135,14 @@ type EVM struct {
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
-		Context:      blockCtx,
-		TxContext:    txCtx,
-		StateDB:      statedb,
-		Config:       config,
-		chainConfig:  chainConfig,
-		chainRules:   chainConfig.Rules(blockCtx.BlockNumber),
-		interpreters: make([]Interpreter, 0, 1),
+		Context:     blockCtx,
+		TxContext:   txCtx,
+		StateDB:     statedb,
+		Config:      config,
+		chainConfig: chainConfig,
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
 	}
-
-	if chainConfig.IsEWASM(blockCtx.BlockNumber) {
-		// to be implemented by EVM-C and Wagon PRs.
-		// if vmConfig.EWASMInterpreter != "" {
-		//  extIntOpts := strings.Split(vmConfig.EWASMInterpreter, ":")
-		//  path := extIntOpts[0]
-		//  options := []string{}
-		//  if len(extIntOpts) > 1 {
-		//    options = extIntOpts[1..]
-		//  }
-		//  evm.interpreters = append(evm.interpreters, NewEVMVCInterpreter(evm, vmConfig, options))
-		// } else {
-		// 	evm.interpreters = append(evm.interpreters, NewEWASMInterpreter(evm, vmConfig))
-		// }
-		panic("No supported ewasm interpreter yet.")
-	}
-
-	// vmConfig.EVMInterpreter will be used by EVM-C, it won't be checked here
-	// as we always want to have the built-in EVM as the failover option.
-	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, config))
-	evm.interpreter = evm.interpreters[0]
-
+	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
 }
 

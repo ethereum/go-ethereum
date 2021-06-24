@@ -35,9 +35,6 @@ type Config struct {
 
 	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
 
-	EWASMInterpreter string // External EWASM interpreter options
-	EVMInterpreter   string // External EVM interpreter options
-
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
