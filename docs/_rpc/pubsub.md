@@ -51,7 +51,7 @@ subscription name as first parameter. If successful it returns the subscription 
 
 ### Example
 
-    >> {"id": 1, "method": "eth_subscribe", "params": ["newHeads", {"includeTransactions": true}]}
+    >> {"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
     << {"id": 1, "jsonrpc": "2.0", "result": "0x9cef478923ff08bf67fde6c64013158d"}
 
 ## Cancel subscription
