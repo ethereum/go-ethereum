@@ -312,10 +312,18 @@ type Tracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
+// Context contains some contextual infos for a transaction execution that is not
+// available from within the EVM object.
+type Context struct {
+	BlockHash common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
+	TxIndex   int         // Index of the transaction within a block (zero if dangling tx or call)
+	TxHash    common.Hash // Hash of the transaction being traced (zero if dangling call)
+}
+
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
-func New(code string, txCtx vm.TxContext) (*Tracer, error) {
+func New(code string, ctx *Context) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
@@ -334,8 +342,14 @@ func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 		depthValue:      new(uint),
 		refundValue:     new(uint),
 	}
-	tracer.ctx["gasPrice"] = txCtx.GasPrice
+	if ctx.BlockHash != (common.Hash{}) {
+		tracer.ctx["blockHash"] = ctx.BlockHash
 
+		if ctx.TxHash != (common.Hash{}) {
+			tracer.ctx["txIndex"] = ctx.TxIndex
+			tracer.ctx["txHash"] = ctx.TxHash
+		}
+	}
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
@@ -550,11 +564,13 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	jst.ctx["to"] = to
 	jst.ctx["input"] = input
 	jst.ctx["gas"] = gas
+	jst.ctx["gasPrice"] = env.TxContext.GasPrice
 	jst.ctx["value"] = value
 
 	// Initialize the context
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 	jst.dbWrapper.db = env.StateDB
+
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
 	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)

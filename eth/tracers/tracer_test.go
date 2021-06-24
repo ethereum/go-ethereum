@@ -80,12 +80,14 @@ func runTrace(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
 func TestTracer(t *testing.T) {
 	execTracer := func(code string) ([]byte, string) {
 		t.Helper()
-		ctx := &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
-		tracer, err := New(code, ctx.txCtx)
+		tracer, err := New(code, new(Context))
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runTrace(tracer, ctx)
+		ret, err := runTrace(tracer, &vmContext{
+			blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
+			txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
+		})
 		if err != nil {
 			return nil, err.Error() // Stringify to allow comparison without nil checks
 		}
@@ -132,25 +134,21 @@ func TestHalt(t *testing.T) {
 	t.Skip("duktape doesn't support abortion")
 
 	timeout := errors.New("stahp")
-	vmctx := testCtx()
-	tracer, err := New("{step: function() { while(1); }, result: function() { return null; }}", vmctx.txCtx)
+	tracer, err := New("{step: function() { while(1); }, result: function() { return null; }}", new(Context))
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	go func() {
 		time.Sleep(1 * time.Second)
 		tracer.Stop(timeout)
 	}()
-
-	if _, err = runTrace(tracer, vmctx); err.Error() != "stahp    in server-side tracer function 'step'" {
+	if _, err = runTrace(tracer, testCtx()); err.Error() != "stahp    in server-side tracer function 'step'" {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	vmctx := testCtx()
-	tracer, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }}", vmctx.txCtx)
+	tracer, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }}", new(Context))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +156,6 @@ func TestHaltBetweenSteps(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
-
 	tracer.CaptureState(env, 0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
@@ -182,12 +179,14 @@ func TestNoStepExec(t *testing.T) {
 	}
 	execTracer := func(code string) []byte {
 		t.Helper()
-		ctx := &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
-		tracer, err := New(code, ctx.txCtx)
+		tracer, err := New(code, new(Context))
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runEmptyTrace(tracer, ctx)
+		ret, err := runEmptyTrace(tracer, &vmContext{
+			blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
+			txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
