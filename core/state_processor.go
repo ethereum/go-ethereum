@@ -126,9 +126,14 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	}
 
 	// Set the receipt logs and create the bloom filter.
-	receipt.Logs = statedb.GetLogs(tx.Hash())
+	blockhash := header.Hash()
+	logs := statedb.GetLogs(tx.Hash())
+	for _, l := range logs {
+		l.BlockHash = blockhash
+	}
+	receipt.Logs = logs
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	receipt.BlockHash = header.Hash()
+	receipt.BlockHash = blockhash
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 	return receipt, err
