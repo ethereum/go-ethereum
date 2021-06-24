@@ -415,7 +415,6 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
-	tracer.activePrecompiles = vm.PrecompiledAddressesHomestead
 	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
 		addr := common.BytesToAddress(popSlice(ctx))
 		for _, p := range tracer.activePrecompiles {
