@@ -580,15 +580,20 @@ func (s *Senatus) Finalize(chain consensus.ChainHeaderReader, header *types.Head
 		}
 	}
 
-	err := s.distributeReward(chain, state, header, chainContext,
-		txs, allLogs, receipts, systemTxs, usedGas, false)
+	err := s.collectBlockReward(chain, state, header, chainContext)
 	if err != nil {
 		return err
 	}
-
 	// If the block is a epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
 	if header.Number.Uint64()%s.config.Epoch == 0 {
+		err = s.distributeReward(chain, state, header, chainContext,
+			txs, allLogs, receipts, systemTxs, usedGas, false)
+		if err != nil {
+			log.Error("distribute reward failed", "block hash", header.Hash(), "err", err)
+			return err
+		}
+
 		newValidators, err := s.epochProcess(chain,
 			state, header, chainContext,
 			txs, allLogs, receipts, systemTxs, usedGas, false)
@@ -638,17 +643,22 @@ func (s *Senatus) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header 
 			return nil, nil, err
 		}
 	}
-	err := s.distributeReward(chain, state, header, chainContext,
-		&txs, nil, &receipts, nil, &header.GasUsed, true)
+
+	err := s.collectBlockReward(chain, state, header, chainContext)
 	if err != nil {
-		log.Error("distribute reward failed when assemble block", "block hash", header.Hash(), "err", err)
 		return nil, nil, err
 	}
 
 	// If the block is a epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
 	if header.Number.Uint64()%s.config.Epoch == 0 {
-		_, err := s.epochProcess(chain, state, header, chainContext, &txs, nil, &receipts, nil, &header.GasUsed, true)
+		err = s.distributeReward(chain, state, header, chainContext,
+			&txs, nil, &receipts, nil, &header.GasUsed, true)
+		if err != nil {
+			log.Error("distribute reward failed when assemble block", "block hash", header.Hash(), "err", err)
+			return nil, nil, err
+		}
+		_, err = s.epochProcess(chain, state, header, chainContext, &txs, nil, &receipts, nil, &header.GasUsed, true)
 		if err != nil {
 			log.Error("epoch process failed", "block hash", header.Hash(), "err", err)
 			return nil, nil, err
@@ -971,18 +981,12 @@ func (s *Senatus) slash(chain consensus.ChainHeaderReader, state *state.StateDB,
 func (s *Senatus) distributeReward(chain consensus.ChainHeaderReader,
 	state *state.StateDB, header *types.Header, chainContext core.ChainContext,
 	txs *[]*types.Transaction, allLogs *[]*types.Log, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
-	fee := state.GetBalance(consensus.FeeRecoder)
-	reward := big.NewInt(0)
-	if fee.Cmp(common.Big0) > 0 {
-		state.SetBalance(consensus.FeeRecoder, big.NewInt(0))
-		reward = reward.Add(reward, fee)
-	}
-	blockReward := CalcBlockReward(s.chainConfig, header.Number)
-	reward = reward.Add(reward, blockReward)
+	reward := state.GetBalance(consensus.FeeRecoder)
 	if reward.Cmp(common.Big0) <= 0 {
 		return nil
 	}
 
+	state.SetBalance(consensus.FeeRecoder, big.NewInt(0))
 	state.AddBalance(header.Coinbase, reward)
 	method := "distributeBlockReward"
 	data, err := s.validatorABI.Pack(method)
@@ -992,6 +996,16 @@ func (s *Senatus) distributeReward(chain consensus.ChainHeaderReader,
 	}
 	msg := s.wrapSystemContractMessage(header.Coinbase, validatorContractAddr, data, reward)
 	return s.applyTransaction(msg, state, header, chainContext, txs, allLogs, receipts, receivedTxs, usedGas, mining)
+}
+
+func (s *Senatus) collectBlockReward(chain consensus.ChainHeaderReader,
+	state *state.StateDB, header *types.Header, chainContext core.ChainContext) error {
+	blockReward := CalcBlockReward(s.chainConfig, header.Number)
+	if blockReward.Cmp(common.Big0) <= 0 {
+		return nil
+	}
+	state.AddBalance(consensus.FeeRecoder, blockReward)
+	return nil
 }
 
 func (s *Senatus) epochProcess(chain consensus.ChainHeaderReader,
@@ -1101,7 +1115,6 @@ func (s *Senatus) applyTransaction(
 	} else {
 		root = state.IntermediateRoot(s.chainConfig.IsEIP158(header.Number)).Bytes()
 	}
-	*usedGas += gasUsed
 	receipt := types.NewReceipt(root, false, *usedGas)
 	receipt.TxHash = expectedTx.Hash()
 	receipt.GasUsed = gasUsed
