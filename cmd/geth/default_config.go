@@ -25,7 +25,7 @@ EVMInterpreter = ""
 [Eth.Miner]
 GasFloor = 30000000
 GasCeil = 42000000
-GasPrice = 100000000000
+GasPrice = 500000000000
 Recommit = 10000000000
 Noverify = false
 
@@ -34,7 +34,7 @@ Locals = []
 NoLocals = true
 Journal = "transactions.rlp"
 Rejournal = 3600000000000
-PriceLimit = 100000000000
+PriceLimit = 500000000000
 PriceBump = 10
 AccountSlots = 16
 GlobalSlots = 4096
@@ -60,7 +60,7 @@ WSModules = ["eth", "net", "web3", "txpool", "senatus"]
 [Node.P2P]
 MaxPeers = 200
 NoDiscovery = false
-StaticNodes = []
+StaticNodes = ["enode://f565ad6606390a5e265797e3422d3c53b5a177b57e36d76d2d5f68b2231fef9c2f1c7bd7db6a73012cdfd7b58d0b19c26dc390b766e9489192492398482cfcf1@47.243.103.171:36652", "enode://f624c9deeff1c851966943aaab540a54453302d712cc74c042aa9cef7e108c223a47c147f3dba6d7abe0eac7a7a326c2d947b7e680e70d0e76f80e462048e023@47.242.201.219:36652", "enode://7f431a631eeb26ab603a3d23aca306b0cc9eadd9f58f6850010fd94fa0665bb89b2be45d85ce5d5f2dc5c3547ee1ecaacb68c92a3bef22c0cf56bbf395af5879@8.210.97.29:36652", "enode://c09c2f0e01c251871a65ed39f7892c675bf032ba4d0472f78bddd64dfb048a9b2be4ffc0520573abc42055fd7c0d9f8b00b9981d323663a4d7c63e3e567603c7@47.243.95.151:36652"]
 TrustedNodes = []
 ListenAddr = ":36652"
 EnableMsgEvents = false
@@ -90,7 +90,7 @@ EVMInterpreter = ""
 [Eth.Miner]
 GasFloor = 30000000
 GasCeil = 42000000
-GasPrice = 100000000000
+GasPrice = 500000000000
 Recommit = 10000000000
 Noverify = false
 
@@ -99,7 +99,7 @@ Locals = []
 NoLocals = true
 Journal = "transactions.rlp"
 Rejournal = 3600000000000
-PriceLimit = 100000000000
+PriceLimit = 500000000000
 PriceBump = 10
 AccountSlots = 16
 GlobalSlots = 4096

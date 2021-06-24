@@ -78,7 +78,7 @@ var DefaultConfig = Config{
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
 	GPO:         DefaultFullGPOConfig,
-	RPCTxFeeCap: 1, // 1 ether
+	RPCTxFeeCap: 25, // 25 ether
 }
 
 var DefaultTestnetConfig = Config{
@@ -111,7 +111,7 @@ var DefaultTestnetConfig = Config{
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
 	GPO:         DefaultFullGPOConfig,
-	RPCTxFeeCap: 1, // 1 ether
+	RPCTxFeeCap: 25, // 25 ether
 }
 
 func init() {

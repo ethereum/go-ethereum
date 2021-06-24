@@ -244,7 +244,7 @@ The validator.create command creates a new validator.
 		Description: ``,
 	}
 
-	defaultGasPrice = big.NewInt(100000000000) // 100GWEI
+	defaultGasPrice = big.NewInt(params.MinimalGasPrice.Int64()) // 500GWEI
 )
 
 const defaultNodeHttpHost = "http://127.0.0.1:8545"
@@ -253,7 +253,6 @@ const nodeTimeout = 60 * time.Second
 type validator struct {
 	rewardAddr common.Address
 	moniker    string
-	identity   string
 	website    string
 	email      string
 	details    string
