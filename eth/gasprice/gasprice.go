@@ -155,7 +155,7 @@ func (gpo *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		// Nothing returned. There are two special cases here:
 		// - The block is empty
 		// - All the transactions included are sent by the miner itself.
-		// In these cases, use the latest calculated price for samping.
+		// In these cases, use the latest calculated price for sampling.
 		if len(res.values) == 0 {
 			res.values = []*big.Int{lastPrice}
 		}
