@@ -17,16 +17,6 @@ import (
 type APILoader func(*node.Node, Backend) []rpc.API
 type Subcommand func(*cli.Context, []string) error
 
-type PluginType int
-
-const (
-	TracerPluginType PluginType = iota
-	StateHookType
-	ChainEventHookType
-	RPCPluginType
-	SubcommandType
-)
-
 
 type PluginLoader struct{
 	TracerPlugins map[string]interface{} // TODO: Set interface
@@ -36,6 +26,8 @@ type PluginLoader struct{
 	Subcommands map[string]Subcommand
 	Flags []*flag.FlagSet
 }
+
+var defaultPluginLoader *PluginLoader
 
 
 func NewPluginLoader(target string) (*PluginLoader, error) {
@@ -52,7 +44,7 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 	for _, file := range files {
 		fpath := path.Join(target, file.Name())
 		if !strings.HasSuffix(file.Name(), ".so") {
-			log.Warn("File inplugin directory is not '.so' file. Skipping.", "file", fpath)
+			log.Debug("File inplugin directory is not '.so' file. Skipping.", "file", fpath)
 			continue
 		}
 		plug, err := plugin.Open(fpath)
@@ -70,52 +62,37 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 				pl.Flags = append(pl.Flags, flagset)
 			}
 		}
-		t, err := plug.Lookup("Type")
-		if err != nil {
-			log.Warn("Could not load plugin Type", "file", fpath, "error", err.Error())
-			continue
-		}
-		switch pt := t.(*PluginType); *pt {
-		case RPCPluginType:
-			fn, err := plug.Lookup("GetAPIs")
-			if err != nil {
-				log.Warn("Could not load GetAPIs from plugin", "file", fpath, "error", err.Error())
-				continue
-			}
+		fn, err := plug.Lookup("GetAPIs")
+		if err == nil {
 			apiLoader, ok := fn.(func(*node.Node, Backend) []rpc.API)
 			if !ok {
 				log.Warn("Could not cast plugin.GetAPIs to APILoader", "file", fpath)
-				continue
+			} else {
+				pl.RPCPlugins = append(pl.RPCPlugins, APILoader(apiLoader))
 			}
-			pl.RPCPlugins = append(pl.RPCPlugins, APILoader(apiLoader))
-		case SubcommandType:
-			n, err := plug.Lookup("Name")
-			if err != nil {
-				log.Warn("Could not load Name from subcommand plugin", "file", fpath, "error", err.Error())
-				continue
-			}
-			name, ok := n.(*string)
+		} else { log.Debug("Error retrieving GetAPIs for plugin", "file", fpath, "error", err.Error()) }
+
+		sb, err := plug.Lookup("Subcommands")
+		if err == nil {
+			subcommands, ok := sb.(map[string]func(*cli.Context, []string) error)
 			if !ok {
-				log.Warn("Could not cast plugin.Name to string", "file", fpath)
-				continue
+				log.Warn("Could not cast plugin.Subocmmands to `map[string]func(*cli.Context, []string) error`", "file", fpath)
+			} else {
+				for k, v := range subcommands {
+					if _, ok := pl.Subcommands[k]; ok {
+						log.Warn("Subcommand redeclared", "file", fpath, "subcommand", k)
+					}
+					pl.Subcommands[k] = v
+				}
 			}
-			fn, err := plug.Lookup("Main")
-			if err != nil {
-				log.Warn("Could not load Main from plugin", "file", fpath, "error", err.Error())
-				continue
-			}
-			subcommand, ok := fn.(func(*cli.Context, []string) error)
-			if !ok {
-				log.Warn("Could not cast plugin.Main to Subcommand", "file", fpath)
-				continue
-			}
-			if _, ok := pl.Subcommands[*name]; ok {
-				return pl, fmt.Errorf("Multiple subcommand plugins with the same name: %v", *name)
-			}
-			pl.Subcommands[*name] = subcommand
 		}
 	}
 	return pl, nil
+}
+
+func Initialize(target string) (err error) {
+	defaultPluginLoader, err = NewPluginLoader(target)
+	return err
 }
 
 func (pl *PluginLoader) RunSubcommand(ctx *cli.Context) (bool, error) {
@@ -126,11 +103,24 @@ func (pl *PluginLoader) RunSubcommand(ctx *cli.Context) (bool, error) {
 	return true, subcommand(ctx, args[1:])
 }
 
+func RunSubcommand(ctx *cli.Context) (bool, error) {
+	if defaultPluginLoader == nil { return false, fmt.Errorf("Plugin loader not initialized") }
+	return defaultPluginLoader.RunSubcommand(ctx)
+}
+
 func (pl *PluginLoader) ParseFlags(args []string) bool {
 	for _, flagset := range pl.Flags {
 		flagset.Parse(args)
 	}
 	return len(pl.Flags) > 0
+}
+
+func ParseFlags(args []string) bool {
+	if defaultPluginLoader == nil {
+		log.Warn("Attempting to parse flags, but default PluginLoader has not been initialized")
+		return false
+	}
+	return defaultPluginLoader.ParseFlags(args)
 }
 
 func (pl *PluginLoader) GetAPIs(stack *node.Node, backend Backend) []rpc.API {
@@ -139,4 +129,12 @@ func (pl *PluginLoader) GetAPIs(stack *node.Node, backend Backend) []rpc.API {
 		apis = append(apis, apiLoader(stack, backend)...)
 	}
 	return apis
+}
+
+func GetAPIs(stack *node.Node, backend Backend) []rpc.API {
+	if defaultPluginLoader == nil {
+		log.Warn("Attempting GetAPIs ,but default PluginLoader has not been initialized")
+		return []rpc.API{}
+	 }
+	return defaultPluginLoader.GetAPIs(stack, backend)
 }
