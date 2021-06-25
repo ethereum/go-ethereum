@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/plugins"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -799,19 +800,24 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *txTrac
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txContext); err != nil {
-			return nil, err
-		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+		// Get the tracer from the plugin loader
+		if tr, ok := plugins.GetTracer(*config.Tracer); ok {
+			tracer = tr(statedb)
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = New(*config.Tracer, txContext); err != nil {
+				return nil, err
 			}
-		}()
-		defer cancel()
+			// Handle timeouts and RPC cancellations
+			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				if deadlineCtx.Err() == context.DeadlineExceeded {
+					tracer.(*Tracer).Stop(errors.New("execution timeout"))
+				}
+				}()
+				defer cancel()
+		}
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)

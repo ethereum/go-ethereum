@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/state"
 	"gopkg.in/urfave/cli.v1"
 	"flag"
 	"io/ioutil"
@@ -19,7 +21,7 @@ type Subcommand func(*cli.Context, []string) error
 
 
 type PluginLoader struct{
-	TracerPlugins map[string]interface{} // TODO: Set interface
+	Tracers map[string]func(*state.StateDB)vm.Tracer
 	StateHooks []interface{} // TODO: Set interface
 	ChainEventHooks []interface{} // TODO: Set interface
 	RPCPlugins []APILoader
@@ -76,13 +78,27 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 		if err == nil {
 			subcommands, ok := sb.(map[string]func(*cli.Context, []string) error)
 			if !ok {
-				log.Warn("Could not cast plugin.Subocmmands to `map[string]func(*cli.Context, []string) error`", "file", fpath)
+				log.Warn("Could not cast plugin.Subcommands to `map[string]func(*cli.Context, []string) error`", "file", fpath)
 			} else {
 				for k, v := range subcommands {
 					if _, ok := pl.Subcommands[k]; ok {
 						log.Warn("Subcommand redeclared", "file", fpath, "subcommand", k)
 					}
 					pl.Subcommands[k] = v
+				}
+			}
+		}
+		tr, err := plug.Lookup("Tracers")
+		if err == nil {
+			tracers, ok := tr.(map[string]func(*state.StateDB)vm.Tracer)
+			if !ok {
+				log.Warn("Could not cast plugin.Tracers to `map[string]vm.Tracer`", "file", fpath)
+			} else {
+				for k, v := range tracers {
+					if _, ok := pl.Tracers[k]; ok {
+						log.Warn("Tracer redeclared", "file", fpath, "tracer", k)
+					}
+					pl.Tracers[k] = v
 				}
 			}
 		}
@@ -133,8 +149,21 @@ func (pl *PluginLoader) GetAPIs(stack *node.Node, backend Backend) []rpc.API {
 
 func GetAPIs(stack *node.Node, backend Backend) []rpc.API {
 	if defaultPluginLoader == nil {
-		log.Warn("Attempting GetAPIs ,but default PluginLoader has not been initialized")
+		log.Warn("Attempting GetAPIs, but default PluginLoader has not been initialized")
 		return []rpc.API{}
 	 }
 	return defaultPluginLoader.GetAPIs(stack, backend)
+}
+
+func (pl *PluginLoader) GetTracer(s string) (func(*state.StateDB)vm.Tracer, bool) {
+	tr, ok := pl.Tracers[s]
+	return tr, ok
+}
+
+func GetTracer(s string) (func(*state.StateDB)vm.Tracer, bool) {
+	if defaultPluginLoader == nil {
+		log.Warn("Attempting GetTracer, but default PluginLoader has not been initialized")
+		return nil, false
+	}
+	return defaultPluginLoader.GetTracer(s)
 }
