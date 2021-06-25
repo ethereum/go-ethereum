@@ -662,6 +662,13 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 		case *big.Int:
 			pushBigInt(val, jst.vm)
 
+		case int:
+			jst.vm.PushInt(val)
+
+		case common.Hash:
+			ptr := jst.vm.PushFixedBuffer(32)
+			copy(makeSlice(ptr, 32), val[:])
+
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", val))
 		}
