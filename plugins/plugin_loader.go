@@ -13,15 +13,20 @@ import (
 	"strings"
 	"path"
 	"fmt"
+	"reflect"
 )
 
 
 type APILoader func(*node.Node, Backend) []rpc.API
 type Subcommand func(*cli.Context, []string) error
+type TracerResult interface {
+	vm.Tracer
+	GetResult() (interface{}, error)
+}
 
 
 type PluginLoader struct{
-	Tracers map[string]func(*state.StateDB)vm.Tracer
+	Tracers map[string]func(*state.StateDB)TracerResult
 	StateHooks []interface{} // TODO: Set interface
 	ChainEventHooks []interface{} // TODO: Set interface
 	RPCPlugins []APILoader
@@ -36,6 +41,7 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 	pl := &PluginLoader{
 		RPCPlugins: []APILoader{},
 		Subcommands: make(map[string]Subcommand),
+		Tracers: make(map[string]func(*state.StateDB)TracerResult),
 		Flags: []*flag.FlagSet{},
 	}
 	files, err := ioutil.ReadDir(target)
@@ -76,11 +82,11 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 
 		sb, err := plug.Lookup("Subcommands")
 		if err == nil {
-			subcommands, ok := sb.(map[string]func(*cli.Context, []string) error)
+			subcommands, ok := sb.(*map[string]func(*cli.Context, []string) error)
 			if !ok {
-				log.Warn("Could not cast plugin.Subcommands to `map[string]func(*cli.Context, []string) error`", "file", fpath)
+				log.Warn("Could not cast plugin.Subcommands to `map[string]func(*cli.Context, []string) error`", "file", fpath, "type", reflect.TypeOf(sb))
 			} else {
-				for k, v := range subcommands {
+				for k, v := range *subcommands {
 					if _, ok := pl.Subcommands[k]; ok {
 						log.Warn("Subcommand redeclared", "file", fpath, "subcommand", k)
 					}
@@ -90,11 +96,11 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 		}
 		tr, err := plug.Lookup("Tracers")
 		if err == nil {
-			tracers, ok := tr.(map[string]func(*state.StateDB)vm.Tracer)
+			tracers, ok := tr.(*map[string]func(*state.StateDB)TracerResult)
 			if !ok {
 				log.Warn("Could not cast plugin.Tracers to `map[string]vm.Tracer`", "file", fpath)
 			} else {
-				for k, v := range tracers {
+				for k, v := range *tracers {
 					if _, ok := pl.Tracers[k]; ok {
 						log.Warn("Tracer redeclared", "file", fpath, "tracer", k)
 					}
@@ -155,12 +161,12 @@ func GetAPIs(stack *node.Node, backend Backend) []rpc.API {
 	return defaultPluginLoader.GetAPIs(stack, backend)
 }
 
-func (pl *PluginLoader) GetTracer(s string) (func(*state.StateDB)vm.Tracer, bool) {
+func (pl *PluginLoader) GetTracer(s string) (func(*state.StateDB)TracerResult, bool) {
 	tr, ok := pl.Tracers[s]
 	return tr, ok
 }
 
-func GetTracer(s string) (func(*state.StateDB)vm.Tracer, bool) {
+func GetTracer(s string) (func(*state.StateDB)TracerResult, bool) {
 	if defaultPluginLoader == nil {
 		log.Warn("Attempting GetTracer, but default PluginLoader has not been initialized")
 		return nil, false

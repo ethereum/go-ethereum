@@ -851,6 +851,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *txTrac
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
+	case plugins.TracerResult:
+		return tracer.GetResult()
+
 	case *Tracer:
 		return tracer.GetResult()
 
