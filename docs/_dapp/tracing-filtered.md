@@ -48,7 +48,8 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
    ```
    
    The bottom of the output looks similar to:
-   ```
+   ```json
+   ...
    "3366:POP", "3367:JUMP", "1355:JUMPDEST", "1356:PUSH1", "1358:MLOAD", "1359:DUP1", "1360:DUP3", "1361:ISZERO", "1362:ISZERO", 
    "1363:ISZERO", "1364:ISZERO", "1365:DUP2", "1366:MSTORE", "1367:PUSH1", "1369:ADD", "1370:SWAP2", "1371:POP", "1372:POP", "1373:PUSH1", 
    "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"]
@@ -104,9 +105,44 @@ tracer = function(tx) {
 }   // tracer = function ...
 ```
 
-The `step` function here looks at the opcode number of the op, and only pushes an entry if it is 
+The `step` function here looks at the opcode number of the op, and only pushes an entry if the opcode is
 `SLOAD` or `SSTORE` ([here is a list of EVM opcodes and their numbers](https://github.com/wolflo/evm-opcodes)).
+We could have used `log.op.toString()` instead, but it is faster to compare numbers rather than strings.
 
+The output looks similar to this:
+
+```json
+["5020: SLOAD", "5100: SSTORE", "5168: SLOAD", "5247: SSTORE"]
+```
+
+
+## Stack Information
+
+The trace above tells us the PC and whether the program read from storage or wrote to it. That isn't very
+useful. 
+
+```javascript
+tracer = function(tx) {
+      return debug.traceTransaction(tx, {tracer:
+      '{' +
+         'retVal: [],' +
+         'step: function(log,db) {' +
+         '   if(log.op.toNumber() == 0x54) ' +
+         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+         '        log.stack.peek(0).toString(16));' +
+         '   if(log.op.toNumber() == 0x55) ' +
+         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+         '        log.stack.peek(0).toString(16) + " <- " +' +
+         '        log.stack.peek(1).toString(16));' +
+         '},' +
+         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+         'result: function(ctx,db) {return this.retVal}' +
+      '}'
+      }) // return debug.traceTransaction ...
+}   // tracer = function ...
+
+
+```
 
    
 ## Conclusion
