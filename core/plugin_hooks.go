@@ -3,10 +3,11 @@ package core
 import (
   "github.com/ethereum/go-ethereum/core/types"
   "github.com/ethereum/go-ethereum/plugins"
+  "github.com/ethereum/go-ethereum/log"
 )
 
-func pluginPreProcessBlock(block *types.Block) {
-  fnList := plugins.Lookup("ProcessBlock", func(item interface{}) bool {
+func PluginPreProcessBlock(pl *plugins.PluginLoader, block *types.Block) {
+  fnList := pl.Lookup("ProcessBlock", func(item interface{}) bool {
     _, ok := item.(func(*types.Block))
     return ok
   })
@@ -16,8 +17,15 @@ func pluginPreProcessBlock(block *types.Block) {
     }
   }
 }
-func pluginPreProcessTransaction(tx *types.Transaction, block *types.Block, i int) {
-  fnList := plugins.Lookup("ProcessTransaction", func(item interface{}) bool {
+func pluginPreProcessBlock(block *types.Block) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting PreProcessBlock, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginPreProcessBlock(plugins.DefaultPluginLoader, block) // TODO
+}
+func PluginPreProcessTransaction(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, i int) {
+  fnList := pl.Lookup("ProcessTransaction", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, int))
     return ok
   })
@@ -27,8 +35,15 @@ func pluginPreProcessTransaction(tx *types.Transaction, block *types.Block, i in
     }
   }
 }
-func pluginBlockProcessingError(tx *types.Transaction, block *types.Block, err error) {
-  fnList := plugins.Lookup("ProcessingError", func(item interface{}) bool {
+func pluginPreProcessTransaction(tx *types.Transaction, block *types.Block, i int) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting PreProcessTransaction, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginPreProcessTransaction(plugins.DefaultPluginLoader, tx, block, i)
+}
+func PluginBlockProcessingError(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, err error) {
+  fnList := pl.Lookup("ProcessingError", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, error))
     return ok
   })
@@ -38,8 +53,15 @@ func pluginBlockProcessingError(tx *types.Transaction, block *types.Block, err e
     }
   }
 }
-func pluginPostProcessTransaction(tx *types.Transaction, block *types.Block, i int, receipt *types.Receipt) {
-  fnList := plugins.Lookup("ProcessTransaction", func(item interface{}) bool {
+func pluginBlockProcessingError(tx *types.Transaction, block *types.Block, err error) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting BlockProcessingError, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginBlockProcessingError(plugins.DefaultPluginLoader, tx, block, err)
+}
+func PluginPostProcessTransaction(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, i int, receipt *types.Receipt) {
+  fnList := pl.Lookup("ProcessTransaction", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, int, *types.Receipt))
     return ok
   })
@@ -49,8 +71,15 @@ func pluginPostProcessTransaction(tx *types.Transaction, block *types.Block, i i
     }
   }
 }
-func pluginPostProcessBlock(block *types.Block) {
-  fnList := plugins.Lookup("ProcessBlock", func(item interface{}) bool {
+func pluginPostProcessTransaction(tx *types.Transaction, block *types.Block, i int, receipt *types.Receipt) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting PostProcessTransaction, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginPostProcessTransaction(plugins.DefaultPluginLoader, tx, block, i, receipt)
+}
+func PluginPostProcessBlock(pl *plugins.PluginLoader, block *types.Block) {
+  fnList := pl.Lookup("ProcessBlock", func(item interface{}) bool {
     _, ok := item.(func(*types.Block))
     return ok
   })
@@ -59,4 +88,11 @@ func pluginPostProcessBlock(block *types.Block) {
       fn(block)
     }
   }
+}
+func pluginPostProcessBlock(block *types.Block) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting PostProcessBlock, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginPostProcessBlock(plugins.DefaultPluginLoader, block)
 }

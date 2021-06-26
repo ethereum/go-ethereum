@@ -9,11 +9,11 @@ import (
   "github.com/ethereum/go-ethereum/consensus/ethash"
   "github.com/ethereum/go-ethereum/eth/ethconfig"
   "github.com/ethereum/go-ethereum/ethdb"
+  "github.com/ethereum/go-ethereum/log"
 )
 
-
-  func pluginCreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
-  fnList := plugins.Lookup("CreateConsensusEngine", func(item interface{}) bool {
+func PluginCreateConsensusEngine(pl *plugins.PluginLoader, stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+  fnList := pl.Lookup("CreateConsensusEngine", func(item interface{}) bool {
     _, ok := item.(func(*node.Node, *params.ChainConfig, *ethash.Config, []string, bool, ethdb.Database) consensus.Engine)
     return ok
   })
@@ -24,7 +24,16 @@ import (
   }
   return ethconfig.CreateConsensusEngine(stack, chainConfig, config, notify, noverify, db)
 }
-func pluginUpdateBlockchainVMConfig(cfg *vm.Config) {
+
+func pluginCreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting CreateConsensusEngine, but default PluginLoader has not been initialized")
+		return ethconfig.CreateConsensusEngine(stack, chainConfig, config, notify, noverify, db)
+	}
+  return PluginCreateConsensusEngine(plugins.DefaultPluginLoader, stack, chainConfig, config, notify, noverify, db)
+}
+
+func PluginUpdateBlockchainVMConfig(pl *plugins.PluginLoader, cfg *vm.Config) {
   fnList := plugins.Lookup("UpdateBlockchainVMConfig", func(item interface{}) bool {
     _, ok := item.(func(*vm.Config))
     return ok
@@ -37,16 +46,11 @@ func pluginUpdateBlockchainVMConfig(cfg *vm.Config) {
   }
 }
 
-// ce, err := plug.Lookup("CreateConsensusEngine")
-// if err == nil {
-// 	cce, ok := ce.(func (stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine)
-// 	if !ok {
-// 		log.Warn("Could not cast plugin.CreateConsensusEngine to appropriate function", "file", fpath)
-// 	} else {
-// 		if setConsensus {
-// 			log.Warn("CreateConsensusEngine redeclared", "file", fpath)
-// 		}
-// 		pl.CreateConsensusEngine = cce
-// 		setConsensus = true
-// 	}
-// }
+
+func pluginUpdateBlockchainVMConfig(cfg *vm.Config) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting CreateConsensusEngine, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginUpdateBlockchainVMConfig(plugins.DefaultPluginLoader, cfg)
+}
