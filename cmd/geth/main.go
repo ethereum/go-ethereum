@@ -324,7 +324,7 @@ func geth(ctx *cli.Context) error {
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
-	stack.RegisterAPIs(plugins.GetAPIs(stack, backend))
+	stack.RegisterAPIs(pluginGetAPIs(stack, backend))
 
 	startNode(ctx, stack, backend)
 	stack.Wait()

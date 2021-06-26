@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/plugins"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -71,27 +70,27 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
-	plugins.PreProcessBlock(block)
+	pluginPreProcessBlock(block)
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
 		if err != nil {
-			plugins.BlockProcessingError(tx, block, err)
+			pluginBlockProcessingError(tx, block, err)
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		plugins.PreProcessTransaction(tx, block, i)
+		pluginPreProcessTransaction(tx, block, i)
 		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, header, tx, usedGas, vmenv)
 		if err != nil {
-			plugins.BlockProcessingError(tx, block, err)
+			pluginBlockProcessingError(tx, block, err)
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		plugins.PostProcessTransaction(tx, block, i, receipt)
+		pluginPostProcessTransaction(tx, block, i, receipt)
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
-	plugins.PostProcessBlock(block)
+	pluginPostProcessBlock(block)
 	return receipts, allLogs, *usedGas, nil
 }
 
