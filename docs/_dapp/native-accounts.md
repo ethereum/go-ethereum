@@ -1,5 +1,6 @@
 ---
 title: Go Account Management
+sort_key: D
 ---
 
 To provide Ethereum integration for your native applications, the very first thing you
