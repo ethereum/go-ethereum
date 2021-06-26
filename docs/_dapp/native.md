@@ -1,5 +1,6 @@
 ---
 title: Go API
+sort_key: C
 ---
 
 The Ethereum blockchain along with its two extension protocols Whisper and Swarm was
