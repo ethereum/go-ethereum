@@ -81,7 +81,7 @@ list to be sent to the caller.
    
 ## Conclusion
 
-This tutorial only taught the basics of 
-Link to https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing
+This tutorial only taught the basics of using JavaScript to filter traces. For additional information you can
+[read the reference](https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing).
 
 Original version by [Ori Pomerantz](qbzzt1@gmail.com)
