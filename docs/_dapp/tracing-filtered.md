@@ -62,7 +62,26 @@ above, it is:
    result: function(ctx,db) {return this.retVal}
 }
 ```
+
+This object has to have three member functions:
+
+- `step`, called for each opcode
+- `fault`, called if there is a problem in the execution
+- `result`, called to produce the results that are returned by `debug.traceTransaction` after the execution is done
+
+It can have additional members. In this case, we use `retVal` to store the list of strings that we'll return in `result`.
+
+The `step` function here adds to `retVal` the program counter and the name of the opcode there. Then, in `result`, we return this
+list to be sent to the caller.
+
+
+## Actual Filtering
+
+
    
 ## Conclusion
 
+This tutorial only taught the basics of 
 Link to https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing
+
+Original version by [Ori Pomerantz](qbzzt1@gmail.com)
