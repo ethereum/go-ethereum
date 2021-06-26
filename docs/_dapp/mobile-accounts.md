@@ -1,5 +1,6 @@
 ---
 title: Mobile Account Management
+sort_key: G
 ---
 
 To provide Ethereum integration for your mobile applications, the very first thing you
