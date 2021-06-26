@@ -83,6 +83,30 @@ list to be sent to the caller.
 
 ## Actual Filtering
 
+For actual filtered tracing we need an `if` statement to only log relevant information. For example, if we are interested in
+the transaction's interaction with storage, we might use:
+
+```javascript
+tracer = function(tx) {
+      return debug.traceTransaction(tx, {tracer:
+      '{' +
+         'retVal: [],' +
+         'step: function(log,db) {' +
+         '   if(log.op.toNumber() == 0x54) ' +
+         '     this.retVal.push(log.getPC() + ": SLOAD");' +
+         '   if(log.op.toNumber() == 0x55) ' +
+         '     this.retVal.push(log.getPC() + ": SSTORE");' +
+         '},' +
+         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+         'result: function(ctx,db) {return this.retVal}' +
+      '}'
+      }) // return debug.traceTransaction ...
+}   // tracer = function ...
+```
+
+The `step` function here looks at the opcode number of the op, and only pushes an entry if it is 
+`SLOAD` or `SSTORE` ([here is a list of EVM opcodes and their numbers](https://github.com/wolflo/evm-opcodes)).
+
 
    
 ## Conclusion
