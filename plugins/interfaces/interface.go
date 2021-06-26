@@ -1,4 +1,4 @@
-package plugins
+package interfaces
 
 import (
 	"context"
@@ -71,4 +71,10 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+}
+
+
+type TracerResult interface {
+	vm.Tracer
+	GetResult() (interface{}, error)
 }

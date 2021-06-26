@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/plugins/interfaces"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -850,7 +851,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *txTrac
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
-	case TracerResult:
+	case interfaces.TracerResult:
 		return tracer.GetResult()
 
 	case *Tracer:

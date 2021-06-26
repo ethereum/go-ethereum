@@ -3,7 +3,6 @@ package plugins
 import (
 	"plugin"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"gopkg.in/urfave/cli.v1"
 	"flag"
 	"io/ioutil"
@@ -15,10 +14,6 @@ import (
 
 
 type Subcommand func(*cli.Context, []string) error
-type TracerResult interface {
-	vm.Tracer
-	GetResult() (interface{}, error)
-}
 
 
 type PluginLoader struct{
