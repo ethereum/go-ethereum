@@ -41,12 +41,18 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
    loadScript("filterTrace_1.js")
    ```
 
-5. Run the trancer from the script:
+5. Run the trancer from the script. Be patient, it could take a long time.
 
    ```javascript
    tracer("<hash of transaction>")
    ```
    
+   The bottom of the output looks similar to:
+   ```
+   "3366:POP", "3367:JUMP", "1355:JUMPDEST", "1356:PUSH1", "1358:MLOAD", "1359:DUP1", "1360:DUP3", "1361:ISZERO", "1362:ISZERO", 
+   "1363:ISZERO", "1364:ISZERO", "1365:DUP2", "1366:MSTORE", "1367:PUSH1", "1369:ADD", "1370:SWAP2", "1371:POP", "1372:POP", "1373:PUSH1", 
+   "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"]
+   ```
    
 ### How Does It Work?
 
