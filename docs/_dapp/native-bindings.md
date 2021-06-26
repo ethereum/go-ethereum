@@ -1,5 +1,6 @@
 ---
 title: Go Contract Bindings
+sort_key: E
 ---
 
 **[Please note, events are not yet implemented as they need some RPC subscription
