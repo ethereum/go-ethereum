@@ -119,7 +119,11 @@ The output looks similar to this:
 ## Stack Information
 
 The trace above tells us the PC and whether the program read from storage or wrote to it. That isn't very
-useful. To know more, you can 
+useful. To know more, you can use the `log.stack.peek` function to peek into the stack. `log.stack.peek(0)`
+is the stack top, `log.stack.peek(1)` the entry below it, etc. The values returned by `log.stack.peek` are
+Go `big.Int` objects. By default they are converted to JavaScript floating point numbers, so you need 
+`toString(16)` to get them as hexadecimals, which is how we normally represent 256-bit values such as
+storage cells and their content.
 
 ```javascript
 tracer = function(tx) {
@@ -143,8 +147,12 @@ tracer = function(tx) {
 
 ```
 
+This function gives you a trace of all the storage operations, and show you their parameters. This gives
+you a nearly complete picture of the program's interaction with storage.
 
 ## Operation Results
+
+
 
 ```javascript
 tracer = function(tx) {
@@ -174,6 +182,8 @@ tracer = function(tx) {
       }) // return debug.traceTransaction ...
 }   // tracer = function ...
 ```
+
+## Dealing with intra-Contract Calls
 
    
 ## Conclusion
