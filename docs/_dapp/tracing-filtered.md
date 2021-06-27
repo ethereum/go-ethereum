@@ -141,13 +141,47 @@ tracer = function(tx) {
       }) // return debug.traceTransaction ...
 }   // tracer = function ...
 
+```
 
+
+## Operation Results
+
+```javascript
+tracer = function(tx) {
+      return debug.traceTransaction(tx, {tracer:
+      '{' +
+         'retVal: [],' +
+         'afterSload: false,' +
+         'step: function(log,db) {' +
+         '   if(this.afterSload) {' +
+         '     this.retVal.push("    Result: " + ' +
+         '          log.stack.peek(0).toString(16)); ' +
+         '     this.afterSload = false; ' +
+         '   } ' +
+         '   if(log.op.toNumber() == 0x54) {' +
+         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+         '        log.stack.peek(0).toString(16));' +
+         '        this.afterSload = true; ' +
+         '   } ' +
+         '   if(log.op.toNumber() == 0x55) ' +
+         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+         '        log.stack.peek(0).toString(16) + " <- " +' +
+         '        log.stack.peek(1).toString(16));' +
+         '},' +
+         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+         'result: function(ctx,db) {return this.retVal}' +
+      '}'
+      }) // return debug.traceTransaction ...
+}   // tracer = function ...
 ```
 
    
 ## Conclusion
 
-This tutorial only taught the basics of using JavaScript to filter traces. For additional information you can
-[read the reference](https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing).
+This tutorial only taught the basics of using JavaScript to filter traces. We did not go over access to memory,
+or how to use the `db` parameter to know the state of the chain at the time of execution. All this and more is
+covered [in the reference](https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing).
+
+Hopefully with this tool you will find it easier to step over and debug thorny issues with contracts and the EVM.
 
 Original version by [Ori Pomerantz](qbzzt1@gmail.com)
