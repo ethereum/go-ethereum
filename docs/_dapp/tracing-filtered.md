@@ -119,7 +119,7 @@ The output looks similar to this:
 ## Stack Information
 
 The trace above tells us the PC and whether the program read from storage or wrote to it. That isn't very
-useful. 
+useful. To know more, you can 
 
 ```javascript
 tracer = function(tx) {
