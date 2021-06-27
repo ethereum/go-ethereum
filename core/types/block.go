@@ -389,3 +389,51 @@ func (b *Block) Hash() common.Hash {
 }
 
 type Blocks []*Block
+
+// HeaderParentHashFromRLP returns the parentHash of an rlp-encoded
+// header-blob.
+// Fix-size gields in an RLP-encoded types.Header are:
+//
+// | name        | size   | type           |
+// | ------------|--------| ---------------|
+// | ParentHash  |   32   | common.Hash    |
+// | UncleHash   |   32   | common.Hash    |
+// | Coinbase    |   20   | common.Address |
+// | Root        |   32   | common.Hash    |
+// | TxHash      |   32   | common.Hash    |
+// | ReceiptHash |   32   | common.Hash    |
+// | Bloom       |   256  | Bloom          |
+// | GasLimit    |   8    |  uint64        |
+// | GasUsed     |   8    | uint64         |
+// | Time        |   8    | uint64         |
+// | MixDigest   |   32   | common.Hash    |
+// | Nonce       |   8    | BlockNonce     |
+//
+// Size of constant fields: `500`.
+//
+// | name        | size   | type           |  max
+// | ------------|--------| ---------------|-----------------------|
+// | Difficulty  | dynamic| *big.Int       | 0x5ad3c2c71bbff854908 (current mainnet TD: 76 bits) => 10 byte |
+// | Number      | dynamic| *big.Int       | 32 bits = 4 bytes              |
+// | Extra       | dynamic| []byte         | 32 byte + 65 byte +(20 bytes per signer for certain Clique blocks) |
+// | BaseFee     | dynamic| *big.Int       | 64 bits = 8 byte            |
+//
+// Maximum size of dynamic fields: 119 bytes + dynamic overhead
+//
+// Total max size + 619 + dynamic overhead
+//
+// Any RLP-encoded data structure between `256` bytes, and `65535` bytes will have three leading bytes for `size`.
+// Since we know that the header is at least `500` bytes, and practically will never go above `800`, we can be certain that
+// the first field, `parentHash` is located at a constant byte-offset.
+//
+func HeaderParentHashFromRLP(value rlp.RawValue) common.Hash {
+	if len(value) < 65535 {
+		return common.BytesToHash(value[4:36])
+	}
+	// This path is expected to _never_ be used, but the method should
+	// behave correctly even in the presence of very very odd blocks, with
+	// thousands of clique signers.
+	var h Header
+	rlp.DecodeBytes(value, &h)
+	return h.ParentHash
+}
