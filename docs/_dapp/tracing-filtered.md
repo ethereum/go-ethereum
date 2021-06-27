@@ -21,7 +21,7 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
       return debug.traceTransaction(tx, {tracer: 
          '{' +
             'retVal: [],' +
-            'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},'$
+            'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
             'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
             'result: function(ctx,db) {return this.retVal}' + 
          '}'
