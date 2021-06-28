@@ -249,8 +249,92 @@ the address of the current contract in `log.contract.getAddress()`, but even tha
 there are two opcodes, `CALLCODE` and `DELEGATECALL`, which call a different contract while keeping the 
 storage of the current contract. 
 
-Because of this complication we need to keep track of the call stack ourselves. 
+Because of this complication we need to keep track of the call stack ourselves, as this function does:
 
+```javascript
+tracer = function(tx) {
+      return debug.traceTransaction(tx, {tracer:
+      '{' +
+         'retVal: [],' +
+         'afterSload: false,' +
+         'callStack: [],' +
+
+         'byte2Hex: function(byte) {' +
+         '  if (byte < 0x10) ' +
+         '      return "0" + byte.toString(16); ' +
+         '  return byte.toString(16); ' +
+         '},' +
+
+         'array2Hex: function(arr) {' +
+         '  var retVal = ""; ' +
+         '  for (var i=0; i<arr.length; i++) ' +
+         '    retVal += this.byte2Hex(arr[i]); ' +
+         '  return retVal; ' +
+         '}, ' +
+
+         'getAddr: function() {' +
+         '  return this.callStack[this.callStack.length-1];' +
+         '}, ' +
+
+         'step: function(log,db) {' +
+         '   var opcode = log.op.toNumber();' +
+
+         // First opcode, push the current address
+         '   if (this.callStack.length == 0) ' +
+         '      this.callStack.push(this.array2Hex(log.contract.getAddress()));' +
+
+         // SLOAD
+         '   if (opcode == 0x54) {' +
+         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+         '        this.getAddr() + ":" + ' +
+         '        log.stack.peek(0).toString(16));' +
+         '        this.afterSload = true; ' +
+         '   } ' +
+
+         // SLOAD Result
+         '   if (this.afterSload) {' +
+         '     this.retVal.push("    Result: " + ' +
+         '          log.stack.peek(0).toString(16)); ' +
+         '     this.afterSload = false; ' +
+         '   } ' +
+
+         // SSTORE
+         '   if (opcode == 0x55) ' +
+         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+         '        this.getAddr() + ":" + ' +
+         '        log.stack.peek(0).toString(16) + " <- " +' +
+         '        log.stack.peek(1).toString(16));' +
+
+         // CALL and STATICCALL, push new address
+         '   if (opcode == 0xF1 || opcode == 0xFA) ' +
+         '      this.callStack.push(log.stack.peek(1).toString(16)); ' +
+
+         // CALLCODE and DELEGATECALL, push current address
+         // so RETURN/REVERT will only pop one copy of it
+         '   if (opcode == 0xF2 || opcode == 0xF4) ' +
+         '      this.callStack.push(this.getAddr()); ' +
+
+         // RETURN and REVERT, pop the top of callStack
+         '   if (opcode == 0xF3 || opcode == 0xFD) ' +
+         '      this.callStack.pop(); ' +
+
+         // End of step
+         '},' +
+
+
+         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+
+         'result: function(ctx,db) {return this.retVal}' +
+      '}'
+      }) // return debug.traceTransaction ...
+}   // tracer = function ...
+```
+
+### How Does It Work?
+
+This function is complex enough that it could use a line by line explanation.
+
+# GOON GOON GOON
    
 ## Conclusion
 
