@@ -5,6 +5,16 @@ PluGeth is a fork of the [Go Ethereum Client](https://github.com/ethereum/go-eth
 Geth's  capabilities in a number of different ways using plugins, rather than
 having to create additional, new forks of Geth.
 
+## System Requirements
+
+System requirements will vary depending on which network you are connecting to.
+On the Ethereum mainnet, you should have at least 8 GB RAM, 2 CPUs, and 350 GB
+of SSD disks.
+
+PluGeth relies on Golang's Plugin implementation, which is only supported on
+Linux, FreeBSD, and macOS. Windows support is unlikely to be added in the
+foreseeable future.
+
 ## Design Goals
 
 The upstream Geth client exists primarily to serve as a client for the Ethereum
@@ -96,5 +106,16 @@ GetResult() (interface{}, error) {
   transactions may be processed that don't end up in blocks, so be sure to
   check transactions against finalized blocks.
 
-The interface for a vm.Tracer is similar to a TracerResult (above), but does 
+The interface for a vm.Tracer is similar to a TracerResult (above), but does
 not require a `GetResult()` function.
+
+
+## Extending The Plugin API
+
+While we can imagine lots of ways plugins might like to extract or change
+information in Geth, we're trying not to go too crazy with the plugin API based
+purely on hypotheticals. The Plugin API in its current form reflects the needs
+of projects currently building on PluGeth, and we're happy to extend it for
+people who are building something. If you're trying to do something that isn't
+supported by the current plugin system, we're happy to help. Reach out to us on
+[Discord](https://discord.gg/Epf7b7Gr and we'll figure out how to make it work.
