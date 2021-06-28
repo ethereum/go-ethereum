@@ -241,13 +241,16 @@ line itself, but that would have been a bit more work.
 ```
 
 
-## Dealing with intra-Contract Calls
+## Dealing With Calls Between Contracts
 
 So far we have treated the storage as if there are only 2^256 cells. However, that is not true. Contracts 
 can call other contracts, and then the storage involved is the storage of the other contract. We can see 
 the address of the current contract in `log.contract.getAddress()`. This value is the execution context, 
 the contract whose storage we are using, even when we use code from another contract (by using 
 `CALLCODE` or `DELEGATECODE`).
+
+However, `log.contract.getAddress()` returns an array of bytes. We use `this.byteHex()` and `array2Hex()`
+to convert this array to the hexadecimal representation we usually use to identify contracts.
 
 ```javascript
 tracer = function(tx) {
@@ -318,7 +321,6 @@ The output is similar to:
   "    Result: 360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
   "10778: SLOAD 22ff293e14f1ec3a09b137e9e06084afd63addf9:6",
   "    Result: 6",
-  "423: SLOAD ed6bcbf6907d4feeee8a8875543249bea9d308e8:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
   .
   .
   .
@@ -338,6 +340,6 @@ This tutorial only taught the basics of using JavaScript to filter traces. We di
 or how to use the `db` parameter to know the state of the chain at the time of execution. All this and more is
 covered [in the reference](https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing).
 
-Hopefully with this tool you will find it easier to step over and debug thorny issues with contracts and the EVM.
+Hopefully with this tool you will find it easier to trace the EVM's behavior and debug thorny contract issues.
 
 Original version by [Ori Pomerantz](qbzzt1@gmail.com)
