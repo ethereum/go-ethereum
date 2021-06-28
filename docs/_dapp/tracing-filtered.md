@@ -30,7 +30,8 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
 
    ```
 
-   We could specify this command directly in the JavaScript console, but it would be excessively long and unwieldy.
+   We could specify this function directly in the JavaScript console, but it would be unwieldy and difficult
+   to edit.
    
 2. Run the [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console). 
 3. Get the hash of a recent transaction. For example, if you use the Goerli network, you can get such a value
@@ -49,13 +50,12 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
    
    The bottom of the output looks similar to:
    ```json
-   ...
    "3366:POP", "3367:JUMP", "1355:JUMPDEST", "1356:PUSH1", "1358:MLOAD", "1359:DUP1", "1360:DUP3", "1361:ISZERO", "1362:ISZERO", 
    "1363:ISZERO", "1364:ISZERO", "1365:DUP2", "1366:MSTORE", "1367:PUSH1", "1369:ADD", "1370:SWAP2", "1371:POP", "1372:POP", "1373:PUSH1", 
    "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"]
    ```
    
-6. This output isn't very readable. Run this line to get a more readable output:
+6. This output isn't very readable. Run this line to get a more readable output with each string in its own line.
 
    ```javascript
    console.log(JSON.stringify(tracer("<hash of transaction>"), null, 2))
