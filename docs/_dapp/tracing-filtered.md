@@ -246,7 +246,8 @@ line itself, but that would have been a bit more work.
 So far we have treated the storage as if there are only 2^256 cells. However, that is not true. Contracts 
 can call other contracts, and then the storage involved is the storage of the other contract. We can see 
 the address of the current contract in `log.contract.getAddress()`. This value is the execution context, 
-the contract whose storage we are using, even when using `CALLCODE` or `DELEGATECODE`.
+the contract whose storage we are using, even when we use code from another contract (by using 
+`CALLCODE` or `DELEGATECODE`).
 
 ```javascript
 tracer = function(tx) {
