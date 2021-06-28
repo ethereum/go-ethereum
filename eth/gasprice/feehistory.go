@@ -216,7 +216,9 @@ func (f *Oracle) FeeHistory(ctx context.Context, blockCount int, lastBlockNumber
 		pendingBlock    *types.Block
 		pendingReceipts types.Receipts
 	)
-	pendingBlock, pendingReceipts, lastBlockNumber, blockCount, err = f.resolveBlockRange(ctx, lastBlockNumber, blockCount, maxHistory)
+	if pendingBlock, pendingReceipts, lastBlockNumber, blockCount, err = f.resolveBlockRange(ctx, lastBlockNumber, blockCount, maxHistory); err != nil {
+		return
+	}
 	firstBlockNumber = lastBlockNumber + 1 - rpc.BlockNumber(blockCount)
 
 	processNext := int64(firstBlockNumber)
