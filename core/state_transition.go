@@ -25,8 +25,11 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 /*
 The State Transitioning Model
@@ -221,9 +224,9 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure the sender is an EOA
-	if codesize := st.state.GetCodeSize(st.msg.From()); codesize != 0 {
-		return fmt.Errorf("%w: address %v, codesize: %d", ErrSenderNoEOA,
-			st.msg.From().Hex(), codesize)
+	if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash {
+		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+			st.msg.From().Hex(), codeHash)
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
