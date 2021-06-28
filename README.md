@@ -5,6 +5,14 @@ PluGeth is a fork of the [Go Ethereum Client](https://github.com/ethereum/go-eth
 Geth's  capabilities in a number of different ways using plugins, rather than
 having to create additional, new forks of Geth.
 
+## WARNING: UNSTABLE API
+
+Right now PluGeth is in early development. We are still settling on some of the
+plugin APIs, and are not yet making official releases. From an operational
+perspective, PluGeth should be as stable as upstream Geth, less whatever
+instability is added by plugins you might run. But if you plan to run PluGeth
+today, be aware that future updates will likely break your plugins.
+
 ## System Requirements
 
 System requirements will vary depending on which network you are connecting to.
