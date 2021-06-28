@@ -29,7 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var errInvalidPercentiles = errors.New("Invalid reward percentiles")
+var (
+	errInvalidPercentiles = errors.New("Invalid reward percentiles")
+	errRequestBeyondHead  = errors.New("Request beyond head block")
+)
 
 const maxBlockCount = 1024 // number of blocks retrievable with a single query
 
@@ -153,12 +156,7 @@ func (f *Oracle) resolveBlockRange(ctx context.Context, lastBlockNumber rpc.Bloc
 	if lastBlockNumber == rpc.LatestBlockNumber {
 		lastBlockNumber = headBlockNumber
 	} else if pendingBlock == nil && lastBlockNumber > headBlockNumber {
-		// ensure not trying to retrieve beyond head block
-		if lastBlockNumber >= headBlockNumber+rpc.BlockNumber(blockCount) {
-			return nil, nil, 0, 0, nil
-		}
-		blockCount -= int(lastBlockNumber - headBlockNumber)
-		lastBlockNumber = headBlockNumber
+		return nil, nil, 0, 0, errRequestBeyondHead
 	}
 	if maxHistory != 0 {
 		// limit retrieval to the given number of latest blocks
