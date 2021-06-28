@@ -55,10 +55,19 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
    "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"]
    ```
    
+6. This output isn't very readable. Run this line to get a more readable output:
+
+   ```javascript
+   console.log(JSON.stringify(tracer("<hash of transaction>"), null, 2))
+   ```
+   
+   You can read about thhe `JSON.stringify` function 
+   [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify).
+   
 ### How Does It Work?
 
 We call the same `debug.traceTransaction` function we use for [basic traces](https://geth.ethereum.org/docs/dapp/tracing), but
-with a new parameter, `tracer`. This parameter is a string that is the JavaScript object we use. In the fact of the program
+with a new parameter, `tracer`. This parameter is a string that is the JavaScript object we use. In the case of the trace
 above, it is:
 
 ```javascript
@@ -112,7 +121,23 @@ We could have used `log.op.toString()` instead, but it is faster to compare numb
 The output looks similar to this:
 
 ```json
-["5020: SLOAD", "5100: SSTORE", "5168: SLOAD", "5247: SSTORE"]
+[
+  "5921: SLOAD",
+  "5936: SSTORE",
+  "12734: SLOAD",
+  "12739: SLOAD",
+  "1209: SLOAD",
+  "8310: SLOAD",
+  "8360: SSTORE",
+  "11409: SSTORE",
+  "4065: SLOAD",
+  "4081: SSTORE",
+  "2117: SLOAD",
+  "2413: SSTORE",
+  "2420: SLOAD",
+  "2475: SSTORE",
+  "6094: SSTORE"
+]
 ```
 
 
@@ -148,9 +173,33 @@ tracer = function(tx) {
 ```
 
 This function gives you a trace of all the storage operations, and show you their parameters. This gives
-you a nearly complete picture of the program's interaction with storage.
+you a more complete picture of the program's interaction with storage. The output is similar to:
+
+```json
+[
+  "5921: SLOAD 0",
+  "5936: SSTORE 0 <- 2",
+  "12734: SLOAD bbbc8f1fb1317a27197ac2561e8db9a96b185f7d5ed27d9e72ced42831f4b313",
+  "12739: SLOAD bbbc8f1fb1317a27197ac2561e8db9a96b185f7d5ed27d9e72ced42831f4b314",
+  "1209: SLOAD 2",
+  "8310: SLOAD 6",
+  "8360: SSTORE 6 <- 1e66a40569b713c0000000000000000000002a4cdfba02d",
+  "11409: SSTORE bbbc8f1fb1317a27197ac2561e8db9a96b185f7d5ed27d9e72ced42831f4b313 <- 4cfa320000000003e2c5a4a4941972ea530000000000fb75538b44eec5420a",
+  "4065: SLOAD 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d",
+  "4081: SSTORE 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d <- 4f688248dcd61ec96a4",
+  "2117: SLOAD 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d",
+  "2413: SSTORE 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d <- fb8629ad13d9a12456",
+  "2420: SLOAD cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870",
+  "2475: SSTORE cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870 <- 358c3de691bd19",
+  "6094: SSTORE 0 <- 1"
+]
+```
 
 ## Operation Results
+
+One piece of information missing from the function above is the result on an `SLOAD` operation. The 
+state we get inside `log` is the state prior to the execution of the opcode, so that value is not
+known yet.
 
 
 
