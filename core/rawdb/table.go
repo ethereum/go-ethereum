@@ -62,6 +62,12 @@ func (t *table) Ancient(kind string, number uint64) ([]byte, error) {
 	return t.db.Ancient(kind, number)
 }
 
+// ReadAncients is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) ReadAncients(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	return t.db.ReadAncients(kind, start, max, maxByteSize)
+}
+
 // Ancients is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) Ancients() (uint64, error) {
