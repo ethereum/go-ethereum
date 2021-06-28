@@ -121,7 +121,7 @@ We could have used `log.op.toString()` instead, but it is faster to compare numb
 
 The output looks similar to this:
 
-```json
+```javascript
 [
   "5921: SLOAD",
   .
@@ -169,7 +169,7 @@ tracer = function(tx) {
 This function gives you a trace of all the storage operations, and show you their parameters. This gives
 you a more complete picture of the program's interaction with storage. The output is similar to:
 
-```json
+```javascript
 [
   "5921: SLOAD 0",
   .
@@ -225,7 +225,7 @@ The output now contains the result in the line that follows the `SLOAD`. We coul
 line itself, but that would have been a bit more work.
 
 
-```json
+```javascript
 [
   "5921: SLOAD 0",
   "    Result: 1",
@@ -243,7 +243,13 @@ line itself, but that would have been a bit more work.
 
 ## Dealing with intra-Contract Calls
 
+So far we have treated the storage as if there are only 2^256 cells. However, that is not true. Contracts 
+can call other contracts, and then the storage involved is the storage of the other contract. We can see 
+the address of the current contract in `log.contract.getAddress()`, but even that is not reliable because 
+there are two opcodes, `CALLCODE` and `DELEGATECALL`, which call a different contract while keeping the 
+storage of the current contract. 
 
+Because of this complication we need to keep track of the call stack ourselves. 
 
    
 ## Conclusion
