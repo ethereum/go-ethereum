@@ -118,4 +118,5 @@ purely on hypotheticals. The Plugin API in its current form reflects the needs
 of projects currently building on PluGeth, and we're happy to extend it for
 people who are building something. If you're trying to do something that isn't
 supported by the current plugin system, we're happy to help. Reach out to us on
-[Discord](https://discord.gg/Epf7b7Gr and we'll figure out how to make it work.
+[Discord](https://discord.gg/Epf7b7Gr) and we'll help you figure out how to
+make it work.
