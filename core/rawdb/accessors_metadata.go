@@ -91,51 +91,28 @@ type crashList struct {
 const crashesToKeep = 10
 
 func StartUncleanShutdownMarker(name string, db ethdb.KeyValueStore) {
-	if name == "lightchaindata" {
-		db.(*nofreezedb).isChainDb = true
-		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(false, db); err != nil {
-			log.Error("Could not update unclean-shutdown-marker list", "error", err)
-		} else {
-			if discards > 0 {
-				log.Warn("Old unclean shutdowns found", "count", discards)
-			}
-			for _, tstamp := range uncleanShutdowns {
-				t := time.Unix(int64(tstamp), 0)
-				log.Warn("Unclean shutdown detected", "booted", t,
-					"age", common.PrettyAge(t))
-			}
-		}
-		return
-	} else if name == "les.client" {
+	switch name {
+	case "les.client":
 		db.(*nofreezedb).isChainDb = false
 		return
-	} else if name == "chaindata" {
-		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(true, db); err != nil {
-			log.Error("Could not update unclean-shutdown-marker list", "error", err)
-		} else {
-			if discards > 0 {
-				log.Warn("Old unclean shutdowns found", "count", discards)
-			}
-			for _, tstamp := range uncleanShutdowns {
-				t := time.Unix(int64(tstamp), 0)
-				log.Warn("Unclean shutdown detected", "booted", t,
-					"age", common.PrettyAge(t))
-			}
-			return
+	case "lightchaindata":
+		db.(*nofreezedb).isChainDb = true
+	case "chaindata":
+		break
+	case "":
+		break
+	default:
+		return
+	}
+	if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(db); err != nil {
+		log.Error("Could not update unclean-shutdown-marker list", "error", err)
+	} else {
+		if discards > 0 {
+			log.Warn("Old unclean shutdowns found", "count", discards)
 		}
-	} else if name == "" {
-		if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(false, db); err != nil {
-			log.Error("Could not update unclean-shutdown-marker list", "error", err)
-		} else {
-			if discards > 0 {
-				log.Warn("Old unclean shutdowns found", "count", discards)
-			}
-			for _, tstamp := range uncleanShutdowns {
-				t := time.Unix(int64(tstamp), 0)
-				log.Warn("Unclean shutdown detected", "booted", t,
-					"age", common.PrettyAge(t))
-			}
-			return
+		for _, tstamp := range uncleanShutdowns {
+			t := time.Unix(int64(tstamp), 0)
+			log.Warn("Unclean shutdown detected", "booted", t, "age", common.PrettyAge(t))
 		}
 	}
 	return
@@ -146,7 +123,7 @@ func StartUncleanShutdownMarker(name string, db ethdb.KeyValueStore) {
 // the previous unclean shutdown
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(isFreezer bool, db ethdb.KeyValueStore) ([]uint64, uint64, error) {
+func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -173,10 +150,10 @@ func PushUncleanShutdownMarker(isFreezer bool, db ethdb.KeyValueStore) ([]uint64
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return nil, 0, err
 	}
-	if isFreezer {
-		go UpdateUncleanShutdownMarker(db, db.(*freezerdb).stopUncleanMarkerUpdateCh)
-	} else {
-		go UpdateUncleanShutdownMarker(db, db.(*nofreezedb).stopUncleanMarkerUpdateCh)
+	if frdb, ok := db.(*freezerdb); ok {
+		go UpdateUncleanShutdownMarker(db, frdb.stopUncleanMarkerUpdateCh)
+	} else if nfrdb, ok := db.(*nofreezedb); ok {
+		go UpdateUncleanShutdownMarker(db, nfrdb.stopUncleanMarkerUpdateCh)
 	}
 	return previous, discarded, nil
 }

@@ -92,16 +92,12 @@ func (db *nofreezedb) Close() error {
 	if db.isChainDb {
 		db.stopUncleanMarkerUpdateCh <- true
 		PopUncleanShutdownMarker(db.KeyValueStore)
-		if err := db.KeyValueStore.Close(); err != nil {
-			return err
-		}
-		return nil
-	} else {
-		if err := db.KeyValueStore.Close(); err != nil {
-			return err
-		}
-		return nil
 	}
+	if err := db.KeyValueStore.Close(); err != nil {
+		return err
+	}
+	return nil
+
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.
