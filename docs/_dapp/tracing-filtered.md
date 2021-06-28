@@ -245,11 +245,8 @@ line itself, but that would have been a bit more work.
 
 So far we have treated the storage as if there are only 2^256 cells. However, that is not true. Contracts 
 can call other contracts, and then the storage involved is the storage of the other contract. We can see 
-the address of the current contract in `log.contract.getAddress()`, but even that is not reliable because 
-there are two opcodes, `CALLCODE` and `DELEGATECALL`, which call a different contract while keeping the 
-storage of the current contract. 
-
-Because of this complication we need to keep track of the call stack ourselves, as this function does:
+the address of the current contract in `log.contract.getAddress()`. This value is the execution context, 
+the contract whose storage we are using, even when using `CALLCODE` or `DELEGATECODE`.
 
 ```javascript
 tracer = function(tx) {
@@ -272,21 +269,17 @@ tracer = function(tx) {
          '  return retVal; ' +
          '}, ' +
 
-         'getAddr: function() {' +
-         '  return this.callStack[this.callStack.length-1];' +
+         'getAddr: function(log) {' +
+         '  return this.array2Hex(log.contract.getAddress());' +
          '}, ' +
-
+         
          'step: function(log,db) {' +
          '   var opcode = log.op.toNumber();' +
-
-         // First opcode, push the current address
-         '   if (this.callStack.length == 0) ' +
-         '      this.callStack.push(this.array2Hex(log.contract.getAddress()));' +
 
          // SLOAD
          '   if (opcode == 0x54) {' +
          '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-         '        this.getAddr() + ":" + ' +
+         '        this.getAddr(log) + ":" + ' +
          '        log.stack.peek(0).toString(16));' +
          '        this.afterSload = true; ' +
          '   } ' +
@@ -297,45 +290,47 @@ tracer = function(tx) {
          '          log.stack.peek(0).toString(16)); ' +
          '     this.afterSload = false; ' +
          '   } ' +
-
+         
          // SSTORE
          '   if (opcode == 0x55) ' +
          '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-         '        this.getAddr() + ":" + ' +
+         '        this.getAddr(log) + ":" + ' +
          '        log.stack.peek(0).toString(16) + " <- " +' +
          '        log.stack.peek(1).toString(16));' +
 
-         // CALL and STATICCALL, push new address
-         '   if (opcode == 0xF1 || opcode == 0xFA) ' +
-         '      this.callStack.push(log.stack.peek(1).toString(16)); ' +
-
-         // CALLCODE and DELEGATECALL, push current address
-         // so RETURN/REVERT will only pop one copy of it
-         '   if (opcode == 0xF2 || opcode == 0xF4) ' +
-         '      this.callStack.push(this.getAddr()); ' +
-
-         // RETURN and REVERT, pop the top of callStack
-         '   if (opcode == 0xF3 || opcode == 0xFD) ' +
-         '      this.callStack.pop(); ' +
-
          // End of step
          '},' +
-
 
          'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
 
          'result: function(ctx,db) {return this.retVal}' +
       '}'
       }) // return debug.traceTransaction ...
-}   // tracer = function ...
+}   // tracer = function ...         
 ```
 
-### How Does It Work?
+The output is similar to:
 
-This function is complex enough that it could use a line by line explanation.
+```javascript
+[
+  "423: SLOAD 22ff293e14f1ec3a09b137e9e06084afd63addf9:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  "    Result: 360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  "10778: SLOAD 22ff293e14f1ec3a09b137e9e06084afd63addf9:6",
+  "    Result: 6",
+  "423: SLOAD ed6bcbf6907d4feeee8a8875543249bea9d308e8:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  .
+  .
+  .
+  "13529: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:8328de571f86baa080836c50543c740196dbc109d42041802573ba9a13efa340",
+  "    Result: 8328de571f86baa080836c50543c740196dbc109d42041802573ba9a13efa340",
+  "423: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  "    Result: 360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  "13529: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:b38558064d8dd9c883d2a8c80c604667ddb90a324bc70b1bac4e70d90b148ed4",
+  "    Result: b38558064d8dd9c883d2a8c80c604667ddb90a324bc70b1bac4e70d90b148ed4",
+  "11041: SSTORE 22ff293e14f1ec3a09b137e9e06084afd63addf9:6 <- 0"
+]  
+```
 
-# GOON GOON GOON
-   
 ## Conclusion
 
 This tutorial only taught the basics of using JavaScript to filter traces. We did not go over access to memory,
