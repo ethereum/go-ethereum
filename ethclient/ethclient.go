@@ -473,19 +473,37 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 // case the code is taken from the latest known block. Note that state from very old
 // blocks might not be available.
 func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	return ec.CallContractWithOverrides(ctx, msg, blockNumber, nil)
+}
+
+// PendingCallContract executes a message call transaction using the EVM.
+// The state seen by the contract call is the pending state.
+func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+	return ec.PendingCallContractWithOverrides(ctx, msg, nil)
+}
+
+// CallContractWithOverrides executes a message call transaction, which is directly executed in the VM
+// of the node, but never mined into the blockchain.
+//
+// blockNumber selects the block height at which the call runs. It can be nil, in which
+// case the code is taken from the latest known block. Note that state from very old
+// blocks might not be available.
+//
+// overrides specifies accounts whose state will be overridden prior to execution.
+func (ec *Client) CallContractWithOverrides(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int, overrides ethereum.StateOverride) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber), overrides)
 	if err != nil {
 		return nil, err
 	}
 	return hex, nil
 }
 
-// PendingCallContract executes a message call transaction using the EVM.
-// The state seen by the contract call is the pending state.
-func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+// PendingCallContractWithOverrides executes a message call transaction using the EVM.
+// The state seen by the contract call is the pending state after account overrides have been applied.
+func (ec *Client) PendingCallContractWithOverrides(ctx context.Context, msg ethereum.CallMsg, overrides ethereum.StateOverride) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending", overrides)
 	if err != nil {
 		return nil, err
 	}

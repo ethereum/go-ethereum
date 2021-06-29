@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -263,6 +264,9 @@ func TestEthClient(t *testing.T) {
 		"TestCallContract": {
 			func(t *testing.T) { testCallContract(t, client) },
 		},
+		"TestCallContractWithOverrides": {
+			func(t *testing.T) { testCallContractWithOverrides(t, client) },
+		},
 		"TestAtFunctions": {
 			func(t *testing.T) { testAtFunctions(t, client) },
 		},
@@ -492,8 +496,45 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// PendingCallCOntract
+	// PendingCallContract
 	if _, err := ec.PendingCallContract(context.Background(), msg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func testCallContractWithOverrides(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+
+	nonExistentAccount := common.Address{1}
+
+	msg := ethereum.CallMsg{
+		From:  nonExistentAccount,
+		To:    &common.Address{},
+		Gas:   21000,
+		Value: big.NewInt(1),
+	}
+
+	// CallContract should fail due to lack of funds
+	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err == nil {
+		t.Fatalf("expected error sending from empty account")
+	}
+	// PendingCallContract should fail due to lack of funds
+	if _, err := ec.PendingCallContract(context.Background(), msg); err == nil {
+		t.Fatalf("expected error sending from empty account")
+	}
+
+	// Override
+	overrides := make(ethereum.StateOverride)
+	balance := new(*hexutil.Big)
+	*balance = (*hexutil.Big)(big.NewInt(1))
+	overrides[nonExistentAccount] = ethereum.OverrideAccount{Balance: balance}
+
+	// CallContractWithOverrides should succeed with overridden balance
+	if _, err := ec.CallContractWithOverrides(context.Background(), msg, big.NewInt(1), overrides); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// PendingCallContractWithOverrides should succeed with overridden balance
+	if _, err := ec.PendingCallContractWithOverrides(context.Background(), msg, overrides); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
