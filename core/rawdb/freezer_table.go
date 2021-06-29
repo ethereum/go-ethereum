@@ -680,7 +680,7 @@ func (t *freezerTable) retrieveItems(start, max, maxBytes uint64) ([]byte, []int
 		if len(output) < length {
 			output = make([]byte, length)
 		}
-		if dataFile, exist := t.files[uint32(fileId)]; !exist {
+		if dataFile, exist := t.files[fileId]; !exist {
 			return fmt.Errorf("missing data file %d", fileId)
 		} else if _, err := dataFile.ReadAt(output[outputSize:outputSize+length], int64(start)); err != nil {
 			return err
@@ -709,7 +709,7 @@ func (t *freezerTable) retrieveItems(start, max, maxBytes uint64) ([]byte, []int
 		if secondIndex.filenum != firstIndex.filenum {
 			if unreadSize > 0 {
 				// If we have unread data in the first file, we need to do that read now.
-				if err := readData(firstIndex.filenum, uint32(readStart), unreadSize); err != nil {
+				if err := readData(firstIndex.filenum, readStart, unreadSize); err != nil {
 					return nil, nil, err
 				}
 				unreadSize = 0
@@ -725,7 +725,7 @@ func (t *freezerTable) retrieveItems(start, max, maxBytes uint64) ([]byte, []int
 		sizes = append(sizes, size)
 		if i == len(indices)-2 || uint64(totalSize) > maxBytes {
 			// Last item, need to do the read now
-			if err := readData(secondIndex.filenum, uint32(readStart), unreadSize); err != nil {
+			if err := readData(secondIndex.filenum, readStart, unreadSize); err != nil {
 				return nil, nil, err
 			}
 			break
