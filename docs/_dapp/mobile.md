@@ -1,5 +1,6 @@
 ---
 title: Mobile API
+sort_key: F
 ---
 
 The Ethereum blockchain along with its two extension protocols Whisper and Swarm was
