@@ -9,7 +9,7 @@ having to create additional, new forks of Geth.
 
 Right now PluGeth is in early development. We are still settling on some of the
 plugin APIs, and are not yet making official releases. From an operational
-perspective, PluGeth should be as stable as upstream Geth, less whatever
+perspective, PluGeth should be as stable as upstream Geth less whatever
 instability is added by plugins you might run. But if you plan to run PluGeth
 today, be aware that future updates will likely break your plugins.
 
