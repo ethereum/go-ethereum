@@ -671,6 +671,114 @@ func makeTestReceipts(n int, nPerBlock int) []types.Receipts {
 	return allReceipts
 }
 
+type fullLogRLP struct {
+	Address     common.Address
+	Topics      []common.Hash
+	Data        []byte
+	BlockNumber uint64
+	TxHash      common.Hash
+	TxIndex     uint
+	BlockHash   common.Hash
+	Index       uint
+}
+
+func newFullLogRLP(l *types.Log) *fullLogRLP {
+	return &fullLogRLP{
+		Address:     l.Address,
+		Topics:      l.Topics,
+		Data:        l.Data,
+		BlockNumber: l.BlockNumber,
+		TxHash:      l.TxHash,
+		TxIndex:     l.TxIndex,
+		BlockHash:   l.BlockHash,
+		Index:       l.Index,
+	}
+}
+
+// Tests that logs associated with a single block can be retrieved.
+func TestReadLogs(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Create a live block since we need metadata to reconstruct the receipt
+	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
+	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+
+	body := &types.Body{Transactions: types.Transactions{tx1, tx2}}
+
+	// Create the two receipts to manage afterwards
+	receipt1 := &types.Receipt{
+		Status:            types.ReceiptStatusFailed,
+		CumulativeGasUsed: 1,
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x11})},
+			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+		},
+		TxHash:          tx1.Hash(),
+		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
+		GasUsed:         111111,
+	}
+	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
+
+	receipt2 := &types.Receipt{
+		PostState:         common.Hash{2}.Bytes(),
+		CumulativeGasUsed: 2,
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x22})},
+			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
+		},
+		TxHash:          tx2.Hash(),
+		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
+		GasUsed:         222222,
+	}
+	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+	receipts := []*types.Receipt{receipt1, receipt2}
+
+	hash := common.BytesToHash([]byte{0x03, 0x14})
+	// Check that no receipt entries are in a pristine database
+	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) != 0 {
+		t.Fatalf("non existent receipts returned: %v", rs)
+	}
+	// Insert the body that corresponds to the receipts
+	WriteBody(db, hash, 0, body)
+
+	// Insert the receipt slice into the database and check presence
+	WriteReceipts(db, hash, 0, receipts)
+
+	logs := ReadLogs(db, hash, 0)
+	if len(logs) == 0 {
+		t.Fatalf("no logs returned")
+	}
+	if have, want := len(logs), 2; have != want {
+		t.Fatalf("unexpected number of logs returned, have %d want %d", have, want)
+	}
+	if have, want := len(logs[0]), 2; have != want {
+		t.Fatalf("unexpected number of logs[0] returned, have %d want %d", have, want)
+	}
+	if have, want := len(logs[1]), 2; have != want {
+		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
+	}
+
+	// Fill in log fields so we can compare their rlp encoding
+	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
+		t.Fatal(err)
+	}
+	for i, pr := range receipts {
+		for j, pl := range pr.Logs {
+			rlpHave, err := rlp.EncodeToBytes(newFullLogRLP(logs[i][j]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rlpWant, err := rlp.EncodeToBytes(newFullLogRLP(pl))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(rlpHave, rlpWant) {
+				t.Fatalf("receipt #%d: receipt mismatch: have %s, want %s", i, hex.EncodeToString(rlpHave), hex.EncodeToString(rlpWant))
+			}
+		}
+	}
+}
+
 func TestDeriveLogFields(t *testing.T) {
 	// Create a few transactions to have receipts for
 	to2 := common.HexToAddress("0x2")
