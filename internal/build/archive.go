@@ -183,3 +183,106 @@ func (a *TarballArchive) Close() error {
 	}
 	return a.file.Close()
 }
+
+// ExtractArchive unpacks a .zip or .tar.gz archive to the destination directory.
+func ExtractArchive(archive string, dest string) error {
+	ar, err := os.Open(archive)
+	if err != nil {
+		return err
+	}
+	defer ar.Close()
+
+	switch {
+	case strings.HasSuffix(archive, ".tar.gz"):
+		return extractTarball(ar, dest)
+	case strings.HasSuffix(archive, ".zip"):
+		return extractZip(ar, dest)
+	default:
+		return fmt.Errorf("unhandled archive type %s", archive)
+	}
+}
+
+// extractTarball unpacks a .tar.gz file.
+func extractTarball(ar io.Reader, dest string) error {
+	gzr, err := gzip.NewReader(ar)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	for {
+		// Move to the next file header.
+		header, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		// We only care about regular files, directory modes
+		// and special file types are not supported.
+		if header.Typeflag == tar.TypeReg {
+			armode := header.FileInfo().Mode()
+			err := extractFile(header.Name, armode, tr, dest)
+			if err != nil {
+				return fmt.Errorf("extract %s: %v", header.Name, err)
+			}
+		}
+	}
+}
+
+// extractZip unpacks the given .zip file.
+func extractZip(ar *os.File, dest string) error {
+	info, err := ar.Stat()
+	if err != nil {
+		return err
+	}
+	zr, err := zip.NewReader(ar, info.Size())
+	if err != nil {
+		return err
+	}
+
+	for _, zf := range zr.File {
+		if !zf.Mode().IsRegular() {
+			continue
+		}
+
+		data, err := zf.Open()
+		if err != nil {
+			return err
+		}
+		err = extractFile(zf.Name, zf.Mode(), data, dest)
+		data.Close()
+		if err != nil {
+			return fmt.Errorf("extract %s: %v", zf.Name, err)
+		}
+	}
+	return nil
+}
+
+// extractFile extracts a single file from an archive.
+func extractFile(arpath string, armode os.FileMode, data io.Reader, dest string) error {
+	// Check that path is inside destination directory.
+	target := filepath.Join(dest, filepath.FromSlash(arpath))
+	if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) {
+		return fmt.Errorf("path %q escapes archive destination", target)
+	}
+
+	// Ensure the destination directory exists.
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return err
+	}
+
+	// Copy file data.
+	file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, armode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(file, data); err != nil {
+		file.Close()
+		os.Remove(target)
+		return err
+	}
+	return file.Close()
+}

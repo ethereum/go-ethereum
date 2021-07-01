@@ -18,6 +18,7 @@ package tests
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,10 +34,22 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Command line flags to configure the interpreters.
+var (
+	testEVM   = flag.String("vm.evm", "", "EVM configuration")
+	testEWASM = flag.String("vm.ewasm", "", "EWASM configuration")
+)
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
 var (
 	baseDir            = filepath.Join(".", "testdata")
 	blockTestDir       = filepath.Join(baseDir, "BlockchainTests")
 	stateTestDir       = filepath.Join(baseDir, "GeneralStateTests")
+	legacyStateTestDir = filepath.Join(baseDir, "LegacyTests", "Constantinople", "GeneralStateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
 	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
@@ -154,10 +167,9 @@ func (tm *testMatcher) findSkip(name string) (reason string, skipload bool) {
 }
 
 // findConfig returns the chain config matching defined patterns.
-func (tm *testMatcher) findConfig(name string) *params.ChainConfig {
-	// TODO(fjl): name can be derived from testing.T when min Go version is 1.8
+func (tm *testMatcher) findConfig(t *testing.T) *params.ChainConfig {
 	for _, m := range tm.configpat {
-		if m.p.MatchString(name) {
+		if m.p.MatchString(t.Name()) {
 			return &m.config
 		}
 	}
@@ -165,11 +177,10 @@ func (tm *testMatcher) findConfig(name string) *params.ChainConfig {
 }
 
 // checkFailure checks whether a failure is expected.
-func (tm *testMatcher) checkFailure(t *testing.T, name string, err error) error {
-	// TODO(fjl): name can be derived from t when min Go version is 1.8
+func (tm *testMatcher) checkFailure(t *testing.T, err error) error {
 	failReason := ""
 	for _, m := range tm.failpat {
-		if m.p.MatchString(name) {
+		if m.p.MatchString(t.Name()) {
 			failReason = m.reason
 			break
 		}
@@ -274,5 +285,16 @@ func runTestFunc(runTest interface{}, t *testing.T, name string, m reflect.Value
 		reflect.ValueOf(t),
 		reflect.ValueOf(name),
 		m.MapIndex(reflect.ValueOf(key)),
+	})
+}
+
+func TestMatcherWhitelist(t *testing.T) {
+	t.Parallel()
+	tm := new(testMatcher)
+	tm.whitelist("invalid*")
+	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
+		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
+			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)
+		}
 	})
 }

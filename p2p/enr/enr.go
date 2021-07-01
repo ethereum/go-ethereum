@@ -50,6 +50,7 @@ var (
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")
 	errIncompletePair = errors.New("record contains incomplete k/v pair")
+	errIncompleteList = errors.New("record contains less than two list elements")
 	errTooBig         = fmt.Errorf("record bigger than %d bytes", SizeLimit)
 	errEncodeUnsigned = errors.New("can't encode unsigned record")
 	errNotFound       = errors.New("no such key in record")
@@ -163,6 +164,16 @@ func (r *Record) invalidate() {
 	r.raw = nil
 }
 
+// Signature returns the signature of the record.
+func (r *Record) Signature() []byte {
+	if r.signature == nil {
+		return nil
+	}
+	cpy := make([]byte, len(r.signature))
+	copy(cpy, r.signature)
+	return cpy
+}
+
 // EncodeRLP implements rlp.Encoder. Encoding fails if
 // the record is unsigned.
 func (r Record) EncodeRLP(w io.Writer) error {
@@ -173,7 +184,7 @@ func (r Record) EncodeRLP(w io.Writer) error {
 	return err
 }
 
-// DecodeRLP implements rlp.Decoder. Decoding verifies the signature.
+// DecodeRLP implements rlp.Decoder. Decoding doesn't verify the signature.
 func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	dec, raw, err := decodeRecord(s)
 	if err != nil {
@@ -199,9 +210,15 @@ func decodeRecord(s *rlp.Stream) (dec Record, raw []byte, err error) {
 		return dec, raw, err
 	}
 	if err = s.Decode(&dec.signature); err != nil {
+		if err == rlp.EOL {
+			err = errIncompleteList
+		}
 		return dec, raw, err
 	}
 	if err = s.Decode(&dec.seq); err != nil {
+		if err == rlp.EOL {
+			err = errIncompleteList
+		}
 		return dec, raw, err
 	}
 	// The rest of the record contains sorted k/v pairs.

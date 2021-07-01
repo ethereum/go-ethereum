@@ -35,14 +35,7 @@ package secp256k1
 import (
 	"crypto/elliptic"
 	"math/big"
-	"unsafe"
 )
-
-/*
-#include "libsecp256k1/include/secp256k1.h"
-extern int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
-*/
-import "C"
 
 const (
 	// number of bits in a big.Word
@@ -116,6 +109,10 @@ func (BitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
 // affineFromJacobian reverses the Jacobian transform. See the comment at the
 // top of the file.
 func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.Int) {
+	if z.Sign() == 0 {
+		return new(big.Int), new(big.Int)
+	}
+
 	zinv := new(big.Int).ModInverse(z, BitCurve.P)
 	zinvsq := new(big.Int).Mul(zinv, zinv)
 
@@ -129,7 +126,18 @@ func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.
 
 // Add returns the sum of (x1,y1) and (x2,y2)
 func (BitCurve *BitCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
+	// If one point is at infinity, return the other point.
+	// Adding the point at infinity to any point will preserve the other point.
+	if x1.Sign() == 0 && y1.Sign() == 0 {
+		return x2, y2
+	}
+	if x2.Sign() == 0 && y2.Sign() == 0 {
+		return x1, y1
+	}
 	z := new(big.Int).SetInt64(1)
+	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
+		return BitCurve.affineFromJacobian(BitCurve.doubleJacobian(x1, y1, z))
+	}
 	return BitCurve.affineFromJacobian(BitCurve.addJacobian(x1, y1, z, x2, y2, z))
 }
 
@@ -238,41 +246,6 @@ func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 	return x3, y3, z3
 }
 
-func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
-	// Ensure scalar is exactly 32 bytes. We pad always, even if
-	// scalar is 32 bytes long, to avoid a timing side channel.
-	if len(scalar) > 32 {
-		panic("can't handle scalars > 256 bits")
-	}
-	// NOTE: potential timing issue
-	padded := make([]byte, 32)
-	copy(padded[32-len(scalar):], scalar)
-	scalar = padded
-
-	// Do the multiplication in C, updating point.
-	point := make([]byte, 64)
-	readBits(Bx, point[:32])
-	readBits(By, point[32:])
-
-	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
-	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
-	res := C.secp256k1_ext_scalar_mul(context, pointPtr, scalarPtr)
-
-	// Unpack the result and clear temporaries.
-	x := new(big.Int).SetBytes(point[:32])
-	y := new(big.Int).SetBytes(point[32:])
-	for i := range point {
-		point[i] = 0
-	}
-	for i := range padded {
-		scalar[i] = 0
-	}
-	if res != 1 {
-		return nil, nil
-	}
-	return x, y
-}
-
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
 // an integer in big-endian form.
 func (BitCurve *BitCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
@@ -310,7 +283,7 @@ var theCurve = new(BitCurve)
 func init() {
 	// See SEC 2 section 2.7.1
 	// curve parameters taken from:
-	// http://www.secg.org/collateral/sec2_final.pdf
+	// http://www.secg.org/sec2-v2.pdf
 	theCurve.P, _ = new(big.Int).SetString("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 0)
 	theCurve.N, _ = new(big.Int).SetString("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 0)
 	theCurve.B, _ = new(big.Int).SetString("0x0000000000000000000000000000000000000000000000000000000000000007", 0)

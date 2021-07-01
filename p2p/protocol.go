@@ -54,6 +54,11 @@ type Protocol struct {
 	// but returns nil, it is assumed that the protocol handshake is still running.
 	PeerInfo func(id enode.ID) interface{}
 
+	// DialCandidates, if non-nil, is a way to tell Server about protocol-specific nodes
+	// that should be dialed. The server continuously reads nodes from the iterator and
+	// attempts to create connections to them.
+	DialCandidates enode.Iterator
+
 	// Attributes contains protocol specific information for the node record.
 	Attributes []enr.Entry
 }
@@ -79,5 +84,3 @@ func (cs capsByNameAndVersion) Swap(i, j int) { cs[i], cs[j] = cs[j], cs[i] }
 func (cs capsByNameAndVersion) Less(i, j int) bool {
 	return cs[i].Name < cs[j].Name || (cs[i].Name == cs[j].Name && cs[i].Version < cs[j].Version)
 }
-
-func (capsByNameAndVersion) ENRKey() string { return "cap" }

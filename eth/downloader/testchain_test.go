@@ -24,9 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -34,18 +34,18 @@ import (
 var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
-	testDB      = ethdb.NewMemDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000))
+	testDB      = rawdb.NewMemoryDatabase()
+	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000))
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheItems+200, testGenesis)
+var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
 func init() {
-	var forkLen = int(MaxForkAncestry + 50)
+	var forkLen = int(fullMaxForkAncestry + 50)
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
@@ -127,7 +127,7 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.genesis && i%22 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -170,18 +170,27 @@ func (tc *testChain) td(hash common.Hash) *big.Int {
 	return tc.tdm[hash]
 }
 
-// headersByHash returns headers in ascending order from the given hash.
-func (tc *testChain) headersByHash(origin common.Hash, amount int, skip int) []*types.Header {
+// headersByHash returns headers in order from the given hash.
+func (tc *testChain) headersByHash(origin common.Hash, amount int, skip int, reverse bool) []*types.Header {
 	num, _ := tc.hashToNumber(origin)
-	return tc.headersByNumber(num, amount, skip)
+	return tc.headersByNumber(num, amount, skip, reverse)
 }
 
-// headersByNumber returns headers in ascending order from the given number.
-func (tc *testChain) headersByNumber(origin uint64, amount int, skip int) []*types.Header {
+// headersByNumber returns headers from the given number.
+func (tc *testChain) headersByNumber(origin uint64, amount int, skip int, reverse bool) []*types.Header {
 	result := make([]*types.Header, 0, amount)
-	for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
-		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
-			result = append(result, header)
+
+	if !reverse {
+		for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
+			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+				result = append(result, header)
+			}
+		}
+	} else {
+		for num := int64(origin); num >= 0 && len(result) < amount; num -= int64(skip) + 1 {
+			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+				result = append(result, header)
+			}
 		}
 	}
 	return result

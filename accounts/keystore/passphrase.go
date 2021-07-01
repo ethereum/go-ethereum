@@ -38,10 +38,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
 )
@@ -97,9 +98,9 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 }
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
-func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
+func StoreKey(dir, auth string, scryptN, scryptP int) (accounts.Account, error) {
 	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
-	return a.Address, err
+	return a, err
 }
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
@@ -122,6 +123,7 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 				"Please file a ticket at:\n\n" +
 				"https://github.com/ethereum/go-ethereum/issues." +
 				"The error was : %s"
+			//lint:ignore ST1005 This is a message for the user
 			return fmt.Errorf(msg, tmpName, err)
 		}
 	}
@@ -226,9 +228,12 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		return nil, err
 	}
 	key := crypto.ToECDSAUnsafe(keyBytes)
-
+	id, err := uuid.FromBytes(keyId)
+	if err != nil {
+		return nil, err
+	}
 	return &Key{
-		Id:         uuid.UUID(keyId),
+		Id:         id,
 		Address:    crypto.PubkeyToAddress(key.PublicKey),
 		PrivateKey: key,
 	}, nil
@@ -236,7 +241,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 
 func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 	if cryptoJson.Cipher != "aes-128-ctr" {
-		return nil, fmt.Errorf("Cipher not supported: %v", cryptoJson.Cipher)
+		return nil, fmt.Errorf("cipher not supported: %v", cryptoJson.Cipher)
 	}
 	mac, err := hex.DecodeString(cryptoJson.MAC)
 	if err != nil {
@@ -272,9 +277,13 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
 	if keyProtected.Version != version {
-		return nil, nil, fmt.Errorf("Version not supported: %v", keyProtected.Version)
+		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
 	}
-	keyId = uuid.Parse(keyProtected.Id)
+	keyUUID, err := uuid.Parse(keyProtected.Id)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyId = keyUUID[:]
 	plainText, err := DecryptDataV3(keyProtected.Crypto, auth)
 	if err != nil {
 		return nil, nil, err
@@ -283,7 +292,11 @@ func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byt
 }
 
 func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byte, keyId []byte, err error) {
-	keyId = uuid.Parse(keyProtected.Id)
+	keyUUID, err := uuid.Parse(keyProtected.Id)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyId = keyUUID[:]
 	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
 	if err != nil {
 		return nil, nil, err
@@ -334,13 +347,13 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 		c := ensureInt(cryptoJSON.KDFParams["c"])
 		prf := cryptoJSON.KDFParams["prf"].(string)
 		if prf != "hmac-sha256" {
-			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: %s", prf)
+			return nil, fmt.Errorf("unsupported PBKDF2 PRF: %s", prf)
 		}
 		key := pbkdf2.Key(authArray, salt, c, dkLen, sha256.New)
 		return key, nil
 	}
 
-	return nil, fmt.Errorf("Unsupported KDF: %s", cryptoJSON.KDF)
+	return nil, fmt.Errorf("unsupported KDF: %s", cryptoJSON.KDF)
 }
 
 // TODO: can we do without this when unmarshalling dynamic JSON?

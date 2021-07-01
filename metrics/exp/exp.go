@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/prometheus"
 )
 
 type exp struct {
@@ -42,12 +44,27 @@ func Exp(r metrics.Registry) {
 	// http.HandleFunc("/debug/vars", e.expHandler)
 	// haven't found an elegant way, so just use a different endpoint
 	http.Handle("/debug/metrics", h)
+	http.Handle("/debug/metrics/prometheus", prometheus.Handler(r))
 }
 
 // ExpHandler will return an expvar powered metrics handler.
 func ExpHandler(r metrics.Registry) http.Handler {
 	e := exp{sync.Mutex{}, r}
 	return http.HandlerFunc(e.expHandler)
+}
+
+// Setup starts a dedicated metrics server at the given address.
+// This function enables metrics reporting separate from pprof.
+func Setup(address string) {
+	m := http.NewServeMux()
+	m.Handle("/debug/metrics", ExpHandler(metrics.DefaultRegistry))
+	m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
+	log.Info("Starting metrics server", "addr", fmt.Sprintf("http://%s/debug/metrics", address))
+	go func() {
+		if err := http.ListenAndServe(address, m); err != nil {
+			log.Error("Failure in running metrics server", "err", err)
+		}
+	}()
 }
 
 func (exp *exp) getInt(name string) *expvar.Int {
@@ -111,7 +128,7 @@ func (exp *exp) publishMeter(name string, metric metrics.Meter) {
 	exp.getInt(name + ".count").Set(m.Count())
 	exp.getFloat(name + ".one-minute").Set(m.Rate1())
 	exp.getFloat(name + ".five-minute").Set(m.Rate5())
-	exp.getFloat(name + ".fifteen-minute").Set((m.Rate15()))
+	exp.getFloat(name + ".fifteen-minute").Set(m.Rate15())
 	exp.getFloat(name + ".mean").Set(m.RateMean())
 }
 

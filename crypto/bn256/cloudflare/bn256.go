@@ -9,8 +9,13 @@
 //
 // This package specifically implements the Optimal Ate pairing over a 256-bit
 // Barreto-Naehrig curve as described in
-// http://cryptojedi.org/papers/dclxvi-20100714.pdf. Its output is compatible
-// with the implementation described in that paper.
+// http://cryptojedi.org/papers/dclxvi-20100714.pdf. Its output is not
+// compatible with the implementation described in that paper, as different
+// parameters are chosen.
+//
+// (This package previously claimed to operate at a 128-bit security level.
+// However, recent improvements in attacks mean that is no longer true. See
+// https://moderncrypto.org/mail-archive/curves/2016/000740.html.)
 package bn256
 
 import (
@@ -23,7 +28,7 @@ import (
 func randomK(r io.Reader) (k *big.Int, err error) {
 	for {
 		k, err = rand.Int(r, Order)
-		if k.Sign() > 0 || err != nil {
+		if err != nil || k.Sign() > 0 {
 			return
 		}
 	}
@@ -99,6 +104,10 @@ func (e *G1) Set(a *G1) *G1 {
 func (e *G1) Marshal() []byte {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
+
+	if e.p == nil {
+		e.p = &curvePoint{}
+	}
 
 	e.p.MakeAffine()
 	ret := make([]byte, numBytes*2)
@@ -381,6 +390,11 @@ func (e *GT) Finalize() *GT {
 func (e *GT) Marshal() []byte {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
+
+	if e.p == nil {
+		e.p = &gfP12{}
+		e.p.SetOne()
+	}
 
 	ret := make([]byte, numBytes*12)
 	temp := &gfP{}

@@ -19,6 +19,8 @@ package event
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -102,7 +104,7 @@ func TestResubscribe(t *testing.T) {
 func TestResubscribeAbort(t *testing.T) {
 	t.Parallel()
 
-	done := make(chan error)
+	done := make(chan error, 1)
 	sub := Resubscribe(0, func(ctx context.Context) (Subscription, error) {
 		select {
 		case <-ctx.Done():
@@ -116,5 +118,39 @@ func TestResubscribeAbort(t *testing.T) {
 	sub.Unsubscribe()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestResubscribeWithErrorHandler(t *testing.T) {
+	t.Parallel()
+
+	var i int
+	nfails := 6
+	subErrs := make([]string, 0)
+	sub := ResubscribeErr(100*time.Millisecond, func(ctx context.Context, lastErr error) (Subscription, error) {
+		i++
+		var lastErrVal string
+		if lastErr != nil {
+			lastErrVal = lastErr.Error()
+		}
+		subErrs = append(subErrs, lastErrVal)
+		sub := NewSubscription(func(unsubscribed <-chan struct{}) error {
+			if i < nfails {
+				return fmt.Errorf("err-%v", i)
+			} else {
+				return nil
+			}
+		})
+		return sub, nil
+	})
+
+	<-sub.Err()
+	if i != nfails {
+		t.Fatalf("resubscribe function called %d times, want %d times", i, nfails)
+	}
+
+	expectedSubErrs := []string{"", "err-1", "err-2", "err-3", "err-4", "err-5"}
+	if !reflect.DeepEqual(subErrs, expectedSubErrs) {
+		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }

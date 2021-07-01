@@ -18,17 +18,68 @@ package rpc
 
 import "fmt"
 
-// request is for an unknown service
-type methodNotFoundError struct {
-	service string
-	method  string
+// HTTPError is returned by client operations when the HTTP status code of the
+// response is not a 2xx status.
+type HTTPError struct {
+	StatusCode int
+	Status     string
+	Body       []byte
 }
+
+func (err HTTPError) Error() string {
+	if len(err.Body) == 0 {
+		return err.Status
+	}
+	return fmt.Sprintf("%v: %s", err.Status, err.Body)
+}
+
+// Error wraps RPC errors, which contain an error code in addition to the message.
+type Error interface {
+	Error() string  // returns the message
+	ErrorCode() int // returns the code
+}
+
+// A DataError contains some data in addition to the error message.
+type DataError interface {
+	Error() string          // returns the message
+	ErrorData() interface{} // returns the error data
+}
+
+// Error types defined below are the built-in JSON-RPC errors.
+
+var (
+	_ Error = new(methodNotFoundError)
+	_ Error = new(subscriptionNotFoundError)
+	_ Error = new(parseError)
+	_ Error = new(invalidRequestError)
+	_ Error = new(invalidMessageError)
+	_ Error = new(invalidParamsError)
+)
+
+const defaultErrorCode = -32000
+
+type methodNotFoundError struct{ method string }
 
 func (e *methodNotFoundError) ErrorCode() int { return -32601 }
 
 func (e *methodNotFoundError) Error() string {
-	return fmt.Sprintf("The method %s%s%s does not exist/is not available", e.service, serviceMethodSeparator, e.method)
+	return fmt.Sprintf("the method %s does not exist/is not available", e.method)
 }
+
+type subscriptionNotFoundError struct{ namespace, subscription string }
+
+func (e *subscriptionNotFoundError) ErrorCode() int { return -32601 }
+
+func (e *subscriptionNotFoundError) Error() string {
+	return fmt.Sprintf("no %q subscription in %s namespace", e.subscription, e.namespace)
+}
+
+// Invalid JSON was received by the server.
+type parseError struct{ message string }
+
+func (e *parseError) ErrorCode() int { return -32700 }
+
+func (e *parseError) Error() string { return e.message }
 
 // received message isn't a valid request
 type invalidRequestError struct{ message string }
@@ -50,17 +101,3 @@ type invalidParamsError struct{ message string }
 func (e *invalidParamsError) ErrorCode() int { return -32602 }
 
 func (e *invalidParamsError) Error() string { return e.message }
-
-// logic error, callback returned an error
-type callbackError struct{ message string }
-
-func (e *callbackError) ErrorCode() int { return -32000 }
-
-func (e *callbackError) Error() string { return e.message }
-
-// issued when a request is received after the server is issued to stop.
-type shutdownError struct{}
-
-func (e *shutdownError) ErrorCode() int { return -32000 }
-
-func (e *shutdownError) Error() string { return "server is shutting down" }

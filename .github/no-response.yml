@@ -1,7 +1,7 @@
 # Number of days of inactivity before an Issue is closed for lack of response
 daysUntilClose: 30
 # Label requiring a response
-responseRequiredLabel: more-information-needed
+responseRequiredLabel: "need:more-information"
 # Comment to post when closing an Issue for lack of response. Set to `false` to disable
 closeComment: >
   This issue has been automatically closed because there has been no response

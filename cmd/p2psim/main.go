@@ -289,7 +289,7 @@ func createNode(ctx *cli.Context) error {
 		config.PrivateKey = privKey
 	}
 	if services := ctx.String("services"); services != "" {
-		config.Services = strings.Split(services, ",")
+		config.Lifecycles = strings.Split(services, ",")
 	}
 	node, err := client.CreateNode(config)
 	if err != nil {

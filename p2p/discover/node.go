@@ -18,6 +18,7 @@ package discover
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"errors"
 	"math/big"
 	"net"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -33,7 +33,8 @@ import (
 // The fields of Node may not be modified.
 type node struct {
 	enode.Node
-	addedAt time.Time // time when the node was added to the table
+	addedAt        time.Time // time when the node was added to the table
+	livenessChecks uint      // how often liveness was checked
 }
 
 type encPubkey [64]byte
@@ -45,30 +46,22 @@ func encodePubkey(key *ecdsa.PublicKey) encPubkey {
 	return e
 }
 
-func decodePubkey(e encPubkey) (*ecdsa.PublicKey, error) {
-	p := &ecdsa.PublicKey{Curve: crypto.S256(), X: new(big.Int), Y: new(big.Int)}
+func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
+	if len(e) != len(encPubkey{}) {
+		return nil, errors.New("wrong size public key data")
+	}
+	p := &ecdsa.PublicKey{Curve: curve, X: new(big.Int), Y: new(big.Int)}
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])
 	p.Y.SetBytes(e[half:])
 	if !p.Curve.IsOnCurve(p.X, p.Y) {
-		return nil, errors.New("invalid secp256k1 curve point")
+		return nil, errors.New("invalid curve point")
 	}
 	return p, nil
 }
 
 func (e encPubkey) id() enode.ID {
 	return enode.ID(crypto.Keccak256Hash(e[:]))
-}
-
-// recoverNodeKey computes the public key used to sign the
-// given hash from the signature.
-func recoverNodeKey(hash, sig []byte) (key encPubkey, err error) {
-	pubkey, err := secp256k1.RecoverPubkey(hash, sig)
-	if err != nil {
-		return key, err
-	}
-	copy(key[:], pubkey[1:])
-	return key, nil
 }
 
 func wrapNode(n *enode.Node) *node {

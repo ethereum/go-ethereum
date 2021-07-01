@@ -1,111 +1,112 @@
 {
-  "sealEngine":"Ethash",
-  "params":{
-    "accountStartNonce":"0x00",
-    "maximumExtraDataSize":"0x20",
-    "homesteadForkBlock":"0x2710",
-    "daoHardforkBlock":"0x00",
-    "EIP150ForkBlock":"0x3a98",
-    "EIP158ForkBlock":"0x59d8",
-    "byzantiumForkBlock":"0x7530",
-    "constantinopleForkBlock":"0x9c40",
-    "minGasLimit":"0x1388",
-    "maxGasLimit":"0x7fffffffffffffff",
-    "tieBreakingGas":false,
-    "gasLimitBoundDivisor":"0x0400",
-    "minimumDifficulty":"0x20000",
-    "difficultyBoundDivisor":"0x0800",
-    "durationLimit":"0x0d",
-    "blockReward":"0x4563918244F40000",
-    "networkID":"0x4cb2e",
-    "chainID":"0x4cb2e",
-    "allowFutureBlocks":false
+  "sealEngine": "Ethash",
+  "params": {
+    "accountStartNonce": "0x0",
+    "maximumExtraDataSize": "0x20",
+    "homesteadForkBlock": "0x2710",
+    "daoHardforkBlock": "0x0",
+    "EIP150ForkBlock": "0x3a98",
+    "EIP158ForkBlock": "0x59d8",
+    "byzantiumForkBlock": "0x7530",
+    "constantinopleForkBlock": "0x9c40",
+    "constantinopleFixForkBlock": "0x9c40",
+    "istanbulForkBlock": "0xc350",
+    "minGasLimit": "0x1388",
+    "maxGasLimit": "0x7fffffffffffffff",
+    "tieBreakingGas": false,
+    "gasLimitBoundDivisor": "0x400",
+    "minimumDifficulty": "0x20000",
+    "difficultyBoundDivisor": "0x800",
+    "durationLimit": "0xd",
+    "blockReward": "0x4563918244f40000",
+    "networkID": "0x4cb2e",
+    "chainID": "0x4cb2e",
+    "allowFutureBlocks": false
   },
-  "genesis":{
-    "nonce":"0x0000000000000000",
-    "difficulty":"0x20000",
-    "mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-    "author":"0x0000000000000000000000000000000000000000",
-    "timestamp":"0x59a4e76d",
-    "parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-    "extraData":"0x0000000000000000000000000000000000000000000000000000000b4dc0ffee",
-    "gasLimit":"0x47b760"
+  "genesis": {
+    "nonce": "0x0000000000000000",
+    "difficulty": "0x20000",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "author": "0x0000000000000000000000000000000000000000",
+    "timestamp": "0x59a4e76d",
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "extraData": "0x0000000000000000000000000000000000000000000000000000000b4dc0ffee",
+    "gasLimit": "0x47b760"
   },
-  "accounts":{
-    "0000000000000000000000000000000000000001":{
-      "balance":"1",
-      "precompiled":{
-        "name":"ecrecover",
-        "linear":{
-          "base":3000,
-          "word":0
+  "accounts": {
+    "0000000000000000000000000000000000000001": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "ecrecover",
+        "linear": {
+          "base": 3000,
+          "word": 0
         }
       }
     },
-    "0000000000000000000000000000000000000002":{
-      "balance":"1",
-      "precompiled":{
-        "name":"sha256",
-        "linear":{
-          "base":60,
-          "word":12
+    "0000000000000000000000000000000000000002": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "sha256",
+        "linear": {
+          "base": 60,
+          "word": 12
         }
       }
     },
-    "0000000000000000000000000000000000000003":{
-      "balance":"1",
-      "precompiled":{
-        "name":"ripemd160",
-        "linear":{
-          "base":600,
-          "word":120
+    "0000000000000000000000000000000000000003": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "ripemd160",
+        "linear": {
+          "base": 600,
+          "word": 120
         }
       }
     },
-    "0000000000000000000000000000000000000004":{
-      "balance":"1",
-      "precompiled":{
-        "name":"identity",
-        "linear":{
-          "base":15,
-          "word":3
+    "0000000000000000000000000000000000000004": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "identity",
+        "linear": {
+          "base": 15,
+          "word": 3
         }
       }
     },
-    "0000000000000000000000000000000000000005":{
-      "balance":"1",
-      "precompiled":{
-        "name":"modexp",
-        "startingBlock":"0x7530"
+    "0000000000000000000000000000000000000005": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "modexp",
+        "startingBlock": "0x7530"
       }
     },
-    "0000000000000000000000000000000000000006":{
-      "balance":"1",
-      "precompiled":{
-        "name":"alt_bn128_G1_add",
-        "startingBlock":"0x7530",
-        "linear":{
-          "base":500,
-          "word":0
-        }
+    "0000000000000000000000000000000000000006": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "alt_bn128_G1_add",
+        "startingBlock": "0x7530"
       }
     },
-    "0000000000000000000000000000000000000007":{
-      "balance":"1",
-      "precompiled":{
-        "name":"alt_bn128_G1_mul",
-        "startingBlock":"0x7530",
-        "linear":{
-          "base":40000,
-          "word":0
-        }
+    "0000000000000000000000000000000000000007": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "alt_bn128_G1_mul",
+        "startingBlock": "0x7530"
       }
     },
-    "0000000000000000000000000000000000000008":{
-      "balance":"1",
-      "precompiled":{
-        "name":"alt_bn128_pairing_product",
-        "startingBlock":"0x7530"
+    "0000000000000000000000000000000000000008": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "alt_bn128_pairing_product",
+        "startingBlock": "0x7530"
+      }
+    },
+    "0000000000000000000000000000000000000009": {
+      "balance": "0x1",
+      "precompiled": {
+        "name": "blake2_compression",
+        "startingBlock": "0xc350"
       }
     }
   }

@@ -17,15 +17,22 @@
 package runtime
 
 import (
+	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/asm"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -95,7 +102,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	state, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -151,7 +158,7 @@ func BenchmarkCall(b *testing.B) {
 }
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		sender     = common.BytesToAddress([]byte("sender"))
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
@@ -202,4 +209,482 @@ func BenchmarkEVM_CREATE_1200(bench *testing.B) {
 func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	// initcode size 1200K, repeatedly calls CREATE2 and then modifies the mem contents
 	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
+}
+
+func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
+	header := types.Header{
+		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
+		Number:     big.NewInt(int64(n)),
+		ParentHash: parentHash,
+		Time:       1000,
+		Nonce:      types.BlockNonce{0x1},
+		Extra:      []byte{},
+		Difficulty: big.NewInt(0),
+		GasLimit:   100000,
+	}
+	return &header
+}
+
+type dummyChain struct {
+	counter int
+}
+
+// Engine retrieves the chain's consensus engine.
+func (d *dummyChain) Engine() consensus.Engine {
+	return nil
+}
+
+// GetHeader returns the hash corresponding to their hash.
+func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
+	d.counter++
+	parentHash := common.Hash{}
+	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
+	copy(parentHash[:], s)
+
+	//parentHash := common.Hash{byte(n - 1)}
+	//fmt.Printf("GetHeader(%x, %d) => header with parent %x\n", h, n, parentHash)
+	return fakeHeader(n, parentHash)
+}
+
+// TestBlockhash tests the blockhash operation. It's a bit special, since it internally
+// requires access to a chain reader.
+func TestBlockhash(t *testing.T) {
+	// Current head
+	n := uint64(1000)
+	parentHash := common.Hash{}
+	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
+	copy(parentHash[:], s)
+	header := fakeHeader(n, parentHash)
+
+	// This is the contract we're using. It requests the blockhash for current num (should be all zeroes),
+	// then iteratively fetches all blockhashes back to n-260.
+	// It returns
+	// 1. the first (should be zero)
+	// 2. the second (should be the parent hash)
+	// 3. the last non-zero hash
+	// By making the chain reader return hashes which correlate to the number, we can
+	// verify that it obtained the right hashes where it should
+
+	/*
+
+		pragma solidity ^0.5.3;
+		contract Hasher{
+
+			function test() public view returns (bytes32, bytes32, bytes32){
+				uint256 x = block.number;
+				bytes32 first;
+				bytes32 last;
+				bytes32 zero;
+				zero = blockhash(x); // Should be zeroes
+				first = blockhash(x-1);
+				for(uint256 i = 2 ; i < 260; i++){
+					bytes32 hash = blockhash(x - i);
+					if (uint256(hash) != 0){
+						last = hash;
+					}
+				}
+				return (zero, first, last);
+			}
+		}
+
+	*/
+	// The contract above
+	data := common.Hex2Bytes("6080604052348015600f57600080fd5b50600436106045576000357c010000000000000000000000000000000000000000000000000000000090048063f8a8fd6d14604a575b600080fd5b60506074565b60405180848152602001838152602001828152602001935050505060405180910390f35b600080600080439050600080600083409050600184034092506000600290505b61010481101560c35760008186034090506000816001900414151560b6578093505b5080806001019150506094565b508083839650965096505050505090919256fea165627a7a72305820462d71b510c1725ff35946c20b415b0d50b468ea157c8c77dff9466c9cb85f560029")
+	// The method call to 'test()'
+	input := common.Hex2Bytes("f8a8fd6d")
+	chain := &dummyChain{}
+	ret, _, err := Execute(data, input, &Config{
+		GetHashFn:   core.GetHashFn(header, chain),
+		BlockNumber: new(big.Int).Set(header.Number),
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(ret) != 96 {
+		t.Fatalf("expected returndata to be 96 bytes, got %d", len(ret))
+	}
+
+	zero := new(big.Int).SetBytes(ret[0:32])
+	first := new(big.Int).SetBytes(ret[32:64])
+	last := new(big.Int).SetBytes(ret[64:96])
+	if zero.BitLen() != 0 {
+		t.Fatalf("expected zeroes, got %x", ret[0:32])
+	}
+	if first.Uint64() != 999 {
+		t.Fatalf("second block should be 999, got %d (%x)", first, ret[32:64])
+	}
+	if last.Uint64() != 744 {
+		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
+	}
+	if exp, got := 255, chain.counter; exp != got {
+		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
+	}
+}
+
+type stepCounter struct {
+	inner *vm.JSONLogger
+	steps int
+}
+
+func (s *stepCounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+}
+
+func (s *stepCounter) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+}
+
+func (s *stepCounter) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+
+func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	s.steps++
+	// Enable this for more output
+	//s.inner.CaptureState(env, pc, op, gas, cost, memory, stack, rStack, contract, depth, err)
+}
+
+// benchmarkNonModifyingCode benchmarks code, but if the code modifies the
+// state, this should not be used, since it does not reset the state between runs.
+func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.B) {
+	cfg := new(Config)
+	setDefaults(cfg)
+	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	cfg.GasLimit = gas
+	var (
+		destination = common.BytesToAddress([]byte("contract"))
+		vmenv       = NewEnv(cfg)
+		sender      = vm.AccountRef(cfg.Origin)
+	)
+	cfg.State.CreateAccount(destination)
+	eoa := common.HexToAddress("E0")
+	{
+		cfg.State.CreateAccount(eoa)
+		cfg.State.SetNonce(eoa, 100)
+	}
+	reverting := common.HexToAddress("EE")
+	{
+		cfg.State.CreateAccount(reverting)
+		cfg.State.SetCode(reverting, []byte{
+			byte(vm.PUSH1), 0x00,
+			byte(vm.PUSH1), 0x00,
+			byte(vm.REVERT),
+		})
+	}
+
+	//cfg.State.CreateAccount(cfg.Origin)
+	// set the receiver's (the executing contract) code for execution.
+	cfg.State.SetCode(destination, code)
+	vmenv.Call(sender, destination, nil, gas, cfg.Value)
+
+	b.Run(name, func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			vmenv.Call(sender, destination, nil, gas, cfg.Value)
+		}
+	})
+}
+
+// BenchmarkSimpleLoop test a pretty simple loop which loops until OOG
+// 55 ms
+func BenchmarkSimpleLoop(b *testing.B) {
+
+	staticCallIdentity := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),       // out offset
+		byte(vm.DUP1),       // out insize
+		byte(vm.DUP1),       // in offset
+		byte(vm.PUSH1), 0x4, // address of identity
+		byte(vm.GAS), // gas
+		byte(vm.STATICCALL),
+		byte(vm.POP),      // pop return value
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	callIdentity := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),       // out offset
+		byte(vm.DUP1),       // out insize
+		byte(vm.DUP1),       // in offset
+		byte(vm.DUP1),       // value
+		byte(vm.PUSH1), 0x4, // address of identity
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),      // pop return value
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	callInexistant := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),        // out offset
+		byte(vm.DUP1),        // out insize
+		byte(vm.DUP1),        // in offset
+		byte(vm.DUP1),        // value
+		byte(vm.PUSH1), 0xff, // address of existing contract
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),      // pop return value
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	callEOA := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),        // out offset
+		byte(vm.DUP1),        // out insize
+		byte(vm.DUP1),        // in offset
+		byte(vm.DUP1),        // value
+		byte(vm.PUSH1), 0xE0, // address of EOA
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),      // pop return value
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	loopingCode := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),       // out offset
+		byte(vm.DUP1),       // out insize
+		byte(vm.DUP1),       // in offset
+		byte(vm.PUSH1), 0x4, // address of identity
+		byte(vm.GAS), // gas
+
+		byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP),
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	calllRevertingContractWithInput := []byte{
+		byte(vm.JUMPDEST), //
+		// push args for the call
+		byte(vm.PUSH1), 0, // out size
+		byte(vm.DUP1),        // out offset
+		byte(vm.PUSH1), 0x20, // in size
+		byte(vm.PUSH1), 0x00, // in offset
+		byte(vm.PUSH1), 0x00, // value
+		byte(vm.PUSH1), 0xEE, // address of reverting contract
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),      // pop return value
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	//tracer := vm.NewJSONLogger(nil, os.Stdout)
+	//Execute(loopingCode, nil, &Config{
+	//	EVMConfig: vm.Config{
+	//		Debug:  true,
+	//		Tracer: tracer,
+	//	}})
+	// 100M gas
+	benchmarkNonModifyingCode(100000000, staticCallIdentity, "staticcall-identity-100M", b)
+	benchmarkNonModifyingCode(100000000, callIdentity, "call-identity-100M", b)
+	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", b)
+	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", b)
+	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", b)
+	benchmarkNonModifyingCode(100000000, calllRevertingContractWithInput, "call-reverting-100M", b)
+
+	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
+	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
+}
+
+// TestEip2929Cases contains various testcases that are used for
+// EIP-2929 about gas repricings
+func TestEip2929Cases(t *testing.T) {
+
+	id := 1
+	prettyPrint := func(comment string, code []byte) {
+
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+		fmt.Printf("### Case %d\n\n", id)
+		id++
+		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
+			comment,
+			code, ops)
+		Execute(code, nil, &Config{
+			EVMConfig: vm.Config{
+				Debug:     true,
+				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				ExtraEips: []int{2929},
+			},
+		})
+	}
+
+	{ // First eip testcase
+		code := []byte{
+			// Three checks against a precompile
+			byte(vm.PUSH1), 1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 3, byte(vm.BALANCE), byte(vm.POP),
+			// Three checks against a non-precompile
+			byte(vm.PUSH1), 0xf1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.BALANCE), byte(vm.POP),
+			// Same three checks (should be cheaper)
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf1, byte(vm.BALANCE), byte(vm.POP),
+			// Check the origin, and the 'this'
+			byte(vm.ORIGIN), byte(vm.BALANCE), byte(vm.POP),
+			byte(vm.ADDRESS), byte(vm.BALANCE), byte(vm.POP),
+
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `EXT`(codehash,codesize,balance) of precompiles, which should be `100`, "+
+			"and later checks the same operations twice against some non-precompiles. "+
+			"Those are cheaper second time they are accessed. Lastly, it checks the `BALANCE` of `origin` and `this`.", code)
+	}
+
+	{ // EXTCODECOPY
+		code := []byte{
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( this,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.ADDRESS), byte(vm.EXTCODECOPY),
+
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `extcodecopy( 0xff,0,0,0,0)` twice, (should be expensive first time), "+
+			"and then does `extcodecopy( this,0,0,0,0)`.", code)
+	}
+
+	{ // SLOAD + SSTORE
+		code := []byte{
+
+			// Add slot `0x1` to access list
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), byte(vm.POP), // SLOAD( 0x1) (add to access list)
+			// Write to `0x1` which is already in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x01, byte(vm.SSTORE), // SSTORE( loc: 0x01, val: 0x11)
+			// Write to `0x2` which is not in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Write again to `0x2`
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Read slot in access list (0x2)
+			byte(vm.PUSH1), 0x02, byte(vm.SLOAD), // SLOAD( 0x2)
+			// Read slot in access list (0x1)
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), // SLOAD( 0x1)
+		}
+		prettyPrint("This checks `sload( 0x1)` followed by `sstore(loc: 0x01, val:0x11)`, then 'naked' sstore:"+
+			"`sstore(loc: 0x02, val:0x11)` twice, and `sload(0x2)`, `sload(0x1)`. ", code)
+	}
+	{ // Call variants
+		code := []byte{
+			// identity precompile
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0x04, byte(vm.PUSH1), 0x0, byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 1
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0xff, byte(vm.PUSH1), 0x0, byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 2
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0xff, byte(vm.PUSH1), 0x0, byte(vm.STATICCALL), byte(vm.POP),
+		}
+		prettyPrint("This calls the `identity`-precompile (cheap), then calls an account (expensive) and `staticcall`s the same"+
+			"account (cheap)", code)
+	}
+}
+
+// TestColdAccountAccessCost test that the cold account access cost is reported
+// correctly
+// see: https://github.com/ethereum/go-ethereum/issues/22649
+func TestColdAccountAccessCost(t *testing.T) {
+	for i, tc := range []struct {
+		code []byte
+		step int
+		want uint64
+	}{
+		{ // EXTCODEHASH(0xff)
+			code: []byte{byte(vm.PUSH1), 0xFF, byte(vm.EXTCODEHASH), byte(vm.POP)},
+			step: 1,
+			want: 2600,
+		},
+		{ // BALANCE(0xff)
+			code: []byte{byte(vm.PUSH1), 0xFF, byte(vm.BALANCE), byte(vm.POP)},
+			step: 1,
+			want: 2600,
+		},
+		{ // CALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.CALL), byte(vm.POP),
+			},
+			step: 7,
+			want: 2855,
+		},
+		{ // CALLCODE(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.CALLCODE), byte(vm.POP),
+			},
+			step: 7,
+			want: 2855,
+		},
+		{ // DELEGATECALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.DELEGATECALL), byte(vm.POP),
+			},
+			step: 6,
+			want: 2855,
+		},
+		{ // STATICCALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.STATICCALL), byte(vm.POP),
+			},
+			step: 6,
+			want: 2855,
+		},
+		{ // SELFDESTRUCT(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0xff, byte(vm.SELFDESTRUCT),
+			},
+			step: 1,
+			want: 7600,
+		},
+	} {
+		tracer := vm.NewStructLogger(nil)
+		Execute(tc.code, nil, &Config{
+			EVMConfig: vm.Config{
+				Debug:  true,
+				Tracer: tracer,
+			},
+		})
+		have := tracer.StructLogs()[tc.step].GasCost
+		if want := tc.want; have != want {
+			for ii, op := range tracer.StructLogs() {
+				t.Logf("%d: %v %d", ii, op.OpName(), op.GasCost)
+			}
+			t.Fatalf("tescase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
+		}
+	}
 }

@@ -212,6 +212,16 @@ func TestU256(t *testing.T) {
 	}
 }
 
+func TestU256Bytes(t *testing.T) {
+	ubytes := make([]byte, 32)
+	ubytes[31] = 1
+
+	unsigned := U256Bytes(big.NewInt(1))
+	if !bytes.Equal(unsigned, ubytes) {
+		t.Errorf("expected %x got %x", ubytes, unsigned)
+	}
+}
+
 func TestBigEndianByteAt(t *testing.T) {
 	tests := []struct {
 		x   string

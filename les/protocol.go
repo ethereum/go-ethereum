@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
 package les
 
 import (
@@ -25,37 +24,43 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
-	lpv1 = 1
 	lpv2 = 2
+	lpv3 = 3
+	lpv4 = 4
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2, lpv1}
-	ServerProtocolVersions    = []uint{lpv2, lpv1}
+	ClientProtocolVersions    = []uint{lpv2, lpv3, lpv4}
+	ServerProtocolVersions    = []uint{lpv2, lpv3, lpv4}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv1: 15, lpv2: 22}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 24}
 
 const (
 	NetworkId          = 1
 	ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
+	blockSafetyMargin  = 4                // safety margin applied to block ranges specified relative to head block
+
+	txIndexUnlimited    = 0 // this value in the "recentTxLookup" handshake field means the entire tx index history is served
+	txIndexDisabled     = 1 // this value means tx index is not served at all
+	txIndexRecentOffset = 1 // txIndexRecentOffset + N in the handshake field means then tx index of the last N blocks is supported
 )
 
 // les protocol message codes
 const (
-	// Protocol messages belonging to LPV1
+	// Protocol messages inherited from LPV1
 	StatusMsg          = 0x00
 	AnnounceMsg        = 0x01
 	GetBlockHeadersMsg = 0x02
@@ -64,14 +69,9 @@ const (
 	BlockBodiesMsg     = 0x05
 	GetReceiptsMsg     = 0x06
 	ReceiptsMsg        = 0x07
-	GetProofsV1Msg     = 0x08
-	ProofsV1Msg        = 0x09
 	GetCodeMsg         = 0x0a
 	CodeMsg            = 0x0b
-	SendTxMsg          = 0x0c
-	GetHeaderProofsMsg = 0x0d
-	HeaderProofsMsg    = 0x0e
-	// Protocol messages belonging to LPV2
+	// Protocol messages introduced in LPV2
 	GetProofsV2Msg         = 0x0f
 	ProofsV2Msg            = 0x10
 	GetHelperTrieProofsMsg = 0x11
@@ -79,7 +79,121 @@ const (
 	SendTxV2Msg            = 0x13
 	GetTxStatusMsg         = 0x14
 	TxStatusMsg            = 0x15
+	// Protocol messages introduced in LPV3
+	StopMsg   = 0x16
+	ResumeMsg = 0x17
 )
+
+// GetBlockHeadersData represents a block header query (the request ID is not included)
+type GetBlockHeadersData struct {
+	Origin  hashOrNumber // Block from which to retrieve headers
+	Amount  uint64       // Maximum number of headers to retrieve
+	Skip    uint64       // Blocks to skip between consecutive headers
+	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+}
+
+// GetBlockHeadersPacket represents a block header request
+type GetBlockHeadersPacket struct {
+	ReqID uint64
+	Query GetBlockHeadersData
+}
+
+// GetBlockBodiesPacket represents a block body request
+type GetBlockBodiesPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
+
+// GetCodePacket represents a contract code request
+type GetCodePacket struct {
+	ReqID uint64
+	Reqs  []CodeReq
+}
+
+// GetReceiptsPacket represents a block receipts request
+type GetReceiptsPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
+
+// GetProofsPacket represents a proof request
+type GetProofsPacket struct {
+	ReqID uint64
+	Reqs  []ProofReq
+}
+
+// GetHelperTrieProofsPacket represents a helper trie proof request
+type GetHelperTrieProofsPacket struct {
+	ReqID uint64
+	Reqs  []HelperTrieReq
+}
+
+// SendTxPacket represents a transaction propagation request
+type SendTxPacket struct {
+	ReqID uint64
+	Txs   []*types.Transaction
+}
+
+// GetTxStatusPacket represents a transaction status query
+type GetTxStatusPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
+
+type requestInfo struct {
+	name                          string
+	maxCount                      uint64
+	refBasketFirst, refBasketRest float64
+}
+
+// reqMapping maps an LES request to one or two vflux service vector entries.
+// If rest != -1 and the request type is used with amounts larger than one then the
+// first one of the multi-request is mapped to first while the rest is mapped to rest.
+type reqMapping struct {
+	first, rest int
+}
+
+var (
+	// requests describes the available LES request types and their initializing amounts
+	// in the vfc.ValueTracker reference basket. Initial values are estimates
+	// based on the same values as the server's default cost estimates (reqAvgTimeCost).
+	requests = map[uint64]requestInfo{
+		GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch, 10, 1000},
+		GetBlockBodiesMsg:      {"GetBlockBodies", MaxBodyFetch, 1, 0},
+		GetReceiptsMsg:         {"GetReceipts", MaxReceiptFetch, 1, 0},
+		GetCodeMsg:             {"GetCode", MaxCodeFetch, 1, 0},
+		GetProofsV2Msg:         {"GetProofsV2", MaxProofsFetch, 10, 0},
+		GetHelperTrieProofsMsg: {"GetHelperTrieProofs", MaxHelperTrieProofsFetch, 10, 100},
+		SendTxV2Msg:            {"SendTxV2", MaxTxSend, 1, 0},
+		GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus, 10, 0},
+	}
+	requestList    []vfc.RequestInfo
+	requestMapping map[uint32]reqMapping
+)
+
+// init creates a request list and mapping between protocol message codes and vflux
+// service vector indices.
+func init() {
+	requestMapping = make(map[uint32]reqMapping)
+	for code, req := range requests {
+		cost := reqAvgTimeCost[code]
+		rm := reqMapping{len(requestList), -1}
+		requestList = append(requestList, vfc.RequestInfo{
+			Name:       req.name + ".first",
+			InitAmount: req.refBasketFirst,
+			InitValue:  float64(cost.baseCost + cost.reqCost),
+		})
+		if req.refBasketRest != 0 {
+			rm.rest = len(requestList)
+			requestList = append(requestList, vfc.RequestInfo{
+				Name:       req.name + ".rest",
+				InitAmount: req.refBasketRest,
+				InitValue:  float64(cost.reqCost),
+			})
+		}
+		requestMapping[uint32(code)] = rm
+	}
+}
 
 type errCode int
 
@@ -99,6 +213,7 @@ const (
 	ErrInvalidResponse
 	ErrTooManyTimeouts
 	ErrMissingKey
+	ErrForkIDRejected
 )
 
 func (e errCode) String() string {
@@ -121,12 +236,7 @@ var errorToString = map[int]string{
 	ErrInvalidResponse:         "Invalid response",
 	ErrTooManyTimeouts:         "Too many request timeouts",
 	ErrMissingKey:              "Key missing from list",
-}
-
-type announceBlock struct {
-	Hash   common.Hash // Hash of one particular block being announced
-	Number uint64      // Number of one particular block being announced
-	Td     *big.Int    // Total difficulty of one particular block being announced
+	ErrForkIDRejected:          "ForkID rejected",
 }
 
 // announceData is the network packet for the block announcements.
@@ -138,20 +248,28 @@ type announceData struct {
 	Update     keyValueList
 }
 
+// sanityCheck verifies that the values are reasonable, as a DoS protection
+func (a *announceData) sanityCheck() error {
+	if tdlen := a.Td.BitLen(); tdlen > 100 {
+		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	}
+	return nil
+}
+
 // sign adds a signature to the block announcement by the given privKey
 func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
-	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
 	sig, _ := crypto.Sign(crypto.Keccak256(rlp), privKey)
 	a.Update = a.Update.add("sign", sig)
 }
 
 // checkSignature verifies if the block announcement has a valid signature by the given pubKey
-func (a *announceData) checkSignature(id enode.ID) error {
+func (a *announceData) checkSignature(id enode.ID, update keyValueMap) error {
 	var sig []byte
-	if err := a.Update.decode().get("sign", &sig); err != nil {
+	if err := update.get("sign", &sig); err != nil {
 		return err
 	}
-	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
 	recPubkey, err := crypto.SigToPub(crypto.Keccak256(rlp), sig)
 	if err != nil {
 		return err
@@ -166,14 +284,6 @@ type blockInfo struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 	Td     *big.Int    // Total difficulty of one particular block being announced
-}
-
-// getBlockHeadersData represents a block header query.
-type getBlockHeadersData struct {
-	Origin  hashOrNumber // Block from which to retrieve headers
-	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
-	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
 // hashOrNumber is a combined field for specifying an origin block.
@@ -197,30 +307,22 @@ func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
 // DecodeRLP is a specialized decoder for hashOrNumber to decode the contents
 // into either a block hash or a block number.
 func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	origin, err := s.Raw()
-	if err == nil {
-		switch {
-		case size == 32:
-			err = rlp.DecodeBytes(origin, &hn.Hash)
-		case size <= 8:
-			err = rlp.DecodeBytes(origin, &hn.Number)
-		default:
-			err = fmt.Errorf("invalid input size %d for origin", size)
-		}
+	_, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case size == 32:
+		hn.Number = 0
+		return s.Decode(&hn.Hash)
+	case size <= 8:
+		hn.Hash = common.Hash{}
+		return s.Decode(&hn.Number)
+	default:
+		return fmt.Errorf("invalid input size %d for origin", size)
 	}
-	return err
 }
 
 // CodeData is the network response packet for a node data retrieval.
 type CodeData []struct {
 	Value []byte
-}
-
-type proofsData [][]rlp.RawValue
-
-type txStatus struct {
-	Status core.TxStatus
-	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
-	Error  string
 }

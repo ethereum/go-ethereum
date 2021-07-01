@@ -35,7 +35,7 @@ var ErrNotSupported = errors.New("not supported")
 
 // ErrInvalidPassphrase is returned when a decryption operation receives a bad
 // passphrase.
-var ErrInvalidPassphrase = errors.New("invalid passphrase")
+var ErrInvalidPassphrase = errors.New("invalid password")
 
 // ErrWalletAlreadyOpen is returned if a wallet is attempted to be opened the
 // second time.

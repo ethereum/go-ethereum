@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"text/template"
@@ -55,10 +56,13 @@ type TestCmd struct {
 	Err error
 }
 
+var id int32
+
 // Run exec's the current binary using name as argv[0] which will trigger the
 // reexec init function for that name (e.g. "geth-test" in cmd/geth/run_test.go)
 func (tt *TestCmd) Run(name string, args ...string) {
-	tt.stderr = &testlogger{t: tt.T}
+	id := atomic.AddInt32(&id, 1)
+	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id)}
 	tt.cmd = &exec.Cmd{
 		Path:   reexec.Self(),
 		Args:   append([]string{name}, args...),
@@ -77,7 +81,7 @@ func (tt *TestCmd) Run(name string, args ...string) {
 	}
 }
 
-// InputLine writes the given text to the childs stdin.
+// InputLine writes the given text to the child's stdin.
 // This method can also be called from an expect template, e.g.:
 //
 //     geth.expect(`Passphrase: {{.InputLine "password"}}`)
@@ -127,12 +131,12 @@ func (tt *TestCmd) matchExactOutput(want []byte) error {
 		// Find the mismatch position.
 		for i := 0; i < n; i++ {
 			if want[i] != buf[i] {
-				return fmt.Errorf("Output mismatch at ◊:\n---------------- (stdout text)\n%s◊%s\n---------------- (expected text)\n%s",
+				return fmt.Errorf("output mismatch at ◊:\n---------------- (stdout text)\n%s◊%s\n---------------- (expected text)\n%s",
 					buf[:i], buf[i:n], want)
 			}
 		}
 		if n < len(want) {
-			return fmt.Errorf("Not enough output, got until ◊:\n---------------- (stdout text)\n%s\n---------------- (expected text)\n%s◊%s",
+			return fmt.Errorf("not enough output, got until ◊:\n---------------- (stdout text)\n%s\n---------------- (expected text)\n%s◊%s",
 				buf, want[:n], want[n:])
 		}
 	}
@@ -238,16 +242,17 @@ func (tt *TestCmd) withKillTimeout(fn func()) {
 // testlogger logs all written lines via t.Log and also
 // collects them for later inspection.
 type testlogger struct {
-	t   *testing.T
-	mu  sync.Mutex
-	buf bytes.Buffer
+	t    *testing.T
+	mu   sync.Mutex
+	buf  bytes.Buffer
+	name string
 }
 
 func (tl *testlogger) Write(b []byte) (n int, err error) {
 	lines := bytes.Split(b, []byte("\n"))
 	for _, line := range lines {
 		if len(line) > 0 {
-			tl.t.Logf("(stderr) %s", line)
+			tl.t.Logf("(stderr:%v) %s", tl.name, line)
 		}
 	}
 	tl.mu.Lock()

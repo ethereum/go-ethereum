@@ -20,61 +20,40 @@
 package node
 
 import (
-	"reflect"
-
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// NoopService is a trivial implementation of the Service interface.
-type NoopService struct{}
+// NoopLifecycle is a trivial implementation of the Service interface.
+type NoopLifecycle struct{}
 
-func (s *NoopService) Protocols() []p2p.Protocol { return nil }
-func (s *NoopService) APIs() []rpc.API           { return nil }
-func (s *NoopService) Start(*p2p.Server) error   { return nil }
-func (s *NoopService) Stop() error               { return nil }
+func (s *NoopLifecycle) Start() error { return nil }
+func (s *NoopLifecycle) Stop() error  { return nil }
 
-func NewNoopService(*ServiceContext) (Service, error) { return new(NoopService), nil }
+func NewNoop() *Noop {
+	noop := new(Noop)
+	return noop
+}
 
-// Set of services all wrapping the base NoopService resulting in the same method
+// Set of services all wrapping the base NoopLifecycle resulting in the same method
 // signatures but different outer types.
-type NoopServiceA struct{ NoopService }
-type NoopServiceB struct{ NoopService }
-type NoopServiceC struct{ NoopService }
+type Noop struct{ NoopLifecycle }
 
-func NewNoopServiceA(*ServiceContext) (Service, error) { return new(NoopServiceA), nil }
-func NewNoopServiceB(*ServiceContext) (Service, error) { return new(NoopServiceB), nil }
-func NewNoopServiceC(*ServiceContext) (Service, error) { return new(NoopServiceC), nil }
-
-// InstrumentedService is an implementation of Service for which all interface
+// InstrumentedService is an implementation of Lifecycle for which all interface
 // methods can be instrumented both return value as well as event hook wise.
 type InstrumentedService struct {
+	start error
+	stop  error
+
+	startHook func()
+	stopHook  func()
+
 	protocols []p2p.Protocol
-	apis      []rpc.API
-	start     error
-	stop      error
-
-	protocolsHook func()
-	startHook     func(*p2p.Server)
-	stopHook      func()
 }
 
-func NewInstrumentedService(*ServiceContext) (Service, error) { return new(InstrumentedService), nil }
-
-func (s *InstrumentedService) Protocols() []p2p.Protocol {
-	if s.protocolsHook != nil {
-		s.protocolsHook()
-	}
-	return s.protocols
-}
-
-func (s *InstrumentedService) APIs() []rpc.API {
-	return s.apis
-}
-
-func (s *InstrumentedService) Start(server *p2p.Server) error {
+func (s *InstrumentedService) Start() error {
 	if s.startHook != nil {
-		s.startHook(server)
+		s.startHook()
 	}
 	return s.start
 }
@@ -86,48 +65,49 @@ func (s *InstrumentedService) Stop() error {
 	return s.stop
 }
 
-// InstrumentingWrapper is a method to specialize a service constructor returning
-// a generic InstrumentedService into one returning a wrapping specific one.
-type InstrumentingWrapper func(base ServiceConstructor) ServiceConstructor
+type FullService struct{}
 
-func InstrumentingWrapperMaker(base ServiceConstructor, kind reflect.Type) ServiceConstructor {
-	return func(ctx *ServiceContext) (Service, error) {
-		obj, err := base(ctx)
-		if err != nil {
-			return nil, err
-		}
-		wrapper := reflect.New(kind)
-		wrapper.Elem().Field(0).Set(reflect.ValueOf(obj).Elem())
+func NewFullService(stack *Node) (*FullService, error) {
+	fs := new(FullService)
 
-		return wrapper.Interface().(Service), nil
+	stack.RegisterProtocols(fs.Protocols())
+	stack.RegisterAPIs(fs.APIs())
+	stack.RegisterLifecycle(fs)
+	return fs, nil
+}
+
+func (f *FullService) Start() error { return nil }
+
+func (f *FullService) Stop() error { return nil }
+
+func (f *FullService) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{
+		{
+			Name:    "test1",
+			Version: uint(1),
+		},
+		{
+			Name:    "test2",
+			Version: uint(2),
+		},
 	}
 }
 
-// Set of services all wrapping the base InstrumentedService resulting in the
-// same method signatures but different outer types.
-type InstrumentedServiceA struct{ InstrumentedService }
-type InstrumentedServiceB struct{ InstrumentedService }
-type InstrumentedServiceC struct{ InstrumentedService }
-
-func InstrumentedServiceMakerA(base ServiceConstructor) ServiceConstructor {
-	return InstrumentingWrapperMaker(base, reflect.TypeOf(InstrumentedServiceA{}))
-}
-
-func InstrumentedServiceMakerB(base ServiceConstructor) ServiceConstructor {
-	return InstrumentingWrapperMaker(base, reflect.TypeOf(InstrumentedServiceB{}))
-}
-
-func InstrumentedServiceMakerC(base ServiceConstructor) ServiceConstructor {
-	return InstrumentingWrapperMaker(base, reflect.TypeOf(InstrumentedServiceC{}))
-}
-
-// OneMethodAPI is a single-method API handler to be returned by test services.
-type OneMethodAPI struct {
-	fun func()
-}
-
-func (api *OneMethodAPI) TheOneMethod() {
-	if api.fun != nil {
-		api.fun()
+func (f *FullService) APIs() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "admin",
+			Version:   "1.0",
+		},
+		{
+			Namespace: "debug",
+			Version:   "1.0",
+			Public:    true,
+		},
+		{
+			Namespace: "net",
+			Version:   "1.0",
+			Public:    true,
+		},
 	}
 }

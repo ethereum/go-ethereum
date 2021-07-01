@@ -18,103 +18,122 @@ package vm
 
 import (
 	"bytes"
-	"math/big"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
-type twoOperandTest struct {
-	x        string
-	y        string
-	expected string
+type TwoOperandTestcase struct {
+	X        string
+	Y        string
+	Expected string
 }
 
-func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
-	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack          = newstack()
-		pc             = uint64(0)
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
-	)
+type twoOperandParams struct {
+	x string
+	y string
+}
 
-	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
-	for i, test := range tests {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
-		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
-		stack.push(x)
-		stack.push(shift)
-		opFn(&pc, evmInterpreter, nil, nil, stack)
-		actual := stack.pop()
-		if actual.Cmp(expected) != 0 {
-			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
-		}
-		// Check pool usage
-		// 1.pool is not allowed to contain anything on the stack
-		// 2.pool is not allowed to contain the same pointers twice
-		if evmInterpreter.intPool.pool.len() > 0 {
+var alphabetSoup = "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+var commonParams []*twoOperandParams
+var twoOpMethods map[string]executionFunc
 
-			poolvals := make(map[*big.Int]struct{})
-			poolvals[actual] = struct{}{}
+func init() {
 
-			for evmInterpreter.intPool.pool.len() > 0 {
-				key := evmInterpreter.intPool.get()
-				if _, exist := poolvals[key]; exist {
-					t.Errorf("Testcase %d, pool contains double-entry", i)
-				}
-				poolvals[key] = struct{}{}
-			}
+	// Params is a list of common edgecases that should be used for some common tests
+	params := []string{
+		"0000000000000000000000000000000000000000000000000000000000000000", // 0
+		"0000000000000000000000000000000000000000000000000000000000000001", // +1
+		"0000000000000000000000000000000000000000000000000000000000000005", // +5
+		"7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", // + max -1
+		"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // + max
+		"8000000000000000000000000000000000000000000000000000000000000000", // - max
+		"8000000000000000000000000000000000000000000000000000000000000001", // - max+1
+		"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", // - 5
+		"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // - 1
+	}
+	// Params are combined so each param is used on each 'side'
+	commonParams = make([]*twoOperandParams, len(params)*len(params))
+	for i, x := range params {
+		for j, y := range params {
+			commonParams[i*len(params)+j] = &twoOperandParams{x, y}
 		}
 	}
-	poolOfIntPools.put(evmInterpreter.intPool)
+	twoOpMethods = map[string]executionFunc{
+		"add":     opAdd,
+		"sub":     opSub,
+		"mul":     opMul,
+		"div":     opDiv,
+		"sdiv":    opSdiv,
+		"mod":     opMod,
+		"smod":    opSmod,
+		"exp":     opExp,
+		"signext": opSignExtend,
+		"lt":      opLt,
+		"gt":      opGt,
+		"slt":     opSlt,
+		"sgt":     opSgt,
+		"eq":      opEq,
+		"and":     opAnd,
+		"or":      opOr,
+		"xor":     opXor,
+		"byte":    opByte,
+		"shl":     opSHL,
+		"shr":     opSHR,
+		"sar":     opSAR,
+	}
+}
+
+func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
+
+	var (
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		pc             = uint64(0)
+		evmInterpreter = env.interpreter.(*EVMInterpreter)
+	)
+
+	for i, test := range tests {
+		x := new(uint256.Int).SetBytes(common.Hex2Bytes(test.X))
+		y := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Y))
+		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
+		stack.push(x)
+		stack.push(y)
+		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		if len(stack.data) != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
+		}
+		actual := stack.pop()
+
+		if actual.Cmp(expected) != 0 {
+			t.Errorf("Testcase %v %d, %v(%x, %x): expected  %x, got %x", name, i, name, x, y, expected, actual)
+		}
+	}
 }
 
 func TestByteOp(t *testing.T) {
-	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack          = newstack()
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
-	)
-
-	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
-	tests := []struct {
-		v        string
-		th       uint64
-		expected *big.Int
-	}{
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 0, big.NewInt(0xAB)},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 1, big.NewInt(0xCD)},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 0, big.NewInt(0x00)},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 1, big.NewInt(0xCD)},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 31, big.NewInt(0x30)},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 30, big.NewInt(0x20)},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32, big.NewInt(0x0)},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFFFFFFFFFFFFFF, big.NewInt(0x0)},
+	tests := []TwoOperandTestcase{
+		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", "00", "AB"},
+		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", "01", "CD"},
+		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", "00", "00"},
+		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", "01", "CD"},
+		{"0000000000000000000000000000000000000000000000000000000000102030", "1F", "30"},
+		{"0000000000000000000000000000000000000000000000000000000000102030", "1E", "20"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "20", "00"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "FFFFFFFFFFFFFFFF", "00"},
 	}
-	pc := uint64(0)
-	for _, test := range tests {
-		val := new(big.Int).SetBytes(common.Hex2Bytes(test.v))
-		th := new(big.Int).SetUint64(test.th)
-		stack.push(val)
-		stack.push(th)
-		opByte(&pc, evmInterpreter, nil, nil, stack)
-		actual := stack.pop()
-		if actual.Cmp(test.expected) != 0 {
-			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.v, test.th, test.expected, actual)
-		}
-	}
-	poolOfIntPools.put(evmInterpreter.intPool)
+	testTwoOperandOp(t, tests, opByte, "byte")
 }
 
 func TestSHL(t *testing.T) {
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#shl-shift-left
-	tests := []twoOperandTest{
-		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
+	tests := []TwoOperandTestcase{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000002"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "ff", "8000000000000000000000000000000000000000000000000000000000000000"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "0100", "0000000000000000000000000000000000000000000000000000000000000000"},
@@ -126,12 +145,12 @@ func TestSHL(t *testing.T) {
 		{"0000000000000000000000000000000000000000000000000000000000000000", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "01", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"},
 	}
-	testTwoOperandOp(t, tests, opSHL)
+	testTwoOperandOp(t, tests, opSHL, "shl")
 }
 
 func TestSHR(t *testing.T) {
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#shr-logical-shift-right
-	tests := []twoOperandTest{
+	tests := []TwoOperandTestcase{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"8000000000000000000000000000000000000000000000000000000000000000", "01", "4000000000000000000000000000000000000000000000000000000000000000"},
@@ -144,12 +163,12 @@ func TestSHR(t *testing.T) {
 		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0100", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"0000000000000000000000000000000000000000000000000000000000000000", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
-	testTwoOperandOp(t, tests, opSHR)
+	testTwoOperandOp(t, tests, opSHR, "shr")
 }
 
 func TestSAR(t *testing.T) {
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#sar-arithmetic-shift-right
-	tests := []twoOperandTest{
+	tests := []TwoOperandTestcase{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"8000000000000000000000000000000000000000000000000000000000000000", "01", "c000000000000000000000000000000000000000000000000000000000000000"},
@@ -168,55 +187,106 @@ func TestSAR(t *testing.T) {
 		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0100", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
 
-	testTwoOperandOp(t, tests, opSAR)
+	testTwoOperandOp(t, tests, opSAR, "sar")
 }
 
-func TestSGT(t *testing.T) {
-	tests := []twoOperandTest{
-
-		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "0000000000000000000000000000000000000000000000000000000000000000"},
-	}
-	testTwoOperandOp(t, tests, opSgt)
-}
-
-func TestSLT(t *testing.T) {
-	tests := []twoOperandTest{
-		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "0000000000000000000000000000000000000000000000000000000000000001"},
-	}
-	testTwoOperandOp(t, tests, opSlt)
-}
-
-func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
+func TestAddMod(t *testing.T) {
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+		evmInterpreter = NewEVMInterpreter(env, env.Config)
+		pc             = uint64(0)
+	)
+	tests := []struct {
+		x        string
+		y        string
+		z        string
+		expected string
+	}{
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
+		},
+	}
+	// x + y = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd
+	// in 256 bit repr, fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd
+
+	for i, test := range tests {
+		x := new(uint256.Int).SetBytes(common.Hex2Bytes(test.x))
+		y := new(uint256.Int).SetBytes(common.Hex2Bytes(test.y))
+		z := new(uint256.Int).SetBytes(common.Hex2Bytes(test.z))
+		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.expected))
+		stack.push(z)
+		stack.push(y)
+		stack.push(x)
+		opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		actual := stack.pop()
+		if actual.Cmp(expected) != 0 {
+			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
+		}
+	}
+}
+
+// getResult is a convenience function to generate the expected values
+func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
+	var (
+		env         = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		stack       = newstack()
+		pc          = uint64(0)
+		interpreter = env.interpreter.(*EVMInterpreter)
+	)
+	result := make([]TwoOperandTestcase, len(args))
+	for i, param := range args {
+		x := new(uint256.Int).SetBytes(common.Hex2Bytes(param.x))
+		y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
+		stack.push(x)
+		stack.push(y)
+		opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+		actual := stack.pop()
+		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
+	}
+	return result
+}
+
+// utility function to fill the json-file with testcases
+// Enable this test to generate the 'testcases_xx.json' files
+func TestWriteExpectedValues(t *testing.T) {
+	t.Skip("Enable this test to create json test cases.")
+
+	for name, method := range twoOpMethods {
+		data, err := json.Marshal(getResult(commonParams, method))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = ioutil.WriteFile(fmt.Sprintf("testdata/testcases_%v.json", name), data, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestJsonTestcases runs through all the testcases defined as json-files
+func TestJsonTestcases(t *testing.T) {
+	for name := range twoOpMethods {
+		data, err := ioutil.ReadFile(fmt.Sprintf("testdata/testcases_%v.json", name))
+		if err != nil {
+			t.Fatal("Failed to read file", err)
+		}
+		var testcases []TwoOperandTestcase
+		json.Unmarshal(data, &testcases)
+		testTwoOperandOp(t, testcases, twoOpMethods[name], name)
+	}
+}
+
+func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
+	var (
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		evmInterpreter = NewEVMInterpreter(env, env.Config)
 	)
 
 	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
 	// convert args
 	byteArgs := make([][]byte, len(args))
 	for i, arg := range args {
@@ -226,13 +296,13 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpret
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		for _, arg := range byteArgs {
-			a := new(big.Int).SetBytes(arg)
+			a := new(uint256.Int)
+			a.SetBytes(arg)
 			stack.push(a)
 		}
-		op(&pc, evmInterpreter, nil, nil, stack)
+		op(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		stack.pop()
 	}
-	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func BenchmarkOpAdd64(b *testing.B) {
@@ -278,8 +348,8 @@ func BenchmarkOpSub256(b *testing.B) {
 }
 
 func BenchmarkOpMul(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opMul, x, y)
 }
@@ -310,64 +380,64 @@ func BenchmarkOpSdiv(b *testing.B) {
 }
 
 func BenchmarkOpMod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opMod, x, y)
 }
 
 func BenchmarkOpSmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSmod, x, y)
 }
 
 func BenchmarkOpExp(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opExp, x, y)
 }
 
 func BenchmarkOpSignExtend(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSignExtend, x, y)
 }
 
 func BenchmarkOpLt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opLt, x, y)
 }
 
 func BenchmarkOpGt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opGt, x, y)
 }
 
 func BenchmarkOpSlt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSlt, x, y)
 }
 
 func BenchmarkOpSgt(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opSgt, x, y)
 }
 
 func BenchmarkOpEq(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opEq, x, y)
 }
@@ -377,45 +447,45 @@ func BenchmarkOpEq2(b *testing.B) {
 	opBenchmark(b, opEq, x, y)
 }
 func BenchmarkOpAnd(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opAnd, x, y)
 }
 
 func BenchmarkOpOr(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opOr, x, y)
 }
 
 func BenchmarkOpXor(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opXor, x, y)
 }
 
 func BenchmarkOpByte(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
 
 	opBenchmark(b, opByte, x, y)
 }
 
 func BenchmarkOpAddmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
+	z := alphabetSoup
 
 	opBenchmark(b, opAddmod, x, y, z)
 }
 
 func BenchmarkOpMulmod(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := alphabetSoup
+	y := alphabetSoup
+	z := alphabetSoup
 
 	opBenchmark(b, opMulmod, x, y, z)
 }
@@ -445,72 +515,66 @@ func BenchmarkOpIsZero(b *testing.B) {
 
 func TestOpMstore(t *testing.T) {
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+		evmInterpreter = NewEVMInterpreter(env, env.Config)
 	)
 
 	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
 	mem.Resize(64)
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
-	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if got := common.Bytes2Hex(mem.Get(0, 32)); got != v {
+	stack.pushN(*new(uint256.Int).SetBytes(common.Hex2Bytes(v)), *new(uint256.Int))
+	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
-	stack.pushN(big.NewInt(0x1), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+	stack.pushN(*new(uint256.Int).SetUint64(0x1), *new(uint256.Int))
+	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
-	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func BenchmarkOpMstore(bench *testing.B) {
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+		evmInterpreter = NewEVMInterpreter(env, env.Config)
 	)
 
 	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
 	mem.Resize(64)
 	pc := uint64(0)
-	memStart := big.NewInt(0)
-	value := big.NewInt(0x1337)
+	memStart := new(uint256.Int)
+	value := new(uint256.Int).SetUint64(0x1337)
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(value, memStart)
-		opMstore(&pc, evmInterpreter, nil, mem, stack)
+		stack.pushN(*value, *memStart)
+		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
-	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func BenchmarkOpSHA3(bench *testing.B) {
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
-		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+		evmInterpreter = NewEVMInterpreter(env, env.Config)
 	)
 	env.interpreter = evmInterpreter
-	evmInterpreter.intPool = poolOfIntPools.get()
 	mem.Resize(32)
 	pc := uint64(0)
-	start := big.NewInt(0)
+	start := new(uint256.Int)
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(big.NewInt(32), start)
-		opSha3(&pc, evmInterpreter, nil, mem, stack)
+		stack.pushN(*uint256.NewInt(32), *start)
+		opSha3(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
-	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func TestCreate2Addreses(t *testing.T) {
@@ -584,6 +648,5 @@ func TestCreate2Addreses(t *testing.T) {
 		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
 		}
-
 	}
 }

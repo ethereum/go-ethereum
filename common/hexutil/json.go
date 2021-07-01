@@ -72,6 +72,25 @@ func (b Bytes) String() string {
 	return Encode(b)
 }
 
+// ImplementsGraphQLType returns true if Bytes implements the specified GraphQL type.
+func (b Bytes) ImplementsGraphQLType(name string) bool { return name == "Bytes" }
+
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
+func (b *Bytes) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		data, err := Decode(input)
+		if err != nil {
+			return err
+		}
+		*b = data
+	default:
+		err = fmt.Errorf("unexpected type %T for Bytes", input)
+	}
+	return err
+}
+
 // UnmarshalFixedJSON decodes the input as a string with 0x prefix. The length of out
 // determines the required input length. This function is commonly used to implement the
 // UnmarshalJSON method for fixed-size types.
@@ -187,6 +206,25 @@ func (b *Big) String() string {
 	return EncodeBig(b.ToInt())
 }
 
+// ImplementsGraphQLType returns true if Big implements the provided GraphQL type.
+func (b Big) ImplementsGraphQLType(name string) bool { return name == "BigInt" }
+
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
+func (b *Big) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		return b.UnmarshalText([]byte(input))
+	case int32:
+		var num big.Int
+		num.SetInt64(int64(input))
+		*b = Big(num)
+	default:
+		err = fmt.Errorf("unexpected type %T for BigInt", input)
+	}
+	return err
+}
+
 // Uint64 marshals/unmarshals as a JSON string with 0x prefix.
 // The zero value marshals as "0x0".
 type Uint64 uint64
@@ -232,6 +270,23 @@ func (b *Uint64) UnmarshalText(input []byte) error {
 // String returns the hex encoding of b.
 func (b Uint64) String() string {
 	return EncodeUint64(uint64(b))
+}
+
+// ImplementsGraphQLType returns true if Uint64 implements the provided GraphQL type.
+func (b Uint64) ImplementsGraphQLType(name string) bool { return name == "Long" }
+
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
+func (b *Uint64) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		return b.UnmarshalText([]byte(input))
+	case int32:
+		*b = Uint64(input)
+	default:
+		err = fmt.Errorf("unexpected type %T for Long", input)
+	}
+	return err
 }
 
 // Uint marshals/unmarshals as a JSON string with 0x prefix.

@@ -83,7 +83,7 @@ func LvlFromString(lvlString string) (Lvl, error) {
 	case "crit":
 		return LvlCrit, nil
 	default:
-		return LvlDebug, fmt.Errorf("Unknown level: %v", lvlString)
+		return LvlDebug, fmt.Errorf("unknown level: %v", lvlString)
 	}
 }
 

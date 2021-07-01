@@ -58,11 +58,40 @@ func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, userna
 	rep.run()
 }
 
+// InfluxDBWithTagsOnce runs once an InfluxDB reporter and post the given metrics.Registry with the specified tags
+func InfluxDBWithTagsOnce(r metrics.Registry, url, database, username, password, namespace string, tags map[string]string) error {
+	u, err := uurl.Parse(url)
+	if err != nil {
+		return fmt.Errorf("unable to parse InfluxDB. url: %s, err: %v", url, err)
+	}
+
+	rep := &reporter{
+		reg:       r,
+		url:       *u,
+		database:  database,
+		username:  username,
+		password:  password,
+		namespace: namespace,
+		tags:      tags,
+		cache:     make(map[string]int64),
+	}
+	if err := rep.makeClient(); err != nil {
+		return fmt.Errorf("unable to make InfluxDB client. err: %v", err)
+	}
+
+	if err := rep.send(); err != nil {
+		return fmt.Errorf("unable to send to InfluxDB. err: %v", err)
+	}
+
+	return nil
+}
+
 func (r *reporter) makeClient() (err error) {
 	r.client, err = client.NewClient(client.Config{
 		URL:      r.url,
 		Username: r.username,
 		Password: r.password,
+		Timeout:  10 * time.Second,
 	})
 
 	return
@@ -133,26 +162,29 @@ func (r *reporter) send() error {
 			})
 		case metrics.Histogram:
 			ms := metric.Snapshot()
-			ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
-			pts = append(pts, client.Point{
-				Measurement: fmt.Sprintf("%s%s.histogram", namespace, name),
-				Tags:        r.tags,
-				Fields: map[string]interface{}{
-					"count":    ms.Count(),
-					"max":      ms.Max(),
-					"mean":     ms.Mean(),
-					"min":      ms.Min(),
-					"stddev":   ms.StdDev(),
-					"variance": ms.Variance(),
-					"p50":      ps[0],
-					"p75":      ps[1],
-					"p95":      ps[2],
-					"p99":      ps[3],
-					"p999":     ps[4],
-					"p9999":    ps[5],
-				},
-				Time: now,
-			})
+
+			if ms.Count() > 0 {
+				ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
+				pts = append(pts, client.Point{
+					Measurement: fmt.Sprintf("%s%s.histogram", namespace, name),
+					Tags:        r.tags,
+					Fields: map[string]interface{}{
+						"count":    ms.Count(),
+						"max":      ms.Max(),
+						"mean":     ms.Mean(),
+						"min":      ms.Min(),
+						"stddev":   ms.StdDev(),
+						"variance": ms.Variance(),
+						"p50":      ps[0],
+						"p75":      ps[1],
+						"p95":      ps[2],
+						"p99":      ps[3],
+						"p999":     ps[4],
+						"p9999":    ps[5],
+					},
+					Time: now,
+				})
+			}
 		case metrics.Meter:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{

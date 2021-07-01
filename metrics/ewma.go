@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // EWMAs continuously calculate an exponentially-weighted moving average
@@ -85,7 +86,7 @@ type StandardEWMA struct {
 func (a *StandardEWMA) Rate() float64 {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	return a.rate * float64(1e9)
+	return a.rate * float64(time.Second)
 }
 
 // Snapshot returns a read-only copy of the EWMA.
@@ -98,7 +99,7 @@ func (a *StandardEWMA) Snapshot() EWMA {
 func (a *StandardEWMA) Tick() {
 	count := atomic.LoadInt64(&a.uncounted)
 	atomic.AddInt64(&a.uncounted, -count)
-	instantRate := float64(count) / float64(5e9)
+	instantRate := float64(count) / float64(5*time.Second)
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	if a.init {

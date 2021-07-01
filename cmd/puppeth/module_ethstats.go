@@ -43,7 +43,8 @@ version: '2'
 services:
   ethstats:
     build: .
-    image: {{.Network}}/ethstats{{if not .VHost}}
+    image: {{.Network}}/ethstats
+    container_name: {{.Network}}_ethstats_1{{if not .VHost}}
     ports:
       - "{{.Port}}:3000"{{end}}
     environment:

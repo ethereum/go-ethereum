@@ -28,22 +28,6 @@ var customGenesisTests = []struct {
 	query   string
 	result  string
 }{
-	// Plain genesis file without anything extra
-	{
-		genesis: `{
-			"alloc"      : {},
-			"coinbase"   : "0x0000000000000000000000000000000000000000",
-			"difficulty" : "0x20000",
-			"extraData"  : "",
-			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
-			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"timestamp"  : "0x00"
-		}`,
-		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
-	},
 	// Genesis file with an empty chain configuration (ensure missing fields work)
 	{
 		genesis: `{
@@ -52,14 +36,14 @@ var customGenesisTests = []struct {
 			"difficulty" : "0x20000",
 			"extraData"  : "",
 			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
+			"nonce"      : "0x0000000000001338",
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
 			"config"     : {}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
+		result: "0x0000000000001338",
 	},
 	// Genesis file with specific chain configurations
 	{
@@ -69,18 +53,18 @@ var customGenesisTests = []struct {
 			"difficulty" : "0x20000",
 			"extraData"  : "",
 			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
+			"nonce"      : "0x0000000000001339",
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
 			"config"     : {
-				"homesteadBlock" : 314,
+				"homesteadBlock" : 42,
 				"daoForkBlock"   : 141,
 				"daoForkSupport" : true
 			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
+		result: "0x0000000000001339",
 	},
 }
 
@@ -100,7 +84,7 @@ func TestCustomGenesis(t *testing.T) {
 		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
-		geth := runGeth(t,
+		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
 			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")

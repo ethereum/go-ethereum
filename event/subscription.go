@@ -95,6 +95,26 @@ func (s *funcSub) Err() <-chan error {
 // Resubscribe applies backoff between calls to fn. The time between calls is adapted
 // based on the error rate, but will never exceed backoffMax.
 func Resubscribe(backoffMax time.Duration, fn ResubscribeFunc) Subscription {
+	return ResubscribeErr(backoffMax, func(ctx context.Context, _ error) (Subscription, error) {
+		return fn(ctx)
+	})
+}
+
+// A ResubscribeFunc attempts to establish a subscription.
+type ResubscribeFunc func(context.Context) (Subscription, error)
+
+// ResubscribeErr calls fn repeatedly to keep a subscription established. When the
+// subscription is established, ResubscribeErr waits for it to fail and calls fn again. This
+// process repeats until Unsubscribe is called or the active subscription ends
+// successfully.
+//
+// The difference between Resubscribe and ResubscribeErr is that with ResubscribeErr,
+// the error of the failing subscription is available to the callback for logging
+// purposes.
+//
+// ResubscribeErr applies backoff between calls to fn. The time between calls is adapted
+// based on the error rate, but will never exceed backoffMax.
+func ResubscribeErr(backoffMax time.Duration, fn ResubscribeErrFunc) Subscription {
 	s := &resubscribeSub{
 		waitTime:   backoffMax / 10,
 		backoffMax: backoffMax,
@@ -106,15 +126,18 @@ func Resubscribe(backoffMax time.Duration, fn ResubscribeFunc) Subscription {
 	return s
 }
 
-// A ResubscribeFunc attempts to establish a subscription.
-type ResubscribeFunc func(context.Context) (Subscription, error)
+// A ResubscribeErrFunc attempts to establish a subscription.
+// For every call but the first, the second argument to this function is
+// the error that occurred with the previous subscription.
+type ResubscribeErrFunc func(context.Context, error) (Subscription, error)
 
 type resubscribeSub struct {
-	fn                   ResubscribeFunc
+	fn                   ResubscribeErrFunc
 	err                  chan error
 	unsub                chan struct{}
 	unsubOnce            sync.Once
 	lastTry              mclock.AbsTime
+	lastSubErr           error
 	waitTime, backoffMax time.Duration
 }
 
@@ -145,31 +168,30 @@ func (s *resubscribeSub) loop() {
 func (s *resubscribeSub) subscribe() Subscription {
 	subscribed := make(chan error)
 	var sub Subscription
-retry:
 	for {
 		s.lastTry = mclock.Now()
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			rsub, err := s.fn(ctx)
+			rsub, err := s.fn(ctx, s.lastSubErr)
 			sub = rsub
 			subscribed <- err
 		}()
 		select {
 		case err := <-subscribed:
 			cancel()
-			if err != nil {
-				// Subscribing failed, wait before launching the next try.
-				if s.backoffWait() {
-					return nil
+			if err == nil {
+				if sub == nil {
+					panic("event: ResubscribeFunc returned nil subscription and no error")
 				}
-				continue retry
+				return sub
 			}
-			if sub == nil {
-				panic("event: ResubscribeFunc returned nil subscription and no error")
+			// Subscribing failed, wait before launching the next try.
+			if s.backoffWait() {
+				return nil // unsubscribed during wait
 			}
-			return sub
 		case <-s.unsub:
 			cancel()
+			<-subscribed // avoid leaking the s.fn goroutine.
 			return nil
 		}
 	}
@@ -179,6 +201,7 @@ func (s *resubscribeSub) waitForError(sub Subscription) bool {
 	defer sub.Unsubscribe()
 	select {
 	case err := <-sub.Err():
+		s.lastSubErr = err
 		return err == nil
 	case <-s.unsub:
 		return true

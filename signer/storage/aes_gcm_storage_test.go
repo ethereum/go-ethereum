@@ -1,19 +1,19 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
@@ -38,13 +38,13 @@ func TestEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("Ciphertext %x, nonce %x\n", c, iv)
+	t.Logf("Ciphertext %x, nonce %x\n", c, iv)
 
 	p, err := decrypt(key, iv, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("Plaintext %v\n", string(p))
+	t.Logf("Plaintext %v\n", string(p))
 	if !bytes.Equal(plaintext, p) {
 		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(plaintext), string(p))
 	}
@@ -110,8 +110,8 @@ func TestEnd2End(t *testing.T) {
 	}
 
 	s1.Put("bazonk", "foobar")
-	if v := s2.Get("bazonk"); v != "foobar" {
-		t.Errorf("Expected bazonk->foobar, got '%v'", v)
+	if v, err := s2.Get("bazonk"); v != "foobar" || err != nil {
+		t.Errorf("Expected bazonk->foobar (nil error), got '%v' (%v error)", v, err)
 	}
 }
 
@@ -154,11 +154,11 @@ func TestSwappedKeys(t *testing.T) {
 		}
 	}
 	swap()
-	if v := s1.Get("k1"); v != "" {
+	if v, _ := s1.Get("k1"); v != "" {
 		t.Errorf("swapped value should return empty")
 	}
 	swap()
-	if v := s1.Get("k1"); v != "v1" {
+	if v, _ := s1.Get("k1"); v != "v1" {
 		t.Errorf("double-swapped value should work fine")
 	}
 }

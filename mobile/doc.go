@@ -24,7 +24,7 @@
 //
 // Since gomobile cannot bridge arbitrary types between Go and Android/iOS, the
 // exposed APIs need to be manually wrapped into simplified types, with custom
-// constructors and getters/setters to ensure that they can be meaninfully used
+// constructors and getters/setters to ensure that they can be meaningfully used
 // from Java/ObjC too.
 //
 // With this in mind, please try to limit the scope of this package and only add

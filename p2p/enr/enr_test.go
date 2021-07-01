@@ -49,28 +49,28 @@ func TestGetSetID(t *testing.T) {
 }
 
 // TestGetSetIP4 tests encoding/decoding and setting/getting of the IP key.
-func TestGetSetIP4(t *testing.T) {
-	ip := IP{192, 168, 0, 3}
+func TestGetSetIPv4(t *testing.T) {
+	ip := IPv4{192, 168, 0, 3}
 	var r Record
 	r.Set(ip)
 
-	var ip2 IP
+	var ip2 IPv4
 	require.NoError(t, r.Load(&ip2))
 	assert.Equal(t, ip, ip2)
 }
 
-// TestGetSetIP6 tests encoding/decoding and setting/getting of the IP key.
-func TestGetSetIP6(t *testing.T) {
-	ip := IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
+// TestGetSetIP6 tests encoding/decoding and setting/getting of the IP6 key.
+func TestGetSetIPv6(t *testing.T) {
+	ip := IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
 	var r Record
 	r.Set(ip)
 
-	var ip2 IP
+	var ip2 IPv6
 	require.NoError(t, r.Load(&ip2))
 	assert.Equal(t, ip, ip2)
 }
 
-// TestGetSetDiscPort tests encoding/decoding and setting/getting of the DiscPort key.
+// TestGetSetUDP tests encoding/decoding and setting/getting of the UDP key.
 func TestGetSetUDP(t *testing.T) {
 	port := UDP(30309)
 	var r Record
@@ -83,7 +83,7 @@ func TestGetSetUDP(t *testing.T) {
 
 func TestLoadErrors(t *testing.T) {
 	var r Record
-	ip4 := IP{127, 0, 0, 1}
+	ip4 := IPv4{127, 0, 0, 1}
 	r.Set(ip4)
 
 	// Check error for missing keys.
@@ -185,13 +185,13 @@ func TestSeq(t *testing.T) {
 func TestGetSetOverwrite(t *testing.T) {
 	var r Record
 
-	ip := IP{192, 168, 0, 3}
+	ip := IPv4{192, 168, 0, 3}
 	r.Set(ip)
 
-	ip2 := IP{192, 168, 0, 4}
+	ip2 := IPv4{192, 168, 0, 4}
 	r.Set(ip2)
 
-	var ip3 IP
+	var ip3 IPv4
 	require.NoError(t, r.Load(&ip3))
 	assert.Equal(t, ip2, ip3)
 }
@@ -200,7 +200,7 @@ func TestGetSetOverwrite(t *testing.T) {
 func TestSignEncodeAndDecode(t *testing.T) {
 	var r Record
 	r.Set(UDP(30303))
-	r.Set(IP{127, 0, 0, 1})
+	r.Set(IPv4{127, 0, 0, 1})
 	require.NoError(t, signTest([]byte{5}, &r))
 
 	blob, err := rlp.EncodeToBytes(r)
@@ -229,6 +229,29 @@ func TestRecordTooBig(t *testing.T) {
 	// set an acceptable value for random key, expect no error
 	r.Set(WithEntry(key, randomString(100)))
 	require.NoError(t, signTest([]byte{5}, &r))
+}
+
+// This checks that incomplete RLP inputs are handled correctly.
+func TestDecodeIncomplete(t *testing.T) {
+	type decTest struct {
+		input []byte
+		err   error
+	}
+	tests := []decTest{
+		{[]byte{0xC0}, errIncompleteList},
+		{[]byte{0xC1, 0x1}, errIncompleteList},
+		{[]byte{0xC2, 0x1, 0x2}, nil},
+		{[]byte{0xC3, 0x1, 0x2, 0x3}, errIncompletePair},
+		{[]byte{0xC4, 0x1, 0x2, 0x3, 0x4}, nil},
+		{[]byte{0xC5, 0x1, 0x2, 0x3, 0x4, 0x5}, errIncompletePair},
+	}
+	for _, test := range tests {
+		var r Record
+		err := rlp.DecodeBytes(test.input, &r)
+		if err != test.err {
+			t.Errorf("wrong error for %X: %v", test.input, err)
+		}
+	}
 }
 
 // TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.

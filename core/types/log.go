@@ -44,11 +44,11 @@ type Log struct {
 	// hash of the transaction
 	TxHash common.Hash `json:"transactionHash" gencodec:"required"`
 	// index of the transaction in the block
-	TxIndex uint `json:"transactionIndex" gencodec:"required"`
+	TxIndex uint `json:"transactionIndex"`
 	// hash of the block in which the transaction was included
 	BlockHash common.Hash `json:"blockHash"`
 	// index of the log in the block
-	Index uint `json:"logIndex" gencodec:"required"`
+	Index uint `json:"logIndex"`
 
 	// The Removed field is true if this log was reverted due to a chain reorganisation.
 	// You must pay attention to this field if you receive logs through a filter query.
@@ -68,16 +68,8 @@ type rlpLog struct {
 	Data    []byte
 }
 
-type rlpStorageLog struct {
-	Address     common.Address
-	Topics      []common.Hash
-	Data        []byte
-	BlockNumber uint64
-	TxHash      common.Hash
-	TxIndex     uint
-	BlockHash   common.Hash
-	Index       uint
-}
+// rlpStorageLog is the storage encoding of a log.
+type rlpStorageLog rlpLog
 
 // EncodeRLP implements rlp.Encoder.
 func (l *Log) EncodeRLP(w io.Writer) error {
@@ -101,32 +93,20 @@ type LogForStorage Log
 // EncodeRLP implements rlp.Encoder.
 func (l *LogForStorage) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, rlpStorageLog{
-		Address:     l.Address,
-		Topics:      l.Topics,
-		Data:        l.Data,
-		BlockNumber: l.BlockNumber,
-		TxHash:      l.TxHash,
-		TxIndex:     l.TxIndex,
-		BlockHash:   l.BlockHash,
-		Index:       l.Index,
+		Address: l.Address,
+		Topics:  l.Topics,
+		Data:    l.Data,
 	})
 }
 
 // DecodeRLP implements rlp.Decoder.
+//
+// Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
 func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
 	var dec rlpStorageLog
-	err := s.Decode(&dec)
-	if err == nil {
-		*l = LogForStorage{
-			Address:     dec.Address,
-			Topics:      dec.Topics,
-			Data:        dec.Data,
-			BlockNumber: dec.BlockNumber,
-			TxHash:      dec.TxHash,
-			TxIndex:     dec.TxIndex,
-			BlockHash:   dec.BlockHash,
-			Index:       dec.Index,
-		}
+	if err := s.Decode(&dec); err != nil {
+		return err
 	}
-	return err
+	*l = LogForStorage{Address: dec.Address, Topics: dec.Topics, Data: dec.Data}
+	return nil
 }

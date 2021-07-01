@@ -20,13 +20,21 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
+	if len(endpoint) > int(max_path_size) {
+		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", max_path_size),
+			"endpoint", endpoint)
+	}
+
 	// Ensure the IPC path exists and remove any previous leftover
 	if err := os.MkdirAll(filepath.Dir(endpoint), 0751); err != nil {
 		return nil, err
@@ -42,5 +50,5 @@ func ipcListen(endpoint string) (net.Listener, error) {
 
 // newIPCConnection will connect to a Unix socket on the given endpoint.
 func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
-	return dialContext(ctx, "unix", endpoint)
+	return new(net.Dialer).DialContext(ctx, "unix", endpoint)
 }

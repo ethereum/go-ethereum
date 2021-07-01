@@ -25,7 +25,7 @@ import (
 
 func Compile(fn string, src []byte, debug bool) (string, error) {
 	compiler := asm.NewCompiler(debug)
-	compiler.Feed(asm.Lex(fn, src, debug))
+	compiler.Feed(asm.Lex(src, debug))
 
 	bin, compileErrors := compiler.Compile()
 	if len(compileErrors) > 0 {

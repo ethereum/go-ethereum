@@ -102,6 +102,21 @@ func (w *wizard) deployFaucet() {
 			infos.captchaSecret = w.readPassword()
 		}
 	}
+	// Accessing the Twitter API requires a bearer token, request it
+	if infos.twitterToken != "" {
+		fmt.Println()
+		fmt.Println("Reuse previous Twitter API token (y/n)? (default = yes)")
+		if !w.readDefaultYesNo(true) {
+			infos.twitterToken = ""
+		}
+	}
+	if infos.twitterToken == "" {
+		// No previous twitter token (or old one discarded)
+		fmt.Println()
+		fmt.Println()
+		fmt.Printf("What is the Twitter API app Bearer token?\n")
+		infos.twitterToken = w.readString()
+	}
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
 	if infos.node.datadir == "" {
@@ -147,7 +162,7 @@ func (w *wizard) deployFaucet() {
 		infos.node.keyPass = w.readPassword()
 
 		if _, err := keystore.DecryptKey([]byte(infos.node.keyJSON), infos.node.keyPass); err != nil {
-			log.Error("Failed to decrypt key with given passphrase")
+			log.Error("Failed to decrypt key with given password")
 			infos.node.keyJSON = ""
 			infos.node.keyPass = ""
 		}

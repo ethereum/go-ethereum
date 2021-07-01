@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -61,6 +62,63 @@ func TestBlockNumberJSONUnmarshal(t *testing.T) {
 		}
 		if num != test.expected {
 			t.Errorf("Test %d got unexpected value, want %d, got %d", i, test.expected, num)
+		}
+	}
+}
+
+func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		input    string
+		mustFail bool
+		expected BlockNumberOrHash
+	}{
+		0:  {`"0x"`, true, BlockNumberOrHash{}},
+		1:  {`"0x0"`, false, BlockNumberOrHashWithNumber(0)},
+		2:  {`"0X1"`, false, BlockNumberOrHashWithNumber(1)},
+		3:  {`"0x00"`, true, BlockNumberOrHash{}},
+		4:  {`"0x01"`, true, BlockNumberOrHash{}},
+		5:  {`"0x1"`, false, BlockNumberOrHashWithNumber(1)},
+		6:  {`"0x12"`, false, BlockNumberOrHashWithNumber(18)},
+		7:  {`"0x7fffffffffffffff"`, false, BlockNumberOrHashWithNumber(math.MaxInt64)},
+		8:  {`"0x8000000000000000"`, true, BlockNumberOrHash{}},
+		9:  {"0", true, BlockNumberOrHash{}},
+		10: {`"ff"`, true, BlockNumberOrHash{}},
+		11: {`"pending"`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		12: {`"latest"`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		13: {`"earliest"`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		14: {`someString`, true, BlockNumberOrHash{}},
+		15: {`""`, true, BlockNumberOrHash{}},
+		16: {``, true, BlockNumberOrHash{}},
+		17: {`"0x0000000000000000000000000000000000000000000000000000000000000000"`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		18: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		19: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":false}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		20: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":true}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), true)},
+		21: {`{"blockNumber":"0x1"}`, false, BlockNumberOrHashWithNumber(1)},
+		22: {`{"blockNumber":"pending"}`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		23: {`{"blockNumber":"latest"}`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		24: {`{"blockNumber":"earliest"}`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		25: {`{"blockNumber":"0x1", "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, true, BlockNumberOrHash{}},
+	}
+
+	for i, test := range tests {
+		var bnh BlockNumberOrHash
+		err := json.Unmarshal([]byte(test.input), &bnh)
+		if test.mustFail && err == nil {
+			t.Errorf("Test %d should fail", i)
+			continue
+		}
+		if !test.mustFail && err != nil {
+			t.Errorf("Test %d should pass but got err: %v", i, err)
+			continue
+		}
+		hash, hashOk := bnh.Hash()
+		expectedHash, expectedHashOk := test.expected.Hash()
+		num, numOk := bnh.Number()
+		expectedNum, expectedNumOk := test.expected.Number()
+		if bnh.RequireCanonical != test.expected.RequireCanonical ||
+			hash != expectedHash || hashOk != expectedHashOk ||
+			num != expectedNum || numOk != expectedNumOk {
+			t.Errorf("Test %d got unexpected value, want %v, got %v", i, test.expected, bnh)
 		}
 	}
 }

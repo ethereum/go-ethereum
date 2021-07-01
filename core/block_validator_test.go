@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -32,7 +32,7 @@ import (
 func TestHeaderVerification(t *testing.T) {
 	// Create a simple chain to verify
 	var (
-		testdb    = ethdb.NewMemDatabase()
+		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
@@ -42,7 +42,7 @@ func TestHeaderVerification(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -84,7 +84,7 @@ func TestHeaderConcurrentVerification32(t *testing.T) { testHeaderConcurrentVeri
 func testHeaderConcurrentVerification(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb    = ethdb.NewMemDatabase()
+		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
@@ -106,11 +106,11 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		var results <-chan error
 
 		if valid {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}
@@ -156,7 +156,7 @@ func TestHeaderConcurrentAbortion32(t *testing.T) { testHeaderConcurrentAbortion
 func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb    = ethdb.NewMemDatabase()
+		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 1024, nil)
@@ -173,7 +173,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	defer runtime.GOMAXPROCS(old)
 
 	// Start the verifications and immediately abort
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	abort, results := chain.engine.VerifyHeaders(chain, headers, seals)
@@ -195,5 +195,38 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Check that abortion was honored by not processing too many POWs
 	if verified > 2*threads {
 		t.Errorf("verification count too large: have %d, want below %d", verified, 2*threads)
+	}
+}
+
+func TestCalcGasLimit1559(t *testing.T) {
+
+	for i, tc := range []struct {
+		pGasLimit uint64
+		max       uint64
+		min       uint64
+	}{
+		{20000000, 20019530, 19980470},
+		{40000000, 40039061, 39960939},
+	} {
+		// Increase
+		if have, want := CalcGasLimit1559(tc.pGasLimit, 2*tc.pGasLimit), tc.max; have != want {
+			t.Errorf("test %d: have %d want <%d", i, have, want)
+		}
+		// Decrease
+		if have, want := CalcGasLimit1559(tc.pGasLimit, 0), tc.min; have != want {
+			t.Errorf("test %d: have %d want >%d", i, have, want)
+		}
+		// Small decrease
+		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit-1), tc.pGasLimit-1; have != want {
+			t.Errorf("test %d: have %d want %d", i, have, want)
+		}
+		// Small increase
+		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit+1), tc.pGasLimit+1; have != want {
+			t.Errorf("test %d: have %d want %d", i, have, want)
+		}
+		// No change
+		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit), tc.pGasLimit; have != want {
+			t.Errorf("test %d: have %d want %d", i, have, want)
+		}
 	}
 }

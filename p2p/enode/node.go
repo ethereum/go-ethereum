@@ -18,16 +18,19 @@ package enode
 
 import (
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/bits"
-	"math/rand"
 	"net"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded record")
 
 // Node represents a host on the network.
 type Node struct {
@@ -46,6 +49,34 @@ func New(validSchemes enr.IdentityScheme, r *enr.Record) (*Node, error) {
 		return nil, fmt.Errorf("invalid node ID length %d, need %d", n, len(ID{}))
 	}
 	return node, nil
+}
+
+// MustParse parses a node record or enode:// URL. It panics if the input is invalid.
+func MustParse(rawurl string) *Node {
+	n, err := Parse(ValidSchemes, rawurl)
+	if err != nil {
+		panic("invalid node: " + err.Error())
+	}
+	return n
+}
+
+// Parse decodes and verifies a base64-encoded node record.
+func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
+	if strings.HasPrefix(input, "enode://") {
+		return ParseV4(input)
+	}
+	if !strings.HasPrefix(input, "enr:") {
+		return nil, errMissingPrefix
+	}
+	bin, err := base64.RawURLEncoding.DecodeString(input[4:])
+	if err != nil {
+		return nil, err
+	}
+	var r enr.Record
+	if err := rlp.DecodeBytes(bin, &r); err != nil {
+		return nil, err
+	}
+	return New(validSchemes, &r)
 }
 
 // ID returns the node identifier.
@@ -68,11 +99,19 @@ func (n *Node) Load(k enr.Entry) error {
 	return n.r.Load(k)
 }
 
-// IP returns the IP address of the node.
+// IP returns the IP address of the node. This prefers IPv4 addresses.
 func (n *Node) IP() net.IP {
-	var ip net.IP
-	n.Load((*enr.IP)(&ip))
-	return ip
+	var (
+		ip4 enr.IPv4
+		ip6 enr.IPv6
+	)
+	if n.Load(&ip4) == nil {
+		return net.IP(ip4)
+	}
+	if n.Load(&ip6) == nil {
+		return net.IP(ip6)
+	}
+	return nil
 }
 
 // UDP returns the UDP port of the node.
@@ -82,7 +121,7 @@ func (n *Node) UDP() int {
 	return int(port)
 }
 
-// UDP returns the TCP port of the node.
+// TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	var port enr.TCP
 	n.Load(&port)
@@ -105,10 +144,11 @@ func (n *Node) Record() *enr.Record {
 	return &cpy
 }
 
-// checks whether n is a valid complete node.
+// ValidateComplete checks whether n has a valid IP and UDP port.
+// Deprecated: don't use this method.
 func (n *Node) ValidateComplete() error {
 	if n.Incomplete() {
-		return errors.New("incomplete node")
+		return errors.New("missing IP address")
 	}
 	if n.UDP() == 0 {
 		return errors.New("missing UDP port")
@@ -122,20 +162,24 @@ func (n *Node) ValidateComplete() error {
 	return n.Load(&key)
 }
 
-// The string representation of a Node is a URL.
-// Please see ParseNode for a description of the format.
+// String returns the text representation of the record.
 func (n *Node) String() string {
-	return n.v4URL()
+	if isNewV4(n) {
+		return n.URLv4() // backwards-compatibility glue for NewV4 nodes
+	}
+	enc, _ := rlp.EncodeToBytes(&n.r) // always succeeds because record is valid
+	b64 := base64.RawURLEncoding.EncodeToString(enc)
+	return "enr:" + b64
 }
 
 // MarshalText implements encoding.TextMarshaler.
 func (n *Node) MarshalText() ([]byte, error) {
-	return []byte(n.v4URL()), nil
+	return []byte(n.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (n *Node) UnmarshalText(text []byte) error {
-	dec, err := ParseV4(string(text))
+	dec, err := Parse(ValidSchemes, string(text))
 	if err == nil {
 		*n = *dec
 	}
@@ -172,7 +216,7 @@ func (n ID) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (n *ID) UnmarshalText(text []byte) error {
-	id, err := parseID(string(text))
+	id, err := ParseID(string(text))
 	if err != nil {
 		return err
 	}
@@ -184,14 +228,14 @@ func (n *ID) UnmarshalText(text []byte) error {
 // The string may be prefixed with 0x.
 // It panics if the string is not a valid ID.
 func HexID(in string) ID {
-	id, err := parseID(in)
+	id, err := ParseID(in)
 	if err != nil {
 		panic(err)
 	}
 	return id
 }
 
-func parseID(in string) (ID, error) {
+func ParseID(in string) (ID, error) {
 	var id ID
 	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
@@ -232,24 +276,4 @@ func LogDist(a, b ID) int {
 		}
 	}
 	return len(a)*8 - lz
-}
-
-// RandomID returns a random ID b such that logdist(a, b) == n.
-func RandomID(a ID, n int) (b ID) {
-	if n == 0 {
-		return a
-	}
-	// flip bit at position n, fill the rest with random bits
-	b = a
-	pos := len(a) - n/8 - 1
-	bit := byte(0x01) << (byte(n%8) - 1)
-	if bit == 0 {
-		pos++
-		bit = 0x80
-	}
-	b[pos] = a[pos]&^bit | ^a[pos]&bit // TODO: randomize end bits
-	for i := pos + 1; i < len(a); i++ {
-		b[i] = byte(rand.Intn(255))
-	}
-	return b
 }
