@@ -1117,7 +1117,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
 			for i, stackValue := range trace.Stack {
-				stack[i] = fmt.Sprintf("%x", math.PaddedBigBytes(stackValue, 32))
+				stack[i] = stackValue.Hex()
 			}
 			formatted[index].Stack = &stack
 		}
