@@ -10,7 +10,8 @@ If you start geth without any flags it'll connect to the Ethereum mainnet throug
 - `--goerli`, Goerli proof-of-authority test network
 
 **Note:** network selection is not persisted in the config file. To connect to a pre-defined network
-you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
+you must always enable it explicitly, even when using the `--config` flag to load other configuration values.
+For example:
 
 ```sh
 # Generate desired config file. You must specify testnet here.
