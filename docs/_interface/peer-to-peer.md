@@ -3,7 +3,8 @@ title: Connecting To The Network
 sort_key: B
 ---
 
-If you start geth without any flags it'll connect to the Ethereum mainnet through a set of pre-set [bootnodes](#how-peers-are-found). In addition to mainnet geth recognizes a few testnets which you can connect to via the respective flags:
+If you start geth without any flags, it will connect to the Ethereum mainnet. In addition to
+the mainnet, geth recognizes a few testnets which you can connect to via the respective flags:
 
 - `--ropsten`, Ropsten proof-of-work test network
 - `--rinkeby`, Rinkeby proof-of-authority test network
