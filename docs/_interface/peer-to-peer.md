@@ -3,6 +3,25 @@ title: Connecting To The Network
 sort_key: B
 ---
 
+If you start geth without any flags, it will connect to the Ethereum mainnet. In addition to
+the mainnet, geth recognizes a few testnets which you can connect to via the respective flags:
+
+- `--ropsten`, Ropsten proof-of-work test network
+- `--rinkeby`, Rinkeby proof-of-authority test network
+- `--goerli`, Goerli proof-of-authority test network
+
+**Note:** network selection is not persisted in the config file. To connect to a pre-defined network
+you must always enable it explicitly, even when using the `--config` flag to load other configuration values.
+For example:
+
+```sh
+# Generate desired config file. You must specify testnet here.
+geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
+
+# Start geth with given config file. Here too the testnet must be specified.
+geth --goerli --config goerli.toml
+```
+
 ## How Peers Are Found
 
 Geth continuously attempts to connect to other nodes on the network until it has peers. If
