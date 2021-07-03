@@ -111,7 +111,7 @@ func (s *Snapshot) store(db ethdb.Database) error {
 }
 
 // copy creates a deep copy of the snapshot, though not the individual votes.
-func (s *Snapshot) copy() *Snapshot {
+func (s *Snapshot) deepCopy() *Snapshot {
 	cpy := &Snapshot{
 		config:   s.config,
 		sigcache: s.sigcache,
@@ -197,7 +197,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		return nil, errInvalidVotingChain
 	}
 	// Iterate through the headers and create a new snapshot
-	snap := s.copy()
+	snap := s.deepCopy()
 
 	var (
 		start  = time.Now()
