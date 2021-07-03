@@ -18,6 +18,7 @@ package ethtest
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"net"
 	"reflect"
 	"strings"
@@ -649,58 +650,53 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// create NewBlockHashes announcement
-	nextBlock := s.fullChain.blocks[s.chain.Len()]
-	newBlockHash := &NewBlockHashes{
-		{Hash: nextBlock.Hash(), Number: nextBlock.Number().Uint64()},
+	type anno struct {
+		Hash   common.Hash // Hash of one particular block being announced
+		Number uint64      // Number of one particular block being announced
 	}
-
+	nextBlock := s.fullChain.blocks[s.chain.Len()]
+	announcement := anno{Hash: nextBlock.Hash(), Number: nextBlock.Number().Uint64()}
+	newBlockHash := &NewBlockHashes{announcement}
 	if err := sendConn.Write(newBlockHash); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}
+	var id uint64
+	var msg Message
 	if isEth66 {
-		// expect GetBlockHeaders request, and respond
-		id, msg := sendConn.Read66()
-		switch msg := msg.(type) {
-		case GetBlockHeaders:
-			blockHeaderReq := msg
-			if blockHeaderReq.Amount != 1 {
-				return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
-			}
-			if blockHeaderReq.Origin.Hash != nextBlock.Hash() {
-				return fmt.Errorf("unexpected block header requested: %v", pretty.Sdump(blockHeaderReq))
-			}
-			resp := &eth.BlockHeadersPacket66{
+		id, msg = sendConn.Read66()
+	} else {
+		msg = sendConn.Read()
+	}
+	switch msg := msg.(type) {
+	case GetBlockHeaders: // expect GetBlockHeaders request, and respond
+		blockHeaderReq := msg
+		if blockHeaderReq.Amount != 1 {
+			return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
+		}
+		if blockHeaderReq.Origin.Hash != announcement.Hash {
+			return fmt.Errorf("unexpected block header requested. Announced:\n %v\n Remote request:\n%v",
+				pretty.Sdump(announcement),
+				pretty.Sdump(blockHeaderReq))
+		}
+		if eth66 {
+			if err := sendConn.Write66(&eth.BlockHeadersPacket66{
 				RequestId: id,
 				BlockHeadersPacket: eth.BlockHeadersPacket{
 					nextBlock.Header(),
 				},
-			}
-			if err := sendConn.Write66(resp, BlockHeaders{}.Code()); err != nil {
+			}, BlockHeaders{}.Code()); err != nil {
 				return fmt.Errorf("failed to write to connection: %v", err)
 			}
-		default:
-			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
-		}
-	} else {
-		// expect GetBlockHeaders request, and respond
-		switch msg := sendConn.Read().(type) {
-		case *GetBlockHeaders:
-			blockHeaderReq := *msg
-			if blockHeaderReq.Amount != 1 {
-				return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
-			}
-			if blockHeaderReq.Origin.Hash != nextBlock.Hash() {
-				return fmt.Errorf("unexpected block header requested: %v", pretty.Sdump(blockHeaderReq))
-			}
+		} else {
 			if err := sendConn.Write(&BlockHeaders{nextBlock.Header()}); err != nil {
 				return fmt.Errorf("failed to write to connection: %v", err)
 			}
-		default:
-			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
 		}
+	default:
+		return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
 	}
 	// wait for block announcement
-	msg := recvConn.readAndServe(s.chain, timeout)
+	msg = recvConn.readAndServe(s.chain, timeout)
 	switch msg := msg.(type) {
 	case *NewBlockHashes:
 		hashes := *msg
