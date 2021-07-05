@@ -660,16 +660,20 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 	if err := sendConn.Write(newBlockHash); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}
-	var id uint64
-	var msg Message
+	// Announcement sent, now wait for a header request
+	var (
+		id             uint64
+		msg            Message
+		blockHeaderReq GetBlockHeaders
+	)
 	if isEth66 {
 		id, msg = sendConn.Read66()
-	} else {
-		msg = sendConn.Read()
-	}
-	switch msg := msg.(type) {
-	case GetBlockHeaders: // expect GetBlockHeaders request, and respond
-		blockHeaderReq := msg
+		switch msg := msg.(type) {
+		case GetBlockHeaders:
+			blockHeaderReq = msg
+		default:
+			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
+		}
 		if blockHeaderReq.Amount != 1 {
 			return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
 		}
@@ -678,22 +682,33 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 				pretty.Sdump(announcement),
 				pretty.Sdump(blockHeaderReq))
 		}
-		if eth66 {
-			if err := sendConn.Write66(&eth.BlockHeadersPacket66{
-				RequestId: id,
-				BlockHeadersPacket: eth.BlockHeadersPacket{
-					nextBlock.Header(),
-				},
-			}, BlockHeaders{}.Code()); err != nil {
-				return fmt.Errorf("failed to write to connection: %v", err)
-			}
-		} else {
-			if err := sendConn.Write(&BlockHeaders{nextBlock.Header()}); err != nil {
-				return fmt.Errorf("failed to write to connection: %v", err)
-			}
+		if err := sendConn.Write66(&eth.BlockHeadersPacket66{
+			RequestId: id,
+			BlockHeadersPacket: eth.BlockHeadersPacket{
+				nextBlock.Header(),
+			},
+		}, BlockHeaders{}.Code()); err != nil {
+			return fmt.Errorf("failed to write to connection: %v", err)
 		}
-	default:
-		return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
+	} else {
+		msg = sendConn.Read()
+		switch msg := msg.(type) {
+		case *GetBlockHeaders:
+			blockHeaderReq = *msg
+		default:
+			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
+		}
+		if blockHeaderReq.Amount != 1 {
+			return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
+		}
+		if blockHeaderReq.Origin.Hash != announcement.Hash {
+			return fmt.Errorf("unexpected block header requested. Announced:\n %v\n Remote request:\n%v",
+				pretty.Sdump(announcement),
+				pretty.Sdump(blockHeaderReq))
+		}
+		if err := sendConn.Write(&BlockHeaders{nextBlock.Header()}); err != nil {
+			return fmt.Errorf("failed to write to connection: %v", err)
+		}
 	}
 	// wait for block announcement
 	msg = recvConn.readAndServe(s.chain, timeout)
