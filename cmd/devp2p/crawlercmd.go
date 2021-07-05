@@ -434,7 +434,7 @@ func updateNodes(db *sql.DB, nodes []crawledNode) error {
 		fid := fmt.Sprintf("Hash: %v, Next %v", info.ForkID.Hash, info.ForkID.Next)
 
 		_, err = stmt.Exec(
-			n.N.ID().GoString(),
+			n.N.ID().String(),
 			now.String(),
 			info.ClientType,
 			pk,
