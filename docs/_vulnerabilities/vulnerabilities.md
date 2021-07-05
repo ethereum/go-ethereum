@@ -23,7 +23,7 @@ Vulnerabilies typically take two forms:
     - Denial-of-service via p2p networking, whereby portions of the network could be made
       inaccessible due to crashes or resource consumption.
 
-Historically, vulnerabilities in `geth` predominantly been of the second type, where the
+In most cases so far, vulnerabilities in `geth` have been of the second type, where the
 health of the network is a concern, rather than individual node operators. For such
 issues, we reserve the right to silently patch and ship fixes in new releases.
 
