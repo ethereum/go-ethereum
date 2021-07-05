@@ -66,15 +66,9 @@ collections:
     caption: Clef
     sidebar_index: 7
     frontpage: _clef/Tutorial.md
-  whisper:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Whisper
-    sidebar_index: 8
-    frontpage: _whisper/Whisper-Overview.md
   vulnerabilities:
     output: true
     permalink: docs/:collection/:slug
     caption: Vulnerabilities
-    sidebar_index: 9
+    sidebar_index: 8
     frontpage: _vulnerabilies/vulnerabilities.md
