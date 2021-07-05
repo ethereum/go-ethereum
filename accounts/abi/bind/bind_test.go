@@ -1850,6 +1850,53 @@ var bindTests = []struct {
 			if count != 1 {
 				t.Fatal("Unexpected contract event number")
 			}
+			`,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	// Test errors introduced in v0.8.4
+	{
+		`NewErrors`,
+		`
+		pragma solidity >0.8.4;
+	
+		contract Test {
+			error MyError(uint256);
+			error MyError1(uint256);
+			error MyError2(uint256, uint256);
+			error MyError3(uint256 a, uint256 b, uint256 c);
+		}
+	   `,
+		[]string{"0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220313fc94775b67962460298a5e968a46aed3683e1162a713923677e23373efa6364736f6c63430008060033"},
+		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"}]`},
+		`
+			"math/big"
+	
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/ethereum/go-ethereum/eth/ethconfig"
+	   `,
+		`
+			var (
+				key, _  = crypto.GenerateKey()
+				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+			)
+			defer sim.Close()
+	
+			_, tx, _, err := DeployNewErrors(user, sim)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sim.Commit()
+			_, err = bind.WaitDeployed(nil, sim, tx)
+			if err != nil {
+				t.Error(err)
+			}
 	   `,
 		nil,
 		nil,
