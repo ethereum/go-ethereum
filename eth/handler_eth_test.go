@@ -351,7 +351,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	seen := make(map[common.Hash]struct{})
 	for len(seen) < len(insert) {
 		switch protocol {
-		case 65, 66:
+		case 66:
 			select {
 			case hashes := <-anns:
 				for _, hash := range hashes {
@@ -361,7 +361,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 					seen[hash] = struct{}{}
 				}
 			case <-bcasts:
-				t.Errorf("initial tx broadcast received on post eth/65")
+				t.Errorf("initial tx broadcast received on post eth/66")
 			}
 
 		default:
@@ -386,6 +386,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// to receive them. We need multiple sinks since a one-to-one peering would
 	// broadcast all transactions without announcement.
 	source := newTestHandler()
+	source.handler.snapSync = 0 // Avoid requiring snap, otherwise some will be dropped below
 	defer source.close()
 
 	sinks := make([]*testHandler, 10)
@@ -403,7 +404,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, source.txpool)
+		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i + 1)}, "", nil, sourcePipe), sourcePipe, source.txpool)
 		sinkPeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, sink.txpool)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
@@ -435,12 +436,13 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 
 	// Iterate through all the sinks and ensure they all got the transactions
 	for i := range sinks {
-		for arrived := 0; arrived < len(txs); {
+		for arrived, timeout := 0, false; arrived < len(txs) && !timeout; {
 			select {
 			case event := <-txChs[i]:
 				arrived += len(event.Txs)
-			case <-time.NewTimer(time.Second).C:
+			case <-time.After(time.Second):
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
+				timeout = true
 			}
 		}
 	}
@@ -460,23 +462,23 @@ func TestCheckpointChallenge(t *testing.T) {
 	}{
 		// If checkpointing is not enabled locally, don't challenge and don't drop
 		{downloader.FullSync, false, false, false, false, false},
-		{downloader.FastSync, false, false, false, false, false},
+		{downloader.SnapSync, false, false, false, false, false},
 
 		// If checkpointing is enabled locally and remote response is empty, only drop during fast sync
 		{downloader.FullSync, true, false, true, false, false},
-		{downloader.FastSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
+		{downloader.SnapSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
 
 		// If checkpointing is enabled locally and remote response mismatches, always drop
 		{downloader.FullSync, true, false, false, false, true},
-		{downloader.FastSync, true, false, false, false, true},
+		{downloader.SnapSync, true, false, false, false, true},
 
 		// If checkpointing is enabled locally and remote response matches, never drop
 		{downloader.FullSync, true, false, false, true, false},
-		{downloader.FastSync, true, false, false, true, false},
+		{downloader.SnapSync, true, false, false, true, false},
 
 		// If checkpointing is enabled locally and remote times out, always drop
 		{downloader.FullSync, true, true, false, true, true},
-		{downloader.FastSync, true, true, false, true, true},
+		{downloader.SnapSync, true, true, false, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("sync %v checkpoint %v timeout %v empty %v match %v", tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match), func(t *testing.T) {
@@ -497,10 +499,10 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	handler := newTestHandler()
 	defer handler.close()
 
-	if syncmode == downloader.FastSync {
-		atomic.StoreUint32(&handler.handler.fastSync, 1)
+	if syncmode == downloader.SnapSync {
+		atomic.StoreUint32(&handler.handler.snapSync, 1)
 	} else {
-		atomic.StoreUint32(&handler.handler.fastSync, 0)
+		atomic.StoreUint32(&handler.handler.snapSync, 0)
 	}
 	var response *types.Header
 	if checkpoint {

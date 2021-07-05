@@ -155,6 +155,28 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 
 // AddUncle adds an uncle header to the generated block.
 func (b *BlockGen) AddUncle(h *types.Header) {
+	// The uncle will have the same timestamp and auto-generated difficulty
+	h.Time = b.header.Time
+
+	var parent *types.Header
+	for i := b.i - 1; i >= 0; i-- {
+		if b.chain[i].Hash() == h.ParentHash {
+			parent = b.chain[i].Header()
+			break
+		}
+	}
+	chainreader := &fakeChainReader{config: b.config}
+	h.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, parent)
+
+	// The gas limit and price should be derived from the parent
+	h.GasLimit = parent.GasLimit
+	if b.config.IsLondon(h.Number) {
+		h.BaseFee = misc.CalcBaseFee(b.config, parent)
+		if !b.config.IsLondon(parent.Number) {
+			parentGasLimit := parent.GasLimit * params.ElasticityMultiplier
+			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
+		}
+	}
 	b.uncles = append(b.uncles, h)
 }
 

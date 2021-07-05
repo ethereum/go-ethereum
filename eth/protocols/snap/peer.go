@@ -33,9 +33,9 @@ type Peer struct {
 	logger log.Logger // Contextual logger with the peer id injected
 }
 
-// newPeer create a wrapper for a network connection and negotiated  protocol
+// NewPeer create a wrapper for a network connection and negotiated  protocol
 // version.
-func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
+func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	id := p.ID().String()
 	return &Peer{
 		id:      id,
