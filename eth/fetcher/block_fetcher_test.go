@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -195,16 +196,26 @@ func (f *fetcherTester) makeHeaderFetcher(peer string, blocks map[common.Hash]*t
 		closure[hash] = block
 	}
 	// Create a function that return a header from the closure
-	return func(hash common.Hash) error {
+	return func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		// Gather the blocks to return
 		headers := make([]*types.Header, 0, 1)
 		if block, ok := closure[hash]; ok {
 			headers = append(headers, block.Header())
 		}
 		// Return on a new thread
-		go f.fetcher.FilterHeaders(peer, headers, time.Now().Add(drift))
-
-		return nil
+		req := &eth.Request{
+			Peer: peer,
+		}
+		res := &eth.Response{
+			Req:  req,
+			Res:  (*eth.BlockHeadersPacket)(&headers),
+			Time: drift,
+			Done: make(chan error, 1), // Ignore the returned status
+		}
+		go func() {
+			sink <- res
+		}()
+		return req, nil
 	}
 }
 
@@ -215,7 +226,7 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 		closure[hash] = block
 	}
 	// Create a function that returns blocks from the closure
-	return func(hashes []common.Hash) error {
+	return func(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		// Gather the block bodies to return
 		transactions := make([][]*types.Transaction, 0, len(hashes))
 		uncles := make([][]*types.Header, 0, len(hashes))
@@ -227,9 +238,26 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 			}
 		}
 		// Return on a new thread
-		go f.fetcher.FilterBodies(peer, transactions, uncles, time.Now().Add(drift))
-
-		return nil
+		bodies := make([]*eth.BlockBody, len(transactions))
+		for i, txs := range transactions {
+			bodies[i] = &eth.BlockBody{
+				Transactions: txs,
+				Uncles:       uncles[i],
+			}
+		}
+		req := &eth.Request{
+			Peer: peer,
+		}
+		res := &eth.Response{
+			Req:  req,
+			Res:  (*eth.BlockBodiesPacket)(&bodies),
+			Time: drift,
+			Done: make(chan error, 1), // Ignore the returned status
+		}
+		go func() {
+			sink <- res
+		}()
+		return req, nil
 	}
 }
 
@@ -368,13 +396,13 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	secondBodyFetcher := tester.makeBodyFetcher("second", blocks, 0)
 
 	counter := uint32(0)
-	firstHeaderWrapper := func(hash common.Hash) error {
+	firstHeaderWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		atomic.AddUint32(&counter, 1)
-		return firstHeaderFetcher(hash)
+		return firstHeaderFetcher(hash, sink)
 	}
-	secondHeaderWrapper := func(hash common.Hash) error {
+	secondHeaderWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		atomic.AddUint32(&counter, 1)
-		return secondHeaderFetcher(hash)
+		return secondHeaderFetcher(hash, sink)
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
@@ -468,15 +496,20 @@ func testPendingDeduplication(t *testing.T, light bool) {
 
 	delay := 50 * time.Millisecond
 	counter := uint32(0)
-	headerWrapper := func(hash common.Hash) error {
+	headerWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		atomic.AddUint32(&counter, 1)
 
 		// Simulate a long running fetch
-		go func() {
-			time.Sleep(delay)
-			headerFetcher(hash)
-		}()
-		return nil
+		resink := make(chan *eth.Response)
+		req, err := headerFetcher(hash, resink)
+		if err == nil {
+			go func() {
+				res := <-resink
+				time.Sleep(delay)
+				sink <- res
+			}()
+		}
+		return req, err
 	}
 	checkNonExist := func() bool {
 		return tester.getBlock(hashes[0]) == nil

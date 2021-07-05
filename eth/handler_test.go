@@ -151,7 +151,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		TxPool:     txpool,
 		Merger:     core.NewMerger(rawdb.NewMemoryDatabase()),
 		Network:    1,
-		Sync:       downloader.FastSync,
+		Sync:       downloader.SnapSync,
 		BloomCache: 1,
 	})
 	handler.Start(1000)

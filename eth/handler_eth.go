@@ -64,24 +64,21 @@ func (h *ethHandler) AcceptTxs() bool {
 func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the downloader
 	switch packet := packet.(type) {
-	case *eth.BlockHeadersPacket:
-		return h.handleHeaders(peer, *packet)
+	case *eth.BlockHeadersPacket: //  TODO(karalabe): Delete before PR merge
+		log.Error("Old header handler still got called")
+		return errors.New("old header handler still got called")
 
-	case *eth.BlockBodiesPacket:
-		txset, uncleset := packet.Unpack()
-		return h.handleBodies(peer, txset, uncleset)
+	case *eth.BlockBodiesPacket: //  TODO(karalabe): Delete before PR merge
+		log.Error("Old body handler still got called")
+		return errors.New("old body handler still got called")
 
-	case *eth.NodeDataPacket:
-		if err := h.downloader.DeliverNodeData(peer.ID(), *packet); err != nil {
-			log.Debug("Failed to deliver node state data", "err", err)
-		}
-		return nil
+	case *eth.NodeDataPacket: //  TODO(karalabe): Delete before PR merge
+		log.Error("Old node data handler still got called")
+		return errors.New("old node data handler still got called")
 
-	case *eth.ReceiptsPacket:
-		if err := h.downloader.DeliverReceipts(peer.ID(), *packet); err != nil {
-			log.Debug("Failed to deliver receipts", "err", err)
-		}
-		return nil
+	case *eth.ReceiptsPacket: //  TODO(karalabe): Delete before PR merge
+		log.Error("Old receipt handler still got called")
+		return errors.New("old receipt handler still got called")
 
 	case *eth.NewBlockHashesPacket:
 		hashes, numbers := packet.Unpack()
@@ -102,79 +99,6 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
 	}
-}
-
-// handleHeaders is invoked from a peer's message handler when it transmits a batch
-// of headers for the local node to process.
-func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) error {
-	p := h.peers.peer(peer.ID())
-	if p == nil {
-		return errors.New("unregistered during callback")
-	}
-	// If no headers were received, but we're expencting a checkpoint header, consider it that
-	if len(headers) == 0 && p.syncDrop != nil {
-		// Stop the timer either way, decide later to drop or not
-		p.syncDrop.Stop()
-		p.syncDrop = nil
-
-		// If we're doing a fast (or snap) sync, we must enforce the checkpoint block to avoid
-		// eclipse attacks. Unsynced nodes are welcome to connect after we're done
-		// joining the network
-		if atomic.LoadUint32(&h.fastSync) == 1 {
-			peer.Log().Warn("Dropping unsynced node during sync", "addr", peer.RemoteAddr(), "type", peer.Name())
-			return errors.New("unsynced node cannot serve sync")
-		}
-	}
-	// Filter out any explicitly requested headers, deliver the rest to the downloader
-	filter := len(headers) == 1
-	if filter {
-		// If it's a potential sync progress check, validate the content and advertised chain weight
-		if p.syncDrop != nil && headers[0].Number.Uint64() == h.checkpointNumber {
-			// Disable the sync drop timer
-			p.syncDrop.Stop()
-			p.syncDrop = nil
-
-			// Validate the header and either drop the peer or continue
-			if headers[0].Hash() != h.checkpointHash {
-				return errors.New("checkpoint hash mismatch")
-			}
-			return nil
-		}
-		// Otherwise if it's a whitelisted block, validate against the set
-		if want, ok := h.whitelist[headers[0].Number.Uint64()]; ok {
-			if hash := headers[0].Hash(); want != hash {
-				peer.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
-				return errors.New("whitelist block mismatch")
-			}
-			peer.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", want)
-		}
-		// Irrelevant of the fork checks, send the header to the fetcher just in case
-		headers = h.blockFetcher.FilterHeaders(peer.ID(), headers, time.Now())
-	}
-	if len(headers) > 0 || !filter {
-		err := h.downloader.DeliverHeaders(peer.ID(), headers)
-		if err != nil {
-			log.Debug("Failed to deliver headers", "err", err)
-		}
-	}
-	return nil
-}
-
-// handleBodies is invoked from a peer's message handler when it transmits a batch
-// of block bodies for the local node to process.
-func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
-	// Filter out any explicitly requested bodies, deliver the rest to the downloader
-	filter := len(txs) > 0 || len(uncles) > 0
-	if filter {
-		txs, uncles = h.blockFetcher.FilterBodies(peer.ID(), txs, uncles, time.Now())
-	}
-	if len(txs) > 0 || len(uncles) > 0 || !filter {
-		err := h.downloader.DeliverBodies(peer.ID(), txs, uncles)
-		if err != nil {
-			log.Debug("Failed to deliver bodies", "err", err)
-		}
-	}
-	return nil
 }
 
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
