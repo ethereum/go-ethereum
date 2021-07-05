@@ -252,10 +252,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			addrCopy := addr
+
+			var header eof1Header
+			if hasEIP3540(&evm.vmConfig) && isEOFCode(code) {
+				header = readValidEOF1Header(code)
+			}
+
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
 			ret, err = run(evm, contract, input, false)
 			gas = contract.Gas
 		}
@@ -304,10 +310,18 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
+
+		code := evm.StateDB.GetCode(addrCopy)
+
+		var header eof1Header
+		if hasEIP3540(&evm.vmConfig) && isEOFCode(code) {
+			header = readValidEOF1Header(code)
+		}
+
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
 		ret, err = run(evm, contract, input, false)
 		gas = contract.Gas
 	}
@@ -340,9 +354,17 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
+
+		code := evm.StateDB.GetCode(addrCopy)
+
+		var header eof1Header
+		if hasEIP3540(&evm.vmConfig) && isEOFCode(code) {
+			header = readValidEOF1Header(code)
+		}
+
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
 		ret, err = run(evm, contract, input, false)
 		gas = contract.Gas
 	}
@@ -387,10 +409,18 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
 		// even if the actual execution ends on RunPrecompiled above.
 		addrCopy := addr
+
+		code := evm.StateDB.GetCode(addrCopy)
+
+		var header eof1Header
+		if hasEIP3540(&evm.vmConfig) && isEOFCode(code) {
+			header = readValidEOF1Header(code)
+		}
+
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -416,6 +446,15 @@ func (c *codeAndHash) Hash() common.Hash {
 		c.hash = crypto.Keccak256Hash(c.code)
 	}
 	return c.hash
+}
+
+func hasEIP3540(vmConfig *Config) bool {
+	for _, eip := range vmConfig.ExtraEips {
+		if eip == 3540 {
+			return true
+		}
+	}
+	return false
 }
 
 // create creates a new contract using code as deployment code.
@@ -448,10 +487,20 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
+	// Try to read code header if it claims to be EOF-formatted.
+	var header eof1Header
+	if hasEIP3540(&evm.vmConfig) && hasFormatByte(codeAndHash.code) {
+		var err error
+		header, err = readEOF1Header(codeAndHash.code)
+		if err != nil {
+			return nil, common.Address{}, gas, ErrInvalidCodeFormat
+		}
+	}
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
-	contract.SetCodeOptionalHash(&address, codeAndHash)
+	contract.SetCodeOptionalHash(&address, codeAndHash, &header)
 
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, address, gas, nil
@@ -469,9 +518,16 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		err = ErrMaxCodeSizeExceeded
 	}
 
-	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		err = ErrInvalidCode
+	if err == nil && hasFormatByte(ret) {
+		if hasEIP3540(&evm.vmConfig) {
+			// Allow only valid EOF1 if EIP-3540 is enabled.
+			if !validateEOF(ret) {
+				err = ErrInvalidCodeFormat
+			}
+		} else if evm.chainRules.IsLondon {
+			// Reject code starting with 0xEF in London.
+			err = ErrInvalidCode
+		}
 	}
 
 	// if the contract creation ran successfully and no errors were returned

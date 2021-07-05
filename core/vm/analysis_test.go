@@ -19,6 +19,7 @@ package vm
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -48,7 +49,15 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH32)}, 0xFF, 2},
 	}
 	for _, test := range tests {
-		ret := codeBitmap(test.code)
+		var (
+			contract Contract
+			addr     common.Address
+			hash     common.Hash
+			header   eof1Header
+		)
+		contract.SetCallCode(&addr, hash, test.code, &header)
+
+		ret := codeBitmap(&contract)
 		if ret[test.which] != test.exp {
 			t.Fatalf("expected %x, got %02x", test.exp, ret[test.which])
 		}
@@ -58,9 +67,16 @@ func TestJumpDestAnalysis(t *testing.T) {
 func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	// 1.4 ms
 	code := make([]byte, 1200000)
+	var (
+		contract Contract
+		addr     common.Address
+		hash     common.Hash
+		header   eof1Header
+	)
+	contract.SetCallCode(&addr, hash, code, &header)
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		codeBitmap(code)
+		codeBitmap(&contract)
 	}
 	bench.StopTimer()
 }

@@ -174,7 +174,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
-		pc   = uint64(0) // program counter
+		pc   = contract.CodeBeginOffset() // program counter
 		cost uint64
 		// copies used by tracer
 		pcCopy  uint64 // needed for the deferred Tracer

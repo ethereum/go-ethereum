@@ -35,6 +35,24 @@ var (
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
+	ErrInvalidCodeFormat        = errors.New("invalid code: format validation failed")
+)
+
+// EOF1 validation errors
+var (
+	ErrEOF1InvalidFormatByte            = errors.New("invalid FORMAT byte")
+	ErrEOF1InvalidMagic                 = errors.New("invalid magic")
+	ErrEOF1InvalidVersion               = errors.New("invalid version byte")
+	ErrEOF1MultipleCodeSections         = errors.New("multiple code sections")
+	ErrEOF1CodeSectionSizeMissing       = errors.New("can't read code section size")
+	ErrEOF1EmptyCodeSection             = errors.New("code section size is 0")
+	ErrEOF1DataSectionBeforeCodeSection = errors.New("data section before code section")
+	ErrEOF1MultipleDataSections         = errors.New("multiple data sections")
+	ErrEOF1DataSectionSizeMissing       = errors.New("can't read data section size")
+	ErrEOF1EmptyDataSection             = errors.New("data section size is 0")
+	ErrEOF1UnknownSection               = errors.New("unknown section id")
+	ErrEOF1CodeSectionMissing           = errors.New("no code section")
+	ErrEOF1InvalidTotalSize             = errors.New("invalid total size")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

@@ -35,13 +35,13 @@ func (bits *bitvec) codeSegment(pos uint64) bool {
 }
 
 // codeBitmap collects data locations in code.
-func codeBitmap(code []byte) bitvec {
+func codeBitmap(c *Contract) bitvec {
 	// The bitmap is 4 bytes longer than necessary, in case the code
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
-	bits := make(bitvec, len(code)/8+1+4)
-	for pc := uint64(0); pc < uint64(len(code)); {
-		op := OpCode(code[pc])
+	bits := make(bitvec, c.CodeSize()/8+1+4)
+	for pc := c.CodeBeginOffset(); pc < c.CodeEndOffset(); {
+		op := OpCode(c.Code[pc])
 
 		if op >= PUSH1 && op <= PUSH32 {
 			numbits := op - PUSH1 + 1

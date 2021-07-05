@@ -31,6 +31,7 @@ var activators = map[int]func(*JumpTable){
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
+	3540: enable3540,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -173,4 +174,8 @@ func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
 	return nil, nil
+}
+
+func enable3540(jt *JumpTable) {
+	// Do nothing.
 }
