@@ -677,40 +677,14 @@ func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common
 		return
 	}
 
-	frame := make(map[string]interface{})
-	//frame["type"] = type_
-	frame["from"] = from
-	frame["to"] = to
-	frame["input"] = input
-	frame["gas"] = gas
-	frame["value"] = value
-	// Transform the context into a JavaScript object and inject into the state
+	// Transform the frame into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
-
-	for key, val := range frame {
-		switch val := val.(type) {
-		case uint64:
-			jst.vm.PushUint(uint(val))
-
-		case string:
-			jst.vm.PushString(val)
-
-		case []byte:
-			ptr := jst.vm.PushFixedBuffer(len(val))
-			copy(makeSlice(ptr, uint(len(val))), val)
-
-		case common.Address:
-			ptr := jst.vm.PushFixedBuffer(20)
-			copy(makeSlice(ptr, 20), val[:])
-
-		case *big.Int:
-			pushBigInt(val, jst.vm)
-
-		default:
-			panic(fmt.Sprintf("unsupported type: %T", val))
-		}
-		jst.vm.PutPropString(obj, key)
-	}
+	jst.addToObj(obj, "type", callFrameType(type_))
+	jst.addToObj(obj, "from", from)
+	jst.addToObj(obj, "to", to)
+	jst.addToObj(obj, "input", input)
+	jst.addToObj(obj, "gas", gas)
+	jst.addToObj(obj, "value", value)
 	jst.vm.PutPropString(jst.stateObject, "frame")
 
 	if _, err := jst.call(true, "enter", "frame"); err != nil {
@@ -732,14 +706,8 @@ func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64) {
 	}
 
 	obj := jst.vm.PushObject()
-
-	ptr := jst.vm.PushFixedBuffer(len(output))
-	copy(makeSlice(ptr, uint(len(output))), output)
-	jst.vm.PutPropString(obj, "output")
-
-	jst.vm.PushUint(uint(gasUsed))
-	jst.vm.PutPropString(obj, "gasUsed")
-
+	jst.addToObj(obj, "output", output)
+	jst.addToObj(obj, "gasUsed", gasUsed)
 	jst.vm.PutPropString(jst.stateObject, "frameResult")
 	if _, err := jst.call(true, "exit", "frameResult"); err != nil {
 		jst.err = wrapError("exit", err)
@@ -794,4 +762,44 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	jst.vm.Destroy()
 
 	return result, jst.err
+}
+
+// addToObj pushes a field to a JS object.
+func (jst *Tracer) addToObj(obj int, key string, val interface{}) {
+	switch val := val.(type) {
+	case uint64:
+		jst.vm.PushUint(uint(val))
+	case string:
+		jst.vm.PushString(val)
+	case []byte:
+		ptr := jst.vm.PushFixedBuffer(len(val))
+		copy(makeSlice(ptr, uint(len(val))), val)
+	case common.Address:
+		ptr := jst.vm.PushFixedBuffer(20)
+		copy(makeSlice(ptr, 20), val[:])
+	case *big.Int:
+		pushBigInt(val, jst.vm)
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", val))
+	}
+	jst.vm.PutPropString(obj, key)
+}
+
+func callFrameType(type_ vm.CallFrameType) string {
+	switch type_ {
+	case vm.CallType:
+		return "call"
+	case vm.CallCodeType:
+		return "callcode"
+	case vm.DelegateCallType:
+		return "delegatecall"
+	case vm.StaticCallType:
+		return "staticcall"
+	case vm.CreateType:
+		return "create"
+	case vm.Create2Type:
+		return "create2"
+	default:
+		panic(fmt.Sprintf("unsupported call frame type: %T", type_))
+	}
 }
