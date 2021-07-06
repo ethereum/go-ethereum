@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -177,8 +178,9 @@ func Main(ctx *cli.Context) error {
 	prestate.Env = *inputData.Env
 
 	vmConfig := vm.Config{
-		Tracer: tracer,
-		Debug:  (tracer != nil),
+		Tracer:     tracer,
+		Debug:      (tracer != nil),
+		MeasureGas: ctx.GlobalIsSet(utils.MeasureGasFlag.Name),
 	}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig

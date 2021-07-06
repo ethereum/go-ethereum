@@ -17,7 +17,9 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/monitor"
 	"hash"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +30,7 @@ import (
 // Config are the configuration options for the Interpreter
 type Config struct {
 	Debug                   bool   // Enables debugging
+	MeasureGas              bool   // Enables measure
 	Tracer                  Tracer // Opcode logger
 	NoRecursion             bool   // Disables call, callcode, delegate call and create
 	NoBaseFee               bool   // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
@@ -283,7 +286,24 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		res, err = operation.execute(&pc, in, callContext)
+		//if in.cfg.MeasureGas {
+		if in.cfg.MeasureGas {
+			sum := monitor.NewSystemUsageMonitor()
+			sum.Start()
+			res, err = operation.execute(&pc, in, callContext)
+			sum.End()
+			systemDurationUsage := sum.GetSystemDurationUsage()
+			log.Info("--System usage v1.2 \n ==================================================\n")
+			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
+			log.Info(opCodeToString[op])
+			log.Info(systemDurationUsage.ToString() + "\n")
+		} else {
+			log.Info("--System usage v1.2 \n ==================================================\n")
+			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
+			log.Info(opCodeToString[op])
+			res, err = operation.execute(&pc, in, callContext)
+		}
+
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
 		if operation.returns {

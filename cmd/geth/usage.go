@@ -231,6 +231,12 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		},
 	},
 	{
+		Name: "MEASURE",
+		Flags: []cli.Flag{
+			utils.MeasureGasFlag,
+		},
+	},
+	{
 		Name: "MISC",
 		Flags: []cli.Flag{
 			utils.SnapshotFlag,

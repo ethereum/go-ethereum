@@ -775,6 +775,11 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	MeasureGasFlag = cli.BoolFlag{
+		Name:  "measure-gas",
+		Usage: "measure gas (default = false)",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
