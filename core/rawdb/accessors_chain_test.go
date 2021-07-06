@@ -439,7 +439,7 @@ func TestAncientStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
-	defer os.Remove(frdir)
+	defer os.RemoveAll(frdir)
 
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
