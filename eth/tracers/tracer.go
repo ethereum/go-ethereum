@@ -720,35 +720,7 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	obj := jst.vm.PushObject()
 
 	for key, val := range jst.ctx {
-		switch val := val.(type) {
-		case uint64:
-			jst.vm.PushUint(uint(val))
-
-		case string:
-			jst.vm.PushString(val)
-
-		case []byte:
-			ptr := jst.vm.PushFixedBuffer(len(val))
-			copy(makeSlice(ptr, uint(len(val))), val)
-
-		case common.Address:
-			ptr := jst.vm.PushFixedBuffer(20)
-			copy(makeSlice(ptr, 20), val[:])
-
-		case *big.Int:
-			pushBigInt(val, jst.vm)
-
-		case int:
-			jst.vm.PushInt(val)
-
-		case common.Hash:
-			ptr := jst.vm.PushFixedBuffer(32)
-			copy(makeSlice(ptr, 32), val[:])
-
-		default:
-			panic(fmt.Sprintf("unsupported type: %T", val))
-		}
-		jst.vm.PutPropString(obj, key)
+		jst.addToObj(obj, key, val)
 	}
 	jst.vm.PutPropString(jst.stateObject, "ctx")
 
@@ -779,6 +751,11 @@ func (jst *Tracer) addToObj(obj int, key string, val interface{}) {
 		copy(makeSlice(ptr, 20), val[:])
 	case *big.Int:
 		pushBigInt(val, jst.vm)
+	case int:
+		jst.vm.PushInt(val)
+	case common.Hash:
+		ptr := jst.vm.PushFixedBuffer(32)
+		copy(makeSlice(ptr, 32), val[:])
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", val))
 	}
