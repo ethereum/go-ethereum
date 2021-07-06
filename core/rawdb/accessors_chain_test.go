@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -571,4 +572,96 @@ func TestHashesInRange(t *testing.T) {
 	if have, want := len(ReadAllHashes(db, 1)), 1; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+}
+
+// This measures the write speed of the WriteAncientBlocks operation.
+func BenchmarkWriteAncientBlocks(b *testing.B) {
+	frdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		b.Fatalf("failed to create temp freezer dir: %v", err)
+	}
+	defer os.RemoveAll(frdir)
+
+	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
+	if err != nil {
+		b.Fatalf("failed to create database with ancient backend")
+	}
+	blocks, receipts := makeTestBlocks(50)
+	b.ResetTimer()
+
+	var (
+		td        = big.NewInt(55)
+		number    uint64
+		totalSize int64
+	)
+	for i := 0; i < b.N; i++ {
+		blocks = setBlockNumbers(blocks, number)
+		number += uint64(len(blocks))
+		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td)
+		if err != nil {
+			b.Fatal(err)
+		}
+		totalSize += writeSize
+	}
+	b.SetBytes(totalSize / int64(b.N))
+}
+
+// setBlockNumbers modifies the block numbers of the given blocks
+// be consecutive starting at 'first'.
+func setBlockNumbers(blocks []*types.Block, first uint64) []*types.Block {
+	for i := 0; i < len(blocks); i++ {
+		h := blocks[i].Header()
+		h.Number.SetUint64(first)
+		blocks[i] = types.NewBlockWithHeader(h)
+		blocks[i] = blocks[i].WithBody(blocks[i].Transactions(), blocks[i].Uncles())
+		first++
+	}
+	return blocks
+}
+
+// makeTestBlocks creates chain data for the ancient write benchmark.
+func makeTestBlocks(nblock int) ([]*types.Block, []types.Receipts) {
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.LatestSignerForChainID(big.NewInt(8))
+
+	// Create transactions.
+	txs := make([]*types.Transaction, 20)
+	for i := 0; i < len(txs); i++ {
+		var err error
+		to := common.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+		txs[i], err = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    2,
+			GasPrice: big.NewInt(30000),
+			Gas:      0x45454545,
+			To:       &to,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+	// Create receipts.
+	receipts := make([]*types.Receipt, len(txs))
+	for i := 0; i < len(receipts); i++ {
+		receipts[i] = &types.Receipt{
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: 0x888888888,
+			Logs:              make([]*types.Log, 5),
+		}
+	}
+
+	// Create the block.
+	header := &types.Header{
+		Number: big.NewInt(123444),
+		Extra:  []byte("test block"),
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil)
+
+	// Multiply.
+	blocks := make([]*types.Block, nblock)
+	blockReceipts := make([]types.Receipts, nblock)
+	for i := 0; i < nblock; i++ {
+		blocks[i] = block
+		blockReceipts[i] = receipts
+	}
+	return blocks, blockReceipts
 }
