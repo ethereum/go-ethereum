@@ -17,6 +17,8 @@
 package abi
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -25,11 +27,9 @@ import (
 )
 
 type Error struct {
-	Name string
-	// RawName might be overloaded
-	RawName string
-	Inputs  Arguments
-	str     string
+	Name   string
+	Inputs Arguments
+	str    string
 	// Sig contains the string signature according to the ABI spec.
 	// e.g.	 event foo(uint32 a, int b) = "foo(uint32,int256)"
 	// Please note that "int" is substitute for its canonical representation "int256"
@@ -39,7 +39,7 @@ type Error struct {
 	ID common.Hash
 }
 
-func NewError(name, rawName string, inputs Arguments) Error {
+func NewError(name string, inputs Arguments) Error {
 	// sanitize inputs to remove inputs without names
 	// and precompute string and sig representation.
 	names := make([]string, len(inputs))
@@ -63,20 +63,29 @@ func NewError(name, rawName string, inputs Arguments) Error {
 		types[i] = input.Type.String()
 	}
 
-	str := fmt.Sprintf("event %v(%v)", rawName, strings.Join(names, ", "))
-	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
+	str := fmt.Sprintf("error %v(%v)", name, strings.Join(names, ", "))
+	sig := fmt.Sprintf("%v(%v)", name, strings.Join(types, ","))
 	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
 
 	return Error{
-		Name:    name,
-		RawName: rawName,
-		Inputs:  inputs,
-		str:     str,
-		Sig:     sig,
-		ID:      id,
+		Name:   name,
+		Inputs: inputs,
+		str:    str,
+		Sig:    sig,
+		ID:     id,
 	}
 }
 
-func (err *Error) String() string {
-	return err.str
+func (e *Error) String() string {
+	return e.str
+}
+
+func (e *Error) Unpack(data []byte) (interface{}, error) {
+	if len(data) < 4 {
+		return "", errors.New("invalid data for unpacking")
+	}
+	if !bytes.Equal(data[:4], e.ID[:4]) {
+		return "", errors.New("invalid data for unpacking")
+	}
+	return e.Inputs.Unpack(data[4:])
 }

@@ -1862,15 +1862,18 @@ var bindTests = []struct {
 		`
 		pragma solidity >0.8.4;
 	
-		contract Test {
+		contract NewErrors {
 			error MyError(uint256);
 			error MyError1(uint256);
 			error MyError2(uint256, uint256);
 			error MyError3(uint256 a, uint256 b, uint256 c);
+			function Error() public pure {
+				revert MyError3(1,2,3);
+			}
 		}
 	   `,
-		[]string{"0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220313fc94775b67962460298a5e968a46aed3683e1162a713923677e23373efa6364736f6c63430008060033"},
-		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"}]`},
+		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
+		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		`
 			"math/big"
 	
@@ -1888,7 +1891,7 @@ var bindTests = []struct {
 			)
 			defer sim.Close()
 	
-			_, tx, _, err := DeployNewErrors(user, sim)
+			_, tx, contract, err := DeployNewErrors(user, sim)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1897,6 +1900,11 @@ var bindTests = []struct {
 			if err != nil {
 				t.Error(err)
 			}
+			if err := contract.Error(new(bind.CallOpts)); err == nil {
+				t.Fatalf("expected contract to throw error")
+			}
+			// TODO (MariusVanDerWijden unpack error using abigen
+			// once that is implemented
 	   `,
 		nil,
 		nil,

@@ -187,8 +187,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		case "error":
-			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Errors[s]; return ok })
-			abi.Errors[name] = NewError(name, field.Name, field.Inputs)
+			abi.Errors[field.Name] = NewError(field.Name, field.Inputs)
 		default:
 			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
 		}
