@@ -1164,14 +1164,24 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if frozen, _ := bc.db.Ancients(); frozen == 0 {
 				b := bc.genesisBlock
 				td := bc.genesisBlock.Difficulty()
-				size += rawdb.WriteAncientBlocks(bc.db, []*types.Block{b}, []types.Receipts{nil}, td)
+				writeSize, err := rawdb.WriteAncientBlocks(bc.db, []*types.Block{b}, []types.Receipts{nil}, td)
+				size += writeSize
+				if err != nil {
+					log.Error("Error writing genesis to ancients", "err", err)
+					return 0, err
+				}
 				log.Info("Wrote genesis to ancients")
 			}
 		}
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		size += rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td)
+		size += writeSize
+		if err != nil {
+			log.Error("Error importing chain data to ancients", "err", err)
+			return 0, err
+		}
 
 		// Write tx indices if any condition is satisfied:
 		// * If user requires to reserve all tx indices(txlookuplimit=0)

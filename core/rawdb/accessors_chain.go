@@ -688,12 +688,12 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, td *big.Int) int64 {
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, td *big.Int) (int64, error) {
 	var (
 		tdSum      = new(big.Int).Set(td)
 		stReceipts []*types.ReceiptForStorage
 	)
-	writeSize, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			// Convert receipts to storage format and sum up total difficulty.
 			stReceipts = stReceipts[:0]
@@ -709,10 +709,6 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 		}
 		return nil
 	})
-	if err != nil {
-		log.Crit("Ancients write operation failed", "err", err)
-	}
-	return writeSize
 }
 
 func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, receipts []*types.ReceiptForStorage, td *big.Int) error {
