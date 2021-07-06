@@ -107,7 +107,7 @@ for the last 64 blocks. The returned object contains the following fields:
 | Client  | Method invocation                                   |
 |:--------|-----------------------------------------------------|
 | Console | `clique.status()`                                   |
-| RPC     | `{"method": "clique_status", "params": [}` |
+| RPC     | `{"method": "clique_status", "params": []}` |
 
 Example:
 
