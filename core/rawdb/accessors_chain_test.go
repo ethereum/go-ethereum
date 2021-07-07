@@ -576,47 +576,38 @@ func TestHashesInRange(t *testing.T) {
 
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
+	// Open freezer database.
 	frdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		b.Fatalf("failed to create temp freezer dir: %v", err)
 	}
 	defer os.RemoveAll(frdir)
-
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
 		b.Fatalf("failed to create database with ancient backend")
 	}
-	blocks, receipts := makeTestBlocks(50)
+
+	// Create the inserted data.
+	const batchSize = 50
+	allBlocks, allReceipts := makeTestBlocks(batchSize * b.N)
 	b.ResetTimer()
 
-	var (
-		td        = big.NewInt(55)
-		number    uint64
-		totalSize int64
-	)
+	var td = big.NewInt(55)
+	var totalSize int64
 	for i := 0; i < b.N; i++ {
-		blocks = setBlockNumbers(blocks, number)
-		number += uint64(len(blocks))
+		blocks := allBlocks[:batchSize]
+		receipts := allReceipts[:batchSize]
 		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td)
 		if err != nil {
 			b.Fatal(err)
 		}
 		totalSize += writeSize
-	}
-	b.SetBytes(totalSize / int64(b.N))
-}
 
-// setBlockNumbers modifies the block numbers of the given blocks
-// be consecutive starting at 'first'.
-func setBlockNumbers(blocks []*types.Block, first uint64) []*types.Block {
-	for i := 0; i < len(blocks); i++ {
-		h := blocks[i].Header()
-		h.Number.SetUint64(first)
-		blocks[i] = types.NewBlockWithHeader(h)
-		blocks[i] = blocks[i].WithBody(blocks[i].Transactions(), blocks[i].Uncles())
-		first++
+		allBlocks = allBlocks[batchSize:]
+		allReceipts = allReceipts[batchSize:]
 	}
-	return blocks
+
+	b.SetBytes(totalSize / int64(b.N))
 }
 
 // makeTestBlocks creates chain data for the ancient write benchmark.
@@ -649,19 +640,19 @@ func makeTestBlocks(nblock int) ([]*types.Block, []types.Receipts) {
 		}
 	}
 
-	// Create the block.
-	header := &types.Header{
-		Number: big.NewInt(123444),
-		Extra:  []byte("test block"),
-	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil)
-
-	// Multiply.
+	// Create the blocks.
 	blocks := make([]*types.Block, nblock)
 	blockReceipts := make([]types.Receipts, nblock)
 	for i := 0; i < nblock; i++ {
-		blocks[i] = block
+		header := &types.Header{
+			Number: big.NewInt(int64(i)),
+			Extra:  []byte("test block"),
+		}
+		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
 		blockReceipts[i] = receipts
+
+		// Pre-calculate the block hashes.
+		blocks[i].Hash()
 	}
 	return blocks, blockReceipts
 }
