@@ -587,36 +587,46 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 		b.Fatalf("failed to create database with ancient backend")
 	}
 
-	// Create the inserted data.
-	const batchSize = 50
-	allBlocks, allReceipts := makeTestBlocks(batchSize * b.N)
+	// Create the data to insert. The blocks must have consecutive numbers, so we create
+	// all of them ahead of time. However, there is no need to create receipts
+	// individually for each block, just make one batch here and reuse it for all writes.
+	const batchSize = 128
+	const blockTxs = 20
+	allBlocks := makeTestBlocks(b.N, blockTxs)
+	batchReceipts := makeTestReceipts(batchSize, blockTxs)
 	b.ResetTimer()
 
+	// The benchmark loop writes batches of blocks, but note that the total block count is
+	// b.N. This means the resulting ns/op measurement is the time it takes to write a
+	// single block and its associated data.
 	var td = big.NewInt(55)
 	var totalSize int64
-	for i := 0; i < b.N; i++ {
-		blocks := allBlocks[:batchSize]
-		receipts := allReceipts[:batchSize]
+	for i := 0; i < b.N; i += batchSize {
+		length := batchSize
+		if i+batchSize > b.N {
+			length = b.N - i
+		}
+
+		blocks := allBlocks[i : i+length]
+		receipts := batchReceipts[:length]
 		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td)
 		if err != nil {
 			b.Fatal(err)
 		}
 		totalSize += writeSize
-
-		allBlocks = allBlocks[batchSize:]
-		allReceipts = allReceipts[batchSize:]
 	}
 
+	// Enable MB/s reporting.
 	b.SetBytes(totalSize / int64(b.N))
 }
 
-// makeTestBlocks creates chain data for the ancient write benchmark.
-func makeTestBlocks(nblock int) ([]*types.Block, []types.Receipts) {
+// makeTestBlocks creates fake blocks for the ancient write benchmark.
+func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	signer := types.LatestSignerForChainID(big.NewInt(8))
 
 	// Create transactions.
-	txs := make([]*types.Transaction, 20)
+	txs := make([]*types.Transaction, txsPerBlock)
 	for i := 0; i < len(txs); i++ {
 		var err error
 		to := common.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
@@ -630,8 +640,23 @@ func makeTestBlocks(nblock int) ([]*types.Block, []types.Receipts) {
 			panic(err)
 		}
 	}
-	// Create receipts.
-	receipts := make([]*types.Receipt, len(txs))
+
+	// Create the blocks.
+	blocks := make([]*types.Block, nblock)
+	for i := 0; i < nblock; i++ {
+		header := &types.Header{
+			Number: big.NewInt(int64(i)),
+			Extra:  []byte("test block"),
+		}
+		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
+		blocks[i].Hash() // pre-cache the block hash
+	}
+	return blocks
+}
+
+// makeTestReceipts creates fake receipts for the ancient write benchmark.
+func makeTestReceipts(n int, nPerBlock int) []types.Receipts {
+	receipts := make([]*types.Receipt, nPerBlock)
 	for i := 0; i < len(receipts); i++ {
 		receipts[i] = &types.Receipt{
 			Status:            types.ReceiptStatusSuccessful,
@@ -639,20 +664,9 @@ func makeTestBlocks(nblock int) ([]*types.Block, []types.Receipts) {
 			Logs:              make([]*types.Log, 5),
 		}
 	}
-
-	// Create the blocks.
-	blocks := make([]*types.Block, nblock)
-	blockReceipts := make([]types.Receipts, nblock)
-	for i := 0; i < nblock; i++ {
-		header := &types.Header{
-			Number: big.NewInt(int64(i)),
-			Extra:  []byte("test block"),
-		}
-		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
-		blockReceipts[i] = receipts
-
-		// Pre-calculate the block hashes.
-		blocks[i].Hash()
+	allReceipts := make([]types.Receipts, n)
+	for i := 0; i < n; i++ {
+		allReceipts[i] = receipts
 	}
-	return blocks, blockReceipts
+	return allReceipts
 }
