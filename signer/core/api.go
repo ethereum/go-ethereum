@@ -456,6 +456,16 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 // it also returns 'true' if the transaction was modified, to make it possible to configure the signer not to allow
 // UI-modifications to requests
 func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
+	var intPtrModified = func(a, b *hexutil.Big) bool {
+		aBig := (*big.Int)(a)
+		bBig := (*big.Int)(b)
+		if aBig != nil && bBig != nil {
+			return aBig.Cmp(bBig) != 0
+		}
+		// One or both of them are nil
+		return a != b
+	}
+
 	modified := false
 	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
@@ -469,9 +479,17 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
-	if g0, g1 := big.Int(original.Transaction.GasPrice), big.Int(new.Transaction.GasPrice); g0.Cmp(&g1) != 0 {
+	if a, b := original.Transaction.GasPrice, new.Transaction.GasPrice; intPtrModified(a, b) {
+		log.Info("GasPrice changed by UI", "was", a, "is", b)
 		modified = true
-		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
+	}
+	if a, b := original.Transaction.MaxPriorityFeePerGas, new.Transaction.MaxPriorityFeePerGas; intPtrModified(a, b) {
+		log.Info("maxPriorityFeePerGas changed by UI", "was", a, "is", b)
+		modified = true
+	}
+	if a, b := original.Transaction.MaxFeePerGas, new.Transaction.MaxFeePerGas; intPtrModified(a, b) {
+		log.Info("maxFeePerGas changed by UI", "was", a, "is", b)
+		modified = true
 	}
 	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
 		modified = true
@@ -532,6 +550,14 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	if api.rejectMode {
 		if err := msgs.getWarnings(); err != nil {
 			return nil, err
+		}
+	}
+	if args.ChainID != nil {
+		requestedChainId := (*big.Int)(args.ChainID)
+		if api.chainID.Cmp(requestedChainId) != 0 {
+			log.Error("Signing request with wrong chain id", "requested", requestedChainId, "configured", api.chainID)
+			return nil, fmt.Errorf("requested chainid %d does not match the configuration of the signer",
+				requestedChainId)
 		}
 	}
 	req := SignTxRequest{

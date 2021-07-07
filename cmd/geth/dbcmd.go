@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -29,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -57,6 +60,8 @@ Remove blockchain and state databases`,
 			dbGetCmd,
 			dbDeleteCmd,
 			dbPutCmd,
+			dbGetSlotsCmd,
+			dbDumpFreezerIndex,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -70,7 +75,7 @@ Remove blockchain and state databases`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 		},
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
@@ -86,7 +91,7 @@ Remove blockchain and state databases`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 		},
 	}
 	dbCompactCmd = cli.Command{
@@ -100,7 +105,7 @@ Remove blockchain and state databases`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 		},
@@ -120,7 +125,7 @@ corruption if it is aborted during execution'!`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 		},
 		Description: "This command looks up the specified database key from the database.",
 	}
@@ -136,7 +141,7 @@ corruption if it is aborted during execution'!`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 		},
 		Description: `This command deletes the specified database key from the database. 
 WARNING: This is a low-level operation which may cause database corruption!`,
@@ -153,10 +158,42 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.YoloV3Flag,
+			utils.CalaverasFlag,
 		},
 		Description: `This command sets a given database key to the given value. 
 WARNING: This is a low-level operation which may cause database corruption!`,
+	}
+	dbGetSlotsCmd = cli.Command{
+		Action:    utils.MigrateFlags(dbDumpTrie),
+		Name:      "dumptrie",
+		Usage:     "Show the storage key/values of a given storage trie",
+		ArgsUsage: "<hex-encoded storage trie root> <hex-encoded start (optional)> <int max elements (optional)>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.CalaverasFlag,
+		},
+		Description: "This command looks up the specified database key from the database.",
+	}
+	dbDumpFreezerIndex = cli.Command{
+		Action:    utils.MigrateFlags(freezerInspect),
+		Name:      "freezer-index",
+		Usage:     "Dump out the index of a given freezer type",
+		ArgsUsage: "<type> <start (int)> <end (int)>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.CalaverasFlag,
+		},
+		Description: "This command displays information about the freezer index.",
 	}
 )
 
@@ -379,4 +416,94 @@ func dbPut(ctx *cli.Context) error {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
 	return db.Put(key, value)
+}
+
+// dbDumpTrie shows the key-value slots of a given storage trie
+func dbDumpTrie(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+	var (
+		root  []byte
+		start []byte
+		max   = int64(-1)
+		err   error
+	)
+	if root, err = hexutil.Decode(ctx.Args().Get(0)); err != nil {
+		log.Info("Could not decode the root", "error", err)
+		return err
+	}
+	stRoot := common.BytesToHash(root)
+	if ctx.NArg() >= 2 {
+		if start, err = hexutil.Decode(ctx.Args().Get(1)); err != nil {
+			log.Info("Could not decode the seek position", "error", err)
+			return err
+		}
+	}
+	if ctx.NArg() >= 3 {
+		if max, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64); err != nil {
+			log.Info("Could not decode the max count", "error", err)
+			return err
+		}
+	}
+	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	if err != nil {
+		return err
+	}
+	var count int64
+	it := trie.NewIterator(theTrie.NodeIterator(start))
+	for it.Next() {
+		if max > 0 && count == max {
+			fmt.Printf("Exiting after %d values\n", count)
+			break
+		}
+		fmt.Printf("  %d. key %#x: %#x\n", count, it.Key, it.Value)
+		count++
+	}
+	return it.Err
+}
+
+func freezerInspect(ctx *cli.Context) error {
+	var (
+		start, end    int64
+		disableSnappy bool
+		err           error
+	)
+	if ctx.NArg() < 3 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	kind := ctx.Args().Get(0)
+	if noSnap, ok := rawdb.FreezerNoSnappy[kind]; !ok {
+		var options []string
+		for opt := range rawdb.FreezerNoSnappy {
+			options = append(options, opt)
+		}
+		sort.Strings(options)
+		return fmt.Errorf("Could read freezer-type '%v'. Available options: %v", kind, options)
+	} else {
+		disableSnappy = noSnap
+	}
+	if start, err = strconv.ParseInt(ctx.Args().Get(1), 10, 64); err != nil {
+		log.Info("Could read start-param", "error", err)
+		return err
+	}
+	if end, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64); err != nil {
+		log.Info("Could read count param", "error", err)
+		return err
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	log.Info("Opening freezer", "location", path, "name", kind)
+	if f, err := rawdb.NewFreezerTable(path, kind, disableSnappy); err != nil {
+		return err
+	} else {
+		f.DumpIndex(start, end)
+	}
+	return nil
 }

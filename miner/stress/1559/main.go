@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,34 +14,38 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build none
-
-// This file contains a miner stress test based on the Clique consensus engine.
+// This file contains a miner stress test for eip 1559.
 package main
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+)
+
+var (
+	londonBlock = big.NewInt(30) // Predefined london fork block for activating eip 1559.
 )
 
 func main() {
@@ -53,21 +57,19 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	sealers := make([]*ecdsa.PrivateKey, 4)
-	for i := 0; i < len(sealers); i++ {
-		sealers[i], _ = crypto.GenerateKey()
-	}
-	// Create a Clique network based off of the Rinkeby config
-	genesis := makeGenesis(faucets, sealers)
+	// Pre-generate the ethash mining DAG so we don't race
+	ethash.MakeDataset(1, filepath.Join(os.Getenv("HOME"), ".ethash"))
+
+	// Create an Ethash network based off of the Ropsten config
+	genesis := makeGenesis(faucets)
 
 	var (
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
-
-	for _, sealer := range sealers {
+	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := makeSealer(genesis)
+		stack, ethBackend, err := makeMiner(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -86,16 +88,12 @@ func main() {
 
 		// Inject the signer key and start sealing with it
 		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		signer, err := store.ImportECDSA(sealer, "")
-		if err != nil {
-			panic(err)
-		}
-		if err := store.Unlock(signer, ""); err != nil {
+		if _, err := store.NewAccount(""); err != nil {
 			panic(err)
 		}
 	}
 
-	// Iterate over all the nodes and start signing on them
+	// Iterate over all the nodes and start mining
 	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
 		if err := node.StartMining(1); err != nil {
@@ -104,39 +102,100 @@ func main() {
 	}
 	time.Sleep(3 * time.Second)
 
-	// Start injecting transactions from the faucet like crazy
-	nonces := make([]uint64, len(faucets))
+	// Start injecting transactions from the faucets like crazy
+	var (
+		nonces = make([]uint64, len(faucets))
+
+		// The signer activates the 1559 features even before the fork,
+		// so the new 1559 txs can be created with this signer.
+		signer = types.LatestSignerForChainID(genesis.Config.ChainID)
+	)
 	for {
-		// Pick a random signer node
+		// Pick a random mining node
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
 
-		// Create a self transaction and inject into the pool
-		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000), nil), types.HomesteadSigner{}, faucets[index])
-		if err != nil {
-			panic(err)
-		}
+		headHeader := backend.BlockChain().CurrentHeader()
+		baseFee := headHeader.BaseFee
+
+		// Create a self transaction and inject into the pool. The legacy
+		// and 1559 transactions can all be created by random even if the
+		// fork is not happened.
+		tx := makeTransaction(nonces[index], faucets[index], signer, baseFee)
 		if err := backend.TxPool().AddLocal(tx); err != nil {
-			panic(err)
+			continue
 		}
 		nonces[index]++
 
 		// Wait if we're too saturated
-		if pend, _ := backend.TxPool().Stats(); pend > 2048 {
+		if pend, _ := backend.TxPool().Stats(); pend > 4192 {
 			time.Sleep(100 * time.Millisecond)
+		}
+
+		// Wait if the basefee is raised too fast
+		if baseFee != nil && baseFee.Cmp(new(big.Int).Mul(big.NewInt(100), big.NewInt(params.GWei))) > 0 {
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
 
-// makeGenesis creates a custom Clique genesis block based on some pre-defined
-// signer and faucet accounts.
-func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core.Genesis {
-	// Create a Clique network based off of the Rinkeby config
-	genesis := core.DefaultRinkebyGenesisBlock()
-	genesis.GasLimit = 25000000
+func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signer, baseFee *big.Int) *types.Transaction {
+	// Generate legacy transaction
+	if rand.Intn(2) == 0 {
+		tx, err := types.SignTx(types.NewTransaction(nonce, crypto.PubkeyToAddress(privKey.PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), signer, privKey)
+		if err != nil {
+			panic(err)
+		}
+		return tx
+	}
+	// Generate eip 1559 transaction
+	recipient := crypto.PubkeyToAddress(privKey.PublicKey)
+
+	// Feecap and feetip are limited to 32 bytes. Offer a sightly
+	// larger buffer for creating both valid and invalid transactions.
+	var buf = make([]byte, 32+5)
+	rand.Read(buf)
+	gasTipCap := new(big.Int).SetBytes(buf)
+
+	// If the given base fee is nil(the 1559 is still not available),
+	// generate a fake base fee in order to create 1559 tx forcibly.
+	if baseFee == nil {
+		baseFee = new(big.Int).SetInt64(int64(rand.Int31()))
+	}
+	// Generate the feecap, 75% valid feecap and 25% unguaranted.
+	var gasFeeCap *big.Int
+	if rand.Intn(4) == 0 {
+		rand.Read(buf)
+		gasFeeCap = new(big.Int).SetBytes(buf)
+	} else {
+		gasFeeCap = new(big.Int).Add(baseFee, gasTipCap)
+	}
+	return types.MustSignNewTx(privKey, signer, &types.DynamicFeeTx{
+		ChainID:    signer.ChainID(),
+		Nonce:      nonce,
+		GasTipCap:  gasTipCap,
+		GasFeeCap:  gasFeeCap,
+		Gas:        21000,
+		To:         &recipient,
+		Value:      big.NewInt(100),
+		Data:       nil,
+		AccessList: nil,
+	})
+}
+
+// makeGenesis creates a custom Ethash genesis block based on some pre-defined
+// faucet accounts.
+func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
+	genesis := core.DefaultRopstenGenesisBlock()
+
+	genesis.Config = params.AllEthashProtocolChanges
+	genesis.Config.LondonBlock = londonBlock
+	genesis.Difficulty = params.MinimumDifficulty
+
+	// Small gaslimit for easier basefee moving testing.
+	genesis.GasLimit = 8_000_000
 
 	genesis.Config.ChainID = big.NewInt(18)
-	genesis.Config.Clique.Period = 1
 	genesis.Config.EIP150Hash = common.Hash{}
 
 	genesis.Alloc = core.GenesisAlloc{}
@@ -145,27 +204,15 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		}
 	}
-	// Sort the signers and embed into the extra-data section
-	signers := make([]common.Address, len(sealers))
-	for i, sealer := range sealers {
-		signers[i] = crypto.PubkeyToAddress(sealer.PublicKey)
+	if londonBlock.Sign() == 0 {
+		log.Info("Enabled the eip 1559 by default")
+	} else {
+		log.Info("Registered the london fork", "number", londonBlock)
 	}
-	for i := 0; i < len(signers); i++ {
-		for j := i + 1; j < len(signers); j++ {
-			if bytes.Compare(signers[i][:], signers[j][:]) > 0 {
-				signers[i], signers[j] = signers[j], signers[i]
-			}
-		}
-	}
-	genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
-	for i, signer := range signers {
-		copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
-	}
-	// Return the genesis block for initialization
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -178,13 +225,13 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			NoDiscovery: true,
 			MaxPeers:    25,
 		},
+		UseLightweightKDF: true,
 	}
-	// Start the node and configure a full Ethereum node on it
+	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err
 	}
-	// Create and register the backend
 	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
@@ -192,7 +239,8 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
-		GPO:             eth.DefaultConfig.GPO,
+		GPO:             ethconfig.Defaults.GPO,
+		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
 			GasFloor: genesis.GasLimit * 9 / 10,
 			GasCeil:  genesis.GasLimit * 11 / 10,
@@ -203,7 +251,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	err = stack.Start()
 	return stack, ethBackend, err
 }

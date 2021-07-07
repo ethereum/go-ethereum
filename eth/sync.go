@@ -54,7 +54,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	//
 	// TODO(karalabe): Figure out if we could get away with random order somehow
 	var txs types.Transactions
-	pending, _ := h.txpool.Pending()
+	pending, _ := h.txpool.Pending(false)
 	for _, batch := range pending {
 		txs = append(txs, batch...)
 	}
@@ -289,8 +289,8 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 		}
 	}
 	// Nope, we're really full syncing
-	head := cs.handler.chain.CurrentHeader()
-	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
+	head := cs.handler.chain.CurrentBlock()
+	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
 	return downloader.FullSync, td
 }
 

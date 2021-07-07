@@ -40,7 +40,6 @@ type (
 
 	// Service is a service registered at the Server and identified by a string id
 	Service interface {
-		ServiceInfo() (id, desc string)                                      // only called during registration
 		Handle(id enode.ID, address string, name string, data []byte) []byte // never called concurrently
 	}
 
@@ -60,9 +59,8 @@ func NewServer(delayPerRequest time.Duration) *Server {
 }
 
 // Register registers a Service
-func (s *Server) Register(b Service) {
-	srv := &serviceEntry{backend: b}
-	srv.id, srv.desc = b.ServiceInfo()
+func (s *Server) Register(b Service, id, desc string) {
+	srv := &serviceEntry{backend: b, id: id, desc: desc}
 	if strings.Contains(srv.id, ":") {
 		// srv.id + ":" will be used as a service database prefix
 		log.Error("Service ID contains ':'", "id", srv.id)

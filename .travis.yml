@@ -24,6 +24,42 @@ jobs:
       script:
         - go run build/ci.go lint
 
+    # These builders create the Docker sub-images for multi-arch push and each
+    # will attempt to push the multi-arch image if they are the last builder
+    - stage: build
+      if: type = push
+      os: linux
+      arch: amd64
+      dist: bionic
+      go: 1.16.x
+      env:
+        - docker
+      services:
+        - docker
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      before_install:
+        - export DOCKER_CLI_EXPERIMENTAL=enabled
+      script:
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload karalabe/geth-docker-test
+
+    - stage: build
+      if: type = push
+      os: linux
+      arch: arm64
+      dist: bionic
+      go: 1.16.x
+      env:
+        - docker
+      services:
+        - docker
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      before_install:
+        - export DOCKER_CLI_EXPERIMENTAL=enabled
+      script:
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload karalabe/geth-docker-test
+
     # This builder does the Ubuntu PPA upload
     - stage: build
       if: type = push

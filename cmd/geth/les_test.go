@@ -137,14 +137,18 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 		name: name,
 		geth: runGeth(t, args...),
 	}
-	// wait before we can attach to it. TODO: probe for it properly
-	time.Sleep(1 * time.Second)
-	var err error
 	ipcpath := ipcEndpoint(ipcName, g.geth.Datadir)
-	if g.rpc, err = rpc.Dial(ipcpath); err != nil {
-		t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+	// We can't know exactly how long geth will take to start, so we try 10
+	// times over a 5 second period.
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
+			return g
+		}
 	}
-	return g
+	t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+	return nil
 }
 
 func initGeth(t *testing.T) string {

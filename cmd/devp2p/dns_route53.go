@@ -107,22 +107,48 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return err
 	}
 	log.Info(fmt.Sprintf("Found %d TXT records", len(existing)))
-
 	records := t.ToTXT(name)
 	changes := c.computeChanges(name, records, existing)
+
+	// Submit to API.
+	comment := fmt.Sprintf("enrtree update of %s at seq %d", name, t.Seq())
+	return c.submitChanges(changes, comment)
+}
+
+// deleteDomain removes all TXT records of the given domain.
+func (c *route53Client) deleteDomain(name string) error {
+	if err := c.checkZone(name); err != nil {
+		return err
+	}
+
+	// Compute DNS changes.
+	existing, err := c.collectRecords(name)
+	if err != nil {
+		return err
+	}
+	log.Info(fmt.Sprintf("Found %d TXT records", len(existing)))
+	changes := makeDeletionChanges(existing, nil)
+
+	// Submit to API.
+	comment := "enrtree delete of " + name
+	return c.submitChanges(changes, comment)
+}
+
+// submitChanges submits the given DNS changes to Route53.
+func (c *route53Client) submitChanges(changes []types.Change, comment string) error {
 	if len(changes) == 0 {
 		log.Info("No DNS changes needed")
 		return nil
 	}
 
-	// Submit all change batches.
+	var err error
 	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
 	changesToCheck := make([]*route53.ChangeResourceRecordSetsOutput, len(batches))
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := &types.ChangeBatch{
 			Changes: changes,
-			Comment: aws.String(fmt.Sprintf("enrtree update %d/%d of %s at seq %d", i+1, len(batches), name, t.Seq())),
+			Comment: aws.String(fmt.Sprintf("%s (%d/%d)", comment, i+1, len(batches))),
 		}
 		req := &route53.ChangeResourceRecordSetsInput{HostedZoneId: &c.zoneID, ChangeBatch: batch}
 		changesToCheck[i], err = c.api.ChangeResourceRecordSets(context.TODO(), req)
@@ -131,7 +157,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		}
 	}
 
-	// wait for all change batches to propagate
+	// Wait for all change batches to propagate.
 	for _, change := range changesToCheck {
 		log.Info(fmt.Sprintf("Waiting for change request %s", *change.ChangeInfo.Id))
 		wreq := &route53.GetChangeInput{Id: change.ChangeInfo.Id}
@@ -151,7 +177,6 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 			time.Sleep(30 * time.Second)
 		}
 	}
-
 	return nil
 }
 
@@ -186,7 +211,8 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 	return "", errors.New("can't find zone ID for " + name)
 }
 
-// computeChanges creates DNS changes for the given record.
+// computeChanges creates DNS changes for the given set of DNS discovery records.
+// The 'existing' arg is the set of records that already exist on Route53.
 func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string]recordSet) []types.Change {
 	// Convert all names to lowercase.
 	lrecords := make(map[string]string, len(records))
@@ -196,38 +222,50 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	records = lrecords
 
 	var changes []types.Change
-	for path, val := range records {
+	for path, newValue := range records {
+		prevRecords, exists := existing[path]
+		prevValue := strings.Join(prevRecords.values, "")
+
+		// prevValue contains quoted strings, encode newValue to compare.
+		newValue = splitTXT(newValue)
+
+		// Assign TTL.
 		ttl := int64(rootTTL)
 		if path != name {
 			ttl = int64(treeNodeTTL)
 		}
 
-		prevRecords, exists := existing[path]
-		prevValue := strings.Join(prevRecords.values, "")
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
-			changes = append(changes, newTXTChange("CREATE", path, ttl, splitTXT(val)))
-		} else if prevValue != val || prevRecords.ttl != ttl {
+			log.Info(fmt.Sprintf("Creating %s = %s", path, newValue))
+			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+		} else if prevValue != newValue || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
-			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, prevValue, val))
-			changes = append(changes, newTXTChange("UPSERT", path, ttl, splitTXT(val)))
+			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, newValue))
+			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
 		} else {
-			log.Info(fmt.Sprintf("Skipping %s = %q", path, val))
+			log.Debug(fmt.Sprintf("Skipping %s = %s", path, newValue))
 		}
 	}
 
 	// Iterate over the old records and delete anything stale.
-	for path, set := range existing {
-		if _, ok := records[path]; ok {
+	changes = append(changes, makeDeletionChanges(existing, records)...)
+
+	// Ensure changes are in the correct order.
+	sortChanges(changes)
+	return changes
+}
+
+// makeDeletionChanges creates record changes which delete all records not contained in 'keep'.
+func makeDeletionChanges(records map[string]recordSet, keep map[string]string) []types.Change {
+	var changes []types.Change
+	for path, set := range records {
+		if _, ok := keep[path]; ok {
 			continue
 		}
-		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, strings.Join(set.values, "")))
+		log.Info(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
 		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
-
-	sortChanges(changes)
 	return changes
 }
 
@@ -288,21 +326,19 @@ func changeCount(ch types.Change) int {
 
 // collectRecords collects all TXT records below the given name.
 func (c *route53Client) collectRecords(name string) (map[string]recordSet, error) {
-	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s (%s)", name, c.zoneID))
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
-	for {
+	for page := 0; ; page++ {
+		log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
 		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
 		if err != nil {
 			return existing, err
 		}
-
 		for _, set := range resp.ResourceRecordSets {
 			if !isSubdomain(*set.Name, name) || set.Type != types.RRTypeTxt {
 				continue
 			}
-
 			s := recordSet{ttl: *set.TTL}
 			for _, rec := range set.ResourceRecords {
 				s.values = append(s.values, *rec.Value)
@@ -314,14 +350,12 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 		if !resp.IsTruncated {
 			break
 		}
-
-		// Set the cursor to the next batc. From the AWS docs:
+		// Set the cursor to the next batch. From the AWS docs:
 		//
 		// To display the next page of results, get the values of NextRecordName,
 		// NextRecordType, and NextRecordIdentifier (if any) from the response. Then submit
 		// another ListResourceRecordSets request, and specify those values for
 		// StartRecordName, StartRecordType, and StartRecordIdentifier.
-
 		req.StartRecordIdentifier = resp.NextRecordIdentifier
 		req.StartRecordName = resp.NextRecordName
 		req.StartRecordType = resp.NextRecordType

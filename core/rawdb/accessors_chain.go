@@ -839,7 +839,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
 }
 
-// ReadHeadHeader returns the current canonical head block.
+// ReadHeadBlock returns the current canonical head block.
 func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
 	if headBlockHash == (common.Hash{}) {
