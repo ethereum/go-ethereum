@@ -73,7 +73,7 @@ Sets the etherbase, where mining rewards will go.
 
 ### miner_setGasLimit
 
-Sets the gas limit the miner will target when minning. 
+Sets the gas limit the miner will target when mining. 
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|
