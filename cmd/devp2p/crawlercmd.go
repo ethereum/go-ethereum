@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -86,8 +87,9 @@ var (
 )
 
 type crawledNode struct {
-	node nodeJSON
-	info *clientInfo
+	node         nodeJSON
+	info         *clientInfo
+	tooManyPeers bool
 }
 
 type clientInfo struct {
@@ -192,12 +194,16 @@ func crawlRound(ctx *cli.Context, inputSet nodeSet, db *sql.DB, timeout time.Dur
 		for {
 			node := <-in
 			info, err := getClientInfo(genesis, networkID, nodeURL, node.N)
+			tooManyPeers := false
 			if err != nil {
 				log.Warn("GetClientInfo failed", "error", err, "nodeID", node.N.ID())
+				if strings.Contains(err.Error(), "too many peers") {
+					tooManyPeers = true
+				}
 			} else {
 				log.Info("GetClientInfo succeeded")
 			}
-			out <- crawledNode{node: node, info: info}
+			out <- crawledNode{node: node, info: info, tooManyPeers: tooManyPeers}
 		}
 	}
 	// Schedule 10 workers
@@ -413,6 +419,9 @@ func updateNodes(db *sql.DB, nodes []crawledNode) error {
 		info := &clientInfo{}
 		if node.info != nil {
 			info = node.info
+		}
+		if info.ClientType == "" && node.tooManyPeers {
+			info.ClientType = "tmp"
 		}
 		connType := ""
 		var portUDP enr.UDP
