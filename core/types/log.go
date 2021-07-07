@@ -68,9 +68,6 @@ type rlpLog struct {
 	Data    []byte
 }
 
-// rlpStorageLog is the storage encoding of a log.
-type rlpStorageLog rlpLog
-
 // EncodeRLP implements rlp.Encoder.
 func (l *Log) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data})
@@ -84,29 +81,4 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 		l.Address, l.Topics, l.Data = dec.Address, dec.Topics, dec.Data
 	}
 	return err
-}
-
-// LogForStorage is a wrapper around a Log that flattens and parses the entire content of
-// a log including non-consensus fields.
-type LogForStorage Log
-
-// EncodeRLP implements rlp.Encoder.
-func (l *LogForStorage) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rlpStorageLog{
-		Address: l.Address,
-		Topics:  l.Topics,
-		Data:    l.Data,
-	})
-}
-
-// DecodeRLP implements rlp.Decoder.
-//
-// Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
-func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
-	var dec rlpStorageLog
-	if err := s.Decode(&dec); err != nil {
-		return err
-	}
-	*l = LogForStorage{Address: dec.Address, Topics: dec.Topics, Data: dec.Data}
-	return nil
 }
