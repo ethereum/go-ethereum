@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -129,6 +130,14 @@ var encTests = []encTest{
 	{
 		val:    big.NewInt(0).SetBytes(unhex("010000000000000000000000000000000000000000000000000000000000000000")),
 		output: "A1010000000000000000000000000000000000000000000000000000000000000000",
+	},
+	{
+		val:    veryBigInt,
+		output: "89FFFFFFFFFFFFFFFFFF",
+	},
+	{
+		val:    veryVeryBigInt,
+		output: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001",
 	},
 
 	// non-pointer big.Int
@@ -257,12 +266,30 @@ var encTests = []encTest{
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
+	{val: &intField{X: 3}, error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)"},
+
+	// struct tag "-"
+	{val: &ignoredField{A: 1, B: 2, C: 3}, output: "C20103"},
+
+	// struct tag "tail"
 	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}}, output: "C3010203"},
 	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02")}}, output: "C20102"},
 	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
-	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
-	{val: &intField{X: 3}, error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)"},
+
+	// struct tag "optional"
+	{val: &optionalFields{}, output: "C180"},
+	{val: &optionalFields{A: 1}, output: "C101"},
+	{val: &optionalFields{A: 1, B: 2}, output: "C20102"},
+	{val: &optionalFields{A: 1, B: 2, C: 3}, output: "C3010203"},
+	{val: &optionalFields{A: 1, B: 0, C: 3}, output: "C3018003"},
+	{val: &optionalAndTailField{A: 1}, output: "C101"},
+	{val: &optionalAndTailField{A: 1, B: 2}, output: "C20102"},
+	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
+	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
+	{val: &optionalBigIntField{A: 1}, output: "C101"},
+	{val: &optionalPtrField{A: 1}, output: "C101"},
+	{val: &optionalPtrFieldNil{A: 1}, output: "C101"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
@@ -458,6 +485,57 @@ func BenchmarkEncodeBigInts(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out.Reset()
 		if err := Encode(out, ints); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEncodeConcurrentInterface(b *testing.B) {
+	type struct1 struct {
+		A string
+		B *big.Int
+		C [20]byte
+	}
+	value := []interface{}{
+		uint(999),
+		&struct1{A: "hello", B: big.NewInt(0xFFFFFFFF)},
+		[10]byte{1, 2, 3, 4, 5, 6},
+		[]string{"yeah", "yeah", "yeah"},
+	}
+
+	var wg sync.WaitGroup
+	for cpu := 0; cpu < runtime.NumCPU(); cpu++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var buffer bytes.Buffer
+			for i := 0; i < b.N; i++ {
+				buffer.Reset()
+				err := Encode(&buffer, value)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+type byteArrayStruct struct {
+	A [20]byte
+	B [32]byte
+	C [32]byte
+}
+
+func BenchmarkEncodeByteArrayStruct(b *testing.B) {
+	var out bytes.Buffer
+	var value byteArrayStruct
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		out.Reset()
+		if err := Encode(&out, &value); err != nil {
 			b.Fatal(err)
 		}
 	}

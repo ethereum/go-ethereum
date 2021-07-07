@@ -21,7 +21,7 @@ import (
 )
 
 type (
-	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error)
+	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
 	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
@@ -57,10 +57,20 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
 	berlinInstructionSet           = newBerlinInstructionSet()
+	londonInstructionSet           = newLondonInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newLondonInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin and london instructions.
+func newLondonInstructionSet() JumpTable {
+	instructionSet := newBerlinInstructionSet()
+	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
+	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+	return instructionSet
+}
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg and berlin instructions.

@@ -86,7 +86,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 		config:     genesis.Config,
 		events:     filters.NewEventSystem(&filterBackend{database, blockchain}, false),
 	}
-	backend.rollback()
+	backend.rollback(blockchain.CurrentBlock())
 	return backend
 }
 
@@ -112,7 +112,9 @@ func (b *SimulatedBackend) Commit() {
 	if _, err := b.blockchain.InsertChain([]*types.Block{b.pendingBlock}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
-	b.rollback()
+	// Using the last inserted block here makes it possible to build on a side
+	// chain after a fork.
+	b.rollback(b.pendingBlock)
 }
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
@@ -120,14 +122,41 @@ func (b *SimulatedBackend) Rollback() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.rollback()
+	b.rollback(b.blockchain.CurrentBlock())
 }
 
-func (b *SimulatedBackend) rollback() {
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
+func (b *SimulatedBackend) rollback(parent *types.Block) {
+	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
+}
+
+// Fork creates a side-chain that can be used to simulate reorgs.
+//
+// This function should be called with the ancestor block where the new side
+// chain should be started. Transactions (old and new) can then be applied on
+// top and Commit-ed.
+//
+// Note, the side-chain will only become canonical (and trigger the events) when
+// it becomes longer. Until then CallContract will still operate on the current
+// canonical chain.
+//
+// There is a % chance that the side chain becomes canonical at the same length
+// to simulate live network behavior.
+func (b *SimulatedBackend) Fork(ctx context.Context, parent common.Hash) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.pendingBlock.Transactions()) != 0 {
+		return errors.New("pending block dirty")
+	}
+	block, err := b.blockByHash(ctx, parent)
+	if err != nil {
+		return err
+	}
+	b.rollback(block)
+	return nil
 }
 
 // stateByBlockNumber retrieves a state by a given blocknumber.
@@ -135,7 +164,7 @@ func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *
 	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
 		return b.blockchain.State()
 	}
-	block, err := b.blockByNumberNoLock(ctx, blockNumber)
+	block, err := b.blockByNumber(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +257,11 @@ func (b *SimulatedBackend) BlockByHash(ctx context.Context, hash common.Hash) (*
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	return b.blockByHash(ctx, hash)
+}
+
+// blockByHash retrieves a block based on the block hash without Locking.
+func (b *SimulatedBackend) blockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if hash == b.pendingBlock.Hash() {
 		return b.pendingBlock, nil
 	}
@@ -246,12 +280,12 @@ func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.blockByNumberNoLock(ctx, number)
+	return b.blockByNumber(ctx, number)
 }
 
-// blockByNumberNoLock retrieves a block from the database by number, caching it
+// blockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found without Lock.
-func (b *SimulatedBackend) blockByNumberNoLock(ctx context.Context, number *big.Int) (*types.Block, error) {
+func (b *SimulatedBackend) blockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
 	if number == nil || number.Cmp(b.pendingBlock.Number()) == 0 {
 		return b.blockchain.CurrentBlock(), nil
 	}
@@ -431,6 +465,12 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 	return big.NewInt(1), nil
 }
 
+// SuggestGasTipCap implements ContractTransactor.SuggestGasTipCap. Since the simulated
+// chain doesn't have miners, we just return a gas tip of 1 for any call.
+func (b *SimulatedBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(1), nil
+}
+
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
@@ -527,10 +567,38 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
 func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
-	// Ensure message is initialized properly.
-	if call.GasPrice == nil {
-		call.GasPrice = big.NewInt(1)
+	// Gas prices post 1559 need to be initialized
+	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
+		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
+	head := b.blockchain.CurrentHeader()
+	if !b.blockchain.Config().IsLondon(head.Number) {
+		// If there's no basefee, then it must be a non-1559 execution
+		if call.GasPrice == nil {
+			call.GasPrice = new(big.Int)
+		}
+		call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
+	} else {
+		// A basefee is provided, necessitating 1559-type execution
+		if call.GasPrice != nil {
+			// User specified the legacy gas field, convert to 1559 gas typing
+			call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
+		} else {
+			// User specified 1559 gas feilds (or none), use those
+			if call.GasFeeCap == nil {
+				call.GasFeeCap = new(big.Int)
+			}
+			if call.GasTipCap == nil {
+				call.GasTipCap = new(big.Int)
+			}
+			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
+			call.GasPrice = new(big.Int)
+			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
+				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, head.BaseFee), call.GasFeeCap)
+			}
+		}
+	}
+	// Ensure message is initialized properly.
 	if call.Gas == 0 {
 		call.Gas = 50000000
 	}
@@ -547,7 +615,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
@@ -559,8 +627,12 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Check transaction validity.
-	block := b.blockchain.CurrentBlock()
+	// Get the last block
+	block, err := b.blockByHash(ctx, b.pendingBlock.ParentHash())
+	if err != nil {
+		panic("could not fetch parent")
+	}
+	// Check transaction validity
 	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
@@ -570,8 +642,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if tx.Nonce() != nonce {
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
-
-	// Include tx in chain.
+	// Include tx in chain
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
@@ -716,6 +787,8 @@ func (m callMsg) Nonce() uint64                { return 0 }
 func (m callMsg) CheckNonce() bool             { return false }
 func (m callMsg) To() *common.Address          { return m.CallMsg.To }
 func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
+func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
+func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
 func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
 func (m callMsg) Data() []byte                 { return m.CallMsg.Data }

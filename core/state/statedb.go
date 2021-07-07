@@ -972,7 +972,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, StateChanges, er
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
-	root, err := s.trie.Commit(func(path []byte, leaf []byte, parent common.Hash) error {
+	root, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash) error {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
@@ -1016,7 +1016,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, StateChanges, er
 // - Add precompiles to access list (2929)
 // - Add the contents of the optional tx access list (2930)
 //
-// This method should only be called if Yolov3/Berlin/2929+2930 is applicable at the current number.
+// This method should only be called if Berlin/2929+2930 is applicable at the current number.
 func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	s.AddAddressToAccessList(sender)
 	if dst != nil {

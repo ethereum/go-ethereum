@@ -184,7 +184,7 @@ func TestToFilterArg(t *testing.T) {
 var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testBalance = big.NewInt(2e10)
+	testBalance = big.NewInt(2e15)
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
@@ -220,6 +220,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
+		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
@@ -288,8 +289,9 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			want:  chain[1].Header(),
 		},
 		"future_block": {
-			block: big.NewInt(1000000000),
-			want:  nil,
+			block:   big.NewInt(1000000000),
+			want:    nil,
+			wantErr: ethereum.NotFound,
 		},
 	}
 	for name, tt := range tests {
@@ -299,10 +301,10 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			defer cancel()
 
 			got, err := ec.HeaderByNumber(ctx, tt.block)
-			if tt.wantErr != nil && (err == nil || err.Error() != tt.wantErr.Error()) {
+			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
-			if got != nil && got.Number.Sign() == 0 {
+			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
@@ -456,8 +458,16 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gasPrice.Cmp(big.NewInt(1000000000)) != 0 {
+	if gasPrice.Cmp(big.NewInt(1875000000)) != 0 { // 1 gwei tip + 0.875 basefee after a 1 gwei fee empty block
 		t.Fatalf("unexpected gas price: %v", gasPrice)
+	}
+	// SuggestGasTipCap (should suggest 1 Gwei)
+	gasTipCap, err := ec.SuggestGasTipCap(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gasTipCap.Cmp(big.NewInt(1000000000)) != 0 {
+		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
 	}
 }
 
@@ -466,11 +476,10 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 
 	// EstimateGas
 	msg := ethereum.CallMsg{
-		From:     testAddr,
-		To:       &common.Address{},
-		Gas:      21000,
-		GasPrice: big.NewInt(1),
-		Value:    big.NewInt(1),
+		From:  testAddr,
+		To:    &common.Address{},
+		Gas:   21000,
+		Value: big.NewInt(1),
 	}
 	gas, err := ec.EstimateGas(context.Background(), msg)
 	if err != nil {
@@ -559,7 +568,7 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(params.InitialBaseFee), nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {

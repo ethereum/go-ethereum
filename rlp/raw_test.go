@@ -263,6 +263,12 @@ func TestAppendUint64(t *testing.T) {
 		if !bytes.Equal(x, unhex(test.output)) {
 			t.Errorf("AppendUint64(%v, %d): got %x, want %s", test.slice, test.input, x, test.output)
 		}
+
+		// Check that IntSize returns the appended size.
+		length := len(x) - len(test.slice)
+		if s := IntSize(test.input); s != length {
+			t.Errorf("IntSize(%d): got %d, want %d", test.input, s, length)
+		}
 	}
 }
 

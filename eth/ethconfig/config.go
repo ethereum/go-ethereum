@@ -41,21 +41,23 @@ import (
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
 var FullNodeGPO = gasprice.Config{
-	Blocks:     20,
-	Percentile: 60,
-	MaxPrice:   gasprice.DefaultMaxPrice,
+	Blocks:      20,
+	Percentile:  60,
+	MaxPrice:    gasprice.DefaultMaxPrice,
+	IgnorePrice: gasprice.DefaultIgnorePrice,
 }
 
 // LightClientGPO contains default gasprice oracle settings for light client.
 var LightClientGPO = gasprice.Config{
-	Blocks:     2,
-	Percentile: 60,
-	MaxPrice:   gasprice.DefaultMaxPrice,
+	Blocks:      2,
+	Percentile:  60,
+	MaxPrice:    gasprice.DefaultMaxPrice,
+	IgnorePrice: gasprice.DefaultIgnorePrice,
 }
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode: downloader.FastSync,
+	SyncMode: downloader.SnapSync,
 	Ethash: ethash.Config{
 		CacheDir:         "ethash",
 		CachesInMem:      2,
@@ -83,7 +85,7 @@ var Defaults = Config{
 		Recommit: 3 * time.Second,
 	},
 	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   25000000,
+	RPCGasCap:   50000000,
 	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
@@ -187,11 +189,11 @@ type Config struct {
 	EVMInterpreter string
 
 	// RPCGasCap is the global gas cap for eth-call variants.
-	RPCGasCap uint64 `toml:",omitempty"`
+	RPCGasCap uint64
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
-	RPCTxFeeCap float64 `toml:",omitempty"`
+	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
 	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
@@ -200,7 +202,7 @@ type Config struct {
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
 	// Berlin block override (TODO: remove after the fork)
-	OverrideBerlin *big.Int `toml:",omitempty"`
+	OverrideLondon *big.Int `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
@@ -213,25 +215,23 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	switch config.PowMode {
 	case ethash.ModeFake:
 		log.Warn("Ethash used in fake mode")
-		return ethash.NewFaker()
 	case ethash.ModeTest:
 		log.Warn("Ethash used in test mode")
-		return ethash.NewTester(nil, noverify)
 	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
-		return ethash.NewShared()
-	default:
-		engine := ethash.New(ethash.Config{
-			CacheDir:         stack.ResolvePath(config.CacheDir),
-			CachesInMem:      config.CachesInMem,
-			CachesOnDisk:     config.CachesOnDisk,
-			CachesLockMmap:   config.CachesLockMmap,
-			DatasetDir:       config.DatasetDir,
-			DatasetsInMem:    config.DatasetsInMem,
-			DatasetsOnDisk:   config.DatasetsOnDisk,
-			DatasetsLockMmap: config.DatasetsLockMmap,
-		}, notify, noverify)
-		engine.SetThreads(-1) // Disable CPU mining
-		return engine
 	}
+	engine := ethash.New(ethash.Config{
+		PowMode:          config.PowMode,
+		CacheDir:         stack.ResolvePath(config.CacheDir),
+		CachesInMem:      config.CachesInMem,
+		CachesOnDisk:     config.CachesOnDisk,
+		CachesLockMmap:   config.CachesLockMmap,
+		DatasetDir:       config.DatasetDir,
+		DatasetsInMem:    config.DatasetsInMem,
+		DatasetsOnDisk:   config.DatasetsOnDisk,
+		DatasetsLockMmap: config.DatasetsLockMmap,
+		NotifyFull:       config.NotifyFull,
+	}, notify, noverify)
+	engine.SetThreads(-1) // Disable CPU mining
+	return engine
 }

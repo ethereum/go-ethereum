@@ -131,6 +131,8 @@ func (t *table) Compact(start []byte, limit []byte) error {
 	// If no start was specified, use the table prefix as the first value
 	if start == nil {
 		start = []byte(t.prefix)
+	} else {
+		start = append([]byte(t.prefix), start...)
 	}
 	// If no limit was specified, use the first element not matching the prefix
 	// as the limit
@@ -147,6 +149,8 @@ func (t *table) Compact(start []byte, limit []byte) error {
 				limit = nil
 			}
 		}
+	} else {
+		limit = append([]byte(t.prefix), limit...)
 	}
 	// Range correctly calculated based on table prefix, delegate down
 	return t.db.Compact(start, limit)

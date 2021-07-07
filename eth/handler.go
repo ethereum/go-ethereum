@@ -66,7 +66,7 @@ type txPool interface {
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	Pending() (map[common.Address]types.Transactions, error)
+	Pending(enforceTips bool) (map[common.Address]types.Transactions, error)
 
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
@@ -177,7 +177,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	if atomic.LoadUint32(&h.fastSync) == 1 {
+	// Note: we don't enable it if snap-sync is performed, since it's very heavy
+	// and the heal-portion of the snap sync is much lighter than fast. What we particularly
+	// want to avoid, is a 90%-finished (but restarted) snap-sync to begin
+	// indexing the entire trie
+	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
 		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
 	}
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
@@ -283,7 +287,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
-	defer h.removePeer(peer.ID())
+	defer h.unregisterPeer(peer.ID())
 
 	p := h.peers.peer(peer.ID())
 	if p == nil {
@@ -350,9 +354,16 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	return handler(peer)
 }
 
-// removePeer unregisters a peer from the downloader and fetchers, removes it from
-// the set of tracked peers and closes the network connection to it.
+// removePeer requests disconnection of a peer.
 func (h *handler) removePeer(id string) {
+	peer := h.peers.peer(id)
+	if peer != nil {
+		peer.Peer.Disconnect(p2p.DiscUselessPeer)
+	}
+}
+
+// unregisterPeer removes a peer from the downloader, fetchers and main peer set.
+func (h *handler) unregisterPeer(id string) {
 	// Create a custom logger to avoid printing the entire id
 	var logger log.Logger
 	if len(id) < 16 {
@@ -380,8 +391,6 @@ func (h *handler) removePeer(id string) {
 	if err := h.peers.unregisterPeer(id); err != nil {
 		logger.Error("Ethereum peer removal failed", "err", err)
 	}
-	// Hard disconnect at the networking layer
-	peer.Peer.Disconnect(p2p.DiscUselessPeer)
 }
 
 func (h *handler) Start(maxPeers int) {
@@ -492,11 +501,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	for peer, hashes := range annos {
 		annoPeers++
 		annoCount += len(hashes)
-		if peer.Version() >= eth.ETH65 {
-			peer.AsyncSendPooledTransactionHashes(hashes)
-		} else {
-			peer.AsyncSendTransactions(hashes)
-		}
+		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,

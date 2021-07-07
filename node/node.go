@@ -547,7 +547,7 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -559,7 +559,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
+		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
 	}
 
 	if err == nil {
@@ -573,7 +573,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -592,7 +592,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 		case !filepath.IsAbs(freezer):
 			freezer = n.ResolvePath(freezer)
 		}
-		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
 	}
 
 	if err == nil {

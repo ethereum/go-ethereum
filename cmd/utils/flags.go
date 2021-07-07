@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	godebug "runtime/debug"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -65,6 +67,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -148,9 +151,9 @@ var (
 		Name:  "goerli",
 		Usage: "Görli network: pre-configured proof-of-authority test network",
 	}
-	YoloV3Flag = cli.BoolFlag{
-		Name:  "yolov3",
-		Usage: "YOLOv3 network: pre-configured proof-of-authority shortlived test network.",
+	CalaverasFlag = cli.BoolFlag{
+		Name:  "calaveras",
+		Usage: "Calaveras network: pre-configured proof-of-authority shortlived test network.",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -181,7 +184,7 @@ var (
 		Name:  "exitwhensynced",
 		Usage: "Exits after block synchronisation completes",
 	}
-	IterativeOutputFlag = cli.BoolFlag{
+	IterativeOutputFlag = cli.BoolTFlag{
 		Name:  "iterative",
 		Usage: "Print streaming JSON iteratively, delimited by newlines",
 	}
@@ -196,6 +199,16 @@ var (
 	ExcludeCodeFlag = cli.BoolFlag{
 		Name:  "nocode",
 		Usage: "Exclude contract code (save db lookups)",
+	}
+	StartKeyFlag = cli.StringFlag{
+		Name:  "start",
+		Usage: "Start position. Either a hash or address",
+		Value: "0x0000000000000000000000000000000000000000000000000000000000000000",
+	}
+	DumpLimitFlag = cli.Uint64Flag{
+		Name:  "limit",
+		Usage: "Max number of elements (0 = no limit)",
+		Value: 0,
 	}
 	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
@@ -230,9 +243,9 @@ var (
 		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
 		Value: 2048,
 	}
-	OverrideBerlinFlag = cli.Uint64Flag{
-		Name:  "override.berlin",
-		Usage: "Manually specify Berlin fork-block, overriding the bundled setting",
+	OverrideLondonFlag = cli.Uint64Flag{
+		Name:  "override.london",
+		Usage: "Manually specify London fork-block, overriding the bundled setting",
 	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
@@ -426,6 +439,10 @@ var (
 	MinerNotifyFlag = cli.StringFlag{
 		Name:  "miner.notify",
 		Usage: "Comma separated HTTP URL list to notify of new work packages",
+	}
+	MinerNotifyFullFlag = cli.BoolFlag{
+		Name:  "miner.notify.full",
+		Usage: "Notify with pending block headers instead of work packages",
 	}
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
@@ -658,10 +675,10 @@ var (
 	}
 
 	// ATM the url is left to the user and deployment to
-	JSpathFlag = cli.StringFlag{
+	JSpathFlag = DirectoryFlag{
 		Name:  "jspath",
 		Usage: "JavaScript root path for `loadScript`",
-		Value: ".",
+		Value: DirectoryString("."),
 	}
 
 	// Gas price oracle settings
@@ -679,6 +696,11 @@ var (
 		Name:  "gpo.maxprice",
 		Usage: "Maximum gas price will be recommended by gpo",
 		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
+	}
+	GpoIgnoreGasPriceFlag = cli.Int64Flag{
+		Name:  "gpo.ignoreprice",
+		Usage: "Gas price below which gpo will ignore transactions",
+		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
 
 	// Metrics flags
@@ -748,6 +770,11 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+
+	CatalystFlag = cli.BoolFlag{
+		Name:  "catalyst",
+		Usage: "Catalyst mode (eth2 integration testing)",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -766,8 +793,8 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
-		if ctx.GlobalBool(YoloV3Flag.Name) {
-			return filepath.Join(path, "yolo-v3")
+		if ctx.GlobalBool(CalaverasFlag.Name) {
+			return filepath.Join(path, "calaveras")
 		}
 		return path
 	}
@@ -821,8 +848,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(YoloV3Flag.Name):
-		urls = params.YoloV3Bootnodes
+	case ctx.GlobalBool(CalaverasFlag.Name):
+		urls = params.CalaverasBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1179,10 +1206,11 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if ctx.GlobalBool(DeveloperFlag.Name) {
+	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
-		cfg.ListenAddr = ":0"
+		cfg.ListenAddr = ""
+		cfg.NoDial = true
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false
 	}
@@ -1205,6 +1233,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.GlobalString(KeyStoreDirFlag.Name)
+	}
+	if ctx.GlobalIsSet(DeveloperFlag.Name) {
+		cfg.UseLightweightKDF = true
 	}
 	if ctx.GlobalIsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.GlobalBool(LightKDFFlag.Name)
@@ -1262,8 +1293,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(YoloV3Flag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v3")
+	case ctx.GlobalBool(CalaverasFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "calaveras")
 	}
 }
 
@@ -1282,6 +1313,9 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	}
 	if ctx.GlobalIsSet(GpoMaxGasPriceFlag.Name) {
 		cfg.MaxPrice = big.NewInt(ctx.GlobalInt64(GpoMaxGasPriceFlag.Name))
+	}
+	if ctx.GlobalIsSet(GpoIgnoreGasPriceFlag.Name) {
+		cfg.IgnorePrice = big.NewInt(ctx.GlobalInt64(GpoIgnoreGasPriceFlag.Name))
 	}
 }
 
@@ -1359,6 +1393,7 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
 	}
+	cfg.NotifyFull = ctx.GlobalBool(MinerNotifyFullFlag.Name)
 	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
 	}
@@ -1446,7 +1481,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, YoloV3Flag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, CalaverasFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1467,6 +1502,26 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
+
+	// Cap the cache allowance and tune the garbage collector
+	mem, err := gopsutil.VirtualMemory()
+	if err == nil {
+		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
+			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
+			mem.Total = 2 * 1024 * 1024 * 1024
+		}
+		allowance := int(mem.Total / 1024 / 1024 / 3)
+		if cache := ctx.GlobalInt(CacheFlag.Name); cache > allowance {
+			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+			ctx.GlobalSet(CacheFlag.Name, strconv.Itoa(allowance))
+		}
+	}
+	// Ensure Go's GC ignores the database cache for trigger percentage
+	cache := ctx.GlobalInt(CacheFlag.Name)
+	gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
+
+	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+	godebug.SetGCPercent(int(gogc))
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
@@ -1586,15 +1641,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(YoloV3Flag.Name):
+	case ctx.GlobalBool(CalaverasFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = new(big.Int).SetBytes([]byte("yolov3x")).Uint64() // "yolov3x"
+			cfg.NetworkId = 123 // https://gist.github.com/holiman/c5697b041b3dc18c50a5cdd382cbdd16
 		}
-		cfg.Genesis = core.DefaultYoloV3GenesisBlock()
+		cfg.Genesis = core.DefaultCalaverasGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
+		cfg.SyncMode = downloader.FullSync
 		// Create new developer account or reuse existing one
 		var (
 			developer  accounts.Account
@@ -1628,7 +1684,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if ctx.GlobalIsSet(DataDirFlag.Name) {
 			// Check if we have an already initialized chain and fall back to
 			// that if so. Otherwise we need to generate a new genesis spec.
-			chaindb := MakeChainDatabase(ctx, stack)
+			chaindb := MakeChainDatabase(ctx, stack, false) // TODO (MariusVanDerWijden) make this read only
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
@@ -1656,23 +1712,21 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 	}
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 		cfg.EthDiscoveryURLs = []string{url}
-	}
-	if cfg.SyncMode == downloader.SnapSync {
-		if url := params.KnownDNSNetwork(genesis, "snap"); url != "" {
-			cfg.SnapDiscoveryURLs = []string{url}
-		}
+		cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
 	}
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) ethapi.Backend {
+// The second return value is the full node instance, which may be nil if the
+// node is running as a light client.
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
-		return backend.ApiBackend
+		return backend.ApiBackend, nil
 	}
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
@@ -1685,7 +1739,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) ethapi.Backend 
 		}
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
-	return backend.APIBackend
+	return backend.APIBackend, backend
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
@@ -1749,7 +1803,7 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
-func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
+func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles()
@@ -1759,10 +1813,10 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	)
 	if ctx.GlobalString(SyncModeFlag.Name) == "light" {
 		name := "lightchaindata"
-		chainDb, err = stack.OpenDatabase(name, cache, handles, "")
+		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
 	} else {
 		name := "chaindata"
-		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "")
+		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
@@ -1773,14 +1827,16 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
+	case ctx.GlobalBool(MainnetFlag.Name):
+		genesis = core.DefaultGenesisBlock()
 	case ctx.GlobalBool(RopstenFlag.Name):
 		genesis = core.DefaultRopstenGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(YoloV3Flag.Name):
-		genesis = core.DefaultYoloV3GenesisBlock()
+	case ctx.GlobalBool(CalaverasFlag.Name):
+		genesis = core.DefaultCalaverasGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -1788,9 +1844,9 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
-	chainDb = MakeChainDatabase(ctx, stack)
+	chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
@@ -1839,12 +1895,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
-	var limit *uint64
-	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) && !readOnly {
-		l := ctx.GlobalUint64(TxLookupLimitFlag.Name)
-		limit = &l
-	}
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, limit)
+
+	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
+	// Disable transaction indexing/unindexing by default.
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

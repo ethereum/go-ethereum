@@ -45,17 +45,17 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
 	bankKey, _ = crypto.GenerateKey()
 	bankAddr   = crypto.PubkeyToAddress(bankKey.PublicKey)
-	bankFunds  = big.NewInt(1000000000000000000)
+	bankFunds  = big.NewInt(1_000_000_000_000_000_000)
 
 	userKey1, _ = crypto.GenerateKey()
 	userKey2, _ = crypto.GenerateKey()
@@ -123,7 +123,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 
 			// bankUser transfers some ether to user1
 			nonce, _ := backend.PendingNonceAt(ctx, bankAddr)
-			tx, _ := types.SignTx(types.NewTransaction(nonce, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
+			tx, _ := types.SignTx(types.NewTransaction(nonce, userAddr1, big.NewInt(10_000_000_000_000_000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, bankKey)
 			backend.SendTransaction(ctx, tx)
 		case 1:
 			// Builtin-block
@@ -134,20 +134,20 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			userNonce1, _ := backend.PendingNonceAt(ctx, userAddr1)
 
 			// bankUser transfers more ether to user1
-			tx1, _ := types.SignTx(types.NewTransaction(bankNonce, userAddr1, big.NewInt(1000), params.TxGas, nil, nil), signer, bankKey)
+			tx1, _ := types.SignTx(types.NewTransaction(bankNonce, userAddr1, big.NewInt(1_000_000_000_000_000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, bankKey)
 			backend.SendTransaction(ctx, tx1)
 
 			// user1 relays ether to user2
-			tx2, _ := types.SignTx(types.NewTransaction(userNonce1, userAddr2, big.NewInt(1000), params.TxGas, nil, nil), signer, userKey1)
+			tx2, _ := types.SignTx(types.NewTransaction(userNonce1, userAddr2, big.NewInt(1_000_000_000_000_000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, userKey1)
 			backend.SendTransaction(ctx, tx2)
 
 			// user1 deploys a test contract
-			tx3, _ := types.SignTx(types.NewContractCreation(userNonce1+1, big.NewInt(0), 200000, big.NewInt(0), testContractCode), signer, userKey1)
+			tx3, _ := types.SignTx(types.NewContractCreation(userNonce1+1, big.NewInt(0), 200000, big.NewInt(params.InitialBaseFee), testContractCode), signer, userKey1)
 			backend.SendTransaction(ctx, tx3)
 			testContractAddr = crypto.CreateAddress(userAddr1, userNonce1+1)
 
 			// user1 deploys a event contract
-			tx4, _ := types.SignTx(types.NewContractCreation(userNonce1+2, big.NewInt(0), 200000, big.NewInt(0), testEventEmitterCode), signer, userKey1)
+			tx4, _ := types.SignTx(types.NewContractCreation(userNonce1+2, big.NewInt(0), 200000, big.NewInt(params.InitialBaseFee), testEventEmitterCode), signer, userKey1)
 			backend.SendTransaction(ctx, tx4)
 		case 2:
 			// Builtin-block
@@ -156,12 +156,12 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 
 			// bankUser transfer some ether to signer
 			bankNonce, _ := backend.PendingNonceAt(ctx, bankAddr)
-			tx1, _ := types.SignTx(types.NewTransaction(bankNonce, signerAddr, big.NewInt(1000000000), params.TxGas, nil, nil), signer, bankKey)
+			tx1, _ := types.SignTx(types.NewTransaction(bankNonce, signerAddr, big.NewInt(1000000000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, bankKey)
 			backend.SendTransaction(ctx, tx1)
 
 			// invoke test contract
 			data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001")
-			tx2, _ := types.SignTx(types.NewTransaction(bankNonce+1, testContractAddr, big.NewInt(0), 100000, nil, data), signer, bankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(bankNonce+1, testContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, bankKey)
 			backend.SendTransaction(ctx, tx2)
 		case 3:
 			// Builtin-block
@@ -171,7 +171,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			// invoke test contract
 			bankNonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
-			tx, _ := types.SignTx(types.NewTransaction(bankNonce, testContractAddr, big.NewInt(0), 100000, nil, data), signer, bankKey)
+			tx, _ := types.SignTx(types.NewTransaction(bankNonce, testContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, bankKey)
 			backend.SendTransaction(ctx, tx)
 		}
 		backend.Commit()
@@ -189,7 +189,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) *clientHandler {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -197,6 +197,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
 			GasLimit: 100000000,
+			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
@@ -245,15 +246,18 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		client.oracle.Start(backend)
 	}
 	client.handler.start()
-	return client.handler
+	return client.handler, func() {
+		client.handler.stop()
+	}
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend, func()) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
 			GasLimit: 100000000,
+			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
@@ -284,7 +288,6 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		}
 		oracle = checkpointoracle.New(checkpointConfig, getLocal)
 	}
-	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	server := &LesServer{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),
@@ -296,8 +299,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			oracle:      oracle,
 			closeCh:     make(chan struct{}),
 		},
-		ns:           ns,
-		broadcaster:  newBroadcaster(ns),
+		peers:        newClientPeerSet(),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -307,16 +309,21 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	}
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
-	server.clientPool = newClientPool(ns, db, testBufRecharge, defaultConnectedBias, clock, func(id enode.ID) {})
-	server.clientPool.setLimits(10000, 10000) // Assign enough capacity for clientpool
+	server.clientPool = vfs.NewClientPool(db, testBufRecharge, defaultConnectedBias, clock, alwaysTrueFn)
+	server.clientPool.Start()
+	server.clientPool.SetLimits(10000, 10000) // Assign enough capacity for clientpool
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
 	}
 	server.servingQueue.setThreads(4)
-	ns.Start()
 	server.handler.start()
-	return server.handler, simulation
+	closer := func() { server.Stop() }
+	return server.handler, simulation, closer
+}
+
+func alwaysTrueFn() bool {
+	return true
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.
@@ -598,8 +605,8 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b := newTestServerHandler(config.blocks, sindexers, sdb, clock)
-	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
+	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
+	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
@@ -656,11 +663,18 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		cbIndexer.Close()
 		scIndexer.Close()
 		sbIndexer.Close()
+		dist.close()
+		serverClose()
 		b.Close()
+		clientClose()
 	}
 	return s, c, teardown
 }
 
-func NewFuzzerPeer(version int) *clientPeer {
-	return newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+// NewFuzzerPeer creates a client peer for test purposes, and also returns
+// a function to close the peer: this is needed to avoid goroutine leaks in the
+// exec queue.
+func NewFuzzerPeer(version int) (p *clientPeer, closer func()) {
+	p = newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+	return p, func() { p.peerCommons.close() }
 }
