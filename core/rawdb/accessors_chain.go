@@ -700,10 +700,11 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 			for _, receipt := range receipts[i] {
 				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
 			}
+			header := block.Header()
 			if i > 0 {
-				tdSum.Add(tdSum, block.Difficulty())
+				tdSum.Add(tdSum, header.Difficulty)
 			}
-			if err := writeAncientBlock(op, block, stReceipts, tdSum); err != nil {
+			if err := writeAncientBlock(op, block, header, stReceipts, tdSum); err != nil {
 				return err
 			}
 		}
@@ -711,12 +712,12 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, receipts []*types.ReceiptForStorage, td *big.Int) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, td *big.Int) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
 	}
-	if err := op.Append(freezerHeaderTable, num, block.Header()); err != nil {
+	if err := op.Append(freezerHeaderTable, num, header); err != nil {
 		return fmt.Errorf("can't append block header %d: %v", num, err)
 	}
 	if err := op.Append(freezerBodiesTable, num, block.Body()); err != nil {
