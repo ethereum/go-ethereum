@@ -1,8 +1,8 @@
-## KuCoin Community Chain(KCC)
+## KCC
 
-Official KuCoin Community Chain Golang Client based on the go-ethereum.
+Official KCC Golang Client based on the go-ethereum.
 
-![logo](KuCoin-Community-Chain_Green.png)
+![logo](KCC_Green.png)
 
 ## Features
 - Ethereum compatible,but low gas fee.
