@@ -98,6 +98,18 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
+// StructFrame is emitted to the EVM upon stepping into a new call frame.
+type StructFrame struct {
+	Type_   string         `json:"type"`
+	From    common.Address `json:"from"`
+	To      common.Address `json:"to"`
+	Input   []byte         `json:"input"`
+	Gas     uint64         `json:"gas"`
+	Value   *big.Int       `json:"value"`
+	GasUsed uint64         `json:"gasUsed"`
+	Output  []byte         `json:"output"`
+}
+
 // Tracer is used to collect execution traces from an EVM transaction
 // execution. CaptureState is called for each step of the VM with the
 // current VM state.
@@ -122,6 +134,7 @@ type StructLogger struct {
 
 	storage map[common.Address]Storage
 	logs    []StructLog
+	frames  []StructFrame
 	output  []byte
 	err     error
 }
@@ -228,15 +241,26 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 }
 
 func (l *StructLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// TODO
+	in := make([]byte, len(input))
+	copy(in, input)
+	// TODO: should we honor `l.Cfg.Limit` for frames too?
+	frame := StructFrame{type_.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil}
+	l.frames = append(l.frames, frame)
 }
 
 func (l *StructLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64) {
-	// TODO
+	frame := l.frames[len(l.frames)-1]
+	frame.GasUsed = gasUsed
+	out := make([]byte, len(output))
+	copy(out, output)
+	frame.Output = out
 }
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+
+// StructFrames returns the captured call frames.
+func (l *StructLogger) StructFrames() []StructFrame { return l.frames }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }

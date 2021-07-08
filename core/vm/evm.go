@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -43,6 +44,25 @@ const (
 	CreateType
 	Create2Type
 )
+
+func (t CallFrameType) String() string {
+	switch t {
+	case CallType:
+		return "call"
+	case CallCodeType:
+		return "callcode"
+	case DelegateCallType:
+		return "delegatecall"
+	case StaticCallType:
+		return "staticcall"
+	case CreateType:
+		return "create"
+	case Create2Type:
+		return "create2"
+	default:
+		panic(fmt.Sprintf("unsupported call frame type: %T", t))
+	}
+}
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
