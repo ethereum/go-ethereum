@@ -449,7 +449,7 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args Transactio
 		return nil, fmt.Errorf("gas not specified")
 	}
 	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
-		return nil, fmt.Errorf("either gasPrice or (maxFeePerGas and maxPriorityFeePerGas) is specified")
+		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
@@ -1764,7 +1764,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 		return nil, fmt.Errorf("gas not specified")
 	}
 	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
-		return nil, fmt.Errorf("either gasPrice or (maxFeePerGas and maxPriorityFeePerGas) is specified")
+		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
