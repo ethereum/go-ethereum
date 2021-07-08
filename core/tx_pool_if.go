@@ -39,4 +39,5 @@ type TxPoolIf interface {
 	AddRemotes(txs []*types.Transaction) []error
 	AddRemotesSync(txs []*types.Transaction) []error
 	Get(hash common.Hash) *types.Transaction
+	Has(hash common.Hash) bool
 }

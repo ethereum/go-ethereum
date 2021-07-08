@@ -177,7 +177,6 @@ func (pool *TxPool) loop() {
 		// prune in memory transactions to disk
 		case e := <-pool.pruneCh:
 			_ = e
-			fmt.Print("Tick\n")
 			pool.mu.Lock()
 			txs := pool.remoteTxs.Prune()
 			pool.mu.Unlock()
@@ -222,7 +221,7 @@ func (pool *TxPool) loop() {
 				pool.all.Update(tx.Hash(), transactionOrNumber{tx: tx}, false)
 				pool.database.Delete(t)
 			}
-			fmt.Printf("done: %v, elements %v\n", pool.remoteTxs.Len(), len(elements))
+			fmt.Printf("Unpruned: %v, elements %v\n", pool.remoteTxs.Len(), len(elements))
 			pool.mu.Unlock()
 		}
 	}
@@ -481,6 +480,17 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
 // Has returns true if a transaction is contained in the pool.
 func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Has(hash)
+}
+
+func (pool *TxPool) removeTx(hash common.Hash) {
+	if e := pool.remoteTxs.Delete(func(e *txEntry) bool {
+		return e.tx.Hash() == hash
+	}); e == nil {
+		return
+	} else {
+		// Remove tx from pool
+		pool.all.Remove(e.tx.Hash())
+	}
 }
 
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {

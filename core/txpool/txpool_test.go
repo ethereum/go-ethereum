@@ -342,25 +342,23 @@ func TestTransactionChainFork(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000))
+		statedb.AddBalance(addr, big.NewInt(10000000000000000))
 
 		pool.chain = &testBlockChain{statedb, 1000000, new(event.Feed)}
 	}
 	resetState()
-	/*
-		TODO reenable
-		tx := transaction(0, 100000, key)
-		if _, err := pool.add(tx, false); err != nil {
-			t.Error("didn't expect error", err)
-		}
-		pool.removeTx(tx.Hash(), true)
+	tx, _ := pool.txToTxEntry(transaction(0, 100000, key))
+	if _, _, err := pool.add(tx, false); err != nil {
+		t.Error("didn't expect error", err)
+	}
+	pool.removeTx(tx.tx.Hash())
 
-		// reset the pool's internal state
-		resetState()
-		if _, err := pool.add(tx, false); err != nil {
-			t.Error("didn't expect error", err)
-		}
-	*/
+	// reset the pool's internal state
+	resetState()
+	if _, _, err := pool.add(tx, false); err != nil {
+		t.Error("didn't expect error", err)
+	}
+
 }
 
 func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
@@ -425,13 +423,13 @@ func TestPruning(t *testing.T) {
 	for j := 0; j < size; j++ {
 		batch[j] = transaction(uint64(j), 100000, key)
 	}
-	for _, err := range pool.AddRemotes(batch) {
+	for _, err := range pool.AddRemotesSync(batch) {
 		if err != nil {
 			t.Error(err)
 		}
 	}
 	// Pruning should be triggered right now
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	// Pending block triggers unpruning, but we have enough tx's in memory already.
 	_, remotes := pool.PendingBlock()
 	if len(remotes) != 750 {
@@ -442,9 +440,8 @@ func TestPruning(t *testing.T) {
 		from, _ := types.Sender(pool.signer, t)
 		statedb.SetNonce(from, t.Nonce()+1)
 	}
-	time.Sleep(100 * time.Millisecond)
 	pool.runReorg(nil, nil)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	// Pending block triggers unpruning, but we have enough tx's in memory already.
 	_, remotes = pool.PendingBlock()
 	if len(remotes) != 750 {
@@ -455,9 +452,8 @@ func TestPruning(t *testing.T) {
 		from, _ := types.Sender(pool.signer, t)
 		statedb.SetNonce(from, t.Nonce()+1)
 	}
-	time.Sleep(100 * time.Millisecond)
 	pool.runReorg(nil, nil)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	// Pending block triggers unpruning, but we have enough tx's in memory already.
 	_, remotes = pool.PendingBlock()
 	if len(remotes) != size-2*750 {
