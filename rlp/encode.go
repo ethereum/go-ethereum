@@ -432,7 +432,20 @@ func makeByteArrayWriter(typ reflect.Type) writer {
 	case 1:
 		return writeLengthOneByteArray
 	default:
-		return writeByteArray
+		length := typ.Len()
+		return func(val reflect.Value, w *encbuf) error {
+			if !val.CanAddr() {
+				// Getting the byte slice of val requires it to be addressable. Make it
+				// addressable by copying.
+				copy := reflect.New(val.Type()).Elem()
+				copy.Set(val)
+				val = copy
+			}
+			slice := byteArrayBytes(val, length)
+			w.encodeStringHeader(len(slice))
+			w.str = append(w.str, slice...)
+			return nil
+		}
 	}
 }
 
@@ -448,21 +461,6 @@ func writeLengthOneByteArray(val reflect.Value, w *encbuf) error {
 	} else {
 		w.str = append(w.str, 0x81, b)
 	}
-	return nil
-}
-
-func writeByteArray(val reflect.Value, w *encbuf) error {
-	if !val.CanAddr() {
-		// Getting the byte slice of val requires it to be addressable. Make it
-		// addressable by copying.
-		copy := reflect.New(val.Type()).Elem()
-		copy.Set(val)
-		val = copy
-	}
-
-	slice := byteArrayBytes(val)
-	w.encodeStringHeader(len(slice))
-	w.str = append(w.str, slice...)
 	return nil
 }
 
