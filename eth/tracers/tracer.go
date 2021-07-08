@@ -679,7 +679,7 @@ func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common
 
 	// Transform the frame into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
-	jst.addToObj(obj, "type", callFrameType(type_))
+	jst.addToObj(obj, "type", type_.String())
 	jst.addToObj(obj, "from", from)
 	jst.addToObj(obj, "to", to)
 	jst.addToObj(obj, "input", input)
@@ -760,23 +760,4 @@ func (jst *Tracer) addToObj(obj int, key string, val interface{}) {
 		panic(fmt.Sprintf("unsupported type: %T", val))
 	}
 	jst.vm.PutPropString(obj, key)
-}
-
-func callFrameType(type_ vm.CallFrameType) string {
-	switch type_ {
-	case vm.CallType:
-		return "call"
-	case vm.CallCodeType:
-		return "callcode"
-	case vm.DelegateCallType:
-		return "delegatecall"
-	case vm.StaticCallType:
-		return "staticcall"
-	case vm.CreateType:
-		return "create"
-	case vm.Create2Type:
-		return "create2"
-	default:
-		panic(fmt.Sprintf("unsupported call frame type: %T", type_))
-	}
 }
