@@ -49,7 +49,7 @@ type TransactionArgs struct {
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input"`
 
-	// For non-legacy transactions
+	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
@@ -108,7 +108,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				return err
 			}
 			if b.ChainConfig().IsLondon(head.Number) {
-				price.Add(price, head.BaseFee)
+				price.Add(price, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
 			}
 			args.GasPrice = (*hexutil.Big)(price)
 		}
