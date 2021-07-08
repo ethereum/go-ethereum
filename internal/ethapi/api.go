@@ -80,28 +80,28 @@ func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.
 	return (*hexutil.Big)(tipcap), err
 }
 
-type feeHistoryResults struct {
-	FirstBlock   rpc.BlockNumber
-	Reward       [][]*hexutil.Big
-	BaseFee      []*hexutil.Big
-	GasUsedRatio []float64
+type feeHistoryResult struct {
+	OldestBlock  rpc.BlockNumber  `json:"oldestBlock"`
+	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
-func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (feeHistoryResults, error) {
-	firstBlock, reward, baseFee, gasUsedRatio, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 	if err != nil {
-		return feeHistoryResults{}, err
+		return nil, err
 	}
-	results := feeHistoryResults{
-		FirstBlock:   firstBlock,
-		GasUsedRatio: gasUsedRatio,
+	results := &feeHistoryResult{
+		OldestBlock:  oldest,
+		GasUsedRatio: gasUsed,
 	}
 	if reward != nil {
 		results.Reward = make([][]*hexutil.Big, len(reward))
-		for j, w := range reward {
-			results.Reward[j] = make([]*hexutil.Big, len(w))
-			for i, v := range w {
-				results.Reward[j][i] = (*hexutil.Big)(v)
+		for i, w := range reward {
+			results.Reward[i] = make([]*hexutil.Big, len(w))
+			for j, v := range w {
+				results.Reward[i][j] = (*hexutil.Big)(v)
 			}
 		}
 	}
