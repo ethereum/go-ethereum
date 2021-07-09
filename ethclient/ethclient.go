@@ -450,7 +450,10 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
 	return uint(num), err
 }
-
+// SubscribePendingTransactions subscribes to the results of a streaming of pending transaction
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- string) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
+}
 // Contract Calling
 
 // CallContract executes a message call transaction, which is directly executed in the VM
