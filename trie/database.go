@@ -662,6 +662,13 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	for db.oldest != oldest {
 		node := db.dirties[db.oldest]
 		delete(db.dirties, db.oldest)
+
+		// Move the flushed node into the clean cache to prevent insta-reloads
+		if db.cleans != nil {
+			rlp := node.rlp()
+			db.cleans.Set(db.oldest[:], rlp)
+			memcacheCleanWriteMeter.Mark(int64(len(rlp)))
+		}
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
