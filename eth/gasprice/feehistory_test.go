@@ -18,6 +18,7 @@ package gasprice
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestFeeHistory(t *testing.T) {
 	}{
 		{false, 0, 0, 10, 30, nil, 21, 10, nil},
 		{false, 0, 0, 10, 30, []float64{0, 10}, 21, 10, nil},
-		{false, 0, 0, 10, 30, []float64{20, 10}, 0, 0, errInvalidPercentiles},
+		{false, 0, 0, 10, 30, []float64{20, 10}, 0, 0, errInvalidPercentile},
 		{false, 0, 0, 1000000000, 30, nil, 0, 31, nil},
 		{false, 0, 0, 1000000000, rpc.LatestBlockNumber, nil, 0, 33, nil},
 		{false, 0, 0, 10, 40, nil, 0, 0, errRequestBeyondHead},
@@ -81,7 +82,7 @@ func TestFeeHistory(t *testing.T) {
 		if len(ratio) != c.expCount {
 			t.Fatalf("Test case %d: gasUsedRatio array length mismatch, want %d, got %d", i, c.expCount, len(ratio))
 		}
-		if err != c.expErr {
+		if err != c.expErr && !errors.Is(err, c.expErr) {
 			t.Fatalf("Test case %d: error mismatch, want %v, got %v", i, c.expErr, err)
 		}
 	}
