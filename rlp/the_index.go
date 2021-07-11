@@ -9,11 +9,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// cursor.rlp (latest block that was indexed)
 type TheIndex_rlpCursor struct {
 	BlockNumber *big.Int
 	Time        uint64
 }
 
+// blocks-nnnnn.rlp (all block headers)
 type TheIndex_rlpBlock struct {
 	BlockNumber *big.Int
 	Time        uint64
@@ -41,6 +43,7 @@ type TheIndex_rlpContract struct {
 	Balance []*big.Int
 }
 
+// contracts-ss-nnnnn.rlp (sharded contract state and events)
 type TheIndex_rlpContractsForBlock struct {
 	BlockNumber *big.Int
 	Contracts   []TheIndex_rlpContract
@@ -52,6 +55,7 @@ type TheIndex_rlpAccount struct {
 	CodeHash []byte
 }
 
+// accounts-nnnnn.rlp (all user ETH balances)
 type TheIndex_rlpAccountsForBlock struct {
 	BlockNumber *big.Int
 	Accounts    []TheIndex_rlpAccount
