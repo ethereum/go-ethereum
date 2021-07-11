@@ -3,6 +3,8 @@ title: The Configuration File
 sort_key: B
 ---
 
+The configuration file 
+
 ```
 $ geth --help
 NAME:
