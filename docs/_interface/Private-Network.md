@@ -1,6 +1,6 @@
 ---
 title: Private Networks
-sort_key: B
+sort_key: C
 ---
 
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum
