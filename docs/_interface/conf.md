@@ -16,10 +16,16 @@ To use a configuration file, run:
 get --config configFile
 ```
 
-The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML). 
+The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML). The section names mostly correspond to [the names
+of packages in the Geth source code](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
 
 
 ## Sample Configuration File
+
+### Eth
+
+This package is responsible for running the Ethereum protocol. 
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig)
 
 ```toml
 [Eth]
@@ -46,14 +52,28 @@ EWASMInterpreter = ""
 EVMInterpreter = ""
 RPCGasCap = 25000000
 RPCTxFeeCap = 1e+00
+```
 
+### Eth.Miner
+
+This package implements mining, the creation of new Ethereum blocks for profit. 
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/miner#Config)
+
+```toml
 [Eth.Miner]
 GasFloor = 8000000
 GasCeil = 8000000
 GasPrice = 1000000000
 Recommit = 3000000000
 Noverify = false
+```
 
+### Eth.Ethash
+
+This package implements the PoW (proof of work) protocol. 
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/consensus/ethash#Config)
+
+```toml
 [Eth.Ethash]
 CacheDir = "ethash"
 CachesInMem = 2
@@ -65,7 +85,15 @@ DatasetsOnDisk = 2
 DatasetsLockMmap = false
 PowMode = 0
 NotifyFull = false
+```
 
+### Eth.TxPool
+
+This package handles the transaction pool from which transactions are chosen for new blocks. 
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/core#DefaultTxPoolConfig)
+
+
+```toml
 [Eth.TxPool]
 Locals = []
 NoLocals = false
@@ -78,12 +106,24 @@ GlobalSlots = 4096
 AccountQueue = 64
 GlobalQueue = 1024
 Lifetime = 10800000000000
+```
 
+### Eth.GPO
+
+This is the Gas Price Oracle. [The configuration object](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig#FullNodeGPO).
+
+```toml
 [Eth.GPO]
 Blocks = 20
 Percentile = 60
 MaxPrice = 500000000000
+```
 
+### Node
+
+This package is used for the Remote Procedure Calls (RPCs) used to communicate between notes. [Config](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/node#Config)
+
+```toml
 [Node]
 DataDir = "/home/qbzzt1/.ethereum"
 IPCPath = "geth.ipc"
@@ -95,7 +135,13 @@ WSHost = ""
 WSPort = 8546
 WSModules = ["net", "web3", "eth"]
 GraphQLVirtualHosts = ["localhost"]
+```
 
+# Node.P2P
+
+[Peer to peer networking](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p#Config)
+
+```toml
 [Node.P2P]
 MaxPeers = 50
 NoDiscovery = false
@@ -105,12 +151,24 @@ StaticNodes = []
 TrustedNodes = []
 ListenAddr = ":30303"
 EnableMsgEvents = false
+```
 
+### Node.HTTPTimeouts
+
+[Timeouts for the HTTP serve](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/rpc#HTTPTimeouts)
+
+```toml
 [Node.HTTPTimeouts]
 ReadTimeout = 30000000000
 WriteTimeout = 30000000000
 IdleTimeout = 120000000000
+```
 
+### Metrics
+
+[Metrics](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/metrics#Config)
+
+```toml
 [Metrics]
 HTTP = "127.0.0.1"
 Port = 6060
