@@ -1,6 +1,6 @@
 ---
 title: Metrics
-sort_key: C
+sort_key: D
 ---
 
 ## Meters and Timers
