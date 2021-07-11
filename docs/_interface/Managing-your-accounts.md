@@ -1,6 +1,6 @@
 ---
 title: Managing Your Accounts
-sort_key: B
+sort_key: C
 ---
 
 **WARNING**
