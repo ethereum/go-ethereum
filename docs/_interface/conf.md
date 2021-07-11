@@ -3,231 +3,120 @@ title: The Configuration File
 sort_key: B
 ---
 
-The configuration file 
+Geth can use a configuration file to specify various parameters, instead of using command line arguments. To get a configuration file
+with the default, run:
 
+```sh
+geth dumpconfig > configFile
 ```
-$ geth --help
-NAME:
-   geth - the go-ethereum command line interface
 
-   Copyright 2013-2021 The go-ethereum Authors
+To use a configuration file, run:
 
-USAGE:
-   geth [options] [command] [command options] [arguments...]
+```sh
+get --config configFile
+```
 
-VERSION:
-   1.10.3-stable-991384a7
-
-COMMANDS:
-   account                            Manage accounts
-   attach                             Start an interactive JavaScript environment (connect to node)
-   console                            Start an interactive JavaScript environment
-   db                                 Low level database operations
-   dump                               Dump a specific block from storage
-   dumpconfig                         Show configuration values
-   dumpgenesis                        Dumps genesis block JSON configuration to stdout
-   export                             Export blockchain into file
-   export-preimages                   Export the preimage database into an RLP stream
-   import                             Import a blockchain file
-   import-preimages                   Import the preimage database from an RLP stream
-   init                               Bootstrap and initialize a new genesis block
-   js                                 Execute the specified JavaScript files
-   license                            Display license information
-   makecache                          Generate ethash verification cache (for testing)
-   makedag                            Generate ethash mining DAG (for testing)
-   removedb                           Remove blockchain and state databases
-   show-deprecated-flags              Show flags that have been deprecated
-   snapshot                           A set of commands based on the snapshot
-   version                            Print version numbers
-   version-check                      Checks (online) whether the current version suffers from any known security vulnerabilities
-   wallet                             Manage Ethereum presale wallets
-   help, h                            Shows a list of commands or help for one command
-
-ETHEREUM OPTIONS:
-  --config value                      TOML configuration file
-  --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
-  --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
-  --datadir.minfreedisk value         Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)
-  --keystore value                    Directory for the keystore (default = inside the datadir)
-  --usb                               Enable monitoring and management of USB hardware wallets
-  --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
-  --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
-  --mainnet                           Ethereum mainnet
-  --goerli                            Görli network: pre-configured proof-of-authority test network
-  --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
-  --yolov3                            YOLOv3 network: pre-configured proof-of-authority shortlived test network.
-  --ropsten                           Ropsten network: pre-configured proof-of-work test network
-  --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: fast)
-  --exitwhensynced                    Exits after block synchronisation completes
-  --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
-  --txlookuplimit value               Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (default: 2350000)
-  --ethstats value                    Reporting URL of a ethstats service (nodename:secret@host:port)
-  --identity value                    Custom node name
-  --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
-  --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
-
-LIGHT CLIENT OPTIONS:
-  --light.serve value                 Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100) (default: 0)
-  --light.ingress value               Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited) (default: 0)
-  --light.egress value                Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited) (default: 0)
-  --light.maxpeers value              Maximum number of light clients to serve, or light servers to attach to (default: 100)
-  --ulc.servers value                 List of trusted ultra-light servers
-  --ulc.fraction value                Minimum % of trusted ultra-light servers required to announce a new head (default: 75)
-  --ulc.onlyannounce                  Ultra light server sends announcements only
-  --light.nopruning                   Disable ancient light chain data pruning
-  --light.nosyncserve                 Enables serving light clients before syncing
-
-DEVELOPER CHAIN OPTIONS:
-  --dev                               Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
-  --dev.period value                  Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
-
-ETHASH OPTIONS:
-  --ethash.cachedir value             Directory to store the ethash verification caches (default = inside the datadir)
-  --ethash.cachesinmem value          Number of recent ethash caches to keep in memory (16MB each) (default: 2)
-  --ethash.cachesondisk value         Number of recent ethash caches to keep on disk (16MB each) (default: 3)
-  --ethash.cacheslockmmap             Lock memory maps of recent ethash caches
-  --ethash.dagdir value               Directory to store the ethash mining DAGs (default: "~/.ethash")
-  --ethash.dagsinmem value            Number of recent ethash mining DAGs to keep in memory (1+GB each) (default: 1)
-  --ethash.dagsondisk value           Number of recent ethash mining DAGs to keep on disk (1+GB each) (default: 2)
-  --ethash.dagslockmmap               Lock memory maps for recent ethash mining DAGs
-
-TRANSACTION POOL OPTIONS:
-  --txpool.locals value               Comma separated accounts to treat as locals (no flush, priority inclusion)
-  --txpool.nolocals                   Disables price exemptions for locally submitted transactions
-  --txpool.journal value              Disk journal for local transaction to survive node restarts (default: "transactions.rlp")
-  --txpool.rejournal value            Time interval to regenerate the local transaction journal (default: 1h0m0s)
-  --txpool.pricelimit value           Minimum gas price limit to enforce for acceptance into the pool (default: 1)
-  --txpool.pricebump value            Price bump percentage to replace an already existing transaction (default: 10)
-  --txpool.accountslots value         Minimum number of executable transaction slots guaranteed per account (default: 16)
-  --txpool.globalslots value          Maximum number of executable transaction slots for all accounts (default: 4096)
-  --txpool.accountqueue value         Maximum number of non-executable transaction slots permitted per account (default: 64)
-  --txpool.globalqueue value          Maximum number of non-executable transaction slots for all accounts (default: 1024)
-  --txpool.lifetime value             Maximum amount of time non-executable transaction are queued (default: 3h0m0s)
-
-PERFORMANCE TUNING OPTIONS:
-  --cache value                       Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode) (default: 1024)
-  --cache.database value              Percentage of cache memory allowance to use for database io (default: 50)
-  --cache.trie value                  Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode) (default: 15)
-  --cache.trie.journal value          Disk journal directory for trie cache to survive node restarts (default: "triecache")
-  --cache.trie.rejournal value        Time interval to regenerate the trie cache journal (default: 1h0m0s)
-  --cache.gc value                    Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode) (default: 25)
-  --cache.snapshot value              Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode) (default: 10)
-  --cache.noprefetch                  Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
-  --cache.preimages                   Enable recording the SHA3/keccak preimages of trie keys
-
-ACCOUNT OPTIONS:
-  --unlock value                      Comma separated list of accounts to unlock
-  --password value                    Password file to use for non-interactive password input
-  --signer value                      External signer (url or path to ipc file)
-  --allow-insecure-unlock             Allow insecure account unlocking when account-related RPCs are exposed by http
-
-API AND CONSOLE OPTIONS:
-  --ipcdisable                        Disable the IPC-RPC server
-  --ipcpath value                     Filename for IPC socket/pipe within the datadir (explicit paths escape it)
-  --http                              Enable the HTTP-RPC server
-  --http.addr value                   HTTP-RPC server listening interface (default: "localhost")
-  --http.port value                   HTTP-RPC server listening port (default: 8545)
-  --http.api value                    API's offered over the HTTP-RPC interface
-  --http.rpcprefix value              HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
-  --http.corsdomain value             Comma separated list of domains from which to accept cross origin requests (browser enforced)
-  --http.vhosts value                 Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
-  --ws                                Enable the WS-RPC server
-  --ws.addr value                     WS-RPC server listening interface (default: "localhost")
-  --ws.port value                     WS-RPC server listening port (default: 8546)
-  --ws.api value                      API's offered over the WS-RPC interface
-  --ws.rpcprefix value                HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
-  --ws.origins value                  Origins from which to accept websockets requests
-  --graphql                           Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
-  --graphql.corsdomain value          Comma separated list of domains from which to accept cross origin requests (browser enforced)
-  --graphql.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
-  --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 25000000)
-  --rpc.txfeecap value                Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 1)
-  --rpc.allow-unprotected-txs         Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC
-  --jspath loadScript                 JavaScript root path for loadScript (default: ".")
-  --exec value                        Execute JavaScript statement
-  --preload value                     Comma separated list of JavaScript files to preload into the console
-
-NETWORKING OPTIONS:
-  --bootnodes value                   Comma separated enode URLs for P2P discovery bootstrap
-  --discovery.dns value               Sets DNS discovery entry points (use "" to disable DNS)
-  --port value                        Network listening port (default: 30303)
-  --maxpeers value                    Maximum number of network peers (network disabled if set to 0) (default: 50)
-  --maxpendpeers value                Maximum number of pending connection attempts (defaults used if set to 0) (default: 0)
-  --nat value                         NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "any")
-  --nodiscover                        Disables the peer discovery mechanism (manual peer addition)
-  --v5disc                            Enables the experimental RLPx V5 (Topic Discovery) mechanism
-  --netrestrict value                 Restricts network communication to the given IP networks (CIDR masks)
-  --nodekey value                     P2P node key file
-  --nodekeyhex value                  P2P node key as hex (for testing)
-
-MINER OPTIONS:
-  --mine                              Enable mining
-  --miner.threads value               Number of CPU threads to use for mining (default: 0)
-  --miner.notify value                Comma separated HTTP URL list to notify of new work packages
-  --miner.notify.full                 Notify with pending block headers instead of work packages
-  --miner.gasprice value              Minimum gas price for mining a transaction (default: 1000000000)
-  --miner.gastarget value             Target gas floor for mined blocks (default: 8000000)
-  --miner.gaslimit value              Target gas ceiling for mined blocks (default: 8000000)
-  --miner.etherbase value             Public address for block mining rewards (default = first account) (default: "0")
-  --miner.extradata value             Block extra data set by the miner (default = client version)
-  --miner.recommit value              Time interval to recreate the block being mined (default: 3s)
-  --miner.noverify                    Disable remote sealing verification
-
-GAS PRICE ORACLE OPTIONS:
-  --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
-  --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
-  --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
-
-VIRTUAL MACHINE OPTIONS:
-  --vmdebug                           Record information useful for VM and contract debugging
-  --vm.evm value                      External EVM configuration (default = built-in interpreter)
-  --vm.ewasm value                    External ewasm configuration (default = built-in interpreter)
-
-LOGGING AND DEBUGGING OPTIONS:
-  --fakepow                           Disables proof-of-work verification
-  --nocompaction                      Disables db compaction after import
-  --verbosity value                   Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail (default: 3)
-  --vmodule value                     Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
-  --log.json                          Format logs with JSON
-  --log.backtrace value               Request a stack trace at a specific logging statement (e.g. "block.go:271")
-  --log.debug                         Prepends log messages with call-site location (file and line number)
-  --pprof                             Enable the pprof HTTP server
-  --pprof.addr value                  pprof HTTP server listening interface (default: "127.0.0.1")
-  --pprof.port value                  pprof HTTP server listening port (default: 6060)
-  --pprof.memprofilerate value        Turn on memory profiling with the given rate (default: 524288)
-  --pprof.blockprofilerate value      Turn on block profiling with the given rate (default: 0)
-  --pprof.cpuprofile value            Write CPU profile to the given file
-  --trace value                       Write execution trace to the given file
-
-METRICS AND STATS OPTIONS:
-  --metrics                           Enable metrics collection and reporting
-  --metrics.expensive                 Enable expensive metrics collection and reporting
-  --metrics.addr value                Enable stand-alone metrics HTTP server listening interface (default: "127.0.0.1")
-  --metrics.port value                Metrics HTTP server listening port (default: 6060)
-  --metrics.influxdb                  Enable metrics export/push to an external InfluxDB database
-  --metrics.influxdb.endpoint value   InfluxDB API endpoint to report metrics to (default: "http://localhost:8086")
-  --metrics.influxdb.database value   InfluxDB database name to push reported metrics to (default: "geth")
-  --metrics.influxdb.username value   Username to authorize access to the database (default: "test")
-  --metrics.influxdb.password value   Password to authorize access to the database (default: "test")
-  --metrics.influxdb.tags value       Comma-separated InfluxDB tags (key/values) attached to all measurements (default: "host=localhost")
-
-ALIASED (deprecated) OPTIONS:
-  --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
-  --rpc                               Enable the HTTP-RPC server (deprecated and will be removed June 2021, use --http)
-  --rpcaddr value                     HTTP-RPC server listening interface (deprecated and will be removed June 2021, use --http.addr) (default: "localhost")
-  --rpcport value                     HTTP-RPC server listening port (deprecated and will be removed June 2021, use --http.port) (default: 8545)
-  --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)
-  --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
-  --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
-
-MISC OPTIONS:
-  --snapshot                          Enables snapshot-database mode (default = enable)
-  --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
-  --help, -h                          show help
-  --catalyst                          Catalyst mode (eth2 integration testing)
-  --override.berlin value             Manually specify Berlin fork-block, overriding the bundled setting (default: 0)
+The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML). 
 
 
-COPYRIGHT:
-   Copyright 2013-2021 The go-ethereum Authors
+## Sample Configuration File
+
+```toml
+[Eth]
+NetworkId = 1
+SyncMode = "fast"
+EthDiscoveryURLs = ["enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net"]
+SnapDiscoveryURLs = ["enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net"]
+NoPruning = false
+NoPrefetch = false
+TxLookupLimit = 2350000
+LightPeers = 100
+UltraLightFraction = 75
+DatabaseCache = 512
+DatabaseFreezer = ""
+TrieCleanCache = 154
+TrieCleanCacheJournal = "triecache"
+TrieCleanCacheRejournal = 3600000000000
+TrieDirtyCache = 256
+TrieTimeout = 3600000000000
+SnapshotCache = 102
+Preimages = false
+EnablePreimageRecording = false
+EWASMInterpreter = ""
+EVMInterpreter = ""
+RPCGasCap = 25000000
+RPCTxFeeCap = 1e+00
+
+[Eth.Miner]
+GasFloor = 8000000
+GasCeil = 8000000
+GasPrice = 1000000000
+Recommit = 3000000000
+Noverify = false
+
+[Eth.Ethash]
+CacheDir = "ethash"
+CachesInMem = 2
+CachesOnDisk = 3
+CachesLockMmap = false
+DatasetDir = "/home/qbzzt1/.ethash"
+DatasetsInMem = 1
+DatasetsOnDisk = 2
+DatasetsLockMmap = false
+PowMode = 0
+NotifyFull = false
+
+[Eth.TxPool]
+Locals = []
+NoLocals = false
+Journal = "transactions.rlp"
+Rejournal = 3600000000000
+PriceLimit = 1
+PriceBump = 10
+AccountSlots = 16
+GlobalSlots = 4096
+AccountQueue = 64
+GlobalQueue = 1024
+Lifetime = 10800000000000
+
+[Eth.GPO]
+Blocks = 20
+Percentile = 60
+MaxPrice = 500000000000
+
+[Node]
+DataDir = "/home/qbzzt1/.ethereum"
+IPCPath = "geth.ipc"
+HTTPHost = ""
+HTTPPort = 8545
+HTTPVirtualHosts = ["localhost"]
+HTTPModules = ["net", "web3", "eth"]
+WSHost = ""
+WSPort = 8546
+WSModules = ["net", "web3", "eth"]
+GraphQLVirtualHosts = ["localhost"]
+
+[Node.P2P]
+MaxPeers = 50
+NoDiscovery = false
+BootstrapNodes = ["enode://d860a01f9722d78051619d1e2351aba3f43f943f6f00718d1b9baa4101932a1f5011f16bb2b1bb35db20d6fe28fa0bf09636d26a87d31de9ec6203eeedb1f666@18.138.108.67:30303", "enode://22a8232c3abc76a16ae9d6c3b164f98775fe226f0917b0ca871128a74a8e9630b458460865bab457221f1d448dd9791d24c4e5d88786180ac185df813a68d4de@3.209.45.79:30303", "enode://ca6de62fce278f96aea6ec5a2daadb877e51651247cb96ee310a318def462913b653963c155a0ef6c7d50048bba6e6cea881130857413d9f50a621546b590758@34.255.23.113:30303", "enode://279944d8dcd428dffaa7436f25ca0ca43ae19e7bcf94a8fb7d1641651f92d121e972ac2e8f381414b80cc8e5555811c2ec6e1a99bb009b3f53c4c69923e11bd8@35.158.244.151:30303", "enode://8499da03c47d637b20eee24eec3c356c9a2e6148d6fe25ca195c7949ab8ec2c03e3556126b0d7ed644675e78c4318b08691b7b57de10e5f0d40d05b09238fa0a@52.187.207.27:30303", "enode://103858bdb88756c71f15e9b5e09b56dc1be52f0a5021d46301dbbfb7e130029cc9d0d6f73f693bc29b665770fff7da4d34f3c6379fe12721b5d7a0bcb5ca1fc1@191.234.162.198:30303", "enode://715171f50508aba88aecd1250af392a45a330af91d7b90701c436b618c86aaa1589c9184561907bebbb56439b8f8787bc01f49a7c77276c58c1b09822d75e8e8@52.231.165.108:30303", "enode://5d6d7cd20d6da4bb83a1d28cadb5d409b64edf314c0335df658c1a54e32c7c4a7ab7823d57c39b6a757556e68ff1df17c748b698544a55cb488b52479a92b60f@104.42.217.25:30303"]
+BootstrapNodesV5 = ["enr:-KG4QOtcP9X1FbIMOe17QNMKqDxCpm14jcX5tiOE4_TyMrFqbmhPZHK_ZPG2Gxb1GE2xdtodOfx9-cgvNtxnRyHEmC0ghGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQDE8KdiXNlY3AyNTZrMaEDhpehBDbZjM_L9ek699Y7vhUJ-eAdMyQW_Fil522Y0fODdGNwgiMog3VkcIIjKA", "enr:-KG4QDyytgmE4f7AnvW-ZaUOIi9i79qX4JwjRAiXBZCU65wOfBu-3Nb5I7b_Rmg3KCOcZM_C3y5pg7EBU5XGrcLTduQEhGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQ2_DUbiXNlY3AyNTZrMaEDKnz_-ps3UUOfHWVYaskI5kWYO_vtYMGYCQRAR3gHDouDdGNwgiMog3VkcIIjKA", "enr:-Ku4QImhMc1z8yCiNJ1TyUxdcfNucje3BGwEHzodEZUan8PherEo4sF7pPHPSIB1NNuSg5fZy7qFsjmUKs2ea1Whi0EBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQOVphkDqal4QzPMksc5wnpuC3gvSC8AfbFOnZY_On34wIN1ZHCCIyg", "enr:-Ku4QP2xDnEtUXIjzJ_DhlCRN9SN99RYQPJL92TMlSv7U5C1YnYLjwOQHgZIUXw6c-BvRg2Yc2QsZxxoS_pPRVe0yK8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMeFF5GrS7UZpAH2Ly84aLK-TyvH-dRo0JM1i8yygH50YN1ZHCCJxA", "enr:-Ku4QPp9z1W4tAO8Ber_NQierYaOStqhDqQdOPY3bB3jDgkjcbk6YrEnVYIiCBbTxuar3CzS528d2iE7TdJsrL-dEKoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMw5fqqkw2hHC4F5HZZDPsNmPdB1Gi8JPQK7pRc9XHh-oN1ZHCCKvg", "enr:-IS4QLkKqDMy_ExrpOEWa59NiClemOnor-krjp4qoeZwIw2QduPC-q7Kz4u1IOWf3DDbdxqQIgC4fejavBOuUPy-HE4BgmlkgnY0gmlwhCLzAHqJc2VjcDI1NmsxoQLQSJfEAHZApkm5edTCZ_4qps_1k_ub2CxHFxi-gr2JMIN1ZHCCIyg", "enr:-IS4QDAyibHCzYZmIYZCjXwU9BqpotWmv2BsFlIq1V31BwDDMJPFEbox1ijT5c2Ou3kvieOKejxuaCqIcjxBjJ_3j_cBgmlkgnY0gmlwhAMaHiCJc2VjcDI1NmsxoQJIdpj_foZ02MXz4It8xKD7yUHTBx7lVFn3oeRP21KRV4N1ZHCCIyg", "enr:-Ku4QHqVeJ8PPICcWk1vSn_XcSkjOkNiTg6Fmii5j6vUQgvzMc9L1goFnLKgXqBJspJjIsB91LTOleFmyWWrFVATGngBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhAMRHkWJc2VjcDI1NmsxoQKLVXFOhp2uX6jeT0DvvDpPcU8FWMjQdR4wMuORMhpX24N1ZHCCIyg", "enr:-Ku4QG-2_Md3sZIAUebGYT6g0SMskIml77l6yR-M_JXc-UdNHCmHQeOiMLbylPejyJsdAPsTHJyjJB2sYGDLe0dn8uYBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhBLY-NyJc2VjcDI1NmsxoQORcM6e19T1T9gi7jxEZjk_sjVLGFscUNqAY9obgZaxbIN1ZHCCIyg", "enr:-Ku4QPn5eVhcoF1opaFEvg1b6JNFD2rqVkHQ8HApOKK61OIcIXD127bKWgAtbwI7pnxx6cDyk_nI88TrZKQaGMZj0q0Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhDayLMaJc2VjcDI1NmsxoQK2sBOLGcUb4AwuYzFuAVCaNHA-dy24UuEKkeFNgCVCsIN1ZHCCIyg", "enr:-Ku4QEWzdnVtXc2Q0ZVigfCGggOVB2Vc1ZCPEc6j21NIFLODSJbvNaef1g4PxhPwl_3kax86YPheFUSLXPRs98vvYsoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhDZBrP2Jc2VjcDI1NmsxoQM6jr8Rb1ktLEsVcKAPa08wCsKUmvoQ8khiOl_SLozf9IN1ZHCCIyg"]
+StaticNodes = []
+TrustedNodes = []
+ListenAddr = ":30303"
+EnableMsgEvents = false
+
+[Node.HTTPTimeouts]
+ReadTimeout = 30000000000
+WriteTimeout = 30000000000
+IdleTimeout = 120000000000
+
+[Metrics]
+HTTP = "127.0.0.1"
+Port = 6060
+InfluxDBEndpoint = "http://localhost:8086"
+InfluxDBDatabase = "geth"
+InfluxDBUsername = "test"
+InfluxDBPassword = "test"
+InfluxDBTags = "host=localhost"
 ```
