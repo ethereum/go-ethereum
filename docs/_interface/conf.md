@@ -13,7 +13,7 @@ geth dumpconfig > configFile
 To use a configuration file, run:
 
 ```sh
-get --config configFile
+geth --config configFile
 ```
 
 The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML). The section names mostly correspond to [the names
