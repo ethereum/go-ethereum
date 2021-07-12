@@ -115,10 +115,10 @@ Response
 ### account_signTransaction
 
 #### Sign transactions
-   Signs a transaction and responds with the signed transaction in RLP-encoded and JSON forms.
+   Signs a transaction and responds with the signed transaction in RLP-encoded and JSON forms. Supports both legacy and EIP-1559-style transactions. 
 
 #### Arguments
-  1. transaction object:
+  1. transaction object (legacy):
      - `from` [address]: account to send the transaction from
      - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
      - `gas` [number]: maximum amount of gas to burn
@@ -126,7 +126,16 @@ Response
      - `value` [number:optional]: amount of Wei to send with the transaction
      - `data` [data:optional]:  input data
      - `nonce` [number]: account nonce
-  1. method signature [string:optional]
+  1. transaction object (1559):
+     - `from` [address]: account to send the transaction from
+     - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
+     - `gas` [number]: maximum amount of gas to burn
+     - `maxPriorityFeePerGas` [number]: maximum priority fee per unit of gas for the transaction
+     - `maxFeePerGas` [number]: maximum fee per unit of gas for the transaction
+     - `value` [number:optional]: amount of Wei to send with the transaction
+     - `data` [data:optional]:  input data
+     - `nonce` [number]: account nonce
+  3. method signature [string:optional]
      - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 
@@ -134,7 +143,7 @@ Response
   - raw [data]: signed transaction in RLP encoded form
   - tx [json]: signed transaction in JSON form
 
-#### Sample call
+#### Sample call (legacy)
 ```json
 {
   "id": 2,
@@ -176,6 +185,56 @@ Response
   }
 }
 ```
+
+#### Sample call (1559)
+```json
+{
+  "id": 2,
+  "jsonrpc": "2.0",
+  "method": "account_signTransaction",
+  "params": [
+    {
+      "from": "0xd1a9C60791e8440AEd92019a2C3f6c336ffefA27",
+      "to": "0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192",
+      "gas": "0x33333",
+      "maxPriorityFeePerGas": "0x174876E800",
+      "maxFeePerGas": "0x174876E800",
+      "nonce": "0x0",
+      "value": "0x10",
+      "data": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"
+    }
+  ]
+}
+```
+Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "raw": "0x02f891018085174876e80085174876e80083033333948a8eafb1cf62bfbeb1741769dae1a9dd4799619210a44401a6e40000000000000000000000000000000000000000000000000000000000000012c080a0c8b59180c6e0c154284402b52d772f1afcf8ec2d245cf75bfb3212ebe676135ba02c660aaebf92d5e314fc2ba4c70f018915d174c3c1fc6e4e38d00ebf1a5bb69f",
+    "tx": { 
+      "type": "0x2", 
+      "nonce": "0x0", 
+      "gasPrice": null,
+      "maxPriorityFeePerGas": "0x174876e800",
+      "maxFeePerGas": "0x174876e800",
+      "gas": "0x33333",
+      "value": "0x10",
+      "input": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012",
+      "v": "0x0",
+      "r": "0xc8b59180c6e0c154284402b52d772f1afcf8ec2d245cf75bfb3212ebe676135b",
+      "s": "0x2c660aaebf92d5e314fc2ba4c70f018915d174c3c1fc6e4e38d00ebf1a5bb69f",
+      "to": "0x8a8eafb1cf62bfbeb1741769dae1a9dd47996192",
+      "chainId": "0x1",
+      "accessList": [],
+      "hash": "0x8e096eb11ea89aa83900e6816fb182ff0adb2c85d270998ca2dd2394ec6c5a73"
+    }
+  }
+}
+```
+
 #### Sample call with ABI-data
 
 
