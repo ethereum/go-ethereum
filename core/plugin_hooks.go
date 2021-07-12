@@ -2,6 +2,7 @@ package core
 
 import (
   "github.com/ethereum/go-ethereum/core/types"
+  "github.com/ethereum/go-ethereum/common"
   "github.com/ethereum/go-ethereum/plugins"
   "github.com/ethereum/go-ethereum/log"
 )
@@ -95,4 +96,43 @@ func pluginPostProcessBlock(block *types.Block) {
     return
   }
   PluginPostProcessBlock(plugins.DefaultPluginLoader, block)
+}
+
+
+func PluginNewHead(pl *plugins.PluginLoader, block *types.Block, hash common.Hash, logs []*types.Log) {
+  fnList := pl.Lookup("NewHead", func(item interface{}) bool {
+    _, ok := item.(func(*types.Block, common.Hash, []*types.Log))
+    return ok
+  })
+  for _, fni := range fnList {
+    if fn, ok := fni.(func(*types.Block, common.Hash, []*types.Log)); ok {
+      fn(block, hash, logs)
+    }
+  }
+}
+func pluginNewHead(block *types.Block, hash common.Hash, logs []*types.Log) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting NewHead, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginNewHead(plugins.DefaultPluginLoader, block, hash, logs)
+}
+
+func PluginNewSideBlock(pl *plugins.PluginLoader, block *types.Block, hash common.Hash, logs []*types.Log) {
+  fnList := pl.Lookup("NewSideBlock", func(item interface{}) bool {
+    _, ok := item.(func(*types.Block, common.Hash, []*types.Log))
+    return ok
+  })
+  for _, fni := range fnList {
+    if fn, ok := fni.(func(*types.Block, common.Hash, []*types.Log)); ok {
+      fn(block, hash, logs)
+    }
+  }
+}
+func pluginNewSideBlock(block *types.Block, hash common.Hash, logs []*types.Log) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting NewSideBlock, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginNewSideBlock(plugins.DefaultPluginLoader, block, hash, logs)
 }

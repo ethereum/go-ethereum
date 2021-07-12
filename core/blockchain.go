@@ -1566,6 +1566,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
+		pluginNewHead(block, block.Hash(), logs)
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
@@ -1579,6 +1580,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
+		pluginNewSideBlock(block, block.Hash(), logs)
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
