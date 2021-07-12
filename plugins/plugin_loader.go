@@ -113,12 +113,12 @@ func Initialize(target string, ctx *cli.Context) (err error) {
 
 func (pl *PluginLoader) Initialize(ctx *cli.Context) {
 	fns := pl.Lookup("Initialize", func(i interface{}) bool {
-		_, ok := i.(func(*cli.Context) error)
+		_, ok := i.(func(*cli.Context, *PluginLoader) error)
 		return ok
 	})
 	for _, fni := range fns {
-		if fn, ok := fni.(func(*cli.Context)); ok {
-			fn(ctx)
+		if fn, ok := fni.(func(*cli.Context, *PluginLoader)); ok {
+			fn(ctx, pl)
 		}
 	}
 }
