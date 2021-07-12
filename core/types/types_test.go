@@ -18,7 +18,6 @@ package types
 
 import (
 	"math/big"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +32,15 @@ func (d *devnull) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func BenchmarkRLP(b *testing.B) {
+func BenchmarkEncodeRLP(b *testing.B) {
+	benchRLP(b, true)
+}
+
+func BenchmarkDecodeRLP(b *testing.B) {
+	benchRLP(b, false)
+}
+
+func benchRLP(b *testing.B, encode bool) {
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	to := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 	signer := NewLondonSigner(big.NewInt(1337))
@@ -69,7 +76,7 @@ func BenchmarkRLP(b *testing.B) {
 			&ReceiptForStorage{
 				Status:            ReceiptStatusSuccessful,
 				CumulativeGasUsed: 0x888888888,
-				Logs:              make([]*Log, 5),
+				Logs:              make([]*Log, 0),
 			},
 		},
 		{
@@ -77,7 +84,7 @@ func BenchmarkRLP(b *testing.B) {
 			&Receipt{
 				Status:            ReceiptStatusSuccessful,
 				CumulativeGasUsed: 0x888888888,
-				Logs:              make([]*Log, 5),
+				Logs:              make([]*Log, 0),
 			},
 		},
 		{
@@ -115,24 +122,27 @@ func BenchmarkRLP(b *testing.B) {
 				}),
 		},
 	} {
-		// Test encoding
-		b.Run("encode-"+tc.name, func(b *testing.B) {
-			b.ReportAllocs()
-			var null = &devnull{}
-			for i := 0; i < b.N; i++ {
-				rlp.Encode(null, tc.obj)
-			}
-			b.SetBytes(int64(null.len / b.N))
-		})
-		data, _ := rlp.EncodeToBytes(tc.obj)
-		// Test decoding
-		obj := reflect.New(reflect.TypeOf(tc.obj))
-		b.Run("decode-"+tc.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				rlp.DecodeBytes(data, obj)
-			}
-			b.SetBytes(int64(len(data)))
-		})
+		if encode {
+			b.Run(tc.name, func(b *testing.B) {
+				b.ReportAllocs()
+				var null = &devnull{}
+				for i := 0; i < b.N; i++ {
+					rlp.Encode(null, tc.obj)
+				}
+				b.SetBytes(int64(null.len / b.N))
+			})
+		} else {
+			data, _ := rlp.EncodeToBytes(tc.obj)
+			// Test decoding
+			b.Run(tc.name, func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					if err := rlp.DecodeBytes(data, tc.obj); err != nil {
+						b.Fatal(err)
+					}
+				}
+				b.SetBytes(int64(len(data)))
+			})
+		}
 	}
 }
