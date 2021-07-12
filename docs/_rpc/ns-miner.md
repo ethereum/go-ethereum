@@ -73,7 +73,7 @@ Sets the etherbase, where mining rewards will go.
 
 ### miner_setGasLimit
 
-Sets the gas limit the miner will target when mining. 
+Sets the gas limit the miner will target when mining. Note: on networks where EIP-1559 is activated, this should be set to twice what you want the gas target (i.e. the effective gas used on average per block) to be. 
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|
