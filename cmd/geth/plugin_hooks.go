@@ -31,3 +31,23 @@ func pluginGetAPIs(stack *node.Node, backend interfaces.Backend) []rpc.API {
 	 }
 	return GetAPIsFromLoader(plugins.DefaultPluginLoader, stack, backend)
 }
+
+func InitializeNode(pl *plugins.PluginLoader, stack *node.Node, backend interfaces.Backend) {
+  fnList := pl.Lookup("InitializeNode", func(item interface{}) bool {
+    _, ok := item.(func(*node.Node, interfaces.Backend))
+      return ok
+  })
+  for _, fni := range fnList {
+    if fn, ok := fni.(func(*node.Node, interfaces.Backend)); ok {
+      fn(stack, backend)
+    }
+  }
+}
+
+func pluginsInitializeNode(stack *node.Node, backend interfaces.Backend) {
+	if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting InitializeNode, but default PluginLoader has not been initialized")
+		return
+	}
+	InitializeNode(plugins.DefaultPluginLoader, stack, backend)
+}

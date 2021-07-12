@@ -104,9 +104,23 @@ func NewPluginLoader(target string) (*PluginLoader, error) {
 	return pl, nil
 }
 
-func Initialize(target string) (err error) {
+func Initialize(target string, ctx *cli.Context) (err error) {
 	DefaultPluginLoader, err = NewPluginLoader(target)
-	return err
+	if err != nil { return err }
+	DefaultPluginLoader.Initialize(ctx)
+	return nil
+}
+
+func (pl *PluginLoader) Initialize(ctx *cli.Context) {
+	fns := pl.Lookup("Initialize", func(i interface{}) bool {
+		_, ok := i.(func(*cli.Context) error)
+		return ok
+	})
+	for _, fni := range fns {
+		if fn, ok := fni.(func(*cli.Context)); ok {
+			fn(ctx)
+		}
+	}
 }
 
 func (pl *PluginLoader) RunSubcommand(ctx *cli.Context) (bool, error) {

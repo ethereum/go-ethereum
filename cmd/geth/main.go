@@ -313,7 +313,7 @@ func prepare(ctx *cli.Context) {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
-	if err := plugins.Initialize(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "plugins")); err != nil { return err }
+	if err := plugins.Initialize(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "plugins"), ctx); err != nil { return err }
 	if ok, err := plugins.RunSubcommand(ctx); ok { return err }
 	if !plugins.ParseFlags(ctx.Args()) {
 		if args := ctx.Args(); len(args) > 0 {
@@ -323,6 +323,7 @@ func geth(ctx *cli.Context) error {
 
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
+	pluginsInitializeNode(stack, backend)
 	defer stack.Close()
 	stack.RegisterAPIs(pluginGetAPIs(stack, backend))
 
