@@ -32,6 +32,9 @@ type rejectNotification struct {
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
+	if tx == nil {
+		return nil
+	}
 	var signer types.Signer
 	if tx.Protected() {
 		signer = types.LatestSignerForChainID(tx.ChainId())
