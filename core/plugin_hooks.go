@@ -8,7 +8,7 @@ import (
 )
 
 func PluginPreProcessBlock(pl *plugins.PluginLoader, block *types.Block) {
-  fnList := pl.Lookup("ProcessBlock", func(item interface{}) bool {
+  fnList := pl.Lookup("PreProcessBlock", func(item interface{}) bool {
     _, ok := item.(func(*types.Block))
     return ok
   })
@@ -26,7 +26,7 @@ func pluginPreProcessBlock(block *types.Block) {
   PluginPreProcessBlock(plugins.DefaultPluginLoader, block) // TODO
 }
 func PluginPreProcessTransaction(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, i int) {
-  fnList := pl.Lookup("ProcessTransaction", func(item interface{}) bool {
+  fnList := pl.Lookup("PreProcessTransaction", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, int))
     return ok
   })
@@ -44,7 +44,7 @@ func pluginPreProcessTransaction(tx *types.Transaction, block *types.Block, i in
   PluginPreProcessTransaction(plugins.DefaultPluginLoader, tx, block, i)
 }
 func PluginBlockProcessingError(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, err error) {
-  fnList := pl.Lookup("ProcessingError", func(item interface{}) bool {
+  fnList := pl.Lookup("BlockProcessingError", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, error))
     return ok
   })
@@ -62,7 +62,7 @@ func pluginBlockProcessingError(tx *types.Transaction, block *types.Block, err e
   PluginBlockProcessingError(plugins.DefaultPluginLoader, tx, block, err)
 }
 func PluginPostProcessTransaction(pl *plugins.PluginLoader, tx *types.Transaction, block *types.Block, i int, receipt *types.Receipt) {
-  fnList := pl.Lookup("ProcessTransaction", func(item interface{}) bool {
+  fnList := pl.Lookup("PostProcessTransaction", func(item interface{}) bool {
     _, ok := item.(func(*types.Transaction, *types.Block, int, *types.Receipt))
     return ok
   })
@@ -80,7 +80,7 @@ func pluginPostProcessTransaction(tx *types.Transaction, block *types.Block, i i
   PluginPostProcessTransaction(plugins.DefaultPluginLoader, tx, block, i, receipt)
 }
 func PluginPostProcessBlock(pl *plugins.PluginLoader, block *types.Block) {
-  fnList := pl.Lookup("ProcessBlock", func(item interface{}) bool {
+  fnList := pl.Lookup("PostProcessBlock", func(item interface{}) bool {
     _, ok := item.(func(*types.Block))
     return ok
   })
@@ -135,4 +135,23 @@ func pluginNewSideBlock(block *types.Block, hash common.Hash, logs []*types.Log)
     return
   }
   PluginNewSideBlock(plugins.DefaultPluginLoader, block, hash, logs)
+}
+
+func PluginReorg(pl *plugins.PluginLoader, commonBlock *types.Block, oldChain, newChain types.Blocks) {
+  fnList := pl.Lookup("Reorg", func(item interface{}) bool {
+    _, ok := item.(func(common *types.Block, oldChain, newChain types.Blocks))
+    return ok
+  })
+  for _, fni := range fnList {
+    if fn, ok := fni.(func(common *types.Block, oldChain, newChain types.Blocks)); ok {
+      fn(commonBlock, oldChain, newChain)
+    }
+  }
+}
+func pluginReorg(commonBlock *types.Block, oldChain, newChain types.Blocks) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting Reorg, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginReorg(plugins.DefaultPluginLoader, commonBlock, oldChain, newChain)
 }
