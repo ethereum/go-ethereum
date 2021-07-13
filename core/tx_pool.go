@@ -499,11 +499,11 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
-	pending := types.Transactions{}
+	var pending types.Transactions
 	if list, ok := pool.pending[addr]; ok {
 		pending = list.Flatten()
 	}
-	queued := types.Transactions{}
+	var queued types.Transactions
 	if list, ok := pool.queue[addr]; ok {
 		queued = list.Flatten()
 	}
