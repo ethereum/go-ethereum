@@ -191,6 +191,11 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	return s.GetCommittedState(db, key)
 }
 
+// GetDirtyStorage retrieves the dirty storage
+func (s *stateObject) GetDirtyStorage() Storage {
+	return s.dirtyStorage
+}
+
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)

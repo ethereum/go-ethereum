@@ -200,6 +200,10 @@ func (s *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log 
 	return logs
 }
 
+func (s *StateDB) GetStateObjects() (map[common.Address]*stateObject, map[common.Address]struct{}, map[common.Address]struct{}) {
+	return s.stateObjects, s.stateObjectsPending, s.stateObjectsDirty
+}
+
 func (s *StateDB) Logs() []*types.Log {
 	var logs []*types.Log
 	for _, lgs := range s.logs {

@@ -858,3 +858,117 @@ func APIs(backend Backend) []rpc.API {
 		},
 	}
 }
+
+// TraceCalls lets you trace a sequence eth_call. It collects the state
+// difference during the execution of EVM if the given transaction was added on
+// top of the provided block and returns them as a JSON object.
+// You can provide -2 as a block number to trace on top of the pending block.
+//func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+func (api *API) TraceCalls(ctx context.Context, args []ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+	// Try to retrieve the specified block
+	var (
+		err        error
+		block      *types.Block
+		stateBlock *types.Block // Used when state is not calculated for pending block
+		totalGas   uint64
+	)
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		block, err = api.blockByHash(ctx, hash)
+		stateBlock = block
+	} else if number, ok := blockNrOrHash.Number(); ok {
+		block, err = api.blockByNumber(ctx, number)
+		stateBlock = block
+		if number == -2 {
+			stateBlock, err = api.blockByNumber(ctx, -1)
+		}
+	} else {
+		return nil, errors.New("invalid arguments; neither block nor hash specified")
+	}
+	if err != nil {
+		return nil, err
+	}
+	// try to recompute the state
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	statedb, err := api.backend.StateAtBlock(ctx, stateBlock, reexec, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	// Apply the customized state rules if required.
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+	}
+	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+
+	var stateTraceResult ethapi.StateTraceResult
+	stateTraceResult.Transactions = make([]ethapi.TransactionStateTrace, 0)
+
+	for i, arg := range args {
+		msg, err := arg.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+		if err != nil {
+			return nil, err
+		}
+		txctx := new(Context)
+		statedb.Prepare(txctx.TxHash, i)
+		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
+
+		result, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if err != nil {
+			return nil, err
+		}
+
+		obj, _, _ := statedb.GetStateObjects()
+		var txState ethapi.TransactionStateTrace
+		state := make(map[string]ethapi.StateObjectTrace)
+
+		for stateAddr, stateObj := range obj {
+			dirtyStorage := stateObj.GetDirtyStorage()
+			storage := make(map[string]string)
+
+			for slot, value := range dirtyStorage {
+				storage[slot.String()] = value.String()
+			}
+
+			state[stateAddr.String()] = ethapi.StateObjectTrace{
+				Balance: "0x" + stateObj.Balance().Text(16),
+				Storage: &storage,
+			}
+
+		}
+		txState.StateObject = &state
+		txState.Gas = result.UsedGas
+		totalGas += result.UsedGas
+		stateTraceResult.Transactions = append(stateTraceResult.Transactions, txState)
+
+		// Finalize the state so any modifications are written to the trie
+		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+	}
+
+	stateTraceResult.State = stateTraceResult.Transactions[len(stateTraceResult.Transactions)-1]
+	stateTraceResult.State.Gas = totalGas
+
+	// Compute original state
+	statedbOrigin, err := api.backend.StateAtBlock(ctx, stateBlock, reexec, nil, true)
+	stateOrigin := make(map[string]ethapi.StateObjectTrace)
+
+	for stateAddr, state := range *stateTraceResult.State.StateObject {
+		originalBalance := statedbOrigin.GetBalance(common.HexToAddress(stateAddr))
+		originState := make(map[string]string)
+		for slot, _ := range *state.Storage {
+			stateObj := statedbOrigin.GetState(common.HexToAddress(stateAddr), common.HexToHash(slot))
+			originState[slot] = stateObj.String()
+		}
+		stateOrigin[stateAddr] = ethapi.StateObjectTrace{
+			Balance: "0x" + originalBalance.Text(16),
+			Storage: &originState,
+		}
+	}
+	stateTraceResult.OriginState.StateObject = &stateOrigin
+
+	return stateTraceResult, nil
+}
