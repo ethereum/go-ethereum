@@ -221,8 +221,8 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address,
 		return api.clique.Author(block.Header())
 	}
 	header := new(types.Header)
-	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, header); err == nil {
-		return api.clique.Author(header)
+	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, header); err != nil {
+		return common.Address{}, fmt.Errorf("could not decode rlp")
 	}
-	return common.Address{}, fmt.Errorf("could not decode rlp")
+	return api.clique.Author(header)
 }
