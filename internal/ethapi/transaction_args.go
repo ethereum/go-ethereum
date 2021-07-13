@@ -108,7 +108,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				return err
 			}
 			if b.ChainConfig().IsLondon(head.Number) {
-				price.Add(price, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
+				// The legacy tx gas price suggestion should not add 2x base fee
+				// because all fees are consumed, so it would result in a spiral
+				// upwards.
+				price.Add(price, head.BaseFee)
 			}
 			args.GasPrice = (*hexutil.Big)(price)
 		}
