@@ -1070,40 +1070,6 @@ func (c *Bor) fetchAndCommitSpan(
 	return applyMessage(msg, state, header, c.chainConfig, chain)
 }
 
-// GetPendingStateProposals get pending state proposals
-func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error) {
-	// block
-	blockNr := rpc.BlockNumber(snapshotNumber)
-
-	// method
-	method := "getPendingStates"
-
-	data, err := c.stateReceiverABI.Pack(method)
-	if err != nil {
-		log.Error("Unable to pack tx for getPendingStates", "error", err)
-		return nil, err
-	}
-
-	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(c.config.StateReceiverContract)
-	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
-		Gas:  &gas,
-		To:   &toAddress,
-		Data: &msgData,
-	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var ret = new([]*big.Int)
-	if err = c.stateReceiverABI.UnpackIntoInterface(ret, method, result); err != nil {
-		return nil, err
-	}
-
-	return *ret, nil
-}
-
 // CommitStates commit states
 func (c *Bor) CommitStates(
 	state *state.StateDB,
