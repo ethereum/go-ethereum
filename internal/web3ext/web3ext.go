@@ -108,6 +108,12 @@ web3._extend({
 			call: 'clique_status',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'getSigner',
+			call: 'clique_getSigner',
+			params: 1,
+			inputFormatter: [null]
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
