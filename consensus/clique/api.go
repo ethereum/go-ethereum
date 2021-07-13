@@ -17,17 +17,13 @@
 package clique
 
 import (
-	"bytes"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -183,12 +179,12 @@ func (api *API) Status() (*status, error) {
 	}, nil
 }
 
-type SignerBlock struct {
+type blockNumberOrHashOrRLP struct {
 	*rpc.BlockNumberOrHash
-	RLP string `json:"rlp,omitempty"`
+	RLP hexutil.Bytes `json:"rlp,omitempty"`
 }
 
-func (sb *SignerBlock) UnmarshalJSON(data []byte) error {
+func (sb *blockNumberOrHashOrRLP) UnmarshalJSON(data []byte) error {
 	bnOrHash := new(rpc.BlockNumberOrHash)
 	// Try to unmarshal bNrOrHash
 	if err := bnOrHash.UnmarshalJSON(data); err == nil {
@@ -197,18 +193,17 @@ func (sb *SignerBlock) UnmarshalJSON(data []byte) error {
 	}
 	// Try to unmarshal RLP
 	var input string
-	err := json.Unmarshal(data, &input)
-	if err != nil {
+	if err := json.Unmarshal(data, &input); err != nil {
 		return err
 	}
-	sb.RLP = input
+	sb.RLP = hexutil.MustDecode(input)
 	return nil
 }
 
 // GetSigner returns the signer for a specific clique block.
 // Can be called with either a blocknumber, blockhash or an rlp encoded blob.
 // The RLP encoded blob can either be a block or a header.
-func (api *API) GetSigner(rlpOrBlockNr *SignerBlock) (common.Address, error) {
+func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address, error) {
 	if len(rlpOrBlockNr.RLP) == 0 {
 		blockNrOrHash := rlpOrBlockNr.BlockNumberOrHash
 		var header *types.Header
@@ -219,37 +214,15 @@ func (api *API) GetSigner(rlpOrBlockNr *SignerBlock) (common.Address, error) {
 		} else if number, ok := blockNrOrHash.Number(); ok {
 			header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 		}
-		return getSigner(header)
-	}
-	blob, err := hex.DecodeString(strings.TrimLeft(rlpOrBlockNr.RLP, "0x"))
-	if err != nil {
-		return common.Address{}, err
+		return api.clique.Author(header)
 	}
 	block := new(types.Block)
-	if err := rlp.Decode(bytes.NewReader(blob), block); err == nil {
-		return getSigner(block.Header())
+	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, block); err == nil {
+		return api.clique.Author(block.Header())
 	}
 	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(blob), header); err == nil {
-		return getSigner(header)
+	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, header); err == nil {
+		return api.clique.Author(header)
 	}
 	return common.Address{}, fmt.Errorf("could not decode rlp")
-}
-
-func getSigner(header *types.Header) (common.Address, error) {
-	if header == nil {
-		return common.Address{}, errors.New("could not find header")
-	}
-	if len(header.Extra)-extraSeal < 0 {
-		return common.Address{}, errors.New("invalid extra data in header")
-	}
-	signature := header.Extra[len(header.Extra)-extraSeal:]
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	return signer, nil
 }
