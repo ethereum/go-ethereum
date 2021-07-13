@@ -512,7 +512,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 	defer pool.mu.RUnlock()
 
 	// Retrieve the pending transactions and sort by nonce
-	pending := types.Transactions{}
+	var pending types.Transactions
 	for _, tx := range pool.pending {
 		account, _ := types.Sender(pool.signer, tx)
 		if account != addr {
