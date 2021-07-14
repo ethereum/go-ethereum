@@ -218,6 +218,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 			log.Info("Append ancient failed", "number", number, "err", err)
 		}
 	}()
+	pluginAppendAncient(number, hash, header, body, receipts, td)
 	// Inject all the components into the relevant data tables
 	if err := f.tables[freezerHashTable].Append(f.frozen, hash[:]); err != nil {
 		log.Error("Failed to append ancient hash", "number", f.frozen, "hash", hash, "err", err)
