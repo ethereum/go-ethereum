@@ -27,7 +27,7 @@ import (
 
 type devnull struct{ len int }
 
-func (d *devnull) Write(p []byte) (n int, err error) {
+func (d *devnull) Write(p []byte) (int, error) {
 	d.len += len(p)
 	return len(p), nil
 }
