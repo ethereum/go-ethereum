@@ -55,7 +55,7 @@ ETHEREUM OPTIONS:
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --yolov3                            YOLOv3 network: pre-configured proof-of-authority shortlived test network.
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
-  --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: fast)
+  --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
   --txlookuplimit value               Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (default: 2350000)
