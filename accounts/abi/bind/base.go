@@ -229,13 +229,13 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	head, err := c.transactor.HeaderByNumber(opts.Context, nil)
+	head, err := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil)
 	if err != nil {
 		return nil, err
 	}
 	if head.BaseFee != nil && opts.GasPrice == nil {
 		if opts.GasTipCap == nil {
-			tip, err := c.transactor.SuggestGasTipCap(opts.Context)
+			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
 			}
@@ -256,12 +256,9 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 		}
 		if opts.GasPrice == nil {
-			price, err := c.transactor.SuggestGasTipCap(opts.Context)
+			price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
-			}
-			if head.BaseFee != nil {
-				price.Add(price, head.BaseFee)
 			}
 			opts.GasPrice = price
 		}
@@ -443,7 +440,7 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event strin
 // user specified it as such.
 func ensureContext(ctx context.Context) context.Context {
 	if ctx == nil {
-		return context.TODO()
+		return context.Background()
 	}
 	return ctx
 }

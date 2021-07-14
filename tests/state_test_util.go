@@ -328,6 +328,9 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
 			tx.MaxFeePerGas)
 	}
+	if gasPrice == nil {
+		return nil, fmt.Errorf("no gas price provided")
+	}
 
 	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
 		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, true)

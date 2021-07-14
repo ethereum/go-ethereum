@@ -38,7 +38,7 @@ const (
 	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
 	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
 
-	SstoreSetGas    uint64 = 20000 // Once per SLOAD operation.
+	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
 	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
 	SstoreClearGas  uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
 	SstoreRefundGas uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
