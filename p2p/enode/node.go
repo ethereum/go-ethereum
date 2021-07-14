@@ -121,7 +121,7 @@ func (n *Node) UDP() int {
 	return int(port)
 }
 
-// UDP returns the TCP port of the node.
+// TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	var port enr.TCP
 	n.Load(&port)
