@@ -88,15 +88,15 @@ operations.
 
 ```
 // CaptureStart is called at the start of each transaction
-CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {}
 // CaptureState is called for each opcode
-CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {}
 // CaptureFault is called when an error occurs in the EVM
-CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {}
 // CaptureEnd is called at the end of each transaction
-CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 // GetResult should return a JSON serializable result object to respond to the trace call
-GetResult() (interface{}, error) {
+GetResult() (interface{}, error) {}
 
 ```
 
@@ -117,8 +117,77 @@ GetResult() (interface{}, error) {
 The interface for a vm.Tracer is similar to a TracerResult (above), but does
 not require a `GetResult()` function.
 
+#### GetAPIs
+
+* **Name**: GetAPIs
+* **Type**: func(*node.Node, interfaces.Backend) []rpc.API
+* **Behavior**: This allows you to register new RPC methods to run within Geth.
+* **Example**:
+
+The GetAPIs function itself will generally be fairly brief, and will looks
+something like this:
+
+```
+func GetAPIs(stack *node.Node, backend plugins.Backend) []rpc.API {
+  return []rpc.API{
+   {
+     Namespace: "mynamespace",
+     Version:	 "1.0",
+     Service:	 &MyService{backend},
+     Public:		true,
+   },
+ }
+}
+```
+
+The bulk of the implementation will be in the `MyService` struct. MyService
+should be a struct with public functions. These functions can have two
+different types of signatures:
+
+* RPC Calls: For straight RPC calls, a function should have a `context.Context`
+  object as the first argument, followed by an arbitrary number of JSON
+  marshallable arguments, and return either a single JSON marshal object, or a
+  JSON marshallable object and an error. The RPC framework will take care of
+  decoding inputs to this function and encoding outputs, and if the error is
+  non-nil it will serve an error response.
+* Subscriptions: For subscriptions (supported on IPC and websockets), a
+  function should have a `context.Context` object as the first argument
+  followed by an arbitrary number of JSON marshallable arguments, and should
+  return an `*rpc.Subscription` object. The subscription object can be created
+  with `rpcSub := notifier.CreateSubscription()`, and JSON marshallable data
+  can be sent to the subscriber with `notifier.Notify(rpcSub.ID, b)`.
+
+A very simple MyService might look like:
+
+```
+type MyService struct{}
+
+func (h *MyService) HelloWorld(ctx context.Context) string {
+  return "Hello World"
+}
+```
+
+And the user could then access this with 
 
 ## Extending The Plugin API
+
+.Lookup("GetAPIs", func(item interface{}) bool {
+.Lookup("InitializeNode", func(item interface{}) bool {
+.Lookup("PreProcessBlock", func(item interface{}) bool {
+.Lookup("PreProcessTransaction", func(item interface{}) bool {
+.Lookup("BlockProcessingError", func(item interface{}) bool {
+.Lookup("PostProcessTransaction", func(item interface{}) bool {
+.Lookup("PostProcessBlock", func(item interface{}) bool {
+.Lookup("NewHead", func(item interface{}) bool {
+.Lookup("NewSideBlock", func(item interface{}) bool {
+.Lookup("Reorg", func(item interface{}) bool {
+.Lookup("AppendAncient", func(item interface{}) bool {
+.Lookup("StateUpdate", func(item interface{}) bool  {
+.Lookup("CreateConsensusEngine", func(item interface{}) bool {
+.Lookup("UpdateBlockchainVMConfig", func(item interface{}) bool {
+.Lookup("BlockUpdates", func(item interface{}) bool {
+.Lookup("Subcommands")
+.Lookup("Initialize", func(i interface{}) bool {
 
 While we can imagine lots of ways plugins might like to extract or change
 information in Geth, we're trying not to go too crazy with the plugin API based
