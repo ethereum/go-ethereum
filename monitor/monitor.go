@@ -2,25 +2,15 @@ package monitor
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/log"
+	"math/big"
+	"sync"
 	"time"
 )
 
 var systemUsageMonitor SystemUsageMonitor
-
-type SystemUsage struct {
-	CurrentTime time.Time
-	CpuData     map[string]float64
-	MemData     map[string]float64
-	IOData      map[string]float64
-}
-
-type SystemDurationUsage struct {
-	DurationTime time.Duration
-	CpuData      map[string]float64
-	MemData      map[string]float64
-	IOData       map[string]float64
-}
+var monitorOnce sync.Once
 
 func GetCurrentTime() time.Time {
 	return time.Now()
@@ -31,25 +21,71 @@ type ISystemUsageMonitor interface {
 }
 
 type SystemUsageMonitor struct {
-	tool             Tool
-	startSystemUsage SystemUsage
-	endSystemUsage   SystemUsage
+	tool                      Tool
+	db                        Idb
+	currentBlockId            *big.Int
+	currentTransactionIndex   int
+	currentOperationName      string
+	currentBlockData          BlockData
+	currentTransactionData    TransactionData
+	currentOperationData      OperationData
+	operationStartSystemUsage SystemUsage
+	operationEndSystemUsage   SystemUsage
 }
 
-func NewSystemUsageMonitor() *SystemUsageMonitor {
+func GetSystemUsageMonitor() *SystemUsageMonitor {
 
-	if &systemUsageMonitor != nil {
-		log.Info("reuse SystemUsageMonitor")
-		return &systemUsageMonitor
-	} else {
-
-		sum := SystemUsageMonitor{
-			*NewTool(),
-			SystemUsage{},
-			SystemUsage{},
+	monitorOnce.Do(func() {
+		systemUsageMonitor = SystemUsageMonitor{
+			tool: *NewTool(),
 		}
-		return &sum
+		db, err := NewMongoDb("mongodb://geth:123456@localhost:27017/admin")
+		if err != nil {
+			log.Error("Failed to create mongo db")
+		}
+		systemUsageMonitor.SetDb(db)
+	})
+	return &systemUsageMonitor
+}
+
+func Init() {
+	systemUsageMonitor := GetSystemUsageMonitor()
+	db, err := NewMongoDb("mongodb://geth:123456@localhost:27017/admin")
+	if err != nil {
+		log.Error("Failed to create mongo db")
 	}
+	systemUsageMonitor.SetDb(db)
+}
+
+func (sum *SystemUsageMonitor) SetDb(db Idb) {
+	sum.db = db
+}
+
+func (sum *SystemUsageMonitor) SaveBlockData(blockData BlockData) error {
+	if &sum.db == nil {
+		return fmt.Errorf("db is not set")
+	}
+	if len(blockData.TransactionDataList) > 0 {
+		return sum.db.SaveBlockData(blockData)
+	} else {
+		return nil
+	}
+
+}
+
+func (sum *SystemUsageMonitor) IsInBlock() bool {
+	if sum.currentBlockId.Int64() >= 0 {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (sum *SystemUsageMonitor) SaveTxData(txData TransactionData) error {
+	if &sum.db == nil {
+		return fmt.Errorf("db is not set")
+	}
+	return sum.db.SaveTxData(txData)
 }
 
 func (sum *SystemUsageMonitor) GetSystemCurrentUsage() *SystemUsage {
@@ -69,20 +105,67 @@ func getMapDataDiff(d1 map[string]float64, d2 map[string]float64) *map[string]fl
 	return &diff
 }
 
-func (sum *SystemUsageMonitor) Start() {
-	sum.startSystemUsage = *sum.GetSystemCurrentUsage()
+func (sum *SystemUsageMonitor) BlockStart(blockId *big.Int) {
+	sum.currentBlockId = blockId
+	sum.currentBlockData = BlockData{
+		BlockId:             blockId,
+		TransactionDataList: []TransactionData{},
+	}
 }
 
-func (sum *SystemUsageMonitor) End() {
-	sum.endSystemUsage = *sum.GetSystemCurrentUsage()
+func (sum *SystemUsageMonitor) BlockEnd() (blockData *BlockData) {
+	sum.currentBlockId = big.NewInt(-1)
+	ret := sum.currentBlockData
+	sum.currentBlockData = BlockData{
+		BlockId:             big.NewInt(-1),
+		TransactionDataList: []TransactionData{},
+	}
+	return &ret
 }
 
-func (sum *SystemUsageMonitor) GetSystemDurationUsage() *SystemDurationUsage {
+func (sum *SystemUsageMonitor) TransactionStart(txIndex int) {
+	sum.currentTransactionData = TransactionData{
+		TransactionIndex:  txIndex,
+		OperationDataList: []OperationData{},
+	}
+}
+
+func (sum *SystemUsageMonitor) TransactionEnd() (transactionData *TransactionData) {
+	ret := sum.currentTransactionData
+	sum.currentTransactionData = TransactionData{
+		TransactionIndex:  -1,
+		OperationDataList: []OperationData{},
+	}
+	sum.currentBlockData.TransactionDataList = append(sum.currentBlockData.TransactionDataList, ret)
+	return &ret
+}
+
+func (sum *SystemUsageMonitor) OperationStart(op string) {
+	sum.currentOperationData = OperationData{
+		Op:            op,
+		DurationUsage: SystemDurationUsage{},
+	}
+	sum.operationStartSystemUsage = *sum.GetSystemCurrentUsage()
+}
+
+func (sum *SystemUsageMonitor) OperationEnd() (operationData *OperationData) {
+	sum.operationEndSystemUsage = *sum.GetSystemCurrentUsage()
+	sum.currentOperationData.DurationUsage = *sum.GetOperationDurationUsage()
+	ret := sum.currentOperationData
+	sum.currentOperationData = OperationData{
+		Op:            "",
+		DurationUsage: SystemDurationUsage{},
+	}
+	sum.currentTransactionData.OperationDataList = append(sum.currentTransactionData.OperationDataList, ret)
+	return &ret
+}
+
+func (sum *SystemUsageMonitor) GetOperationDurationUsage() *SystemDurationUsage {
 	return &SystemDurationUsage{
-		DurationTime: sum.startSystemUsage.CurrentTime.Sub(GetCurrentTime()),
-		CpuData:      *getMapDataDiff(sum.startSystemUsage.CpuData, sum.endSystemUsage.CpuData),
-		MemData:      *getMapDataDiff(sum.startSystemUsage.CpuData, sum.endSystemUsage.MemData),
-		IOData:       *getMapDataDiff(sum.startSystemUsage.CpuData, sum.endSystemUsage.IOData),
+		DurationTime: sum.operationEndSystemUsage.CurrentTime.Sub(sum.operationStartSystemUsage.CurrentTime),
+		CpuData:      *getMapDataDiff(sum.operationStartSystemUsage.CpuData, sum.operationEndSystemUsage.CpuData),
+		MemData:      *getMapDataDiff(sum.operationStartSystemUsage.MemData, sum.operationEndSystemUsage.MemData),
+		IOData:       *getMapDataDiff(sum.operationStartSystemUsage.IOData, sum.operationEndSystemUsage.IOData),
 	}
 }
 

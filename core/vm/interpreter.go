@@ -288,17 +288,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// execute the operation
 		//if in.cfg.MeasureGas {
 		if in.cfg.MeasureGas {
-			sum := monitor.NewSystemUsageMonitor()
-			sum.Start()
+			sum := monitor.GetSystemUsageMonitor()
+			sum.OperationStart(opCodeToString[op])
 			res, err = operation.execute(&pc, in, callContext)
-			sum.End()
-			systemDurationUsage := sum.GetSystemDurationUsage()
+			sum.OperationEnd()
 			log.Info("--System usage v1.2 \n ==================================================\n")
+			log.Info("BlockNum: %s", in.evm.Context.BlockNumber)
 			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
 			log.Info(opCodeToString[op])
-			log.Info(systemDurationUsage.ToString() + "\n")
 		} else {
 			log.Info("--System usage v1.2 \n ==================================================\n")
+			log.Info("BlockNum: %s", in.evm.Context.BlockNumber)
 			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
 			log.Info(opCodeToString[op])
 			res, err = operation.execute(&pc, in, callContext)

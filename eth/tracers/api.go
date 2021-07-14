@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/monitor"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -533,6 +534,18 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	// Feed the transactions into the tracers and return
 	var failed error
+
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+		db, err := monitor.NewMongoDb("mongodb://geth:123456@localhost:27017/admin")
+		if err != nil {
+			log.Error("Failed to create mongo db")
+		}
+
+		sum.SetDb(db)
+		sum.BlockStart(block.Number())
+	}
+
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
@@ -540,7 +553,9 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
+		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{
+			MeasureGas: true,
+		})
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
 			break
@@ -549,6 +564,17 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+		blockData := sum.BlockEnd()
+		err := sum.SaveBlockData(*blockData)
+
+		if err != nil {
+			log.Error("Unable to save block data")
+		}
+	}
+
 	close(jobs)
 	pend.Wait()
 

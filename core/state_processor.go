@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -26,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/monitor"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -69,7 +70,22 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+
+	if vmenv.Config.MeasureGas {
+		sum := monitor.GetSystemUsageMonitor()
+		db, err := monitor.NewMongoDb("mongodb://geth:123456@localhost:27017/admin")
+		if err != nil {
+			log.Error("Failed to create mongo db")
+		}
+
+		sum.SetDb(db)
+		sum.BlockStart(block.Number())
+	}
+
 	// Iterate over and process the individual transactions
+	if len(block.Transactions()) > 0 {
+		fmt.Println("test")
+	}
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
 		if err != nil {
@@ -83,6 +99,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	if vmenv.Config.MeasureGas {
+		sum := monitor.GetSystemUsageMonitor()
+		blockData := sum.BlockEnd()
+		err := sum.SaveBlockData(*blockData)
+
+		if err != nil {
+			log.Error("Unable to save block data")
+		}
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 
