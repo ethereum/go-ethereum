@@ -253,6 +253,9 @@ And the client could then access this with an rpc call to `mynaespace_helloWorld
   maps the hash of each account address to the SlimRLP encoding of the account
   data. `storage` maps the hash of each account to a map of that account's
   stored data.
+* **Warning**: StateUpdate is only called if Geth is running with
+  `--snapshot=true`. This is the default behavior for Geth, but if you are
+  explicitly running with `--snapshot=false` this function will not be invoked.
 
 #### AppendAncient
 * **Name**: AppendAncient
@@ -357,3 +360,13 @@ people who are building something. If you're trying to do something that isn't
 supported by the current plugin system, we're happy to help. Reach out to us on
 [Discord](https://discord.gg/Epf7b7Gr) and we'll help you figure out how to
 make it work.
+
+
+# Existing Plugins
+
+We currently provide the following plugins:
+
+* [BlockUpdates](./plugins/packages/blockupdates/main.go): A good reference
+  plugin, which leverages several hooks to provide a new BlockUpdates hook,
+  which plugins can use to get more cohesive updates about new blocks than can
+  easily be achieved with the standard PluGeth hooks.
