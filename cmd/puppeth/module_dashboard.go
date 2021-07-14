@@ -482,7 +482,7 @@ ADD puppeth.png /dashboard/puppeth.png
 
 EXPOSE 80
 
-CMD ["node", "/server.js"]
+CMD ["node", "./server.js"]
 `
 
 // dashboardComposefile is the docker-compose.yml file required to deploy and

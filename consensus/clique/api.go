@@ -17,11 +17,14 @@
 package clique
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -174,4 +177,52 @@ func (api *API) Status() (*status, error) {
 		SigningStatus: signStatus,
 		NumBlocks:     numBlocks,
 	}, nil
+}
+
+type blockNumberOrHashOrRLP struct {
+	*rpc.BlockNumberOrHash
+	RLP hexutil.Bytes `json:"rlp,omitempty"`
+}
+
+func (sb *blockNumberOrHashOrRLP) UnmarshalJSON(data []byte) error {
+	bnOrHash := new(rpc.BlockNumberOrHash)
+	// Try to unmarshal bNrOrHash
+	if err := bnOrHash.UnmarshalJSON(data); err == nil {
+		sb.BlockNumberOrHash = bnOrHash
+		return nil
+	}
+	// Try to unmarshal RLP
+	var input string
+	if err := json.Unmarshal(data, &input); err != nil {
+		return err
+	}
+	sb.RLP = hexutil.MustDecode(input)
+	return nil
+}
+
+// GetSigner returns the signer for a specific clique block.
+// Can be called with either a blocknumber, blockhash or an rlp encoded blob.
+// The RLP encoded blob can either be a block or a header.
+func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address, error) {
+	if len(rlpOrBlockNr.RLP) == 0 {
+		blockNrOrHash := rlpOrBlockNr.BlockNumberOrHash
+		var header *types.Header
+		if blockNrOrHash == nil {
+			header = api.chain.CurrentHeader()
+		} else if hash, ok := blockNrOrHash.Hash(); ok {
+			header = api.chain.GetHeaderByHash(hash)
+		} else if number, ok := blockNrOrHash.Number(); ok {
+			header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+		}
+		return api.clique.Author(header)
+	}
+	block := new(types.Block)
+	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, block); err == nil {
+		return api.clique.Author(block.Header())
+	}
+	header := new(types.Header)
+	if err := rlp.DecodeBytes(rlpOrBlockNr.RLP, header); err != nil {
+		return common.Address{}, err
+	}
+	return api.clique.Author(header)
 }
