@@ -77,6 +77,26 @@ operations.
   function. This can be useful for certain behaviors like manipulating Geth's
   database without having to build a separate binary.
 
+
+#### Initialize
+
+* **Name**: Initialize
+* **Type**: func(*cli.Context, *PluginLoader)
+* **Behavior**: Called as soon as the plugin is loaded, with the cli context
+  and a reference to the plugin loader. This is your plugin's opportunity to
+  initialize required variables as needed. Note that using the context object
+  you can check arguments, and optionally can manipulate arguments if needed
+  for your plugin.
+
+#### InitializeNode
+
+* **Name**: InitializeNode
+* **Type**: func(*node.Node, interfaces.Backend)
+* **Behavior**: This is called as soon as the Geth node is initialized. The
+ `*node.Node` object represents the running node with p2p and RPC capabilities,
+ while the Backend gives you access to a wide array of data you may need to
+ access.
+
 #### Tracers
 
 * **Name**: Tracer
@@ -167,27 +187,167 @@ func (h *MyService) HelloWorld(ctx context.Context) string {
 }
 ```
 
-And the user could then access this with 
+And the client could then access this with an rpc call to `mynaespace_helloWorld`.
+
+
+#### PreProcessBlock
+* **Name**: PreProcessBlock
+* **Type**: func(*types.Block)
+* **Behavior**: Invoked before the transactions of a block are processed.
+
+#### PreProcessTransaction
+* **Name**: PreProcessTransaction
+* **Type**: func(*types.Transaction, *types.Block, int)
+* **Behavior**: Invoked before each individual transaction of a block is
+  processed.
+
+#### BlockProcessingError
+* **Name**: BlockProcessingError
+* **Type**: func(*types.Transaction, *types.Block, error)
+* **Behavior**: Invoked if an error occurs while processing a transaction. This
+  only applies to errors that would invalidate the block were this transaction
+  included, not errors such as reverts or opcode errors.
+
+#### PostProcessTransaction
+* **Name**: PostProcessTransaction
+* **Type**: func(*types.Transaction, *types.Block, int, *types.Receipt)
+* **Behavior**: Invoked after each individual transaction of a block is processed.
+
+#### PostProcessBlock
+* **Name**: PostProcessBlock
+* **Type**: func(*types.Block)
+* **Behavior**: Invoked after all transactions of a block are processed. Note
+  that this does not mean that the block can be considered canonical - it may
+  end up being uncled or side-chained. You should rely on `NewHead` to
+  determine which blocks are canonical.
+
+#### NewHead
+* **Name**: NewHead
+* **Type**: func(*types.Block, common.Hash, []*types.Log)
+* **Behavior**: Invoked when a new block becomes the canonical latest block.
+  Note that if several blocks are processed in a group (such as during a reorg)
+  this may not be called for each block. You should track the prior latest head
+  if you need to process intermediate blocks.
+
+#### NewSideBlock
+* **Name**: NewSideBlock
+* **Type**: func(*types.Block, common.Hash, []*types.Log)
+* **Behavior**: Invoked when a block is side-chained. Blocks passed to this
+  method are non-canonical blocks
+
+#### Reorg
+* **Name**: Reorg
+* **Type**: func(common *types.Block, oldChain, newChain types.Blocks)
+* **Behavior**: Invoked when a chain reorg occurs (at least one block is
+  removed and one block is added). `oldChain` is a list of removed blocks,
+  `newChain` is a list of newly added blocks, and `common` is the latest block
+  that is an ancestor to both oldChain and newChain.
+
+#### StateUpdate
+* **Name**: StateUpdate
+* **Type**: func(root common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte)
+* **Behavior**: Invoked for each new block, StateUpdate provides the changes to
+  the blockchain state. `root` corresponds to the state root of the new block.
+  `parentRoot` corresponds to the state root of the parent block. `destructs`
+  serves as a set of accounts that self-destructed in this block. `accounts`
+  maps the hash of each account address to the SlimRLP encoding of the account
+  data. `storage` maps the hash of each account to a map of that account's
+  stored data.
+
+#### AppendAncient
+* **Name**: AppendAncient
+* **Type**: func(number uint64, hash, header, body, receipts, td []byte)
+* **Behavior**: Invoked when the freezer moves a block from LevelDB to the
+  ancients database. `number` is the number of the block. `hash` is the 32 byte
+  hash of the block as a raw `[]byte`. `header`, `body`, and `receipts` are the
+  RLP encoded versions of their respective block elements. `td` is the byte
+  encoded total difficulty of the block.
+
 
 ## Extending The Plugin API
 
-.Lookup("GetAPIs", func(item interface{}) bool {
-.Lookup("InitializeNode", func(item interface{}) bool {
-.Lookup("PreProcessBlock", func(item interface{}) bool {
-.Lookup("PreProcessTransaction", func(item interface{}) bool {
-.Lookup("BlockProcessingError", func(item interface{}) bool {
-.Lookup("PostProcessTransaction", func(item interface{}) bool {
-.Lookup("PostProcessBlock", func(item interface{}) bool {
-.Lookup("NewHead", func(item interface{}) bool {
-.Lookup("NewSideBlock", func(item interface{}) bool {
-.Lookup("Reorg", func(item interface{}) bool {
-.Lookup("AppendAncient", func(item interface{}) bool {
-.Lookup("StateUpdate", func(item interface{}) bool  {
-.Lookup("CreateConsensusEngine", func(item interface{}) bool {
-.Lookup("UpdateBlockchainVMConfig", func(item interface{}) bool {
-.Lookup("BlockUpdates", func(item interface{}) bool {
-.Lookup("Subcommands")
-.Lookup("Initialize", func(i interface{}) bool {
+When extending the plugin API, a primary concern is leaving a minimal footprint
+in the core Geth codebase to avoid future merge conflicts. To achieve this,
+when we want to add a hook within some existing Geth code, we create a
+`plugin_hooks.go` in the same package. For example, in the core/rawdb package
+we have:
+
+```
+// This file is part of the package we are adding hooks to
+package rawdb
+
+// Import whatever is necessary
+import (
+  "github.com/ethereum/go-ethereum/plugins"
+  "github.com/ethereum/go-ethereum/log"
+)
+
+
+// PluginAppendAncient is the public plugin hook function, available for testing
+func PluginAppendAncient(pl *plugins.PluginLoader, number uint64, hash, header, body, receipts, td []byte) {
+  fnList := pl.Lookup("AppendAncient", func(item interface{}) bool {
+    _, ok := item.(func(number uint64, hash, header, body, receipts, td []byte))
+    return ok
+  })
+  for _, fni := range fnList {
+    if fn, ok := fni.(func(number uint64, hash, header, body, receipts, td []byte)); ok {
+      fn(number, hash, header, body, receipts, td)
+    }
+  }
+}
+
+// pluginAppendAncient is the private plugin hook function
+func pluginAppendAncient(number uint64, hash, header, body, receipts, td []byte) {
+  if plugins.DefaultPluginLoader == nil {
+		log.Warn("Attempting AppendAncient, but default PluginLoader has not been initialized")
+    return
+  }
+  PluginAppendAncient(plugins.DefaultPluginLoader, number, hash, header, body, receipts, td)
+}
+```
+
+### The Public Plugin Hook Function
+
+The public plugin hook function should follow the naming convention
+`Plugin$HookName`. The first argument should be a *plugins.PluginLoader,
+followed by any arguments required by the functions to be provided by nay
+plugins implementing this hook.
+
+The plugin hook function should use `PluginLoader.Lookup("$HookName", func(item interface{}) bool`
+to get a list of the plugin-provided functions to be invoked. The provided
+function should verify that the provided function implements the expected
+interface. After the first time a given hook is looked up through the plugin
+loader, the PluginLoader will cache references to those hooks.
+
+Given the function list provided by the plugin loader, the public plugin hook
+function should iterate over the list, cast the elements to the appropriate
+type, and call the function with the provided arguments.
+
+Unless there is a clear justification to the contrary, the function should be
+called in the current goroutine. Plugins may choose to spawn off a separate
+goroutine as appropriate, but for the sake of thread safety we should generally
+not assume that plugins will be implemented in a threadsafe manner. If a plugin
+degrades the performance of Geth significantly, that will generally be obvious,
+and plugin authors can take appropriate measures to improve performance. If a
+plugin introduces thread safety issues, those can go unnoticed during testing.
+
+### The Private Plugin Hook Function
+
+The private plugin hook function should bear the same name as the public plugin
+hook function, but with a lower case first letter. The signature should match
+the public plugin hook function, except that the first argument referencing the
+PluginLoader should be removed. It should invoke the public plugin hook
+function on `plugins.DefaultPluginLoader`. It should always verify that the
+DefaultPluginLoader is non-nil, log warning and return if the
+DefaultPluginLoader has not been initialized.
+
+### In-Line Invocation
+
+Within the Geth codebase, the private plugin hook function should be invoked
+with the appropriate arguments in a single line, to minimize unexpected
+conflicts merging the upstream geth codebase into plugeth.
+
+### Contact Us
 
 While we can imagine lots of ways plugins might like to extract or change
 information in Geth, we're trying not to go too crazy with the plugin API based
