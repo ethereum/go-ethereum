@@ -306,7 +306,7 @@ func TestTraceCall(t *testing.T) {
 	}
 }
 
-func TestOverridenTraceCall(t *testing.T) {
+func TestOverriddenTraceCall(t *testing.T) {
 	t.Parallel()
 
 	// Initialize test accounts
