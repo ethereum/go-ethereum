@@ -494,25 +494,6 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	return pending, queued
 }
 
-// ContentByAccount retrieves the data content of the transaction pool with a specific account,
-// returning the pending as well as queued transaction.
-func (pool *TxPool) ContentByAccount(addr common.Address) (pending, queued types.Transactions) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	list, ok := pool.pending[addr]
-	if ok {
-		pending = list.Flatten()
-	}
-
-	list, ok = pool.queue[addr]
-	if ok {
-		queued = list.Flatten()
-	}
-
-	return
-}
-
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
 func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {

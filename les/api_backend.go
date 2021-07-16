@@ -222,11 +222,6 @@ func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) TxPoolContentByAccount(addr common.Address) (pending, queued types.Transactions) {
-	// TODO(barryz) not implement for light node.
-	return nil, nil
-}
-
 func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
 	return b.eth.txPool.ContentFrom(addr)
 }
