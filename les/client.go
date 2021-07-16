@@ -287,8 +287,17 @@ func (s *LightDummyAPI) Mining() bool {
 func (s *LightEthereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.ApiBackend)
 	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
+	var protocolVersion uint
+	if len(s.p2pServer.Config.Protocols) > 0 {
+		protocolVersion = s.p2pServer.Config.Protocols[0].Version
+	}
 	return append(apis, []rpc.API{
 		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   ethapi.NewPublicEthereumAPI(s.ApiBackend, protocolVersion),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},

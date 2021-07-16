@@ -297,9 +297,20 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
+	// Retrieve network protocol version if available
+	var protocolVersion uint
+	if len(s.p2pServer.Config.Protocols) > 0 {
+		protocolVersion = s.p2pServer.Config.Protocols[0].Version
+	}
+
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   ethapi.NewPublicEthereumAPI(s.APIBackend, protocolVersion),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicEthereumAPI(s),
