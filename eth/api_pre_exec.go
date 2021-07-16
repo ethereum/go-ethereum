@@ -90,8 +90,8 @@ func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		hexutil.MustDecodeBig(origin.Value),
 		hexutil.MustDecodeUint64(origin.Gas),
 		hexutil.MustDecodeBig(origin.GasPrice),
-		nil,
-		nil,
+		tx.GasFeeCap(),
+		tx.GasTipCap(),
 		hexutil.MustDecode(origin.Data),
 		nil, false,
 	)
