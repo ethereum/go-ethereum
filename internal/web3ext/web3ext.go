@@ -240,6 +240,18 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'burned',
+			call: 'debug_burned',
+			params: 2,
+			inputFormatter: [null, null],
+		}),
+		new web3._extend.Method({
+			name: 'getBlockReward',
+			call: 'debug_getBlockReward',
+			params: 1,
+			inputFormatter: [null],
+		}),
+		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1

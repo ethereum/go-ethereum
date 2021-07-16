@@ -1972,13 +1972,15 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
-	b Backend
+	b           Backend
+	burned      *big.Int
+	burnedBlock uint64
 }
 
 // NewPrivateDebugAPI creates a new API definition for the private debug methods
 // of the Ethereum service.
 func NewPrivateDebugAPI(b Backend) *PrivateDebugAPI {
-	return &PrivateDebugAPI{b: b}
+	return &PrivateDebugAPI{b: b, burned: big.NewInt(0)}
 }
 
 // ChaindbProperty returns leveldb properties of the key-value database.
@@ -2007,6 +2009,76 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 // SetHead rewinds the head of the blockchain to a previous block.
 func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
+}
+
+// Burned returns the amount of burned ether for a specific
+// range of blocks under eip-1559.
+// The returned value is in denoted in Wei.
+func (api *PrivateDebugAPI) Burned(start, end *hexutil.Uint64) (*hexutil.Big, error) {
+	burned := big.NewInt(0)
+	startBlock := 0
+	endBlock := int(api.b.CurrentHeader().Number.Int64())
+	if start != nil {
+		startBlock = int(*start)
+	}
+	if end != nil {
+		endBlock = int(*end)
+	}
+	if startBlock > endBlock {
+		return (*hexutil.Big)(burned), errors.New("invalid range specified, start > end")
+	}
+	// If we don't calculate the burn for a single block, recompute from the given block.
+	if startBlock != endBlock {
+		startBlock = int(api.burnedBlock)
+		burned = api.burned
+	}
+	for i := startBlock; i <= endBlock; i++ {
+		header, err := api.b.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
+		if err != nil {
+			return (*hexutil.Big)(burned), err
+		}
+
+		if basefee := header.BaseFee; basefee != nil && basefee.Cmp(common.Big0) != 0 {
+			gasUsed := big.NewInt(int64(header.GasUsed))
+			burned.Add(burned, gasUsed.Mul(gasUsed, basefee))
+		}
+	}
+	if startBlock != endBlock {
+		api.burned = burned
+		api.burnedBlock = uint64(endBlock)
+	}
+	return (*hexutil.Big)(burned), nil
+}
+
+func (api *PrivateDebugAPI) GetBlockReward(numberOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	block, err := api.b.BlockByNumberOrHash(context.Background(), numberOrHash)
+	if err != nil {
+		return nil, err
+	}
+	config := api.b.ChainConfig()
+	// Select the correct block reward based on chain progression
+	blockReward := ethash.FrontierBlockReward
+	if config.IsByzantium(block.Number()) {
+		blockReward = ethash.ByzantiumBlockReward
+	}
+	if config.IsConstantinople(block.Number()) {
+		blockReward = ethash.ConstantinopleBlockReward
+	}
+	// Accumulate the rewards for the miner and any included uncles
+	reward := new(big.Int).Set(blockReward)
+	uncleMinerReward := big.NewInt(0)
+	r := new(big.Int)
+	for _, uncle := range block.Uncles() {
+		r.Add(uncle.Number, big.NewInt(8))
+		r.Sub(r, block.Number())
+		r.Mul(r, blockReward)
+		r.Div(r, big.NewInt(8))
+		uncleMinerReward.Add(uncleMinerReward, r)
+
+		r.Div(blockReward, big.NewInt(32))
+		reward.Add(reward, r)
+	}
+	return (*hexutil.Big)(new(big.Int).Add(reward, uncleMinerReward)), nil
 }
 
 // PublicNetAPI offers network related RPC methods
