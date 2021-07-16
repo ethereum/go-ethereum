@@ -74,7 +74,7 @@ func TestFreezerBasics(t *testing.T) {
 		exp := getChunk(15, y)
 		got, err := f.Retrieve(uint64(y))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("reading item %d: %v", y, err)
 		}
 		if !bytes.Equal(got, exp) {
 			t.Fatalf("test %d, got \n%x != \n%x", y, got, exp)
@@ -690,5 +690,65 @@ func TestAppendTruncateParallel(t *testing.T) {
 				t.Fatalf("have %x want %x", have, data0)
 			}
 		}
+	}
+}
+
+// TestSequentialRead does some basic tests on the RetrieveItems.
+func TestSequentialRead(t *testing.T) {
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("batchread-%d", rand.Uint64())
+	{ // Fill table
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 15 bytes 30 times
+		for x := 0; x < 30; x++ {
+			data := getChunk(15, x)
+			f.Append(uint64(x), data)
+		}
+		f.DumpIndex(0, 30)
+		f.Close()
+	}
+	{ // Open it, iterate, verify iteration
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := f.RetrieveItems(0, 10000, 100000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, want := len(items), 30; have != want {
+			t.Fatalf("want %d items, have %d ", want, have)
+		}
+		for i, have := range items {
+			want := getChunk(15, i)
+			if !bytes.Equal(want, have) {
+				t.Fatalf("data corruption: have\n%x\n, want \n%x\n", have, want)
+			}
+		}
+		f.Close()
+	}
+	{ // Open it, iterate, verify byte limit. The byte limit is less than item
+		// size, so each lookup should only return one otem
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := f.RetrieveItems(0, 10000, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, want := len(items), 1; have != want {
+			t.Fatalf("want %d items, have %d ", want, have)
+		}
+		for i, have := range items {
+			want := getChunk(15, i)
+			if !bytes.Equal(want, have) {
+				t.Fatalf("data corruption: have\n%x\n, want \n%x\n", have, want)
+			}
+		}
+		f.Close()
 	}
 }
