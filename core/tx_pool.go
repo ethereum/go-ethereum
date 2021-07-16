@@ -111,7 +111,14 @@ var (
 	invalidTxMeter     = metrics.NewRegisteredMeter("txpool/invalid", nil)
 	underpricedTxMeter = metrics.NewRegisteredMeter("txpool/underpriced", nil)
 	overflowedTxMeter  = metrics.NewRegisteredMeter("txpool/overflowed", nil)
-	throttleTxMeter    = metrics.NewRegisteredMeter("txpool/throttle", nil)
+	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
+	// txpool reorgs.
+	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
+	// reorgDurationTimer measures how long time a txpool reorg takes.
+	reorgDurationTimer = metrics.NewRegisteredTimer("txpool/reorgtime", nil)
+	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
+	// that this number is pretty low, since txpool reorgs happen very frequently.
+	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
 
 	pendingGauge = metrics.NewRegisteredGauge("txpool/pending", nil)
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
@@ -1128,6 +1135,9 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
+	defer func(t0 time.Time) {
+		reorgDurationTimer.Update(time.Since(t0))
+	}(time.Now())
 	defer close(done)
 
 	var promoteAddrs []common.Address
@@ -1177,8 +1187,8 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		highestPending := list.LastElement()
 		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
 	}
-	// Reset change counter
-	pool.changesSinceReorg = 0
+	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
+	pool.changesSinceReorg = 0 // Reset change counter
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions
