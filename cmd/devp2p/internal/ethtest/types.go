@@ -19,13 +19,8 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"reflect"
-	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -137,6 +132,7 @@ type Conn struct {
 	caps                   []p2p.Cap
 }
 
+// Read reads an eth packet from the connection.
 func (c *Conn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
@@ -185,32 +181,83 @@ func (c *Conn) Read() Message {
 	return msg
 }
 
-// ReadAndServe serves GetBlockHeaders requests while waiting
-// on another message from the node.
-func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
-	start := time.Now()
-	for time.Since(start) < timeout {
-		c.SetReadDeadline(time.Now().Add(5 * time.Second))
-		switch msg := c.Read().(type) {
-		case *Ping:
-			c.Write(&Pong{})
-		case *GetBlockHeaders:
-			req := *msg
-			headers, err := chain.GetHeaders(req)
-			if err != nil {
-				return errorf("could not get headers for inbound header request: %v", err)
-			}
-
-			if err := c.Write(headers); err != nil {
-				return errorf("could not write to connection: %v", err)
-			}
-		default:
-			return msg
-		}
+// Read66 reads an eth66 packet from the connection.
+func (c *Conn) Read66() (uint64, Message) {
+	code, rawData, _, err := c.Conn.Read()
+	if err != nil {
+		return 0, errorf("could not read from connection: %v", err)
 	}
-	return errorf("no message received within %v", timeout)
+
+	var msg Message
+	switch int(code) {
+	case (Hello{}).Code():
+		msg = new(Hello)
+	case (Ping{}).Code():
+		msg = new(Ping)
+	case (Pong{}).Code():
+		msg = new(Pong)
+	case (Disconnect{}).Code():
+		msg = new(Disconnect)
+	case (Status{}).Code():
+		msg = new(Status)
+	case (GetBlockHeaders{}).Code():
+		ethMsg := new(eth.GetBlockHeadersPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, GetBlockHeaders(*ethMsg.GetBlockHeadersPacket)
+	case (BlockHeaders{}).Code():
+		ethMsg := new(eth.BlockHeadersPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, BlockHeaders(ethMsg.BlockHeadersPacket)
+	case (GetBlockBodies{}).Code():
+		ethMsg := new(eth.GetBlockBodiesPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, GetBlockBodies(ethMsg.GetBlockBodiesPacket)
+	case (BlockBodies{}).Code():
+		ethMsg := new(eth.BlockBodiesPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, BlockBodies(ethMsg.BlockBodiesPacket)
+	case (NewBlock{}).Code():
+		msg = new(NewBlock)
+	case (NewBlockHashes{}).Code():
+		msg = new(NewBlockHashes)
+	case (Transactions{}).Code():
+		msg = new(Transactions)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		ethMsg := new(eth.GetPooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, GetPooledTransactions(ethMsg.GetPooledTransactionsPacket)
+	case (PooledTransactions{}.Code()):
+		ethMsg := new(eth.PooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, PooledTransactions(ethMsg.PooledTransactionsPacket)
+	default:
+		msg = errorf("invalid message code: %d", code)
+	}
+
+	if msg != nil {
+		if err := rlp.DecodeBytes(rawData, msg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return 0, msg
+	}
+	return 0, errorf("invalid message: %s", string(rawData))
 }
 
+// Write writes a eth packet to the connection.
 func (c *Conn) Write(msg Message) error {
 	// check if message is eth protocol message
 	var (
@@ -225,135 +272,12 @@ func (c *Conn) Write(msg Message) error {
 	return err
 }
 
-// handshake checks to make sure a `HELLO` is received.
-func (c *Conn) handshake(t *utesting.T) Message {
-	defer c.SetDeadline(time.Time{})
-	c.SetDeadline(time.Now().Add(10 * time.Second))
-
-	// write hello to client
-	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
-	ourHandshake := &Hello{
-		Version: 5,
-		Caps:    c.caps,
-		ID:      pub0,
+// Write66 writes an eth66 packet to the connection.
+func (c *Conn) Write66(req eth.Packet, code int) error {
+	payload, err := rlp.EncodeToBytes(req)
+	if err != nil {
+		return err
 	}
-	if err := c.Write(ourHandshake); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	// read hello from client
-	switch msg := c.Read().(type) {
-	case *Hello:
-		// set snappy if version is at least 5
-		if msg.Version >= 5 {
-			c.SetSnappy(true)
-		}
-		c.negotiateEthProtocol(msg.Caps)
-		if c.negotiatedProtoVersion == 0 {
-			t.Fatalf("unexpected eth protocol version")
-		}
-		return msg
-	default:
-		t.Fatalf("bad handshake: %#v", msg)
-		return nil
-	}
-}
-
-// negotiateEthProtocol sets the Conn's eth protocol version
-// to highest advertised capability from peer
-func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
-	var highestEthVersion uint
-	for _, capability := range caps {
-		if capability.Name != "eth" {
-			continue
-		}
-		if capability.Version > highestEthVersion && capability.Version <= c.ourHighestProtoVersion {
-			highestEthVersion = capability.Version
-		}
-	}
-	c.negotiatedProtoVersion = highestEthVersion
-}
-
-// statusExchange performs a `Status` message exchange with the given
-// node.
-func (c *Conn) statusExchange(t *utesting.T, chain *Chain, status *Status) Message {
-	defer c.SetDeadline(time.Time{})
-	c.SetDeadline(time.Now().Add(20 * time.Second))
-
-	// read status message from client
-	var message Message
-loop:
-	for {
-		switch msg := c.Read().(type) {
-		case *Status:
-			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
-				t.Fatalf("wrong head block in status, want:  %#x (block %d) have %#x",
-					want, chain.blocks[chain.Len()-1].NumberU64(), have)
-			}
-			if have, want := msg.TD.Cmp(chain.TD(chain.Len())), 0; have != want {
-				t.Fatalf("wrong TD in status: have %v want %v", have, want)
-			}
-			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
-				t.Fatalf("wrong fork ID in status: have %v, want %v", have, want)
-			}
-			message = msg
-			break loop
-		case *Disconnect:
-			t.Fatalf("disconnect received: %v", msg.Reason)
-		case *Ping:
-			c.Write(&Pong{}) // TODO (renaynay): in the future, this should be an error
-			// (PINGs should not be a response upon fresh connection)
-		default:
-			t.Fatalf("bad status message: %s", pretty.Sdump(msg))
-		}
-	}
-	// make sure eth protocol version is set for negotiation
-	if c.negotiatedProtoVersion == 0 {
-		t.Fatalf("eth protocol version must be set in Conn")
-	}
-	if status == nil {
-		// write status message to client
-		status = &Status{
-			ProtocolVersion: uint32(c.negotiatedProtoVersion),
-			NetworkID:       chain.chainConfig.ChainID.Uint64(),
-			TD:              chain.TD(chain.Len()),
-			Head:            chain.blocks[chain.Len()-1].Hash(),
-			Genesis:         chain.blocks[0].Hash(),
-			ForkID:          chain.ForkID(),
-		}
-	}
-
-	if err := c.Write(status); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-
-	return message
-}
-
-// waitForBlock waits for confirmation from the client that it has
-// imported the given block.
-func (c *Conn) waitForBlock(block *types.Block) error {
-	defer c.SetReadDeadline(time.Time{})
-
-	c.SetReadDeadline(time.Now().Add(20 * time.Second))
-	// note: if the node has not yet imported the block, it will respond
-	// to the GetBlockHeaders request with an empty BlockHeaders response,
-	// so the GetBlockHeaders request must be sent again until the BlockHeaders
-	// response contains the desired header.
-	for {
-		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
-		if err := c.Write(req); err != nil {
-			return err
-		}
-		switch msg := c.Read().(type) {
-		case *BlockHeaders:
-			for _, header := range *msg {
-				if header.Number.Uint64() == block.NumberU64() {
-					return nil
-				}
-			}
-			time.Sleep(100 * time.Millisecond)
-		default:
-			return fmt.Errorf("invalid message: %s", pretty.Sdump(msg))
-		}
-	}
+	_, err = c.Conn.Write(uint64(code), payload)
+	return err
 }

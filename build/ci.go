@@ -54,6 +54,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,7 +153,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.16.3"
+	dlgoVersion = "1.16.4"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -182,6 +183,8 @@ func main() {
 		doLint(os.Args[2:])
 	case "archive":
 		doArchive(os.Args[2:])
+	case "docker":
+		doDocker(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -449,6 +452,172 @@ func maybeSkipArchive(env build.Environment) {
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
+	}
+}
+
+// Builds the docker images and optionally uploads them to Docker Hub.
+func doDocker(cmdline []string) {
+	var (
+		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
+		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	// Skip building and pushing docker images for PR builds
+	env := build.Env()
+	maybeSkipArchive(env)
+
+	// Retrieve the upload credentials and authenticate
+	user := getenvBase64("DOCKER_HUB_USERNAME")
+	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+
+	if len(user) > 0 && len(pass) > 0 {
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
+	}
+	// Retrieve the version infos to build and push to the following paths:
+	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
+	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
+	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
+	var tags []string
+
+	switch {
+	case env.Branch == "master":
+		tags = []string{"latest"}
+	case strings.HasPrefix(env.Tag, "v1."):
+		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), params.Version}
+	}
+	// If architecture specific image builds are requested, build and push them
+	if *image {
+		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
+		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+
+		// Tag and upload the images to Docker Hub
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
+			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
+
+			// If the image already exists (non version tag), check the build
+			// number to prevent overwriting a newer commit if concurrent builds
+			// are running. This is still a tiny bit racey if two published are
+			// done at the same time, but that's extremely unlikely even on the
+			// master branch.
+			for _, img := range []string{gethImage, toolImage} {
+				if exec.Command("docker", "pull", img).Run() != nil {
+					continue // Generally the only failure is a missing image, which is good
+				}
+				buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
+				if err != nil {
+					log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
+				}
+				buildnum = bytes.TrimSpace(buildnum)
+
+				if len(buildnum) > 0 && len(env.Buildnum) > 0 {
+					oldnum, err := strconv.Atoi(string(buildnum))
+					if err != nil {
+						log.Fatalf("Failed to parse old image build number: %v", err)
+					}
+					newnum, err := strconv.Atoi(env.Buildnum)
+					if err != nil {
+						log.Fatalf("Failed to parse current build number: %v", err)
+					}
+					if oldnum > newnum {
+						log.Fatalf("Current build number %d not newer than existing %d", newnum, oldnum)
+					} else {
+						log.Printf("Updating %s from build %d to %d", img, oldnum, newnum)
+					}
+				}
+			}
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
+			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
+			build.MustRunCommand("docker", "push", gethImage)
+			build.MustRunCommand("docker", "push", toolImage)
+		}
+	}
+	// If multi-arch image manifest push is requested, assemble it
+	if len(*manifest) != 0 {
+		// Since different architectures are pushed by different builders, wait
+		// until all required images are updated.
+		var mismatch bool
+		for i := 0; i < 2; i++ { // 2 attempts, second is race check
+			mismatch = false // hope there's no mismatch now
+
+			for _, tag := range tags {
+				for _, arch := range strings.Split(*manifest, ",") {
+					gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, arch)
+					toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, arch)
+
+					for _, img := range []string{gethImage, toolImage} {
+						if out, err := exec.Command("docker", "pull", img).CombinedOutput(); err != nil {
+							log.Printf("Required image %s unavailable: %v\nOutput: %s", img, err, out)
+							mismatch = true
+							break
+						}
+						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
+						if err != nil {
+							log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
+						}
+						buildnum = bytes.TrimSpace(buildnum)
+
+						if string(buildnum) != env.Buildnum {
+							log.Printf("Build number mismatch on %s: want %s, have %s", img, env.Buildnum, buildnum)
+							mismatch = true
+							break
+						}
+					}
+					if mismatch {
+						break
+					}
+				}
+				if mismatch {
+					break
+				}
+			}
+			if mismatch {
+				// Build numbers mismatching, retry in a short time to
+				// avoid concurrent failes in both publisher images. If
+				// however the retry failed too, it means the concurrent
+				// builder is still crunching, let that do the publish.
+				if i == 0 {
+					time.Sleep(30 * time.Second)
+				}
+				continue
+			}
+			break
+		}
+		if mismatch {
+			log.Println("Relinquishing publish to other builder")
+			return
+		}
+		// Assemble and push the Geth manifest image
+		for _, tag := range tags {
+			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
+
+			var gethSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				gethSubImages = append(gethSubImages, gethImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", gethImage}, gethSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", gethImage)
+		}
+		// Assemble and push the alltools manifest image
+		for _, tag := range tags {
+			toolImage := fmt.Sprintf("%s:alltools-%s", *upload, tag)
+
+			var toolSubImages []string
+			for _, arch := range strings.Split(*manifest, ",") {
+				toolSubImages = append(toolSubImages, toolImage+"-"+arch)
+			}
+			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
+			build.MustRunCommand("docker", "manifest", "push", toolImage)
+		}
 	}
 }
 

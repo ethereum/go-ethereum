@@ -90,6 +90,8 @@ func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		hexutil.MustDecodeBig(origin.Value),
 		hexutil.MustDecodeUint64(origin.Gas),
 		hexutil.MustDecodeBig(origin.GasPrice),
+		nil,
+		nil,
 		hexutil.MustDecode(origin.Data),
 		nil, false,
 	)
@@ -129,7 +131,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	gas := d.tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
-	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), 0)
+	d.stateDb.Prepare(d.tx.Hash(), 0)
 	receipt, err := core.ApplyTransactionForPreExec(
 		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
 	if err != nil {
@@ -150,6 +152,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 		return nil, err
 	}
 	txContext := core.NewEVMTxContext(d.msg)
+	txIndex := 0
 
 	switch {
 	case config != nil && config.Tracer != nil:
@@ -161,7 +164,11 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 			}
 		}
 		// Constuct the JavaScript tracer to execute with
-		if tracer, err = tracers.New(*config.Tracer, txContext); err != nil {
+		if tracer, err = tracers.New(*config.Tracer, &tracers.Context{
+			BlockHash: d.block.Hash(),
+			TxIndex:   txIndex,
+			TxHash:    d.tx.Hash(),
+		}); err != nil {
 			return nil, err
 		}
 		// Handle timeouts and RPC cancellations
@@ -182,9 +189,8 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
 
-	txIndex := 0
 	// Call Prepare to clear out the statedb access list
-	d.stateDb.Prepare(d.tx.Hash(), d.block.Hash(), txIndex)
+	d.stateDb.Prepare(d.tx.Hash(), txIndex)
 
 	// check if type of tracer is txtrace.StructLogger, in that case, fill info.
 	var traceLogger *txtrace.StructLogger

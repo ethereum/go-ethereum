@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Storage represents a contract's storage.
@@ -66,7 +67,7 @@ type StructLog struct {
 	GasCost       uint64                      `json:"gasCost"`
 	Memory        []byte                      `json:"memory"`
 	MemorySize    int                         `json:"memSize"`
-	Stack         []*big.Int                  `json:"stack"`
+	Stack         []uint256.Int               `json:"stack"`
 	ReturnData    []byte                      `json:"returnData"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
@@ -76,7 +77,6 @@ type StructLog struct {
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Stack       []*math.HexOrDecimal256
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
@@ -135,6 +135,14 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
+// Reset clears the data held by the logger.
+func (l *StructLogger) Reset() {
+	l.storage = make(map[common.Address]Storage)
+	l.output = make([]byte, 0)
+	l.logs = l.logs[:0]
+	l.err = nil
+}
+
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
@@ -157,16 +165,16 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		copy(mem, memory.Data())
 	}
 	// Copy a snapshot of the current stack state to a new buffer
-	var stck []*big.Int
+	var stck []uint256.Int
 	if !l.cfg.DisableStack {
-		stck = make([]*big.Int, len(stack.Data()))
+		stck = make([]uint256.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
-			stck[i] = new(big.Int).Set(item.ToBig())
+			stck[i] = item
 		}
 	}
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
-	if !l.cfg.DisableStorage {
+	if !l.cfg.DisableStorage && (op == SLOAD || op == SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
 		if l.storage[contract.Address()] == nil {
@@ -179,16 +187,16 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 				value   = env.StateDB.GetState(contract.Address(), address)
 			)
 			l.storage[contract.Address()][address] = value
-		}
-		// capture SSTORE opcodes and record the written entry in the local storage.
-		if op == SSTORE && stack.len() >= 2 {
+			storage = l.storage[contract.Address()].Copy()
+		} else if op == SSTORE && stack.len() >= 2 {
+			// capture SSTORE opcodes and record the written entry in the local storage.
 			var (
 				value   = common.Hash(stack.data[stack.len()-2].Bytes32())
 				address = common.Hash(stack.data[stack.len()-1].Bytes32())
 			)
 			l.storage[contract.Address()][address] = value
+			storage = l.storage[contract.Address()].Copy()
 		}
-		storage = l.storage[contract.Address()].Copy()
 	}
 	var rdata []byte
 	if !l.cfg.DisableReturnData {
@@ -238,7 +246,7 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
 			for i := len(log.Stack) - 1; i >= 0; i-- {
-				fmt.Fprintf(writer, "%08d  %x\n", len(log.Stack)-i-1, math.PaddedBigBytes(log.Stack[i], 32))
+				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
 		if len(log.Memory) > 0 {
@@ -314,7 +322,7 @@ func (t *mdLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64
 		// format stack
 		var a []string
 		for _, elem := range stack.data {
-			a = append(a, fmt.Sprintf("%v", elem.String()))
+			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
