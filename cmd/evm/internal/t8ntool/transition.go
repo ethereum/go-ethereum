@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -199,8 +200,25 @@ func Main(ctx *cli.Context) error {
 		}
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&txsWithKeys); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
+		if strings.HasSuffix(txStr, ".rlp") {
+			var body hexutil.Bytes
+			if err := decoder.Decode(&body); err != nil {
+				return err
+			}
+			var txs types.Transactions
+			if err := rlp.DecodeBytes(body, &txs); err != nil {
+				return err
+			}
+			for _, tx := range txs {
+				txsWithKeys = append(txsWithKeys, &txWithKey{
+					key: nil,
+					tx:  tx,
+				})
+			}
+		} else {
+			if err := decoder.Decode(&txsWithKeys); err != nil {
+				return NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
+			}
 		}
 	} else {
 		txsWithKeys = inputData.Txs
@@ -365,6 +383,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
 		os.Stdout.Write(b)
+		os.Stdout.Write([]byte("\n"))
 	}
 	if len(stdErrObject) > 0 {
 		b, err := json.MarshalIndent(stdErrObject, "", " ")
@@ -372,6 +391,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
 		os.Stderr.Write(b)
+		os.Stderr.Write([]byte("\n"))
 	}
 	return nil
 }
