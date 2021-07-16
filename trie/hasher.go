@@ -149,8 +149,8 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 }
 
 // shortnodeToHash creates a hashNode from a shortNode. The supplied shortnode
-// should have hex-type Key, which will be converted (without modification)
-// into compact form for RLP encoding.
+// should have compact-type Key, which has been converted (without modification)
+// from hex form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	h.tmp.Reset()
