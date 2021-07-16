@@ -181,7 +181,7 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		chaindb:     chaindb,
 		chain:       chain,
 		reqDist:     reqDist,
-		fetcher:     fetcher.NewBlockFetcher(true, chain.GetHeaderByHash, nil, validator, nil, heighter, inserter, nil, dropper),
+		fetcher:     fetcher.NewBlockFetcher(true, chain.GetHeaderByHash, chain.HasBlock, validator, nil, heighter, inserter, nil, dropper),
 		peers:       make(map[enode.ID]*fetcherPeer),
 		synchronise: syncFn,
 		announceCh:  make(chan *announce),
