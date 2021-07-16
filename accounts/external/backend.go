@@ -204,25 +204,30 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		to = &t
 	}
 	args := &core.SendTxArgs{
-		Data:     &data,
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		Value:    hexutil.Big(*tx.Value()),
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: hexutil.Big(*tx.GasPrice()),
-		To:       to,
-		From:     common.NewMixedcaseAddress(account.Address),
+		Data:  &data,
+		Nonce: hexutil.Uint64(tx.Nonce()),
+		Value: hexutil.Big(*tx.Value()),
+		Gas:   hexutil.Uint64(tx.Gas()),
+		To:    to,
+		From:  common.NewMixedcaseAddress(account.Address),
+	}
+	if tx.GasFeeCap() != nil {
+		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
+		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
+	} else {
+		args.GasPrice = (*hexutil.Big)(tx.GasPrice())
 	}
 	// We should request the default chain id that we're operating with
 	// (the chain we're executing on)
 	if chainID != nil {
 		args.ChainID = (*hexutil.Big)(chainID)
 	}
-	// However, if the user asked for a particular chain id, then we should
-	// use that instead.
-	if tx.Type() != types.LegacyTxType && tx.ChainId() != nil {
-		args.ChainID = (*hexutil.Big)(tx.ChainId())
-	}
-	if tx.Type() == types.AccessListTxType {
+	if tx.Type() != types.LegacyTxType {
+		// However, if the user asked for a particular chain id, then we should
+		// use that instead.
+		if tx.ChainId() != nil {
+			args.ChainID = (*hexutil.Big)(tx.ChainId())
+		}
 		accessList := tx.AccessList()
 		args.AccessList = &accessList
 	}

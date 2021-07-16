@@ -126,7 +126,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			t.Errorf("entry missing from the transition database: %x -> %x", key, fvalue)
 		}
 		if !bytes.Equal(fvalue, tvalue) {
-			t.Errorf("the value associate key %x is mismatch,: %x in transition database ,%x in final database", key, tvalue, fvalue)
+			t.Errorf("value mismatch at key %x: %x in transition database, %x in final database", key, tvalue, fvalue)
 		}
 	}
 	it.Release()
@@ -139,7 +139,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			t.Errorf("extra entry in the transition database: %x -> %x", key, it.Value())
 		}
 		if !bytes.Equal(fvalue, tvalue) {
-			t.Errorf("the value associate key %x is mismatch,: %x in transition database ,%x in final database", key, tvalue, fvalue)
+			t.Errorf("value mismatch at key %x: %x in transition database, %x in final database", key, tvalue, fvalue)
 		}
 	}
 }
@@ -463,9 +463,9 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
 			state.GetRefund(), checkstate.GetRefund())
 	}
-	if !reflect.DeepEqual(state.GetLogs(common.Hash{}), checkstate.GetLogs(common.Hash{})) {
+	if !reflect.DeepEqual(state.GetLogs(common.Hash{}, common.Hash{}), checkstate.GetLogs(common.Hash{}, common.Hash{})) {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
-			state.GetLogs(common.Hash{}), checkstate.GetLogs(common.Hash{}))
+			state.GetLogs(common.Hash{}, common.Hash{}), checkstate.GetLogs(common.Hash{}, common.Hash{}))
 	}
 	return nil
 }

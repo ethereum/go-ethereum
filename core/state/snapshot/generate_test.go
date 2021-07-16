@@ -71,7 +71,7 @@ func TestGeneration(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -136,7 +136,7 @@ func TestGenerateExistentState(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -309,7 +309,7 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -361,7 +361,7 @@ func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -406,7 +406,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt account trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
@@ -466,7 +466,7 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
@@ -525,7 +525,7 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(time.Second):
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
@@ -588,7 +588,7 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -646,7 +646,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -699,7 +699,7 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -743,7 +743,7 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -775,7 +775,7 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
@@ -822,7 +822,7 @@ func TestGenerateWithIncompleteStorage(t *testing.T) {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
