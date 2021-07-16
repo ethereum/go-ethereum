@@ -527,3 +527,82 @@ func TestCanonicalHashIteration(t *testing.T) {
 		}
 	}
 }
+
+func TestDeriveLogFields(t *testing.T) {
+	// Create a few transactions to have receipts for
+	to2 := common.HexToAddress("0x2")
+	to3 := common.HexToAddress("0x3")
+	txs := types.Transactions{
+		types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			Value:    big.NewInt(1),
+			Gas:      1,
+			GasPrice: big.NewInt(1),
+		}),
+		types.NewTx(&types.LegacyTx{
+			To:       &to2,
+			Nonce:    2,
+			Value:    big.NewInt(2),
+			Gas:      2,
+			GasPrice: big.NewInt(2),
+		}),
+		types.NewTx(&types.AccessListTx{
+			To:       &to3,
+			Nonce:    3,
+			Value:    big.NewInt(3),
+			Gas:      3,
+			GasPrice: big.NewInt(3),
+		}),
+	}
+	// Create the corresponding receipts
+	receipts := []*receiptLogs{
+		{
+			Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x11})},
+				{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+			},
+		},
+		{
+			Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x22})},
+				{Address: common.BytesToAddress([]byte{0x02, 0x22})},
+			},
+		},
+		{
+			Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x33})},
+				{Address: common.BytesToAddress([]byte{0x03, 0x33})},
+			},
+		},
+	}
+
+	// Derive log metadata fields
+	number := big.NewInt(1)
+	hash := common.BytesToHash([]byte{0x03, 0x14})
+	if err := deriveLogFields(receipts, hash, number.Uint64(), txs); err != nil {
+		t.Fatal(err)
+	}
+
+	// Iterate over all the computed fields and check that they're correct
+	logIndex := uint(0)
+	for i := range receipts {
+		for j := range receipts[i].Logs {
+			if receipts[i].Logs[j].BlockNumber != number.Uint64() {
+				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, number.Uint64())
+			}
+			if receipts[i].Logs[j].BlockHash != hash {
+				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), hash.String())
+			}
+			if receipts[i].Logs[j].TxHash != txs[i].Hash() {
+				t.Errorf("receipts[%d].Logs[%d].TxHash = %s, want %s", i, j, receipts[i].Logs[j].TxHash.String(), txs[i].Hash().String())
+			}
+			if receipts[i].Logs[j].TxIndex != uint(i) {
+				t.Errorf("receipts[%d].Logs[%d].TransactionIndex = %d, want %d", i, j, receipts[i].Logs[j].TxIndex, i)
+			}
+			if receipts[i].Logs[j].Index != logIndex {
+				t.Errorf("receipts[%d].Logs[%d].Index = %d, want %d", i, j, receipts[i].Logs[j].Index, logIndex)
+			}
+			logIndex++
+		}
+	}
+}
