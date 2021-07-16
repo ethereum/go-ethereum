@@ -19,9 +19,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -62,6 +65,8 @@ Remove blockchain and state databases`,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
+			dbImportCmd,
+			dbExportCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -194,6 +199,38 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.CalaverasFlag,
 		},
 		Description: "This command displays information about the freezer index.",
+	}
+	dbImportCmd = cli.Command{
+		Action:    utils.MigrateFlags(importChaindata),
+		Name:      "import",
+		Usage:     "import the specified chain data from the RLP stream",
+		ArgsUsage: "<type> <dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.BaikalFlag,
+		},
+		Description: "The import command imports the specific chain data from an RLP encoded stream.",
+	}
+	dbExportCmd = cli.Command{
+		Action:    utils.MigrateFlags(exportChaindata),
+		Name:      "export",
+		Usage:     "Export the specified chain data into an RLP stream",
+		ArgsUsage: "<type> <dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.BaikalFlag,
+		},
+		Description: "The export command exports the specified chain data to an RLP encoded stream.",
 	}
 )
 
@@ -506,4 +543,118 @@ func freezerInspect(ctx *cli.Context) error {
 		f.DumpIndex(start, end)
 	}
 	return nil
+}
+
+// importFuncs defines all supported chain data import functions.
+var importFuncs = map[string]func(db ethdb.Database, fn string, interrupt chan struct{}) error{
+	"preimage": utils.ImportPreimages,
+	"snapshot": utils.ImportSnapshot,
+}
+
+func importChaindata(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	// Parse the required chain data type, make sure it's supported.
+	kind := ctx.Args().Get(0)
+	kind = strings.ToLower(strings.Trim(kind, " "))
+	fn, ok := importFuncs[kind]
+	if !ok {
+		var kinds []string
+		for key := range importFuncs {
+			kinds = append(kinds, key)
+		}
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	var (
+		interrupted bool
+		interrupt   = make(chan struct{})
+	)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+
+		for {
+			<-sigc
+			if interrupted {
+				interrupted = true
+				close(interrupt)
+			}
+			log.Info("Got interrupt, shutting down...")
+		}
+	}()
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	return fn(db, ctx.Args().Get(1), interrupt)
+}
+
+// exporter defines all the necessary information for chain data export.
+type exporter struct {
+	encoder  func(key []byte, val []byte) []byte
+	prefixes [][]byte
+}
+
+// chainExporters defines the export scheme for all exportable chain data.
+var chainExporters = map[string]*exporter{
+	"preimage": {
+		encoder: func(key []byte, val []byte) []byte {
+			return val // The key can be derived by keccak56(val).
+		},
+		prefixes: [][]byte{rawdb.PreimagePrefix},
+	},
+	"snapshot": {
+		encoder: func(key []byte, val []byte) []byte {
+			// The prefix used to identify the snapshot data type,
+			// 0: account snapshot
+			// 1: storage snapshot
+			if len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+				return append([]byte{0}, append(key, val...)...)
+			}
+			return append([]byte{1}, append(key, val...)...)
+		},
+		prefixes: [][]byte{rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix},
+	},
+}
+
+func exportChaindata(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	// Parse the required chain data type, make sure it's supported.
+	kind := ctx.Args().Get(0)
+	kind = strings.ToLower(strings.Trim(kind, " "))
+	exporter, ok := chainExporters[kind]
+	if !ok {
+		var kinds []string
+		for kind := range chainExporters {
+			kinds = append(kinds, kind)
+		}
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	var (
+		interrupted bool
+		interrupt   = make(chan struct{})
+	)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+
+		for {
+			<-sigc
+			if interrupted {
+				interrupted = true
+				close(interrupt)
+			}
+			log.Info("Got interrupt, shutting down...")
+		}
+	}()
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.encoder, exporter.prefixes, interrupt)
 }
