@@ -267,10 +267,6 @@ func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.TxPool().Content()
 }
 
-func (b *EthAPIBackend) TxPoolContentByAccount(addr common.Address) (pending, queued types.Transactions) {
-	return b.eth.TxPool().ContentByAccount(addr)
-}
-
 func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
 	return b.eth.TxPool().ContentFrom(addr)
 }
