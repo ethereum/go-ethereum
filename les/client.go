@@ -181,20 +181,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	stack.RegisterAPIs(leth.APIs())
 	stack.RegisterProtocols(leth.Protocols())
 	stack.RegisterLifecycle(leth)
-
-	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
 	return leth, nil
 }
 
@@ -383,7 +369,6 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.lesDb.Close()
 	s.wg.Wait()

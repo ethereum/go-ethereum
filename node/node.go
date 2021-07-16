@@ -556,12 +556,13 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 
 	var db ethdb.Database
 	var err error
+	fmt.Println(n.config.DataDir)
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
 		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
 	}
-
+	rawdb.StartUncleanShutdownMarker(name, db)
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
@@ -584,6 +585,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
+		rawdb.StartUncleanShutdownMarker("", db)
 	} else {
 		root := n.ResolvePath(name)
 		switch {
@@ -593,8 +595,8 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 			freezer = n.ResolvePath(freezer)
 		}
 		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		rawdb.StartUncleanShutdownMarker(name, db)
 	}
-
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}

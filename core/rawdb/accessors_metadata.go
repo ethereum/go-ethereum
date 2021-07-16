@@ -90,15 +90,47 @@ type crashList struct {
 
 const crashesToKeep = 10
 
-// PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
-// the previous data
+func StartUncleanShutdownMarker(name string, db ethdb.KeyValueStore) {
+	switch name {
+	case "les.client":
+		db.(*nofreezedb).isChainDb = false
+		return
+	case "lightchaindata":
+		db.(*nofreezedb).isChainDb = true
+	case "chaindata":
+		break
+	case "":
+		break
+	default:
+		return
+	}
+	if uncleanShutdowns, discards, err := PushUncleanShutdownMarker(db); err != nil {
+		log.Error("Could not update unclean-shutdown-marker list", "error", err)
+	} else {
+		if discards > 0 {
+			log.Warn("Old unclean shutdowns found", "count", discards)
+		}
+		for _, tstamp := range uncleanShutdowns {
+			t := time.Unix(int64(tstamp), 0)
+			log.Warn("Unclean shutdown detected", "booted", t, "age", common.PrettyAge(t))
+		}
+	}
+	return
+}
+
+// PushUncleanShutdownMarker appends a new unclean shutdown marker and starts a goroutine
+// to update the unclean shutdown marker every five minutes. It returns
+// the previous unclean shutdown
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
 func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading unclean shutdown markers", "error", err)
+		// don't want to warn if there were no unclean shutdowns
+		if err.Error() != "leveldb: not found" {
+			log.Warn("Error reading unclean shutdown markers", "error", err)
+		}
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
 		return nil, 0, err
 	}
@@ -118,6 +150,11 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return nil, 0, err
 	}
+	if frdb, ok := db.(*freezerdb); ok {
+		go UpdateUncleanShutdownMarker(db, frdb.stopUncleanMarkerUpdateCh)
+	} else if nfrdb, ok := db.(*nofreezedb); ok {
+		go UpdateUncleanShutdownMarker(db, nfrdb.stopUncleanMarkerUpdateCh)
+	}
 	return previous, discarded, nil
 }
 
@@ -136,5 +173,36 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to clear unclean-shutdown marker", "err", err)
+	}
+}
+
+// UpdateUncleanShutdownMarker updates the current unclean shutdown marker
+// every 5 minutes
+func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore, stopUncleanShutdownUpdateCh chan bool) {
+	var uncleanShutdowns crashList
+	// Read old data
+	if previous, err := db.Get(uncleanShutdownKey); err != nil {
+		log.Warn("Error reading unclean shutdown markers", "error", err)
+	} else if err := rlp.DecodeBytes(previous, &uncleanShutdowns); err != nil {
+		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
+	}
+	l := len(uncleanShutdowns.Recent)
+	if l == 0 {
+		l++
+	}
+	// update marker every five minutes
+	ticker := time.NewTicker(300 * time.Second)
+	defer func() { ticker.Stop() }()
+	for {
+		select {
+		case <-ticker.C:
+			uncleanShutdowns.Recent[l-1] = uint64(time.Now().Unix())
+			data, _ := rlp.EncodeToBytes(uncleanShutdowns)
+			if err := db.Put(uncleanShutdownKey, data); err != nil {
+				log.Warn("Failed to update unclean-shutdown marker", "err", err)
+			}
+		case <-stopUncleanShutdownUpdateCh:
+			return
+		}
 	}
 }

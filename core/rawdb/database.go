@@ -33,15 +33,20 @@ import (
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
+// stopUncleanMarkerUpdateCh is used to stop the unclean shutdown marker
+// that updates every 5 minutes.
 type freezerdb struct {
 	ethdb.KeyValueStore
 	ethdb.AncientStore
+	stopUncleanMarkerUpdateCh chan bool
 }
 
 // Close implements io.Closer, closing both the fast key-value store as well as
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	var errs []error
+	frdb.stopUncleanMarkerUpdateCh <- true
+	PopUncleanShutdownMarker(frdb.KeyValueStore)
 	if err := frdb.AncientStore.Close(); err != nil {
 		errs = append(errs, err)
 	}
@@ -75,8 +80,24 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
+// stopUncleanMarkerUpdateCh is used to stop the unclean shutdown marker
+// that updates every 5 minutes.
 type nofreezedb struct {
 	ethdb.KeyValueStore
+	stopUncleanMarkerUpdateCh chan bool
+	isChainDb                 bool
+}
+
+func (db *nofreezedb) Close() error {
+	if db.isChainDb {
+		db.stopUncleanMarkerUpdateCh <- true
+		PopUncleanShutdownMarker(db.KeyValueStore)
+	}
+	if err := db.KeyValueStore.Close(); err != nil {
+		return err
+	}
+	return nil
+
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.
@@ -117,9 +138,11 @@ func (db *nofreezedb) Sync() error {
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
-	return &nofreezedb{
-		KeyValueStore: db,
+	frdb := &nofreezedb{
+		KeyValueStore:             db,
+		stopUncleanMarkerUpdateCh: make(chan bool),
 	}
+	return frdb
 }
 
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
@@ -204,8 +227,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 		}()
 	}
 	return &freezerdb{
-		KeyValueStore: db,
-		AncientStore:  frdb,
+		KeyValueStore:             db,
+		AncientStore:              frdb,
+		stopUncleanMarkerUpdateCh: make(chan bool),
 	}, nil
 }
 
