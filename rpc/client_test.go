@@ -51,6 +51,38 @@ func TestClientRequest(t *testing.T) {
 	}
 }
 
+func TestClientNamedParams(t *testing.T) {
+	client := Client{}
+
+	type params struct {
+		Str  string
+		Int  int
+		Args *echoArgs
+	}
+
+	p := params{
+		Str:  "hello",
+		Int:  10,
+		Args: &echoArgs{"world"},
+	}
+
+	method := "test_echo"
+	msg, err := client.newMessage(method, NewNamedParams(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Method != method {
+		t.Fatalf("expect method %s but got %s", method, msg.Method)
+	}
+	var msgParams params
+	if err := json.Unmarshal(msg.Params, &msgParams); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(msgParams, p) {
+		t.Errorf("incorrect params %#v", msgParams)
+	}
+}
+
 func TestClientResponseType(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
