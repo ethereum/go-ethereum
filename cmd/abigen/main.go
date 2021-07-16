@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -32,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -224,7 +225,10 @@ func abigen(c *cli.Context) error {
 		}
 		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
-			if exclude[strings.ToLower(name)] {
+			// fully qualified name is of the form <solFilePath>:<type>
+			nameParts := strings.Split(name, ":")
+			typeName := nameParts[len(nameParts)-1]
+			if exclude[strings.ToLower(typeName)] {
 				continue
 			}
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
@@ -234,11 +238,10 @@ func abigen(c *cli.Context) error {
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
 			sigs = append(sigs, contract.Hashes)
-			nameParts := strings.Split(name, ":")
-			types = append(types, nameParts[len(nameParts)-1])
+			types = append(types, typeName)
 
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36]
-			libs[libPattern] = nameParts[len(nameParts)-1]
+			libs[libPattern] = typeName
 		}
 	}
 	// Extract all aliases from the flags
