@@ -179,17 +179,20 @@ func (tc *testChain) headersByHash(origin common.Hash, amount int, skip int, rev
 // headersByNumber returns headers from the given number.
 func (tc *testChain) headersByNumber(origin uint64, amount int, skip int, reverse bool) []*types.Header {
 	result := make([]*types.Header, 0, amount)
-
 	if !reverse {
 		for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
 			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
 				result = append(result, header)
+			} else {
+				break
 			}
 		}
 	} else {
 		for num := int64(origin); num >= 0 && len(result) < amount; num -= int64(skip) + 1 {
 			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
 				result = append(result, header)
+			} else {
+				break
 			}
 		}
 	}
