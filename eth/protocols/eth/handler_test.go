@@ -133,11 +133,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		query  *GetBlockHeadersPacket // The query to execute for header retrieval
 		expect []common.Hash          // The hashes of the block whose headers are expected
 	}{
-		// A single random block should be retrievable by hash and number too
+		// A single random block should be retrievable by hash
 		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: backend.chain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
-		}, {
+		},
+		// A single random block should be retrievable by number
+		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
 		},
@@ -177,8 +179,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(0).Hash()},
-		}, {
+		},
+		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 1},
+			[]common.Hash{backend.chain.CurrentBlock().Hash()},
+		},
+		{ // If the peer requests a bit into the future, we deliver what we have
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 10},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
@@ -257,7 +264,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		if protocol <= ETH65 {
 			p2p.Send(peer.app, GetBlockHeadersMsg, tt.query)
 			if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, headers); err != nil {
-				t.Errorf("test %d: headers mismatch: %v", i, err)
+				t.Fatalf("test %d: headers mismatch: %v", i, err)
 			}
 		} else {
 			p2p.Send(peer.app, GetBlockHeadersMsg, GetBlockHeadersPacket66{
@@ -268,7 +275,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 				RequestId:          123,
 				BlockHeadersPacket: headers,
 			}); err != nil {
-				t.Errorf("test %d: headers mismatch: %v", i, err)
+				t.Fatalf("test %d: headers mismatch: %v", i, err)
 			}
 		}
 		// If the test used number origins, repeat with hashes as the too
@@ -279,7 +286,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 				if protocol <= ETH65 {
 					p2p.Send(peer.app, GetBlockHeadersMsg, tt.query)
 					if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, headers); err != nil {
-						t.Errorf("test %d: headers mismatch: %v", i, err)
+						t.Fatalf("test %d by hash:  headers mismatch: %v", i, err)
 					}
 				} else {
 					p2p.Send(peer.app, GetBlockHeadersMsg, GetBlockHeadersPacket66{
@@ -290,7 +297,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 						RequestId:          456,
 						BlockHeadersPacket: headers,
 					}); err != nil {
-						t.Errorf("test %d: headers mismatch: %v", i, err)
+						t.Fatalf("test %d by hash: headers mismatch: %v", i, err)
 					}
 				}
 			}

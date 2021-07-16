@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -552,15 +553,17 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 		// Create a block to reply to the challenge if no timeout is simulated.
 		if !timeout {
 			if empty {
-				if err := remote.SendBlockHeaders([]*types.Header{}); err != nil {
+				if err := remote.SendBlockHeadersRLP([]rlp.RawValue{}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else if match {
-				if err := remote.SendBlockHeaders([]*types.Header{response}); err != nil {
+				responseRlp, _ := rlp.EncodeToBytes(response)
+				if err := remote.SendBlockHeadersRLP([]rlp.RawValue{responseRlp}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else {
-				if err := remote.SendBlockHeaders([]*types.Header{{Number: response.Number}}); err != nil {
+				responseRlp, _ := rlp.EncodeToBytes(types.Header{Number: response.Number})
+				if err := remote.SendBlockHeadersRLP([]rlp.RawValue{responseRlp}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			}
