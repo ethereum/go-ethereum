@@ -379,7 +379,7 @@ func (pc *peerConnection) Head() (common.Hash, *big.Int) {
 	return pc.peer.HeadAndTd()
 }
 
-func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (pc *peerConnection) RequestHeadersByHash(id uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
 			peer := dp.(*serverPeer)
@@ -389,11 +389,10 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 			return dp.(*serverPeer) == pc.peer
 		},
 		request: func(dp distPeer) func() {
-			reqID := rand.Uint64()
 			peer := dp.(*serverPeer)
 			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.requestHeadersByHash(reqID, origin, amount, skip, reverse) }
+			peer.fcServer.QueuedRequest(id, cost)
+			return func() { peer.requestHeadersByHash(id, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)
@@ -403,7 +402,7 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 	return nil
 }
 
-func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (pc *peerConnection) RequestHeadersByNumber(id uint64, origin uint64, amount int, skip int, reverse bool) error {
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
 			peer := dp.(*serverPeer)
@@ -413,11 +412,10 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 			return dp.(*serverPeer) == pc.peer
 		},
 		request: func(dp distPeer) func() {
-			reqID := rand.Uint64()
 			peer := dp.(*serverPeer)
 			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.requestHeadersByNumber(reqID, origin, amount, skip, reverse) }
+			peer.fcServer.QueuedRequest(id, cost)
+			return func() { peer.requestHeadersByNumber(id, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)

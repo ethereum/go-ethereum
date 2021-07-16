@@ -501,13 +501,13 @@ func (f *lightFetcher) trackRequest(peerid enode.ID, reqid uint64, hash common.H
 // Note, we rely on the underlying eth/fetcher to retrieve and validate the
 // response, so that we have to obey the rule of eth/fetcher which only accepts
 // the response from given peer.
-func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) error {
-	return func(hash common.Hash) error {
+func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(uint64, common.Hash) error {
+	return func(id uint64, hash common.Hash) error {
 		req := &distReq{
 			getCost: func(dp distPeer) uint64 { return dp.(*serverPeer).getRequestCost(GetBlockHeadersMsg, 1) },
 			canSend: func(dp distPeer) bool { return dp.(*serverPeer).ID() == peerid },
 			request: func(dp distPeer) func() {
-				peer, id := dp.(*serverPeer), rand.Uint64()
+				peer := dp.(*serverPeer)
 				cost := peer.getRequestCost(GetBlockHeadersMsg, 1)
 				peer.fcServer.QueuedRequest(id, cost)
 
