@@ -417,24 +417,24 @@ func TestOverriddenTraceCall(t *testing.T) {
 			},
 		},
 	}
-	for _, testspec := range testSuite {
+	for i, testspec := range testSuite {
 		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
 		if testspec.expectErr != nil {
 			if err == nil {
-				t.Errorf("Expect error %v, get nothing", testspec.expectErr)
+				t.Errorf("test %d: want error %v, have nothing", i, testspec.expectErr)
 				continue
 			}
 			if !errors.Is(err, testspec.expectErr) {
-				t.Errorf("Error mismatch, want %v, get %v", testspec.expectErr, err)
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, testspec.expectErr, err)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("Expect no error, get %v", err)
+				t.Errorf("test %d: want no error, have %v", i, err)
 				continue
 			}
 			ret := new(callTrace)
 			if err := json.Unmarshal(result.(json.RawMessage), ret); err != nil {
-				t.Fatalf("failed to unmarshal trace result: %v", err)
+				t.Fatalf("test %d: failed to unmarshal trace result: %v", i, err)
 			}
 			if !jsonEqual(ret, testspec.expect) {
 				// uncomment this for easier debugging

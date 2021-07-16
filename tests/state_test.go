@@ -58,7 +58,9 @@ func TestState(t *testing.T) {
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
 		stateTestDir,
-		legacyStateTestDir,
+		// The legacy tests are temporarily disabled, since they need to be regenerated with the no-eoa-sender logic.
+		// Enable them when the tests are regenerated again, TODO @holiman @mariusvandervijden
+		//legacyStateTestDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
 			for _, subtest := range test.Subtests() {
