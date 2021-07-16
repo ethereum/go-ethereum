@@ -44,6 +44,7 @@ type (
 	}
 	hashNode  []byte
 	valueNode []byte
+	rawNode   []byte
 )
 
 // nilValueNode is used when collapsing internal trie nodes for hashing, since
@@ -64,6 +65,12 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, nodes)
 }
 
+// EncodeRLP encodes a raw node into the consensus RLP format.
+func (n rawNode) EncodeRLP(w io.Writer) error {
+	_, err := w.Write(n)
+	return err
+}
+
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 
@@ -77,12 +84,14 @@ func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirt
 func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
 func (n hashNode) cache() (hashNode, bool)   { return nil, true }
 func (n valueNode) cache() (hashNode, bool)  { return nil, true }
+func (n rawNode) cache() (hashNode, bool)    { panic("this should never end up in a live trie") }
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
 func (n *shortNode) String() string { return n.fstring("") }
 func (n hashNode) String() string   { return n.fstring("") }
 func (n valueNode) String() string  { return n.fstring("") }
+func (n rawNode) String() string    { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
@@ -104,11 +113,12 @@ func (n hashNode) fstring(ind string) string {
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
 }
+func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 func mustDecodeNode(hash, buf []byte) node {
 	n, err := decodeNode(hash, buf)
 	if err != nil {
-		panic(fmt.Sprintf("node %x: %v", hash, err))
+		panic(fmt.Sprintf("node %x (%x): %v", hash, buf, err))
 	}
 	return n
 }

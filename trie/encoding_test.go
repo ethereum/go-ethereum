@@ -71,8 +71,8 @@ func TestHexKeybytes(t *testing.T) {
 		if h := keybytesToHex(test.key); !bytes.Equal(h, test.hexOut) {
 			t.Errorf("keybytesToHex(%x) -> %x, want %x", test.key, h, test.hexOut)
 		}
-		if k := hexToKeybytes(test.hexIn); !bytes.Equal(k, test.key) {
-			t.Errorf("hexToKeybytes(%x) -> %x, want %x", test.hexIn, k, test.key)
+		if k := HexToKeybytes(test.hexIn); !bytes.Equal(k, test.key) {
+			t.Errorf("HexToKeybytes(%x) -> %x, want %x", test.hexIn, k, test.key)
 		}
 	}
 }
@@ -135,6 +135,6 @@ func BenchmarkKeybytesToHex(b *testing.B) {
 func BenchmarkHexToKeybytes(b *testing.B) {
 	testBytes := []byte{7, 6, 6, 5, 7, 2, 6, 2, 16}
 	for i := 0; i < b.N; i++ {
-		hexToKeybytes(testBytes)
+		HexToKeybytes(testBytes)
 	}
 }

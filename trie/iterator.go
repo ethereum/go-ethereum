@@ -116,6 +116,12 @@ type NodeIterator interface {
 	// making trie.Database an interface and wrapping at that level. It's a huge
 	// refactor, but it could be worth it if another occurrence arises.
 	AddResolver(ethdb.KeyValueStore)
+
+	// Owner returns the associated trie owner.
+	Owner() common.Hash
+
+	// ComposedKey returns the encoded node key.
+	ComposedKey() []byte
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -184,7 +190,7 @@ func (it *nodeIterator) Leaf() bool {
 func (it *nodeIterator) LeafKey() []byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
-			return hexToKeybytes(it.path)
+			return HexToKeybytes(it.path)
 		}
 	}
 	panic("not at leaf")
@@ -222,6 +228,17 @@ func (it *nodeIterator) LeafProof() [][]byte {
 
 func (it *nodeIterator) Path() []byte {
 	return it.path
+}
+
+func (it *nodeIterator) Owner() common.Hash {
+	return it.trie.owner
+}
+
+func (it *nodeIterator) ComposedKey() []byte {
+	if it.Hash() == (common.Hash{}) {
+		return nil
+	}
+	return EncodeNodeKey(it.trie.owner, it.path, it.Hash())
 }
 
 func (it *nodeIterator) Error() error {
@@ -602,6 +619,14 @@ func (it *differenceIterator) Error() error {
 	return it.b.Error()
 }
 
+func (it *differenceIterator) Owner() common.Hash {
+	return it.b.Owner()
+}
+
+func (it *differenceIterator) ComposedKey() []byte {
+	return it.b.ComposedKey()
+}
+
 type nodeIteratorHeap []NodeIterator
 
 func (h nodeIteratorHeap) Len() int            { return len(h) }
@@ -711,4 +736,12 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+func (it *unionIterator) Owner() common.Hash {
+	return (*it.items)[0].Owner()
+}
+
+func (it *unionIterator) ComposedKey() []byte {
+	return (*it.items)[0].ComposedKey()
 }

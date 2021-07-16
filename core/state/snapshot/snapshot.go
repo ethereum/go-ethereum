@@ -183,6 +183,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 		layers: make(map[common.Hash]snapshot),
 	}
 	if !async {
+		fmt.Println("wait")
 		defer snap.waitBuild()
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed

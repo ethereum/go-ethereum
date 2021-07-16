@@ -125,7 +125,7 @@ func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
-		database.TrieDB().Reference(root, common.Hash{})
+		database.TrieDB().Reference(common.Hash{}, root, common.Hash{}, nil)
 		if parent != (common.Hash{}) {
 			database.TrieDB().Dereference(parent)
 		}
