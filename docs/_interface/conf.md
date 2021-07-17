@@ -20,7 +20,7 @@ The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML
 of packages in the Geth source code](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
 
 
-## Sample Configuration File
+## Configuration File Fields
 
 ### Eth
 
@@ -29,6 +29,13 @@ This package is responsible for running the Ethereum protocol.
 
 ```toml
 [Eth]
+```
+
+| Field     | Type      | Meaning                                                                                              |
+| --------- | --------- | ---------------------------------------------------------------------------------------------------- |
+| NetworkId | uint(64)  | The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
+
+```toml
 NetworkId = 1
 SyncMode = "fast"
 EthDiscoveryURLs = ["enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net"]
