@@ -31,15 +31,18 @@ This package is responsible for running the Ethereum protocol.
 [Eth]
 ```
 
-| Field     | Type      | Meaning                                                                                              |
-| --------- | --------- | ---------------------------------------------------------------------------------------------------- |
-| NetworkId | uint(64)  | The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
+
+
+| Field             | Type         | Meaning                                                                                               |
+| ----------------- | ------------ |  ---------------------------------------------------------------------------------------------------- |
+| NetworkId         | uint(64)     |  The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
+| SyncMode          | string       |  How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
+| EthDiscoveryURLs  | string array |  URLs to query for the list of nodes to access                          |
+| SnapDiscoveryURLs | string array |  URLs to query for the list of nodes to access for snap synchronization |
+
+
 
 ```toml
-NetworkId = 1
-SyncMode = "fast"
-EthDiscoveryURLs = ["enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net"]
-SnapDiscoveryURLs = ["enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net"]
 NoPruning = false
 NoPrefetch = false
 TxLookupLimit = 2350000
