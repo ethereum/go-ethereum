@@ -72,7 +72,7 @@ func verifySelector(selector string, calldata []byte) (*decodedCallData, error) 
 		return nil, err
 	}
 	// Parse the call data according to the requested selector
-	return parseCallData(calldata, string(abidata))
+	return parseCallData(calldata, abidata)
 }
 
 // selectorRegexp is used to validate that a 4byte database selector corresponds
@@ -115,7 +115,7 @@ func parseSelector(unescapedSelector string) ([]byte, error) {
 
 // parseCallData matches the provided call data against the ABI definition and
 // returns a struct containing the actual go-typed values.
-func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, error) {
+func parseCallData(calldata []byte, unescapedAbidata []byte) (*decodedCallData, error) {
 	// Validate the call data that it has the 4byte prefix and the rest divisible by 32 bytes
 	if len(calldata) < 4 {
 		return nil, fmt.Errorf("invalid call data, incomplete method signature (%d bytes < 4)", len(calldata))
@@ -127,7 +127,7 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 		return nil, fmt.Errorf("invalid call data; length should be a multiple of 32 bytes (was %d)", len(argdata))
 	}
 	// Validate the called method and upack the call data accordingly
-	abispec, err := abi.JSON(strings.NewReader(unescapedAbidata))
+	abispec, err := abi.JSON(bytes.NewReader(unescapedAbidata))
 	if err != nil {
 		return nil, fmt.Errorf("invalid method signature (%q): %v", unescapedAbidata, err)
 	}
