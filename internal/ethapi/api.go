@@ -80,28 +80,28 @@ func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.
 	return (*hexutil.Big)(tipcap), err
 }
 
-type feeHistoryResults struct {
-	FirstBlock   rpc.BlockNumber
-	Reward       [][]*hexutil.Big
-	BaseFee      []*hexutil.Big
-	GasUsedRatio []float64
+type feeHistoryResult struct {
+	OldestBlock  rpc.BlockNumber  `json:"oldestBlock"`
+	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
-func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (feeHistoryResults, error) {
-	firstBlock, reward, baseFee, gasUsedRatio, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 	if err != nil {
-		return feeHistoryResults{}, err
+		return nil, err
 	}
-	results := feeHistoryResults{
-		FirstBlock:   firstBlock,
-		GasUsedRatio: gasUsedRatio,
+	results := &feeHistoryResult{
+		OldestBlock:  oldest,
+		GasUsedRatio: gasUsed,
 	}
 	if reward != nil {
 		results.Reward = make([][]*hexutil.Big, len(reward))
-		for j, w := range reward {
-			results.Reward[j] = make([]*hexutil.Big, len(w))
-			for i, v := range w {
-				results.Reward[j][i] = (*hexutil.Big)(v)
+		for i, w := range reward {
+			results.Reward[i] = make([]*hexutil.Big, len(w))
+			for j, v := range w {
+				results.Reward[i][j] = (*hexutil.Big)(v)
 			}
 		}
 	}
@@ -172,6 +172,29 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 		}
 		content["queued"][account.Hex()] = dump
 	}
+	return content
+}
+
+// ContentFrom returns the transactions contained within the transaction pool.
+func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
+	content := make(map[string]map[string]*RPCTransaction, 2)
+	pending, queue := s.b.TxPoolContentFrom(addr)
+	curHeader := s.b.CurrentHeader()
+
+	// Build the pending transactions
+	dump := make(map[string]*RPCTransaction, len(pending))
+	for _, tx := range pending {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+	}
+	content["pending"] = dump
+
+	// Build the queued transactions
+	dump = make(map[string]*RPCTransaction, len(queue))
+	for _, tx := range queue {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+	}
+	content["queued"] = dump
+
 	return content
 }
 
@@ -448,14 +471,15 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args Transactio
 	if args.Gas == nil {
 		return nil, fmt.Errorf("gas not specified")
 	}
-	if args.GasPrice == nil {
-		return nil, fmt.Errorf("gasPrice not specified")
+	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
+		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	if err := checkTxFee(args.GasPrice.ToInt(), uint64(*args.Gas), s.b.RPCTxFeeCap()); err != nil {
+	tx := args.toTransaction()
+	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
 	signed, err := s.signTransaction(ctx, &args, passwd)
@@ -1697,8 +1721,9 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	return SubmitTransaction(ctx, s.b, signed)
 }
 
-// FillTransaction fills the defaults (nonce, gas, gasPrice) on a given unsigned transaction,
-// and returns it to the caller for further processing (signing + broadcast)
+// FillTransaction fills the defaults (nonce, gas, gasPrice or 1559 fields)
+// on a given unsigned transaction, and returns it to the caller for further
+// processing (signing + broadcast).
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
@@ -1761,8 +1786,8 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	if args.Gas == nil {
 		return nil, fmt.Errorf("gas not specified")
 	}
-	if args.GasPrice == nil {
-		return nil, fmt.Errorf("gasPrice not specified")
+	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
+		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
@@ -1771,18 +1796,19 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	if err := checkTxFee(args.GasPrice.ToInt(), uint64(*args.Gas), s.b.RPCTxFeeCap()); err != nil {
+	tx := args.toTransaction()
+	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
-	tx, err := s.sign(args.from(), args.toTransaction())
+	signed, err := s.sign(args.from(), tx)
 	if err != nil {
 		return nil, err
 	}
-	data, err := tx.MarshalBinary()
+	data, err := signed.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	return &SignTransactionResult{data, tx}, nil
+	return &SignTransactionResult{data, signed}, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool

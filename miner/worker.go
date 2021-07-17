@@ -162,7 +162,7 @@ type worker struct {
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
 
-	snapshotMu       sync.RWMutex // The lock used to protect the block snapshot and state snapshot
+	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
 	snapshotState    *state.StateDB
@@ -242,6 +242,12 @@ func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
+}
+
+func (w *worker) setGasCeil(ceil uint64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.config.GasCeil = ceil
 }
 
 // setExtra sets the content used to initialize the block extra field.
@@ -739,7 +745,7 @@ func (w *worker) updateSnapshot() {
 		w.current.receipts,
 		trie.NewStackTrie(nil),
 	)
-	w.snapshotReceipts = w.current.receipts
+	w.snapshotReceipts = copyReceipts(w.current.receipts)
 	w.snapshotState = w.current.state.Copy()
 }
 

@@ -186,12 +186,6 @@ type Config struct {
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
 
-	// Type of the EWASM interpreter ("" for default)
-	EWASMInterpreter string
-
-	// Type of the EVM interpreter ("" for default)
-	EVMInterpreter string
-
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 

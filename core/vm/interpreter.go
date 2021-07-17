@@ -35,32 +35,7 @@ type Config struct {
 
 	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
 
-	EWASMInterpreter string // External EWASM interpreter options
-	EVMInterpreter   string // External EVM interpreter options
-
 	ExtraEips []int // Additional EIPS that are to be enabled
-}
-
-// Interpreter is used to run Ethereum based contracts and will utilise the
-// passed environment to query external sources for state information.
-// The Interpreter will run the byte code VM based on the passed
-// configuration.
-type Interpreter interface {
-	// Run loops and evaluates the contract's code with the given input data and returns
-	// the return byte-slice and an error if one occurred.
-	Run(contract *Contract, input []byte, static bool) ([]byte, error)
-	// CanRun tells if the contract, passed as an argument, can be
-	// run by the current interpreter. This is meant so that the
-	// caller can do something like:
-	//
-	// ```golang
-	// for _, interpreter := range interpreters {
-	//   if interpreter.CanRun(contract.code) {
-	//     interpreter.Run(contract.code, input)
-	//   }
-	// }
-	// ```
-	CanRun([]byte) bool
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -302,10 +277,4 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 	}
 	return nil, nil
-}
-
-// CanRun tells if the contract, passed as an argument, can be
-// run by the current interpreter.
-func (in *EVMInterpreter) CanRun(code []byte) bool {
-	return true
 }

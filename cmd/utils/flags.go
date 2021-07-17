@@ -760,16 +760,6 @@ var (
 		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
 		Value: metrics.DefaultConfig.InfluxDBTags,
 	}
-	EWASMInterpreterFlag = cli.StringFlag{
-		Name:  "vm.ewasm",
-		Usage: "External ewasm configuration (default = built-in interpreter)",
-		Value: "",
-	}
-	EVMInterpreterFlag = cli.StringFlag{
-		Name:  "vm.evm",
-		Usage: "External EVM configuration (default = built-in interpreter)",
-		Value: "",
-	}
 
 	CatalystFlag = cli.BoolFlag{
 		Name:  "catalyst",
@@ -1586,13 +1576,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(EWASMInterpreterFlag.Name) {
-		cfg.EWASMInterpreter = ctx.GlobalString(EWASMInterpreterFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(EVMInterpreterFlag.Name) {
-		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
-	}
 	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
 	}

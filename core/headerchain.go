@@ -574,7 +574,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		if parent == nil {
 			parent = hc.genesisHeader
 		}
-		parentHash = hdr.ParentHash
+		parentHash = parent.Hash()
 
 		// Notably, since geth has the possibility for setting the head to a low
 		// height which is even lower than ancient head.
