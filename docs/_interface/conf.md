@@ -27,25 +27,33 @@ of packages in the Geth source code](https://pkg.go.dev/github.com/ethereum/go-e
 This package is responsible for running the Ethereum protocol. 
 [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig)
 
+#### Network Fields
+
+| Field             | Type         | Meaning                                                                                              |
+| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| NetworkId         | uint(64)     | The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
+| SyncMode          | string       | How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
+| EthDiscoveryURLs  | string array | URLs to query for the list of nodes to access                          |
+| SnapDiscoveryURLs | string array | URLs to query for the list of nodes to access for snap synchronization |
+
+
+#### Database Fields
+
+| Field             | Type         | Meaning                                                                                              |
+| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| NoPruning         | boolean      | Whether to disable state pruning and write everything to disk |
+| NoPrefetch        | boolean      | Whether to disable prefetching and only load state on demand |
+| TxLookupLimit     | uint(64)     | The maximum number of blocks from head whose tx indices are reserved. |
+| Whitelist         | map          | Whitelist of required block number -> hash values to accept, usually not specified |
+
+
+#### Light Client Field
+
+| Field             | Type         | Meaning                                                                                              |
+| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+
+
 ```toml
-[Eth]
-```
-
-
-
-| Field             | Type         | Meaning                                                                                               |
-| ----------------- | ------------ |  ---------------------------------------------------------------------------------------------------- |
-| NetworkId         | uint(64)     |  The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
-| SyncMode          | string       |  How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
-| EthDiscoveryURLs  | string array |  URLs to query for the list of nodes to access                          |
-| SnapDiscoveryURLs | string array |  URLs to query for the list of nodes to access for snap synchronization |
-
-
-
-```toml
-NoPruning = false
-NoPrefetch = false
-TxLookupLimit = 2350000
 LightPeers = 100
 UltraLightFraction = 75
 DatabaseCache = 512
