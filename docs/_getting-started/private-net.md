@@ -62,10 +62,6 @@ be scripted including account creation which is needed for mining. See
 [`gethcluster.sh`](https://github.com/ethersphere/eth-utils) script, and the README there
 for usage and examples.
 
-## Private network 
-
-See [[the Private Network Page|Private network]] for more information.
-
 ### Setup bootnode
 
 The first time a node connects to the network it uses one of the predefined
