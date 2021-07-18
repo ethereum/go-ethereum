@@ -47,7 +47,7 @@ This package is responsible for running the Ethereum protocol.
 | Whitelist         | map          | Whitelist of required block number -> hash values to accept, usually not specified |
 
 
-#### Light Client Field
+#### Light Client Fields
 
 These settings apply when running `geth` as a [light node](https://ethereum.org/en/developers/docs/nodes-and-clients/#light-node).
 
@@ -56,28 +56,78 @@ These settings apply when running `geth` as a [light node](https://ethereum.org/
 | LightServ         | int          | Maximum percentage of time allowed for serving light server requests |
 | LightIngress      | int          | Incoming bandwidth limit for light servers    |
 | LightEgress       | int          | Outgoing bandwidth limit for light servers |
-| LightPeers        | int          | Maximum number of [Light Ethereum Sub-protocol (LES)](https://github.com/ethereum/devp2p/blob/master/caps/les.md) client peers | LightNoPrune      | boolean      | Whether to disable light chain pruning |
+| LightPeers        | int          | Maximum number of [Light Ethereum Sub-protocol (LES)](https://github.com/ethereum/devp2p/blob/master/caps/les.md) client peers |
+| LightNoPrune      | boolean      | Whether to disable light chain pruning |
 | LightNoSyncServe  | boolean      | Whether to serve light clients before syncing |
 | SyncFromCheckpoint| boolean      | Whether to sync the header chain from the configured checkpoint |
 
-```toml
-LightPeers = 100
-UltraLightFraction = 75
-DatabaseCache = 512
-DatabaseFreezer = ""
-TrieCleanCache = 154
-TrieCleanCacheJournal = "triecache"
-TrieCleanCacheRejournal = 3600000000000
-TrieDirtyCache = 256
-TrieTimeout = 3600000000000
-SnapshotCache = 102
-Preimages = false
-EnablePreimageRecording = false
-EWASMInterpreter = ""
-EVMInterpreter = ""
-RPCGasCap = 25000000
-RPCTxFeeCap = 1e+00
-```
+
+### Ultra Light Client Fields
+
+These settings apply to [ultra light clients](https://status.im/research/ulc_in_details.html).
+
+| Field                  | Type         | Meaning                                                                                              |
+| ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| UltraLightServers      | string array | List of trusted ultra light servers                       |
+|	UltraLightFraction     | int          | Percentage of trusted servers to accept an announcement   |
+|	UltraLightOnlyAnnounce | boolean      | Whether to only announce headers, or also serve them      |
+
+
+#### Database Fields
+
+| Field                  | Type         | Meaning                                                                                              |
+| ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| SkipBcVersionCheck     | boolean      |
+| DatabaseHandles        | int          |
+| DatabaseCache          | int          |
+| DatabaseFreezer        | string       |
+
+
+#### Trie Fields
+
+| Field                   | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| TrieCleanCache          | int           |
+| TrieCleanCacheJournal   | string        | Disk journal directory for trie cache to survive node restarts |
+| TrieCleanCacheRejournal | time.Duration | Time interval to regenerate the journal for clean cache        |
+| TrieDirtyCache          | int           |
+| TrieTimeout             | time.Duration |
+|	SnapshotCache           | int           |
+|	Preimages               | boolean       |
+
+
+### Misc. Fields
+
+	// Enables tracking of SHA3 preimages in the VM
+	EnablePreimageRecording bool
+
+	// Miscellaneous options
+	DocRoot string `toml:"-"`
+
+	// Type of the EWASM interpreter ("" for default)
+	EWASMInterpreter string
+
+	// Type of the EVM interpreter ("" for default)
+	EVMInterpreter string
+
+	// RPCGasCap is the global gas cap for eth-call variants.
+	RPCGasCap uint64
+
+	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
+	// send-transction variants. The unit is ether.
+	RPCTxFeeCap float64
+
+	// Checkpoint is a hardcoded checkpoint which can be nil.
+	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
+
+	// CheckpointOracle is the configuration for checkpoint oracle.
+	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
+
+	// Berlin block override (TODO: remove after the fork)
+	OverrideLondon *big.Int `toml:",omitempty"`
+}
+
+
 
 ### Eth.Miner
 
