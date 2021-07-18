@@ -117,14 +117,18 @@ These settings apply to [ultra light clients](https://status.im/research/ulc_in_
 This package implements mining, the creation of new Ethereum blocks for profit. 
 [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/miner#Config)
 
-```toml
-[Eth.Miner]
-GasFloor = 8000000
-GasCeil = 8000000
-GasPrice = 1000000000
-Recommit = 3000000000
-Noverify = false
-```
+| Field                   | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Etherbase               | [Address](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/common#Address) | Public address for block mining rewards (default = first account)     |
+|	Notify                  | string array  | HTTP URL list to be notified of new work packages (only useful in ethash) |
+|	NotifyFull              | boolean       | Notify with pending block headers instead of work packages                |           
+| ExtraData               | Bytes         | Block extra data set by the miner                                         |
+|	GasFloor                | uint64        | Target gas floor for mined blocks                                         |
+|	GasCeil                 | uint64        | Target gas ceiling for mined blocks                                       |
+|	GasPrice                | \*big.Int     | Minimum gas price for mining a transaction                                |
+|	Recommit                | time.Duration | The time interval for miner to re-create mining work                      |
+|	Noverify                | boolean       | Disable remote mining solution verification(only useful in ethash)        |
+  
 
 ### Eth.Ethash
 
