@@ -49,15 +49,16 @@ This package is responsible for running the Ethereum protocol.
 
 #### Light Client Field
 
+These settings apply when running `geth` as a [light node](https://ethereum.org/en/developers/docs/nodes-and-clients/#light-node).
+
 | Field             | Type         | Meaning                                                                                              |
 | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | LightServ         | int          | Maximum percentage of time allowed for serving light server requests |
-|	LightIngress      | int          | Incoming bandwidth limit for light servers    |
-	LightEgress        int  `toml:",omitempty"` // Outgoing bandwidth limit for light servers
-	LightPeers         int  `toml:",omitempty"` // Maximum number of LES client peers
-	LightNoPrune       bool `toml:",omitempty"` // Whether to disable light chain pruning
-	LightNoSyncServe   bool `toml:",omitempty"` // Whether to serve light clients before syncing
-	SyncFromCheckpoint bool `toml:",omitempty"` // Whether to sync the header chain from the configured checkpoint
+| LightIngress      | int          | Incoming bandwidth limit for light servers    |
+| LightEgress       | int          | Outgoing bandwidth limit for light servers |
+| LightPeers        | int          | Maximum number of [Light Ethereum Sub-protocol (LES)](https://github.com/ethereum/devp2p/blob/master/caps/les.md) client peers | LightNoPrune      | boolean      | Whether to disable light chain pruning |
+| LightNoSyncServe  | boolean      | Whether to serve light clients before syncing |
+| SyncFromCheckpoint| boolean      | Whether to sync the header chain from the configured checkpoint |
 
 ```toml
 LightPeers = 100
