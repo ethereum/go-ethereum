@@ -199,7 +199,7 @@ WSModules = ["net", "web3", "eth"]
 GraphQLVirtualHosts = ["localhost"]
 ```
 
-# Node.P2P
+### Node.P2P
 
 [Peer to peer networking](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p#Config)
 
