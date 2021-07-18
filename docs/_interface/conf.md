@@ -98,34 +98,17 @@ These settings apply to [ultra light clients](https://status.im/research/ulc_in_
 
 ### Misc. Fields
 
-	// Enables tracking of SHA3 preimages in the VM
-	EnablePreimageRecording bool
+| Field                   | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| EnablePreimageRecording | boolean       | Enables tracking of SHA3 preimages in the VM   |
+| DocRoot                 | string        |
+| EWASMInterpreter        | string        | Type of the EWASM interpreter ("" for default) |
+| EVMInterpreter          | string        | Type of the EVM interpreter ("" for default)   |
+| RPCGasCap               | uint64        | Global gas cap for eth-call variants |
+| RPCTxFeeCap             | float64       | Global transaction fee(price * gaslimit) cap for send-transction variants. The unit is ether. |
+| Checkpoint              | [TrustedCheckpoint](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/params#TrustedCheckpoint) | Checkpoint is a hardcoded checkpoint which can be nil |
+| CheckpointOracle        | [CheckpointOracleConfig](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/params#CheckpointOracleConfig)| CheckpointOracle is the configuration for checkpoint oracle |
 
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
-
-	// Type of the EWASM interpreter ("" for default)
-	EWASMInterpreter string
-
-	// Type of the EVM interpreter ("" for default)
-	EVMInterpreter string
-
-	// RPCGasCap is the global gas cap for eth-call variants.
-	RPCGasCap uint64
-
-	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
-	RPCTxFeeCap float64
-
-	// Checkpoint is a hardcoded checkpoint which can be nil.
-	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
-
-	// CheckpointOracle is the configuration for checkpoint oracle.
-	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
-
-	// Berlin block override (TODO: remove after the fork)
-	OverrideLondon *big.Int `toml:",omitempty"`
-}
 
 
 
