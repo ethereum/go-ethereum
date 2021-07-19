@@ -150,49 +150,28 @@ This package implements the PoW (proof of work) protocol.
 
 
 
+### Eth.TxPool Settings
 
+This package handles the transaction pool from which transactions are chosen for new blocks by a miner.
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/core#TxPoolConfig)
 
-	Log log.Logger `toml:"-"`
-  
-  
-```toml
-[Eth.Ethash]
-CacheDir = "ethash"
-CachesInMem = 2
-CachesOnDisk = 3
-CachesLockMmap = false
-DatasetDir = "/home/qbzzt1/.ethash"
-DatasetsInMem = 1
-DatasetsOnDisk = 2
-DatasetsLockMmap = false
-PowMode = 0
-NotifyFull = false
-```
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Locals                  | [Address](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/common#Address) array | Addresses that should be treated by default as local
+| NoLocals                | boolean       | Whether local transaction handling should be disabled
+|Journal                  | string        | Journal of local transactions to survive node restarts
+| Rejournal               | [Duration](https://pkg.go.dev/time#Duration) | Time interval to regenerate the local transaction journal
+| PriceLimit              | uint64        | Minimum gas price to enforce for acceptance into the pool
+| PriceBump               | uint64        | Minimum price bump percentage to replace an already existing transaction (nonce)
+| AccountSlots            | uint64        | Number of executable transaction slots guaranteed per account
+| lobalSlots              | uint64        | Maximum number of executable transaction slots for all accounts
+| AccountQueue            | uint64        | Maximum number of non-executable transaction slots permitted per account
+| GlobalQueue             | uint64        | Maximum number of non-executable transaction slots for all accounts
+| Lifetime                | [Duration](https://pkg.go.dev/time#Duration) | Maximum amount of time non-executable transaction are queued
 
-### Eth.TxPool
+### Eth.GPO Settings
 
-This package handles the transaction pool from which transactions are chosen for new blocks. 
-[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/core#DefaultTxPoolConfig)
-
-
-```toml
-[Eth.TxPool]
-Locals = []
-NoLocals = false
-Journal = "transactions.rlp"
-Rejournal = 3600000000000
-PriceLimit = 1
-PriceBump = 10
-AccountSlots = 16
-GlobalSlots = 4096
-AccountQueue = 64
-GlobalQueue = 1024
-Lifetime = 10800000000000
-```
-
-### Eth.GPO
-
-This is the Gas Price Oracle. [The configuration object](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig#FullNodeGPO).
+This is the Gas Price Oracle. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig#FullNodeGPO).
 
 ```toml
 [Eth.GPO]
@@ -201,9 +180,9 @@ Percentile = 60
 MaxPrice = 500000000000
 ```
 
-### Node
+### Node Settings
 
-This package is used for the Remote Procedure Calls (RPCs) used to communicate between notes. [Config](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/node#Config)
+This package is used for the Remote Procedure Calls (RPCs) used to communicate between notes. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/node#Config)
 
 ```toml
 [Node]
@@ -219,9 +198,9 @@ WSModules = ["net", "web3", "eth"]
 GraphQLVirtualHosts = ["localhost"]
 ```
 
-### Node.P2P
+### Node.P2P Settings
 
-[Peer to peer networking](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p#Config)
+These are peer to peer network settings. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p#Config)
 
 ```toml
 [Node.P2P]
@@ -235,9 +214,10 @@ ListenAddr = ":30303"
 EnableMsgEvents = false
 ```
 
-### Node.HTTPTimeouts
+### Node.HTTPTimeouts Settings
 
-[Timeouts for the HTTP serve](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/rpc#HTTPTimeouts)
+These are the timeouts for the HTTP server in various states. [The configuration object is documented 
+here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/rpc#HTTPTimeouts)
 
 ```toml
 [Node.HTTPTimeouts]
@@ -246,9 +226,10 @@ WriteTimeout = 30000000000
 IdleTimeout = 120000000000
 ```
 
-### Metrics
+### Metrics Settings
 
-[Metrics](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/metrics#Config)
+Geth can log to an [InfluxDB](https://www.influxdata.com/products/influxdb/) for metrics.
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/metrics#Config)
 
 ```toml
 [Metrics]
