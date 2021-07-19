@@ -128,6 +128,7 @@ type worker struct {
 	engine      consensus.Engine
 	eth         Backend
 	chain       *core.BlockChain
+	merger      *core.Merger
 
 	// Feeds
 	pendingLogsFeed event.Feed
@@ -179,7 +180,7 @@ type worker struct {
 	noempty uint32
 
 	// External functions
-	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
+	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
@@ -188,7 +189,7 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, merger *core.Merger) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -196,6 +197,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		eth:                eth,
 		mux:                mux,
 		chain:              eth.BlockChain(),
+		merger:             merger,
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
@@ -464,7 +466,7 @@ func (w *worker) mainLoop() {
 				continue
 			}
 			// Add side block to possible uncle block set depending on the author.
-			if w.isLocalBlock != nil && w.isLocalBlock(ev.Block) {
+			if w.isLocalBlock != nil && w.isLocalBlock(ev.Block.Header()) {
 				w.localUncles[ev.Block.Hash()] = ev.Block
 			} else {
 				w.remoteUncles[ev.Block.Hash()] = ev.Block
@@ -638,7 +640,7 @@ func (w *worker) resultLoop() {
 				logs = append(logs, receipt.Logs...)
 			}
 			// Commit block and state to database.
-			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
+			_, err := w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
@@ -1022,7 +1024,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	if w.isRunning() {
+	if w.isRunning() && !w.merger.LeftPoW() {
 		if interval != nil {
 			interval()
 		}
