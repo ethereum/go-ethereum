@@ -409,7 +409,6 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 	if log.Topics[0] != c.abi.Events[event].ID {
 		return fmt.Errorf("event signature mismatch")
 	}
-
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return err
@@ -429,7 +428,6 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event strin
 	if log.Topics[0] != c.abi.Events[event].ID {
 		return fmt.Errorf("event signature mismatch")
 	}
-
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
 			return err
