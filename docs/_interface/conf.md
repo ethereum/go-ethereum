@@ -169,34 +169,130 @@ This package handles the transaction pool from which transactions are chosen for
 | GlobalQueue             | uint64        | Maximum number of non-executable transaction slots for all accounts
 | Lifetime                | [Duration](https://pkg.go.dev/time#Duration) | Maximum amount of time non-executable transaction are queued
 
+
+
 ### Eth.GPO Settings
 
-This is the Gas Price Oracle. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig#FullNodeGPO).
+This is the Gas Price Oracle. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/gasprice#Config).
 
-```toml
-[Eth.GPO]
-Blocks = 20
-Percentile = 60
-MaxPrice = 500000000000
-```
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Blocks                  | int
+| Percentile              | int
+| Default                 | [\*big.Int](https://pkg.go.dev/math/big#Int)
+| MaxPrice                | [\*big.Int](https://pkg.go.dev/math/big#Int)
+| IgnorePrice             | [\*big.Int](https://pkg.go.dev/math/big#Int)
+
+
 
 ### Node Settings
 
-This package is used for the Remote Procedure Calls (RPCs) used to communicate between notes. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/node#Config)
+This package is used for the settings of the node itself and the Remote Procedure Calls (RPC) it uses to communicate. 
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/node#Config)
 
-```toml
-[Node]
-DataDir = "/home/qbzzt1/.ethereum"
-IPCPath = "geth.ipc"
-HTTPHost = ""
-HTTPPort = 8545
-HTTPVirtualHosts = ["localhost"]
-HTTPModules = ["net", "web3", "eth"]
-WSHost = ""
-WSPort = 8546
-WSModules = ["net", "web3", "eth"]
-GraphQLVirtualHosts = ["localhost"]
-```
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Name                    | string        | The instance name of the node. It must not contain the / character and is used in the devp2p node identifier. 
+| UserIdent               | string        | UserIdent, if set, is used as an additional component in the devp2p node identifier.
+| Version                 | string        | The version number of the program. It is used in the devp2p node identifier.
+| DataDir                 | string        | DataDir is the file system folder the node should use for any data storage requirements. 
+| KeyStoreDir             | string        | File system folder that contains private keys. 
+| ExternalSigner          | string        | External URI for a clef-type signer
+| UseLightweightKDF       | boolean       | If true, lowers the memory and CPU requirements of the key store scrypt KDF at the expense of security.
+| InsecureUnlockAllowed   | boolean       | Allow user to unlock accounts in unsafe http environment.
+| NoUSB                   | boolean       | Disable hardware wallet monitoring and connectivity
+| USB                     | boolean       | Enable hardware wallet monitoring and connectivity.
+| SmartCardDaemonPath     | string        |	Path to the smartcard daemon's socket
+
+	// IPCPath is the requested location to place the IPC endpoint. If the path is
+	// a simple file name, it is placed inside the data directory (or on the root
+	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
+	// relative), then that specific path is enforced. An empty path disables IPC.
+	IPCPath string
+
+	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
+	// field is empty, no HTTP API endpoint will be started.
+	HTTPHost string
+
+	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	HTTPPort int `toml:",omitempty"`
+
+	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	HTTPCors []string `toml:",omitempty"`
+
+	// HTTPVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
+	// This is by default {'localhost'}. Using this prevents attacks like
+	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
+	// origin. These attacks do not utilize CORS, since they are not cross-domain.
+	// By explicitly checking the Host-header, the server will not allow requests
+	// made against the server with a malicious host domain.
+	// Requests using ip address directly are not affected
+	HTTPVirtualHosts []string `toml:",omitempty"`
+
+	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	HTTPModules []string
+
+	// HTTPTimeouts allows for customization of the timeout values used by the HTTP RPC
+	// interface.
+	HTTPTimeouts rpc.HTTPTimeouts
+
+	// HTTPPathPrefix specifies a path prefix on which http-rpc is to be served.
+	HTTPPathPrefix string `toml:",omitempty"`
+
+	// WSHost is the host interface on which to start the websocket RPC server. If
+	// this field is empty, no websocket API endpoint will be started.
+	WSHost string
+
+	// WSPort is the TCP port number on which to start the websocket RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful for
+	// ephemeral nodes).
+	WSPort int `toml:",omitempty"`
+
+	// WSPathPrefix specifies a path prefix on which ws-rpc is to be served.
+	WSPathPrefix string `toml:",omitempty"`
+
+	// WSOrigins is the list of domain to accept websocket requests from. Please be
+	// aware that the server can only act upon the HTTP request the client sends and
+	// cannot verify the validity of the request header.
+	WSOrigins []string `toml:",omitempty"`
+
+	// WSModules is a list of API modules to expose via the websocket RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	WSModules []string
+
+	// WSExposeAll exposes all API modules via the WebSocket RPC interface rather
+	// than just the public ones.
+	//
+	// *WARNING* Only set this if the node is running in a trusted network, exposing
+	// private APIs to untrusted users is a major security risk.
+	WSExposeAll bool `toml:",omitempty"`
+
+	// GraphQLCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	GraphQLCors []string `toml:",omitempty"`
+
+	// GraphQLVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
+	// This is by default {'localhost'}. Using this prevents attacks like
+	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
+	// origin. These attacks do not utilize CORS, since they are not cross-domain.
+	// By explicitly checking the Host-header, the server will not allow requests
+	// made against the server with a malicious host domain.
+	// Requests using ip address directly are not affected
+	GraphQLVirtualHosts []string `toml:",omitempty"`
+
+	
+	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
+	AllowUnprotectedTxs bool `toml:",omitempty"`
+  
+  
 
 ### Node.P2P Settings
 
