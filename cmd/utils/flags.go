@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -1182,7 +1183,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
+	if ctx.GlobalBool(DeveloperFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
 		cfg.ListenAddr = ""
@@ -1683,13 +1684,18 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, isCatalyst bool) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
+		if isCatalyst {
+			if err := catalyst.RegisterLight(stack, backend); err != nil {
+				Fatalf("Failed to register the catalyst service: %v", err)
+			}
+		}
 		return backend.ApiBackend, nil
 	}
 	backend, err := eth.New(stack, cfg)
@@ -1700,6 +1706,11 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		_, err := les.NewLesServer(stack, backend, cfg)
 		if err != nil {
 			Fatalf("Failed to create the LES server: %v", err)
+		}
+	}
+	if isCatalyst {
+		if err := catalyst.Register(stack, backend); err != nil {
+			Fatalf("Failed to register the catalyst service: %v", err)
 		}
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
@@ -1891,7 +1902,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil, core.NewMerger(chainDb))
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

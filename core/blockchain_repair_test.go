@@ -1783,7 +1783,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1829,14 +1829,14 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
 
-	// Start a new blockchain back up and see where the repait leads us
+	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
