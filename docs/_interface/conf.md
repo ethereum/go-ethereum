@@ -20,16 +20,16 @@ The configuration file uses the [TOML syntax](https://en.wikipedia.org/wiki/TOML
 of packages in the Geth source code](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
 
 
-## Configuration File Fields
+## Settings in the Configuration File
 
 ### Eth
 
 This package is responsible for running the Ethereum protocol. 
-[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig)
+[The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/ethconfig#Config)
 
-#### Network Fields
+#### Network Settings
 
-| Field             | Type         | Meaning                                                                                              |
+| Setting           | Type         | Meaning                                                                                              |
 | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | NetworkId         | uint(64)     | The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
 | SyncMode          | string       | How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
@@ -37,21 +37,27 @@ This package is responsible for running the Ethereum protocol.
 | SnapDiscoveryURLs | string array | URLs to query for the list of nodes to access for snap synchronization |
 
 
-#### Database Fields
+#### Database Settings
 
-| Field             | Type         | Meaning                                                                                              |
-| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
-| NoPruning         | boolean      | Whether to disable state pruning and write everything to disk |
-| NoPrefetch        | boolean      | Whether to disable prefetching and only load state on demand |
-| TxLookupLimit     | uint(64)     | The maximum number of blocks from head whose tx indices are reserved. |
-| Whitelist         | map          | Whitelist of required block number -> hash values to accept, usually not specified |
+These settings apply to the database that keeps the state of the Ethereum chain (in memory and on disk)
+
+| Setting            | Type         | Meaning                                                                                              |
+| ------------------ | ------------ | ---------------------------------------------------------------------------------------------------- |
+| NoPruning          | boolean      | Whether to disable state pruning and write everything to disk |
+| NoPrefetch         | boolean      | Whether to disable prefetching and only load state on demand |
+| TxLookupLimit      | uint(64)     | The maximum number of blocks from head whose tx indices are reserved. |
+| Whitelist          | map          | Whitelist of required block number -> hash values to accept, usually not specified |
+| SkipBcVersionCheck | boolean      |
+| DatabaseHandles    | int          |
+| DatabaseCache      | int          |
+| DatabaseFreezer    | string       |
 
 
-#### Light Client Fields
+#### Light Client Settings
 
 These settings apply when running `geth` as a [light node](https://ethereum.org/en/developers/docs/nodes-and-clients/#light-node).
 
-| Field             | Type         | Meaning                                                                                              |
+| Setting           | Type         | Meaning                                                                                              |
 | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | LightServ         | int          | Maximum percentage of time allowed for serving light server requests |
 | LightIngress      | int          | Incoming bandwidth limit for light servers    |
@@ -62,30 +68,24 @@ These settings apply when running `geth` as a [light node](https://ethereum.org/
 | SyncFromCheckpoint| boolean      | Whether to sync the header chain from the configured checkpoint |
 
 
-### Ultra Light Client Fields
+### Ultra Light Client Settings
 
 These settings apply to [ultra light clients](https://status.im/research/ulc_in_details.html).
 
-| Field                  | Type         | Meaning                                                                                              |
+| Setting                | Type         | Meaning                                                                                              |
 | ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | UltraLightServers      | string array | List of trusted ultra light servers                       |
 |	UltraLightFraction     | int          | Percentage of trusted servers to accept an announcement   |
 |	UltraLightOnlyAnnounce | boolean      | Whether to only announce headers, or also serve them      |
 
 
-#### Database Fields
-
-| Field                  | Type         | Meaning                                                                                              |
-| ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
-| SkipBcVersionCheck     | boolean      |
-| DatabaseHandles        | int          |
-| DatabaseCache          | int          |
-| DatabaseFreezer        | string       |
 
 
-#### Trie Fields
+#### Trie Settings
 
-| Field                   | Type          | Meaning                                                                                              |
+These settings apply to the cache used to manage [trie information](https://medium.com/@eiki1212/ethereum-state-trie-architecture-explained-a30237009d4e).
+
+| Setting                 | Type          | Meaning                                                                                              |
 | ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
 | TrieCleanCache          | int           |
 | TrieCleanCacheJournal   | string        | Disk journal directory for trie cache to survive node restarts |
@@ -96,9 +96,9 @@ These settings apply to [ultra light clients](https://status.im/research/ulc_in_
 |	Preimages               | boolean       |
 
 
-### Misc. Fields
+### Misc. Settings
 
-| Field                   | Type          | Meaning                                                                                              |
+| Setting                 | Type          | Meaning                                                                                              |
 | ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
 | EnablePreimageRecording | boolean       | Enables tracking of SHA3 preimages in the VM   |
 | DocRoot                 | string        |
@@ -112,12 +112,12 @@ These settings apply to [ultra light clients](https://status.im/research/ulc_in_
 
 
 
-### Eth.Miner
+### Eth.Miner Settings
 
 This package implements mining, the creation of new Ethereum blocks for profit. 
 [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/miner#Config)
 
-| Field                   | Type          | Meaning                                                                                              |
+| Setting                 | Type          | Meaning                                                                                              |
 | ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
 | Etherbase               | [Address](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/common#Address) | Public address for block mining rewards (default = first account)     |
 |	Notify                  | string array  | HTTP URL list to be notified of new work packages (only useful in ethash) |
@@ -130,11 +130,31 @@ This package implements mining, the creation of new Ethereum blocks for profit.
 |	Noverify                | boolean       | Disable remote mining solution verification(only useful in ethash)        |
   
 
-### Eth.Ethash
+### Eth.Ethash Settings
 
 This package implements the PoW (proof of work) protocol. 
 [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/consensus/ethash#Config)
 
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| CacheDir                | string
+| CachesInMem             | int
+| CachesOnDisk            | int
+| CachesLockMmap          | boolean
+| DatasetDir              | string
+| DatasetsInMem           | int
+| DatasetsOnDisk          | int
+| DatasetsLockMmap        | boolean
+| PowMode                 | [Mode](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/consensus/ethash#Mode)
+| NotifyFull              | boolean       | When true notifications sent by the remote sealer will be block header JSON objects instead of work package arrays.
+
+
+
+
+
+	Log log.Logger `toml:"-"`
+  
+  
 ```toml
 [Eth.Ethash]
 CacheDir = "ethash"
