@@ -361,6 +361,19 @@ supported by the current plugin system, we're happy to help. Reach out to us on
 [Discord](https://discord.gg/Epf7b7Gr) and we'll help you figure out how to
 make it work.
 
+# Licensing Considerations
+
+The Geth codebase is licensed under the LGPL. By linking with Geth, you have an
+obligation to enable anyone you provide your plugin binaries to run against
+their own modified versions of Geth. Because of how Golang plugins work
+running against updated versions of Geth may require recompiling the plugin.
+
+If you plan to license your plugin under the LGPL or a more permissive license,
+you should be able to meet these requirements. If you plan to use your plugin
+privately without distributing it, you should be fine. If you plan to release
+your plugin without making the source available, you may find yourself in
+violation of Geth's license unless you can provide a way to relink it against
+more recent versions of Geth.
 
 # Existing Plugins
 

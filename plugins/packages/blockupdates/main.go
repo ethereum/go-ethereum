@@ -251,7 +251,7 @@ func (b *BlockUpdates) BlockUpdatesByNumber(ctx context.Context, number rpc.Bloc
 	return blockUpdates(ctx, block)
 }
 
-// BlockUPdatesByHash retrieves a block by hash, gets receipts and state
+// BlockUpdatesByHash retrieves a block by hash, gets receipts and state
 // updates, and serializes the response.
 func (b *BlockUpdates) BlockUpdatesByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	block, err := b.backend.BlockByHash(ctx, hash)
