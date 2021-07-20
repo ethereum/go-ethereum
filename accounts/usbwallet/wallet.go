@@ -209,9 +209,7 @@ func (w *wallet) heartbeat() {
 		w.stateLock.RUnlock()
 
 		if err != nil {
-			w.stateLock.Lock() // Lock state to tear the wallet down
-			w.close()
-			w.stateLock.Unlock()
+			go w.Close()
 		}
 		// Ignore non hardware related errors
 		err = nil
