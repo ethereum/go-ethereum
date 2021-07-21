@@ -251,30 +251,37 @@ These are peer to peer network settings. [The configuration object is documented
 | EnableMsgEvents         | boolean      | If EnableMsgEvents is set then the server will emit PeerEvents whenever a message is sent to or received from a peer
 | Logger                  | [Logger](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/log#Logger) | Custom logger to use with the p2p.Server.
 
+
+
 ### Node.HTTPTimeouts Settings
 
 These are the timeouts for the HTTP server in various states. [The configuration object is documented 
 here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/rpc#HTTPTimeouts)
 
-```toml
-[Node.HTTPTimeouts]
-ReadTimeout = 30000000000
-WriteTimeout = 30000000000
-IdleTimeout = 120000000000
-```
+
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| ReadTimeout             | [Duration](https://pkg.go.dev/time#Duration) | Maximum duration for reading the entire request, including the body.
+| WriteTimeout            | [Duration](https://pkg.go.dev/time#Duration) | Maximum duration before timing out
+| IdleTimeout             | [Duration](https://pkg.go.dev/time#Duration) | Maximum amount of time to wait for the next request when keep-alives are enabled.
+
+
 
 ### Metrics Settings
 
 Geth can log to an [InfluxDB](https://www.influxdata.com/products/influxdb/) for metrics.
 [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/metrics#Config)
 
-```toml
-[Metrics]
-HTTP = "127.0.0.1"
-Port = 6060
-InfluxDBEndpoint = "http://localhost:8086"
-InfluxDBDatabase = "geth"
-InfluxDBUsername = "test"
-InfluxDBPassword = "test"
-InfluxDBTags = "host=localhost"
-```
+
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Enabled                 | boolean 
+| EnabledExpensive        | boolean 
+| HTTP                    | string 
+| Port                    | int    
+| EnableInfluxDB          | boolean 
+| InfluxDBEndpoint        | string 
+| InfluxDBDatabase        | string 
+| InfluxDBUsername        | string 
+| InfluxDBPassword        | string 
+| InfluxDBTags            | string 
