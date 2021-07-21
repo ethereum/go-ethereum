@@ -227,6 +227,12 @@ func (miner *Miner) DisablePreseal() {
 	miner.worker.disablePreseal()
 }
 
+// GetSealingBlock retrieves a sealing block based on the given parameters.
+// The returned block is not sealed but all other fields should be filled.
+func (miner *Miner) GetSealingBlock(parent common.Hash, timestamp uint64) (*types.Block, error) {
+	return miner.worker.getSealingBlock(parent, timestamp)
+}
+
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
