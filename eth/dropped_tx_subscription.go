@@ -9,8 +9,13 @@ package eth
 
 import (
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
+
+func (b *EthAPIBackend)  SubscribeQueuedTxsEvent(ch chan<- *types.Transaction) event.Subscription {
+	return b.eth.TxPool().SubscribeQueuedTxsEvent(ch)
+}
 
 func (b *EthAPIBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription {
 	return b.eth.TxPool().SubscribeDropTxsEvent(ch)
