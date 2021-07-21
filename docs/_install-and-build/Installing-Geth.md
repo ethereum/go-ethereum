@@ -245,8 +245,8 @@ workspace directory layout, then clone the source and build it.
 
 ```
 C:\Users\xxx> mkdir src\github.com\ethereum
-C:\Users\xxx> git clone https://github.com/ethereum/go-ethereum src\github.com\ethereum\go-ethereum
 C:\Users\xxx> cd src\github.com\ethereum\go-ethereum
+C:\Users\xxx> git clone https://github.com/ethereum/go-ethereum 
 C:\Users\xxx\src\github.com\ethereum\go-ethereum> go get -u -v golang.org/x/net/context
 C:\Users\xxx\src\github.com\ethereum\go-ethereum> go install -v ./cmd/...
 ```
