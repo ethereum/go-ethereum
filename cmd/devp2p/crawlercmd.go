@@ -384,8 +384,6 @@ func negotiateEthProtocol(caps, peer []p2p.Cap) uint {
 	return highestEthVersion
 }
 
-var ns int
-
 func updateNodes(db *sql.DB, nodes []crawledNode) error {
 	log.Info("Writing nodes to db", "nodes", len(nodes))
 	now := time.Now()
@@ -436,8 +434,7 @@ func updateNodes(db *sql.DB, nodes []crawledNode) error {
 		}
 		var eth2 enr.ETH2
 		if n.N.Load((&eth2)) == nil {
-			fmt.Printf("ETH2 node: %v %v %v", ns, eth2, n.N.String())
-			ns += 1
+			info.ClientType = "eth2"
 		}
 		var caps string
 		for _, c := range info.Capabilities {

@@ -75,6 +75,11 @@ type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
 
+// ETH2 is a SSZ encoded field.
+type ETH2 []byte
+
+func (v ETH2) ENRKey() string { return "eth2" }
+
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
 
