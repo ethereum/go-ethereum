@@ -90,24 +90,13 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 }
 
 func (l *JSONLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	type structFrameMarshalling struct {
-		Type    string                `json:"type"`
-		From    common.Address        `json:"from"`
-		To      common.Address        `json:"to"`
-		Input   hexutil.Bytes         `json:"input"`
-		Gas     math.HexOrDecimal64   `json:"gas"`
-		Value   *math.HexOrDecimal256 `json:"value"`
-		GasUsed math.HexOrDecimal64   `json:"gasUsed"`
-		Output  hexutil.Bytes         `json:"output"`
-	}
-
-	frame := structFrameMarshalling{
+	frame := StructFrame{
 		Type:  type_.String(),
 		From:  from,
 		To:    to,
 		Input: input,
-		Gas:   math.HexOrDecimal64(gas),
-		Value: (*math.HexOrDecimal256)(value),
+		Gas:   gas,
+		Value: value,
 	}
 	l.encoder.Encode(frame)
 }

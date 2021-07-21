@@ -57,6 +57,7 @@ type LogConfig struct {
 }
 
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+//go:generate gencodec -type StructFrame -field-override structFrameMarshaling -out gen_structframe.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
@@ -100,14 +101,23 @@ func (s *StructLog) ErrorString() string {
 
 // StructFrame is emitted to the EVM upon stepping into a new call frame.
 type StructFrame struct {
-	Type_   string         `json:"type"`
+	Type    string         `json:"type"`
 	From    common.Address `json:"from"`
 	To      common.Address `json:"to"`
 	Input   []byte         `json:"input"`
 	Gas     uint64         `json:"gas"`
 	Value   *big.Int       `json:"value"`
-	GasUsed uint64         `json:"gasUsed"`
-	Output  []byte         `json:"output"`
+	GasUsed uint64         `json:"-"`
+	Output  []byte         `json:"-"`
+}
+
+type structFrameMarshaling struct {
+	Type  string                `json:"type"`
+	From  common.Address        `json:"from"`
+	To    common.Address        `json:"to"`
+	Input hexutil.Bytes         `json:"input"`
+	Gas   math.HexOrDecimal64   `json:"gas"`
+	Value *math.HexOrDecimal256 `json:"value"`
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
