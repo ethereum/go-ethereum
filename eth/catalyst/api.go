@@ -21,12 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -65,153 +62,11 @@ func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
 	return &consensusAPI{eth: eth}
 }
 
-// blockExecutionEnv gathers all the data required to execute
-// a block, either when assembling it or when inserting it.
-type blockExecutionEnv struct {
-	chain   *core.BlockChain
-	state   *state.StateDB
-	tcount  int
-	gasPool *core.GasPool
-
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-}
-
-func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
-	vmconfig := *env.chain.GetVMConfig()
-	snap := env.state.Snapshot()
-	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return err
-	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
-	return nil
-}
-
-func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*blockExecutionEnv, error) {
-	state, err := api.eth.BlockChain().StateAt(parent.Root())
-	if err != nil {
-		return nil, err
-	}
-	env := &blockExecutionEnv{
-		chain:   api.eth.BlockChain(),
-		state:   state,
-		header:  header,
-		gasPool: new(core.GasPool).AddGas(header.GasLimit),
-	}
-	return env, nil
-}
-
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
 	log.Info("Producing block", "parentHash", params.ParentHash)
-
-	bc := api.eth.BlockChain()
-	parent := bc.GetBlockByHash(params.ParentHash)
-	if parent == nil {
-		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
-		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
-	}
-
-	pool := api.eth.TxPool()
-
-	if parent.Time() >= params.Timestamp {
-		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
-	}
-	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
-		wait := time.Duration(params.Timestamp-now) * time.Second
-		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
-	}
-
-	pending, err := pool.Pending(true)
-	if err != nil {
-		return nil, err
-	}
-
-	coinbase, err := api.eth.Etherbase()
-	if err != nil {
-		return nil, err
-	}
-	num := parent.Number()
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		Coinbase:   coinbase,
-		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
-		Time:       params.Timestamp,
-	}
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
-	}
-	err = api.eth.Engine().Prepare(bc, header)
-	if err != nil {
-		return nil, err
-	}
-
-	env, err := api.makeEnv(parent, header)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		signer       = types.MakeSigner(bc.Config(), header.Number)
-		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending, nil)
-		transactions []*types.Transaction
-	)
-	for {
-		if env.gasPool.Gas() < chainParams.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", chainParams.TxGas)
-			break
-		}
-		tx := txHeap.Peek()
-		if tx == nil {
-			break
-		}
-
-		// The sender is only for logging purposes, and it doesn't really matter if it's correct.
-		from, _ := types.Sender(signer, tx)
-
-		// Execute the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
-		err = env.commitTransaction(tx, coinbase)
-		switch err {
-		case core.ErrGasLimitReached:
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Trace("Gas limit exceeded for current block", "sender", from)
-			txHeap.Pop()
-
-		case core.ErrNonceTooLow:
-			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			txHeap.Shift()
-
-		case core.ErrNonceTooHigh:
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-			txHeap.Pop()
-
-		case nil:
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			env.tcount++
-			txHeap.Shift()
-			transactions = append(transactions, tx)
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			txHeap.Shift()
-		}
-	}
-
-	// Create the block.
-	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
+	block, err := api.eth.Miner().GetSealingBlock(params.ParentHash, params.Timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +110,6 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	if err != nil {
 		return nil, err
 	}
-
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
 	header := &types.Header{
