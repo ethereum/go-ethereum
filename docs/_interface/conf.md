@@ -4,7 +4,7 @@ sort_key: B
 ---
 
 Geth can use a configuration file to specify various parameters, instead of using command line arguments. To get a configuration file
-with the default, run:
+with the defaults, run:
 
 ```sh
 geth dumpconfig > configFile
@@ -35,6 +35,7 @@ This package is responsible for running the Ethereum protocol.
 | SyncMode          | string       | How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
 | EthDiscoveryURLs  | string array | URLs to query for the list of nodes to access                          |
 | SnapDiscoveryURLs | string array | URLs to query for the list of nodes to access for snap synchronization |
+
 
 
 #### Database Settings
