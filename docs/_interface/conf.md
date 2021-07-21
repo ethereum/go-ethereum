@@ -75,8 +75,8 @@ These settings apply to [ultra light clients](https://status.im/research/ulc_in_
 | Setting                | Type         | Meaning                                                                                              |
 | ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | UltraLightServers      | string array | List of trusted ultra light servers                       |
-|	UltraLightFraction     | int          | Percentage of trusted servers to accept an announcement   |
-|	UltraLightOnlyAnnounce | boolean      | Whether to only announce headers, or also serve them      |
+| UltraLightFraction     | int          | Percentage of trusted servers to accept an announcement   |
+| UltraLightOnlyAnnounce | boolean      | Whether to only announce headers, or also serve them      |
 
 
 
@@ -92,8 +92,8 @@ These settings apply to the cache used to manage [trie information](https://medi
 | TrieCleanCacheRejournal | time.Duration | Time interval to regenerate the journal for clean cache        |
 | TrieDirtyCache          | int           |
 | TrieTimeout             | time.Duration |
-|	SnapshotCache           | int           |
-|	Preimages               | boolean       |
+| SnapshotCache           | int           |
+| Preimages               | boolean       |
 
 
 ### Misc. Settings
@@ -120,14 +120,14 @@ This package implements mining, the creation of new Ethereum blocks for profit.
 | Setting                 | Type          | Meaning                                                                                              |
 | ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
 | Etherbase               | [Address](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/common#Address) | Public address for block mining rewards (default = first account)     |
-|	Notify                  | string array  | HTTP URL list to be notified of new work packages (only useful in ethash) |
-|	NotifyFull              | boolean       | Notify with pending block headers instead of work packages                |           
+| Notify                  | string array  | HTTP URL list to be notified of new work packages (only useful in ethash) |
+| NotifyFull              | boolean       | Notify with pending block headers instead of work packages                |           
 | ExtraData               | Bytes         | Block extra data set by the miner                                         |
-|	GasFloor                | uint64        | Target gas floor for mined blocks                                         |
-|	GasCeil                 | uint64        | Target gas ceiling for mined blocks                                       |
-|	GasPrice                | \*big.Int     | Minimum gas price for mining a transaction                                |
-|	Recommit                | time.Duration | The time interval for miner to re-create mining work                      |
-|	Noverify                | boolean       | Disable remote mining solution verification(only useful in ethash)        |
+| GasFloor                | uint64        | Target gas floor for mined blocks                                         |
+| GasCeil                 | uint64        | Target gas ceiling for mined blocks                                       |
+| GasPrice                | \*big.Int     | Minimum gas price for mining a transaction                                |
+| Recommit                | time.Duration | The time interval for miner to re-create mining work                      |
+| Noverify                | boolean       | Disable remote mining solution verification(only useful in ethash)        |
   
 
 ### Eth.Ethash Settings
@@ -226,7 +226,73 @@ This package is used for the settings of the node itself and the Remote Procedur
 
 These are peer to peer network settings. [The configuration object is documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p#Config)
 
+
+| Settings                | Type          | Meaning                                                                                              |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| PrivateKey              | [PrivateKey](https://pkg.go.dev/crypto/ecdsa#PrivateKey) | The private key for the node |
+| MaxPeers                | int           | Maximum number of peers that can be connected
+| MaxPendingPeers         | int           | Maximum number of peers that can be pending in the handshake phase, counted separately for inbound and outbound connections.
+| DialRatio               | int           | Ratio of inbound to dialed connections. Defaults to 3 (one third of connections can be dialed)
+| NoDiscovery             | boolean       | Disable the peer discovery mechanism, useful for protocol debugging (manual topology).
+| DiscoveryV5             | boolean       | Whether the new topic-discovery based V5 discovery protocol should be started or not
+| Name                    | string        | Node name of this server.
+| BootstrapNodes          | [Node array](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p/enode#Node) | Known nodes, used to establish connectivity with the rest of the network.
+| BootstrapNodesV5          | [Node array](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/p2p/enode#Node) | Known nodes, used to establish connectivity with the rest of the network using the V5 discovery protocol
+
+
+	// Static nodes are used as pre-configured connections which are always
+	// maintained and re-connected on disconnects.
+	StaticNodes []*enode.Node
+
+	// Trusted nodes are used as pre-configured connections which are always
+	// allowed to connect, even above the peer limit.
+	TrustedNodes []*enode.Node
+
+	// Connectivity can be restricted to certain IP networks.
+	// If this option is set to a non-nil value, only hosts which match one of the
+	// IP networks contained in the list are considered.
+	NetRestrict *netutil.Netlist `toml:",omitempty"`
+
+	// NodeDatabase is the path to the database containing the previously seen
+	// live nodes in the network.
+	NodeDatabase string `toml:",omitempty"`
+
+	// Protocols should contain the protocols supported
+	// by the server. Matching protocols are launched for
+	// each peer.
+	Protocols []Protocol `toml:"-"`
+
+	// If ListenAddr is set to a non-nil address, the server
+	// will listen for incoming connections.
+	//
+	// If the port is zero, the operating system will pick a port. The
+	// ListenAddr field will be updated with the actual address when
+	// the server is started.
+	ListenAddr string
+
+	// If set to a non-nil value, the given NAT port mapper
+	// is used to make the listening port available to the
+	// Internet.
+	NAT nat.Interface `toml:",omitempty"`
+
+	// If Dialer is set to a non-nil value, the given Dialer
+	// is used to dial outbound peer connections.
+	Dialer NodeDialer `toml:"-"`
+
+	// If NoDial is true, the server will not dial any peers.
+	NoDial bool `toml:",omitempty"`
+
+	// If EnableMsgEvents is set then the server will emit PeerEvents
+	// whenever a message is sent to or received from a peer
+	EnableMsgEvents bool
+
+	// Logger is a custom logger to use with the p2p.Server.
+	Logger log.Logger `toml:",omitempty"`
+	// contains filtered or unexported fields
+}
+
 ```toml
+
 [Node.P2P]
 MaxPeers = 50
 NoDiscovery = false
