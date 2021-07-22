@@ -60,8 +60,11 @@ func (b *LesApiBackend) SetHead(number uint64) {
 }
 
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	// Return the latest current as the pending one since there
+	// is no pending notion in the light client. TODO(rjl493456442)
+	// unify the behavior of `HeaderByNumber` and `PendingBlockAndReceipts`.
 	if number == rpc.PendingBlockNumber {
-		return nil, nil
+		return b.eth.blockchain.CurrentHeader(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
