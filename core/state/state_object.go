@@ -310,19 +310,20 @@ func (s *stateObject) setState(key, value common.Hash) {
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise(prefetch bool) {
-	for key, value := range s.dirtyStorage {
-		s.pendingStorage[key] = value
-	}
-
 	if prefetch && s.db.prefetcher != nil && s.data.Root != emptyRoot {
 		slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 		for key, value := range s.dirtyStorage {
+			s.pendingStorage[key] = value
 			if value != s.originStorage[key] {
 				slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 			}
 		}
 		if len(slotsToPrefetch) > 0 {
 			s.db.prefetcher.prefetch(s.data.Root, slotsToPrefetch)
+		}
+	} else {
+		for key, value := range s.dirtyStorage {
+			s.pendingStorage[key] = value
 		}
 	}
 
