@@ -100,5 +100,20 @@
     "severity": "High",
     "CVE": "CVE-2020-26265",
     "check": "(Geth\\/v1\\.9\\.(4|5|6|7|8|9)-.*)|(Geth\\/v1\\.9\\.1\\d-.*)$"
+  },
+  {
+    "name": "Not ready for London upgrade",
+    "uid": "GETH-2021-01",
+    "summary": "The client is not ready for the 'London' technical upgrade, and will deviate from the canonical chain when the London upgrade occurs (at block '12965000' around August 4, 2021.",
+    "description": "At (or around) August 4, Ethereum will undergo a technical upgrade called 'London'. Clients not upgraded will fail to progress on the canonical chain.",
+    "links": [
+      "https://github.com/ethereum/eth1.0-specs/blob/master/network-upgrades/mainnet-upgrades/london.md",
+      "https://notes.ethereum.org/@timbeiko/ropsten-postmortem"
+    ],
+    "introduced": "v1.10.1",
+    "fixed": "v1.10.6",
+    "published": "2020-12-10",
+    "severity": "High",
+    "check": "(Geth\\/v1\\.10\\.(1|2|3|4|5)-.*)$"
   }
 ]
