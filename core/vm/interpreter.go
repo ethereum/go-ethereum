@@ -17,9 +17,9 @@
 package vm
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/monitor"
 	"hash"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -286,21 +286,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		//if in.cfg.MeasureGas {
 		if in.cfg.MeasureGas {
 			sum := monitor.GetSystemUsageMonitor()
 			sum.OperationStart(opCodeToString[op])
 			res, err = operation.execute(&pc, in, callContext)
+			fmt.Println(opCodeToString[op], byte(op), cost)
 			sum.OperationEnd()
-			log.Info("--System usage v1.2 \n ==================================================\n")
-			log.Info("BlockNum: %s", in.evm.Context.BlockNumber)
-			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
-			log.Info(opCodeToString[op])
 		} else {
-			log.Info("--System usage v1.2 \n ==================================================\n")
-			log.Info("BlockNum: %s", in.evm.Context.BlockNumber)
-			log.Info(strconv.FormatBool(in.cfg.MeasureGas))
-			log.Info(opCodeToString[op])
 			res, err = operation.execute(&pc, in, callContext)
 		}
 

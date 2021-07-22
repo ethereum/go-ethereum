@@ -27,6 +27,8 @@ type OperationData struct {
 type TransactionData struct {
 	TransactionIndex  int
 	OperationDataList []OperationData `bson:"operations"`
+	Hash              string
+	UsedGas           uint64 `bson:"used_gas"`
 }
 
 type BlockData struct {

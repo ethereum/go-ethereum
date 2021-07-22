@@ -18,8 +18,6 @@ package core
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/monitor"
 	"math"
 	"math/big"
 
@@ -306,31 +304,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 
-	if st.evm.Config.MeasureGas {
-		sum := monitor.GetSystemUsageMonitor()
-		sum.TransactionStart(-1)
-	}
-
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
-	}
-
-	if st.evm.Config.MeasureGas {
-		sum := monitor.GetSystemUsageMonitor()
-
-		if sum.IsInBlock() {
-			sum.TransactionEnd()
-		} else {
-			txData := sum.TransactionEnd()
-			err := sum.SaveTxData(*txData)
-			if err != nil {
-				log.Error("save tx data wrong!")
-			}
-		}
 	}
 
 	if !st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {

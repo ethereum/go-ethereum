@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/monitor"
 	"math/big"
 	"sync"
 	"time"
@@ -78,7 +79,9 @@ type SimulatedBackend struct {
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{
+		MeasureGas: true,
+	}, nil, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -380,6 +383,13 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 	return b.pendingState.GetCode(contract), nil
 }
 
+func (b *SimulatedBackend) GetPendingState(ctx context.Context) (*state.StateDB, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.pendingState, nil
+}
+
 func newRevertError(result *core.ExecutionResult) *revertError {
 	reason, errUnpack := abi.UnpackRevert(result.Revert())
 	err := errors.New("execution reverted")
@@ -439,7 +449,28 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+		sum.TransactionStart(-1)
+	}
+
 	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+
+		if sum.IsInBlock() {
+			sum.TransactionEnd()
+		} else {
+			txData := sum.TransactionEnd()
+			txData.Hash = ""
+			err := sum.SaveTxData(*txData)
+			if err != nil {
+				log.Error("save tx data wrong!")
+			}
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +646,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true, MeasureGas: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()

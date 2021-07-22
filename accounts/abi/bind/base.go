@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/monitor"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -109,9 +111,30 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
+
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+		sum.TransactionStart(-1)
+	}
+
 	tx, err := c.transact(opts, nil, append(bytecode, input...))
 	if err != nil {
 		return common.Address{}, nil, nil, err
+	}
+
+	if true {
+		sum := monitor.GetSystemUsageMonitor()
+
+		if sum.IsInBlock() {
+			sum.TransactionEnd()
+		} else {
+			txData := sum.TransactionEnd()
+			txData.Hash = tx.Hash().String()
+			err := sum.SaveTxData(*txData)
+			if err != nil {
+				log.Error("save tx data wrong!")
+			}
+		}
 	}
 	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
 	return c.address, tx, c, nil

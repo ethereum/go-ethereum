@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
@@ -74,7 +75,7 @@ func (sum *SystemUsageMonitor) SaveBlockData(blockData BlockData) error {
 }
 
 func (sum *SystemUsageMonitor) IsInBlock() bool {
-	if sum.currentBlockId.Int64() >= 0 {
+	if sum.currentBlockId != nil && sum.currentBlockId.Int64() >= 0 {
 		return true
 	} else {
 		return false
@@ -167,6 +168,35 @@ func (sum *SystemUsageMonitor) GetOperationDurationUsage() *SystemDurationUsage 
 		MemData:      *getMapDataDiff(sum.operationStartSystemUsage.MemData, sum.operationEndSystemUsage.MemData),
 		IOData:       *getMapDataDiff(sum.operationStartSystemUsage.IOData, sum.operationEndSystemUsage.IOData),
 	}
+}
+
+func (sum *SystemUsageMonitor) GetUsedTimeByTxHash(hash string) (*time.Duration, error) {
+	transactionData, err := sum.GetTransactionDataByTxHash(hash)
+	if err != nil {
+		return nil, err
+	}
+	var allTime time.Duration
+	for _, opData := range transactionData.OperationDataList {
+		allTime += opData.DurationUsage.DurationTime
+	}
+	return &allTime, err
+}
+
+func (sum *SystemUsageMonitor) GetUsedGasByTxHash(hash string) (uint64, error) {
+	transactionData, err := sum.GetTransactionDataByTxHash(hash)
+	if err != nil {
+		return uint64(0), err
+	}
+
+	return transactionData.UsedGas, err
+}
+
+func (sum *SystemUsageMonitor) GetTransactionDataByTxHash(hash string) (*TransactionData, error) {
+	transactionData, err := sum.db.GetTransactionDataByTxHash(hash)
+	if err != nil {
+		return nil, errors.New("Can not find the tx by hash ")
+	}
+	return transactionData, nil
 }
 
 func (sdu *SystemDurationUsage) ToString() string {

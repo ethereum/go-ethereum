@@ -121,10 +121,23 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
+	sum := monitor.GetSystemUsageMonitor()
+	sum.TransactionStart(int(tx.Nonce()))
+
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
+
 	if err != nil {
 		return nil, err
+	}
+
+	txData := sum.TransactionEnd()
+	txData.Hash = tx.Hash().String()
+	txData.UsedGas = result.UsedGas
+	err = sum.SaveTxData(*txData)
+
+	if err != nil {
+		log.Info("failed to save txData")
 	}
 
 	// Update the state with pending changes.

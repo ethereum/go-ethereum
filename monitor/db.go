@@ -22,14 +22,17 @@ type TransactionSystemUsageRow struct {
 	TransactionIndex int             `bson:"transaction_index"`
 	Operations       []OperationData `bson:"operations"`
 	UpdateTime       time.Time       `bson:"update_time"`
+	Hash             string          `bson:"hash"`
+	UsedGas          uint64          `bson:"used_gas"`
 }
 
 type Idb interface {
 	SaveBlockData(data BlockData) error
 	SaveTxData(data TransactionData) error
-	GetBlockData(blockId *big.Int) (BlockData, error)
-	GetTransactionData(blockId string, transactionIndex int) (TransactionData, error)
-	GetOperationData(op string) ([]OperationData, error)
+	GetBlockData(blockId *big.Int) (*BlockData, error)
+	GetTransactionData(blockId string, transactionIndex int) (*TransactionData, error)
+	GetOperationData(op string) (*[]OperationData, error)
+	GetTransactionDataByTxHash(hash string) (*TransactionData, error)
 }
 
 type MongoDb struct {
@@ -88,6 +91,8 @@ func (mongoDb *MongoDb) SaveBlockData(data BlockData) error {
 			transactionData.TransactionIndex,
 			transactionData.OperationDataList,
 			time.Now(),
+			transactionData.Hash,
+			transactionData.UsedGas,
 		}
 		_, err := coll.InsertOne(ctx, transaction)
 
@@ -112,6 +117,8 @@ func (mongoDb *MongoDb) SaveTxData(data TransactionData) error {
 		data.TransactionIndex,
 		data.OperationDataList,
 		time.Now(),
+		data.Hash,
+		data.UsedGas,
 	}
 	_, err := coll.InsertOne(ctx, transaction)
 
@@ -123,7 +130,7 @@ func (mongoDb *MongoDb) SaveTxData(data TransactionData) error {
 	return nil
 }
 
-func (mongoDb *MongoDb) GetBlockData(blockId *big.Int) (BlockData, error) {
+func (mongoDb *MongoDb) GetBlockData(blockId *big.Int) (*BlockData, error) {
 
 	blockData := BlockData{TransactionDataList: []TransactionData{}}
 	blockData.BlockId = blockId
@@ -137,7 +144,7 @@ func (mongoDb *MongoDb) GetBlockData(blockId *big.Int) (BlockData, error) {
 
 	if err != nil {
 		log.Error("Failed to find block data", err)
-		return BlockData{}, err
+		return nil, err
 	}
 
 	for cur.Next(ctx) {
@@ -148,21 +155,37 @@ func (mongoDb *MongoDb) GetBlockData(blockId *big.Int) (BlockData, error) {
 
 		if err != nil {
 			log.Error("Failed to convert to TransactionData", err)
-			return BlockData{}, err
+			return nil, err
 		}
 
 		blockData.TransactionDataList = append(blockData.TransactionDataList, elem)
 	}
 
-	return blockData, nil
+	return &blockData, nil
 }
 
-func (mongoDb *MongoDb) GetTransactionData(blockId string, transactionIndex int) (TransactionData, error) {
-	return TransactionData{}, nil
+func (mongoDb *MongoDb) GetTransactionData(blockId string, transactionIndex int) (*TransactionData, error) {
+	return nil, nil
 }
 
-func (mongoDb *MongoDb) GetOperationData(op string) ([]OperationData, error) {
-	return []OperationData{}, nil
+func (mongoDb *MongoDb) GetOperationData(op string) (*[]OperationData, error) {
+	return nil, nil
+}
+
+func (mongoDb *MongoDb) GetTransactionDataByTxHash(hash string) (*TransactionData, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	coll := mongoDb.client.Database(mongoDb.dbName).Collection(TransactionCollectionName)
+
+	var element TransactionData
+	err := coll.FindOne(ctx, bson.M{"hash": hash}).Decode(&element)
+
+	if err != nil {
+		log.Error("Failed to find tx data by hash", err)
+		return nil, err
+	}
+	return &element, nil
 }
 
 //func (mongoDb *MongoDb) SaveTransactionData(data TransactionData) error {
