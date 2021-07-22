@@ -234,6 +234,10 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	DeprecatedAllowListFlag = cli.StringFlag{
+		Name:  "whitelist",
+		Usage: "[DEPRECATED: you shall replace it by 'allowlist'] Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+	}
 	AllowListFlag = cli.StringFlag{
 		Name:  "allowlist",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
@@ -1405,6 +1409,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 
 func setAllowList(ctx *cli.Context, cfg *ethconfig.Config) {
 	allowList := ctx.GlobalString(AllowListFlag.Name)
+	if allowList == "" {
+		allowList = ctx.GlobalString(DeprecatedAllowListFlag.Name)
+	}
 	if allowList == "" {
 		return
 	}
