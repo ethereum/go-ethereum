@@ -38,7 +38,7 @@ import (
 const heartbeatCycle = time.Second
 
 // Minimum time to wait between self derivation attempts, even it the user is
-// requesting accounts like crazy.
+// requesting accounts unpredictably.
 const selfDeriveThrottling = time.Second
 
 // driver defines the vendor specific functionality hardware wallets instances

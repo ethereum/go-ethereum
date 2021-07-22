@@ -140,13 +140,13 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 			}
 			return nil
 		}
-		// Otherwise if it's a whitelisted block, validate against the set
-		if want, ok := h.whitelist[headers[0].Number.Uint64()]; ok {
+		// Otherwise if it's a allowed block, validate against the set
+		if want, ok := h.allowList[headers[0].Number.Uint64()]; ok {
 			if hash := headers[0].Hash(); want != hash {
-				peer.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
-				return errors.New("whitelist block mismatch")
+				peer.Log().Info("allowed mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
+				return errors.New("allowed block mismatch")
 			}
-			peer.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", want)
+			peer.Log().Debug("Allowed block verified", "number", headers[0].Number.Uint64(), "hash", want)
 		}
 		// Irrelevant of the fork checks, send the header to the fetcher just in case
 		headers = h.blockFetcher.FilterHeaders(peer.ID(), headers, time.Now())

@@ -84,7 +84,7 @@ type handlerConfig struct {
 	BloomCache uint64                    // Megabytes to alloc for fast sync bloom
 	EventMux   *event.TypeMux            // Legacy event mux, deprecate for `feed`
 	Checkpoint *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	Whitelist  map[uint64]common.Hash    // Hard coded whitelist for sync challenged
+	AllowList  map[uint64]common.Hash    // Hard coded allow list for sync challenged
 }
 
 type handler struct {
@@ -114,7 +114,7 @@ type handler struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
-	whitelist map[uint64]common.Hash
+	allowList map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
 	txsyncCh chan *txsync
@@ -139,7 +139,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:     config.TxPool,
 		chain:      config.Chain,
 		peers:      newPeerSet(),
-		whitelist:  config.Whitelist,
+		allowList:  config.AllowList,
 		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
 	}
@@ -329,8 +329,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			}
 		}()
 	}
-	// If we have any explicit whitelist block hashes, request them
-	for number := range h.whitelist {
+	// If we have any explicit allow list block hashes, request them
+	for number := range h.allowList {
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
 			return err
 		}

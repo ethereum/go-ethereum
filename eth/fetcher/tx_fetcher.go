@@ -748,9 +748,9 @@ func (f *TxFetcher) rescheduleTimeout(timer *mclock.Timer, trigger chan struct{}
 }
 
 // scheduleFetches starts a batch of retrievals for all available idle peers.
-func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, whitelist map[string]struct{}) {
+func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, allowList map[string]struct{}) {
 	// Gather the set of peers we want to retrieve from (default to all)
-	actives := whitelist
+	actives := allowList
 	if actives == nil {
 		actives = make(map[string]struct{})
 		for peer := range f.announces {

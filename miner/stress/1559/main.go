@@ -102,7 +102,7 @@ func main() {
 	}
 	time.Sleep(3 * time.Second)
 
-	// Start injecting transactions from the faucets like crazy
+	// Start injecting transactions from the faucets (unpredictably)
 	var (
 		nonces = make([]uint64, len(faucets))
 

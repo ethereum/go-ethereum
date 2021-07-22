@@ -80,7 +80,7 @@ const rttMinConfidence = 0.1
 // behavior similar to our median peers.
 const ttlScaling = 3
 
-// ttlLimit is the maximum timeout allowance to prevent reaching crazy numbers
+// ttlLimit is the maximum timeout allowance to prevent reaching unexpected numbers
 // if some unforeseen network events shappen. As much as we try to hone in on
 // the most optimal values, it doesn't make any sense to go above a threshold,
 // even if everything is slow and screwy.

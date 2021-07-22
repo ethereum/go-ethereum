@@ -220,7 +220,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache: uint64(cacheLimit),
 		EventMux:   eth.eventMux,
 		Checkpoint: checkpoint,
-		Whitelist:  config.Whitelist,
+		AllowList:  config.AllowList,
 	}); err != nil {
 		return nil, err
 	}

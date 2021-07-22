@@ -98,7 +98,7 @@ func main() {
 	}
 	time.Sleep(3 * time.Second)
 
-	// Start injecting transactions from the faucets like crazy
+	// Start injecting transactions from the faucets (unpredictably)
 	nonces := make([]uint64, len(faucets))
 	for {
 		// Pick a random mining node
