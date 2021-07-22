@@ -73,8 +73,27 @@ func NewMongoDb(uri string) (*MongoDb, error) {
 		fmt.Println("Connected to MongoDB!")
 		mongoDb.uri = uri
 		mongoDb.client = *client
+		mongoDb.ensureTxCollectionIndex()
 	})
 	return mongoDb, nil
+}
+
+func (mongoDb *MongoDb) ensureTxCollectionIndex() {
+	mod := mongo.IndexModel{
+		Keys: bson.M{
+			"update_time": -1, // index in ascending order
+		}, Options: nil,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	coll := mongoDb.client.Database(mongoDb.dbName).Collection(TransactionCollectionName)
+	ret, err := coll.Indexes().CreateOne(ctx, mod)
+	log.Info(ret)
+	if err != nil {
+		log.Error("Can not create index for tx collection")
+	}
 }
 
 func (mongoDb *MongoDb) SaveBlockData(data BlockData) error {

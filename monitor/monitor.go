@@ -149,13 +149,15 @@ func (sum *SystemUsageMonitor) OperationStart(op string) {
 	sum.operationStartSystemUsage = *sum.GetSystemCurrentUsage()
 }
 
-func (sum *SystemUsageMonitor) OperationEnd() (operationData *OperationData) {
+func (sum *SystemUsageMonitor) OperationEnd(gas uint64) (operationData *OperationData) {
 	sum.operationEndSystemUsage = *sum.GetSystemCurrentUsage()
 	sum.currentOperationData.DurationUsage = *sum.GetOperationDurationUsage()
+	sum.currentOperationData.UsedGas = gas
 	ret := sum.currentOperationData
 	sum.currentOperationData = OperationData{
 		Op:            "",
 		DurationUsage: SystemDurationUsage{},
+		UsedGas:       gas,
 	}
 	sum.currentTransactionData.OperationDataList = append(sum.currentTransactionData.OperationDataList, ret)
 	return &ret

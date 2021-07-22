@@ -3,6 +3,8 @@ package monitor
 import (
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"math/rand"
+	"strconv"
 	"testing"
 )
 
@@ -66,8 +68,8 @@ func MockTransactionRecord(sum *SystemUsageMonitor) {
 
 func MockOperationRecord(sum *SystemUsageMonitor) {
 	for i := 0; i < 1000; i++ {
-		sum.OperationStart("TEST")
-		sum.OperationEnd()
+		sum.OperationStart("TEST" + strconv.Itoa(rand.Int()))
+		sum.OperationEnd(uint64(rand.Int31()))
 	}
 }
 
@@ -86,8 +88,8 @@ func BenchmarkSystemUsageMonitor_GetOperationDurationUsage(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sum := GetSystemUsageMonitor()
-		sum.OperationStart("TEST")
-		sum.OperationEnd()
+		sum.OperationStart("TEST" + strconv.Itoa(rand.Int()))
+		sum.OperationEnd(uint64(rand.Int31()))
 	}
 }
 

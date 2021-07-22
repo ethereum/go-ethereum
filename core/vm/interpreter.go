@@ -291,7 +291,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			sum.OperationStart(opCodeToString[op])
 			res, err = operation.execute(&pc, in, callContext)
 			fmt.Println(opCodeToString[op], byte(op), cost)
-			sum.OperationEnd()
+			sum.OperationEnd(cost)
 		} else {
 			res, err = operation.execute(&pc, in, callContext)
 		}

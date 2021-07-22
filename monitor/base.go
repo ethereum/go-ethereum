@@ -22,13 +22,14 @@ type SystemDurationUsage struct {
 type OperationData struct {
 	Op            string
 	DurationUsage SystemDurationUsage `bson:"duration_usage"`
+	UsedGas       uint64              `bson:"used_gas"`
 }
 
 type TransactionData struct {
 	TransactionIndex  int
 	OperationDataList []OperationData `bson:"operations"`
-	Hash              string
-	UsedGas           uint64 `bson:"used_gas"`
+	Hash              string          `bson:"hash"`
+	UsedGas           uint64          `bson:"used_gas"`
 }
 
 type BlockData struct {
