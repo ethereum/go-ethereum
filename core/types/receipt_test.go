@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +36,128 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	if err != errEmptyTypedReceipt {
 		t.Fatal("wrong error:", err)
 	}
+}
+
+func TestLegacyReceiptDecoding(t *testing.T) {
+	tests := []struct {
+		name   string
+		encode func(*Receipt) ([]byte, error)
+	}{
+		{
+			"StoredReceiptRLP",
+			encodeAsStoredReceiptRLP,
+		},
+		{
+			"V4StoredReceiptRLP",
+			encodeAsV4StoredReceiptRLP,
+		},
+		{
+			"V3StoredReceiptRLP",
+			encodeAsV3StoredReceiptRLP,
+		},
+	}
+
+	tx := NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
+	receipt := &Receipt{
+		Status:            ReceiptStatusFailed,
+		CumulativeGasUsed: 1,
+		Logs: []*Log{
+			{
+				Address: common.BytesToAddress([]byte{0x11}),
+				Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
+				Data:    []byte{0x01, 0x00, 0xff},
+			},
+			{
+				Address: common.BytesToAddress([]byte{0x01, 0x11}),
+				Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
+				Data:    []byte{0x01, 0x00, 0xff},
+			},
+		},
+		TxHash:          tx.Hash(),
+		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
+		GasUsed:         111111,
+	}
+	receipt.Bloom = CreateBloom(Receipts{receipt})
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			enc, err := tc.encode(receipt)
+			if err != nil {
+				t.Fatalf("Error encoding receipt: %v", err)
+			}
+			var dec ReceiptForStorage
+			if err := rlp.DecodeBytes(enc, &dec); err != nil {
+				t.Fatalf("Error decoding RLP receipt: %v", err)
+			}
+			// Check whether all consensus fields are correct.
+			if dec.Status != receipt.Status {
+				t.Fatalf("Receipt status mismatch, want %v, have %v", receipt.Status, dec.Status)
+			}
+			if dec.CumulativeGasUsed != receipt.CumulativeGasUsed {
+				t.Fatalf("Receipt CumulativeGasUsed mismatch, want %v, have %v", receipt.CumulativeGasUsed, dec.CumulativeGasUsed)
+			}
+			if dec.Bloom != receipt.Bloom {
+				t.Fatalf("Bloom data mismatch, want %v, have %v", receipt.Bloom, dec.Bloom)
+			}
+			if len(dec.Logs) != len(receipt.Logs) {
+				t.Fatalf("Receipt log number mismatch, want %v, have %v", len(receipt.Logs), len(dec.Logs))
+			}
+			for i := 0; i < len(dec.Logs); i++ {
+				if dec.Logs[i].Address != receipt.Logs[i].Address {
+					t.Fatalf("Receipt log %d address mismatch, want %v, have %v", i, receipt.Logs[i].Address, dec.Logs[i].Address)
+				}
+				if !reflect.DeepEqual(dec.Logs[i].Topics, receipt.Logs[i].Topics) {
+					t.Fatalf("Receipt log %d topics mismatch, want %v, have %v", i, receipt.Logs[i].Topics, dec.Logs[i].Topics)
+				}
+				if !bytes.Equal(dec.Logs[i].Data, receipt.Logs[i].Data) {
+					t.Fatalf("Receipt log %d data mismatch, want %v, have %v", i, receipt.Logs[i].Data, dec.Logs[i].Data)
+				}
+			}
+		})
+	}
+}
+
+func encodeAsStoredReceiptRLP(want *Receipt) ([]byte, error) {
+	stored := &storedReceiptRLP{
+		PostStateOrStatus: want.statusEncoding(),
+		CumulativeGasUsed: want.CumulativeGasUsed,
+		Logs:              make([]*LogForStorage, len(want.Logs)),
+	}
+	for i, log := range want.Logs {
+		stored.Logs[i] = (*LogForStorage)(log)
+	}
+	return rlp.EncodeToBytes(stored)
+}
+
+func encodeAsV4StoredReceiptRLP(want *Receipt) ([]byte, error) {
+	stored := &v4StoredReceiptRLP{
+		PostStateOrStatus: want.statusEncoding(),
+		CumulativeGasUsed: want.CumulativeGasUsed,
+		TxHash:            want.TxHash,
+		ContractAddress:   want.ContractAddress,
+		Logs:              make([]*LogForStorage, len(want.Logs)),
+		GasUsed:           want.GasUsed,
+	}
+	for i, log := range want.Logs {
+		stored.Logs[i] = (*LogForStorage)(log)
+	}
+	return rlp.EncodeToBytes(stored)
+}
+
+func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
+	stored := &v3StoredReceiptRLP{
+		PostStateOrStatus: want.statusEncoding(),
+		CumulativeGasUsed: want.CumulativeGasUsed,
+		Bloom:             want.Bloom,
+		TxHash:            want.TxHash,
+		ContractAddress:   want.ContractAddress,
+		Logs:              make([]*LogForStorage, len(want.Logs)),
+		GasUsed:           want.GasUsed,
+	}
+	for i, log := range want.Logs {
+		stored.Logs[i] = (*LogForStorage)(log)
+	}
+	return rlp.EncodeToBytes(stored)
 }
 
 // Tests that receipt data can be correctly derived from the contextual infos
