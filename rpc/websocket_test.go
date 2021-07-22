@@ -129,11 +129,15 @@ func TestClientWebsocketPing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client dial error: %v", err)
 	}
+	defer client.Close()
+
 	resultChan := make(chan int)
 	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
 	if err != nil {
 		t.Fatalf("client subscribe error: %v", err)
 	}
+	// Note: Unsubscribe is not called on this subscription because the mockup
+	// server can't handle the request.
 
 	// Wait for the context's deadline to be reached before proceeding.
 	// This is important for reproducing https://github.com/ethereum/go-ethereum/issues/19798
@@ -142,6 +146,7 @@ func TestClientWebsocketPing(t *testing.T) {
 
 	// Wait for the subscription result.
 	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 	for {
 		select {
 		case err := <-sub.Err():
@@ -153,6 +158,33 @@ func TestClientWebsocketPing(t *testing.T) {
 			t.Error("didn't get any result within the test timeout")
 			return
 		}
+	}
+}
+
+// This checks that the websocket transport can deal with large messages.
+func TestClientWebsocketLargeMessage(t *testing.T) {
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	respLength := wsMessageSizeLimit - 50
+	srv.RegisterName("test", largeRespService{respLength})
+
+	c, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r string
+	if err := c.Call(&r, "test_largeResp"); err != nil {
+		t.Fatal("call failed:", err)
+	}
+	if len(r) != respLength {
+		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
 	}
 }
 
@@ -227,9 +259,11 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 
 	// Write messages.
 	var (
-		sendResponse <-chan time.Time
-		wantPong     string
+		wantPong string
+		timer    = time.NewTimer(0)
 	)
+	defer timer.Stop()
+	<-timer.C
 	for {
 		select {
 		case _, open := <-sendPing:
@@ -246,11 +280,10 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 				t.Errorf("got pong with wrong data %q", data)
 			}
 			wantPong = ""
-			sendResponse = time.NewTimer(200 * time.Millisecond).C
-		case <-sendResponse:
+			timer.Reset(200 * time.Millisecond)
+		case <-timer.C:
 			t.Logf("server sending response")
 			conn.WriteMessage(websocket.TextMessage, []byte(subNotify))
-			sendResponse = nil
 		case <-shutdown:
 			conn.Close()
 			return

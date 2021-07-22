@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
-	"math/rand"
 	"net"
 	"strings"
 
@@ -122,7 +121,7 @@ func (n *Node) UDP() int {
 	return int(port)
 }
 
-// UDP returns the TCP port of the node.
+// TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	var port enr.TCP
 	n.Load(&port)
@@ -217,7 +216,7 @@ func (n ID) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (n *ID) UnmarshalText(text []byte) error {
-	id, err := parseID(string(text))
+	id, err := ParseID(string(text))
 	if err != nil {
 		return err
 	}
@@ -229,14 +228,14 @@ func (n *ID) UnmarshalText(text []byte) error {
 // The string may be prefixed with 0x.
 // It panics if the string is not a valid ID.
 func HexID(in string) ID {
-	id, err := parseID(in)
+	id, err := ParseID(in)
 	if err != nil {
 		panic(err)
 	}
 	return id
 }
 
-func parseID(in string) (ID, error) {
+func ParseID(in string) (ID, error) {
 	var id ID
 	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
@@ -277,24 +276,4 @@ func LogDist(a, b ID) int {
 		}
 	}
 	return len(a)*8 - lz
-}
-
-// RandomID returns a random ID b such that logdist(a, b) == n.
-func RandomID(a ID, n int) (b ID) {
-	if n == 0 {
-		return a
-	}
-	// flip bit at position n, fill the rest with random bits
-	b = a
-	pos := len(a) - n/8 - 1
-	bit := byte(0x01) << (byte(n%8) - 1)
-	if bit == 0 {
-		pos++
-		bit = 0x80
-	}
-	b[pos] = a[pos]&^bit | ^a[pos]&bit // TODO: randomize end bits
-	for i := pos + 1; i < len(a); i++ {
-		b[i] = byte(rand.Intn(255))
-	}
-	return b
 }

@@ -23,13 +23,15 @@ import (
 
 const methoddata = `
 [
-	{"type": "function", "name": "balance", "constant": true },
-	{"type": "function", "name": "send", "constant": false, "inputs": [{ "name": "amount", "type": "uint256" }]},
-	{"type": "function", "name": "transfer", "constant": false, "inputs": [{"name": "from", "type": "address"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"}], "outputs": [{"name": "success", "type": "bool"}]},
+	{"type": "function", "name": "balance", "stateMutability": "view"},
+	{"type": "function", "name": "send", "inputs": [{ "name": "amount", "type": "uint256" }]},
+	{"type": "function", "name": "transfer", "inputs": [{"name": "from", "type": "address"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"}], "outputs": [{"name": "success", "type": "bool"}]},
 	{"constant":false,"inputs":[{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"a","type":"tuple"}],"name":"tuple","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
 	{"constant":false,"inputs":[{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"a","type":"tuple[]"}],"name":"tupleSlice","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
 	{"constant":false,"inputs":[{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"a","type":"tuple[5]"}],"name":"tupleArray","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
-	{"constant":false,"inputs":[{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"a","type":"tuple[5][]"}],"name":"complexTuple","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}
+	{"constant":false,"inputs":[{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"a","type":"tuple[5][]"}],"name":"complexTuple","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
+	{"stateMutability":"nonpayable","type":"fallback"},
+	{"stateMutability":"payable","type":"receive"}
 ]`
 
 func TestMethodString(t *testing.T) {
@@ -39,7 +41,7 @@ func TestMethodString(t *testing.T) {
 	}{
 		{
 			method:      "balance",
-			expectation: "function balance() constant returns()",
+			expectation: "function balance() view returns()",
 		},
 		{
 			method:      "send",
@@ -65,6 +67,14 @@ func TestMethodString(t *testing.T) {
 			method:      "complexTuple",
 			expectation: "function complexTuple((uint256,uint256)[5][] a) returns()",
 		},
+		{
+			method:      "fallback",
+			expectation: "fallback() returns()",
+		},
+		{
+			method:      "receive",
+			expectation: "receive() payable returns()",
+		},
 	}
 
 	abi, err := JSON(strings.NewReader(methoddata))
@@ -73,7 +83,14 @@ func TestMethodString(t *testing.T) {
 	}
 
 	for _, test := range table {
-		got := abi.Methods[test.method].String()
+		var got string
+		if test.method == "fallback" {
+			got = abi.Fallback.String()
+		} else if test.method == "receive" {
+			got = abi.Receive.String()
+		} else {
+			got = abi.Methods[test.method].String()
+		}
 		if got != test.expectation {
 			t.Errorf("expected string to be %s, got %s", test.expectation, got)
 		}
@@ -120,7 +137,7 @@ func TestMethodSig(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		got := abi.Methods[test.method].Sig()
+		got := abi.Methods[test.method].Sig
 		if got != test.expect {
 			t.Errorf("expected string to be %s, got %s", test.expect, got)
 		}

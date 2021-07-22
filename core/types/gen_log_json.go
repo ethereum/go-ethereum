@@ -18,12 +18,12 @@ func (l Log) MarshalJSON() ([]byte, error) {
 		Address     common.Address `json:"address" gencodec:"required"`
 		Topics      []common.Hash  `json:"topics" gencodec:"required"`
 		Data        hexutil.Bytes  `json:"data" gencodec:"required"`
-		BlockNumber hexutil.Uint64 `json:"blockNumber"`
-		TxHash      common.Hash    `json:"transactionHash" gencodec:"required"`
-		TxIndex     hexutil.Uint   `json:"transactionIndex" gencodec:"required"`
-		BlockHash   common.Hash    `json:"blockHash"`
-		Index       hexutil.Uint   `json:"logIndex" gencodec:"required"`
-		Removed     bool           `json:"removed"`
+		BlockNumber hexutil.Uint64 `json:"blockNumber" rlp:"-"`
+		TxHash      common.Hash    `json:"transactionHash" gencodec:"required" rlp:"-"`
+		TxIndex     hexutil.Uint   `json:"transactionIndex" rlp:"-"`
+		BlockHash   common.Hash    `json:"blockHash" rlp:"-"`
+		Index       hexutil.Uint   `json:"logIndex" rlp:"-"`
+		Removed     bool           `json:"removed" rlp:"-"`
 	}
 	var enc Log
 	enc.Address = l.Address
@@ -44,12 +44,12 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		Address     *common.Address `json:"address" gencodec:"required"`
 		Topics      []common.Hash   `json:"topics" gencodec:"required"`
 		Data        *hexutil.Bytes  `json:"data" gencodec:"required"`
-		BlockNumber *hexutil.Uint64 `json:"blockNumber"`
-		TxHash      *common.Hash    `json:"transactionHash" gencodec:"required"`
-		TxIndex     *hexutil.Uint   `json:"transactionIndex" gencodec:"required"`
-		BlockHash   *common.Hash    `json:"blockHash"`
-		Index       *hexutil.Uint   `json:"logIndex" gencodec:"required"`
-		Removed     *bool           `json:"removed"`
+		BlockNumber *hexutil.Uint64 `json:"blockNumber" rlp:"-"`
+		TxHash      *common.Hash    `json:"transactionHash" gencodec:"required" rlp:"-"`
+		TxIndex     *hexutil.Uint   `json:"transactionIndex" rlp:"-"`
+		BlockHash   *common.Hash    `json:"blockHash" rlp:"-"`
+		Index       *hexutil.Uint   `json:"logIndex" rlp:"-"`
+		Removed     *bool           `json:"removed" rlp:"-"`
 	}
 	var dec Log
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -74,17 +74,15 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'transactionHash' for Log")
 	}
 	l.TxHash = *dec.TxHash
-	if dec.TxIndex == nil {
-		return errors.New("missing required field 'transactionIndex' for Log")
+	if dec.TxIndex != nil {
+		l.TxIndex = uint(*dec.TxIndex)
 	}
-	l.TxIndex = uint(*dec.TxIndex)
 	if dec.BlockHash != nil {
 		l.BlockHash = *dec.BlockHash
 	}
-	if dec.Index == nil {
-		return errors.New("missing required field 'logIndex' for Log")
+	if dec.Index != nil {
+		l.Index = uint(*dec.Index)
 	}
-	l.Index = uint(*dec.Index)
 	if dec.Removed != nil {
 		l.Removed = *dec.Removed
 	}

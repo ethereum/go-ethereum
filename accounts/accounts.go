@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -88,7 +88,7 @@ type Wallet interface {
 	// to discover non zero accounts and automatically add them to list of tracked
 	// accounts.
 	//
-	// Note, self derivaton will increment the last component of the specified path
+	// Note, self derivation will increment the last component of the specified path
 	// opposed to decending into a child path to allow discovering accounts starting
 	// from non zero components.
 	//
@@ -113,7 +113,7 @@ type Wallet interface {
 	SignData(account Account, mimeType string, data []byte) ([]byte, error)
 
 	// SignDataWithPassphrase is identical to SignData, but also takes a password
-	// NOTE: there's an chance that an erroneous call might mistake the two strings, and
+	// NOTE: there's a chance that an erroneous call might mistake the two strings, and
 	// supply password in the mimetype field, or vice versa. Thus, an implementation
 	// should never echo the mimetype or return the mimetype in the error-response
 	SignDataWithPassphrase(account Account, passphrase, mimeType string, data []byte) ([]byte, error)
@@ -127,8 +127,10 @@ type Wallet interface {
 	// a password to decrypt the account, or a PIN code o verify the transaction),
 	// an AuthNeededError instance will be returned, containing infos for the user
 	// about which fields or actions are needed. The user may retry by providing
-	// the needed details via SignHashWithPassphrase, or by other means (e.g. unlock
+	// the needed details via SignTextWithPassphrase, or by other means (e.g. unlock
 	// the account in a keystore).
+	//
+	// This method should return the signature in 'canonical' format, with v 0 or 1
 	SignText(account Account, text []byte) ([]byte, error)
 
 	// SignTextWithPassphrase is identical to Signtext, but also takes a password

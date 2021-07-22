@@ -103,6 +103,11 @@ type freezerTable struct {
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
+// NewFreezerTable opens the given path as a freezer table.
+func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
+	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, disableSnappy)
+}
+
 // newTable opens a freezer table with default settings - 2G files
 func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, disableSnappy bool) (*freezerTable, error) {
 	return newCustomTable(path, name, readMeter, writeMeter, sizeGauge, 2*1000*1000*1000, disableSnappy)
@@ -232,8 +237,8 @@ func (t *freezerTable) repair() error {
 	t.index.ReadAt(buffer, 0)
 	firstIndex.unmarshalBinary(buffer)
 
-	t.tailId = firstIndex.offset
-	t.itemOffset = firstIndex.filenum
+	t.tailId = firstIndex.filenum
+	t.itemOffset = firstIndex.offset
 
 	t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 	lastIndex.unmarshalBinary(buffer)
@@ -330,7 +335,8 @@ func (t *freezerTable) truncate(items uint64) error {
 	defer t.lock.Unlock()
 
 	// If our item count is correct, don't do anything
-	if atomic.LoadUint64(&t.items) <= items {
+	existing := atomic.LoadUint64(&t.items)
+	if existing <= items {
 		return nil
 	}
 	// We need to truncate, save the old size for metrics tracking
@@ -339,7 +345,11 @@ func (t *freezerTable) truncate(items uint64) error {
 		return err
 	}
 	// Something's out of sync, truncate the table's offset index
-	t.logger.Warn("Truncating freezer table", "items", t.items, "limit", items)
+	log := t.logger.Debug
+	if existing > items+1 {
+		log = t.logger.Warn // Only loud warn if we delete multiple items
+	}
+	log("Truncating freezer table", "items", existing, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {
 		return err
 	}
@@ -455,35 +465,59 @@ func (t *freezerTable) releaseFilesAfter(num uint32, remove bool) {
 // Note, this method will *not* flush any data to disk so be sure to explicitly
 // fsync before irreversibly deleting data from the database.
 func (t *freezerTable) Append(item uint64, blob []byte) error {
-	// Read lock prevents competition with truncate
-	t.lock.RLock()
-	// Ensure the table is still accessible
-	if t.index == nil || t.head == nil {
-		t.lock.RUnlock()
-		return errClosed
-	}
-	// Ensure only the next item can be written, nothing else
-	if atomic.LoadUint64(&t.items) != item {
-		t.lock.RUnlock()
-		return fmt.Errorf("appending unexpected item: want %d, have %d", t.items, item)
-	}
-	// Encode the blob and write it into the data file
+	// Encode the blob before the lock portion
 	if !t.noCompression {
 		blob = snappy.Encode(nil, blob)
 	}
-	bLen := uint32(len(blob))
+	// Read lock prevents competition with truncate
+	retry, err := t.append(item, blob, false)
+	if err != nil {
+		return err
+	}
+	if retry {
+		// Read lock was insufficient, retry with a writelock
+		_, err = t.append(item, blob, true)
+	}
+	return err
+}
+
+// append injects a binary blob at the end of the freezer table.
+// Normally, inserts do not require holding the write-lock, so it should be invoked with 'wlock' set to
+// false.
+// However, if the data will grown the current file out of bounds, then this
+// method will return 'true, nil', indicating that the caller should retry, this time
+// with 'wlock' set to true.
+func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool, error) {
+	if wlock {
+		t.lock.Lock()
+		defer t.lock.Unlock()
+	} else {
+		t.lock.RLock()
+		defer t.lock.RUnlock()
+	}
+	// Ensure the table is still accessible
+	if t.index == nil || t.head == nil {
+		return false, errClosed
+	}
+	// Ensure only the next item can be written, nothing else
+	if atomic.LoadUint64(&t.items) != item {
+		return false, fmt.Errorf("appending unexpected item: want %d, have %d", t.items, item)
+	}
+	bLen := uint32(len(encodedBlob))
 	if t.headBytes+bLen < bLen ||
 		t.headBytes+bLen > t.maxFileSize {
-		// we need a new file, writing would overflow
-		t.lock.RUnlock()
-		t.lock.Lock()
+		// Writing would overflow, so we need to open a new data file.
+		// If we don't already hold the writelock, abort and let the caller
+		// invoke this method a second time.
+		if !wlock {
+			return true, nil
+		}
 		nextID := atomic.LoadUint32(&t.headId) + 1
 		// We open the next file in truncated mode -- if this file already
 		// exists, we need to start over from scratch on it
 		newHead, err := t.openFile(nextID, openFreezerFileTruncated)
 		if err != nil {
-			t.lock.Unlock()
-			return err
+			return false, err
 		}
 		// Close old file, and reopen in RDONLY mode
 		t.releaseFile(t.headId)
@@ -493,13 +527,9 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 		t.head = newHead
 		atomic.StoreUint32(&t.headBytes, 0)
 		atomic.StoreUint32(&t.headId, nextID)
-		t.lock.Unlock()
-		t.lock.RLock()
 	}
-
-	defer t.lock.RUnlock()
-	if _, err := t.head.Write(blob); err != nil {
-		return err
+	if _, err := t.head.Write(encodedBlob); err != nil {
+		return false, err
 	}
 	newOffset := atomic.AddUint32(&t.headBytes, bLen)
 	idx := indexEntry{
@@ -513,22 +543,33 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 	t.sizeGauge.Inc(int64(bLen + indexEntrySize))
 
 	atomic.AddUint64(&t.items, 1)
-	return nil
+	return false, nil
 }
 
 // getBounds returns the indexes for the item
 // returns start, end, filenumber and error
 func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
-	var startIdx, endIdx indexEntry
 	buffer := make([]byte, indexEntrySize)
-	if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
-		return 0, 0, 0, err
-	}
-	startIdx.unmarshalBinary(buffer)
+	var startIdx, endIdx indexEntry
+	// Read second index
 	if _, err := t.index.ReadAt(buffer, int64((item+1)*indexEntrySize)); err != nil {
 		return 0, 0, 0, err
 	}
 	endIdx.unmarshalBinary(buffer)
+	// Read first index (unless it's the very first item)
+	if item != 0 {
+		if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
+			return 0, 0, 0, err
+		}
+		startIdx.unmarshalBinary(buffer)
+	} else {
+		// Special case if we're reading the first item in the freezer. We assume that
+		// the first item always start from zero(regarding the deletion, we
+		// only support deletion by files, so that the assumption is held).
+		// This means we can use the first item metadata to carry information about
+		// the 'global' offset, for the deletion-case
+		return 0, endIdx.offset, endIdx.filenum, nil
+	}
 	if startIdx.filenum != endIdx.filenum {
 		// If a piece of data 'crosses' a data-file,
 		// it's actually in one piece on the second data-file.
@@ -541,6 +582,22 @@ func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
 // Retrieve looks up the data offset of an item with the given number and retrieves
 // the raw binary blob from the data file.
 func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
+	blob, err := t.retrieve(item)
+	if err != nil {
+		return nil, err
+	}
+	if t.noCompression {
+		return blob, nil
+	}
+	return snappy.Decode(nil, blob)
+}
+
+// retrieve looks up the data offset of an item with the given number and retrieves
+// the raw binary blob from the data file. OBS! This method does not decode
+// compressed data.
+func (t *freezerTable) retrieve(item uint64) ([]byte, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 	// Ensure the table and the item is accessible
 	if t.index == nil || t.head == nil {
 		return nil, errClosed
@@ -549,34 +606,24 @@ func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
 		return nil, errOutOfBounds
 	}
 	// Ensure the item was not deleted from the tail either
-	offset := atomic.LoadUint32(&t.itemOffset)
-	if uint64(offset) > item {
+	if uint64(t.itemOffset) > item {
 		return nil, errOutOfBounds
 	}
-	t.lock.RLock()
-	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(offset))
+	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(t.itemOffset))
 	if err != nil {
-		t.lock.RUnlock()
 		return nil, err
 	}
 	dataFile, exist := t.files[filenum]
 	if !exist {
-		t.lock.RUnlock()
 		return nil, fmt.Errorf("missing data file %d", filenum)
 	}
 	// Retrieve the data itself, decompress and return
 	blob := make([]byte, endOffset-startOffset)
 	if _, err := dataFile.ReadAt(blob, int64(startOffset)); err != nil {
-		t.lock.RUnlock()
 		return nil, err
 	}
-	t.lock.RUnlock()
 	t.readMeter.Mark(int64(len(blob) + 2*indexEntrySize))
-
-	if t.noCompression {
-		return blob, nil
-	}
-	return snappy.Decode(nil, blob)
+	return blob, nil
 }
 
 // has returns an indicator whether the specified number data
@@ -613,25 +660,24 @@ func (t *freezerTable) Sync() error {
 	return t.head.Sync()
 }
 
-// printIndex is a debug print utility function for testing
-func (t *freezerTable) printIndex() {
+// DumpIndex is a debug print utility function, mainly for testing. It can also
+// be used to analyse a live freezer table index.
+func (t *freezerTable) DumpIndex(start, stop int64) {
 	buf := make([]byte, indexEntrySize)
 
-	fmt.Printf("|-----------------|\n")
-	fmt.Printf("| fileno | offset |\n")
-	fmt.Printf("|--------+--------|\n")
+	fmt.Printf("| number | fileno | offset |\n")
+	fmt.Printf("|--------|--------|--------|\n")
 
-	for i := uint64(0); ; i++ {
+	for i := uint64(start); ; i++ {
 		if _, err := t.index.ReadAt(buf, int64(i*indexEntrySize)); err != nil {
 			break
 		}
 		var entry indexEntry
 		entry.unmarshalBinary(buf)
-		fmt.Printf("|  %03d   |  %03d   | \n", entry.filenum, entry.offset)
-		if i > 100 {
-			fmt.Printf(" ... \n")
+		fmt.Printf("|  %03d   |  %03d   |  %03d   | \n", i, entry.filenum, entry.offset)
+		if stop > 0 && i >= uint64(stop) {
 			break
 		}
 	}
-	fmt.Printf("|-----------------|\n")
+	fmt.Printf("|--------------------------|\n")
 }

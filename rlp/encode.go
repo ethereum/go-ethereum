@@ -91,13 +91,6 @@ func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
 	return eb.size(), &encReader{buf: eb}, nil
 }
 
-type encbuf struct {
-	str     []byte      // string data, contains everything except list headers
-	lheads  []*listhead // all list headers
-	lhsize  int         // sum of sizes of all encoded list headers
-	sizebuf []byte      // 9-byte auxiliary buffer for uint encoding
-}
-
 type listhead struct {
 	offset int // index of this header in string data
 	size   int // total size of encoded data (including list headers)
@@ -130,19 +123,22 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	return sizesize + 1
 }
 
+type encbuf struct {
+	str     []byte     // string data, contains everything except list headers
+	lheads  []listhead // all list headers
+	lhsize  int        // sum of sizes of all encoded list headers
+	sizebuf [9]byte    // auxiliary buffer for uint encoding
+}
+
 // encbufs are pooled.
 var encbufPool = sync.Pool{
-	New: func() interface{} { return &encbuf{sizebuf: make([]byte, 9)} },
+	New: func() interface{} { return new(encbuf) },
 }
 
 func (w *encbuf) reset() {
 	w.lhsize = 0
-	if w.str != nil {
-		w.str = w.str[:0]
-	}
-	if w.lheads != nil {
-		w.lheads = w.lheads[:0]
-	}
+	w.str = w.str[:0]
+	w.lheads = w.lheads[:0]
 }
 
 // encbuf implements io.Writer so it can be passed it into EncodeRLP.
@@ -164,7 +160,6 @@ func (w *encbuf) encodeStringHeader(size int) {
 	if size < 56 {
 		w.str = append(w.str, 0x80+byte(size))
 	} else {
-		// TODO: encode to w.str directly
 		sizesize := putint(w.sizebuf[1:], uint64(size))
 		w.sizebuf[0] = 0xB7 + byte(sizesize)
 		w.str = append(w.str, w.sizebuf[:sizesize+1]...)
@@ -181,13 +176,29 @@ func (w *encbuf) encodeString(b []byte) {
 	}
 }
 
-func (w *encbuf) list() *listhead {
-	lh := &listhead{offset: len(w.str), size: w.lhsize}
-	w.lheads = append(w.lheads, lh)
-	return lh
+func (w *encbuf) encodeUint(i uint64) {
+	if i == 0 {
+		w.str = append(w.str, 0x80)
+	} else if i < 128 {
+		// fits single byte
+		w.str = append(w.str, byte(i))
+	} else {
+		s := putint(w.sizebuf[1:], i)
+		w.sizebuf[0] = 0x80 + byte(s)
+		w.str = append(w.str, w.sizebuf[:s+1]...)
+	}
 }
 
-func (w *encbuf) listEnd(lh *listhead) {
+// list adds a new list header to the header stack. It returns the index
+// of the header. The caller must call listEnd with this index after encoding
+// the content of the list.
+func (w *encbuf) list() int {
+	w.lheads = append(w.lheads, listhead{offset: len(w.str), size: w.lhsize})
+	return len(w.lheads) - 1
+}
+
+func (w *encbuf) listEnd(index int) {
+	lh := &w.lheads[index]
 	lh.size = w.size() - lh.offset - lh.size
 	if lh.size < 56 {
 		w.lhsize++ // length encoded into kind tag
@@ -230,7 +241,7 @@ func (w *encbuf) toWriter(out io.Writer) (err error) {
 			}
 		}
 		// write the header
-		enc := head.encode(w.sizebuf)
+		enc := head.encode(w.sizebuf[:])
 		if _, err = out.Write(enc); err != nil {
 			return err
 		}
@@ -296,7 +307,7 @@ func (r *encReader) next() []byte {
 			return p
 		}
 		r.lhpos++
-		return head.encode(r.buf.sizebuf)
+		return head.encode(r.buf.sizebuf[:])
 
 	case r.strpos < len(r.buf.str):
 		// String data at the end, after all list headers.
@@ -309,10 +320,7 @@ func (r *encReader) next() []byte {
 	}
 }
 
-var (
-	encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
-	big0             = big.NewInt(0)
-)
+var encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
 
 // makeWriter creates a writer function for the given type.
 func makeWriter(typ reflect.Type, ts tags) (writer, error) {
@@ -337,7 +345,7 @@ func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	case kind == reflect.Slice && isByte(typ.Elem()):
 		return writeBytes, nil
 	case kind == reflect.Array && isByte(typ.Elem()):
-		return writeByteArray, nil
+		return makeByteArrayWriter(typ), nil
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeSliceWriter(typ, ts)
 	case kind == reflect.Struct:
@@ -349,28 +357,13 @@ func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	}
 }
 
-func isByte(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
-}
-
 func writeRawValue(val reflect.Value, w *encbuf) error {
 	w.str = append(w.str, val.Bytes()...)
 	return nil
 }
 
 func writeUint(val reflect.Value, w *encbuf) error {
-	i := val.Uint()
-	if i == 0 {
-		w.str = append(w.str, 0x80)
-	} else if i < 128 {
-		// fits single byte
-		w.str = append(w.str, byte(i))
-	} else {
-		// TODO: encode int to w.str directly
-		s := putint(w.sizebuf[1:], i)
-		w.sizebuf[0] = 0x80 + byte(s)
-		w.str = append(w.str, w.sizebuf[:s+1]...)
-	}
+	w.encodeUint(val.Uint())
 	return nil
 }
 
@@ -397,13 +390,32 @@ func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
 	return writeBigInt(&i, w)
 }
 
+// wordBytes is the number of bytes in a big.Word
+const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
+
 func writeBigInt(i *big.Int, w *encbuf) error {
-	if cmp := i.Cmp(big0); cmp == -1 {
+	if i.Sign() == -1 {
 		return fmt.Errorf("rlp: cannot encode negative *big.Int")
-	} else if cmp == 0 {
-		w.str = append(w.str, 0x80)
-	} else {
-		w.encodeString(i.Bytes())
+	}
+	bitlen := i.BitLen()
+	if bitlen <= 64 {
+		w.encodeUint(i.Uint64())
+		return nil
+	}
+	// Integer is larger than 64 bits, encode from i.Bits().
+	// The minimal byte length is bitlen rounded up to the next
+	// multiple of 8, divided by 8.
+	length := ((bitlen + 7) & -8) >> 3
+	w.encodeStringHeader(length)
+	w.str = append(w.str, make([]byte, length)...)
+	index := length
+	buf := w.str[len(w.str)-length:]
+	for _, d := range i.Bits() {
+		for j := 0; j < wordBytes && index > 0; j++ {
+			index--
+			buf[index] = byte(d)
+			d >>= 8
+		}
 	}
 	return nil
 }
@@ -413,17 +425,44 @@ func writeBytes(val reflect.Value, w *encbuf) error {
 	return nil
 }
 
+func makeByteArrayWriter(typ reflect.Type) writer {
+	switch typ.Len() {
+	case 0:
+		return writeLengthZeroByteArray
+	case 1:
+		return writeLengthOneByteArray
+	default:
+		return writeByteArray
+	}
+}
+
+func writeLengthZeroByteArray(val reflect.Value, w *encbuf) error {
+	w.str = append(w.str, 0x80)
+	return nil
+}
+
+func writeLengthOneByteArray(val reflect.Value, w *encbuf) error {
+	b := byte(val.Index(0).Uint())
+	if b <= 0x7f {
+		w.str = append(w.str, b)
+	} else {
+		w.str = append(w.str, 0x81, b)
+	}
+	return nil
+}
+
 func writeByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
-		// Slice requires the value to be addressable.
-		// Make it addressable by copying.
+		// Getting the byte slice of val requires it to be addressable. Make it
+		// addressable by copying.
 		copy := reflect.New(val.Type()).Elem()
 		copy.Set(val)
 		val = copy
 	}
-	size := val.Len()
-	slice := val.Slice(0, size).Bytes()
-	w.encodeString(slice)
+
+	slice := byteArrayBytes(val)
+	w.encodeStringHeader(len(slice))
+	w.str = append(w.str, slice...)
 	return nil
 }
 
@@ -456,7 +495,7 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 }
 
 func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
-	etypeinfo := cachedTypeInfo1(typ.Elem(), tags{})
+	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), tags{})
 	if etypeinfo.writerErr != nil {
 		return nil, etypeinfo.writerErr
 	}
@@ -485,21 +524,46 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 			return nil, structFieldError{typ, f.index, f.info.writerErr}
 		}
 	}
-	writer := func(val reflect.Value, w *encbuf) error {
-		lh := w.list()
-		for _, f := range fields {
-			if err := f.info.writer(val.Field(f.index), w); err != nil {
-				return err
+
+	var writer writer
+	firstOptionalField := firstOptionalField(fields)
+	if firstOptionalField == len(fields) {
+		// This is the writer function for structs without any optional fields.
+		writer = func(val reflect.Value, w *encbuf) error {
+			lh := w.list()
+			for _, f := range fields {
+				if err := f.info.writer(val.Field(f.index), w); err != nil {
+					return err
+				}
 			}
+			w.listEnd(lh)
+			return nil
 		}
-		w.listEnd(lh)
-		return nil
+	} else {
+		// If there are any "optional" fields, the writer needs to perform additional
+		// checks to determine the output list length.
+		writer = func(val reflect.Value, w *encbuf) error {
+			lastField := len(fields) - 1
+			for ; lastField >= firstOptionalField; lastField-- {
+				if !val.Field(fields[lastField].index).IsZero() {
+					break
+				}
+			}
+			lh := w.list()
+			for i := 0; i <= lastField; i++ {
+				if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
+					return err
+				}
+			}
+			w.listEnd(lh)
+			return nil
+		}
 	}
 	return writer, nil
 }
 
 func makePtrWriter(typ reflect.Type, ts tags) (writer, error) {
-	etypeinfo := cachedTypeInfo1(typ.Elem(), tags{})
+	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), tags{})
 	if etypeinfo.writerErr != nil {
 		return nil, etypeinfo.writerErr
 	}

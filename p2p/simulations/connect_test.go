@@ -26,8 +26,8 @@ import (
 
 func newTestNetwork(t *testing.T, nodeCount int) (*Network, []enode.ID) {
 	t.Helper()
-	adapter := adapters.NewSimAdapter(adapters.Services{
-		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
+		"noopwoop": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			return NewNoopService(nil), nil
 		},
 	})

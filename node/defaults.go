@@ -45,7 +45,6 @@ var DefaultConfig = Config{
 	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
 	WSPort:              DefaultWSPort,
 	WSModules:           []string{"net", "web3"},
-	GraphQLPort:         DefaultGraphQLPort,
 	GraphQLVirtualHosts: []string{"localhost"},
 	P2P: p2p.Config{
 		ListenAddr: ":30303",

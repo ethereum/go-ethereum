@@ -18,10 +18,13 @@ package rawdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -525,7 +528,7 @@ func TestOffset(t *testing.T) {
 
 		f.Append(4, getChunk(20, 0xbb))
 		f.Append(5, getChunk(20, 0xaa))
-		f.printIndex()
+		f.DumpIndex(0, 100)
 		f.Close()
 	}
 	// Now crop it.
@@ -552,8 +555,8 @@ func TestOffset(t *testing.T) {
 		tailId := uint32(2)     // First file is 2
 		itemOffset := uint32(4) // We have removed four items
 		zeroIndex := indexEntry{
-			offset:  tailId,
-			filenum: itemOffset,
+			filenum: tailId,
+			offset:  itemOffset,
 		}
 		buf := zeroIndex.marshallBinary()
 		// Overwrite index zero
@@ -567,39 +570,67 @@ func TestOffset(t *testing.T) {
 
 	}
 	// Now open again
-	{
+	checkPresent := func(numDeleted uint64) {
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.printIndex()
+		f.DumpIndex(0, 100)
 		// It should allow writing item 6
-		f.Append(6, getChunk(20, 0x99))
+		f.Append(numDeleted+2, getChunk(20, 0x99))
 
 		// It should be fine to fetch 4,5,6
-		if got, err := f.Retrieve(4); err != nil {
+		if got, err := f.Retrieve(numDeleted); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0xbb); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
-		if got, err := f.Retrieve(5); err != nil {
+		if got, err := f.Retrieve(numDeleted + 1); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0xaa); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
-		if got, err := f.Retrieve(6); err != nil {
+		if got, err := f.Retrieve(numDeleted + 2); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0x99); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
 
 		// It should error at 0, 1,2,3
-		for i := 0; i < 4; i++ {
-			if _, err := f.Retrieve(uint64(i)); err == nil {
+		for i := numDeleted - 1; i > numDeleted-10; i-- {
+			if _, err := f.Retrieve(i); err == nil {
 				t.Fatal("expected err")
 			}
 		}
 	}
+	checkPresent(4)
+	// Now, let's pretend we have deleted 1M items
+	{
+		// Read the index file
+		p := filepath.Join(os.TempDir(), fmt.Sprintf("%v.ridx", fname))
+		indexFile, err := os.OpenFile(p, os.O_RDWR, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		indexBuf := make([]byte, 3*indexEntrySize)
+		indexFile.Read(indexBuf)
+
+		// Update the index file, so that we store
+		// [ file = 2, offset = 1M ] at index zero
+
+		tailId := uint32(2)           // First file is 2
+		itemOffset := uint32(1000000) // We have removed 1M items
+		zeroIndex := indexEntry{
+			offset:  itemOffset,
+			filenum: tailId,
+		}
+		buf := zeroIndex.marshallBinary()
+		// Overwrite index zero
+		copy(indexBuf, buf)
+		indexFile.WriteAt(indexBuf, 0)
+		indexFile.Close()
+	}
+	checkPresent(1000000)
 }
 
 // TODO (?)
@@ -609,6 +640,55 @@ func TestOffset(t *testing.T) {
 // 1. have data files d0, d1, d2, d3
 // 2. remove d2,d3
 //
-// However, all 'normal' failure modes arising due to failing to sync() or save a file should be
-// handled already, and the case described above can only (?) happen if an external process/user
-// deletes files from the filesystem.
+// However, all 'normal' failure modes arising due to failing to sync() or save a file
+// should be handled already, and the case described above can only (?) happen if an
+// external process/user deletes files from the filesystem.
+
+// TestAppendTruncateParallel is a test to check if the Append/truncate operations are
+// racy.
+//
+// The reason why it's not a regular fuzzer, within tests/fuzzers, is that it is dependent
+// on timing rather than 'clever' input -- there's no determinism.
+func TestAppendTruncateParallel(t *testing.T) {
+	dir, err := ioutil.TempDir("", "freezer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	f, err := newCustomTable(dir, "tmp", metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, 8, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fill := func(mark uint64) []byte {
+		data := make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, mark)
+		return data
+	}
+
+	for i := 0; i < 5000; i++ {
+		f.truncate(0)
+		data0 := fill(0)
+		f.Append(0, data0)
+		data1 := fill(1)
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			f.truncate(0)
+			wg.Done()
+		}()
+		go func() {
+			f.Append(1, data1)
+			wg.Done()
+		}()
+		wg.Wait()
+
+		if have, err := f.Retrieve(0); err == nil {
+			if !bytes.Equal(have, data0) {
+				t.Fatalf("have %x want %x", have, data0)
+			}
+		}
+	}
+}

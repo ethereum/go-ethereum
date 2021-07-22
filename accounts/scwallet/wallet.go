@@ -33,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -312,15 +312,15 @@ func (w *Wallet) Status() (string, error) {
 	}
 	switch {
 	case !w.session.verified && status.PinRetryCount == 0 && status.PukRetryCount == 0:
-		return fmt.Sprintf("Bricked, waiting for full wipe"), nil
+		return "Bricked, waiting for full wipe", nil
 	case !w.session.verified && status.PinRetryCount == 0:
 		return fmt.Sprintf("Blocked, waiting for PUK (%d attempts left) and new PIN", status.PukRetryCount), nil
 	case !w.session.verified:
 		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
 	case !status.Initialized:
-		return fmt.Sprintf("Empty, waiting for initialization"), nil
+		return "Empty, waiting for initialization", nil
 	default:
-		return fmt.Sprintf("Online"), nil
+		return "Online", nil
 	}
 }
 
@@ -362,7 +362,7 @@ func (w *Wallet) Open(passphrase string) error {
 				return err
 			}
 			// Pairing succeeded, fall through to PIN checks. This will of course fail,
-			// but we can't return ErrPINNeeded directly here becase we don't know whether
+			// but we can't return ErrPINNeeded directly here because we don't know whether
 			// a PIN check or a PIN reset is needed.
 			passphrase = ""
 		}
@@ -637,7 +637,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivaton will increment the last component of the specified path
+// Note, self derivation will increment the last component of the specified path
 // opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //
@@ -699,7 +699,7 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 // the needed details via SignTxWithPassphrase, or by other means (e.g. unlock
 // the account in a keystore).
 func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.LatestSignerForChainID(chainID)
 	hash := signer.Hash(tx)
 	sig, err := w.signHash(account, hash[:])
 	if err != nil {

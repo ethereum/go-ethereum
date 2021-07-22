@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -60,9 +60,10 @@ type btJSON struct {
 }
 
 type btBlock struct {
-	BlockHeader  *btHeader
-	Rlp          string
-	UncleHeaders []*btHeader
+	BlockHeader     *btHeader
+	ExpectException string
+	Rlp             string
+	UncleHeaders    []*btHeader
 }
 
 //go:generate gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -84,6 +85,7 @@ type btHeader struct {
 	GasLimit         uint64
 	GasUsed          uint64
 	Timestamp        uint64
+	BaseFee          *big.Int
 }
 
 type btHeaderMarshaling struct {
@@ -93,6 +95,7 @@ type btHeaderMarshaling struct {
 	GasLimit   math.HexOrDecimal64
 	GasUsed    math.HexOrDecimal64
 	Timestamp  math.HexOrDecimal64
+	BaseFee    *math.HexOrDecimal256
 }
 
 func (t *BlockTest) Run(snapshotter bool) error {
@@ -124,7 +127,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -147,15 +150,8 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		snapTree := chain.Snapshot()
-		root := chain.CurrentBlock().Root()
-		it, err := snapTree.AccountIterator(root, common.Hash{})
-		if err != nil {
-			return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
-		}
-		generatedRoot := snapshot.GenerateTrieRoot(it)
-		if generatedRoot != root {
-			return fmt.Errorf("Snapshot corruption, got %d exp %d", generatedRoot, root)
+		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root()); err != nil {
+			return err
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
@@ -174,6 +170,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Mixhash:    t.json.Genesis.MixHash,
 		Coinbase:   t.json.Genesis.Coinbase,
 		Alloc:      t.json.Pre,
+		BaseFee:    t.json.Genesis.BaseFee,
 	}
 }
 
@@ -192,7 +189,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
-	for _, b := range t.json.Blocks {
+	for bi, b := range t.json.Blocks {
 		cb, err := b.decode()
 		if err != nil {
 			if b.BlockHeader == nil {
@@ -212,7 +209,12 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 			}
 		}
 		if b.BlockHeader == nil {
-			return nil, fmt.Errorf("block insertion should have failed")
+			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+					bi, b.ExpectException, string(data))
+			}
+			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
+				bi, b.ExpectException)
 		}
 
 		// validate RLP decoding by checking all values against test file JSON

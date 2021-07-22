@@ -71,11 +71,9 @@ var (
 
 	connectionTimer       = metrics.NewRegisteredTimer("les/connection/duration", nil)
 	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
-	clientConnectionGauge = metrics.NewRegisteredGauge("les/connection/client", nil)
 
 	totalCapacityGauge   = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
 	totalRechargeGauge   = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
-	totalConnectedGauge  = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
 	blockProcessingTimer = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
 
 	requestServedMeter               = metrics.NewRegisteredMeter("les/server/req/avgServedTime", nil)
@@ -98,15 +96,18 @@ var (
 	sqServedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/served", nil)
 	sqQueuedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/queued", nil)
 
-	clientConnectedMeter    = metrics.NewRegisteredMeter("les/server/clientEvent/connected", nil)
-	clientRejectedMeter     = metrics.NewRegisteredMeter("les/server/clientEvent/rejected", nil)
-	clientKickedMeter       = metrics.NewRegisteredMeter("les/server/clientEvent/kicked", nil)
-	clientDisconnectedMeter = metrics.NewRegisteredMeter("les/server/clientEvent/disconnected", nil)
-	clientFreezeMeter       = metrics.NewRegisteredMeter("les/server/clientEvent/freeze", nil)
-	clientErrorMeter        = metrics.NewRegisteredMeter("les/server/clientEvent/error", nil)
+	clientFreezeMeter = metrics.NewRegisteredMeter("les/server/clientEvent/freeze", nil)
+	clientErrorMeter  = metrics.NewRegisteredMeter("les/server/clientEvent/error", nil)
 
 	requestRTT       = metrics.NewRegisteredTimer("les/client/req/rtt", nil)
 	requestSendDelay = metrics.NewRegisteredTimer("les/client/req/sendDelay", nil)
+
+	serverSelectableGauge = metrics.NewRegisteredGauge("les/client/serverPool/selectable", nil)
+	serverDialedMeter     = metrics.NewRegisteredMeter("les/client/serverPool/dialed", nil)
+	serverConnectedGauge  = metrics.NewRegisteredGauge("les/client/serverPool/connected", nil)
+	sessionValueMeter     = metrics.NewRegisteredMeter("les/client/serverPool/sessionValue", nil)
+	totalValueGauge       = metrics.NewRegisteredGauge("les/client/serverPool/totalValue", nil)
+	suggestedTimeoutGauge = metrics.NewRegisteredGauge("les/client/serverPool/timeout", nil)
 )
 
 // meteredMsgReadWriter is a wrapper around a p2p.MsgReadWriter, capable of

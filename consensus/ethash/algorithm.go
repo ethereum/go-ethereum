@@ -151,10 +151,12 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
 	}()
 	// Convert our destination slice to a byte buffer
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&dest))
-	header.Len *= 4
-	header.Cap *= 4
-	cache := *(*[]byte)(unsafe.Pointer(&header))
+	var cache []byte
+	cacheHdr := (*reflect.SliceHeader)(unsafe.Pointer(&cache))
+	dstHdr := (*reflect.SliceHeader)(unsafe.Pointer(&dest))
+	cacheHdr.Data = dstHdr.Data
+	cacheHdr.Len = dstHdr.Len * 4
+	cacheHdr.Cap = dstHdr.Cap * 4
 
 	// Calculate the number of theoretical rows (we'll store in one buffer nonetheless)
 	size := uint64(len(cache))
@@ -172,7 +174,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
+				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/(cacheRounds+1), "elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
 	}()
@@ -283,10 +285,12 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	swapped := !isLittleEndian()
 
 	// Convert our destination slice to a byte buffer
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&dest))
-	header.Len *= 4
-	header.Cap *= 4
-	dataset := *(*[]byte)(unsafe.Pointer(&header))
+	var dataset []byte
+	datasetHdr := (*reflect.SliceHeader)(unsafe.Pointer(&dataset))
+	destHdr := (*reflect.SliceHeader)(unsafe.Pointer(&dest))
+	datasetHdr.Data = destHdr.Data
+	datasetHdr.Len = destHdr.Len * 4
+	datasetHdr.Cap = destHdr.Cap * 4
 
 	// Generate the dataset on many goroutines since it takes a while
 	threads := runtime.NumCPU()
@@ -295,7 +299,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	var pend sync.WaitGroup
 	pend.Add(threads)
 
-	var progress uint32
+	var progress uint64
 	for i := 0; i < threads; i++ {
 		go func(id int) {
 			defer pend.Done()
@@ -304,23 +308,23 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 			keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
 			// Calculate the data segment this thread should generate
-			batch := uint32((size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads)))
-			first := uint32(id) * batch
+			batch := (size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads))
+			first := uint64(id) * batch
 			limit := first + batch
-			if limit > uint32(size/hashBytes) {
-				limit = uint32(size / hashBytes)
+			if limit > size/hashBytes {
+				limit = size / hashBytes
 			}
 			// Calculate the dataset segment
-			percent := uint32(size / hashBytes / 100)
+			percent := size / hashBytes / 100
 			for index := first; index < limit; index++ {
-				item := generateDatasetItem(cache, index, keccak512)
+				item := generateDatasetItem(cache, uint32(index), keccak512)
 				if swapped {
 					swap(item)
 				}
 				copy(dataset[index*hashBytes:], item)
 
-				if status := atomic.AddUint32(&progress, 1); status%percent == 0 {
-					logger.Info("Generating DAG in progress", "percentage", uint64(status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
+				if status := atomic.AddUint64(&progress, 1); status%percent == 0 {
+					logger.Info("Generating DAG in progress", "percentage", (status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
 				}
 			}
 		}(i)

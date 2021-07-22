@@ -34,7 +34,7 @@ go-fuzz -bin ./rlp/rlp-fuzz.zip
 Once a 'crasher' is found, the fuzzer tries to avoid reporting the same vector twice, so stores the fault in the `suppressions` folder. Thus, if you 
 e.g. make changes to fix a bug, you should _remove_ all data from the `suppressions`-folder, to verify that the issue is indeed resolved. 
 
-Also, if you have only one and the same exit-point for multiple different types of test, the suppression can make the fuzzer hide differnent types of errors. So make 
+Also, if you have only one and the same exit-point for multiple different types of test, the suppression can make the fuzzer hide different types of errors. So make
 sure that each type of failure is unique (for an example, see the rlp fuzzer, where a counter `i` is used to differentiate between failures: 
 
 ```golang

@@ -24,7 +24,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {
@@ -32,7 +34,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	test := newUDPTest(t)
 
 	// Lookup on empty table returns no nodes.
-	targetKey, _ := decodePubkey(lookupTestnet.target)
+	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target[:])
 	if results := test.udp.LookupPubkey(targetKey); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
@@ -59,15 +61,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	if len(results) != bucketSize {
 		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
 	}
-	if hasDuplicates(wrapNodes(results)) {
-		t.Errorf("result set contains duplicate entries")
-	}
-	if !sortedByDistanceTo(lookupTestnet.target.id(), wrapNodes(results)) {
-		t.Errorf("result set not sorted by distance to target")
-	}
-	if err := checkNodesEqual(results, lookupTestnet.closest(bucketSize)); err != nil {
-		t.Errorf("results aren't the closest %d nodes\n%v", bucketSize, err)
-	}
+	checkLookupResults(t, lookupTestnet, results)
 }
 
 func TestUDPv4_LookupIterator(t *testing.T) {
@@ -142,17 +136,37 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p packetV4, to *net.UDPAddr, hash []byte) {
+		done = test.waitPacketOut(func(p v4wire.Packet, to *net.UDPAddr, hash []byte) {
 			n, key := testnet.nodeByAddr(to)
 			switch p.(type) {
-			case *pingV4:
-				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
-			case *findnodeV4:
+			case *v4wire.Ping:
+				test.packetInFrom(nil, key, to, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
+			case *v4wire.Findnode:
 				dist := enode.LogDist(n.ID(), testnet.target.id())
 				nodes := testnet.nodesAtDistance(dist - 1)
-				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
+				test.packetInFrom(nil, key, to, &v4wire.Neighbors{Expiration: futureExp, Nodes: nodes})
 			}
 		})
+	}
+}
+
+// checkLookupResults verifies that the results of a lookup are the closest nodes to
+// the testnet's target.
+func checkLookupResults(t *testing.T, tn *preminedTestnet, results []*enode.Node) {
+	t.Helper()
+	t.Logf("results:")
+	for _, e := range results {
+		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.id(), e.ID()), e.ID().Bytes())
+	}
+	if hasDuplicates(wrapNodes(results)) {
+		t.Errorf("result set contains duplicate entries")
+	}
+	if !sortedByDistanceTo(tn.target.id(), wrapNodes(results)) {
+		t.Errorf("result set not sorted by distance to target")
+	}
+	wantNodes := tn.closest(len(results))
+	if err := checkNodesEqual(results, wantNodes); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -242,8 +256,12 @@ func (tn *preminedTestnet) nodes() []*enode.Node {
 
 func (tn *preminedTestnet) node(dist, index int) *enode.Node {
 	key := tn.dists[dist][index]
-	ip := net.IP{127, byte(dist >> 8), byte(dist), byte(index)}
-	return enode.NewV4(&key.PublicKey, ip, 0, 5000)
+	rec := new(enr.Record)
+	rec.Set(enr.IP{127, byte(dist >> 8), byte(dist), byte(index)})
+	rec.Set(enr.UDP(5000))
+	enode.SignV4(rec, key)
+	n, _ := enode.New(enode.ValidSchemes, rec)
+	return n
 }
 
 func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.PrivateKey) {
@@ -253,10 +271,27 @@ func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.Pr
 	return tn.node(dist, index), key
 }
 
-func (tn *preminedTestnet) nodesAtDistance(dist int) []rpcNode {
-	result := make([]rpcNode, len(tn.dists[dist]))
+func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
+	result := make([]v4wire.Node, len(tn.dists[dist]))
 	for i := range result {
 		result[i] = nodeToRPC(wrapNode(tn.node(dist, i)))
+	}
+	return result
+}
+
+func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []uint, elems int) []*enode.Node {
+	var result []*enode.Node
+	for d := range lookupTestnet.dists {
+		for i := range lookupTestnet.dists[d] {
+			n := lookupTestnet.node(d, i)
+			d := enode.LogDist(base.ID(), n.ID())
+			if containsUint(uint(d), distances) {
+				result = append(result, n)
+				if len(result) >= elems {
+					return result
+				}
+			}
+		}
 	}
 	return result
 }

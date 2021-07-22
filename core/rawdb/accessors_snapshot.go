@@ -17,10 +17,32 @@
 package rawdb
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+// ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
+func ReadSnapshotDisabled(db ethdb.KeyValueReader) bool {
+	disabled, _ := db.Has(snapshotDisabledKey)
+	return disabled
+}
+
+// WriteSnapshotDisabled stores the snapshot pause flag.
+func WriteSnapshotDisabled(db ethdb.KeyValueWriter) {
+	if err := db.Put(snapshotDisabledKey, []byte("42")); err != nil {
+		log.Crit("Failed to store snapshot disabled flag", "err", err)
+	}
+}
+
+// DeleteSnapshotDisabled deletes the flag keeping the snapshot maintenance disabled.
+func DeleteSnapshotDisabled(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotDisabledKey); err != nil {
+		log.Crit("Failed to remove snapshot disabled flag", "err", err)
+	}
+}
 
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in
 // the persisted snapshot.
@@ -93,7 +115,7 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
-	return db.NewIteratorWithPrefix(storageSnapshotsKey(accountHash))
+	return db.NewIterator(storageSnapshotsKey(accountHash), nil)
 }
 
 // ReadSnapshotJournal retrieves the serialized in-memory diff layers saved at
@@ -116,5 +138,81 @@ func WriteSnapshotJournal(db ethdb.KeyValueWriter, journal []byte) {
 func DeleteSnapshotJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotJournalKey); err != nil {
 		log.Crit("Failed to remove snapshot journal", "err", err)
+	}
+}
+
+// ReadSnapshotGenerator retrieves the serialized snapshot generator saved at
+// the last shutdown.
+func ReadSnapshotGenerator(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(snapshotGeneratorKey)
+	return data
+}
+
+// WriteSnapshotGenerator stores the serialized snapshot generator to save at
+// shutdown.
+func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
+	if err := db.Put(snapshotGeneratorKey, generator); err != nil {
+		log.Crit("Failed to store snapshot generator", "err", err)
+	}
+}
+
+// DeleteSnapshotGenerator deletes the serialized snapshot generator saved at
+// the last shutdown
+func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotGeneratorKey); err != nil {
+		log.Crit("Failed to remove snapshot generator", "err", err)
+	}
+}
+
+// ReadSnapshotRecoveryNumber retrieves the block number of the last persisted
+// snapshot layer.
+func ReadSnapshotRecoveryNumber(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(snapshotRecoveryKey)
+	if len(data) == 0 {
+		return nil
+	}
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteSnapshotRecoveryNumber stores the block number of the last persisted
+// snapshot layer.
+func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], number)
+	if err := db.Put(snapshotRecoveryKey, buf[:]); err != nil {
+		log.Crit("Failed to store snapshot recovery number", "err", err)
+	}
+}
+
+// DeleteSnapshotRecoveryNumber deletes the block number of the last persisted
+// snapshot layer.
+func DeleteSnapshotRecoveryNumber(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotRecoveryKey); err != nil {
+		log.Crit("Failed to remove snapshot recovery number", "err", err)
+	}
+}
+
+// ReadSnapshotSyncStatus retrieves the serialized sync status saved at shutdown.
+func ReadSnapshotSyncStatus(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(snapshotSyncStatusKey)
+	return data
+}
+
+// WriteSnapshotSyncStatus stores the serialized sync status to save at shutdown.
+func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
+	if err := db.Put(snapshotSyncStatusKey, status); err != nil {
+		log.Crit("Failed to store snapshot sync status", "err", err)
+	}
+}
+
+// DeleteSnapshotSyncStatus deletes the serialized sync status saved at the last
+// shutdown
+func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotSyncStatusKey); err != nil {
+		log.Crit("Failed to remove snapshot sync status", "err", err)
 	}
 }

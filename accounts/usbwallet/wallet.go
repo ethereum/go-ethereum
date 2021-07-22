@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -67,6 +67,8 @@ type driver interface {
 	// SignTx sends the transaction to the USB device and waits for the user to confirm
 	// or deny the transaction.
 	SignTx(path accounts.DerivationPath, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error)
+
+	SignTypedMessage(path accounts.DerivationPath, messageHash []byte, domainHash []byte) ([]byte, error)
 }
 
 // wallet represents the common functionality shared by all USB hardware
@@ -368,18 +370,22 @@ func (w *wallet) selfDerive() {
 					w.log.Warn("USB wallet nonce retrieval failed", "err", err)
 					break
 				}
-				// If the next account is empty, stop self-derivation, but add for the last base path
+				// We've just self-derived a new account, start tracking it locally
+				// unless the account was empty.
+				path := make(accounts.DerivationPath, len(nextPaths[i]))
+				copy(path[:], nextPaths[i][:])
 				if balance.Sign() == 0 && nonce == 0 {
 					empty = true
+					// If it indeed was empty, make a log output for it anyway. In the case
+					// of legacy-ledger, the first account on the legacy-path will
+					// be shown to the user, even if we don't actively track it
 					if i < len(nextAddrs)-1 {
+						w.log.Info("Skipping trakcking first account on legacy path, use personal.deriveAccount(<url>,<path>, false) to track",
+							"path", path, "address", nextAddrs[i])
 						break
 					}
 				}
-				// We've just self-derived a new account, start tracking it locally
-				path := make(accounts.DerivationPath, len(nextPaths[i]))
-				copy(path[:], nextPaths[i][:])
 				paths = append(paths, path)
-
 				account := accounts.Account{
 					Address: nextAddrs[i],
 					URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},
@@ -489,7 +495,7 @@ func (w *wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivaton will increment the last component of the specified path
+// Note, self derivation will increment the last component of the specified path
 // opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //
@@ -520,7 +526,46 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
-	return w.signHash(account, crypto.Keccak256(data))
+
+	// Unless we are doing 712 signing, simply dispatch to signHash
+	if !(mimeType == accounts.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
+		return w.signHash(account, crypto.Keccak256(data))
+	}
+
+	// dispatch to 712 signing if the mimetype is TypedData and the format matches
+	w.stateLock.RLock() // Comms have own mutex, this is for the state fields
+	defer w.stateLock.RUnlock()
+
+	// If the wallet is closed, abort
+	if w.device == nil {
+		return nil, accounts.ErrWalletClosed
+	}
+	// Make sure the requested account is contained within
+	path, ok := w.paths[account.Address]
+	if !ok {
+		return nil, accounts.ErrUnknownAccount
+	}
+	// All infos gathered and metadata checks out, request signing
+	<-w.commsLock
+	defer func() { w.commsLock <- struct{}{} }()
+
+	// Ensure the device isn't screwed with while user confirmation is pending
+	// TODO(karalabe): remove if hotplug lands on Windows
+	w.hub.commsLock.Lock()
+	w.hub.commsPend++
+	w.hub.commsLock.Unlock()
+
+	defer func() {
+		w.hub.commsLock.Lock()
+		w.hub.commsPend--
+		w.hub.commsLock.Unlock()
+	}()
+	// Sign the transaction
+	signature, err := w.driver.SignTypedMessage(path, data[2:34], data[34:66])
+	if err != nil {
+		return nil, err
+	}
+	return signature, nil
 }
 
 // SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given

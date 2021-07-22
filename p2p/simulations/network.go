@@ -110,8 +110,8 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	}
 
 	// if no services are configured, use the default service
-	if len(conf.Services) == 0 {
-		conf.Services = []string{net.DefaultService}
+	if len(conf.Lifecycles) == 0 {
+		conf.Lifecycles = []string{net.DefaultService}
 	}
 
 	// use the NodeAdapter to create the node
@@ -454,9 +454,8 @@ func (net *Network) getNodeIDs(excludeIDs []enode.ID) []enode.ID {
 	if len(excludeIDs) > 0 {
 		// Return the difference of nodeIDs and excludeIDs
 		return filterIDs(nodeIDs, excludeIDs)
-	} else {
-		return nodeIDs
 	}
+	return nodeIDs
 }
 
 // GetNodes returns the existing nodes.
@@ -472,9 +471,8 @@ func (net *Network) getNodes(excludeIDs []enode.ID) []*Node {
 	if len(excludeIDs) > 0 {
 		nodeIDs := net.getNodeIDs(excludeIDs)
 		return net.getNodesByID(nodeIDs)
-	} else {
-		return net.Nodes
 	}
+	return net.Nodes
 }
 
 // GetNodesByID returns existing nodes with the given enode.IDs.
@@ -913,19 +911,19 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 		snap.Nodes[i].Snapshots = snapshots
 		for _, addSvc := range addServices {
 			haveSvc := false
-			for _, svc := range snap.Nodes[i].Node.Config.Services {
+			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				if svc == addSvc {
 					haveSvc = true
 					break
 				}
 			}
 			if !haveSvc {
-				snap.Nodes[i].Node.Config.Services = append(snap.Nodes[i].Node.Config.Services, addSvc)
+				snap.Nodes[i].Node.Config.Lifecycles = append(snap.Nodes[i].Node.Config.Lifecycles, addSvc)
 			}
 		}
 		if len(removeServices) > 0 {
 			var cleanedServices []string
-			for _, svc := range snap.Nodes[i].Node.Config.Services {
+			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				haveSvc := false
 				for _, rmSvc := range removeServices {
 					if rmSvc == svc {
@@ -938,7 +936,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 				}
 
 			}
-			snap.Nodes[i].Node.Config.Services = cleanedServices
+			snap.Nodes[i].Node.Config.Lifecycles = cleanedServices
 		}
 	}
 	for _, conn := range net.Conns {
@@ -1098,7 +1096,6 @@ func (net *Network) executeNodeEvent(e *Event) error {
 func (net *Network) executeConnEvent(e *Event) error {
 	if e.Conn.Up {
 		return net.Connect(e.Conn.One, e.Conn.Other)
-	} else {
-		return net.Disconnect(e.Conn.One, e.Conn.Other)
 	}
+	return net.Disconnect(e.Conn.One, e.Conn.Other)
 }

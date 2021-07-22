@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var runCommand = cli.Command{
@@ -70,14 +70,13 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, uint64, time.Duration, error) {
-	var (
-		output   []byte
-		gasLeft  uint64
-		execTime time.Duration
-		err      error
-	)
+type execStats struct {
+	time           time.Duration // The execution time.
+	allocs         int64         // The number of heap allocations during execution.
+	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
+}
 
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
 	if bench {
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
@@ -87,14 +86,21 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, uin
 
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		execTime = time.Duration(result.NsPerOp())
+		stats.time = time.Duration(result.NsPerOp())
+		stats.allocs = result.AllocsPerOp()
+		stats.bytesAllocated = result.AllocedBytesPerOp()
 	} else {
+		var memStatsBefore, memStatsAfter goruntime.MemStats
+		goruntime.ReadMemStats(&memStatsBefore)
 		startTime := time.Now()
 		output, gasLeft, err = execFunc()
-		execTime = time.Since(startTime)
+		stats.time = time.Since(startTime)
+		goruntime.ReadMemStats(&memStatsAfter)
+		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
+		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
 	}
 
-	return output, gasLeft, execTime, err
+	return output, gasLeft, stats, err
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -102,9 +108,11 @@ func runCmd(ctx *cli.Context) error {
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 	logconfig := &vm.LogConfig{
-		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
-		Debug:         ctx.GlobalBool(DebugFlag.Name),
+		DisableMemory:     ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:      ctx.GlobalBool(DisableStackFlag.Name),
+		DisableStorage:    ctx.GlobalBool(DisableStorageFlag.Name),
+		DisableReturnData: ctx.GlobalBool(DisableReturnDataFlag.Name),
+		Debug:             ctx.GlobalBool(DebugFlag.Name),
 	}
 
 	var (
@@ -203,9 +211,8 @@ func runCmd(ctx *cli.Context) error {
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
-			Tracer:         tracer,
-			Debug:          ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
-			EVMInterpreter: ctx.GlobalString(EVMInterpreterFlag.Name),
+			Tracer: tracer,
+			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 		},
 	}
 
@@ -256,12 +263,13 @@ func runCmd(ctx *cli.Context) error {
 		}
 	}
 
-	output, leftOverGas, execTime, err := timedExec(ctx.GlobalBool(BenchFlag.Name), execFunc)
+	bench := ctx.GlobalBool(BenchFlag.Name)
+	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		statedb.Commit(true)
 		statedb.IntermediateRoot(true)
-		fmt.Println(string(statedb.Dump(false, false, true)))
+		fmt.Println(string(statedb.Dump(nil)))
 	}
 
 	if memProfilePath := ctx.GlobalString(MemProfileFlag.Name); memProfilePath != "" {
@@ -286,17 +294,12 @@ func runCmd(ctx *cli.Context) error {
 		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
-	if ctx.GlobalBool(StatDumpFlag.Name) {
-		var mem goruntime.MemStats
-		goruntime.ReadMemStats(&mem)
-		fmt.Fprintf(os.Stderr, `evm execution time: %v
-heap objects:       %d
-allocations:        %d
-total allocations:  %d
-GC calls:           %d
-Gas used:           %d
-
-`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
+	if bench || ctx.GlobalBool(StatDumpFlag.Name) {
+		fmt.Fprintf(os.Stderr, `EVM gas used:    %d
+execution time:  %v
+allocations:     %d
+allocated bytes: %d
+`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
 	}
 	if tracer == nil {
 		fmt.Printf("0x%x\n", output)

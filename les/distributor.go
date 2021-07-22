@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/les/utils"
 )
 
 // requestDistributor implements a mechanism that distributes requests to
@@ -179,12 +180,11 @@ func (d *requestDistributor) loop() {
 type selectPeerItem struct {
 	peer   distPeer
 	req    *distReq
-	weight int64
+	weight uint64
 }
 
-// Weight implements wrsItem interface
-func (sp selectPeerItem) Weight() int64 {
-	return sp.weight
+func selectPeerWeight(i interface{}) uint64 {
+	return i.(selectPeerItem).weight
 }
 
 // nextRequest returns the next possible request from any peer, along with the
@@ -194,7 +194,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	elem := d.reqQueue.Front()
 	var (
 		bestWait time.Duration
-		sel      *weightedRandomSelect
+		sel      *utils.WeightedRandomSelect
 	)
 
 	d.peerLock.RLock()
@@ -219,9 +219,9 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 				wait, bufRemain := peer.waitBefore(cost)
 				if wait == 0 {
 					if sel == nil {
-						sel = newWeightedRandomSelect()
+						sel = utils.NewWeightedRandomSelect(selectPeerWeight)
 					}
-					sel.update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
+					sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
 				} else {
 					if bestWait == 0 || wait < bestWait {
 						bestWait = wait
@@ -239,7 +239,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	}
 
 	if sel != nil {
-		c := sel.choose().(selectPeerItem)
+		c := sel.Choose().(selectPeerItem)
 		return c.peer, c.req, 0
 	}
 	return nil, nil, bestWait

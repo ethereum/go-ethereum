@@ -29,9 +29,9 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,10 +40,10 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -53,7 +53,8 @@ import (
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
-	colorable "github.com/mattn/go-colorable"
+
+	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -82,6 +83,10 @@ var (
 		Name:  "advanced",
 		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
 	}
+	acceptFlag = cli.BoolFlag{
+		Name:  "suppress-bootwarn",
+		Usage: "If set, does not show the warning during boot",
+	}
 	keystoreFlag = cli.StringFlag{
 		Name:  "keystore",
 		Value: filepath.Join(node.DefaultDataDir(), "keystore"),
@@ -98,7 +103,7 @@ var (
 		Usage: "Chain id to use for signing (1=mainnet, 3=Ropsten, 4=Rinkeby, 5=Goerli)",
 	}
 	rpcPortFlag = cli.IntFlag{
-		Name:  "rpcport",
+		Name:  "http.port",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort + 5,
 	}
@@ -196,6 +201,7 @@ The delpw command removes a password for a given address (keyfile).
 			logLevelFlag,
 			keystoreFlag,
 			utils.LightKDFFlag,
+			acceptFlag,
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
@@ -211,6 +217,36 @@ The gendoc generates example structures of the json-rpc communication types.
 `}
 )
 
+// AppHelpFlagGroups is the application flags, grouped by functionality.
+var AppHelpFlagGroups = []flags.FlagGroup{
+	{
+		Name: "FLAGS",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			configdirFlag,
+			chainIdFlag,
+			utils.LightKDFFlag,
+			utils.NoUSBFlag,
+			utils.SmartCardDaemonPathFlag,
+			utils.HTTPListenAddrFlag,
+			utils.HTTPVirtualHostsFlag,
+			utils.IPCDisabledFlag,
+			utils.IPCPathFlag,
+			utils.HTTPEnabledFlag,
+			rpcPortFlag,
+			signerSecretFlag,
+			customDBFlag,
+			auditLogFlag,
+			ruleFlag,
+			stdiouiFlag,
+			testFlag,
+			advancedMode,
+			acceptFlag,
+		},
+	},
+}
+
 func init() {
 	app.Name = "Clef"
 	app.Usage = "Manage Ethereum account operations"
@@ -222,11 +258,11 @@ func init() {
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCVirtualHostsFlag,
+		utils.HTTPListenAddrFlag,
+		utils.HTTPVirtualHostsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
-		utils.RPCEnabledFlag,
+		utils.HTTPEnabledFlag,
 		rpcPortFlag,
 		signerSecretFlag,
 		customDBFlag,
@@ -235,6 +271,7 @@ func init() {
 		stdiouiFlag,
 		testFlag,
 		advancedMode,
+		acceptFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -243,7 +280,41 @@ func init() {
 		delCredentialCommand,
 		newAccountCommand,
 		gendocCommand}
-	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
+	cli.CommandHelpTemplate = flags.CommandHelpTemplate
+	// Override the default app help template
+	cli.AppHelpTemplate = flags.ClefAppHelpTemplate
+
+	// Override the default app help printer, but only for the global app help
+	originalHelpPrinter := cli.HelpPrinter
+	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
+		if tmpl == flags.ClefAppHelpTemplate {
+			// Render out custom usage screen
+			originalHelpPrinter(w, tmpl, flags.HelpData{App: data, FlagGroups: AppHelpFlagGroups})
+		} else if tmpl == flags.CommandHelpTemplate {
+			// Iterate over all command specific flags and categorize them
+			categorized := make(map[string][]cli.Flag)
+			for _, flag := range data.(cli.Command).Flags {
+				if _, ok := categorized[flag.String()]; !ok {
+					categorized[flags.FlagCategory(flag, AppHelpFlagGroups)] = append(categorized[flags.FlagCategory(flag, AppHelpFlagGroups)], flag)
+				}
+			}
+
+			// sort to get a stable ordering
+			sorted := make([]flags.FlagGroup, 0, len(categorized))
+			for cat, flgs := range categorized {
+				sorted = append(sorted, flags.FlagGroup{Name: cat, Flags: flgs})
+			}
+			sort.Sort(flags.ByCategory(sorted))
+
+			// add sorted array to data and render with default printer
+			originalHelpPrinter(w, tmpl, map[string]interface{}{
+				"cmd":              data,
+				"categorizedFlags": sorted,
+			})
+		} else {
+			originalHelpPrinter(w, tmpl, data)
+		}
+	}
 }
 
 func main() {
@@ -283,7 +354,7 @@ func initializeSecrets(c *cli.Context) error {
 	text := "The master seed of clef will be locked with a password.\nPlease specify a password. Do not forget this password!"
 	var password string
 	for {
-		password = getPassPhrase(text, true)
+		password = utils.GetPassPhrase(text, true)
 		if err := core.ValidatePasswordFormat(password); err != nil {
 			fmt.Printf("invalid password: %v\n", err)
 		} else {
@@ -356,7 +427,7 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf("Invalid address specified: %s", addr)
 	}
 	address := common.HexToAddress(addr)
-	password := getPassPhrase("Please enter a password to store for this address:", true)
+	password := utils.GetPassPhrase("Please enter a password to store for this address:", true)
 	fmt.Println()
 
 	stretchedKey, err := readMasterKey(ctx, nil)
@@ -433,8 +504,10 @@ func initialize(c *cli.Context) error {
 	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprint(logOutput, legalWarning)
-	} else {
+		if !c.GlobalBool(acceptFlag.Name) {
+			fmt.Fprint(logOutput, legalWarning)
+		}
+	} else if !c.GlobalBool(acceptFlag.Name) {
 		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
 		}
@@ -579,21 +652,32 @@ func signer(c *cli.Context) error {
 			Service:   api,
 			Version:   "1.0"},
 	}
-	if c.GlobalBool(utils.RPCEnabledFlag.Name) {
-		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
-		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
+	if c.GlobalBool(utils.HTTPEnabledFlag.Name) {
+		vhosts := utils.SplitAndTrim(c.GlobalString(utils.HTTPVirtualHostsFlag.Name))
+		cors := utils.SplitAndTrim(c.GlobalString(utils.HTTPCORSDomainFlag.Name))
+
+		srv := rpc.NewServer()
+		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv, false)
+		if err != nil {
+			utils.Fatalf("Could not register API: %w", err)
+		}
+		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
+
+		// set port
+		port := c.Int(rpcPortFlag.Name)
 
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
+		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.HTTPListenAddrFlag.Name), port)
+		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
-		extapiURL = fmt.Sprintf("http://%v/", listener.Addr())
+		extapiURL = fmt.Sprintf("http://%v/", addr)
 		log.Info("HTTP endpoint opened", "url", extapiURL)
 
 		defer func() {
-			listener.Close()
+			// Don't bother imposing a timeout here.
+			httpServer.Shutdown(context.Background())
 			log.Info("HTTP endpoint closed", "url", extapiURL)
 		}()
 	}
@@ -633,21 +717,11 @@ func signer(c *cli.Context) error {
 	return nil
 }
 
-// splitAndTrim splits input separated by a comma
-// and trims excessive white space from the substrings.
-func splitAndTrim(input string) []string {
-	result := strings.Split(input, ",")
-	for i, r := range result {
-		result[i] = strings.TrimSpace(r)
-	}
-	return result
-}
-
 // DefaultConfigDir is the default config directory to use for the vaults and other
 // persistence requirements.
 func DefaultConfigDir() string {
 	// Try to place the data folder in the user's home dir
-	home := homeDir()
+	home := utils.HomeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Signer")
@@ -655,26 +729,15 @@ func DefaultConfigDir() string {
 			appdata := os.Getenv("APPDATA")
 			if appdata != "" {
 				return filepath.Join(appdata, "Signer")
-			} else {
-				return filepath.Join(home, "AppData", "Roaming", "Signer")
 			}
-		} else {
-			return filepath.Join(home, ".clef")
+			return filepath.Join(home, "AppData", "Roaming", "Signer")
 		}
+		return filepath.Join(home, ".clef")
 	}
 	// As we cannot guess a stable location, return empty and handle later
 	return ""
 }
 
-func homeDir() string {
-	if home := os.Getenv("HOME"); home != "" {
-		return home
-	}
-	if usr, err := user.Current(); err == nil {
-		return usr.HomeDir
-	}
-	return ""
-}
 func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	var (
 		file      string
@@ -704,7 +767,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		}
 		password = resp.Text
 	} else {
-		password = getPassPhrase("Decrypt master seed of clef", false)
+		password = utils.GetPassPhrase("Decrypt master seed of clef", false)
 	}
 	masterSeed, err := decryptSeed(cipherKey, password)
 	if err != nil {
@@ -724,14 +787,16 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 
 // checkFile is a convenience function to check if a file
 // * exists
-// * is mode 0400
+// * is mode 0400 (unix only)
 func checkFile(filename string) error {
 	info, err := os.Stat(filename)
 	if err != nil {
 		return fmt.Errorf("failed stat on %s: %v", filename, err)
 	}
 	// Check the unix permission bits
-	if info.Mode().Perm()&0377 != 0 {
+	// However, on windows, we cannot use the unix perm-bits, see
+	// https://github.com/ethereum/go-ethereum/issues/20123
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0377 != 0 {
 		return fmt.Errorf("file (%v) has insecure file permissions (%v)", filename, info.Mode().String())
 	}
 	return nil
@@ -864,7 +929,7 @@ func testExternalUI(api *core.SignerAPI) {
 			Value:    hexutil.Big(*big.NewInt(6)),
 			From:     common.NewMixedcaseAddress(a),
 			To:       &to,
-			GasPrice: hexutil.Big(*big.NewInt(5)),
+			GasPrice: (*hexutil.Big)(big.NewInt(5)),
 			Gas:      1000,
 			Input:    nil,
 		}
@@ -897,27 +962,6 @@ func testExternalUI(api *core.SignerAPI) {
 	result := fmt.Sprintf("Tests completed. %d errors:\n%s\n", len(errs), strings.Join(errs, "\n"))
 	api.UI.ShowInfo(result)
 
-}
-
-// getPassPhrase retrieves the password associated with clef, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-// TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
-func getPassPhrase(prompt string, confirmation bool) string {
-	fmt.Println(prompt)
-	password, err := console.Stdin.PromptPassword("Password: ")
-	if err != nil {
-		utils.Fatalf("Failed to read password: %v", err)
-	}
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read password confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passwords do not match")
-		}
-	}
-	return password
 }
 
 type encryptedSeedStorage struct {
@@ -970,7 +1014,7 @@ func GenDoc(ctx *cli.Context) {
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
 				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
 			} else {
-				log.Error("Error generating output", err)
+				log.Error("Error generating output", "err", err)
 			}
 		}
 	)
@@ -1021,7 +1065,7 @@ func GenDoc(ctx *cli.Context) {
 				Value:    hexutil.Big(*big.NewInt(6)),
 				From:     common.NewMixedcaseAddress(a),
 				To:       nil,
-				GasPrice: hexutil.Big(*big.NewInt(5)),
+				GasPrice: (*hexutil.Big)(big.NewInt(5)),
 				Gas:      1000,
 				Input:    nil,
 			}})
@@ -1037,7 +1081,7 @@ func GenDoc(ctx *cli.Context) {
 					Value:    hexutil.Big(*big.NewInt(6)),
 					From:     common.NewMixedcaseAddress(a),
 					To:       nil,
-					GasPrice: hexutil.Big(*big.NewInt(5)),
+					GasPrice: (*hexutil.Big)(big.NewInt(5)),
 					Gas:      1000,
 					Input:    nil,
 				}})
@@ -1062,7 +1106,7 @@ func GenDoc(ctx *cli.Context) {
 
 		rlpdata := common.FromHex("0xf85d640101948a8eafb1cf62bfbeb1741769dae1a9dd47996192018026a0716bd90515acb1e68e5ac5867aa11a1e65399c3349d479f5fb698554ebc6f293a04e8a4ebfff434e971e0ef12c5bf3a881b06fd04fc3f8b8a7291fb67a26a1d4ed")
 		var tx types.Transaction
-		rlp.DecodeBytes(rlpdata, &tx)
+		tx.UnmarshalBinary(rlpdata)
 		add("OnApproved - SignTransactionResult", desc, &ethapi.SignTransactionResult{Raw: rlpdata, Tx: &tx})
 
 	}

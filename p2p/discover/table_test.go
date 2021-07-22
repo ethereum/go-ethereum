@@ -58,7 +58,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 
 	// Fill up the sender's bucket.
 	pingKey, _ := crypto.HexToECDSA("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")
-	pingSender := wrapNode(enode.NewV4(&pingKey.PublicKey, net.IP{}, 99, 99))
+	pingSender := wrapNode(enode.NewV4(&pingKey.PublicKey, net.IP{127, 0, 0, 1}, 99, 99))
 	last := fillBucket(tab, pingSender)
 
 	// Add the sender as if it just pinged us. Revalidate should replace the last node in
@@ -190,7 +190,7 @@ func checkIPLimitInvariant(t *testing.T, tab *Table) {
 	}
 }
 
-func TestTable_closest(t *testing.T) {
+func TestTable_findnodeByID(t *testing.T) {
 	t.Parallel()
 
 	test := func(test *closeTest) bool {
@@ -202,7 +202,7 @@ func TestTable_closest(t *testing.T) {
 		fillTable(tab, test.All)
 
 		// check that closest(Target, N) returns nodes
-		result := tab.closest(test.Target, test.N, false).entries
+		result := tab.findnodeByID(test.Target, test.N, false).entries
 		if hasDuplicates(result) {
 			t.Errorf("result contains duplicates")
 			return false

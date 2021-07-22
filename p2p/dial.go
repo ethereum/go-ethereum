@@ -78,6 +78,7 @@ var (
 	errAlreadyConnected = errors.New("already connected")
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
+	errNoPort           = errors.New("node does not provide TCP port")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -388,6 +389,12 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if n.ID() == d.self {
 		return errSelf
 	}
+	if n.IP() != nil && n.TCP() == 0 {
+		// This check can trigger if a non-TCP node is found
+		// by discovery. If there is no IP, the node is a static
+		// node and the actual endpoint will be resolved later in dialTask.
+		return errNoPort
+	}
 	if _, ok := d.dialing[n.ID()]; ok {
 		return errAlreadyDialing
 	}
@@ -474,21 +481,23 @@ type dialError struct {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
-	if t.dest.Incomplete() {
-		if !t.resolve(d) {
-			return
-		}
+	if t.needResolve() && !t.resolve(d) {
+		return
 	}
 
 	err := t.dial(d, t.dest)
 	if err != nil {
-		// Try resolving the ID of static nodes if dialing failed.
+		// For static nodes, resolve one more time if dialing fails.
 		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
 			if t.resolve(d) {
 				t.dial(d, t.dest)
 			}
 		}
 	}
+}
+
+func (t *dialTask) needResolve() bool {
+	return t.flags&staticDialedConn != 0 && t.dest.IP() == nil
 }
 
 // resolve attempts to find the current endpoint for the destination

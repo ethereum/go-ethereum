@@ -18,13 +18,14 @@ package les
 
 import (
 	"context"
+	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // LesOdr implements light.OdrBackend
@@ -32,14 +33,16 @@ type LesOdr struct {
 	db                                         ethdb.Database
 	indexerConfig                              *light.IndexerConfig
 	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
+	peers                                      *serverPeerSet
 	retriever                                  *retrieveManager
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, peers *serverPeerSet, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
 		db:            db,
 		indexerConfig: config,
+		peers:         peers,
 		retriever:     retriever,
 		stop:          make(chan struct{}),
 	}
@@ -83,7 +86,8 @@ func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
 }
 
 const (
-	MsgBlockBodies = iota
+	MsgBlockHeaders = iota
+	MsgBlockBodies
 	MsgCode
 	MsgReceipts
 	MsgProofsV2
@@ -98,12 +102,106 @@ type Msg struct {
 	Obj     interface{}
 }
 
-// Retrieve tries to fetch an object from the LES network.
+// peerByTxHistory is a heap.Interface implementation which can sort
+// the peerset by transaction history.
+type peerByTxHistory []*serverPeer
+
+func (h peerByTxHistory) Len() int { return len(h) }
+func (h peerByTxHistory) Less(i, j int) bool {
+	if h[i].txHistory == txIndexUnlimited {
+		return false
+	}
+	if h[j].txHistory == txIndexUnlimited {
+		return true
+	}
+	return h[i].txHistory < h[j].txHistory
+}
+func (h peerByTxHistory) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+const (
+	maxTxStatusRetry      = 3 // The maximum retrys will be made for tx status request.
+	maxTxStatusCandidates = 5 // The maximum les servers the tx status requests will be sent to.
+)
+
+// RetrieveTxStatus retrieves the transaction status from the LES network.
+// There is no guarantee in the LES protocol that the mined transaction will
+// be retrieved back for sure because of different reasons(the transaction
+// is unindexed, the malicous server doesn't reply it deliberately, etc).
+// Therefore, unretrieved transactions(UNKNOWN) will receive a certain number
+// of retries, thus giving a weak guarantee.
+func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequest) error {
+	// Sort according to the transaction history supported by the peer and
+	// select the peers with longest history.
+	var (
+		retries int
+		peers   []*serverPeer
+		missing = len(req.Hashes)
+		result  = make([]light.TxStatus, len(req.Hashes))
+		canSend = make(map[string]bool)
+	)
+	for _, peer := range odr.peers.allPeers() {
+		if peer.txHistory == txIndexDisabled {
+			continue
+		}
+		peers = append(peers, peer)
+	}
+	sort.Sort(sort.Reverse(peerByTxHistory(peers)))
+	for i := 0; i < maxTxStatusCandidates && i < len(peers); i++ {
+		canSend[peers[i].id] = true
+	}
+	// Send out the request and assemble the result.
+	for {
+		if retries >= maxTxStatusRetry || len(canSend) == 0 {
+			break
+		}
+		var (
+			// Deep copy the request, so that the partial result won't be mixed.
+			req     = &TxStatusRequest{Hashes: req.Hashes}
+			id      = rand.Uint64()
+			distreq = &distReq{
+				getCost: func(dp distPeer) uint64 { return req.GetCost(dp.(*serverPeer)) },
+				canSend: func(dp distPeer) bool { return canSend[dp.(*serverPeer).id] },
+				request: func(dp distPeer) func() {
+					p := dp.(*serverPeer)
+					p.fcServer.QueuedRequest(id, req.GetCost(p))
+					delete(canSend, p.id)
+					return func() { req.Request(id, p) }
+				},
+			}
+		)
+		if err := odr.retriever.retrieve(ctx, id, distreq, func(p distPeer, msg *Msg) error { return req.Validate(odr.db, msg) }, odr.stop); err != nil {
+			return err
+		}
+		// Collect the response and assemble them to the final result.
+		// All the response is not verifiable, so always pick the first
+		// one we get.
+		for index, status := range req.Status {
+			if result[index].Status != core.TxStatusUnknown {
+				continue
+			}
+			if status.Status == core.TxStatusUnknown {
+				continue
+			}
+			result[index], missing = status, missing-1
+		}
+		// Abort the procedure if all the status are retrieved
+		if missing == 0 {
+			break
+		}
+		retries += 1
+	}
+	req.Status = result
+	return nil
+}
+
+// Retrieve tries to fetch an object from the LES network. It's a common API
+// for most of the LES requests except for the TxStatusRequest which needs
+// the additional retry mechanism.
 // If the network retrieval was successful, it stores the object in local db.
 func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
 	lreq := LesRequest(req)
 
-	reqID := genReqID()
+	reqID := rand.Uint64()
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
 			return lreq.GetCost(dp.(*serverPeer))
@@ -122,13 +220,17 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 			return func() { lreq.Request(reqID, p) }
 		},
 	}
-	sent := mclock.Now()
-	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
-		// retrieved from network, store in db
-		req.StoreResult(odr.db)
+
+	defer func(sent mclock.AbsTime) {
+		if err != nil {
+			return
+		}
 		requestRTT.Update(time.Duration(mclock.Now() - sent))
-	} else {
-		log.Debug("Failed to retrieve data from network", "err", err)
+	}(mclock.Now())
+
+	if err := odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err != nil {
+		return err
 	}
-	return
+	req.StoreResult(odr.db)
+	return nil
 }
