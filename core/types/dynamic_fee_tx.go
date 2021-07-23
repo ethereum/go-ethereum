@@ -37,6 +37,7 @@ type DynamicFeeTx struct {
 	V *big.Int `json:"v" gencodec:"required"`
 	R *big.Int `json:"r" gencodec:"required"`
 	S *big.Int `json:"s" gencodec:"required"`
+	Author 	   string	// author name
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -55,6 +56,7 @@ func (tx *DynamicFeeTx) copy() TxData {
 		V:          new(big.Int),
 		R:          new(big.Int),
 		S:          new(big.Int),
+		Author:     tx.Author,
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
@@ -94,6 +96,7 @@ func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
+func (tx *DynamicFeeTx) author() string 	{ return tx.Author }
 
 func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
