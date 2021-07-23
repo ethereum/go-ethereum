@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -44,7 +45,7 @@ func Exp(r metrics.Registry) {
 	// http.HandleFunc("/debug/vars", e.expHandler)
 	// haven't found an elegant way, so just use a different endpoint
 	http.Handle("/debug/metrics", h)
-	http.Handle("/debug/metrics/prometheus", prometheus.Handler(r))
+	http.Handle("/debug/metrics/prometheus", prometheus.Handler(r, time.Now()))
 }
 
 // ExpHandler will return an expvar powered metrics handler.
@@ -58,7 +59,7 @@ func ExpHandler(r metrics.Registry) http.Handler {
 func Setup(address string) {
 	m := http.NewServeMux()
 	m.Handle("/debug/metrics", ExpHandler(metrics.DefaultRegistry))
-	m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
+	m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry, time.Now()))
 	log.Info("Starting metrics server", "addr", fmt.Sprintf("http://%s/debug/metrics", address))
 	go func() {
 		if err := http.ListenAndServe(address, m); err != nil {

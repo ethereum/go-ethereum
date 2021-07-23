@@ -64,6 +64,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const (
+	PackagePrefix = "github.com/ethereum/go-ethereum"
+)
+
 var (
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
@@ -259,6 +263,8 @@ func buildFlags(env build.Environment) (flags []string) {
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "main.gitDate="+env.Date)
+		ld = append(ld, "-X", fmt.Sprintf("%s/params.gitCommit=%s", PackagePrefix, env.Commit))
+		ld = append(ld, "-X", fmt.Sprintf("%s/params.gitDate=%s", PackagePrefix, env.Date))
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.

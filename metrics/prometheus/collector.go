@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -44,6 +46,13 @@ func newCollector() *collector {
 	return &collector{
 		buff: &bytes.Buffer{},
 	}
+}
+
+// addBuildInfo produce `geth_build_info {version=$version} $uptime_seconds` prometheus format metric
+func (c *collector) addBuildInfo(start time.Time) {
+	buildInfo := "geth_build_info"
+	c.buff.WriteString(fmt.Sprintf("#TYPE %s gauge\n", buildInfo))
+	c.buff.WriteString(fmt.Sprintf("%s {version=\"%s\"} %v\n", buildInfo, params.VersionWithCommit("", ""), time.Since(start).Seconds()))
 }
 
 func (c *collector) addCounter(name string, m metrics.Counter) {

@@ -21,13 +21,15 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // Handler returns an HTTP handler which dump metrics in Prometheus format.
-func Handler(reg metrics.Registry) http.Handler {
+func Handler(reg metrics.Registry, begin time.Time) http.Handler {
+	start := begin
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Gather and pre-sort the metrics to avoid random listings
 		var names []string
@@ -39,6 +41,7 @@ func Handler(reg metrics.Registry) http.Handler {
 		// Aggregate all the metris into a Prometheus collector
 		c := newCollector()
 
+		c.addBuildInfo(start)
 		for _, name := range names {
 			i := reg.Get(name)
 

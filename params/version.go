@@ -27,6 +27,12 @@ const (
 	VersionMeta  = "unstable-debank" // Version metadata to append to the version string
 )
 
+var (
+	// Git SHA1 commit hash of the release (set via linker flags)
+	gitCommit string
+	gitDate   string
+)
+
 // Version holds the textual version string.
 var Version = func() string {
 	return fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
@@ -55,7 +61,14 @@ func ArchiveVersion(gitCommit string) string {
 	return vsn
 }
 
-func VersionWithCommit(gitCommit, gitDate string) string {
+func VersionWithCommit(commit, date string) string {
+	if commit == "" {
+		commit = gitCommit
+	}
+	if date == "" {
+		date = gitDate
+	}
+
 	vsn := VersionWithMeta
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
