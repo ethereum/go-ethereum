@@ -52,6 +52,7 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+	Author	   string	     `json:"author"`
 }
 
 // from retrieves the transaction sender address.
@@ -252,6 +253,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: al,
+			Author:	    args.Author,
 		}
 	case args.AccessList != nil:
 		data = &types.AccessListTx{
@@ -263,6 +265,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: *args.AccessList,
+			Author:	    args.Author,
 		}
 	default:
 		data = &types.LegacyTx{
@@ -272,6 +275,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			GasPrice: (*big.Int)(args.GasPrice),
 			Value:    (*big.Int)(args.Value),
 			Data:     args.data(),
+			Author:	  args.Author,
 		}
 	}
 	return types.NewTx(data)
