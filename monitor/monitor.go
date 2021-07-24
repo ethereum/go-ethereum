@@ -18,7 +18,25 @@ func GetCurrentTime() time.Time {
 }
 
 type ISystemUsageMonitor interface {
-	GetSystemUsage() map[string]float64
+	SetDb(db Idb)
+	IsInBlock() bool
+
+	BlockStart(blockId *big.Int)
+	BlockEnd() (blockData *BlockData)
+	TransactionStart(txIndex int)
+	TransactionEnd() (transactionData *TransactionData)
+	OperationStart(op string)
+	OperationEnd(gas uint64) (operationData *OperationData)
+
+	SaveTxData(txData TransactionData) error
+	SaveBlockData(blockData BlockData) error
+
+	GetSystemCurrentUsage() *SystemUsage
+	GetOperationDurationUsage() *SystemDurationUsage
+
+	GetUsedTimeByTxHash(hash string) (*time.Duration, error)
+	GetUsedGasByTxHash(hash string) (uint64, error)
+	GetTransactionDataByTxHash(hash string) (*TransactionData, error)
 }
 
 type SystemUsageMonitor struct {
