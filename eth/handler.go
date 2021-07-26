@@ -201,7 +201,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// should only come from the trusted consensus layer instead of
 		// p2p network.
 		if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
-			if beacon.IsPostMergeHeader(header) {
+			if beacon.IsPoSHeader(header) {
 				return errors.New("unexpected post-merge header")
 			}
 		}
@@ -487,7 +487,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 	// Disable the block propagation if it's the post-merge block.
 	if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
-		if beacon.IsPostMergeHeader(block.Header()) {
+		if beacon.IsPoSHeader(block.Header()) {
 			return
 		}
 	}

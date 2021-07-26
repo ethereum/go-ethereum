@@ -308,7 +308,7 @@ func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
 		ReceiptHash: params.ReceiptRoot,
 		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  big.NewInt(1),
+		Difficulty:  common.Big0,
 		Number:      number,
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
