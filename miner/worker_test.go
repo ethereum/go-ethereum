@@ -520,3 +520,107 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		t.Error("interval reset timeout")
 	}
 }
+
+func TestGetSealingWorkEthash(t *testing.T) {
+	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker())
+}
+
+func TestGetSealingWorkClique(t *testing.T) {
+	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
+}
+
+func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+	defer engine.Close()
+
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	defer w.close()
+
+	w.setExtra([]byte{0x01, 0x02})
+	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
+
+	w.skipSealHook = func(task *task) bool {
+		return true
+	}
+	w.fullTaskHook = func() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	timestamp := uint64(time.Now().Unix())
+	_, clique := engine.(*clique.Clique)
+	assertBlock := func(block *types.Block, number uint64) {
+		if block.Time() != timestamp {
+			t.Errorf("Invalid timestamp, want %d, get %d", timestamp, block.Time())
+		}
+		if len(block.Uncles()) != 0 {
+			t.Error("Unexpected uncle block")
+		}
+		if !clique {
+			if len(block.Extra()) != 0 {
+				t.Error("Unexpected extra field")
+			}
+			if block.Coinbase() != w.coinbase {
+				t.Errorf("Invalid coinbase, want %x, get %x", w.coinbase, block.Coinbase())
+			}
+		}
+		if block.MixDigest() != (common.Hash{}) {
+			t.Error("Unexpected mix digest")
+		}
+		if block.Nonce() != 0 {
+			t.Error("Unexpected block nonce")
+		}
+		if block.NumberU64() != number {
+			t.Errorf("Mismatched block number, want %d got %d", number, block.NumberU64())
+		}
+	}
+	var cases = []struct {
+		parent       common.Hash
+		expectNumber uint64
+		expectErr    bool
+	}{
+		{
+			b.chain.Genesis().Hash(),
+			uint64(1),
+			false,
+		},
+		{
+			b.chain.CurrentBlock().Hash(),
+			b.chain.CurrentBlock().NumberU64() + 1,
+			false,
+		},
+		{
+			common.HexToHash("0xdeadbeef"),
+			0,
+			true,
+		},
+	}
+
+	// This API should work even the automatic sealing is not enabled
+	for _, c := range cases {
+		block, err := w.getSealingBlock(c.parent, timestamp)
+		if c.expectErr {
+			if err == nil {
+				t.Error("Expect error but get nil")
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			assertBlock(block, c.expectNumber)
+		}
+	}
+
+	// This API should work when the automatic sealing is enabled
+	w.start()
+	for _, c := range cases {
+		block, err := w.getSealingBlock(c.parent, timestamp)
+		if c.expectErr {
+			if err == nil {
+				t.Error("Expect error but get nil")
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			assertBlock(block, c.expectNumber)
+		}
+	}
+}

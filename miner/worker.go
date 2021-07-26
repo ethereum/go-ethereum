@@ -110,7 +110,7 @@ func (env *environment) copy() *environment {
 	if env.gasPool != nil {
 		cpy.gasPool = &(*env.gasPool)
 	}
-	// the content of txs and uncles are immutable, unnecessary
+	// The content of txs and uncles are immutable, unnecessary
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
@@ -150,7 +150,7 @@ type newWorkReq struct {
 	timestamp int64
 }
 
-// getWorkReq represents a request for getting a unsealed block with provided parameters.
+// getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
 	params *generateParams
 	err    error
@@ -500,7 +500,7 @@ func (w *worker) mainLoop() {
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
 
-	cleanTicker := time.NewTicker(time.Minute)
+	cleanTicker := time.NewTicker(time.Second * 10)
 	defer cleanTicker.Stop()
 
 	for {
@@ -509,12 +509,12 @@ func (w *worker) mainLoop() {
 			w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
-			unsealed, err := w.generateWork(req.params)
+			block, err := w.generateWork(req.params)
 			if err != nil {
 				req.err = err
 				req.result <- nil
 			} else {
-				req.result <- unsealed
+				req.result <- block
 			}
 
 		case ev := <-w.chainSideCh:
@@ -721,7 +721,10 @@ func (w *worker) resultLoop() {
 // makeEnv creates a new environment for the sealing block.
 func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
-	// the miner to speed block sealing up a bit
+	// the miner to speed block sealing up a bit. Note since the sealing block
+	// can be created upon the arbitrary parent block, but the state of parent
+	// block may already be pruned, so the necessary state recovery is needed
+	// here in the future. TODO(rjl493456442).
 	state, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return nil, err
