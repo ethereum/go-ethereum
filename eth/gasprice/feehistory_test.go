@@ -32,7 +32,7 @@ func TestFeeHistory(t *testing.T) {
 		count               int
 		last                rpc.BlockNumber
 		percent             []float64
-		expFirst            rpc.BlockNumber
+		expFirst            uint64
 		expCount            int
 		expErr              error
 	}{
@@ -70,7 +70,7 @@ func TestFeeHistory(t *testing.T) {
 			expBaseFee++
 		}
 
-		if first != c.expFirst {
+		if first.Uint64() != c.expFirst {
 			t.Fatalf("Test case %d: first block mismatch, want %d, got %d", i, c.expFirst, first)
 		}
 		if len(reward) != expReward {
