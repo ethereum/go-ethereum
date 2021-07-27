@@ -31,7 +31,7 @@ This package is responsible for running the Ethereum protocol.
 
 | Setting           | Type         | Meaning                                                                                              |
 | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
-| NetworkId         | uint(64)     | The Chain ID for the network. [Here is a list of possible values](https://chainlist.org/)            |
+| NetworkId         | uint(64)     | The network ID for the network, which in most cases should be identical to the chain id. [Here is a list of possible values](https://chainlist.org/)            |
 | SyncMode          | string       | How to synchronize the client with the rest of the network. There are several values, [documented here](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.4/eth/downloader#SyncMode)                         |
 | EthDiscoveryURLs  | string array | URLs to query for the list of nodes to access                          |
 | SnapDiscoveryURLs | string array | URLs to query for the list of nodes to access for snap synchronization |
