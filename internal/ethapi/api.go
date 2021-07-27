@@ -81,19 +81,19 @@ func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.
 }
 
 type feeHistoryResult struct {
-	OldestBlock  rpc.BlockNumber  `json:"oldestBlock"`
+	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
 	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
 	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
 	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
-func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
-	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount hexutil.Uint, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
 	}
 	results := &feeHistoryResult{
-		OldestBlock:  oldest,
+		OldestBlock:  (*hexutil.Big)(oldest),
 		GasUsedRatio: gasUsed,
 	}
 	if reward != nil {
