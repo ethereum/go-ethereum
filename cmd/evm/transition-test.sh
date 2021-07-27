@@ -168,7 +168,7 @@ tick && echo $cmd && $cmd
 errc=$?
 tick
 echo "Error code: $errc"
-ecoh ""
+echo ""
 
 echo "### Chaining"
 echo ""

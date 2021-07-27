@@ -240,10 +240,10 @@ If a required blockhash is not provided, the exit code should be `4`:
 Example where blockhashes are provided:
 ```
 ./evm --verbosity=1 t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace
-INFO [07-27|09:01:12.745] Trie dumping started                     root=b7341d..857ea1
-INFO [07-27|09:01:12.745] Trie dumping complete                    accounts=3 elapsed="111.787µs"
-INFO [07-27|09:01:12.745] Wrote file                               file=alloc.json
-INFO [07-27|09:01:12.745] Wrote file                               file=result.json
+INFO [07-27|11:53:40.960] Trie dumping started                     root=b7341d..857ea1
+INFO [07-27|11:53:40.960] Trie dumping complete                    accounts=3 elapsed="103.298µs"
+INFO [07-27|11:53:40.960] Wrote file                               file=alloc.json
+INFO [07-27|11:53:40.960] Wrote file                               file=result.json
 
 ```
 
@@ -254,7 +254,7 @@ cat trace-0-0x72fadbef39cd251a437eea619cfeda752271a5faaaa2147df012e112159ffb81.j
 {"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnData":"0x","depth":1,"refund":0,"opName":"PUSH1","error":""}
 {"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnData":"0x","depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
 {"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnData":"0x","depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":200682}
+{"output":"","gasUsed":"0x17","time":156276}
 ```
 
 In this example, the caller has not provided the required blockhash:
@@ -263,22 +263,22 @@ In this example, the caller has not provided the required blockhash:
 ERROR(4): getHash(3) invoked, blockhash for that block not provided
 ```
 Error code: 4
-transition-test.sh: line 171: ecoh: command not found
+
 ### Chaining
 
 Another thing that can be done, is to chain invocations:
 ```
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [07-27|09:01:12.836] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [07-27|09:01:12.836] Trie dumping started                     root=84208a..ae4e13
-INFO [07-27|09:01:12.836] Trie dumping complete                    accounts=3 elapsed="51.938µs"
-INFO [07-27|09:01:12.837] Wrote file                               file=result.json
-INFO [07-27|09:01:12.839] rejected tx                              index=0 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [07-27|09:01:12.839] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [07-27|09:01:12.840] Trie dumping started                     root=84208a..ae4e13
-INFO [07-27|09:01:12.840] Trie dumping complete                    accounts=3 elapsed="82.529µs"
-INFO [07-27|09:01:12.840] Wrote file                               file=alloc.json
-INFO [07-27|09:01:12.840] Wrote file                               file=result.json
+INFO [07-27|11:53:41.049] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.050] Trie dumping started                     root=84208a..ae4e13
+INFO [07-27|11:53:41.050] Trie dumping complete                    accounts=3 elapsed="59.412µs"
+INFO [07-27|11:53:41.050] Wrote file                               file=result.json
+INFO [07-27|11:53:41.051] rejected tx                              index=0 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.051] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.052] Trie dumping started                     root=84208a..ae4e13
+INFO [07-27|11:53:41.052] Trie dumping complete                    accounts=3 elapsed="45.734µs"
+INFO [07-27|11:53:41.052] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.052] Wrote file                               file=result.json
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected.
@@ -297,11 +297,11 @@ to use the evm to go from `json` input to `rlp` input.
 The following command takes **json** the transactions in `./testdata/13/txs.json` and signs them. After execution, they are output to `signed_txs.rlp`.:
 ```
 ./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./testdata/13/txs.json --input.env=./testdata/13/env.json --output.result=alloc_jsontx.json --output.body=signed_txs.rlp
-INFO [07-27|09:01:12.871] Trie dumping started                     root=e4b924..6aef61
-INFO [07-27|09:01:12.871] Trie dumping complete                    accounts=3 elapsed="90.463µs"
-INFO [07-27|09:01:12.871] Wrote file                               file=alloc.json
-INFO [07-27|09:01:12.872] Wrote file                               file=alloc_jsontx.json
-INFO [07-27|09:01:12.872] Wrote file                               file=signed_txs.rlp
+INFO [07-27|11:53:41.124] Trie dumping started                     root=e4b924..6aef61
+INFO [07-27|11:53:41.124] Trie dumping complete                    accounts=3 elapsed="94.284µs"
+INFO [07-27|11:53:41.125] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.125] Wrote file                               file=alloc_jsontx.json
+INFO [07-27|11:53:41.125] Wrote file                               file=signed_txs.rlp
 
 ```
 
@@ -322,10 +322,10 @@ rlpdump -hex $(cat signed_txs.rlp | jq -r )
 Now, we can now use those (or any other already signed transactions), as input, like so:
 ```
 ./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./signed_txs.rlp --input.env=./testdata/13/env.json --output.result=alloc_rlptx.json
-INFO [07-27|09:01:12.943] Trie dumping started                     root=e4b924..6aef61
-INFO [07-27|09:01:12.943] Trie dumping complete                    accounts=3 elapsed="133.649µs"
-INFO [07-27|09:01:12.943] Wrote file                               file=alloc.json
-INFO [07-27|09:01:12.944] Wrote file                               file=alloc_rlptx.json
+INFO [07-27|11:53:41.253] Trie dumping started                     root=e4b924..6aef61
+INFO [07-27|11:53:41.253] Trie dumping complete                    accounts=3 elapsed="128.445µs"
+INFO [07-27|11:53:41.253] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.255] Wrote file                               file=alloc_rlptx.json
 
 ```
 
