@@ -1441,10 +1441,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		gasPrice := args.GasPrice.ToInt()
-		if gasPrice == nil {
-			gasPrice = new(big.Int)
-		}
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
 		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
