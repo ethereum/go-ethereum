@@ -65,9 +65,11 @@ type stJSON struct {
 }
 
 type stPostState struct {
-	Root    common.UnprefixedHash `json:"hash"`
-	Logs    common.UnprefixedHash `json:"logs"`
-	Indexes struct {
+	Root            common.UnprefixedHash `json:"hash"`
+	Logs            common.UnprefixedHash `json:"logs"`
+	TxBytes         hexutil.Bytes         `json:"txbytes"`
+	ExpectException string                `json:"expectException"`
+	Indexes         struct {
 		Data  int `json:"data"`
 		Gas   int `json:"gas"`
 		Value int `json:"value"`
@@ -196,6 +198,19 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
 		return nil, nil, common.Hash{}, err
+	}
+
+	// Try to recover tx with current signer
+	if len(post.TxBytes) != 0 {
+		var ttx types.Transaction
+		err := ttx.UnmarshalBinary(post.TxBytes)
+		if err != nil {
+			return nil, nil, common.Hash{}, err
+		}
+
+		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
+			return nil, nil, common.Hash{}, err
+		}
 	}
 
 	// Prepare the EVM.

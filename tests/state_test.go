@@ -64,10 +64,14 @@ func TestState(t *testing.T) {
 			for _, subtest := range test.Subtests() {
 				subtest := subtest
 				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-
+				fmt.Println(name)
 				t.Run(key+"/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						_, _, err := test.Run(subtest, vmconfig, false)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
 						return st.checkFailure(t, err)
 					})
 				})
@@ -78,6 +82,10 @@ func TestState(t *testing.T) {
 							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
 								return err
 							}
+						}
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
 						}
 						return st.checkFailure(t, err)
 					})
