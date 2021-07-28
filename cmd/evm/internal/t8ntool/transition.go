@@ -73,6 +73,7 @@ type input struct {
 	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
 	Env   *stEnv            `json:"env,omitempty"`
 	Txs   []*txWithKey      `json:"txs,omitempty"`
+	TxRlp string            `json:"txsRlp,omitempty"`
 }
 
 func Main(ctx *cli.Context) error {
@@ -221,7 +222,23 @@ func Main(ctx *cli.Context) error {
 			}
 		}
 	} else {
-		txsWithKeys = inputData.Txs
+		if len(inputData.TxRlp) > 0 {
+			// Decode the body of already signed transactions
+			body := common.FromHex(inputData.TxRlp)
+			var txs types.Transactions
+			if err := rlp.DecodeBytes(body, &txs); err != nil {
+				return err
+			}
+			for _, tx := range txs {
+				txsWithKeys = append(txsWithKeys, &txWithKey{
+					key: nil,
+					tx:  tx,
+				})
+			}
+		} else {
+			// JSON encoded transactions
+			txsWithKeys = inputData.Txs
+		}
 	}
 	// We may have to sign the transactions.
 	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)))
