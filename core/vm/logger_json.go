@@ -101,10 +101,11 @@ func (l *JSONLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Add
 	l.encoder.Encode(frame)
 }
 
-func (l *JSONLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64) {
+func (l *JSONLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64, err error) {
 	type exitLog struct {
 		Output  hexutil.Bytes       `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
+		Err     string              `json:"error,omitempty"`
 	}
-	l.encoder.Encode(exitLog{output, math.HexOrDecimal64(gasUsed)})
+	l.encoder.Encode(exitLog{output, math.HexOrDecimal64(gasUsed), err.Error()})
 }

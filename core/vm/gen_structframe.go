@@ -16,14 +16,16 @@ var _ = (*structFrameMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (s StructFrame) MarshalJSON() ([]byte, error) {
 	type StructFrame struct {
-		Type    string                `json:"type"`
-		From    common.Address        `json:"from"`
-		To      common.Address        `json:"to"`
-		Input   hexutil.Bytes         `json:"input"`
-		Gas     math.HexOrDecimal64   `json:"gas"`
-		Value   *math.HexOrDecimal256 `json:"value"`
-		GasUsed uint64                `json:"-"`
-		Output  []byte                `json:"-"`
+		Type        string                `json:"type"`
+		From        common.Address        `json:"from"`
+		To          common.Address        `json:"to"`
+		Input       hexutil.Bytes         `json:"input"`
+		Gas         math.HexOrDecimal64   `json:"gas"`
+		Value       *math.HexOrDecimal256 `json:"value"`
+		GasUsed     uint64                `json:"-"`
+		Output      []byte                `json:"-"`
+		Err         error                 `json:"-"`
+		ErrorString string                `json:"error"`
 	}
 	var enc StructFrame
 	enc.Type = s.Type
@@ -34,6 +36,8 @@ func (s StructFrame) MarshalJSON() ([]byte, error) {
 	enc.Value = (*math.HexOrDecimal256)(s.Value)
 	enc.GasUsed = s.GasUsed
 	enc.Output = s.Output
+	enc.Err = s.Err
+	enc.ErrorString = s.ErrorString()
 	return json.Marshal(&enc)
 }
 
@@ -48,6 +52,7 @@ func (s *StructFrame) UnmarshalJSON(input []byte) error {
 		Value   *math.HexOrDecimal256 `json:"value"`
 		GasUsed *uint64               `json:"-"`
 		Output  []byte                `json:"-"`
+		Err     error                 `json:"-"`
 	}
 	var dec StructFrame
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -76,6 +81,9 @@ func (s *StructFrame) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Output != nil {
 		s.Output = dec.Output
+	}
+	if dec.Err != nil {
+		s.Err = dec.Err
 	}
 	return nil
 }

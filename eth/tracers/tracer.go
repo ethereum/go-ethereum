@@ -692,7 +692,7 @@ func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common
 	}
 }
 
-func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64) {
+func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64, err error) {
 	if !jst.traceCallFrames {
 		return
 	}
@@ -708,6 +708,9 @@ func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64) {
 	obj := jst.vm.PushObject()
 	jst.addToObj(obj, "output", output)
 	jst.addToObj(obj, "gasUsed", gasUsed)
+	if err != nil {
+		jst.addToObj(obj, "error", err.Error())
+	}
 	jst.vm.PutPropString(jst.stateObject, "frameResult")
 	if _, err := jst.call(true, "exit", "frameResult"); err != nil {
 		jst.err = wrapError("exit", err)

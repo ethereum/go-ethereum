@@ -235,7 +235,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// Handle tracer events for entering and exiting a call frame
 		evm.Config.Tracer.CaptureEnter(evm, CallType, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas, err)
 		}(gas)
 	}
 
@@ -300,7 +300,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if evm.Config.Debug {
 		evm.Config.Tracer.CaptureEnter(evm, CallCodeType, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas, err)
 		}(gas)
 	}
 
@@ -344,7 +344,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.Config.Debug {
 		evm.Config.Tracer.CaptureEnter(evm, DelegateCallType, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas, err)
 		}(gas)
 	}
 
@@ -397,7 +397,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if evm.Config.Debug {
 		evm.Config.Tracer.CaptureEnter(evm, StaticCallType, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas)
+			evm.Config.Tracer.CaptureExit(evm, ret, startGas-gas, err)
 		}(gas)
 	}
 
@@ -525,7 +525,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 	} else if evm.Config.Debug && evm.depth > 0 {
-		evm.Config.Tracer.CaptureExit(evm, ret, gas-contract.Gas)
+		evm.Config.Tracer.CaptureExit(evm, ret, gas-contract.Gas, err)
 	}
 	return ret, address, contract.Gas, err
 }

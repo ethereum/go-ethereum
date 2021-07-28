@@ -32,7 +32,7 @@
     },
     result: function(ctx, db) {
         // Prepare outer message info
-        var call = {
+        var result = {
             type:    ctx.type,
             from:    toHex(ctx.from),
             to:      toHex(ctx.to),
@@ -43,9 +43,18 @@
             output:  toHex(ctx.output),
         }
         if (this.callstack[0].calls !== undefined) {
-          call.calls = this.callstack[0].calls;
+          result.calls = this.callstack[0].calls
         }
-        return call 
+        if (this.callstack[0].error !== undefined) {
+          result.error = this.callstack[0].error
+        } else if (ctx.error !== undefined) {
+          result.error = ctx.error
+        }
+        if (result.error !== undefined && (result.error !== "execution reverted" || result.output ==="0x")) {
+          delete result.output
+        }
+
+        return this.finalize(result)
     },
     enter: function(frame) {
         var call = {
@@ -62,8 +71,11 @@
         var len = this.callstack.length
         if (len > 1) {
             var call = this.callstack.pop()
-            call.gasused = '0x' + bigInt(frameResult.gasUsed).toString('16')
+            call.gasUsed = '0x' + bigInt(frameResult.gasUsed).toString('16')
             call.output = toHex(frameResult.output)
+            if (frameResult.error !== undefined) {
+                call.error = frameResult.error
+            }
             len -= 1
             if (this.callstack[len-1].calls === undefined) {
                 this.callstack[len-1].calls = []
@@ -71,4 +83,33 @@
             this.callstack[len-1].calls.push(call)
         }
     },
+	// finalize recreates a call object using the final desired field oder for json
+	// serialization. This is a nicety feature to pass meaningfully ordered results
+	// to users who don't interpret it, just display it.
+	finalize: function(call) {
+		var sorted = {
+			type:    call.type,
+			from:    call.from,
+			to:      call.to,
+			value:   call.value,
+			gas:     call.gas,
+			gasUsed: call.gasUsed,
+			input:   call.input,
+			output:  call.output,
+			error:   call.error,
+			time:    call.time,
+			calls:   call.calls,
+		}
+		for (var key in sorted) {
+			if (sorted[key] === undefined) {
+				delete sorted[key]
+			}
+		}
+		if (sorted.calls !== undefined) {
+			for (var i=0; i<sorted.calls.length; i++) {
+				sorted.calls[i] = this.finalize(sorted.calls[i])
+			}
+		}
+		return sorted
+	}
 }

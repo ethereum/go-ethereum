@@ -109,15 +109,25 @@ type StructFrame struct {
 	Value   *big.Int       `json:"value"`
 	GasUsed uint64         `json:"-"`
 	Output  []byte         `json:"-"`
+	Err     error          `json:"-"`
+}
+
+// ErrorString formats the log's error as a string.
+func (s *StructFrame) ErrorString() string {
+	if s.Err != nil {
+		return s.Err.Error()
+	}
+	return ""
 }
 
 type structFrameMarshaling struct {
-	Type  string                `json:"type"`
-	From  common.Address        `json:"from"`
-	To    common.Address        `json:"to"`
-	Input hexutil.Bytes         `json:"input"`
-	Gas   math.HexOrDecimal64   `json:"gas"`
-	Value *math.HexOrDecimal256 `json:"value"`
+	Type        string                `json:"type"`
+	From        common.Address        `json:"from"`
+	To          common.Address        `json:"to"`
+	Input       hexutil.Bytes         `json:"input"`
+	Gas         math.HexOrDecimal64   `json:"gas"`
+	Value       *math.HexOrDecimal256 `json:"value"`
+	ErrorString string                `json:"error"`
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
@@ -129,7 +139,7 @@ type Tracer interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
-	CaptureExit(env *EVM, output []byte, gasUsed uint64)
+	CaptureExit(env *EVM, output []byte, gasUsed uint64, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
@@ -254,16 +264,17 @@ func (l *StructLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.A
 	in := make([]byte, len(input))
 	copy(in, input)
 	// TODO: should we honor `l.Cfg.Limit` for frames too?
-	frame := StructFrame{type_.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil}
+	frame := StructFrame{type_.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil, nil}
 	l.frames = append(l.frames, frame)
 }
 
-func (l *StructLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64) {
+func (l *StructLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64, err error) {
 	frame := l.frames[len(l.frames)-1]
 	frame.GasUsed = gasUsed
 	out := make([]byte, len(output))
 	copy(out, output)
 	frame.Output = out
+	frame.Err = err
 }
 
 // StructLogs returns the captured log entries.
