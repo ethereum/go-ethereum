@@ -517,7 +517,7 @@ func (w *worker) mainLoop() {
 				tcount := w.current.tcount
 
 				// can ignore returned error (interrupted by new chain head)
-				w.collateBlock(txs, coinbase, nil, false)
+				w.collateBlock(coinbase, nil, false)
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -765,7 +765,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) collateBlock(txs map[common.Address]types.Transactions, coinbase common.Address, interrupt *int32, isSealing bool) error {
+func (w *worker) collateBlock(coinbase common.Address, interrupt *int32, isSealing bool) error {
 	// Short circuit if current is nil
 	if w.current == nil {
 		return ErrNoCurrentEnv
@@ -783,11 +783,9 @@ func (w *worker) collateBlock(txs map[common.Address]types.Transactions, coinbas
 		baseFee:  w.current.header.BaseFee,
 		signer:   w.current.signer,
 	}
-	var collator = &DefaultCollator{
-		pool: w.eth.TxPool(),
-	}
+	var collator = &DefaultCollator{}
 
-	return collator.CollateBlock(bs, txs, interrupt, isSealing)
+	return collator.CollateBlock(bs, w.eth.TxPool(), interrupt, isSealing)
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
@@ -900,7 +898,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		return
 	}
 
-	err = w.collateBlock(pending, w.coinbase, interrupt, true)
+	err = w.collateBlock(w.coinbase, interrupt, true)
 	if err != nil {
 		if err == ErrResubmitIntervalElapsed {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
@@ -913,8 +911,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 				ratio: ratio,
 				inc:   true,
 			}
+		} else if err != ErrNewHead {
+			log.Error("CollateBlock failed", "err", err)
 		}
-
 		return
 	}
 

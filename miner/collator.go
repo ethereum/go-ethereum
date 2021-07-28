@@ -48,7 +48,7 @@ type BlockState interface {
 
 // Collator is something that can assemble a block.
 type Collator interface {
-	CollateBlock(bs BlockState, txs types.Transactions, interrupt *int32, isSealing bool) error
+	CollateBlock(bs BlockState, interrupt *int32, isSealing bool) error
 }
 
 // Pool is an interface to the transaction pool
@@ -151,9 +151,7 @@ func (bs *blockState) Gas() (remaining uint64) {
 
 // The DefaultCollator is the 'normal' block collator. It assembles a block
 // based on transaction price ordering.
-type DefaultCollator struct {
-	pool Pool
-}
+type DefaultCollator struct{}
 
 var (
 	ErrResubmitIntervalElapsed = errors.New("recommit interval elapsed")
@@ -209,11 +207,18 @@ func (w *DefaultCollator) submit(bs BlockState, txs *types.TransactionsByPriceAn
 
 // CollateBlock fills a block based on the highest paying transactions from the
 // transaction pool, giving precedence over 'local' transactions.
-func (w *DefaultCollator) CollateBlock(bs BlockState, txs map[common.Address]types.Transactions, interrupt *int32, isSealing bool) error {
+func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool, interrupt *int32, isSealing bool) error {
+	txs, err := pool.Pending(true)
+	if err != nil {
+		return err
+	}
+	if len(txs) == 0 {
+		return nil
+	}
 	if isSealing {
 		// Split the pending transactions into locals and remotes
 		localTxs, remoteTxs := make(map[common.Address]types.Transactions), txs
-		for _, account := range w.pool.Locals() {
+		for _, account := range pool.Locals() {
 			if accountTxs := remoteTxs[account]; len(accountTxs) > 0 {
 				delete(remoteTxs, account)
 				localTxs[account] = accountTxs
