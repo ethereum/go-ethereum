@@ -96,7 +96,7 @@ func (al accessList) equal(other accessList) bool {
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: addr}
+		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
