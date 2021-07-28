@@ -110,12 +110,22 @@ type Tracer interface {
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
 
+type wrappedLog struct {
+	parent *wrappedLog
+	error error
+	log StructLog
+	children []*wrappedLog
+}
+
 // StructLogger is an EVM state logger and implements Tracer.
 //
 // StructLogger can capture state based on the given Log configuration and also keeps
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
+	current *wrappedLog
+	depth int
+
 	cfg LogConfig
 
 	storage map[common.Address]Storage
@@ -145,12 +155,45 @@ func (l *StructLogger) Reset() {
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	l.depth = 0
+	l.current = &wrappedLog{}
+}
+
+func errToStr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+	for ; l.depth > depth-1; l.depth-- {
+		l.current = l.current.parent
+	}
+	if err != nil {
+		if l.current.error != nil {
+			l.current.error=fmt.Errorf("%s:%s", l.current.error.Error(), err.Error())
+		}
+		l.current.error = err
+	}
+	switch op {
+	case CALL,DELEGATECALL,STATICCALL,CALLCODE:
+		l.depth = l.depth+1
+		wl := &wrappedLog{
+			parent: l.current,
+			error:  l.current.error,
+		}
+		l.current.children = append(l.current.children, wl)
+		l.current = wl
+	case REVERT:
+		l.current.error = ErrExecutionReverted
+		return
+	default:
+		return
+	}
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
@@ -205,7 +248,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, env.StateDB.GetRefund(), err}
-	l.logs = append(l.logs, log)
+	l.current.log = log
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
@@ -215,6 +258,16 @@ func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost ui
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+	for ; l.depth > 1; l.depth-- {
+		l.current = l.current.parent
+	}
+	l.current.log = StructLog{
+		Op:            CALL,
+		GasCost:       gasUsed,
+		ReturnData:    output,
+		Depth:         0,
+		Err:           err,
+	}
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
@@ -225,8 +278,21 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 }
 
+// Depth first append for all children (stack max depth is 1024)
+func (l *wrappedLog) getLogs() []StructLog {
+	var logs []StructLog
+	l.log.Err = l.error
+	logs = append(logs, l.log)
+	for _, child := range l.children {
+		logs = append(logs, child.getLogs()...)
+	}
+	return logs
+}
+
 // StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+func (l *StructLogger) StructLogs() []StructLog {
+	return l.current.getLogs()
+}
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
