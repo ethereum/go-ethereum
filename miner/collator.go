@@ -88,7 +88,6 @@ func (bs *blockState) Commit() {
 	// when we are mining, the worker will regenerate a mining block every 3 seconds.
 	// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
 	if !w.isRunning() && len(bs.logs) > 0 {
-
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
@@ -124,7 +123,6 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 			err = ErrTxProtectionDisabled
 			break
 		}
-
 		// Start executing the transaction
 		bs.state.Prepare(tx.Hash(), w.current.tcount)
 		var txLogs []*types.Log
@@ -173,25 +171,21 @@ func (w *DefaultCollator) submit(bs BlockState, txs *types.TransactionsByPriceAn
 				return ErrNewHead
 			}
 		}
-
 		// If we don't have enough gas for any further transactions then we're done
 		available := bs.Gas()
 		if available < params.TxGas {
 			break
 		}
-
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
 			break
 		}
-
 		// Enough space for this tx?
 		if available < tx.Gas() {
 			txs.Pop()
 			continue
 		}
-
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		err := bs.AddTransactions(types.Transactions{tx})
@@ -210,7 +204,6 @@ func (w *DefaultCollator) submit(bs BlockState, txs *types.TransactionsByPriceAn
 			txs.Shift()
 		}
 	}
-
 	return nil
 }
 
@@ -226,13 +219,11 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, txs map[common.Address]typ
 				localTxs[account] = accountTxs
 			}
 		}
-
 		if len(localTxs) > 0 {
 			if err := w.submit(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, bs.BaseFee()), interrupt); err != nil {
 				return err
 			}
 		}
-
 		if len(remoteTxs) > 0 {
 			if err := w.submit(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, bs.BaseFee()), interrupt); err != nil {
 				return err
@@ -242,7 +233,6 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, txs map[common.Address]typ
 		// ignore resubmit interval elapse here (only used when sealing)
 		w.submit(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()), nil)
 	}
-
 	bs.Commit()
 	return nil
 }
