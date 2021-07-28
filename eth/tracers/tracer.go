@@ -662,9 +662,7 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 	}
 }
 
-func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// TODO: Do we need env?
-
+func (jst *Tracer) CaptureEnter(type_ vm.CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !jst.traceCallFrames {
 		return
 	}
@@ -692,7 +690,7 @@ func (jst *Tracer) CaptureEnter(env *vm.EVM, type_ vm.CallFrameType, from common
 	}
 }
 
-func (jst *Tracer) CaptureExit(env *vm.EVM, output []byte, gasUsed uint64, err error) {
+func (jst *Tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if !jst.traceCallFrames {
 		return
 	}

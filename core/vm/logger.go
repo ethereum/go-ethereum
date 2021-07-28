@@ -138,8 +138,8 @@ type structFrameMarshaling struct {
 type Tracer interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
-	CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
-	CaptureExit(env *EVM, output []byte, gasUsed uint64, err error)
+	CaptureEnter(type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureExit(output []byte, gasUsed uint64, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
@@ -260,7 +260,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 }
 
-func (l *StructLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureEnter(type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	in := make([]byte, len(input))
 	copy(in, input)
 	// TODO: should we honor `l.Cfg.Limit` for frames too?
@@ -268,7 +268,7 @@ func (l *StructLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.A
 	l.frames = append(l.frames, frame)
 }
 
-func (l *StructLogger) CaptureExit(env *EVM, output []byte, gasUsed uint64, err error) {
+func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 	frame := l.frames[len(l.frames)-1]
 	frame.GasUsed = gasUsed
 	out := make([]byte, len(output))
