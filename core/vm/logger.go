@@ -159,13 +159,6 @@ func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Add
 	l.current = &wrappedLog{}
 }
 
-func errToStr(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
@@ -174,9 +167,6 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		l.current = l.current.parent
 	}
 	if err != nil {
-		if l.current.error != nil {
-			l.current.error=fmt.Errorf("%s:%s", l.current.error.Error(), err.Error())
-		}
 		l.current.error = err
 	}
 	switch op {
