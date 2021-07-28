@@ -494,6 +494,9 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadTdRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid td returned")
 	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database")
+	}
 }
 
 func TestCanonicalHashIteration(t *testing.T) {
