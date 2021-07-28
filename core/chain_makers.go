@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -33,11 +34,13 @@ import (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i       int
-	parent  *types.Block
-	chain   []*types.Block
-	header  *types.Header
-	statedb *state.StateDB
+	i        int
+	db       ethdb.Database
+	parent   *types.Block
+	ancestor *types.Block
+	chain    []*types.Block
+	header   *types.Header
+	statedb  *state.StateDB
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -166,7 +169,7 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 		panic(fmt.Errorf("block index %d out of range (%d,%d)", index, -1, b.i))
 	}
 	if index == -1 {
-		return b.parent
+		return b.ancestor
 	}
 	return b.chain[index]
 }
@@ -179,11 +182,14 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time <= b.parent.Header().Time {
 		panic("block time out of range")
 	}
-	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	chainReader := &fakeChainReader{ancestor: b.ancestor, config: b.config, chain: b.chain[:b.i], db: b.db}
+	err := b.engine.Prepare(chainReader, b.header)
+	if err != nil {
+		panic(fmt.Sprintf("block prepare error %v", err))
+	}
 }
 
-// GenerateChain creates a chain of n blocks. The first block's
+// generateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
 //
@@ -192,17 +198,22 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // become part of the block. If gen is nil, the blocks will be empty
 // and their coinbase will be the zero address.
 //
-// Blocks created by GenerateChain do not contain valid proof of work
-// values. Inserting them into BlockChain requires use of FakePow or
-// a similar non-validating proof of work implementation.
-func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+// The sealer function is called for every block to generate a valid
+// consensus proof if it's non-nil. Inserting non-sealed blocks into
+// BlockChain requires use of FakePow or a similar non-validating
+// consensus implementation.
+func generateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen), seal func(int, *types.Block) (*types.Block, error)) ([]*types.Block, []types.Receipts) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
+	var (
+		ancestor = parent
+		blocks   = make(types.Blocks, n)
+		receipts = make([]types.Receipts, n)
+	)
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b := &BlockGen{i: i, db: db, chain: blocks, parent: parent, ancestor: ancestor, statedb: statedb, config: config, engine: engine}
+		chainreader := &fakeChainReader{ancestor: ancestor, config: config, chain: blocks[:i], db: db}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
 		// Mutate the state and block according to any hard-fork specs
@@ -221,21 +232,25 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if gen != nil {
 			gen(i, b)
 		}
-		if b.engine != nil {
-			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
-
-			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
-			if err != nil {
-				panic(fmt.Sprintf("state write error: %v", err))
-			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
-				panic(fmt.Sprintf("trie write error: %v", err))
-			}
-			return block, b.receipts
+		block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+		if err != nil {
+			panic(fmt.Sprintf("finalize block error: %v", err))
 		}
-		return nil, nil
+		if seal != nil {
+			block, err = seal(i, block)
+			if err != nil {
+				panic(fmt.Sprintf("seal block error: %v", err))
+			}
+		}
+		// Write state changes to db
+		root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+		if err != nil {
+			panic(fmt.Sprintf("state write error: %v", err))
+		}
+		if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+			panic(fmt.Sprintf("trie write error: %v", err))
+		}
+		return block, b.receipts
 	}
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
@@ -250,6 +265,38 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
+// GenerateChain creates a chain of n blocks. The first block's
+// parent will be the provided parent. db is used to store
+// intermediate states and should contain the parent's state trie.
+//
+// The generator function is called with a new block generator for
+// every block. Any transactions and uncles added to the generator
+// become part of the block. If gen is nil, the blocks will be empty
+// and their coinbase will be the zero address.
+//
+// Blocks created by GenerateChain do not contain valid consensus
+// proofs. Inserting them into BlockChain requires use of FakePow or
+// a similar non-validating consensus implementation.
+func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	return generateChain(config, parent, engine, db, n, gen, nil)
+}
+
+// GenerateChain creates a chain of n blocks. The first block's
+// parent will be the provided parent. db is used to store
+// intermediate states and should contain the parent's state trie.
+//
+// The generator function is called with a new block generator for
+// every block. Any transactions and uncles added to the generator
+// become part of the block. If gen is nil, the blocks will be empty
+// and their coinbase will be the zero address.
+//
+// Blocks created by GenerateSealedChain are all supposed to have the
+// valid consensus proofs so that they can be inserted into Blockchain
+// directly.
+func GenerateSealedChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen), seal func(int, *types.Block) (*types.Block, error)) ([]*types.Block, []types.Receipts) {
+	return generateChain(config, parent, engine, db, n, gen, seal)
+}
+
 func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
@@ -258,18 +305,11 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		GasLimit:   parent.GasLimit(),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		Time:       time,
 	}
 	if chain.Config().IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
@@ -278,6 +318,9 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
 		}
 		header.GasLimit = CalcGasLimit1559(parentGasLimit, parentGasLimit)
+	}
+	if err := engine.Prepare(chain, header); err != nil {
+		panic(fmt.Sprintf("generate header error %v", err))
 	}
 	return header
 }
@@ -301,7 +344,10 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 }
 
 type fakeChainReader struct {
-	config *params.ChainConfig
+	ancestor *types.Block
+	config   *params.ChainConfig
+	chain    []*types.Block
+	db       ethdb.Database
 }
 
 // Config returns the chain configuration.
@@ -309,8 +355,79 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
-func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
-func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
-func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
-func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
-func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
+func (cr *fakeChainReader) CurrentHeader() *types.Header {
+	if len(cr.chain) > 0 {
+		return cr.chain[len(cr.chain)-1].Header()
+	}
+	return rawdb.ReadHeadHeader(cr.db)
+}
+
+func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header {
+	if len(cr.chain) > 0 {
+		if cr.chain[len(cr.chain)-1].NumberU64() < number {
+			return nil
+		}
+		if cr.chain[0].NumberU64() <= number {
+			return cr.chain[int(number-cr.chain[0].NumberU64())].Header()
+		}
+	}
+	if cr.ancestor.NumberU64() == number {
+		return cr.ancestor.Header()
+	}
+	hash := rawdb.ReadCanonicalHash(cr.db, number)
+	return rawdb.ReadHeader(cr.db, hash, number)
+}
+
+func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	for _, block := range cr.chain {
+		if block.Hash() == hash {
+			return block.Header()
+		}
+	}
+	if cr.ancestor.Hash() == hash {
+		return cr.ancestor.Header()
+	}
+	number := rawdb.ReadHeaderNumber(cr.db, hash)
+	if number == nil {
+		return nil
+	}
+	return rawdb.ReadHeader(cr.db, hash, *number)
+}
+
+func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	if len(cr.chain) > 0 {
+		if cr.chain[len(cr.chain)-1].NumberU64() < number {
+			return nil
+		}
+		if cr.chain[0].NumberU64() <= number {
+			header := cr.chain[int(number-cr.chain[0].NumberU64())].Header()
+			if header.Hash() == hash {
+				return header
+			}
+			return nil
+		}
+	}
+	if cr.ancestor.Hash() == hash && cr.ancestor.NumberU64() == number {
+		return cr.ancestor.Header()
+	}
+	return rawdb.ReadHeader(cr.db, hash, number)
+}
+
+func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block {
+	if len(cr.chain) > 0 {
+		if cr.chain[len(cr.chain)-1].NumberU64() < number {
+			return nil
+		}
+		if cr.chain[0].NumberU64() <= number {
+			block := cr.chain[int(number-cr.chain[0].NumberU64())]
+			if block.Hash() == hash {
+				return block
+			}
+			return nil
+		}
+	}
+	if cr.ancestor.Hash() == hash && cr.ancestor.NumberU64() == number {
+		return cr.ancestor
+	}
+	return rawdb.ReadBlock(cr.db, hash, number)
+}

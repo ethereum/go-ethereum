@@ -44,6 +44,7 @@ func TestReimportMirroredState(t *testing.T) {
 		engine = New(params.AllCliqueProtocolChanges.Clique, db)
 		signer = new(types.HomesteadSigner)
 	)
+	engine.signer = addr
 	genspec := &core.Genesis{
 		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
 		Alloc: map[common.Address]core.GenesisAccount{
@@ -58,11 +59,7 @@ func TestReimportMirroredState(t *testing.T) {
 	chain, _ := core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
 	defer chain.Stop()
 
-	blocks, _ := core.GenerateChain(params.AllCliqueProtocolChanges, genesis, engine, db, 3, func(i int, block *core.BlockGen) {
-		// The chain maker doesn't have access to a chain, so the difficulty will be
-		// lets unset (nil). Set it here to the correct value.
-		block.SetDifficulty(diffInTurn)
-
+	blocks, _ := core.GenerateSealedChain(params.AllCliqueProtocolChanges, genesis, engine, db, 3, func(i int, block *core.BlockGen) {
 		// We want to simulate an empty middle block, having the same state as the
 		// first one. The last is needs a state change again to force a reorg.
 		if i != 1 {
@@ -72,19 +69,14 @@ func TestReimportMirroredState(t *testing.T) {
 			}
 			block.AddTxWithChain(chain, tx)
 		}
-	})
-	for i, block := range blocks {
+	}, func(i int, block *types.Block) (*types.Block, error) {
+		// Sign the block with valid signer key.
 		header := block.Header()
-		if i > 0 {
-			header.ParentHash = blocks[i-1].Hash()
-		}
 		header.Extra = make([]byte, extraVanity+extraSeal)
-		header.Difficulty = diffInTurn
-
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
 		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
-		blocks[i] = block.WithSeal(header)
-	}
+		return block.WithSeal(header), nil
+	})
 	// Insert the first two blocks and make sure the chain is valid
 	db = rawdb.NewMemoryDatabase()
 	genspec.MustCommit(db)

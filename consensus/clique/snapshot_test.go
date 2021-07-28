@@ -120,7 +120,8 @@ func TestClique(t *testing.T) {
 				{signer: "A", voted: "C", auth: true},
 			},
 			results: []string{"A", "B"},
-		}, {
+		},
+		{
 			// Two signers, voting to add three others (only accept first two, third needs 3 votes already)
 			signers: []string{"A", "B"},
 			votes: []testerVote{
@@ -411,10 +412,8 @@ func TestClique(t *testing.T) {
 			Period: 1,
 			Epoch:  tt.epoch,
 		}
-		engine := New(config.Clique, db)
-		engine.fakeDiff = true
-
-		blocks, _ := core.GenerateChain(&config, genesis.ToBlock(db), engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
+		engine := NewFaker(config.Clique, db)
+		blocks, _ := core.GenerateSealedChain(&config, genesis.ToBlock(db), engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
 			// Cast the vote contained in this block
 			gen.SetCoinbase(accounts.address(tt.votes[j].voted))
 			if tt.votes[j].auth {
@@ -422,25 +421,17 @@ func TestClique(t *testing.T) {
 				copy(nonce[:], nonceAuthVote)
 				gen.SetNonce(nonce)
 			}
-		})
-		// Iterate through the blocks and seal them individually
-		for j, block := range blocks {
-			// Get the header and prepare it for signing
+		}, func(j int, block *types.Block) (*types.Block, error) {
 			header := block.Header()
-			if j > 0 {
-				header.ParentHash = blocks[j-1].Hash()
-			}
 			header.Extra = make([]byte, extraVanity+extraSeal)
 			if auths := tt.votes[j].checkpoint; auths != nil {
 				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 				accounts.checkpoint(header, auths)
 			}
-			header.Difficulty = diffInTurn // Ignored, we just need a valid number
-
 			// Generate the signature, embed it into the header and the block
 			accounts.sign(header, tt.votes[j].signer)
-			blocks[j] = block.WithSeal(header)
-		}
+			return block.WithSeal(header), nil
+		})
 		// Split the blocks up into individual import batches (cornercase testing)
 		batches := [][]*types.Block{nil}
 		for j, block := range blocks {

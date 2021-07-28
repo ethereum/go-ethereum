@@ -184,6 +184,7 @@ type Clique struct {
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
+	fakeTime bool // Skip timestamp verifications
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -205,6 +206,15 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
 	}
+}
+
+// NewFaker creates a clique consensus engine which doesn't check the validity
+// of difficulty and timestamp. The main purpose of this fake mode is for testing.
+func NewFaker(config *params.CliqueConfig, db ethdb.Database) *Clique {
+	clique := New(config, db)
+	clique.fakeDiff = true
+	clique.fakeTime = true
+	return clique
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered
@@ -250,8 +260,10 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	number := header.Number.Uint64()
 
 	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
-		return consensus.ErrFutureBlock
+	if !c.fakeTime {
+		if header.Time > uint64(time.Now().Unix()) {
+			return consensus.ErrFutureBlock
+		}
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
 	checkpoint := (number % c.config.Epoch) == 0
@@ -666,18 +678,10 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	return nil
 }
 
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
+// calcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have:
 // * DIFF_NOTURN(2) if BLOCK_NUMBER % SIGNER_COUNT != SIGNER_INDEX
 // * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
-func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
-	if err != nil {
-		return nil
-	}
-	return calcDifficulty(snap, c.signer)
-}
-
 func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 	if snap.inturn(snap.Number+1, signer) {
 		return new(big.Int).Set(diffInTurn)
