@@ -112,7 +112,8 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 	for _, tx := range sequence {
 		if w.current.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
-			return core.ErrGasLimitReached
+			err = core.ErrGasLimitReached
+			break
 		}
 		from, _ := types.Sender(w.current.signer, tx)
 
@@ -120,7 +121,8 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-			continue
+			err = ErrTxProtectionDisabled
+			break
 		}
 
 		// Start executing the transaction
@@ -159,6 +161,7 @@ var (
 	ErrResubmitIntervalElapsed = errors.New("recommit interval elapsed")
 	ErrNewHead                 = errors.New("new chain head received")
 	ErrNoCurrentEnv            = errors.New("missing env for mining")
+	ErrTxProtectionDisabled    = errors.New("eip155-compatible tx provided when chain config does not support it")
 )
 
 func (w *DefaultCollator) submit(bs BlockState, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
