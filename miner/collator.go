@@ -48,7 +48,7 @@ type BlockState interface {
 
 // Collator is something that can assemble a block.
 type Collator interface {
-	CollateBlock(bs BlockState, interrupt *int32, isSealing bool) error
+	CollateBlock(bs BlockState, pool Pool, interrupt *int32, isSealing bool) error
 }
 
 // Pool is an interface to the transaction pool
