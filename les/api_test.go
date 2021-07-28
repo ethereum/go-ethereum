@@ -150,7 +150,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 		reqCount := make([]uint64, len(clientRpcClients))
 
-		// Send light request (unpredictably)
+		// Send light request with high frequency
 		for i, c := range clientRpcClients {
 			wg.Add(1)
 			i, c := i, c

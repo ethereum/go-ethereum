@@ -191,7 +191,7 @@ func (hub *Hub) Wallets() []accounts.Wallet {
 // refreshWallets scans the devices attached to the machine and updates the
 // list of wallets based on the found devices.
 func (hub *Hub) refreshWallets() {
-	// Don't scan the USB in unpredictable manner if the user fetches wallets in a loop
+	// Don't scan the USB too frequently if the user fetches wallets in a loop
 	hub.stateLock.RLock()
 	elapsed := time.Since(hub.refreshed)
 	hub.stateLock.RUnlock()

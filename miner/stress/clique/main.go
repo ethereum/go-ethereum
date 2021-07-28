@@ -103,7 +103,7 @@ func main() {
 	}
 	time.Sleep(3 * time.Second)
 
-	// Start injecting transactions from the faucet (unpredictably)
+	// Start injecting transactions from the faucet with high frequency
 	nonces := make([]uint64, len(faucets))
 	for {
 		// Pick a random signer node

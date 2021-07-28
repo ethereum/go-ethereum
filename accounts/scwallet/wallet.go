@@ -106,7 +106,7 @@ const (
 )
 
 // Minimum time to wait between self derivation attempts, even it the user is
-// requesting accounts unpredictably.
+// requesting accounts frequently.
 const selfDeriveThrottling = time.Second
 
 // Wallet represents a smartcard wallet instance.
