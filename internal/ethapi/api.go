@@ -1142,13 +1142,17 @@ type StructLogRes struct {
 func FormatLogs(logs []vm.StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
+		var errString string
+		if trace.Err != nil {
+			errString = trace.Err.Error()
+		}
 		formatted[index] = StructLogRes{
 			Pc:      trace.Pc,
 			Op:      trace.Op.String(),
 			Gas:     trace.Gas,
 			GasCost: trace.GasCost,
 			Depth:   trace.Depth,
-			Error:   trace.ErrorString(),
+			Error:   errString,
 		}
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
