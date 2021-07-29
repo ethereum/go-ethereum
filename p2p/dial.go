@@ -73,12 +73,12 @@ func nodeAddr(n *enode.Node) net.Addr {
 
 // checkDial errors:
 var (
-	errSelf                 = errors.New("is self")
-	errAlreadyDialing       = errors.New("already dialing")
-	errAlreadyConnected     = errors.New("already connected")
-	errRecentlyDialed       = errors.New("recently dialed")
-	errNotNetRestrictListed = errors.New("not contained in netrestrict list")
-	errNoPort               = errors.New("node does not provide TCP port")
+	errSelf             = errors.New("is self")
+	errAlreadyDialing   = errors.New("already dialing")
+	errAlreadyConnected = errors.New("already connected")
+	errRecentlyDialed   = errors.New("recently dialed")
+	errNotNetRestrict   = errors.New("not contained in netrestrict list")
+	errNoPort           = errors.New("node does not provide TCP port")
 )
 
 // dialer creates outbound connections and submits them into Server.
