@@ -146,7 +146,25 @@ func DeleteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64) 
 	}
 }
 
-// ReadBorTransaction retrieves a specific bor (fake) transaction, along with
+// ReadBorTransactionWithBlockHash retrieves a specific bor (fake) transaction by tx hash and block hash, along with
+// its added positional metadata.
+func ReadBorTransactionWithBlockHash(db ethdb.Reader, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+	blockNumber := ReadBorTxLookupEntry(db, txHash)
+	if blockNumber == nil {
+		return nil, common.Hash{}, 0, 0
+	}
+
+	body := ReadBody(db, blockHash, *blockNumber)
+	if body == nil {
+		log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash)
+		return nil, common.Hash{}, 0, 0
+	}
+
+	// fetch receipt and return it
+	return types.NewBorTransaction(), blockHash, *blockNumber, uint64(len(body.Transactions))
+}
+
+// ReadBorTransaction retrieves a specific bor (fake) transaction by hash, along with
 // its added positional metadata.
 func ReadBorTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockNumber := ReadBorTxLookupEntry(db, hash)

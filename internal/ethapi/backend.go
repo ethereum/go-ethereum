@@ -92,6 +92,7 @@ type Backend interface {
 	GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
 	GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error)
 	GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine

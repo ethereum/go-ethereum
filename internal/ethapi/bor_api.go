@@ -27,7 +27,7 @@ func (s *PublicBlockChainAPI) GetBorBlockReceipt(ctx context.Context, hash commo
 func (s *PublicBlockChainAPI) appendRPCMarshalBorTransaction(ctx context.Context, block *types.Block, fields map[string]interface{}, fullTx bool) map[string]interface{} {
 	if block != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
-		borTx, blockHash, blockNumber, txIndex, _ := s.b.GetBorBlockTransaction(ctx, txHash)
+		borTx, blockHash, blockNumber, txIndex, _ := s.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
 		if borTx != nil {
 			formattedTxs := fields["transactions"].([]interface{})
 			if fullTx {
