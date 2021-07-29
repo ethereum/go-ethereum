@@ -402,7 +402,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 		return errAlreadyConnected
 	}
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
-		return errNotNetRestrictListed
+		return errNotNetRestrict
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
 		return errRecentlyDialed
