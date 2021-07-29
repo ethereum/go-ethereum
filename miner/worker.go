@@ -505,16 +505,13 @@ func (w *worker) mainLoop() {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
-
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
 				tcount := w.current.tcount
-
 				w.commitTransactionsToPending(txs)
-
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
@@ -761,10 +758,10 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) error {
+func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
-		return ErrNoCurrentEnv
+		return false
 	}
 	gasLimit := w.current.header.GasLimit
 	if w.current.gasPool == nil {
@@ -772,16 +769,20 @@ func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) error {
 	}
 	var bs BlockState
 	bs = &blockState{
-		state:    w.current.state,
-		logs:     nil,
-		worker:   w,
-		coinbase: w.current.header.Coinbase,
-		baseFee:  w.current.header.BaseFee,
-		signer:   w.current.signer,
+		state:     w.current.state,
+		logs:      nil,
+		worker:    w,
+		coinbase:  w.current.header.Coinbase,
+		baseFee:   w.current.header.BaseFee,
+		signer:    w.current.signer,
+		interrupt: interrupt,
 	}
 	var collator = &DefaultCollator{}
 
-	return collator.CollateBlock(bs, w.eth.TxPool(), interrupt)
+	if err := collator.CollateBlock(bs, w.eth.TxPool()); err == ErrNewHead {
+		return false
+	}
+	return true
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
@@ -894,29 +895,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		return
 	}
 
-	err = w.collateBlock(w.coinbase, interrupt)
-	if err != nil {
-		if err == ErrResubmitIntervalElapsed {
-			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
-			gasLimit := w.current.header.GasLimit
-			ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
-			if ratio < 0.1 {
-				ratio = 0.1
-			}
-			w.resubmitAdjustCh <- &intervalAdjust{
-				ratio: ratio,
-				inc:   true,
-			}
-		} else if err != ErrNewHead {
-			log.Error("CollateBlock failed", "err", err)
-		}
+	if !w.collateBlock(w.coinbase, interrupt) {
 		return
-	}
-
-	if interrupt != nil {
-		// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-		// than the user-specified one.
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
 
 	w.commit(uncles, w.fullTaskHook, true, tstart)
@@ -983,24 +963,17 @@ func (w *worker) commitTransactionsToPending(txs map[common.Address]types.Transa
 	}
 	var bs BlockState
 	bs = &blockState{
-		state:    w.current.state,
-		logs:     nil,
-		worker:   w,
-		coinbase: w.current.header.Coinbase,
-		baseFee:  w.current.header.BaseFee,
-		signer:   w.current.signer,
+		state:     w.current.state,
+		logs:      nil,
+		worker:    w,
+		coinbase:  w.current.header.Coinbase,
+		baseFee:   w.current.header.BaseFee,
+		signer:    w.current.signer,
+		interrupt: nil,
 	}
 
-	txs, err := w.eth.TxPool().Pending(true)
-	if err != nil {
-		log.Trace("error getting pending txs from the pool", "err", err)
-		return
-	}
-	if len(txs) == 0 {
-		return
-	}
-
-	SubmitTransactions(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()), nil)
+	bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()))
+	bs.Commit()
 }
 
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.

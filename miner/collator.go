@@ -32,10 +32,16 @@ import (
 // BlockState represents a block-to-be-mined, which is being assembled. A collator
 // can add transactions, and finish by calling Commit.
 type BlockState interface {
-	// AddTransactions adds the sequence of transactions to the blockstate. Either all
-	// transactions are added, or none of them. In the latter case, the error
-	// describes the reason why the txs could not be included.
-	AddTransactions(sequence types.Transactions) error
+	// AddTransactions attempts to add transactions to the blockstate.
+	// The following errors are returned
+	//   1) ErrRecommit- the recommit interval elapses
+	//	 2) ErrNewHead- a new chainHead is received
+	// For both cases, no more transactions will be added to the block on subsequent
+	// calls to AddTransactions
+	// If AddTransactions returns an ErrNewHead during sealing, the collator should abort
+	// immediately and propogate this error to the caller
+	// TODO perhaps this should also return a list of (reason, tx_hash) for failing txs
+	AddTransactions(txs *types.TransactionsByPriceAndNonce) error
 	// Commit signals that the collation is finished, and the block is ready
 	// to be sealed. After calling Commit, no more transactions may be added.
 	Commit()
@@ -45,6 +51,10 @@ type BlockState interface {
 	BaseFee() *big.Int
 	Signer() types.Signer
 }
+
+var (
+	ErrNewHead = errors.New("new chain head received")
+)
 
 // Collator is something that can assemble a block.
 type Collator interface {
@@ -59,12 +69,13 @@ type Pool interface {
 
 // blockState is an implementation of BlockState
 type blockState struct {
-	state    *state.StateDB
-	logs     []*types.Log
-	worker   *worker
-	coinbase common.Address
-	baseFee  *big.Int
-	signer   types.Signer
+	state     *state.StateDB
+	logs      []*types.Log
+	worker    *worker
+	coinbase  common.Address
+	baseFee   *big.Int
+	signer    types.Signer
+	interrupt *int32
 }
 
 // Coinbase returns the miner-address of the block being mined
@@ -84,10 +95,12 @@ func (bs *blockState) Signer() types.Signer {
 
 func (bs *blockState) Commit() {
 	w := bs.worker
-	// We don't push the pendingLogsEvent while we are mining. The reason is that
-	// when we are mining, the worker will regenerate a mining block every 3 seconds.
-	// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
 	if !w.isRunning() && len(bs.logs) > 0 {
+		// We don't push the pendingLogsEvent while we are mining. The reason is that
+		// when we are mining, the worker will regenerate a mining block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
@@ -98,51 +111,100 @@ func (bs *blockState) Commit() {
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
+	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
+	// than the user-specified one.
+	if bs.interrupt != nil {
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	}
 }
 
-func (bs *blockState) AddTransactions(sequence types.Transactions) error {
+func (bs *blockState) AddTransactions(txs *types.TransactionsByPriceAndNonce) error {
 	var (
-		w      = bs.worker
-		snap   = w.current.state.Snapshot()
-		err    error
-		logs   []*types.Log
-		tcount = w.current.tcount
+		w             = bs.worker
+		returnErr     error
+		coalescedLogs []*types.Log
 	)
-	for _, tx := range sequence {
-		if w.current.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
-			err = core.ErrGasLimitReached
+	for {
+		if bs.interrupt != nil && atomic.LoadInt32(bs.interrupt) != commitInterruptNone {
+			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
+			if atomic.LoadInt32(bs.interrupt) == commitInterruptResubmit {
+				ratio := float64(w.current.header.GasLimit-w.current.gasPool.Gas()) / float64(w.current.header.GasLimit)
+				if ratio < 0.1 {
+					ratio = 0.1
+				}
+				w.resubmitAdjustCh <- &intervalAdjust{
+					ratio: ratio,
+					inc:   true,
+				}
+			}
+			if atomic.LoadInt32(bs.interrupt) == commitInterruptNewHead {
+				returnErr = ErrNewHead
+			}
 			break
 		}
+
+		if w.current.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
+			break
+		}
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
+		// Error may be ignored here. The error has already been checked
+		// during transaction acceptance is the transaction pool.
+		//
+		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(w.current.signer, tx)
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-			err = ErrTxProtectionDisabled
-			break
+			continue
 		}
+
 		// Start executing the transaction
 		bs.state.Prepare(tx.Hash(), w.current.tcount)
-		var txLogs []*types.Log
-		txLogs, err = w.commitTransaction(tx, bs.Coinbase())
-		if err == nil {
-			logs = append(logs, txLogs...)
-			tcount++
-		} else {
-			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
-				"type", tx.Type(), "hash", tx.Hash(), "err", err)
-			break
+		logs, err := w.commitTransaction(tx, bs.Coinbase())
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Trace("Gas limit exceeded for current block", "sender", from)
+			txs.Pop()
+
+		case errors.Is(err, core.ErrNonceTooLow):
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+
+		case errors.Is(err, core.ErrNonceTooHigh):
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+
+		case errors.Is(err, nil):
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			coalescedLogs = append(coalescedLogs, logs...)
+			w.current.tcount++
+			txs.Shift()
+
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			txs.Shift()
 		}
 	}
-	if err != nil {
-		bs.state.RevertToSnapshot(snap)
-	} else {
-		bs.logs = append(bs.logs, logs...)
-		w.current.tcount = tcount
-	}
-	return err
+	bs.logs = coalescedLogs
+
+	return returnErr
 }
 
 func (bs *blockState) Gas() (remaining uint64) {
@@ -153,71 +215,18 @@ func (bs *blockState) Gas() (remaining uint64) {
 // based on transaction price ordering.
 type DefaultCollator struct{}
 
-var (
-	ErrResubmitIntervalElapsed = errors.New("recommit interval elapsed")
-	ErrNewHead                 = errors.New("new chain head received")
-	ErrNoCurrentEnv            = errors.New("missing env for mining")
-	ErrTxProtectionDisabled    = errors.New("eip155-compatible tx provided when chain config does not support it")
-)
-
-func SubmitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
-	for {
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				return ErrResubmitIntervalElapsed
-			} else {
-				return ErrNewHead
-			}
-		}
-		// If we don't have enough gas for any further transactions then we're done
-		available := bs.Gas()
-		if available < params.TxGas {
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
-			break
-		}
-		// Enough space for this tx?
-		if available < tx.Gas() {
-			txs.Pop()
-			continue
-		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		err := bs.AddTransactions(types.Transactions{tx})
-		switch {
-		case errors.Is(err, core.ErrGasLimitReached):
-			fallthrough
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			fallthrough
-		case errors.Is(err, core.ErrNonceTooHigh):
-			txs.Pop()
-		case errors.Is(err, core.ErrNonceTooLow):
-			fallthrough
-		case errors.Is(err, nil):
-			fallthrough
-		default:
-			txs.Shift()
-		}
-	}
-
-	bs.Commit()
-	return nil
-}
-
 // CollateBlock fills a block based on the highest paying transactions from the
-// transaction pool, giving precedence over 'local' transactions.
-func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool, interrupt *int32) error {
+// transaction pool, giving precedence over local transactions.
+func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool) error {
+	recommitFired := false
 	txs, err := pool.Pending(true)
 	if err != nil {
+		log.Error("could not get pending transactions from the pool", "err", err)
 		return err
 	}
 	if len(txs) == 0 {
 		return nil
 	}
-
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), txs
 	for _, account := range pool.Locals() {
@@ -227,16 +236,25 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool, interrupt *int3
 		}
 	}
 	if len(localTxs) > 0 {
-		if err := SubmitTransactions(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, bs.BaseFee()), interrupt); err != nil {
-			return err
+		if err := bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, bs.BaseFee())); err != nil {
+			if err == ErrNewHead {
+				return err
+			} else {
+				recommitFired = true
+			}
 		}
 	}
 	if len(remoteTxs) > 0 {
-		if err := SubmitTransactions(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, bs.BaseFee()), interrupt); err != nil {
-			return err
+		if err := bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, bs.BaseFee())); err != nil {
+			if err == ErrNewHead {
+				return err
+			} else {
+				recommitFired = true
+			}
 		}
 	}
-
-	bs.Commit()
+	if !recommitFired {
+		bs.Commit()
+	}
 	return nil
 }
