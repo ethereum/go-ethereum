@@ -66,6 +66,11 @@ var (
 		Usage: "API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)",
 		Value: "",
 	}
+	// (Deprecated 2021, term)
+	WhitelistFlag = cli.StringFlag{
+		Name:  "whitelist", // replaced by allowlist
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.

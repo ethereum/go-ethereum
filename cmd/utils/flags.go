@@ -234,8 +234,8 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	WhitelistFlag = cli.StringFlag{
-		Name:  "whitelist",
+	AllowListFlag = cli.StringFlag{
+		Name:  "allowlist",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
 	BloomFilterSizeFlag = cli.Uint64Flag{
@@ -1403,26 +1403,29 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
-func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
-	whitelist := ctx.GlobalString(WhitelistFlag.Name)
-	if whitelist == "" {
+func setAllowList(ctx *cli.Context, cfg *ethconfig.Config) {
+	allowList := ctx.GlobalString(AllowListFlag.Name)
+	if allowList == "" {
+		allowList = ctx.GlobalString(WhitelistFlag.Name)
+	}
+	if allowList == "" {
 		return
 	}
-	cfg.Whitelist = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(whitelist, ",") {
+	cfg.AllowList = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(allowList, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid whitelist entry: %s", entry)
+			Fatalf("Invalid allowlist entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+			Fatalf("Invalid allowlist block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+			Fatalf("Invalid allowlist hash %s: %v", parts[1], err)
 		}
-		cfg.Whitelist[number] = hash
+		cfg.AllowList[number] = hash
 	}
 }
 
@@ -1489,7 +1492,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
-	setWhitelist(ctx, cfg)
+	setAllowList(ctx, cfg)
 	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
