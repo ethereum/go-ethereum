@@ -89,11 +89,10 @@ func findLine(data []byte, offset int64) (line int) {
 
 // testMatcher controls skipping and chain config assignment to tests.
 type testMatcher struct {
-	configpat    []testConfig
-	failpat      []testFailure
-	skiploadpat  []*regexp.Regexp
-	slowpat      []*regexp.Regexp
-	whitelistpat *regexp.Regexp
+	configpat   []testConfig
+	failpat     []testFailure
+	skiploadpat []*regexp.Regexp
+	slowpat     []*regexp.Regexp
 }
 
 type testConfig struct {
@@ -122,10 +121,6 @@ func (tm *testMatcher) fails(pattern string, reason string) {
 		panic("empty fail reason")
 	}
 	tm.failpat = append(tm.failpat, testFailure{regexp.MustCompile(pattern), reason})
-}
-
-func (tm *testMatcher) whitelist(pattern string) {
-	tm.whitelistpat = regexp.MustCompile(pattern)
 }
 
 // config defines chain config for tests matching the pattern.
@@ -217,11 +212,6 @@ func (tm *testMatcher) runTestFile(t *testing.T, path, name string, runTest inte
 	if r, _ := tm.findSkip(name); r != "" {
 		t.Skip(r)
 	}
-	if tm.whitelistpat != nil {
-		if !tm.whitelistpat.MatchString(name) {
-			t.Skip("Skipped by whitelist")
-		}
-	}
 	t.Parallel()
 
 	// Load the file as map[string]<testType>.
@@ -273,16 +263,5 @@ func runTestFunc(runTest interface{}, t *testing.T, name string, m reflect.Value
 		reflect.ValueOf(t),
 		reflect.ValueOf(name),
 		m.MapIndex(reflect.ValueOf(key)),
-	})
-}
-
-func TestMatcherWhitelist(t *testing.T) {
-	t.Parallel()
-	tm := new(testMatcher)
-	tm.whitelist("invalid*")
-	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
-		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
-			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)
-		}
 	})
 }
