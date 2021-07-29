@@ -73,12 +73,12 @@ func nodeAddr(n *enode.Node) net.Addr {
 
 // checkDial errors:
 var (
-	errSelf             = errors.New("is self")
-	errAlreadyDialing   = errors.New("already dialing")
-	errAlreadyConnected = errors.New("already connected")
-	errRecentlyDialed   = errors.New("recently dialed")
-	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
-	errNoPort           = errors.New("node does not provide TCP port")
+	errSelf                 = errors.New("is self")
+	errAlreadyDialing       = errors.New("already dialing")
+	errAlreadyConnected     = errors.New("already connected")
+	errRecentlyDialed       = errors.New("recently dialed")
+	errNotNetRestrictListed = errors.New("not contained in netrestrict list")
+	errNoPort               = errors.New("node does not provide TCP port")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -133,7 +133,7 @@ type dialConfig struct {
 	self           enode.ID         // our own ID
 	maxDialPeers   int              // maximum number of dialed peers
 	maxActiveDials int              // maximum number of active dials
-	netRestrict    *netutil.Netlist // IP whitelist, disabled if nil
+	netRestrict    *netutil.Netlist // IP netrestrict list, disabled if nil
 	resolver       nodeResolver
 	dialer         NodeDialer
 	log            log.Logger
@@ -402,7 +402,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 		return errAlreadyConnected
 	}
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
-		return errNotWhitelisted
+		return errNotNetRestrictListed
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
 		return errRecentlyDialed
