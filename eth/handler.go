@@ -249,21 +249,20 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			// after the transition. In theory block gossip should be disabled
 			// entirely whenever the transition is started. But in order to
 			// handle the transition boundary reorg in the consensus-layer,
-			// the legacy blocks are still accepted but the chain head won't
-			// be updated.
+			// the legacy blocks are still accepted, but only for the terminal
+			// pow blocks. Spec: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md#halt-the-importing-of-pow-blocks
 			for i, block := range blocks {
 				if err := h.chain.InsertBlock(block); err != nil {
 					return i, err
 				}
 			}
 			return 0, nil
-		} else {
-			n, err := h.chain.InsertChain(blocks)
-			if err == nil {
-				atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
-			}
-			return n, err
 		}
+		n, err := h.chain.InsertChain(blocks)
+		if err == nil {
+			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
+		}
+		return n, err
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
