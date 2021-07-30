@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -146,7 +147,8 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 
 	// Discard all the announces after the transition
 	// Also discarding initial signal to prevent syncing during testing.
-	if !h.backend.merger.LeftPoW() || !noInitAnnounce {
+	if !(noInitAnnounce || h.backend.merger.LeftPoW()) {
+		fmt.Print("adf")
 		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 	}
 

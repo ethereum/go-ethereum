@@ -52,7 +52,7 @@ var (
 // Beacon is a consensus engine combines the ethereum 1 consensus and proof-of-stake
 // algorithm. There is a special flag inside to decide whether to use legacy consensus
 // rules or new rules. The transition rule is described in the eth1/2 merge spec.
-// https://hackmd.io/@n0ble/ethereum_consensus_upgrade_mainnet_perspective#Transition-process
+// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md
 //
 // The beacon here is a half-functional consensus engine with partial functions which
 // is only used for necessary consensus checks. The legacy consensus engine can be any
@@ -78,8 +78,7 @@ func New(ethone consensus.Engine, transitioned bool) *Beacon {
 	}
 }
 
-// Author implements consensus.Engine, returning the header's coinbase as the
-// verified author of the block.
+// Author implements consensus.Engine, returning the verified author of the block.
 func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.Author(header)
@@ -182,7 +181,7 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum consensus engine. The difference between the beacon and ethash is
+// stock Ethereum consensus engine. The difference between the beacon and classic is
 // (a) the difficulty, mixhash, nonce, extradata and unclehash are expected
 //     to be the desired constants
 // (b) the timestamp is not verified anymore

@@ -239,6 +239,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Preimages: cacheConfig.Preimages,
 		}),
 		quit:          make(chan struct{}),
+		chainmu:       syncx.NewClosableMutex(),
 		bodyCache:     bodyCache,
 		bodyRLPCache:  bodyRLPCache,
 		receiptsCache: receiptsCache,
@@ -2105,8 +2106,8 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 	}
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
-		bc.reportBlock(block, nil, ErrBlacklistedHash)
-		return ErrBlacklistedHash
+		bc.reportBlock(block, nil, ErrBannedHash)
+		return ErrBannedHash
 	}
 	// Retrieve the parent block and it's state to execute on top
 	start := time.Now()
@@ -2197,6 +2198,7 @@ func (bc *BlockChain) SetChainHead(newBlock *types.Block) error {
 func (bc *BlockChain) update() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
+	defer bc.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:

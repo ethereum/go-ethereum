@@ -57,9 +57,26 @@ const (
 	eth2LightClient
 )
 
+func (typ nodetype) String() string {
+	switch typ {
+	case legacyMiningNode:
+		return "legacyMiningNode"
+	case legacyNormalNode:
+		return "legacyNormalNode"
+	case eth2MiningNode:
+		return "eth2MiningNode"
+	case eth2NormalNode:
+		return "eth2NormalNode"
+	case eth2LightClient:
+		return "eth2LightClient"
+	default:
+		return "undefined"
+	}
+}
+
 var (
 	// transitionDifficulty is the target total difficulty for transition
-	transitionDifficulty = new(big.Int).Mul(big.NewInt(0), params.MinimumDifficulty)
+	transitionDifficulty = new(big.Int).Mul(big.NewInt(20), params.MinimumDifficulty)
 
 	// blockInterval is the time interval for creating a new eth2 block
 	blockInterval    = time.Second * 3
@@ -285,7 +302,7 @@ func (mgr *nodeManager) run() {
 			}
 			transitioned, parentBlock = true, ev.Block
 			timer.Reset(blockInterval)
-			log.Info("Transition difficulty reached", "td", td, "target", transitionDifficulty)
+			log.Info("Transition difficulty reached", "td", td, "target", transitionDifficulty, "number", ev.Block.NumberU64(), "hash", ev.Block.Hash())
 
 		case <-timer.C:
 			producers := mgr.getNodes(eth2MiningNode)
@@ -309,7 +326,7 @@ func (mgr *nodeManager) run() {
 
 			for _, node := range nodes {
 				if err := node.insertBlockAndSetHead(parentBlock.Header(), *ed); err != nil {
-					log.Error("Failed to insert block", "err", err)
+					log.Error("Failed to insert block", "type", node.typ, "err", err)
 				}
 			}
 			log.Info("Create and insert eth2 block", "number", ed.Number)
@@ -387,6 +404,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis.Config.ChainID = big.NewInt(18)
 	genesis.Config.EIP150Hash = common.Hash{}
 	genesis.BaseFee = big.NewInt(params.InitialBaseFee)
+	genesis.Config.TerminalTotalDifficulty = transitionDifficulty
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
@@ -417,7 +435,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.C
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	econfig := &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
@@ -435,9 +453,14 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.C
 		LightServ:        100,
 		LightPeers:       10,
 		LightNoSyncServe: true,
-	})
+	}
+	ethBackend, err := eth.New(stack, econfig)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	_, err = les.NewLesServer(stack, ethBackend, econfig)
+	if err != nil {
+		log.Crit("Failed to create the LES server", "err", err)
 	}
 	err = stack.Start()
 	return stack, ethBackend, catalyst.NewConsensusAPI(ethBackend, nil), err
