@@ -252,6 +252,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			// the legacy blocks are still accepted, but only for the terminal
 			// pow blocks. Spec: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md#halt-the-importing-of-pow-blocks
 			for i, block := range blocks {
+				ptd := h.chain.GetTd(block.ParentHash(), block.NumberU64()-1)
+				if ptd == nil {
+					return 0, nil
+				}
+				td := new(big.Int).Add(ptd, block.Difficulty())
+				if !h.chain.Config().IsTerminalPoWBlock(ptd, td) {
+					log.Info("Filtered out non-termimal pow block", "number", block.NumberU64(), "hash", block.Hash())
+					return 0, nil
+				}
 				if err := h.chain.InsertBlock(block); err != nil {
 					return i, err
 				}
