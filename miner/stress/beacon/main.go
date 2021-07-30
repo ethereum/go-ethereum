@@ -435,7 +435,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.C
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	econfig := &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
@@ -453,9 +453,14 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.C
 		LightServ:        100,
 		LightPeers:       10,
 		LightNoSyncServe: true,
-	})
+	}
+	ethBackend, err := eth.New(stack, econfig)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	_, err = les.NewLesServer(stack, ethBackend, econfig)
+	if err != nil {
+		log.Crit("Failed to create the LES server", "err", err)
 	}
 	err = stack.Start()
 	return stack, ethBackend, catalyst.NewConsensusAPI(ethBackend, nil), err
