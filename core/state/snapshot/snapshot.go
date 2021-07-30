@@ -169,7 +169,7 @@ type Tree struct {
 // store (with a number of memory layers from a journal), ensuring that the head
 // of the snapshot matches the expected one.
 //
-// If the snapshot is missing or the disk layer is broken, the entire is deleted
+// If the snapshot is missing or the disk layer is broken, the entire snapshot is deleted
 // and will be reconstructed from scratch based on the tries in the key-value
 // store, on a background thread. If the memory layers from the journal is not
 // continuous with disk layer or the journal is missing, all diffs will be discarded
