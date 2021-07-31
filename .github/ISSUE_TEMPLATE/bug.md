@@ -26,5 +26,3 @@ Commit hash : (if `develop`)
 ````
 [backtrace]
 ````
-
-When submitting logs: please submit them as text and not screenshots.
