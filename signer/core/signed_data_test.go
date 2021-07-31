@@ -229,6 +229,20 @@ func TestSignData(t *testing.T) {
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
+	// data/typed
+	typedDataJson, err := json.Marshal(typedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
+	signature, err = api.SignData(context.Background(), core.DataTyped.Mime, a, hexutil.Encode(typedDataJson))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signature == nil || len(signature) != 65 {
+		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+	}
 }
 
 func TestDomainChainId(t *testing.T) {
