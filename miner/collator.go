@@ -32,19 +32,13 @@ import (
 // BlockState represents a block-to-be-mined, which is being assembled. A collator
 // can add transactions, and finish by calling Commit.
 type BlockState interface {
-	// AddTransactions attempts to add transactions to the blockstate.
-	// The following errors are returned
-	//   1) ErrRecommit- the recommit interval elapses
-	//	 2) ErrNewHead- a new chainHead is received
-	// For both cases, no more transactions will be added to the block on subsequent
-	// calls to AddTransactions
-	// If AddTransactions returns an ErrNewHead during sealing, the collator should abort
-	// immediately and propogate this error to the caller
+	// AddTransactions attempts to add transactions to the blockstate.  An error 
+    // (ErrNewHead) is returned signalling that the calling Collator should abort
+    // immediately and not make subsequent calls to AddTransactions.
+	// If a call to AddTransactions returns an ErrNewHead during sealing,
+    // the collator should abort immediately and propogate this error to the caller
 	// TODO perhaps this should also return a list of (reason, tx_hash) for failing txs
 	AddTransactions(txs *types.TransactionsByPriceAndNonce) error
-	// Commit signals that the collation is finished, and the block is ready
-	// to be sealed. After calling Commit, no more transactions may be added.
-	Commit()
 
 	Gas() (remaining uint64)
 	Coinbase() common.Address
@@ -76,6 +70,7 @@ type blockState struct {
 	baseFee   *big.Int
 	signer    types.Signer
 	interrupt *int32
+    resubmitAdjustHandled bool
 }
 
 // Coinbase returns the miner-address of the block being mined
@@ -113,7 +108,7 @@ func (bs *blockState) Commit() {
 	}
 	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
 	// than the user-specified one.
-	if bs.interrupt != nil {
+	if !bs.resubmitAdjustHandled && bs.interrupt != nil {
 		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
 }
@@ -124,6 +119,9 @@ func (bs *blockState) AddTransactions(txs *types.TransactionsByPriceAndNonce) er
 		returnErr     error
 		coalescedLogs []*types.Log
 	)
+    if bs.resubmitAdjustHandled {
+        return nil
+    }
 	for {
 		if bs.interrupt != nil && atomic.LoadInt32(bs.interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
@@ -140,9 +138,9 @@ func (bs *blockState) AddTransactions(txs *types.TransactionsByPriceAndNonce) er
 			if atomic.LoadInt32(bs.interrupt) == commitInterruptNewHead {
 				returnErr = ErrNewHead
 			}
+            bs.resubmitAdjustHandled = true
 			break
 		}
-
 		if w.current.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			break
@@ -157,14 +155,12 @@ func (bs *blockState) AddTransactions(txs *types.TransactionsByPriceAndNonce) er
 		//
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(w.current.signer, tx)
-
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
 			continue
 		}
-
 		// Start executing the transaction
 		bs.state.Prepare(tx.Hash(), w.current.tcount)
 		logs, err := w.commitTransaction(tx, bs.Coinbase())
@@ -203,7 +199,6 @@ func (bs *blockState) AddTransactions(txs *types.TransactionsByPriceAndNonce) er
 		}
 	}
 	bs.logs = coalescedLogs
-
 	return returnErr
 }
 
@@ -218,7 +213,6 @@ type DefaultCollator struct{}
 // CollateBlock fills a block based on the highest paying transactions from the
 // transaction pool, giving precedence over local transactions.
 func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool) error {
-	recommitFired := false
 	txs, err := pool.Pending(true)
 	if err != nil {
 		log.Error("could not get pending transactions from the pool", "err", err)
@@ -237,24 +231,13 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool) error {
 	}
 	if len(localTxs) > 0 {
 		if err := bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, bs.BaseFee())); err != nil {
-			if err == ErrNewHead {
-				return err
-			} else {
-				recommitFired = true
-			}
+            return err
 		}
 	}
 	if len(remoteTxs) > 0 {
 		if err := bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, bs.BaseFee())); err != nil {
-			if err == ErrNewHead {
-				return err
-			} else {
-				recommitFired = true
-			}
+            return err
 		}
-	}
-	if !recommitFired {
-		bs.Commit()
 	}
 	return nil
 }

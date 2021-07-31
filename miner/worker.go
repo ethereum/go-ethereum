@@ -767,8 +767,8 @@ func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) bool {
 	if w.current.gasPool == nil {
 		w.current.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
-	var bs BlockState
-	bs = &blockState{
+	var bs blockState
+	bs = blockState{
 		state:     w.current.state,
 		logs:      nil,
 		worker:    w,
@@ -776,12 +776,15 @@ func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) bool {
 		baseFee:   w.current.header.BaseFee,
 		signer:    w.current.signer,
 		interrupt: interrupt,
+        resubmitAdjustHandled: false,
 	}
 	var collator = &DefaultCollator{}
 
-	if err := collator.CollateBlock(bs, w.eth.TxPool()); err == ErrNewHead {
+	if err := collator.CollateBlock(&bs, w.eth.TxPool()); err != nil {
 		return false
 	}
+
+    bs.Commit()
 	return true
 }
 
@@ -961,8 +964,8 @@ func (w *worker) commitTransactionsToPending(txs map[common.Address]types.Transa
 	if w.current.gasPool == nil {
 		w.current.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
-	var bs BlockState
-	bs = &blockState{
+	var bs blockState
+	bs = blockState{
 		state:     w.current.state,
 		logs:      nil,
 		worker:    w,
@@ -970,8 +973,11 @@ func (w *worker) commitTransactionsToPending(txs map[common.Address]types.Transa
 		baseFee:   w.current.header.BaseFee,
 		signer:    w.current.signer,
 		interrupt: nil,
+        resubmitAdjustHandled: false,
 	}
 
+    // try to commit all transactions to the pending state. won't return an error
+    // because the recommit interrupt only applies when sealing
 	bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()))
 	bs.Commit()
 }
