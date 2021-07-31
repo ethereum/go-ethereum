@@ -1008,8 +1008,21 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		hi = block.GasLimit()
 	}
+
+	// Normalize the max fee per gas the call is willing to spend.
+	var maxFeePerGas *big.Int
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	} else if args.GasPrice != nil {
+		maxFeePerGas = args.GasPrice.ToInt()
+	} else if args.MaxFeePerGas != nil {
+		maxFeePerGas = args.MaxFeePerGas.ToInt()
+	} else {
+		maxFeePerGas = common.Big0
+	}
+
 	// Recap the highest gas limit with account's available balance.
-	if args.GasPrice != nil && args.GasPrice.ToInt().BitLen() != 0 {
+	if maxFeePerGas.BitLen() != 0 {
 		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
@@ -1022,7 +1035,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			}
 			available.Sub(available, args.Value.ToInt())
 		}
-		allowance := new(big.Int).Div(available, args.GasPrice.ToInt())
+		allowance := new(big.Int).Div(available, maxFeePerGas)
 
 		// If the allowance is larger than maximum uint64, skip checking
 		if allowance.IsUint64() && hi > allowance.Uint64() {
@@ -1031,7 +1044,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 				transfer = new(hexutil.Big)
 			}
 			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", transfer.ToInt(), "gasprice", args.GasPrice.ToInt(), "fundable", allowance)
+				"sent", transfer.ToInt(), "maxFeePerGas", maxFeePerGas, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
