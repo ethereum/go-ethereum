@@ -510,13 +510,7 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				tcount := w.current.tcount
 				w.commitTransactionsToPending(txs)
-				// Only update the snapshot if any new transactons were added
-				// to the pending block
-				if tcount != w.current.tcount {
-					w.updateSnapshot()
-				}
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit mining work here since all empty submission will be rejected
@@ -761,7 +755,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
-		return false
+		return true
 	}
 	gasLimit := w.current.header.GasLimit
 	if w.current.gasPool == nil {
@@ -769,23 +763,23 @@ func (w *worker) collateBlock(coinbase common.Address, interrupt *int32) bool {
 	}
 	var bs blockState
 	bs = blockState{
-		state:     w.current.state,
-		logs:      nil,
-		worker:    w,
-		coinbase:  w.coinbase,
-		baseFee:   w.current.header.BaseFee,
-		signer:    w.current.signer,
-		interrupt: interrupt,
-        resubmitAdjustHandled: false,
+		state:                 w.current.state,
+		logs:                  nil,
+		worker:                w,
+		coinbase:              w.coinbase,
+		baseFee:               w.current.header.BaseFee,
+		signer:                w.current.signer,
+		interrupt:             interrupt,
+		resubmitAdjustHandled: false,
 	}
 	var collator = &DefaultCollator{}
 
-	if err := collator.CollateBlock(&bs, w.eth.TxPool()); err != nil {
-		return false
+	if collator.CollateBlock(&bs, w.eth.TxPool()) {
+		return true
 	}
 
-    bs.Commit()
-	return true
+	bs.Commit()
+	return false
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
@@ -898,7 +892,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		return
 	}
 
-	if !w.collateBlock(w.coinbase, interrupt) {
+	if w.collateBlock(w.coinbase, interrupt) {
 		return
 	}
 
@@ -966,19 +960,25 @@ func (w *worker) commitTransactionsToPending(txs map[common.Address]types.Transa
 	}
 	var bs blockState
 	bs = blockState{
-		state:     w.current.state,
-		logs:      nil,
-		worker:    w,
-		coinbase:  w.coinbase,
-		baseFee:   w.current.header.BaseFee,
-		signer:    w.current.signer,
-		interrupt: nil,
-        resubmitAdjustHandled: false,
+		state:                 w.current.state,
+		logs:                  nil,
+		worker:                w,
+		coinbase:              w.coinbase,
+		baseFee:               w.current.header.BaseFee,
+		signer:                w.current.signer,
+		interrupt:             nil,
+		resubmitAdjustHandled: false,
 	}
 
-    // try to commit all transactions to the pending state. won't return an error
-    // because the recommit interrupt only applies when sealing
-	bs.AddTransactions(types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()))
+	// try to commit all transactions to the pending state. won't return an error
+	// because the recommit interrupt only applies when sealing
+	tcount := w.current.tcount
+	submitTransactions(&bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), txs, bs.BaseFee()))
+	// Only update the snapshot if any new transactons were added
+	// to the pending block
+	if tcount != w.current.tcount {
+		w.updateSnapshot()
+	}
 	bs.Commit()
 }
 
