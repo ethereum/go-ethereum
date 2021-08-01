@@ -740,9 +740,6 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
-		} else if err == nil {
-			author, _ := s.b.Engine().Author(block.Header())
-			response["miner"] = author
 		}
 		return response, err
 	}
