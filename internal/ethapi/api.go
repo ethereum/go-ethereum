@@ -1165,6 +1165,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	miner, _ := Author(head)
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
 		"hash":             head.Hash(),
@@ -1174,7 +1175,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"sha3Uncles":       head.UncleHash,
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
-		"miner":            head.Coinbase,
+		"miner":            miner,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
 		"size":             hexutil.Uint64(head.Size()),
@@ -1190,6 +1191,31 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	}
 
 	return result
+}
+
+// Author implements consensus.Engine, returning the Ethereum address recovered
+// from the signature in the header's extra-data section.
+func Author(header *types.Header) (common.Address, error) {
+	if header.Coinbase != common.HexToAddress("0x0") {
+		return header.Coinbase, nil
+	}
+	return ecrecover(header)
+}
+
+// ecrecover extracts the Ethereum account address from a signed header.
+func ecrecover(header *types.Header) (common.Address, error) {
+	extraSeal := crypto.SignatureLength
+	signature := header.Extra[len(header.Extra)-extraSeal:]
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	return signer, nil
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
