@@ -16,7 +16,7 @@ Retrieves a snapshot of all clique state at a given block.
 | Client  | Method invocation                                          |
 |:--------|------------------------------------------------------------|
 | Console | `clique.getSnapshot(blockNumber)`                          |
-| RPC     | `{"method": "clique_getSnapsnot", "params": [blockNumber]}` |
+| RPC     | `{"method": "clique_getSnapshot", "params": [blockNumber]}` |
 
 Example:
 
