@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -1164,8 +1165,8 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) map[string]interface{} {
-	miner, _ := Author(head)
+func RPCMarshalHeader(head *types.Header, engine consensus.Engine) map[string]interface{} {
+	miner, _ := engine.Author(head)
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
 		"hash":             head.Hash(),
@@ -1193,36 +1194,11 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	return result
 }
 
-// Author implements consensus.Engine, returning the Ethereum address recovered
-// from the signature in the header's extra-data section.
-func Author(header *types.Header) (common.Address, error) {
-	if header.Coinbase != common.HexToAddress("0x0") {
-		return header.Coinbase, nil
-	}
-	return ecrecover(header)
-}
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header) (common.Address, error) {
-	extraSeal := crypto.SignatureLength
-	signature := header.Extra[len(header.Extra)-extraSeal:]
-
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-	return signer, nil
-}
-
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, engine consensus.Engine) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(block.Header(), engine)
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
@@ -1257,7 +1233,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalHeader(header)
+	fields := RPCMarshalHeader(header, s.b.Engine())
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
@@ -1265,7 +1241,7 @@ func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *type
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.Engine())
 	if err != nil {
 		return nil, err
 	}
