@@ -861,7 +861,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.accountIdlers)),
-		caps: make([]float64, 0, len(s.accountIdlers)),
+		caps: make([]int, 0, len(s.accountIdlers)),
 	}
 	targetTTL := s.rates.TargetTimeout()
 	for id := range s.accountIdlers {
@@ -958,7 +958,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.bytecodeIdlers)),
-		caps: make([]float64, 0, len(s.bytecodeIdlers)),
+		caps: make([]int, 0, len(s.bytecodeIdlers)),
 	}
 	targetTTL := s.rates.TargetTimeout()
 	for id := range s.bytecodeIdlers {
@@ -1012,11 +1012,11 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 		if cap > maxCodeRequestCount {
 			cap = maxCodeRequestCount
 		}
-		hashes := make([]common.Hash, 0, int(cap))
+		hashes := make([]common.Hash, 0, cap)
 		for hash := range task.codeTasks {
 			delete(task.codeTasks, hash)
 			hashes = append(hashes, hash)
-			if len(hashes) >= int(cap) {
+			if len(hashes) >= cap {
 				break
 			}
 		}
@@ -1061,7 +1061,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.storageIdlers)),
-		caps: make([]float64, 0, len(s.storageIdlers)),
+		caps: make([]int, 0, len(s.storageIdlers)),
 	}
 	targetTTL := s.rates.TargetTimeout()
 	for id := range s.storageIdlers {
@@ -1120,7 +1120,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		if cap < minRequestSize { // Don't bother with peers below a bare minimum performance
 			cap = minRequestSize
 		}
-		storageSets := int(cap / 1024)
+		storageSets := cap / 1024
 
 		var (
 			accounts = make([]common.Hash, 0, storageSets)
@@ -1217,7 +1217,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.trienodeHealIdlers)),
-		caps: make([]float64, 0, len(s.trienodeHealIdlers)),
+		caps: make([]int, 0, len(s.trienodeHealIdlers)),
 	}
 	targetTTL := s.rates.TargetTimeout()
 	for id := range s.trienodeHealIdlers {
@@ -1284,9 +1284,9 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			cap = maxTrieRequestCount
 		}
 		var (
-			hashes   = make([]common.Hash, 0, int(cap))
-			paths    = make([]trie.SyncPath, 0, int(cap))
-			pathsets = make([]TrieNodePathSet, 0, int(cap))
+			hashes   = make([]common.Hash, 0, cap)
+			paths    = make([]trie.SyncPath, 0, cap)
+			pathsets = make([]TrieNodePathSet, 0, cap)
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)
@@ -1295,7 +1295,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			paths = append(paths, pathset)
 			pathsets = append(pathsets, [][]byte(pathset)) // TODO(karalabe): group requests by account hash
 
-			if len(hashes) >= int(cap) {
+			if len(hashes) >= cap {
 				break
 			}
 		}
@@ -1341,7 +1341,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.bytecodeHealIdlers)),
-		caps: make([]float64, 0, len(s.bytecodeHealIdlers)),
+		caps: make([]int, 0, len(s.bytecodeHealIdlers)),
 	}
 	targetTTL := s.rates.TargetTimeout()
 	for id := range s.bytecodeHealIdlers {
@@ -1407,12 +1407,12 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 		if cap > maxCodeRequestCount {
 			cap = maxCodeRequestCount
 		}
-		hashes := make([]common.Hash, 0, int(cap))
+		hashes := make([]common.Hash, 0, cap)
 		for hash := range s.healer.codeTasks {
 			delete(s.healer.codeTasks, hash)
 
 			hashes = append(hashes, hash)
-			if len(hashes) >= int(cap) {
+			if len(hashes) >= cap {
 				break
 			}
 		}
@@ -2852,7 +2852,7 @@ func estimateRemainingSlots(hashes int, last common.Hash) (uint64, error) {
 // of highest capacity being at the front.
 type capacitySort struct {
 	ids  []string
-	caps []float64
+	caps []int
 }
 
 func (s *capacitySort) Len() int {

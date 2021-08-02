@@ -215,7 +215,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		ancestors[parent] = ancestorHeader
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash != types.EmptyUncleHash {
-			// Need to add those uncles to the blacklist too
+			// Need to add those uncles to the banned list too
 			ancestor := chain.GetBlock(parent, number)
 			if ancestor == nil {
 				break

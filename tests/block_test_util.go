@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -59,9 +60,10 @@ type btJSON struct {
 }
 
 type btBlock struct {
-	BlockHeader  *btHeader
-	Rlp          string
-	UncleHeaders []*btHeader
+	BlockHeader     *btHeader
+	ExpectException string
+	Rlp             string
+	UncleHeaders    []*btHeader
 }
 
 //go:generate gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -83,15 +85,17 @@ type btHeader struct {
 	GasLimit         uint64
 	GasUsed          uint64
 	Timestamp        uint64
+	BaseFeePerGas    *big.Int
 }
 
 type btHeaderMarshaling struct {
-	ExtraData  hexutil.Bytes
-	Number     *math.HexOrDecimal256
-	Difficulty *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
+	ExtraData     hexutil.Bytes
+	Number        *math.HexOrDecimal256
+	Difficulty    *math.HexOrDecimal256
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Timestamp     math.HexOrDecimal64
+	BaseFeePerGas *math.HexOrDecimal256
 }
 
 func (t *BlockTest) Run(snapshotter bool) error {
@@ -166,6 +170,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Mixhash:    t.json.Genesis.MixHash,
 		Coinbase:   t.json.Genesis.Coinbase,
 		Alloc:      t.json.Pre,
+		BaseFee:    t.json.Genesis.BaseFeePerGas,
 	}
 }
 
@@ -184,7 +189,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
-	for _, b := range t.json.Blocks {
+	for bi, b := range t.json.Blocks {
 		cb, err := b.decode()
 		if err != nil {
 			if b.BlockHeader == nil {
@@ -204,7 +209,12 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 			}
 		}
 		if b.BlockHeader == nil {
-			return nil, fmt.Errorf("block insertion should have failed")
+			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+					bi, b.ExpectException, string(data))
+			}
+			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
+				bi, b.ExpectException)
 		}
 
 		// validate RLP decoding by checking all values against test file JSON

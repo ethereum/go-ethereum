@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -632,4 +633,117 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	default:
 		return fmt.Errorf("expected disconnect, got: %s", pretty.Sdump(msg))
 	}
+}
+
+func (s *Suite) hashAnnounce(isEth66 bool) error {
+	// create connections
+	sendConn, recvConn, err := s.createSendAndRecvConns(isEth66)
+	if err != nil {
+		return fmt.Errorf("failed to create connections: %v", err)
+	}
+	defer sendConn.Close()
+	defer recvConn.Close()
+	if err := sendConn.peer(s.chain, nil); err != nil {
+		return fmt.Errorf("peering failed: %v", err)
+	}
+	if err := recvConn.peer(s.chain, nil); err != nil {
+		return fmt.Errorf("peering failed: %v", err)
+	}
+	// create NewBlockHashes announcement
+	type anno struct {
+		Hash   common.Hash // Hash of one particular block being announced
+		Number uint64      // Number of one particular block being announced
+	}
+	nextBlock := s.fullChain.blocks[s.chain.Len()]
+	announcement := anno{Hash: nextBlock.Hash(), Number: nextBlock.Number().Uint64()}
+	newBlockHash := &NewBlockHashes{announcement}
+	if err := sendConn.Write(newBlockHash); err != nil {
+		return fmt.Errorf("failed to write to connection: %v", err)
+	}
+	// Announcement sent, now wait for a header request
+	var (
+		id             uint64
+		msg            Message
+		blockHeaderReq GetBlockHeaders
+	)
+	if isEth66 {
+		id, msg = sendConn.Read66()
+		switch msg := msg.(type) {
+		case GetBlockHeaders:
+			blockHeaderReq = msg
+		default:
+			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
+		}
+		if blockHeaderReq.Amount != 1 {
+			return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
+		}
+		if blockHeaderReq.Origin.Hash != announcement.Hash {
+			return fmt.Errorf("unexpected block header requested. Announced:\n %v\n Remote request:\n%v",
+				pretty.Sdump(announcement),
+				pretty.Sdump(blockHeaderReq))
+		}
+		if err := sendConn.Write66(&eth.BlockHeadersPacket66{
+			RequestId: id,
+			BlockHeadersPacket: eth.BlockHeadersPacket{
+				nextBlock.Header(),
+			},
+		}, BlockHeaders{}.Code()); err != nil {
+			return fmt.Errorf("failed to write to connection: %v", err)
+		}
+	} else {
+		msg = sendConn.Read()
+		switch msg := msg.(type) {
+		case *GetBlockHeaders:
+			blockHeaderReq = *msg
+		default:
+			return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
+		}
+		if blockHeaderReq.Amount != 1 {
+			return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
+		}
+		if blockHeaderReq.Origin.Hash != announcement.Hash {
+			return fmt.Errorf("unexpected block header requested. Announced:\n %v\n Remote request:\n%v",
+				pretty.Sdump(announcement),
+				pretty.Sdump(blockHeaderReq))
+		}
+		if err := sendConn.Write(&BlockHeaders{nextBlock.Header()}); err != nil {
+			return fmt.Errorf("failed to write to connection: %v", err)
+		}
+	}
+	// wait for block announcement
+	msg = recvConn.readAndServe(s.chain, timeout)
+	switch msg := msg.(type) {
+	case *NewBlockHashes:
+		hashes := *msg
+		if len(hashes) != 1 {
+			return fmt.Errorf("unexpected new block hash announcement: wanted 1 announcement, got %d", len(hashes))
+		}
+		if nextBlock.Hash() != hashes[0].Hash {
+			return fmt.Errorf("unexpected block hash announcement, wanted %v, got %v", nextBlock.Hash(),
+				hashes[0].Hash)
+		}
+	case *NewBlock:
+		// node should only propagate NewBlock without having requested the body if the body is empty
+		nextBlockBody := nextBlock.Body()
+		if len(nextBlockBody.Transactions) != 0 || len(nextBlockBody.Uncles) != 0 {
+			return fmt.Errorf("unexpected non-empty new block propagated: %s", pretty.Sdump(msg))
+		}
+		if msg.Block.Hash() != nextBlock.Hash() {
+			return fmt.Errorf("mismatched hash of propagated new block: wanted %v, got %v",
+				nextBlock.Hash(), msg.Block.Hash())
+		}
+		// check to make sure header matches header that was sent to the node
+		if !reflect.DeepEqual(nextBlock.Header(), msg.Block.Header()) {
+			return fmt.Errorf("incorrect header received: wanted %v, got %v", nextBlock.Header(), msg.Block.Header())
+		}
+	default:
+		return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
+	}
+	// confirm node imported block
+	if err := s.waitForBlockImport(recvConn, nextBlock, isEth66); err != nil {
+		return fmt.Errorf("error waiting for node to import new block: %v", err)
+	}
+	// update the chain
+	s.chain.blocks = append(s.chain.blocks, nextBlock)
+	return nil
 }

@@ -312,12 +312,11 @@ func (sf *subfetcher) loop() {
 
 				default:
 					// No termination request yet, prefetch the next entry
-					taskid := string(task)
-					if _, ok := sf.seen[taskid]; ok {
+					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
 						sf.trie.TryGet(task)
-						sf.seen[taskid] = struct{}{}
+						sf.seen[string(task)] = struct{}{}
 					}
 				}
 			}

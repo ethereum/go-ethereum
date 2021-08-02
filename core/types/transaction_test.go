@@ -288,27 +288,27 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 		count := 25
 		for i := 0; i < 25; i++ {
 			var tx *Transaction
-			feeCap := rand.Intn(50)
+			gasFeeCap := rand.Intn(50)
 			if baseFee == nil {
 				tx = NewTx(&LegacyTx{
 					Nonce:    uint64(start + i),
 					To:       &common.Address{},
 					Value:    big.NewInt(100),
 					Gas:      100,
-					GasPrice: big.NewInt(int64(feeCap)),
+					GasPrice: big.NewInt(int64(gasFeeCap)),
 					Data:     nil,
 				})
 			} else {
 				tx = NewTx(&DynamicFeeTx{
-					Nonce:  uint64(start + i),
-					To:     &common.Address{},
-					Value:  big.NewInt(100),
-					Gas:    100,
-					FeeCap: big.NewInt(int64(feeCap)),
-					Tip:    big.NewInt(int64(rand.Intn(feeCap + 1))),
-					Data:   nil,
+					Nonce:     uint64(start + i),
+					To:        &common.Address{},
+					Value:     big.NewInt(100),
+					Gas:       100,
+					GasFeeCap: big.NewInt(int64(gasFeeCap)),
+					GasTipCap: big.NewInt(int64(rand.Intn(gasFeeCap + 1))),
+					Data:      nil,
 				})
-				if count == 25 && int64(feeCap) < baseFee.Int64() {
+				if count == 25 && int64(gasFeeCap) < baseFee.Int64() {
 					count = i
 				}
 			}
@@ -345,8 +345,8 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
-			tip, err := txi.EffectiveTip(baseFee)
-			nextTip, nextErr := next.EffectiveTip(baseFee)
+			tip, err := txi.EffectiveGasTip(baseFee)
+			nextTip, nextErr := next.EffectiveGasTip(baseFee)
 			if err != nil || nextErr != nil {
 				t.Errorf("error calculating effective tip")
 			}
