@@ -74,7 +74,7 @@ func showDeprecated(*cli.Context) {
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
-	// TODO remove when there are newly deprecated flags
+	// These are the deprecated aliased flags
 	fmt.Println("--nousb")
 	fmt.Println("--rpc")
 	fmt.Println("--rpcaddr value")
@@ -82,4 +82,5 @@ func showDeprecated(*cli.Context) {
 	fmt.Println("--rpccorsdomain value")
 	fmt.Println("--rpcvhosts value")
 	fmt.Println("--rpcapi value")
+	fmt.Println()
 }
