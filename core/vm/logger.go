@@ -121,9 +121,6 @@ func (s *StructFrame) ErrorString() string {
 }
 
 type structFrameMarshaling struct {
-	Type        string                `json:"type"`
-	From        common.Address        `json:"from"`
-	To          common.Address        `json:"to"`
 	Input       hexutil.Bytes         `json:"input"`
 	Gas         math.HexOrDecimal64   `json:"gas"`
 	Value       *math.HexOrDecimal256 `json:"value"`
