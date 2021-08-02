@@ -89,9 +89,9 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureEnter(typ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	frame := StructFrame{
-		Type:  type_.String(),
+		Type:  typ.String(),
 		From:  from,
 		To:    to,
 		Input: input,

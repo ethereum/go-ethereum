@@ -135,7 +135,7 @@ type structFrameMarshaling struct {
 type Tracer interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
-	CaptureEnter(type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureEnter(typ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	CaptureExit(output []byte, gasUsed uint64, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
@@ -257,11 +257,11 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 }
 
-func (l *StructLogger) CaptureEnter(type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureEnter(typ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	in := make([]byte, len(input))
 	copy(in, input)
 	// TODO: should we honor `l.Cfg.Limit` for frames too?
-	frame := StructFrame{type_.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil, nil}
+	frame := StructFrame{typ.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil, nil}
 	l.frames = append(l.frames, frame)
 }
 
@@ -395,7 +395,7 @@ func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, e
 		output, gasUsed, err)
 }
 
-func (t *mdLogger) CaptureEnter(env *EVM, type_ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureEnter(env *EVM, typ CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// TODO
 }
 
