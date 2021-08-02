@@ -75,6 +75,11 @@ func showDeprecated(*cli.Context) {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
 	// TODO remove when there are newly deprecated flags
-	fmt.Println("no deprecated flags to show at this time")
-	fmt.Println()
+	fmt.Println("--nousb")
+	fmt.Println("--rpc")
+	fmt.Println("--rpcaddr value")
+	fmt.Println("--rpcport value")
+	fmt.Println("--rpccorsdomain value")
+	fmt.Println("--rpcvhosts value")
+	fmt.Println("--rpcapi value")
 }
