@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"math/big"
 	"sort"
@@ -29,10 +30,33 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/opentracing/opentracing-go"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
+	data, _ := db.Ancient(freezerHashTable, number)
+	if len(data) == 0 {
+		data, _ = db.Get(headerHashKey(number))
+		// In the background freezer is moving data from leveldb to flatten files.
+		// So during the first check for ancient db, the data is not yet in there,
+		// but when we reach into leveldb, the data was already moved. That would
+		// result in a not found error.
+		if len(data) == 0 {
+			data, _ = db.Ancient(freezerHashTable, number)
+		}
+	}
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
+func ReadCanonicalHashTraced(ctx context.Context, db ethdb.Reader, number uint64) common.Hash {
+	span, _ := opentracing.StartSpanFromContext(ctx, "ReadCanonicalHashTraced")
+	defer span.Finish()
+
 	data, _ := db.Ancient(freezerHashTable, number)
 	if len(data) == 0 {
 		data, _ = db.Get(headerHashKey(number))
@@ -426,6 +450,23 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 
 // ReadBody retrieves the block body corresponding to the hash.
 func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
+	data := ReadBodyRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	body := new(types.Body)
+	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+		log.Error("Invalid block body RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return body
+}
+
+// ReadBody retrieves the block body corresponding to the hash.
+func ReadBodyTraced(ctx context.Context, db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
+	span, _ := opentracing.StartSpanFromContext(ctx, "ReadBodyTraced")
+	defer span.Finish()
+
 	data := ReadBodyRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil

@@ -254,9 +254,9 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "GetTransaction")
+	span, childCtx := opentracing.StartSpanFromContext(ctx, "GetTransaction")
 	defer span.Finish()
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransactionTraced(childCtx, b.eth.ChainDb(), txHash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
