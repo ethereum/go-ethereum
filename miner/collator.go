@@ -120,11 +120,12 @@ func (bs *blockState) Commit() {
 
 func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 	var (
-		w      = bs.worker
-		snap   = w.current.state.Snapshot()
-		err    error
-		logs   []*types.Log
-		tcount = w.current.tcount
+		w           = bs.worker
+		snap        = w.current.state.Snapshot()
+		err         error
+		logs        []*types.Log
+		tcount      = w.current.tcount
+		startTCount = w.current.tcount
 	)
 	if bs.resubmitAdjustHandled {
 		return ErrRecommit
@@ -179,6 +180,14 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 	}
 	if err != nil {
 		bs.state.RevertToSnapshot(snap)
+
+		// remove the txs and receipts that were added
+		for i := startTCount; i < tcount; i++ {
+			w.current.txs[i] = nil
+			w.current.receipts[i] = nil
+		}
+		w.current.txs = w.current.txs[:startTCount+1]
+		w.current.receipts = w.current.receipts[:startTCount+1]
 	} else {
 		bs.logs = append(bs.logs, logs...)
 		w.current.tcount = tcount
