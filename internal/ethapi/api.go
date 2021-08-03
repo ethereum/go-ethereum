@@ -609,7 +609,7 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
-	span := opentracing.GlobalTracer().StartSpan("ChainID")
+	span := opentracing.StartSpan("ChainID")
 	defer span.Finish()
 	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
 	if config := api.b.ChainConfig(); config.IsEIP155(api.b.CurrentBlock().Number()) {
@@ -620,7 +620,7 @@ func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
-	span := opentracing.GlobalTracer().StartSpan("BlockNumber")
+	span := opentracing.StartSpan("BlockNumber")
 	defer span.Finish()
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 	return hexutil.Uint64(header.Number.Uint64())
@@ -1597,8 +1597,9 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	span := opentracing.GlobalTracer().StartSpan("GetTransaction")
+	span := opentracing.StartSpan("GetTransaction")
 	defer span.Finish()
+	span.SetTag("hash", hash.Hex())
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(opentracing.ContextWithSpan(ctx, span), hash)
 	if err != nil {
 		return nil, nil
