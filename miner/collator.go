@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type AddTransactionsResultFunc func(error, []*types.Receipt) bool
+
 // BlockState represents a block-to-be-mined, which is being assembled.
 // A collator can add transactions by calling AddTransactions
 type BlockState interface {
@@ -40,7 +42,7 @@ type BlockState interface {
 	// If ErrAbort is returned, the collator should immediately abort and return a
 	// value (true) from CollateBlock which indicates to the miner to discard the
 	// block
-	AddTransactions(sequence types.Transactions) error
+	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
 	Gas() (remaining uint64)
 	Coinbase() common.Address
 	BaseFee() *big.Int
@@ -118,7 +120,7 @@ func (bs *blockState) Commit() {
 	}
 }
 
-func (bs *blockState) AddTransactions(sequence types.Transactions) error {
+func (bs *blockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
 	var (
 		w           = bs.worker
 		snap        = w.current.state.Snapshot()
@@ -128,8 +130,10 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 		startTCount = w.current.tcount
 	)
 	if bs.resubmitAdjustHandled {
-		return ErrRecommit
+		cb(ErrRecommit, nil)
+		return
 	}
+
 	for _, tx := range sequence {
 		if bs.interrupt != nil && atomic.LoadInt32(bs.interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
@@ -178,7 +182,14 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 			break
 		}
 	}
-	if err != nil {
+	var txReceipts []*types.Receipt = nil
+	if err == nil {
+		txReceipts = w.current.receipts[startTCount:tcount]
+	}
+	// TODO: deep copy the tx receipts here or add a disclaimer to implementors not to modify them?
+	shouldRevert := cb(err, txReceipts)
+
+	if err != nil || shouldRevert {
 		bs.state.RevertToSnapshot(snap)
 
 		// remove the txs and receipts that were added
@@ -192,7 +203,6 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 		bs.logs = append(bs.logs, logs...)
 		w.current.tcount = tcount
 	}
-	return err
 }
 
 func (bs *blockState) Gas() (remaining uint64) {
@@ -205,6 +215,31 @@ type DefaultCollator struct{}
 
 func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) bool {
 	returnVal := false
+	shouldReturn := false
+	cb := func(err error, receipts []*types.Receipt) bool {
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
+			fallthrough
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			fallthrough
+		case errors.Is(err, core.ErrNonceTooHigh):
+			txs.Pop()
+		case errors.Is(err, ErrAbort):
+			returnVal = true
+			shouldReturn = true
+		case errors.Is(err, ErrRecommit):
+			returnVal = false
+			shouldReturn = true
+		case errors.Is(err, core.ErrNonceTooLow):
+			fallthrough
+		case errors.Is(err, nil):
+			fallthrough
+		default:
+			txs.Shift()
+		}
+		return false
+	}
+
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		available := bs.Gas()
@@ -221,26 +256,9 @@ func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) b
 			txs.Pop()
 			continue
 		}
-		// Error already logged in AddTransactions
-		err := bs.AddTransactions(types.Transactions{tx})
-		switch {
-		case errors.Is(err, core.ErrGasLimitReached):
-			fallthrough
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			fallthrough
-		case errors.Is(err, core.ErrNonceTooHigh):
-			txs.Pop()
-		case errors.Is(err, ErrAbort):
-			returnVal = true
+		bs.AddTransactions(types.Transactions{tx}, cb)
+		if shouldReturn {
 			break
-		case errors.Is(err, ErrRecommit):
-			break
-		case errors.Is(err, core.ErrNonceTooLow):
-			fallthrough
-		case errors.Is(err, nil):
-			fallthrough
-		default:
-			txs.Shift()
 		}
 	}
 
