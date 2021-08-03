@@ -84,7 +84,7 @@ ETHASH OPTIONS:
   --ethash.cachesinmem value          Number of recent ethash caches to keep in memory (16MB each) (default: 2)
   --ethash.cachesondisk value         Number of recent ethash caches to keep on disk (16MB each) (default: 3)
   --ethash.cacheslockmmap             Lock memory maps of recent ethash caches
-  --ethash.dagdir value               Directory to store the ethash mining DAGs (default: "~/.ethash)
+  --ethash.dagdir value               Directory to store the ethash mining DAGs (default: "~/.ethash")
   --ethash.dagsinmem value            Number of recent ethash mining DAGs to keep in memory (1+GB each) (default: 1)
   --ethash.dagsondisk value           Number of recent ethash mining DAGs to keep on disk (1+GB each) (default: 2)
   --ethash.dagslockmmap               Lock memory maps for recent ethash mining DAGs
