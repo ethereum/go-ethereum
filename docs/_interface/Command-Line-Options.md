@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.3-stable-991384a7
+   1.10.6-stable-576681f2
 
 COMMANDS:
    account                            Manage accounts
@@ -48,12 +48,12 @@ ETHEREUM OPTIONS:
   --datadir.minfreedisk value         Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)
   --keystore value                    Directory for the keystore (default = inside the datadir)
   --usb                               Enable monitoring and management of USB hardware wallets
-  --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
+  --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file
   --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
   --mainnet                           Ethereum mainnet
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
-  --yolov3                            YOLOv3 network: pre-configured proof-of-authority shortlived test network.
+  --calaveras                         Calaveras network: pre-configured proof-of-authority shortlived test network.
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
   --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
@@ -97,7 +97,7 @@ TRANSACTION POOL OPTIONS:
   --txpool.pricelimit value           Minimum gas price limit to enforce for acceptance into the pool (default: 1)
   --txpool.pricebump value            Price bump percentage to replace an already existing transaction (default: 10)
   --txpool.accountslots value         Minimum number of executable transaction slots guaranteed per account (default: 16)
-  --txpool.globalslots value          Maximum number of executable transaction slots for all accounts (default: 4096)
+  --txpool.globalslots value          Maximum number of executable transaction slots for all accounts (default: 5120)
   --txpool.accountqueue value         Maximum number of non-executable transaction slots permitted per account (default: 64)
   --txpool.globalqueue value          Maximum number of non-executable transaction slots for all accounts (default: 1024)
   --txpool.lifetime value             Maximum amount of time non-executable transaction are queued (default: 3h0m0s)
@@ -138,7 +138,7 @@ API AND CONSOLE OPTIONS:
   --graphql                           Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
   --graphql.corsdomain value          Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --graphql.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
-  --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 25000000)
+  --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 50000000)
   --rpc.txfeecap value                Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 1)
   --rpc.allow-unprotected-txs         Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC
   --jspath loadScript                 JavaScript root path for loadScript (default: ".")
@@ -175,11 +175,10 @@ GAS PRICE ORACLE OPTIONS:
   --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
   --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
+  --gpo.ignoreprice value             Gas price below which gpo will ignore transactions (default: 2)
 
 VIRTUAL MACHINE OPTIONS:
   --vmdebug                           Record information useful for VM and contract debugging
-  --vm.evm value                      External EVM configuration (default = built-in interpreter)
-  --vm.ewasm value                    External ewasm configuration (default = built-in interpreter)
 
 LOGGING AND DEBUGGING OPTIONS:
   --fakepow                           Disables proof-of-work verification
@@ -223,7 +222,7 @@ MISC OPTIONS:
   --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                          show help
   --catalyst                          Catalyst mode (eth2 integration testing)
-  --override.berlin value             Manually specify Berlin fork-block, overriding the bundled setting (default: 0)
+  --override.london value             Manually specify London fork-block, overriding the bundled setting (default: 0)
 
 
 COPYRIGHT:
