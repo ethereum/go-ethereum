@@ -43,7 +43,7 @@ COMMANDS:
 
 ETHEREUM OPTIONS:
   --config value                      TOML configuration file
-  --datadir value                     Data directory for the databases and keystore (default: "C:\\Users\\mihal\\AppData\\Local\\Ethereum")
+  --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
   --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
   --datadir.minfreedisk value         Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)
   --keystore value                    Directory for the keystore (default = inside the datadir)
@@ -84,7 +84,7 @@ ETHASH OPTIONS:
   --ethash.cachesinmem value          Number of recent ethash caches to keep in memory (16MB each) (default: 2)
   --ethash.cachesondisk value         Number of recent ethash caches to keep on disk (16MB each) (default: 3)
   --ethash.cacheslockmmap             Lock memory maps of recent ethash caches
-  --ethash.dagdir value               Directory to store the ethash mining DAGs (default: "C:\\Users\\mihal\\AppData\\Local\\Ethash")
+  --ethash.dagdir value               Directory to store the ethash mining DAGs (default: "~/.ethash)
   --ethash.dagsinmem value            Number of recent ethash mining DAGs to keep in memory (1+GB each) (default: 1)
   --ethash.dagsondisk value           Number of recent ethash mining DAGs to keep on disk (1+GB each) (default: 2)
   --ethash.dagslockmmap               Lock memory maps for recent ethash mining DAGs
