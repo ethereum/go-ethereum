@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/opentracing/opentracing-go"
 )
 
 // EthAPIBackend implements ethapi.Backend for full nodes
@@ -177,6 +178,8 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "GetReceipts")
+	defer span.Finish()
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
@@ -251,6 +254,8 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "GetTransaction")
+	defer span.Finish()
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
 	return tx, blockHash, blockNumber, index, nil
 }
