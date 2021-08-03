@@ -270,5 +270,5 @@ func (n valueNode) toString(ind string, db *Database) string {
 	// decode data into account & print account
 	var acc Account
 	rlp.DecodeBytes([]byte(n), &acc)
-	return fmt.Sprintf("[ Nonce: %d / Balance: %d ]", acc.Nonce, acc.Balance.Uint64())
+	return fmt.Sprintf("[ Nonce: %d / Balance: %s ]", acc.Nonce, acc.Balance.String())
 }
