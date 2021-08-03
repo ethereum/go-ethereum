@@ -42,8 +42,8 @@ type Node struct {
 	config        *Config
 	accman        *accounts.Manager
 	log           log.Logger
-	keydir        string            // key store directory
-	isKeyDirEphem bool              // If true, key directory will be removed by Stop
+	keyDir        string            // key store directory
+	keyDirTemp    bool              // If true, key directory will be removed by Stop
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
 	server        *p2p.Server       // Currently running P2P networking layer
@@ -113,12 +113,12 @@ func New(conf *Config) (*Node, error) {
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-	keydir, isEphem, err := getKeyStoreDir(conf)
+	keyDir, isEphem, err := getKeyStoreDir(conf)
 	if err != nil {
 		return nil, err
 	}
-	node.keydir = keydir
-	node.isKeyDirEphem = isEphem
+	node.keyDir = keyDir
+	node.keyDirTemp = isEphem
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
 	// are required to add the backends later on.
 	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
@@ -235,8 +235,8 @@ func (n *Node) doClose(errs []error) error {
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if n.isKeyDirEphem {
-		if err := os.RemoveAll(n.keydir); err != nil {
+	if n.keyDirTemp {
+		if err := os.RemoveAll(n.keyDir); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -518,7 +518,7 @@ func (n *Node) InstanceDir() string {
 
 // KeyStoreDir retrieves the key directory
 func (n *Node) KeyStoreDir() string {
-	return n.keydir
+	return n.keyDir
 }
 
 // AccountManager retrieves the account manager used by the protocol stack.
