@@ -186,8 +186,8 @@ func (bs *blockState) AddTransactions(sequence types.Transactions) error {
 			w.current.txs[i] = nil
 			w.current.receipts[i] = nil
 		}
-		w.current.txs = w.current.txs[:startTCount+1]
-		w.current.receipts = w.current.receipts[:startTCount+1]
+		w.current.txs = w.current.txs[:startTCount]
+		w.current.receipts = w.current.receipts[:startTCount]
 	} else {
 		bs.logs = append(bs.logs, logs...)
 		w.current.tcount = tcount
