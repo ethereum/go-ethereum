@@ -170,6 +170,12 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
+
+	// Configure jaeger
+	if err := utils.SetupJaeger(ctx, stack); err != nil {
+		utils.Fatalf("%v\n", err)
+	}
+
 	return stack, backend
 }
 
