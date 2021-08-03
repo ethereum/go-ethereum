@@ -57,6 +57,7 @@ type Manager struct {
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
 	quit chan chan error
+	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
 }
 
@@ -84,6 +85,7 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 		newBackends: make(chan newBackendEvent),
 		wallets:     wallets,
 		quit:        make(chan chan error),
+		term:        make(chan struct{}),
 	}
 	for _, backend := range backends {
 		kind := reflect.TypeOf(backend)
@@ -152,10 +154,13 @@ func (am *Manager) update() {
 			kind := reflect.TypeOf(backend)
 			am.backends[kind] = append(am.backends[kind], backend)
 			am.lock.Unlock()
-			event.processed <- struct{}{}
+			close(event.processed)
 		case errc := <-am.quit:
 			// Manager terminating, return
 			errc <- nil
+			// Signals event emitters the loop is not receiving values
+			// to prevent them from getting stuck.
+			close(am.term)
 			return
 		}
 	}
