@@ -17,6 +17,7 @@
 package jaeger
 
 import (
+	"errors"
 	"io"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -52,10 +53,17 @@ func New(node *node.Node) (*Jaeger, error) {
 }
 
 func (j *Jaeger) Start() error {
-	// No-op
+	if opentracing.IsGlobalTracerRegistered() {
+		return errors.New("Global tracer already registered. Jaeger being initialized twice.")
+	}
+	opentracing.SetGlobalTracer(j.tracer)
 	return nil
 }
 
 func (j *Jaeger) Stop() error {
 	return j.closer.Close()
+}
+
+func (j *Jaeger) Tracer() opentracing.Tracer {
+	return j.tracer
 }
