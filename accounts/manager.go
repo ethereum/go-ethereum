@@ -106,14 +106,12 @@ func (am *Manager) Config() *Config {
 	return am.config
 }
 
-// AddBackends starts the tracking of additional backends for wallet updates.
+// AddBackend starts the tracking of an additional backend for wallet updates.
 // cmd/geth assumes once this func returns the backends have been already integrated.
-func (am *Manager) AddBackends(backends ...Backend) {
-	done := make(chan struct{}, len(backends))
-	for _, backend := range backends {
-		am.newBackends <- newBackendEvent{backend, done}
-		<-done
-	}
+func (am *Manager) AddBackend(backend Backend) {
+	done := make(chan struct{})
+	am.newBackends <- newBackendEvent{backend, done}
+	<-done
 }
 
 // update is the wallet event loop listening for notifications from the backends
