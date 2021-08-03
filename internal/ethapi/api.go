@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/opentracing/opentracing-go"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -608,6 +609,8 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
+	span := opentracing.GlobalTracer().StartSpan("ChainID")
+	defer span.Finish()
 	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
 	if config := api.b.ChainConfig(); config.IsEIP155(api.b.CurrentBlock().Number()) {
 		return (*hexutil.Big)(config.ChainID), nil
@@ -617,6 +620,8 @@ func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
+	span := opentracing.GlobalTracer().StartSpan("BlockNumber")
+	defer span.Finish()
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 	return hexutil.Uint64(header.Number.Uint64())
 }
