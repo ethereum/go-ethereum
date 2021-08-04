@@ -42,7 +42,7 @@ and [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/
    loadScript("filterTrace_1.js")
    ```
 
-5. Run the trancer from the script. Be patient, it could take a long time.
+5. Run the tracer from the script. Be patient, it could take a long time.
 
    ```javascript
    tracer("<hash of transaction>")
