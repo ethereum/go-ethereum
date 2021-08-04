@@ -180,14 +180,14 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errUnknownTable
 }
 
-// Ancient retrieves multiple items in sequence, starting from the index 'start'.
+// ReadAncients retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
 //  - at most 'max' items,
 //  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
 //   return as many items as fit into maxByteSize.
-func (f *freezer) ReadAncients(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+func (f *freezer) ReadAncients(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
-		return table.RetrieveItems(start, max, maxByteSize)
+		return table.RetrieveItems(start, count, maxBytes)
 	}
 	return nil, errUnknownTable
 }

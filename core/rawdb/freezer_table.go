@@ -71,8 +71,8 @@ func (i *indexEntry) marshallBinary() []byte {
 }
 
 // bounds returns the start- and end- offsets, and the file number of where to
-// read there data item marked by the given indexEntry, which are assumed to be
-// sequential.
+// read there data item marked by the two index entries. The two entries are
+// assumed to be sequential.
 func (start *indexEntry) bounds(end *indexEntry) (startOffset, endOffset, fileId uint32) {
 	if start.filenum != end.filenum {
 		// If a piece of data 'crosses' a data-file,
@@ -575,10 +575,10 @@ func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 		offset  int
 	)
 	for i := from; i <= from+count; i++ {
-		var startIndex = new(indexEntry)
-		startIndex.unmarshalBinary(buffer[offset:])
+		index := new(indexEntry)
+		index.unmarshalBinary(buffer[offset:])
 		offset += indexEntrySize
-		indices = append(indices, startIndex)
+		indices = append(indices, index)
 	}
 	if from == 0 {
 		// Special case if we're reading the first item in the freezer. We assume that
@@ -606,25 +606,25 @@ func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
 // Retrieve looks up the data offset of an item with the given number and retrieves
 // the raw binary blob from the data file.
 func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
-	if items, err := t.RetrieveItems(item, 1, 0); err != nil {
+	items, err := t.RetrieveItems(item, 1, 0)
+	if err != nil {
 		return nil, err
-	} else {
-		return items[0], nil
 	}
+	return items[0], nil
 }
 
 // RetrieveItems returns multiple items in sequence, starting from the index 'start'.
 // It will return at most 'max' items, but will abort earlier to respect the
 // 'maxBytes' argument. However, if the 'maxBytes' is smaller than the size of one
 // item, it _will_ return one element and possibly overflow the maxBytes.
-func (t *freezerTable) RetrieveItems(start, max, maxBytes uint64) ([][]byte, error) {
+func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, error) {
 	// First we read the 'raw' data, which might be compressed.
-	diskData, sizes, err := t.retrieveItems(start, max, maxBytes)
+	diskData, sizes, err := t.retrieveItems(start, count, maxBytes)
 	if err != nil {
 		return nil, err
 	}
 	var (
-		output     = make([][]byte, 0, max)
+		output     = make([][]byte, 0, count)
 		offset     int // offset for reading
 		outputSize int // size of uncompressed data
 	)
@@ -640,11 +640,11 @@ func (t *freezerTable) RetrieveItems(start, max, maxBytes uint64) ([][]byte, err
 			break
 		}
 		if !t.noCompression {
-			if data, err := snappy.Decode(nil, item); err != nil {
+			data, err := snappy.Decode(nil, item)
+			if err != nil {
 				return nil, err
-			} else {
-				output = append(output, data)
 			}
+			output = append(output, data)
 		} else {
 			output = append(output, item)
 		}
@@ -653,7 +653,10 @@ func (t *freezerTable) RetrieveItems(start, max, maxBytes uint64) ([][]byte, err
 	return output, nil
 }
 
-func (t *freezerTable) retrieveItems(start, max, maxBytes uint64) ([]byte, []int, error) {
+// retrieveItems reads up to 'count' items from the table. It reads at least
+// one item, but otherwise avoids reading more than maxBytes bytes.
+// It returns the (potentially compressed) data, and the sizes.
+func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []int, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	// Ensure the table and the item is accessible
@@ -663,33 +666,35 @@ func (t *freezerTable) retrieveItems(start, max, maxBytes uint64) ([]byte, []int
 	itemCount := atomic.LoadUint64(&t.items) // max number
 	// Ensure the start is written, not deleted from the tail, and that the
 	// caller actually wants something
-	if itemCount <= start || uint64(t.itemOffset) > start || max == 0 {
+	if itemCount <= start || uint64(t.itemOffset) > start || count == 0 {
 		return nil, nil, errOutOfBounds
 	}
-	if start+max > itemCount {
-		max = itemCount - start
+	if start+count > itemCount {
+		count = itemCount - start
 	}
 	var (
 		output     = make([]byte, maxBytes) // Buffer to read data into
 		outputSize int                      // Used size of that buffer
 	)
-	// Read the data
+	// readData is a helper method to read a single data item from disk.
 	readData := func(fileId, start uint32, length int) error {
 		// In case a small limit is used, and the elements are large, may need to
 		// realloc the read-buffer when reading the first (and only) item.
 		if len(output) < length {
 			output = make([]byte, length)
 		}
-		if dataFile, exist := t.files[fileId]; !exist {
+		dataFile, exist := t.files[fileId]
+		if !exist {
 			return fmt.Errorf("missing data file %d", fileId)
-		} else if _, err := dataFile.ReadAt(output[outputSize:outputSize+length], int64(start)); err != nil {
+		}
+		if _, err := dataFile.ReadAt(output[outputSize:outputSize+length], int64(start)); err != nil {
 			return err
 		}
 		outputSize += length
 		return nil
 	}
 	// Read all the indexes in one go
-	indices, err := t.getIndices(start, max)
+	indices, err := t.getIndices(start, count)
 	if err != nil {
 		return nil, nil, err
 	}

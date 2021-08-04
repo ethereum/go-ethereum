@@ -731,7 +731,7 @@ func TestSequentialRead(t *testing.T) {
 		f.Close()
 	}
 	{ // Open it, iterate, verify byte limit. The byte limit is less than item
-		// size, so each lookup should only return one otem
+		// size, so each lookup should only return one item
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
