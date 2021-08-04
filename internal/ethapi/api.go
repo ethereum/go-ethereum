@@ -477,7 +477,7 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args Transactio
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
-	// Before actually sign the transaction, ensure the transaction fee is reasonable.
+	// Before actually signing the transaction, ensure the transaction fee is reasonable.
 	tx := args.toTransaction()
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
