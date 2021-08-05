@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/gballet/go-verkle"
+	"github.com/protolambda/go-kzg/bls"
 )
 
 const (
@@ -136,29 +137,38 @@ func (trie *VerkleTrie) TryDelete(key []byte) error {
 // Hash returns the root hash of the trie. It does not write to the database and
 // can be used even if the trie doesn't have one.
 func (trie *VerkleTrie) Hash() common.Hash {
-	return trie.root.Hash()
+	// TODO cache this value
+	rootC := trie.root.ComputeCommitment()
+	return bls.FrTo32(rootC)
+}
+
+func nodeToDBKey(n verkle.VerkleNode) []byte {
+	ret := bls.FrTo32(n.ComputeCommitment())
+	return ret[:]
 }
 
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
 func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, error) {
-	flush := make(chan verkle.FlushableNode)
+	flush := make(chan verkle.VerkleNode)
 	go func() {
-		trie.root.(*verkle.InternalNode).Flush(flush)
+		trie.root.(*verkle.InternalNode).Flush(func(n verkle.VerkleNode) {
+			flush <- n
+		})
 		close(flush)
 	}()
 	for n := range flush {
-		value, err := n.Node.Serialize()
+		value, err := n.Serialize()
 		if err != nil {
 			panic(err)
 		}
 
-		if err := trie.db.DiskDB().Put(n.Hash[:], value); err != nil {
+		if err := trie.db.DiskDB().Put(nodeToDBKey(n), value); err != nil {
 			return common.Hash{}, err
 		}
 	}
 
-	return trie.root.Hash(), nil
+	return trie.Hash(), nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration

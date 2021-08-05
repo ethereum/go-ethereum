@@ -43,7 +43,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(accTrie Trie, addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -138,7 +138,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(_ Trie, addrHash, root common.Hash) (Trie, error) {
+func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 	tr, err := trie.NewSecure(root, db.db)
 	if err != nil {
 		return nil, err
@@ -210,7 +210,7 @@ type VerkleDB struct {
 // OpenTrie opens the main account trie.
 func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
 	if root == (common.Hash{}) || root == emptyRoot {
-		return trie.NewVerkleTrie(verkle.New(8), db.db), nil
+		return trie.NewVerkleTrie(verkle.New(), db.db), nil
 	}
 	payload, err := db.db.DiskDB().Get(root[:])
 	if err != nil {
@@ -225,7 +225,7 @@ func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *VerkleDB) OpenStorageTrie(accTrie Trie, addrHash, root common.Hash) (Trie, error) {
+func (db *VerkleDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 	// alternatively, return accTrie
 	panic("should not be called")
 }

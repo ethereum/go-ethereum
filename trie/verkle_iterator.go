@@ -21,6 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/protolambda/go-kzg/bls"
+
 	//"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gballet/go-verkle"
 )
@@ -87,6 +89,13 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		it.stack[len(it.stack)-1].Index++
 		return it.Next(descend)
 	case *verkle.LeafNode:
+		// Look for the next non-empty value
+		for i := it.stack[len(it.stack)-1].Index + 1; i < 256; i++ {
+			if node.Value(i) != nil {
+				it.stack[len(it.stack)-1].Index = i
+				return true
+			}
+		}
 		// go back to parent to get the next leaf
 		it.stack = it.stack[:len(it.stack)-1]
 		it.current = it.stack[len(it.stack)-1].Node
@@ -94,8 +103,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 	case *verkle.HashedNode:
 		// resolve the node
-		h := node.Hash()
-		data, err := it.trie.db.diskdb.Get(h[:])
+		data, err := it.trie.db.diskdb.Get(nodeToDBKey(node))
 		if err != nil {
 			panic(err)
 		}
@@ -115,69 +123,6 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 	}
 }
 
-//func (it *verkleNodeIterator) Next(descend bool) bool {
-//if it.lastErr == errIteratorEnd || len(it.stack) == 0 {
-//it.lastErr = errIteratorEnd
-//return false
-//}
-
-//switch node := it.current.(type) {
-//case *verkle.InternalNode:
-//context := &it.stack[len(it.stack)-1]
-//if context.Index == -1 {
-//// Stop on this internal node
-//context.Index++
-//return true
-//}
-
-//// Look for the next non-empty child
-//children := node.Children()
-//for ; context.Index < len(children); context.Index++ {
-//if _, ok := children[context.Index].(verkle.Empty); !ok {
-//it.stack = append(it.stack, verkleNodeIteratorState{Node: children[context.Index], Index: -1})
-//it.current = children[context.Index]
-//return true
-//}
-//}
-
-//// Reached the end of this node, go back to the parent, if
-//// this isn't root.
-//if len(it.stack) == 1 {
-//it.lastErr = errIteratorEnd
-//return false
-//}
-//it.current = it.stack[len(it.stack)-1].Node
-//it.stack = it.stack[:len(it.stack)-1]
-//it.stack[len(it.stack)-1].Index++
-//return it.Next(descend)
-//case *verkle.LeafNode:
-//// go back to parent to get the next leaf
-//it.current = it.stack[len(it.stack)-2].Node
-//it.stack = it.stack[:len(it.stack)-1]
-//it.stack[len(it.stack)-1].Index++
-//return it.Next(descend)
-//case *verkle.HashedNode:
-//// resolve the trie
-//data, err := it.trie.db.diskdb.Get(h[:])
-//if err != nil {
-//panic(err)
-//}
-//it.current, err = verkle.ParseNode(data, len(it.stack)-1, 8)
-//if err != nil {
-//panic(err)
-//}
-
-//// update the parent with the resolved node
-//it.stack[len(it.stack)-1].Node = it.current
-//parent := &it.stack[len(it.stack)-2]
-//parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
-//return true
-//default:
-//fmt.Println(node)
-//panic("invalid node type")
-//}
-//}
-
 // Error returns the error status of the iterator.
 func (it *verkleNodeIterator) Error() error {
 	if it.lastErr == errIteratorEnd {
@@ -188,13 +133,13 @@ func (it *verkleNodeIterator) Error() error {
 
 // Hash returns the hash of the current node.
 func (it *verkleNodeIterator) Hash() common.Hash {
-	return it.current.Hash()
+	return bls.FrTo32(it.current.ComputeCommitment())
 }
 
 // Parent returns the hash of the parent of the current node. The hash may be the one
 // grandparent if the immediate parent is an internal node with no hash.
 func (it *verkleNodeIterator) Parent() common.Hash {
-	return it.stack[len(it.stack)-1].Node.Hash()
+	return bls.FrTo32(it.stack[len(it.stack)-1].Node.ComputeCommitment())
 }
 
 // Path returns the hex-encoded path to the current node.
@@ -220,7 +165,7 @@ func (it *verkleNodeIterator) LeafKey() []byte {
 		panic("Leaf() called on an verkle node iterator not at a leaf location")
 	}
 
-	return leaf.Key()
+	return leaf.Key(it.stack[len(it.stack)-1].Index)
 }
 
 // LeafBlob returns the content of the leaf. The method panics if the iterator
@@ -232,7 +177,7 @@ func (it *verkleNodeIterator) LeafBlob() []byte {
 		panic("LeafBlob() called on an verkle node iterator not at a leaf location")
 	}
 
-	return leaf.Value()
+	return leaf.Value(it.stack[len(it.stack)-1].Index)
 }
 
 // LeafProof returns the Merkle proof of the leaf. The method panics if the
