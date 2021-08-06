@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -92,6 +93,28 @@ var (
 	gasExtCodeCopy    = memoryCopierGas(3)
 	gasReturnDataCopy = memoryCopierGas(2)
 )
+
+func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	usedGas := uint64(0)
+	where := stack.Back(0)
+	addr := contract.Address()
+	index := trieUtils.GetTreeKeyStorageSlot(addr, where)
+	subtree := common.BytesToHash(index[:31])
+	subleaf := index[31]
+	_, ok := evm.TxContext.Accesses[subtree]
+	if !ok {
+		evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
+		usedGas += 1900 // WITNESS_BRANCH_COST
+	}
+
+	_, ok = evm.TxContext.Accesses[subtree][subleaf]
+	if !ok {
+		usedGas += 200 // WITNESS_CHUNK_COST
+		evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
+	}
+
+	return usedGas, nil
+}
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (

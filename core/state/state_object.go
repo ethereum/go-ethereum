@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -351,15 +353,15 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		s.originStorage[key] = value
 
 		var v []byte
+		k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			s.setError(tr.TryDelete(k))
 			s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 
 			// Update the trie, with v as a value
-			k := trie.GetTreeKeyStorageSlot(s.address, big.NewInt(0).SetBytes(key[:]))
 			s.setError(tr.TryUpdate(k, v))
 
 			// Also save the account data in a location that is easy to

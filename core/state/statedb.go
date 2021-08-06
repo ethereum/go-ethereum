@@ -34,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 type revision struct {
@@ -459,24 +461,24 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 	// TODO rewrite this code in go-verkle to have only verkle.TryUpdateAccount()
 	var err error
-	if err = s.trie.TryUpdate(trie.GetTreeKeyVersion(addr), []byte{0}); err != nil {
+	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyVersion(addr), []byte{0}); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 	nonce := make([]byte, 32)
 	binary.BigEndian.PutUint64(nonce, obj.data.Nonce)
-	if err = s.trie.TryUpdate(trie.GetTreeKeyNonce(addr), nonce); err != nil {
+	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyNonce(addr), nonce); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
-	if err = s.trie.TryUpdate(trie.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
+	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
-	if err = s.trie.TryUpdate(trie.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
+	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 	if len(obj.code) > 0 {
 		cs := make([]byte, 32)
 		binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
-		if err = s.trie.TryUpdate(trie.GetTreeKeyCodeSize(addr), cs); err != nil {
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr), cs); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 	}
@@ -486,10 +488,12 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// since the prefetcher doesn't need to load the values from a
 	// different trie anyway.
 	if obj.dirtyCode {
-		for i := 0; i < len(obj.code)/32; i++ {
-			if err = s.trie.TryUpdate(trie.GetTreeKeyCodeChunk(addr, big.NewInt(int64(i))), obj.code[32*i:32*(i+1)]); err != nil {
-				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
+			for i, chunk := range chunks {
+				s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i))), chunk[:])
 			}
+		} else {
+			s.setError(err)
 		}
 	}
 

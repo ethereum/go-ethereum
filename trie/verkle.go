@@ -17,81 +17,12 @@
 package trie
 
 import (
-	"crypto/sha256"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/gballet/go-verkle"
 	"github.com/protolambda/go-kzg/bls"
 )
-
-const (
-	VersionLeafKey    = 0
-	BalanceLeafKey    = 1
-	NonceLeafKey      = 2
-	CodeKeccakLeafKey = 3
-	CodeSizeLeafKey   = 4
-)
-
-var (
-	zero                = big.NewInt(0)
-	HeaderStorageOffset = big.NewInt(64)
-	CodeOffset          = big.NewInt(128)
-	MainStorageOffset   = big.NewInt(0).Lsh(big.NewInt(256), 31)
-	VerkleNodeWidth     = big.NewInt(8)
-	codeStorageDelta    = big.NewInt(0).Sub(HeaderStorageOffset, CodeOffset)
-)
-
-func GetTreeKey(address common.Address, treeIndex *big.Int, subIndex byte) []byte {
-	digest := sha256.New()
-	digest.Write(address[:])
-	treeIndexBytes := treeIndex.Bytes()
-	var payload [32]byte
-	copy(payload[:len(treeIndexBytes)], treeIndexBytes)
-	digest.Write(payload[:])
-	h := digest.Sum(nil)
-	h[31] = byte(subIndex)
-	return h
-}
-
-func GetTreeKeyVersion(address common.Address) []byte {
-	return GetTreeKey(address, zero, VersionLeafKey)
-}
-
-func GetTreeKeyBalance(address common.Address) []byte {
-	return GetTreeKey(address, zero, BalanceLeafKey)
-}
-
-func GetTreeKeyNonce(address common.Address) []byte {
-	return GetTreeKey(address, zero, NonceLeafKey)
-}
-
-func GetTreeKeyCodeKeccak(address common.Address) []byte {
-	return GetTreeKey(address, zero, CodeKeccakLeafKey)
-}
-
-func GetTreeKeyCodeSize(address common.Address) []byte {
-	return GetTreeKey(address, zero, CodeSizeLeafKey)
-}
-
-func GetTreeKeyCodeChunk(address common.Address, chunk *big.Int) []byte {
-	chunkOffset := big.NewInt(0).Add(CodeOffset, chunk)
-	treeIndex := big.NewInt(0).Div(chunkOffset, VerkleNodeWidth)
-	subIndex := big.NewInt(0).Mod(chunkOffset, VerkleNodeWidth).Bytes()[0]
-	return GetTreeKey(address, treeIndex, subIndex)
-}
-
-func GetTreeKeyStorageSlot(address common.Address, storageKey *big.Int) []byte {
-	if storageKey.Cmp(codeStorageDelta) < 0 {
-		storageKey.Add(HeaderStorageOffset, storageKey)
-	} else {
-		storageKey.Add(MainStorageOffset, storageKey)
-	}
-	treeIndex := big.NewInt(0).Div(storageKey, VerkleNodeWidth)
-	subIndex := big.NewInt(0).Mod(storageKey, VerkleNodeWidth).Bytes()[0]
-	return GetTreeKey(address, treeIndex, subIndex)
-}
 
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
 // interface so that Verkle trees can be reused verbatim.
@@ -196,3 +127,27 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 	}
 }
 
+func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {
+	lastOffset := byte(0)
+	chunkCount := len(code) / 31
+	if len(code)%31 != 0 {
+		chunkCount++
+	}
+	chunks := make([][32]byte, chunkCount)
+	for i, chunk := range chunks {
+		end := 31 * (i + 1)
+		if len(code) < end {
+			end = len(code)
+		}
+		copy(chunk[1:], code[31*i:end])
+		for j := lastOffset; j < 31; j++ {
+			if code[j] >= byte(vm.PUSH1) && code[j] <= byte(vm.PUSH32) {
+				j += code[j] - byte(vm.PUSH1) + 1
+				lastOffset = (j + 1) % 31
+			}
+		}
+		chunk[0] = lastOffset
+	}
+
+	return chunks, nil
+}

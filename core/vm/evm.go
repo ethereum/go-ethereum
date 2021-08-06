@@ -83,6 +83,8 @@ type TxContext struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
+
+	Accesses map[common.Hash]map[byte]struct{}
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
