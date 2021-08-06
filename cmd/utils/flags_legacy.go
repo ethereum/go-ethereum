@@ -77,4 +77,4 @@ func showDeprecated(*cli.Context) {
 
 for _, flag := range DeprecatedFlags {
 		fmt.Println(flag.String())
-	}
+}
