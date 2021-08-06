@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 // Config are the configuration options for the Interpreter
@@ -189,6 +191,20 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.cfg.Debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
+		}
+
+		// if the PC ends up in a new "page" of verkleized code, charge the
+		// associated witness costs.
+		index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
+		subtree := common.BytesToHash(index[:31])
+		subleaf := index[31]
+		if _, ok := in.evm.TxContext.Accesses[subtree]; !ok {
+			in.evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
+			contract.Gas -= 1900 // WITNESS_BRANCH_COST
+		}
+		if _, ok := in.evm.TxContext.Accesses[subtree][subleaf]; !ok {
+			in.evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
+			contract.Gas -= 200 // WITNESS_CHUNK_COST
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
