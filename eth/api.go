@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -54,6 +55,15 @@ func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
 // Etherbase is the address that mining rewards will be send to
 func (api *PublicEthereumAPI) Etherbase() (common.Address, error) {
 	return api.e.Etherbase()
+}
+
+// BaseFee for rpc
+func (api *PublicEthereumAPI) BaseFee(ctx context.Context) (*big.Int, error) {
+	header, err := api.e.APIBackend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	return misc.CalcBaseFee(api.e.APIBackend.ChainConfig(), header), nil
 }
 
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase)
