@@ -1323,7 +1323,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
-			result.GasPrice = nil
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 	}
 	return result
