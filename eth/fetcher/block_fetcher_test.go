@@ -38,8 +38,8 @@ var (
 	testdb       = rawdb.NewMemoryDatabase()
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
-	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
-	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit}, nil, nil, nil, new(trie.Trie))
+	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
+	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -53,7 +53,7 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == genesis && i%3 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -698,6 +698,7 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	badBodyFetcher := tester.makeBodyFetcher("bad", blocks, 0)
 
 	imported := make(chan interface{})
+	announced := make(chan interface{})
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -712,9 +713,23 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 		}
 	}
 	// Announce a block with a bad number, check for immediate drop
+	tester.fetcher.announceChangeHook = func(hash common.Hash, b bool) {
+		announced <- nil
+	}
 	tester.fetcher.Notify("bad", hashes[0], 2, time.Now().Add(-arriveTimeout), badHeaderFetcher, badBodyFetcher)
+	verifyAnnounce := func() {
+		for i := 0; i < 2; i++ {
+			select {
+			case <-announced:
+				continue
+			case <-time.After(1 * time.Second):
+				t.Fatal("announce timeout")
+				return
+			}
+		}
+	}
+	verifyAnnounce()
 	verifyImportEvent(t, imported, false)
-
 	tester.lock.RLock()
 	dropped := tester.drops["bad"]
 	tester.lock.RUnlock()
@@ -722,11 +737,11 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	if !dropped {
 		t.Fatalf("peer with invalid numbered announcement not dropped")
 	}
-
 	goodHeaderFetcher := tester.makeHeaderFetcher("good", blocks, -gatherSlack)
 	goodBodyFetcher := tester.makeBodyFetcher("good", blocks, 0)
 	// Make sure a good announcement passes without a drop
 	tester.fetcher.Notify("good", hashes[0], 1, time.Now().Add(-arriveTimeout), goodHeaderFetcher, goodBodyFetcher)
+	verifyAnnounce()
 	verifyImportEvent(t, imported, true)
 
 	tester.lock.RLock()

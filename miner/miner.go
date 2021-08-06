@@ -42,14 +42,15 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
-	Notify    []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages(only useful in ethash).
-	ExtraData hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor  uint64         // Target gas floor for mined blocks.
-	GasCeil   uint64         // Target gas ceiling for mined blocks.
-	GasPrice  *big.Int       // Minimum gas price for mining a transaction
-	Recommit  time.Duration  // The time interval for miner to re-create mining work.
-	Noverify  bool           // Disable remote mining solution verification(only useful in ethash).
+	Etherbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
+	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor   uint64         // Target gas floor for mined blocks.
+	GasCeil    uint64         // Target gas ceiling for mined blocks.
+	GasPrice   *big.Int       // Minimum gas price for mining a transaction
+	Recommit   time.Duration  // The time interval for miner to re-create mining work.
+	Noverify   bool           // Disable remote mining solution verification(only useful in ethash).
 }
 
 // Miner creates blocks and searches for proof-of-work values.
@@ -159,7 +160,7 @@ func (miner *Miner) Mining() bool {
 	return miner.worker.isRunning()
 }
 
-func (miner *Miner) HashRate() uint64 {
+func (miner *Miner) Hashrate() uint64 {
 	if pow, ok := miner.engine.(consensus.PoW); ok {
 		return uint64(pow.Hashrate())
 	}
@@ -193,9 +194,20 @@ func (miner *Miner) PendingBlock() *types.Block {
 	return miner.worker.pendingBlock()
 }
 
+// PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
+func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return miner.worker.pendingBlockAndReceipts()
+}
+
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.coinbase = addr
 	miner.worker.setEtherbase(addr)
+}
+
+// SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
+// For pre-1559 blocks, it sets the ceiling.
+func (miner *Miner) SetGasCeil(ceil uint64) {
+	miner.worker.setGasCeil(ceil)
 }
 
 // EnablePreseal turns on the preseal mining feature. It's enabled by default.

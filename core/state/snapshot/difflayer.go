@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/steakknife/bloomfilter"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
@@ -44,7 +44,7 @@ var (
 	// aggregatorItemLimit is an approximate number of items that will end up
 	// in the agregator layer before it's flushed out to disk. A plain account
 	// weighs around 14B (+hash), a storage slot 32B (+hash), a deleted slot
-	// 0B (+hash). Slots are mostly set/unset in lockstep, so thet average at
+	// 0B (+hash). Slots are mostly set/unset in lockstep, so that average at
 	// 16B (+hash). All in all, the average entry seems to be 15+32=47B. Use a
 	// smaller number to be on the safe side.
 	aggregatorItemLimit = aggregatorMemoryLimit / 42
@@ -114,9 +114,9 @@ type diffLayer struct {
 	// deleted, all data in other set belongs to the "new" A.
 	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
-	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
+	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil means deleted)
 	storageList map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
-	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
+	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrieval. one per account (nil means deleted)
 
 	diffed *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
 
@@ -191,19 +191,15 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		if blob == nil {
 			panic(fmt.Sprintf("account %#x nil", accountHash))
 		}
+		// Determine memory size and track the dirty writes
+		dl.memory += uint64(common.HashLength + len(blob))
+		snapshotDirtyAccountWriteMeter.Mark(int64(len(blob)))
 	}
 	for accountHash, slots := range storage {
 		if slots == nil {
 			panic(fmt.Sprintf("storage %#x nil", accountHash))
 		}
-	}
-	// Determine memory size and track the dirty writes
-	for _, data := range accounts {
-		dl.memory += uint64(common.HashLength + len(data))
-		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
-	}
-	// Determine memory size and track the dirty writes
-	for _, slots := range storage {
+		// Determine memory size and track the dirty writes
 		for _, data := range slots {
 			dl.memory += uint64(common.HashLength + len(data))
 			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
@@ -300,13 +296,17 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(hash))
 	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
 	dl.lock.RUnlock()
 
 	// If the bloom filter misses, don't even bother with traversing the memory
 	// diff layers, reach straight into the bottom persistent disk layer
-	if !hit {
+	if origin != nil {
 		snapshotBloomAccountMissMeter.Mark(1)
-		return dl.origin.AccountRLP(hash)
+		return origin.AccountRLP(hash)
 	}
 	// The bloom filter hit, start poking in the internal maps
 	return dl.accountRLP(hash, 0)
@@ -362,13 +362,17 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(accountHash))
 	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
 	dl.lock.RUnlock()
 
 	// If the bloom filter misses, don't even bother with traversing the memory
 	// diff layers, reach straight into the bottom persistent disk layer
-	if !hit {
+	if origin != nil {
 		snapshotBloomStorageMissMeter.Mark(1)
-		return dl.origin.Storage(accountHash, storageHash)
+		return origin.Storage(accountHash, storageHash)
 	}
 	// The bloom filter hit, start poking in the internal maps
 	return dl.storage(accountHash, storageHash, 0)
@@ -482,7 +486,7 @@ func (dl *diffLayer) flatten() snapshot {
 	}
 }
 
-// AccountList returns a sorted list of all accounts in this difflayer, including
+// AccountList returns a sorted list of all accounts in this diffLayer, including
 // the deleted ones.
 //
 // Note, the returned slice is not a copy, so do not modify it.
@@ -513,7 +517,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	return dl.accountList
 }
 
-// StorageList returns a sorted list of all storage slot hashes in this difflayer
+// StorageList returns a sorted list of all storage slot hashes in this diffLayer
 // for the given account. If the whole storage is destructed in this layer, then
 // an additional flag *destructed = true* will be returned, otherwise the flag is
 // false. Besides, the returned list will include the hash of deleted storage slot.

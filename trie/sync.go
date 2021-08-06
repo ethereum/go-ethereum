@@ -313,11 +313,15 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
 		rawdb.WriteTrieNode(dbw, key, value)
-		s.bloom.Add(key[:])
+		if s.bloom != nil {
+			s.bloom.Add(key[:])
+		}
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
-		s.bloom.Add(key[:])
+		if s.bloom != nil {
+			s.bloom.Add(key[:])
+		}
 	}
 	// Drop the membatch data and return
 	s.membatch = newSyncMemBatch()
@@ -394,7 +398,14 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (child.node).(valueNode); ok {
-				if err := req.callback(child.path, node, req.hash); err != nil {
+				var paths [][]byte
+				if len(child.path) == 2*common.HashLength {
+					paths = append(paths, hexToKeybytes(child.path))
+				} else if len(child.path) == 4*common.HashLength {
+					paths = append(paths, hexToKeybytes(child.path[:2*common.HashLength]))
+					paths = append(paths, hexToKeybytes(child.path[2*common.HashLength:]))
+				}
+				if err := req.callback(paths, child.path, node, req.hash); err != nil {
 					return nil, err
 				}
 			}
@@ -410,7 +421,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 				// Bloom filter says this might be a duplicate, double check.
 				// If database says yes, then at least the trie node is present
 				// and we hold the assumption that it's NOT legacy contract code.
-				if blob := rawdb.ReadTrieNode(s.database, common.BytesToHash(node)); len(blob) > 0 {
+				if blob := rawdb.ReadTrieNode(s.database, hash); len(blob) > 0 {
 					continue
 				}
 				// False positive, bump fault meter

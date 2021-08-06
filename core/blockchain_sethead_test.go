@@ -1961,7 +1961,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	os.RemoveAll(datadir)
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "")
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -1969,7 +1969,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Initialize a fresh chain
 	var (
-		genesis = new(Genesis).MustCommit(db)
+		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		engine  = ethash.NewFullFaker()
 		config  = &CacheConfig{
 			TrieCleanLimit: 256,
@@ -2023,7 +2023,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	// Force run a freeze cycle
 	type freezer interface {
-		Freeze(threshold uint64)
+		Freeze(threshold uint64) error
 		Ancients() (uint64, error)
 	}
 	db.(freezer).Freeze(tt.freezeThreshold)

@@ -703,12 +703,6 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	// Move all of the accumulated preimages into a write batch
 	if db.preimages != nil {
 		rawdb.WritePreimages(batch, db.preimages)
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return err
-			}
-			batch.Reset()
-		}
 		// Since we're going to replay trie node writes into the clean cache, flush out
 		// any batched pre-images before continuing.
 		if err := batch.Write(); err != nil {
@@ -736,7 +730,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	batch.Replay(uncacher)
 	batch.Reset()
 
-	// Reset the storage counters and bumpd metrics
+	// Reset the storage counters and bumped metrics
 	if db.preimages != nil {
 		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
 	}

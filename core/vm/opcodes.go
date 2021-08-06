@@ -103,25 +103,23 @@ const (
 	GASLIMIT
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
+	BASEFEE     OpCode = 0x48
 )
 
 // 0x50 range - 'storage' and execution.
 const (
-	POP       OpCode = 0x50
-	MLOAD     OpCode = 0x51
-	MSTORE    OpCode = 0x52
-	MSTORE8   OpCode = 0x53
-	SLOAD     OpCode = 0x54
-	SSTORE    OpCode = 0x55
-	JUMP      OpCode = 0x56
-	JUMPI     OpCode = 0x57
-	PC        OpCode = 0x58
-	MSIZE     OpCode = 0x59
-	GAS       OpCode = 0x5a
-	JUMPDEST  OpCode = 0x5b
-	BEGINSUB  OpCode = 0x5c
-	RETURNSUB OpCode = 0x5d
-	JUMPSUB   OpCode = 0x5e
+	POP      OpCode = 0x50
+	MLOAD    OpCode = 0x51
+	MSTORE   OpCode = 0x52
+	MSTORE8  OpCode = 0x53
+	SLOAD    OpCode = 0x54
+	SSTORE   OpCode = 0x55
+	JUMP     OpCode = 0x56
+	JUMPI    OpCode = 0x57
+	PC       OpCode = 0x58
+	MSIZE    OpCode = 0x59
+	GAS      OpCode = 0x5a
+	JUMPDEST OpCode = 0x5b
 )
 
 // 0x60 range.
@@ -283,6 +281,7 @@ var opCodeToString = map[OpCode]string{
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
+	BASEFEE:     "BASEFEE",
 
 	// 0x50 range - 'storage' and execution.
 	POP: "POP",
@@ -299,10 +298,6 @@ var opCodeToString = map[OpCode]string{
 	MSIZE:    "MSIZE",
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
-
-	BEGINSUB:  "BEGINSUB",
-	JUMPSUB:   "JUMPSUB",
-	RETURNSUB: "RETURNSUB",
 
 	// 0x60 range - push.
 	PUSH1:  "PUSH1",
@@ -439,6 +434,7 @@ var stringToOp = map[string]OpCode{
 	"CALLDATASIZE":   CALLDATASIZE,
 	"CALLDATACOPY":   CALLDATACOPY,
 	"CHAINID":        CHAINID,
+	"BASEFEE":        BASEFEE,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,
@@ -468,9 +464,6 @@ var stringToOp = map[string]OpCode{
 	"MSIZE":          MSIZE,
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
-	"BEGINSUB":       BEGINSUB,
-	"RETURNSUB":      RETURNSUB,
-	"JUMPSUB":        JUMPSUB,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
 	"PUSH3":          PUSH3,

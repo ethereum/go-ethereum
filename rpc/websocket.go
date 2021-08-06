@@ -37,6 +37,7 @@ const (
 	wsWriteBuffer      = 1024
 	wsPingInterval     = 60 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
+	wsMessageSizeLimit = 15 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
@@ -95,7 +96,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 		if _, ok := req.Header["Origin"]; !ok {
 			return true
 		}
-		// Verify origin against whitelist.
+		// Verify origin against allow list.
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || originIsAllowed(origins, origin) {
 			return true
@@ -239,7 +240,7 @@ type websocketCodec struct {
 }
 
 func newWebsocketCodec(conn *websocket.Conn) ServerCodec {
-	conn.SetReadLimit(maxRequestContentLength)
+	conn.SetReadLimit(wsMessageSizeLimit)
 	wc := &websocketCodec{
 		jsonCodec: NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON).(*jsonCodec),
 		conn:      conn,

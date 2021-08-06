@@ -30,7 +30,6 @@ type dummyContractRef struct {
 	calledForEach bool
 }
 
-func (dummyContractRef) ReturnGas(*big.Int)          {}
 func (dummyContractRef) Address() common.Address     { return common.Address{} }
 func (dummyContractRef) Value() *big.Int             { return new(big.Int) }
 func (dummyContractRef) SetCode(common.Hash, []byte) {}
@@ -53,17 +52,20 @@ func TestStoreCapture(t *testing.T) {
 	var (
 		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
-		mem      = NewMemory()
-		stack    = newstack()
-		rstack   = newReturnStack()
 		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
+		scope    = &ScopeContext{
+			Memory:   NewMemory(),
+			Stack:    newstack(),
+			Contract: contract,
+		}
 	)
-	stack.push(uint256.NewInt().SetUint64(1))
-	stack.push(uint256.NewInt())
+	scope.Stack.push(uint256.NewInt(1))
+	scope.Stack.push(new(uint256.Int))
 	var index common.Hash
-	logger.CaptureState(env, 0, SSTORE, 0, 0, mem, stack, rstack, nil, contract, 0, nil)
+	logger.CaptureState(env, 0, SSTORE, 0, 0, scope, nil, 0, nil)
 	if len(logger.storage[contract.Address()]) == 0 {
-		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.storage[contract.Address()]))
+		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(),
+			len(logger.storage[contract.Address()]))
 	}
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.storage[contract.Address()][index] != exp {

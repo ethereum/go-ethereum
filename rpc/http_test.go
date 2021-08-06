@@ -98,3 +98,67 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 func TestHTTPResponseWithEmptyGet(t *testing.T) {
 	confirmHTTPRequestYieldsStatusCode(t, http.MethodGet, "", "", http.StatusOK)
 }
+
+// This checks that maxRequestContentLength is not applied to the response of a request.
+func TestHTTPRespBodyUnlimited(t *testing.T) {
+	const respLength = maxRequestContentLength * 3
+
+	s := NewServer()
+	defer s.Stop()
+	s.RegisterName("test", largeRespService{respLength})
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+
+	c, err := DialHTTP(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	var r string
+	if err := c.Call(&r, "test_largeResp"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r) != respLength {
+		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
+// Tests that an HTTP error results in an HTTPError instance
+// being returned with the expected attributes.
+func TestHTTPErrorResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "error has occurred!", http.StatusTeapot)
+	}))
+	defer ts.Close()
+
+	c, err := DialHTTP(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r string
+	err = c.Call(&r, "test_method")
+	if err == nil {
+		t.Fatal("error was expected")
+	}
+
+	httpErr, ok := err.(HTTPError)
+	if !ok {
+		t.Fatalf("unexpected error type %T", err)
+	}
+
+	if httpErr.StatusCode != http.StatusTeapot {
+		t.Error("unexpected status code", httpErr.StatusCode)
+	}
+	if httpErr.Status != "418 I'm a teapot" {
+		t.Error("unexpected status text", httpErr.Status)
+	}
+	if body := string(httpErr.Body); body != "error has occurred!\n" {
+		t.Error("unexpected body", body)
+	}
+
+	if errMsg := httpErr.Error(); errMsg != "418 I'm a teapot: error has occurred!\n" {
+		t.Error("unexpected error message", errMsg)
+	}
+}

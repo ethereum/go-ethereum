@@ -66,7 +66,7 @@ type txPool interface {
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	Pending() (map[common.Address]types.Transactions, error)
+	Pending(enforceTips bool) (map[common.Address]types.Transactions, error)
 
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
@@ -177,7 +177,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	if atomic.LoadUint32(&h.fastSync) == 1 {
+	// Note: we don't enable it if snap-sync is performed, since it's very heavy
+	// and the heal-portion of the snap sync is much lighter than fast. What we particularly
+	// want to avoid, is a 90%-finished (but restarted) snap-sync to begin
+	// indexing the entire trie
+	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
 		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
 	}
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
@@ -218,7 +222,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
-		p := h.peers.ethPeer(peer)
+		p := h.peers.peer(peer)
 		if p == nil {
 			return errors.New("unknown peer")
 		}
@@ -229,8 +233,17 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
-// runEthPeer
+// runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
+// various subsistems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
+	// If the peer has a `snap` extension, wait for it to connect so we can have
+	// a uniform initialization/teardown mechanism
+	snap, err := h.peers.waitSnapExtension(peer)
+	if err != nil {
+		peer.Log().Error("Snapshot extension barrier failed", "err", err)
+		return err
+	}
+	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
 	}
@@ -250,26 +263,46 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
+	reject := false // reserved peer slots
+	if atomic.LoadUint32(&h.snapSync) == 1 {
+		if snap == nil {
+			// If we are running snap-sync, we want to reserve roughly half the peer
+			// slots for peers supporting the snap protocol.
+			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
+			if all, snp := h.peers.len(), h.peers.snapLen(); all-snp > snp+5 {
+				reject = true
+			}
+		}
+	}
 	// Ignore maxPeers if this is a trusted peer
-	if h.peers.Len() >= h.maxPeers && !peer.Peer.Info().Network.Trusted {
-		return p2p.DiscTooManyPeers
+	if !peer.Peer.Info().Network.Trusted {
+		if reject || h.peers.len() >= h.maxPeers {
+			return p2p.DiscTooManyPeers
+		}
 	}
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
-	if err := h.peers.registerEthPeer(peer); err != nil {
+	if err := h.peers.registerPeer(peer, snap); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
-	defer h.removePeer(peer.ID())
+	defer h.unregisterPeer(peer.ID())
 
-	p := h.peers.ethPeer(peer.ID())
+	p := h.peers.peer(peer.ID())
 	if p == nil {
 		return errors.New("peer dropped during handling")
 	}
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
+		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
+	}
+	if snap != nil {
+		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
+			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
+			return err
+		}
 	}
 	h.chainSync.handlePeerEvent(peer)
 
@@ -306,52 +339,57 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	return handler(peer)
 }
 
-// runSnapPeer
-func (h *handler) runSnapPeer(peer *snap.Peer, handler snap.Handler) error {
+// runSnapExtension registers a `snap` peer into the joint eth/snap peerset and
+// starts handling inbound messages. As `snap` is only a satellite protocol to
+// `eth`, all subsystem registrations and lifecycle management will be done by
+// the main `eth` handler to prevent strange races.
+func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
-	// Register the peer locally
-	if err := h.peers.registerSnapPeer(peer); err != nil {
-		peer.Log().Error("Snapshot peer registration failed", "err", err)
+	if err := h.peers.registerSnapExtension(peer); err != nil {
+		peer.Log().Error("Snapshot extension registration failed", "err", err)
 		return err
 	}
-	defer h.removePeer(peer.ID())
-
-	if err := h.downloader.SnapSyncer.Register(peer); err != nil {
-		return err
-	}
-	// Handle incoming messages until the connection is torn down
 	return handler(peer)
 }
 
+// removePeer requests disconnection of a peer.
 func (h *handler) removePeer(id string) {
-	// Remove the eth peer if it exists
-	eth := h.peers.ethPeer(id)
-	if eth != nil {
-		log.Debug("Removing Ethereum peer", "peer", id)
-		h.downloader.UnregisterPeer(id)
-		h.txFetcher.Drop(id)
+	peer := h.peers.peer(id)
+	if peer != nil {
+		peer.Peer.Disconnect(p2p.DiscUselessPeer)
+	}
+}
 
-		if err := h.peers.unregisterEthPeer(id); err != nil {
-			log.Error("Peer removal failed", "peer", id, "err", err)
-		}
+// unregisterPeer removes a peer from the downloader, fetchers and main peer set.
+func (h *handler) unregisterPeer(id string) {
+	// Create a custom logger to avoid printing the entire id
+	var logger log.Logger
+	if len(id) < 16 {
+		// Tests use short IDs, don't choke on them
+		logger = log.New("peer", id)
+	} else {
+		logger = log.New("peer", id[:8])
 	}
-	// Remove the snap peer if it exists
-	snap := h.peers.snapPeer(id)
-	if snap != nil {
-		log.Debug("Removing Snapshot peer", "peer", id)
+	// Abort if the peer does not exist
+	peer := h.peers.peer(id)
+	if peer == nil {
+		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
+		return
+	}
+	// Remove the `eth` peer if it exists
+	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
+
+	// Remove the `snap` extension if it exists
+	if peer.snapExt != nil {
 		h.downloader.SnapSyncer.Unregister(id)
-		if err := h.peers.unregisterSnapPeer(id); err != nil {
-			log.Error("Peer removal failed", "peer", id, "err", err)
-		}
 	}
-	// Hard disconnect at the networking layer
-	if eth != nil {
-		eth.Peer.Disconnect(p2p.DiscUselessPeer)
-	}
-	if snap != nil {
-		snap.Peer.Disconnect(p2p.DiscUselessPeer)
+	h.downloader.UnregisterPeer(id)
+	h.txFetcher.Drop(id)
+
+	if err := h.peers.unregisterPeer(id); err != nil {
+		logger.Error("Ethereum peer removal failed", "err", err)
 	}
 }
 
@@ -398,7 +436,7 @@ func (h *handler) Stop() {
 // will only announce its availability (depending what's requested).
 func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	hash := block.Hash()
-	peers := h.peers.ethPeersWithoutBlock(hash)
+	peers := h.peers.peersWithoutBlock(hash)
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
@@ -427,44 +465,47 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-// BroadcastTransactions will propagate a batch of transactions to all peers which are not known to
+// BroadcastTransactions will propagate a batch of transactions
+// - To a square root of all peers
+// - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
-func (h *handler) BroadcastTransactions(txs types.Transactions, propagate bool) {
+func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	var (
-		txset = make(map[*ethPeer][]common.Hash)
-		annos = make(map[*ethPeer][]common.Hash)
+		annoCount   int // Count of announcements made
+		annoPeers   int
+		directCount int // Count of the txs sent directly to peers
+		directPeers int // Count of the peers that were sent transactions directly
+
+		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
+		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
+
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
-	if propagate {
-		for _, tx := range txs {
-			peers := h.peers.ethPeersWithoutTransacion(tx.Hash())
-
-			// Send the block to a subset of our peers
-			transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-			for _, peer := range transfer {
-				txset[peer] = append(txset[peer], tx.Hash())
-			}
-			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peers))
-		}
-		for peer, hashes := range txset {
-			peer.AsyncSendTransactions(hashes)
-		}
-		return
-	}
-	// Otherwise only broadcast the announcement to peers
 	for _, tx := range txs {
-		peers := h.peers.ethPeersWithoutTransacion(tx.Hash())
-		for _, peer := range peers {
+		peers := h.peers.peersWithoutTransaction(tx.Hash())
+		// Send the tx unconditionally to a subset of our peers
+		numDirect := int(math.Sqrt(float64(len(peers))))
+		for _, peer := range peers[:numDirect] {
+			txset[peer] = append(txset[peer], tx.Hash())
+		}
+		// For the remaining peers, send announcement only
+		for _, peer := range peers[numDirect:] {
 			annos[peer] = append(annos[peer], tx.Hash())
 		}
 	}
-	for peer, hashes := range annos {
-		if peer.Version() >= eth.ETH65 {
-			peer.AsyncSendPooledTransactionHashes(hashes)
-		} else {
-			peer.AsyncSendTransactions(hashes)
-		}
+	for peer, hashes := range txset {
+		directPeers++
+		directCount += len(hashes)
+		peer.AsyncSendTransactions(hashes)
 	}
+	for peer, hashes := range annos {
+		annoPeers++
+		annoCount += len(hashes)
+		peer.AsyncSendPooledTransactionHashes(hashes)
+	}
+	log.Debug("Transaction broadcast", "txs", len(txs),
+		"announce packs", annoPeers, "announced hashes", annoCount,
+		"tx packs", directPeers, "broadcast txs", directCount)
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.
@@ -482,13 +523,10 @@ func (h *handler) minedBroadcastLoop() {
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
-
 	for {
 		select {
 		case event := <-h.txsCh:
-			h.BroadcastTransactions(event.Txs, true)  // First propagate transactions to peers
-			h.BroadcastTransactions(event.Txs, false) // Only then announce to the rest
-
+			h.BroadcastTransactions(event.Txs)
 		case <-h.txsSub.Err():
 			return
 		}
