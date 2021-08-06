@@ -117,6 +117,8 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 }
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// Apply the witness access costs, err is nil
+	accessGas, _ := gasSLoad(evm, contract, stack, mem, memorySize)
 	var (
 		y, x    = stack.Back(1), stack.Back(0)
 		current = evm.StateDB.GetState(contract.Address(), x.Bytes32())
@@ -132,14 +134,15 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
-			return params.SstoreSetGas, nil
+			return params.SstoreSetGas + accessGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
-			return params.SstoreClearGas, nil
+			return params.SstoreClearGas + accessGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
-			return params.SstoreResetGas, nil
+			return params.SstoreResetGas + accessGas, nil
 		}
 	}
+
 	// The new gas metering is based on net gas costs (EIP-1283):
 	//
 	// 1. If current value equals new value (this is a no-op), 200 gas is deducted.
