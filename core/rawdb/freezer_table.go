@@ -562,6 +562,9 @@ func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool
 // getIndices returns the index entries for the given from-item, covering 'count' items.
 // N.B: The actual number of returned indices for N items will always be N+1 (unless an
 // error is returned).
+// OBS: This method assumes that the caller has already verified (and/or trimmed) the range
+// so that the items are within bounds. If this method is used to read out of bounds,
+// it will return error.
 func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 	// Apply the table-offset
 	from = from - uint64(t.itemOffset)
@@ -590,17 +593,6 @@ func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 		indices[0].filenum = indices[1].filenum
 	}
 	return indices, nil
-}
-
-// getBounds returns the indexes for the item
-// returns start, end, filenumber and error
-func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
-	indices, err := t.getIndices(item, 1)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	start, end, fileNum := indices[0].bounds(indices[1])
-	return start, end, fileNum, nil
 }
 
 // Retrieve looks up the data offset of an item with the given number and retrieves
