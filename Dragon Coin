@@ -1,5 +1,5 @@
-https://polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
-wss://polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+https://www.whitefeather.us/polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+wss://www.whitefeather.us/polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
 
 curl https://eth-mainnet.alchemyapi.io/v2/https://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha \
 -X POST \
@@ -12,3 +12,63 @@ curl https://eth-mainnet.alchemyapi.io/v2/https://eth-rinkeby.alchemyapi.io/v2/o
   "id": 0,
   "result": true
 }
+
+
+import (
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+    "terminal.integrated.confirmOnExit": "always"
+}
+
+
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET / HTTP/1.1" 200 8713 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/stylesheets/application.adb8469c.css HTTP/1.1" 200 76332 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/stylesheets/application-palette.a8b3c06d.css HTTP/1.1" 200 38773 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/javascripts/modernizr.86422ebf.js HTTP/1.1" 200 7296 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/fonts/material-icons.css HTTP/1.1" 200 873 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /css/styles.css HTTP/1.1" 200 892 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /css/dark-mode.css HTTP/1.1" 200 6520 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /tutorial/ HTTP/1.1" 200 14815 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/fonts/font-awesome.css HTTP/1.1" 200 30721 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /images/docker-labs-logo.svg HTTP/1.1" 200 6469 "http://localhost/tutorial/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/javascripts/application.c33a9706.js HTTP/1.1" 200 79589 "http://localhost/tutorial/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /tutorial/tutorial-in-dashboard.png HTTP/1.1" 200 109800 "http://localhost/tutorial/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/fonts/specimen/MaterialIcons-Regular.woff2 HTTP/1.1" 200 44300 "http://localhost/assets/fonts/material-icons.css" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /fonts/hinted-Geomanist-Book.ttf HTTP/1.1" 200 73568 "http://localhost/css/styles.css" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/images/favicon.png HTTP/1.1" 200 521 "http://localhost/tutorial/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+172.17.0.1 - - [06/Aug/2021:23:55:23 +0000] "GET /assets/fonts/specimen/FontAwesome.woff2 HTTP/1.1" 200 77160 "http://localhost/assets/fonts/font-awesome.css" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.62" "-"
+
+2021/08/06 23:52:32 [notice] 1#1: using the "epoll" event method
+2021/08/06 23:52:32 [notice] 1#1: nginx/1.21.1
+2021/08/06 23:52:32 [notice] 1#1: built by gcc 10.3.1 20210424 (Alpine 10.3.1_git20210424) 
+2021/08/06 23:52:32 [notice] 1#1: OS: Linux 5.10.16.3-microsoft-standard-WSL2
+2021/08/06 23:52:32 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2021/08/06 23:52:32 [notice] 1#1: start worker processes
+2021/08/06 23:52:32 [notice] 1#1: start worker process 32
+2021/08/06 23:52:32 [notice] 1#1: start worker process 33
+2021/08/06 23:52:32 [notice] 1#1: start worker process 34
+2021/08/06 23:52:32 [notice] 1#1: start worker process 35
+2021/08/06 23:52:32 [notice] 1#1: start worker process 36
+2021/08/06 23:52:32 [notice] 1#1: start worker process 37
+2021/08/06 23:52:32 [notice] 1#1: start worker process 38
+2021/08/06 23:52:32 [notice] 1#1: start worker process 39
+2021/08/06 23:52:32 [notice] 1#1: start worker process 40
+2021/08/06 23:52:32 [notice] 1#1: start worker process 41
+2021/08/06 23:52:32 [notice] 1#1: start worker process 42
+2021/08/06 23:52:32 [notice] 1#1: start worker process 43
+
+
