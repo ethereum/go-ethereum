@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -56,11 +56,11 @@ func main() {
 	head := rawdb.ReadHeadBlockHash(lddb)
 	headNumber := rawdb.ReadHeaderNumber(lddb, head)
 	if headNumber == nil {
-		fmt.Println("Unable to retrieve header number for block ", head);
+		fmt.Println("Unable to retrieve header number for block ", head)
 	}
 	currentHeader := rawdb.ReadHeader(lddb, head, *headNumber)
 	if currentHeader == nil {
-		fmt.Println("Unable to retrieve header number for block ", head);
+		fmt.Println("Unable to retrieve header number for block ", head)
 	}
 	tridb := trie.NewDatabase(lddb)
 	catchEventInterupt(lddb.LDB())

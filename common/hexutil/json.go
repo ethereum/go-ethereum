@@ -296,7 +296,7 @@ func checkText(input []byte, wantPrefix bool) ([]byte, error) {
 	if bytesHaveXDCPrefix(input) {
 		input = input[3:]
 	} else if bytesHave0xPrefix(input) {
-	input = input[2:]
+		input = input[2:]
 	} else if wantPrefix {
 		return nil, ErrMissingPrefix
 	}
