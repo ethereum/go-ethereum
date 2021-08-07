@@ -10,9 +10,8 @@ name: Build and Deploy to IKS
 
 on: 
   release: 08/06/2021
-    types: [created]
-
-# Environment variables available to all jobs and steps in this workflow
+    types: "ibm.yml"
+    
 env:
   GITHUB_SHA: ${{ github.sha }}
   IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
