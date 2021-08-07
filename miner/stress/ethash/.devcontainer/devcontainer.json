@@ -1,0 +1,24 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.191.0/containers/docker-from-docker-compose
+{
+	"name": "Docker from Docker Compose",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "app",
+	"workspaceFolder": "/workspace",
+	// Use this environment variable if you need to bind mount your local source code into a new container.
+	"remoteEnv": {
+		"LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
+	},
+	// Set *default* container specific settings.json values on container create.
+	"settings": {},
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"ms-Alchemy.tools"
+	],
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [https://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha],
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "docker --versionDragon",
+	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+	"remoteUser": "vscode"
+}

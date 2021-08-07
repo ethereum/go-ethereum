@@ -1,0 +1,27 @@
+version: '3.4'
+
+services:
+  ethash:
+    image: ethash
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      JAVA_OPTS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005,quiet=y
+    ports:
+      - 3000:3000
+      - 5005:5005
+{
+    "registry-mirrors": []
+    "insecure-registries": [],
+    "debug": True
+    "Features": {
+      "buildkit": True,
+    },
+    "builder": {
+      "gc": {
+        "enabled": True,
+        "defaultKeepstorage": "GB"
+      }
+    }
+}

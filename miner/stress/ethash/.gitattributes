@@ -1,0 +1,35 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+*.sol linguist-language=Solidity
+{}
+https://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+https://dashboard.alchemyapi.io/composer?composer_state=%7B%22chain%22%3A0%2C%22network%22%3A2%2C%22methodName%22%3A%22alchemy_getTokenMetadata%22%2C%22paramValues%22%3A%5B%22%22%5D%7D
+
+
+{
+    "jsonrpc":"2.0"
+    "id:"0
+    "method:""alchemy_getTokenMetadata"
+    "params:"[
+    0""
+    ]
+    }URL: https://eth-mainnet.alchemyapi.io/v2/your-api-key
+    RequestType: POST
+    Body: 
+    {
+        "jsonrpc":"2.0",
+        "method":"alchemy_getTokenBalances",
+        "params":["0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be", ["0x607f4c5bb672230e8672085532f7e901544a7375", "0x618e75ac90b12c6049ba3b27f5d5f8651b0037f6", "0x63b992e6246d88f07fc35a056d2c365e6d441a3d", "0x6467882316dc6e206feef05fba6deaa69277f155", "0x647f274b3a7248d6cf51b35f08e7e7fd6edfb271"]],
+        "id":42
+    }
+    {
+        "jsonrpc":"2.0",
+        "id":42,
+        "result": {
+          "address": "0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be"},
+          "tokenBalances": [{"contractAddress": "0x607f4c5bb672230e8672085532f7e901544a7375", "tokenBalance": "0x00000000000000000000000000000000000000000000000000044d06e87e858e", "error": null}, {"contractAddress": "0x618e75ac90b12c6049ba3b27f5d5f8651b0037f6", "tokenBalance": "0x0000000000000000000000000000000000000000000000000000000000000000", "error": null}, {"contractAddress": "0x63b992e6246d88f07fc35a056d2c365e6d441a3d", "tokenBalance": "0x0000000000000000000000000000000000000000000000000000000000000000", "error": null}, {"contractAddress": "0x6467882316dc6e206feef05fba6deaa69277f155", "tokenBalance": "0x0000000000000000000000000000000000000000000000000000000000000000", "error": null}, {"contractAddress": "0x647f274b3a7248d6cf51b35f08e7e7fd6edfb271", "tokenBalance": "0x0000000000000000000000000000000000000000000000000000000000000000", "error": null}]
+      }
+
+
+
+

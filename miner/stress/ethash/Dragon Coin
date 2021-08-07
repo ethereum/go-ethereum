@@ -1,0 +1,14 @@
+https://polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+wss://polygon-mainnet.g.alchemy.com/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+
+curl https://eth-mainnet.alchemyapi.io/v2/https://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha \
+-X POST \
+-H "Content-Type: application/json" \
+-d '{"jsonrpc":"2.0","method":"eth_installFilter","params":["0xfe704947a3cd3ca12541458a4321c869"],"id":0}'
+
+
+{
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": true
+}
