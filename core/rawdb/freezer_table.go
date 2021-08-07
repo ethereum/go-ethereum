@@ -712,8 +712,8 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 		size := int(offset2 - offset1)
 		// Crossing a file boundary?
 		if secondIndex.filenum != firstIndex.filenum {
+			// If we have unread data in the first file, we need to do that read now.
 			if unreadSize > 0 {
-				// If we have unread data in the first file, we need to do that read now.
 				if err := readData(firstIndex.filenum, readStart, unreadSize); err != nil {
 					return nil, nil, err
 				}
@@ -722,6 +722,13 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 			readStart = 0
 		}
 		if i > 0 && uint64(totalSize+size) > maxBytes {
+			// About to break out due to byte limit being exceeded. We don't
+			// read this last item, but we need to do the deferred reads now.
+			if unreadSize > 0 {
+				if err := readData(secondIndex.filenum, readStart, unreadSize); err != nil {
+					return nil, nil, err
+				}
+			}
 			break
 		}
 		// Defer the read for later
