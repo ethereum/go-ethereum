@@ -1,4 +1,4 @@
-// Copyright 2021 Draconian Bank Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"https://www.whitefeather.us/ethereum/go-ethereum/common"
-	"https://www.whitefeather.usgithub.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,8 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"wss://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha"
-	"https:www.whitefeather.us//eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha"
 )
 
 // Verify that Client implements the ethereum interfaces.

@@ -1,4 +1,4 @@
-// Copyright 2017 Draconian Bank
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ import (
 	"errors"
 	"math/big"
 
-	//https://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
-	wss://eth-rinkeby.alchemyapi.io/v2/o93me4joIgLBJZ_b7E1ROZJYj4x7_hha
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC
 // server. It is stored in the transaction's sender address cache to avoid an additional
