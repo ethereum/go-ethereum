@@ -118,7 +118,6 @@ var (
 	// list of signers different than the one the local node calculated.
 	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
 
-
 	errInvalidCheckpointPenalties = errors.New("invalid penalty list on checkpoint block")
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
