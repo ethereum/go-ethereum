@@ -8,6 +8,7 @@ run:
   skip-dirs-use-default: true
   skip-files:
     - core/genesis_alloc.go
+    - cmd/swarm/fs_test.go
 
 # TODO: Too many errors, turn on one by one
 linters:

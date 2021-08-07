@@ -26,10 +26,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	//"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	//"github.com/ethereum/go-ethereum/log"
 )
 
 type testFile struct {
@@ -121,90 +119,90 @@ func TestCLISwarmFs(t *testing.T) {
 	//hashRegexp := `[a-f\d]{64}`
 	//log.Debug("swarmfs cli test: unmounting first run...", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
-//	unmount := runSwarm(t, []string{
-//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
-//		"fs",
-//		"unmount",
-//		mountPoint,
-//	}...)
-//	_, matches := unmount.ExpectRegexp(hashRegexp)
-//	unmount.ExpectExit()
-//
-//	hash := matches[0]
-//	if hash == mhash {
-//		t.Fatal("this should not be equal")
-//	}
-//	log.Debug("swarmfs cli test: asserting no files in mount point")
-//
-//	//check that there's nothing in the mount folder
-//	filesInDir, err := ioutil.ReadDir(mountPoint)
-//	if err != nil {
-//		t.Fatalf("had an error reading the directory: %v", err)
-//	}
-//
-//	if len(filesInDir) != 0 {
-//		t.Fatal("there shouldn't be anything here")
-//	}
-//
-//	secondMountPoint, err := ioutil.TempDir("", "swarm-test")
-//	log.Debug("swarmfs cli test", "2nd mount point at", secondMountPoint)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	defer os.RemoveAll(secondMountPoint)
-//
-//	log.Debug("swarmfs cli test: remounting at second mount point", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
-//
-//	//remount, check files
-//	newMount := runSwarm(t, []string{
-//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
-//		"fs",
-//		"mount",
-//		hash, // the latest hash
-//		secondMountPoint,
-//	}...)
-//
-//	newMount.ExpectExit()
-//	time.Sleep(1 * time.Second)
-//
-//	filesInDir, err = ioutil.ReadDir(secondMountPoint)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	if len(filesInDir) == 0 {
-//		t.Fatal("there should be something here")
-//	}
-//
-//	log.Debug("swarmfs cli test: traversing file tree to see it matches previous mount")
-//
-//	for _, file := range filesToAssert {
-//		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, -1)
-//		fileBytes, err := ioutil.ReadFile(file.filePath)
-//
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		if !bytes.Equal(fileBytes, bytes.NewBufferString(file.content).Bytes()) {
-//			t.Fatal("this should be equal")
-//		}
-//	}
-//
-//	log.Debug("swarmfs cli test: unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
-//
-//	unmountSec := runSwarm(t, []string{
-//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
-//		"fs",
-//		"unmount",
-//		secondMountPoint,
-//	}...)
-//
-//	_, matches = unmountSec.ExpectRegexp(hashRegexp)
-//	unmountSec.ExpectExit()
-//
-//	if matches[0] != hash {
-//		t.Fatal("these should be equal - no changes made")
-//	}
+	//	unmount := runSwarm(t, []string{
+	//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
+	//		"fs",
+	//		"unmount",
+	//		mountPoint,
+	//	}...)
+	//	_, matches := unmount.ExpectRegexp(hashRegexp)
+	//	unmount.ExpectExit()
+	//
+	//	hash := matches[0]
+	//	if hash == mhash {
+	//		t.Fatal("this should not be equal")
+	//	}
+	//	log.Debug("swarmfs cli test: asserting no files in mount point")
+	//
+	//	//check that there's nothing in the mount folder
+	//	filesInDir, err := ioutil.ReadDir(mountPoint)
+	//	if err != nil {
+	//		t.Fatalf("had an error reading the directory: %v", err)
+	//	}
+	//
+	//	if len(filesInDir) != 0 {
+	//		t.Fatal("there shouldn't be anything here")
+	//	}
+	//
+	//	secondMountPoint, err := ioutil.TempDir("", "swarm-test")
+	//	log.Debug("swarmfs cli test", "2nd mount point at", secondMountPoint)
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+	//	defer os.RemoveAll(secondMountPoint)
+	//
+	//	log.Debug("swarmfs cli test: remounting at second mount point", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	//
+	//	//remount, check files
+	//	newMount := runSwarm(t, []string{
+	//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
+	//		"fs",
+	//		"mount",
+	//		hash, // the latest hash
+	//		secondMountPoint,
+	//	}...)
+	//
+	//	newMount.ExpectExit()
+	//	time.Sleep(1 * time.Second)
+	//
+	//	filesInDir, err = ioutil.ReadDir(secondMountPoint)
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+	//
+	//	if len(filesInDir) == 0 {
+	//		t.Fatal("there should be something here")
+	//	}
+	//
+	//	log.Debug("swarmfs cli test: traversing file tree to see it matches previous mount")
+	//
+	//	for _, file := range filesToAssert {
+	//		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, -1)
+	//		fileBytes, err := ioutil.ReadFile(file.filePath)
+	//
+	//		if err != nil {
+	//			t.Fatal(err)
+	//		}
+	//		if !bytes.Equal(fileBytes, bytes.NewBufferString(file.content).Bytes()) {
+	//			t.Fatal("this should be equal")
+	//		}
+	//	}
+	//
+	//	log.Debug("swarmfs cli test: unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	//
+	//	unmountSec := runSwarm(t, []string{
+	//		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
+	//		"fs",
+	//		"unmount",
+	//		secondMountPoint,
+	//	}...)
+	//
+	//	_, matches = unmountSec.ExpectRegexp(hashRegexp)
+	//	unmountSec.ExpectExit()
+	//
+	//	if matches[0] != hash {
+	//		t.Fatal("these should be equal - no changes made")
+	//	}
 }
 
 func doUploadEmptyDir(t *testing.T, node *testNode) string {
