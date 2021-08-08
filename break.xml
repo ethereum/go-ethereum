@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BreakpointCollection xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Breakpoints>
+    <Breakpoint>
+      <Version>15</Version>
+      <IsEnabled>1</IsEnabled>
+      <IsVisible>1</IsVisible>
+      <IsEmulated>0</IsEmulated>
+      <IsCondition>0</IsCondition>
+      <IsProductionBps>0</IsProductionBps>
+      <ConditionType>WhenTrue</ConditionType>
+      <LocationType>AddressLocation</LocationType>
+      <TextPosition>
+        <Version>0</Version>
+        <startLine>0</startLine>
+        <StartColumn>0</StartColumn>
+        <EndLine>0</EndLine>
+        <EndColumn>0</EndColumn>
+        <MarkerId>0</MarkerId>
+        <IsLineBased>0</IsLineBased>
+        <IsDocumentPathNotFound>0</IsDocumentPathNotFound>
+        <ShouldUpdateTextSpan>0</ShouldUpdateTextSpan>
+        <Checksum>
+          <Version>0</Version>
+          <Algorithm>00000000-0000-0000-0000-000000000000</Algorithm>
+          <ByteCount>0</ByteCount>
+        </Checksum>
+      </TextPosition>
+      <NamedLocationText>Windows::Storage::Internal::Pickers::IPickerOperation::CallerAppUserModelId::get(void)</NamedLocationText>
+      <NamedLocationLine>0</NamedLocationLine>
+      <NamedLocationColumn>0</NamedLocationColumn>
+      <HitCountType>NoHitCount</HitCountType>
+      <HitCountTarget>1</HitCountTarget>
+      <Language>00000000-0000-0000-0000-000000000000</Language>
+      <IsMapped>0</IsMapped>
+      <BreakpointType>PendingBreakpoint</BreakpointType>
+      <AddressLocation>
+        <Version>4</Version>
+        <AddressName>0x00007FF6F6F61015</AddressName>
+        <MarkerId>0</MarkerId>
+        <FunctionName>Windows::Storage::Internal::Pickers::IPickerOperation::CallerAppUserModelId::get(void)</FunctionName>
+        <ModuleName>C:\Windows\SystemApps\Microsoft.Windows.FilePicker_cw5n1h2txyewy\FilePicker.exe</ModuleName>
+        <DisplayName>0x00007FF6F6F61015</DisplayName>
+        <FunctionLine>0</FunctionLine>
+        <FunctionColumn>0</FunctionColumn>
+        <Language>00000000-0000-0000-0000-000000000000</Language>
+      </AddressLocation>
+      <DataCount>4</DataCount>
+      <ModuleName>C:\Windows\SystemApps\Microsoft.Windows.FilePicker_cw5n1h2txyewy\FilePicker.exe</ModuleName>
+      <IsTracepointActive>0</IsTracepointActive>
+      <TracepointTargetType>VsOutputWindow</TracepointTargetType>
+      <TimeTravelTraceMarker>NoTracing</TimeTravelTraceMarker>
+      <IsBreakWhenHit>1</IsBreakWhenHit>
+      <IsRunMacroWhenHit>0</IsRunMacroWhenHit>
+      <UseChecksum>1</UseChecksum>
+      <Labels />
+      <RequestRemapped>0</RequestRemapped>
+      <IsSnapshotWhenHit>1</IsSnapshotWhenHit>
+      <SnapshotCountTarget>1</SnapshotCountTarget>
+      <parentIndex>-1</parentIndex>
+    </Breakpoint>
+  </Breakpoints>
+</BreakpointCollection>{
+"curl":null,
+"https": webkitURL:XMLHttpRequestEventTarget//eth-mainnet.alchemyapi.io/v2/your-api-key \
+"-X",
+"POST""",
+"-H""Content-Type: application/json",
+"\\""-d",
+"{\"jsonrpc\":\"2.0\", \"id\":1, \"method\":\"parity_getBlockReceipts\",\"params\":[\"0x8D2B29\"]}": null,
+"configurations": [
+{
+"inheritEnvironments": [
+"msvc_x86"
+],
+"name": "x86-Release",
+"includePath": [
+"${env.INCLUDE}",
+"${workspaceRoot}\\**"
+],
+"defines": [
+"WIN32",
+"NDEBUG",
+"UNICODE",
+"_UNICODE"
+],
+"intelliSenseMode": "windows-msvc-x86"
+}
+]
+}
+​ U
