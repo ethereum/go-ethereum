@@ -52,6 +52,10 @@ func GetTreeKey(address common.Address, treeIndex *uint256.Int, subIndex byte) [
 	return h
 }
 
+func GetTreeKeyAccountLeaf(address common.Address, leaf byte) []byte {
+	return GetTreeKey(address, zero, leaf)
+}
+
 func GetTreeKeyVersion(address common.Address) []byte {
 	return GetTreeKey(address, zero, VersionLeafKey)
 }

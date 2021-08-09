@@ -513,9 +513,17 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 	}
 	// Delete the account from the trie
-	addr := obj.Address()
-	if err := s.trie.TryDelete(addr[:]); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+	if false {
+		addr := obj.Address()
+		if err := s.trie.TryDelete(addr[:]); err != nil {
+			s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		}
+	} else {
+		for i := byte(0); i <= 255; i++ {
+			if err := s.trie.TryDelete(trieUtils.GetTreeKeyAccountLeaf(obj.Address(), i)); err != nil {
+				s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", obj.Address(), err))
+			}
+		}
 	}
 }
 
