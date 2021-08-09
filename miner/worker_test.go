@@ -593,7 +593,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 		},
 	}
 
-	// This API should work even the automatic sealing is not enabled
+	// This API should work even when the automatic sealing is not enabled
 	for _, c := range cases {
 		block, err := w.getSealingBlock(c.parent, timestamp)
 		if c.expectErr {
@@ -608,7 +608,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 		}
 	}
 
-	// This API should work when the automatic sealing is enabled
+	// This API should work even when the automatic sealing is enabled
 	w.start()
 	for _, c := range cases {
 		block, err := w.getSealingBlock(c.parent, timestamp)

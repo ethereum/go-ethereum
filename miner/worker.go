@@ -82,30 +82,28 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state       *state.StateDB // apply state changes here
-	ancestors   mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family      mapset.Set     // family set (used for checking uncle invalidity)
-	uncleHashes mapset.Set     // uncle set
-	tcount      int            // tx count in cycle
-	gasPool     *core.GasPool  // available gas used to pack transactions
+	state     *state.StateDB // apply state changes here
+	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family    mapset.Set     // family set (used for checking uncle invalidity)
+	tcount    int            // tx count in cycle
+	gasPool   *core.GasPool  // available gas used to pack transactions
 
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
-	uncles   []*types.Header
+	uncles   map[common.Hash]*types.Header
 }
 
 // copy creates a deep copy of environment.
 func (env *environment) copy() *environment {
 	cpy := &environment{
-		signer:      env.signer,
-		state:       env.state.Copy(),
-		ancestors:   env.ancestors.Clone(),
-		family:      env.family.Clone(),
-		uncleHashes: env.uncleHashes.Clone(),
-		tcount:      env.tcount,
-		header:      types.CopyHeader(env.header),
-		receipts:    copyReceipts(env.receipts),
+		signer:    env.signer,
+		state:     env.state.Copy(),
+		ancestors: env.ancestors.Clone(),
+		family:    env.family.Clone(),
+		tcount:    env.tcount,
+		header:    types.CopyHeader(env.header),
+		receipts:  copyReceipts(env.receipts),
 	}
 	if env.gasPool != nil {
 		cpy.gasPool = &(*env.gasPool)
@@ -114,9 +112,20 @@ func (env *environment) copy() *environment {
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
-	cpy.uncles = make([]*types.Header, len(env.uncles))
-	copy(cpy.uncles, env.uncles)
+	cpy.uncles = make(map[common.Hash]*types.Header)
+	for hash, uncle := range env.uncles {
+		cpy.uncles[hash] = uncle
+	}
 	return cpy
+}
+
+// unclelist returns the contained uncles as the list format.
+func (env *environment) unclelist() []*types.Header {
+	var uncles []*types.Header
+	for _, uncle := range env.uncles {
+		uncles = append(uncles, uncle)
+	}
+	return uncles
 }
 
 // discard terminates the background prefetcher go-routine. It should
@@ -534,7 +543,7 @@ func (w *worker) mainLoop() {
 			// If our sealing block contains less than 2 uncle blocks,
 			// add the new uncle block if valid and regenerate a new
 			// sealing block for higher profit.
-			if w.isRunning() && w.current != nil && w.current.uncleHashes.Cardinality() < 2 {
+			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
 				start := time.Now()
 				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
 					w.commit(w.current.copy(), nil, true, start)
@@ -732,12 +741,12 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 	state.StartPrefetcher("miner")
 
 	env := &environment{
-		signer:      types.MakeSigner(w.chainConfig, header.Number),
-		state:       state,
-		ancestors:   mapset.NewSet(),
-		family:      mapset.NewSet(),
-		uncleHashes: mapset.NewSet(),
-		header:      header,
+		signer:    types.MakeSigner(w.chainConfig, header.Number),
+		state:     state,
+		ancestors: mapset.NewSet(),
+		family:    mapset.NewSet(),
+		header:    header,
+		uncles:    make(map[common.Hash]*types.Header),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -755,7 +764,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 // commitUncle adds the given block to uncle block set, returns error if failed to add.
 func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	hash := uncle.Hash()
-	if env.uncleHashes.Contains(hash) {
+	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
 	if env.header.ParentHash == uncle.ParentHash {
@@ -767,8 +776,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if env.family.Contains(hash) {
 		return errors.New("uncle already included")
 	}
-	env.uncleHashes.Add(uncle.Hash())
-	env.uncles = append(env.uncles, uncle)
+	env.uncles[hash] = uncle
 	return nil
 }
 
@@ -781,7 +789,7 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotBlock = types.NewBlock(
 		env.header,
 		env.txs,
-		env.uncles,
+		env.unclelist(),
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
@@ -993,7 +1001,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if !genParams.noUncle {
 		commitUncles := func(blocks map[common.Hash]*types.Block) {
 			for hash, uncle := range blocks {
-				if env.uncleHashes.Cardinality() == 2 {
+				if len(env.uncles) == 2 {
 					break
 				}
 				if err := w.commitUncle(env, uncle.Header()); err != nil {
@@ -1054,7 +1062,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	if err := w.fillTransactions(nil, work); err != nil {
 		return nil, err
 	}
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.uncles, work.receipts)
+	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1094,7 +1102,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			interval()
 		}
 		// Deep copy receipts here to avoid interaction between different tasks.
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.uncles, env.receipts)
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}
