@@ -1,3 +1,23 @@
+type AddTransactionsResultFunc func(error, []*types.Receipt) bool
+
+// BlockState represents a block-to-be-mined, which is being assembled.
+// A collator can add transactions by calling AddTransactions
+type BlockState interface {
+	// AddTransactions adds the sequence of transactions to the blockstate. Either all
+	// transactions are added, or none of them. In the latter case, the error
+	// describes the reason why the txs could not be included.
+	// if ErrRecommit, the collator should not attempt to add more transactions to the
+	// block and submit the block for sealing.
+	// If ErrAbort is returned, the collator should immediately abort and return a
+	// value (true) from CollateBlock which indicates to the miner to discard the
+	// block
+	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
+	Gas() (remaining uint64)
+	Coinbase() common.Address
+	BaseFee() *big.Int
+	Signer() types.Signer
+}
+
 type collatorWork {
     env *environment
     counter uint64
@@ -7,6 +27,7 @@ type collatorWork {
 type collatorBlockState struct {
     work collatorWork
     c *collator
+    done bool
 }
 
 func (w *collatorWork) Copy() collatorWork {
@@ -18,11 +39,85 @@ func (w *collatorWork) Copy() collatorWork {
     }
 }
 
-func (b *collatorBlockState) AddTransactions() {
+func (b *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
+	var (
+		interrupt   = bs.work.interrupt
+		header = bs.work.env.header
+        gasPool = bs.work.env.gasPool
+        signer = bs.work.env.signer
+        chainConfig = bs.c.chainConfig
+        chain = bs.c.chain
 
+// ---------------
+		w           = bs.worker
+		snap        = w.current.state.Snapshot()
+		err         error
+		logs        []*types.Log
+		tcount      = w.current.tcount
+		startTCount = w.current.tcount
+	)
+	if bs.done {
+		cb(ErrRecommit, nil)
+		return
+	}
+
+	for _, tx := range sequence {
+		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+            bs.done = true
+			break
+		}
+		if gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", gasPool, "want", params.TxGas)
+			err = core.ErrGasLimitReached
+			break
+		}
+		from, _ := types.Sender(signer, tx)
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !w.chainConfig.IsEIP155(header.Number) {
+			log.Trace("encountered replay-protected transaction when chain doesn't support replay protection", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+			err = ErrUnsupportedEIP155Tx
+			break
+		}
+		// Start executing the transaction
+		bs.state.Prepare(tx.Hash(), w.current.tcount)
+
+		var txLogs []*types.Log
+		txLogs, err = commitTransaction(chain, chainConfig, tx, bs.Coinbase())
+		if err == nil {
+			logs = append(logs, txLogs...)
+			tcount++
+		} else {
+			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
+				"type", tx.Type(), "hash", tx.Hash(), "err", err)
+			break
+		}
+	}
+	var txReceipts []*types.Receipt = nil
+	if err == nil {
+		txReceipts = w.current.receipts[startTCount:tcount]
+	}
+	// TODO: deep copy the tx receipts here or add a disclaimer to implementors not to modify them?
+	shouldRevert := cb(err, txReceipts)
+
+	if err != nil || shouldRevert {
+		bs.state.RevertToSnapshot(snap)
+
+		// remove the txs and receipts that were added
+		for i := startTCount; i < tcount; i++ {
+			w.current.txs[i] = nil
+			w.current.receipts[i] = nil
+		}
+		w.current.txs = w.current.txs[:startTCount]
+		w.current.receipts = w.current.receipts[:startTCount]
+	} else {
+		bs.logs = append(bs.logs, logs...)
+		w.current.tcount = tcount
+	}
 }
 
 func (bs *collatorBlockState) Commit() {
+    bs.done = true
     bs.c.workResultch <- bs.work
 }
 
@@ -33,6 +128,8 @@ type collator struct {
     exitCh chan<-interface{}
     newHeadCh chan<-types.Header
     collateBlockImpl BlockCollator
+    chainConfig *params.ChainConfig
+    chain *core.BlockChain
 }
 
 func (c *collator) mainLoop() {
@@ -41,14 +138,11 @@ func (c *collator) mainLoop() {
         // pass a wrapped CollatorBlockState object to the collator
         // implementation.  collator calls Commit() to flush new work to the
         // result channel.
-        // TODO...
         c.collateBlockImpl(collatorBlockState{newWork, c})
 
         // signal to the exitCh that the collator is done
         // computing this work.
-        // TODO...
         c.workResultCh <- collatorWork{nil, newWork.counter}
-        fallthrough
     case newHead := <-newHeadCh:
         fallthrough
     case <-c.exitCh:

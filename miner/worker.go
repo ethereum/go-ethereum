@@ -797,18 +797,18 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-	snap := env.state.Snapshot()
+func commitTransaction(chain *core.BlockChain, chainConfig *core.ChainConfig, env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+    snap := env.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return nil, err
-	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
+    receipt, err := core.ApplyTransaction(chainConfig, chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *chain.GetVMConfig())
+    if err != nil {
+        env.state.RevertToSnapshot(snap)
+        return nil, err
+    }
+    env.txs = append(env.txs, tx)
+    env.receipts = append(env.receipts, receipt)
 
-	return receipt.Logs, nil
+    return receipt.Logs, nil
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
@@ -865,7 +865,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx, coinbase)
+		logs, err := commitTransaction(w.chain, w.chainConfig, env, tx, coinbase)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1059,7 +1059,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-    w.multiCollator.CollateBlock(work)
+    w.multiCollator.CollateBlock(work, nil)
 	if err := w.fillTransactions(nil, work); err != nil {
 		return nil, err
 	}
