@@ -39,7 +39,7 @@ func (w *collatorWork) Copy() collatorWork {
     }
 }
 
-func (b *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
+func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
 	var (
 		interrupt   = bs.work.interrupt
 		header = bs.work.env.header
@@ -47,10 +47,10 @@ func (b *collatorBlockState) AddTransactions(sequence types.Transactions, cb Add
         signer = bs.work.env.signer
         chainConfig = bs.c.chainConfig
         chain = bs.c.chain
-
+        state = bs.work.env.state
+		snap        = state.Snapshot()
 // ---------------
 		w           = bs.worker
-		snap        = w.current.state.Snapshot()
 		err         error
 		logs        []*types.Log
 		tcount      = w.current.tcount
@@ -80,12 +80,12 @@ func (b *collatorBlockState) AddTransactions(sequence types.Transactions, cb Add
 			break
 		}
 		// Start executing the transaction
-		bs.state.Prepare(tx.Hash(), w.current.tcount)
+		state.Prepare(tx.Hash(), w.current.tcount)
 
 		var txLogs []*types.Log
 		txLogs, err = commitTransaction(chain, chainConfig, tx, bs.Coinbase())
 		if err == nil {
-			logs = append(logs, txLogs...)
+			//logs = append(logs, txLogs...)
 			tcount++
 		} else {
 			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
@@ -95,23 +95,23 @@ func (b *collatorBlockState) AddTransactions(sequence types.Transactions, cb Add
 	}
 	var txReceipts []*types.Receipt = nil
 	if err == nil {
-		txReceipts = w.current.receipts[startTCount:tcount]
+		txReceipts = bs.work.env.receipts[startTCount:tcount]
 	}
 	// TODO: deep copy the tx receipts here or add a disclaimer to implementors not to modify them?
 	shouldRevert := cb(err, txReceipts)
 
 	if err != nil || shouldRevert {
-		bs.state.RevertToSnapshot(snap)
+		state.RevertToSnapshot(snap)
 
 		// remove the txs and receipts that were added
 		for i := startTCount; i < tcount; i++ {
-			w.current.txs[i] = nil
-			w.current.receipts[i] = nil
+			bs.work.env.txs[i] = nil
+			bs.work.env.receipts[i] = nil
 		}
-		w.current.txs = w.current.txs[:startTCount]
-		w.current.receipts = w.current.receipts[:startTCount]
+		bs.work.env.txs = bs.work.env.txs[:startTCount]
+		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
-		bs.logs = append(bs.logs, logs...)
+		//bs.logs = append(bs.logs, logs...)
 		w.current.tcount = tcount
 	}
 }
@@ -134,22 +134,25 @@ type collator struct {
 
 func (c *collator) mainLoop() {
     for {
-    case newWork := <-c.newWorkCh:
-        // pass a wrapped CollatorBlockState object to the collator
-        // implementation.  collator calls Commit() to flush new work to the
-        // result channel.
-        c.collateBlockImpl(collatorBlockState{newWork, c})
+        select {
+        case newWork := <-c.newWorkCh:
+            // pass a wrapped CollatorBlockState object to the collator
+            // implementation.  collator calls Commit() to flush new work to the
+            // result channel.
+            c.collateBlockImpl(collatorBlockState{newWork, c})
 
-        // signal to the exitCh that the collator is done
-        // computing this work.
-        c.workResultCh <- collatorWork{nil, newWork.counter}
-    case newHead := <-newHeadCh:
-        fallthrough
-    case <-c.exitCh:
-        // TODO any cleanup needed?
-        break
-    default:
-        fallthrough
+            // signal to the exitCh that the collator is done
+            // computing this work.
+            c.workResultCh <- collatorWork{nil, newWork.counter}
+        case <-c.exitCh:
+            // TODO any cleanup needed?
+            return
+        case newHead := <-newHeadCh:
+            // TODO call hook here
+            fallthrough
+        default:
+            fallthrough
+        }
     }
 }
 
@@ -169,7 +172,10 @@ func (m *MultiCollator) Start() {
 func (m *MultiCollator) Stop() {
     for c := range m.collators {
         select {
-        case c.exitCh
+        case c.exitCh<-true:
+            fallthrough
+        default:
+            continue
         }
     }
 }
@@ -194,6 +200,7 @@ func (m *MultiCollator) CollateBlock(work *environment, interrupt *int32) {
 func (m *MultiCollator) Collect(work *environment, cb workResult) {
     finishedCollators := []uint{}
     shouldAdjustRecommitDown := true
+
     for {
         if finishedCollators == m.responsiveCollatorcount {
             break
@@ -209,7 +216,7 @@ func (m *MultiCollator) Collect(work *environment, cb workResult) {
             case response := m.workResultCh:
                 // ignore collators responding from old work rounds
                 if response.counter != m.counter {
-                    continue
+                    break
                 }
 
                 // ignore responses from collators that have already signalled they are done
@@ -230,7 +237,7 @@ func (m *MultiCollator) Collect(work *environment, cb workResult) {
                     cb(response.work)
                 }
             default:
-                continue
+                fallthrough
             }
         }
     }
@@ -240,6 +247,8 @@ func (m *MultiCollator) Collect(work *environment, cb workResult) {
     }
 }
 
+/*
+TODO implement and hook these into the miner
 func (m *MultiCollator) NewHeadHook() {
 
 }
@@ -247,3 +256,4 @@ func (m *MultiCollator) NewHeadHook() {
 func (m *Multicollator) SideChainHook() {
 
 }
+/*
