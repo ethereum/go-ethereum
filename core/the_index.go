@@ -4,6 +4,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -33,8 +34,15 @@ var indexPath = os.Getenv("THEINDEX_PATH") // eg: "./the-index/"
 var maxFileIndex map[string]int = theIndex_getCurrentMaxFileIndexesOnInit()
 var startIndexAfterBlock = theIndex_getCurrentCursorBlockOnInit()
 
+func (bc *BlockChain) TheIndex_Init() {
+	if !theIndex_isEnabled() {
+		bc.theIndex_criticalError(errors.New("the environment variable THEINDEX_PATH is missing, or the directory does not exist"))
+	}
+	fmt.Println("THE-INDEX:init", indexPath)
+}
+
 func (bc *BlockChain) TheIndex_Hook_UpdateCursor(block *types.Block) {
-	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
+	if !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
@@ -54,7 +62,7 @@ func (bc *BlockChain) TheIndex_Hook_UpdateCursor(block *types.Block) {
 }
 
 func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
-	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
+	if !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
@@ -83,7 +91,7 @@ func (bc *BlockChain) TheIndex_Hook_WriteBlockHeader(block *types.Block) {
 }
 
 func (bc *BlockChain) TheIndex_Hook_WriteContractsAndAccounts(block *types.Block, logs []*types.Log, state *state.StateDB) {
-	if !theIndex_isEnabled() || !theIndex_shouldIndexBlock(block) {
+	if !theIndex_shouldIndexBlock(block) {
 		return
 	}
 
@@ -180,18 +188,11 @@ func TheIndex_addAccountsToContracts(accounts []rlp.TheIndex_rlpAccount, contrac
 func theIndex_getCurrentMaxFileIndexesOnInit() map[string]int {
 	res := map[string]int{}
 
-	if theIndex_isEnabled() {
-		fmt.Println("THE-INDEX:init", "enabled", indexPath)
-
-		res[blocksFilePrefix] = theIndex_getCurrentMaxFileIndex(blocksFilePrefix)
-		res[accountsFilePrefix] = theIndex_getCurrentMaxFileIndex(accountsFilePrefix)
-		for shard := 0; shard < int(contractShards); shard++ {
-			filePrefix := fmt.Sprintf(contractsShardFilePrefix, shard)
-			res[filePrefix] = theIndex_getCurrentMaxFileIndex(filePrefix)
-		}
-
-	} else {
-		fmt.Println("THE-INDEX:init", "disabled", indexPath)
+	res[blocksFilePrefix] = theIndex_getCurrentMaxFileIndex(blocksFilePrefix)
+	res[accountsFilePrefix] = theIndex_getCurrentMaxFileIndex(accountsFilePrefix)
+	for shard := 0; shard < int(contractShards); shard++ {
+		filePrefix := fmt.Sprintf(contractsShardFilePrefix, shard)
+		res[filePrefix] = theIndex_getCurrentMaxFileIndex(filePrefix)
 	}
 	return res
 }
