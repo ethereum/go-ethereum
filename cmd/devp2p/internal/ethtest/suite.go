@@ -70,6 +70,8 @@ func (s *Suite) AllEthTests() []utesting.Test {
 		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce66},
 		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
 		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce66},
+		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
+		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce66},
 		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
@@ -93,6 +95,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestBroadcast", Fn: s.TestBroadcast},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		{Name: "TestTransaction", Fn: s.TestTransaction},
@@ -112,6 +115,7 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 		{Name: "TestBroadcast66", Fn: s.TestBroadcast66},
 		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce66},
 		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce66},
+		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce66},
 		{Name: "TestMaliciousHandshake66", Fn: s.TestMaliciousHandshake66},
 		{Name: "TestMaliciousStatus66", Fn: s.TestMaliciousStatus66},
 		{Name: "TestTransaction66", Fn: s.TestTransaction66},
@@ -580,6 +584,22 @@ func (s *Suite) TestOldAnnounce66(t *utesting.T) {
 	}
 }
 
+// TestBlockHashAnnounce sends a new block hash announcement and expects
+// the node to perform a `GetBlockHeaders` request.
+func (s *Suite) TestBlockHashAnnounce(t *utesting.T) {
+	if err := s.hashAnnounce(eth65); err != nil {
+		t.Fatalf("block hash announcement failed: %v", err)
+	}
+}
+
+// TestBlockHashAnnounce66 sends a new block hash announcement and expects
+// the node to perform a `GetBlockHeaders` request.
+func (s *Suite) TestBlockHashAnnounce66(t *utesting.T) {
+	if err := s.hashAnnounce(eth66); err != nil {
+		t.Fatalf("block hash announcement failed: %v", err)
+	}
+}
+
 // TestMaliciousHandshake tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 	if err := s.maliciousHandshakes(t, eth65); err != nil {
@@ -712,17 +732,20 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	if err := s.sendNextBlock(eth66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
+
 	// generate 50 txs
 	hashMap, _, err := generateTxs(s, 50)
 	if err != nil {
 		t.Fatalf("failed to generate transactions: %v", err)
 	}
+
 	// create new pooled tx hashes announcement
 	hashes := make([]common.Hash, 0)
 	for _, hash := range hashMap {
 		hashes = append(hashes, hash)
 	}
 	announce := NewPooledTransactionHashes(hashes)
+
 	// send announcement
 	conn, err := s.dial66()
 	if err != nil {
@@ -735,6 +758,7 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	if err = conn.Write(announce); err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
+
 	// wait for GetPooledTxs request
 	for {
 		_, msg := conn.readAndServe66(s.chain, timeout)
@@ -744,8 +768,13 @@ func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg))
 			}
 			return
+		// ignore propagated txs from previous tests
 		case *NewPooledTransactionHashes:
-			// ignore propagated txs from old tests
+			continue
+		// ignore block announcements from previous tests
+		case *NewBlockHashes:
+			continue
+		case *NewBlock:
 			continue
 		default:
 			t.Fatalf("unexpected %s", pretty.Sdump(msg))
