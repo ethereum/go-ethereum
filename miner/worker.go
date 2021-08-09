@@ -1064,7 +1064,17 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 		return nil, err
 	}
 
-    candidates := w.multiCollator.Collect()
+    var candidate environment
+    profit := big.NewInt(0)
+
+    chooseMostProfitableBlock := func(e environment) {
+        if e.profit.Gt(profit) {
+            candidate = e
+            profit.Set(e.profit)
+        }
+    }
+    w.multiCollator.Collect(chooseMostProfitableBlock)
+
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
@@ -1088,10 +1098,15 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		return
 	}
 	w.commit(work.copy(), w.fullTaskHook, true, start)
-    //
-    cb := func(work *environment) {
-        // probably don't need to copy again here but do it for now just to be safe
-        w.commit(work.copy(), w.fullTaskHooke, true, start)
+
+    profit = new(big.Int)
+    profit.Set(work.profit)
+    cb := func(newWork environment) {
+        if newWork.profit.Gt(profit) {
+            // probably don't need to copy work again here but do it for now just to be safe
+            w.commit(newWork.copy(), w.fullTaskHooke, true, start)
+            profit.Set(newWork.profit)
+        }
     }
     w.multiCollator.Collect(cb)
 

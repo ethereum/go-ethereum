@@ -196,8 +196,9 @@ func (m *MultiCollator) CollateBlock(work *environment, interrupt *int32) {
     }
 }
 
+type WorkResult func(environment)
 
-func (m *MultiCollator) Collect(work *environment, cb workResult) {
+func (m *MultiCollator) Collect(work *environment, cb WorkResult) {
     finishedCollators := []uint{}
     shouldAdjustRecommitDown := true
 
