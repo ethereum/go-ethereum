@@ -1059,9 +1059,12 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
+    w.multiCollator.CollateBlock(work)
 	if err := w.fillTransactions(nil, work); err != nil {
 		return nil, err
 	}
+
+    candidates := w.multiCollator.Collect()
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
