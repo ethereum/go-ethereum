@@ -1081,11 +1081,19 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		w.commit(work.copy(), nil, false, start)
 	}
+    // start concurrent block collation for custom collators
+    w.multiCollator.CollateBlock(&work)
 	// Fill pending transactions from the txpool
 	if err := w.fillTransactions(interrupt, work); err != nil {
 		return
 	}
 	w.commit(work.copy(), w.fullTaskHook, true, start)
+    //
+    cb := func(work *environment) {
+        // probably don't need to copy again here but do it for now just to be safe
+        w.commit(work.copy(), w.fullTaskHooke, true, start)
+    }
+    w.multiCollator.Collect(cb)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.

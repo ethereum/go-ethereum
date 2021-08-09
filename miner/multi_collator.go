@@ -1,6 +1,29 @@
 type collatorWork {
     env *environment
     counter uint64
+    interrupt *int32
+}
+
+type collatorBlockState struct {
+    work collatorWork
+    c *collator
+}
+
+func (w *collatorWork) Copy() collatorWork {
+    newEnv := w.copy()
+    return collatorWork{
+        env: newEnv,
+        counter: w.counter,
+        interrupt: w.interrupt,
+    }
+}
+
+func (b *collatorBlockState) AddTransactions() {
+
+}
+
+func (bs *collatorBlockState) Commit() {
+    bs.c.workResultch <- bs.work
 }
 
 type collator struct {
@@ -9,7 +32,7 @@ type collator struct {
     // channel signalling collator loop should exit
     exitCh chan<-interface{}
     newHeadCh chan<-types.Header
-    collatorImpl Collator
+    collateBlockImpl BlockCollator
 }
 
 func (c *collator) mainLoop() {
@@ -19,6 +42,7 @@ func (c *collator) mainLoop() {
         // implementation.  collator calls Commit() to flush new work to the
         // result channel.
         // TODO...
+        c.collateBlockImpl(collatorBlockState{newWork, c})
 
         // signal to the exitCh that the collator is done
         // computing this work.
@@ -56,21 +80,37 @@ func (m *MultiCollator) Stop() {
     }
 }
 
-func (m *MultiCollator) CollateBlock(work *environment) {
+func (m *MultiCollator) CollateBlock(work *environment, interrupt *int32) {
+    if m.counter == math.Uint64Max {
+        m.counter = 0
+    } else {
+        m.counter++
+    }
     m.responsiveCollatorCount = 0
+    m.interrupt = interrupt
     for c := range m.collators {
         select {
-        case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter}
+        case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}
             m.responsiveCollatorCount++
         }
     }
 }
 
 
-func (m *MultiCollator) collect(work *environment, cb workResult) {
-    finishedCollators := 0
-    for ; finishedCollators != m.responsiveCollatorCount; {
-        for c := range m.collators {
+func (m *MultiCollator) Collect(work *environment, cb workResult) {
+    finishedCollators := []uint{}
+    shouldAdjustRecommitDown := true
+    for {
+        if finishedCollators == m.responsiveCollatorcount {
+            break
+        }
+
+        if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+            // TODO: if the interrupt was recommit, signal to the worker to adjust up
+            shouldAdjustRecommitDown = false
+        }
+
+        for i, c := range m.collators {
             select {
             case response := m.workResultCh:
                 // ignore collators responding from old work rounds
@@ -79,26 +119,31 @@ func (m *MultiCollator) collect(work *environment, cb workResult) {
                 }
 
                 // ignore responses from collators that have already signalled they are done
-                // TODO
+                shouldIgnore := false
+                for _, finishedCollator := range finishedCollators {
+                    if i == finishedCollator {
+                        shouldIgnore = true
+                    }
+                }
+                if shouldIgnore {
+                    break
+                }
 
-                cb(response.work)
+                // nil for work signals the collator won't send back any more blocks for this round
+                if response.work == nil {
+                    finishedCollators = append(finishedCollators, i)
+                } else {
+                    cb(response.work)
+                }
             default:
                 continue
             }
         }
     }
-}
 
-// Collect sends the work request to all collators and blocks until all have 
-// sent their result, or times out after x seconds
-func (m *MultiCollator) Collect(work *environment) {
-
-}
-
-// StreamAndCommit sends the work request to all collator goroutines.
-// It collects the results and calls worker.commit() on them as they come back
-func (m *MultiCollator) StreamAndCommit(w *worker, work *environment) {
-
+    if shouldAdjustRecommitDown {
+        // TODO signal to worker to adjust recommit interval down
+    }
 }
 
 func (m *MultiCollator) NewHeadHook() {
