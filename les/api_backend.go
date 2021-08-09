@@ -324,3 +324,7 @@ func (b *LesApiBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) (
 func (b *LesApiBackend) GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	return nil, common.Hash{}, 0, 0, errors.New("Not implemented")
 }
+
+func (b *LesApiBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	return nil, common.Hash{}, 0, 0, errors.New("Not implemented")
+}

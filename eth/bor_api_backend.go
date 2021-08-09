@@ -58,6 +58,11 @@ func (b *EthAPIBackend) GetBorBlockTransaction(ctx context.Context, hash common.
 	return tx, blockHash, blockNumber, index, nil
 }
 
+func (b *EthAPIBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	tx, blockHash, blockNumber, index := rawdb.ReadBorTransactionWithBlockHash(b.eth.ChainDb(), txHash, blockHash)
+	return tx, blockHash, blockNumber, index, nil
+}
+
 // SubscribeStateSyncEvent subscribes to state sync event
 func (b *EthAPIBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeStateSyncEvent(ch)
