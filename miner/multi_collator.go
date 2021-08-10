@@ -24,6 +24,12 @@ type collatorWork {
     interrupt *int32
 }
 
+// Pool is an interface to the transaction pool
+type Pool interface {
+        Pending(bool) (map[common.Address]types.Transactions, error)
+        Locals() []common.Address
+}
+
 type collatorBlockState struct {
     work collatorWork
     c *collator
@@ -41,7 +47,7 @@ func (w *collatorWork) Copy() collatorWork {
 
 func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
 	var (
-		interrupt   = bs.work.interrupt
+		interrupt   = bs.work.env.interrupt
 		header = bs.work.env.header
         gasPool = bs.work.env.gasPool
         signer = bs.work.env.signer
@@ -50,13 +56,11 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
         state = bs.work.env.state
 		snap        = state.Snapshot()
         curProfit = big.NewInt(0)
-		coinbaseBalanceBefore = bs.work.state.GetBalance(bs.work.header.Coinbase)
-// ---------------
-		w           = bs.worker
+		coinbaseBalanceBefore = state.GetBalance(bs.work.header.Coinbase)
+		tcount      = bs.work.env.tcount
 		err         error
 		logs        []*types.Log
-		tcount      = w.current.tcount
-		startTCount = w.current.tcount
+		startTCount = bs.work.env.tcount
 	)
 	if bs.done {
 		cb(ErrRecommit, nil)
@@ -81,18 +85,18 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		from, _ := types.Sender(signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(header.Number) {
-			log.Trace("encountered replay-protected transaction when chain doesn't support replay protection", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+		if tx.Protected() && !chainConfig.IsEIP155(header.Number) {
+			log.Trace("encountered replay-protected transaction when chain doesn't support replay protection", "hash", tx.Hash(), "eip155", chainConfig.EIP155Block)
 			err = ErrUnsupportedEIP155Tx
 			break
 		}
 		// Start executing the transaction
-		state.Prepare(tx.Hash(), w.current.tcount)
+		state.Prepare(tx.Hash(), bs.work.env.tcount)
 
 		var txLogs []*types.Log
 		txLogs, err = commitTransaction(chain, chainConfig, tx, bs.Coinbase())
 		if err == nil {
-			//logs = append(logs, txLogs...)
+			logs = append(logs, txLogs...)
             gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[-1].GasUsed)
             curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			tcount++
@@ -120,10 +124,10 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		bs.work.env.txs = bs.work.env.txs[:startTCount]
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
-		coinbaseBalanceAfter := bs.work.state.GetBalance(bs.work.header.Coinbase)
+		coinbaseBalanceAfter := bs.work.state.GetBalance(bs.work.env.header.Coinbase)
         coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
         curProfit.Add(curProfit, coinbaseTransfer)
-		//bs.logs = append(bs.logs, logs...)
+		bs.work.env.logs = append(bs.logs, logs...)
         bs.env.profit = curProfit
 		bs.env.tcount = tcount
 	}
@@ -136,13 +140,15 @@ func (bs *collatorBlockState) Commit() {
     }
 }
 
+type CollateBlockfunc func (bs BlockState, pool Pool)
+
 type collator struct {
     newWorkCh chan<- collatorWork
     workResultCh chan<-collatorWork
     // channel signalling collator loop should exit
     exitCh chan<-interface{}
     newHeadCh chan<-types.Header
-    collateBlockImpl BlockCollator
+    collateBlockImpl CollateBlockFunc
     chainConfig *params.ChainConfig
     chain *core.BlockChain
 }
@@ -151,11 +157,7 @@ func (c *collator) mainLoop() {
     for {
         select {
         case newWork := <-c.newWorkCh:
-            // pass a wrapped CollatorBlockState object to the collator
-            // implementation.  collator calls Commit() to flush new work to the
-            // result channel.
-            c.collateBlockImpl(collatorBlockState{newWork, c})
-
+            c.collateBlockImpl(collatorBlockState{work: newWork, c: c, done: false})
             // signal to the exitCh that the collator is done
             // computing this work.
             c.workResultCh <- collatorWork{nil, newWork.counter}
@@ -195,7 +197,7 @@ func (m *MultiCollator) Stop() {
     }
 }
 
-func (m *MultiCollator) CollateBlock(work *environment, interrupt *int32) {
+func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
     if m.counter == math.Uint64Max {
         m.counter = 0
     } else {

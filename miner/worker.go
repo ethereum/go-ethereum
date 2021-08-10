@@ -1060,7 +1060,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-    w.multiCollator.CollateBlock(work, nil)
+    w.multiCollator.SuggestBlock(work, nil)
 	if err := w.fillTransactions(nil, work); err != nil {
 		return nil, err
 	}
@@ -1094,7 +1094,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		w.commit(work.copy(), nil, false, start)
 	}
     // start concurrent block collation for custom collators
-    w.multiCollator.CollateBlock(&work)
+    w.multiCollator.SuggestBlock(&work)
 	// Fill pending transactions from the txpool
 	if err := w.fillTransactions(interrupt, work); err != nil {
 		return
