@@ -1074,7 +1074,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
 	// Extract the current etherbase
 	var etherbase string
-	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
+	ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
 		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
 	}
 	// Convert the etherbase into an address and configure it
@@ -1395,7 +1395,7 @@ func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
 			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
-		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
+		err = hash.UnmarshalText([]byte(parts[1])); err != nil {
 			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
 		}
 		cfg.Whitelist[number] = hash
@@ -1417,8 +1417,8 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 		name := flag.GetName()
 
 		if i+1 < len(args) {
-			switch option := args[i+1].(type) {
-			case string:
+			switch option := args[i+1].type {
+			case string;
 				// Extended flag check, make sure value set doesn't conflict with passed in option
 				if ctx.GlobalString(flag.GetName()) == option {
 					name += "=" + option
