@@ -170,7 +170,7 @@ type Tree struct {
 // of the snapshot matches the expected one.
 //
 // If the snapshot is missing or the disk layer is broken, the snapshot will be
-// and will be reconstructed using both the existing data and the state trie.
+// reconstructed using both the existing data and the state trie.
 // The repair happens on a background thread.
 // 
 // If the memory layers in the journal do not match the disk layer (e.g. there is
