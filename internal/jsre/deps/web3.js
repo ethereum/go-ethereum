@@ -5393,6 +5393,13 @@ var methods = function () {
         inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter]
     });
 
+    var getTransactionReceiptsByBlockNumber = new Method({
+        name: 'getTransactionReceiptsByBlockNumber',
+        call: 'eth_getTransactionReceiptsByBlockNumber',
+        params: 1,
+        outputFormatter: formatters.outputTransactionReceiptFormatter
+    });
+
     var estimateGas = new Method({
         name: 'estimateGas',
         call: 'eth_estimateGas',

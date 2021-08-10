@@ -495,6 +495,11 @@ web3._extend({
 	property: 'eth',
 	methods: [
 		new web3._extend.Method({
+			name: 'getTransactionReceiptsByBlockNumber',
+			call: 'eth_getTransactionReceiptsByBlockNumber',
+			params: 1,
+		}),
+		new web3._extend.Method({
 			name: 'chainId',
 			call: 'eth_chainId',
 			params: 0
