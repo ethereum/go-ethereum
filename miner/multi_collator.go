@@ -67,10 +67,6 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		return
 	}
 
-    gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
-    if err != nil {
-        return nil, err
-    }
 
 	for _, tx := range sequence {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
@@ -90,6 +86,10 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 			err = ErrUnsupportedEIP155Tx
 			break
 		}
+        gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
+        if err != nil {
+            return nil, err
+        }
 		// Start executing the transaction
 		state.Prepare(tx.Hash(), bs.work.env.tcount)
 

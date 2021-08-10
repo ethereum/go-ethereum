@@ -819,6 +819,8 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	var coalescedLogs []*types.Log
 
+    curProfit := big.NewInt(0).Add(env.profit)
+
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -863,6 +865,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Pop()
 			continue
 		}
+        gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
+        if err != nil {
+            return nil, err
+        }
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
@@ -886,6 +892,8 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
+            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[-1].GasUsed)
+            curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			env.tcount++
 			txs.Shift()
 
@@ -901,6 +909,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Shift()
 		}
 	}
+
+    if w.isRunning() {
+        env.profit = curProfit
+    }
 
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
