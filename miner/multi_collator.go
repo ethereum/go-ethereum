@@ -1,7 +1,9 @@
 type AddTransactionsResultFunc func(error, []*types.Receipt) bool
 
 // BlockState represents a block-to-be-mined, which is being assembled.
-// A collator can add transactions by calling AddTransactions
+// A collator can add transactions by calling AddTransactions.
+// When the collator is done adding transactions to a block, it calls Commit.
+// after-which, no more transactions can be added to the block
 type BlockState interface {
 	// AddTransactions adds the sequence of transactions to the blockstate. Either all
 	// transactions are added, or none of them. In the latter case, the error
@@ -12,6 +14,8 @@ type BlockState interface {
 	// value (true) from CollateBlock which indicates to the miner to discard the
 	// block
 	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
+    Commit()
+    Copy() BlockState
 	Gas() (remaining uint64)
 	Coinbase() common.Address
 	BaseFee() *big.Int
@@ -66,7 +70,6 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		cb(ErrRecommit, nil)
 		return
 	}
-
 
 	for _, tx := range sequence {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
@@ -140,7 +143,28 @@ func (bs *collatorBlockState) Commit() {
     }
 }
 
-type CollateBlockfunc func (bs BlockState, pool Pool)
+func (bs *collatorBlockState) Gas() uint64 {
+    return *bs.work.env.gasPool
+}
+
+func (bs *collatorBlockState) Coinbase() common.Address {
+    // TODO should clone this but I'm feeling lazy rn
+    return bs.work.env.header.Coinbase
+}
+
+func (bs *collatorBlockState) BaseFee() *big.Int {
+    return new(big.Int).SetInt(bs.work.env.header.BaseFee)
+}
+
+func (bs *collatorBlockState) Signer() types.Signer {
+    return bs.work.env.signer
+}
+
+type BlockCollator interface {
+    func CollateBlock(bs BlockState, pool Pool)
+    func SideChainHook(header *types.Header)
+    func NewHeadHook(header *types.Header)
+}
 
 type collator struct {
     newWorkCh chan<- collatorWork
@@ -148,11 +172,14 @@ type collator struct {
     // channel signalling collator loop should exit
     exitCh chan<-interface{}
     newHeadCh chan<-types.Header
-    collateBlockImpl CollateBlockFunc
+    sideChainCh chan<-types.Header
+    blockCollatorImpl BlockCollator
     chainConfig *params.ChainConfig
     chain *core.BlockChain
 }
 
+// mainLoop runs in a separate goroutine and handles the lifecycle of an active collator.
+// TODO more explanation
 func (c *collator) mainLoop() {
     for {
         select {
@@ -164,11 +191,11 @@ func (c *collator) mainLoop() {
         case <-c.exitCh:
             // TODO any cleanup needed?
             return
-        case newHead := <-newHeadCh:
+        case newHead := <-c.newHeadCh:
             // TODO call hook here
-            fallthrough
+        case sideHeader := <-c.sideChainCh:
+            // TODO call hook here
         default:
-            fallthrough
         }
     }
 }
@@ -197,6 +224,10 @@ func (m *MultiCollator) Stop() {
     }
 }
 
+// SuggestBlock sends a new empty block to each active collator.
+// collators whose receiving channels are full are noted as "unresponsive"
+// for the purpose of not expecting a response back (for this round) during 
+// polling performed by Collect
 func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
     if m.counter == math.Uint64Max {
         m.counter = 0
@@ -215,20 +246,18 @@ func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
 
 type WorkResult func(environment)
 
-func (m *MultiCollator) Collect(work *environment, cb WorkResult) {
+// Collect retrieves filled blocks returned by active collators based on the block suggested by the previous call to SuggestedBlock.
+// It blocks until all responsive collators (ones which accepted the block from SuggestBlock) signal that they are done
+// or the provided interrupt is set.
+func (m *MultiCollator) Collect(cb WorkResult) {
     finishedCollators := []uint{}
-    shouldAdjustRecommitDown := true
-
     for {
         if finishedCollators == m.responsiveCollatorcount {
             break
         }
-
-        if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-            // TODO: if the interrupt was recommit, signal to the worker to adjust up
-            shouldAdjustRecommitDown = false
+        if m.interrupt != nil && atomic.LoadInt32(m.interrupt) != commitInterruptNone {
+            break
         }
-
         for i, c := range m.collators {
             select {
             case response := m.workResultCh:
@@ -236,7 +265,6 @@ func (m *MultiCollator) Collect(work *environment, cb WorkResult) {
                 if response.counter != m.counter {
                     break
                 }
-
                 // ignore responses from collators that have already signalled they are done
                 shouldIgnore := false
                 for _, finishedCollator := range finishedCollators {
@@ -247,7 +275,6 @@ func (m *MultiCollator) Collect(work *environment, cb WorkResult) {
                 if shouldIgnore {
                     break
                 }
-
                 // nil for work signals the collator won't send back any more blocks for this round
                 if response.work == nil {
                     finishedCollators = append(finishedCollators, i)
@@ -255,14 +282,10 @@ func (m *MultiCollator) Collect(work *environment, cb WorkResult) {
                     cb(response.work)
                 }
             default:
-                fallthrough
             }
         }
     }
-
-    if shouldAdjustRecommitDown {
-        // TODO signal to worker to adjust recommit interval down
-    }
+    return
 }
 
 /*

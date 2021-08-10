@@ -929,11 +929,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-	// than the user-specified one.
-	if interrupt != nil {
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	}
+
 	return false
 }
 
@@ -1125,6 +1121,24 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
         }
     }
     w.multiCollator.Collect(cb)
+
+    // TODO how to determine how to adjust the resubmit interval here? i.e. how the ratio should be determined
+	/*
+	if interrupt != nil {
+        if interrupt == commitInterruptNone {
+		    w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+        } else if interrupt == commitInterruptNone {
+			ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
+			if ratio < 0.1 {
+				ratio = 0.1
+			}
+			w.resubmitAdjustCh <- &intervalAdjust{
+				ratio: ratio,
+				inc:   true,
+			}
+        }
+	}
+	*/
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
