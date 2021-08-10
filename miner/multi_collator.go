@@ -49,6 +49,8 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
         chain = bs.c.chain
         state = bs.work.env.state
 		snap        = state.Snapshot()
+        curProfit = big.NewInt(0)
+		coinbaseBalanceBefore = bs.work.state.GetBalance(bs.work.header.Coinbase)
 // ---------------
 		w           = bs.worker
 		err         error
@@ -60,6 +62,11 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		cb(ErrRecommit, nil)
 		return
 	}
+
+    gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
+    if err != nil {
+        return nil, err
+    }
 
 	for _, tx := range sequence {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
@@ -86,6 +93,8 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		txLogs, err = commitTransaction(chain, chainConfig, tx, bs.Coinbase())
 		if err == nil {
 			//logs = append(logs, txLogs...)
+            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[-1].GasUsed)
+            curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			tcount++
 		} else {
 			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
@@ -111,14 +120,20 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		bs.work.env.txs = bs.work.env.txs[:startTCount]
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
+		coinbaseBalanceAfter := bs.work.state.GetBalance(bs.work.header.Coinbase)
+        coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
+        curProfit.Add(curProfit, coinbaseTransfer)
 		//bs.logs = append(bs.logs, logs...)
-		w.current.tcount = tcount
+        bs.env.profit = curProfit
+		bs.env.tcount = tcount
 	}
 }
 
 func (bs *collatorBlockState) Commit() {
-    bs.done = true
-    bs.c.workResultch <- bs.work
+    if !bs.done {
+        bs.done = true
+        bs.c.workResultch <- bs.work
+    }
 }
 
 type collator struct {

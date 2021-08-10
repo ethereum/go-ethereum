@@ -92,6 +92,7 @@ type environment struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
+    profit   *big.Int
 }
 
 // copy creates a deep copy of environment.
@@ -1064,18 +1065,19 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 		return nil, err
 	}
 
-    var candidate environment
+    var bestWork environment = work
     profit := big.NewInt(0)
 
     chooseMostProfitableBlock := func(e environment) {
         if e.profit.Gt(profit) {
-            candidate = e
+            bestWork.discard()
+            bestWork = e
             profit.Set(e.profit)
         }
     }
     w.multiCollator.Collect(chooseMostProfitableBlock)
 
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	return w.engine.FinalizeAndAssemble(w.chain, bestWork.header, bestWork.state, bestWork.txs, bestWork.unclelist(), bestWork.receipts)
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1101,11 +1103,13 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 
     profit = new(big.Int)
     profit.Set(work.profit)
+    curBest := work
     cb := func(newWork environment) {
         if newWork.profit.Gt(profit) {
             // probably don't need to copy work again here but do it for now just to be safe
             w.commit(newWork.copy(), w.fullTaskHooke, true, start)
             profit.Set(newWork.profit)
+            curBest = newWork
         }
     }
     w.multiCollator.Collect(cb)
@@ -1115,7 +1119,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if w.current != nil {
 		w.current.discard()
 	}
-	w.current = work
+	w.current = curBest
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
