@@ -270,7 +270,8 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
-func ImportPreimages(db ethdb.Database, fn string, interrupt chan struct{}) error {
+// It's a part of the deprecated functionality, should be removed in the future.
+func ImportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Importing preimages", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -289,15 +290,12 @@ func ImportPreimages(db ethdb.Database, fn string, interrupt chan struct{}) erro
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk trashing
-	var (
-		count     int64
-		start     = time.Now()
-		logged    = time.Now()
-		preimages = make(map[common.Hash][]byte)
-	)
+	preimages := make(map[common.Hash][]byte)
+
 	for {
 		// Read the next entry and ensure it's not junk
 		var blob []byte
+
 		if err := stream.Decode(&blob); err != nil {
 			if err == io.EOF {
 				break
@@ -310,33 +308,48 @@ func ImportPreimages(db ethdb.Database, fn string, interrupt chan struct{}) erro
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[common.Hash][]byte)
 		}
-		// Check interruption emitted by ctrl+c
-		if count%1000 == 0 {
-			select {
-			case <-interrupt:
-				rawdb.WritePreimages(db, preimages)
-				log.Info("Preimages importing interruptted")
-				return nil
-			default:
-			}
-		}
-		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Importing preimages", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
-			logged = time.Now()
-		}
-		count += 1
 	}
 	// Flush the last batch preimage data
 	if len(preimages) > 0 {
 		rawdb.WritePreimages(db, preimages)
 	}
-	log.Info("Imported preimages", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// ExportPreimages exports all known hash preimages into the specified file,
+// truncating any data already present in the file.
+// It's a part of the deprecated functionality, should be removed in the future.
+func ExportPreimages(db ethdb.Database, fn string) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the preimages and export them
+	it := db.NewIterator([]byte("secure-key-"), nil)
+	defer it.Release()
+
+	for it.Next() {
+		if err := rlp.Encode(writer, it.Value()); err != nil {
+			return err
+		}
+	}
+	log.Info("Exported preimages", "file", fn)
 	return nil
 }
 
 // ImportSnapshot imports a batch of snapshot data into the database
-func ImportSnapshot(db ethdb.Database, fn string, interrupt chan struct{}) error {
-	log.Info("Importing snapshot data", "file", fn)
+func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key []byte) bool, interrupt chan struct{}) error {
+	log.Info("Importing chain data", "file", fn, "kind", kind)
 
 	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
@@ -355,38 +368,30 @@ func ImportSnapshot(db ethdb.Database, fn string, interrupt chan struct{}) error
 
 	// Import the snapshot in batches to prevent disk trashing
 	var (
-		count  int64
-		start  = time.Now()
-		logged = time.Now()
-		batch  = db.NewBatch()
+		count    int64
+		filtered int64
+		start    = time.Now()
+		logged   = time.Now()
+		batch    = db.NewBatch()
 	)
 	for {
 		// Read the next entry and ensure it's not junk
-		var blob []byte
-		if err := stream.Decode(&blob); err != nil {
+		var key, val []byte
+		if err := stream.Decode(&key); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return err
 		}
-		if len(blob) == 0 {
-			continue
+		if err := stream.Decode(&val); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
 		}
-		var key, val []byte
-		if blob[0] == byte(0) {
-			keylen := common.HashLength + len(rawdb.SnapshotAccountPrefix) + 1
-			if len(blob) <= keylen {
-				continue
-			}
-			key = blob[1:keylen]
-			val = blob[keylen:]
-		} else {
-			keylen := 2*common.HashLength + len(rawdb.SnapshotStoragePrefix) + 1
-			if len(blob) <= keylen {
-				continue
-			}
-			key = blob[1:keylen]
-			val = blob[keylen:]
+		if !checker(key) {
+			filtered += 1
+			continue
 		}
 		batch.Put(key, val)
 		if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -408,7 +413,7 @@ func ImportSnapshot(db ethdb.Database, fn string, interrupt chan struct{}) error
 			}
 		}
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Importing snapshot data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Importing chain data", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 		count += 1
@@ -419,13 +424,13 @@ func ImportSnapshot(db ethdb.Database, fn string, interrupt chan struct{}) error
 			return err
 		}
 	}
-	log.Info("Imported snapshot data", "file", fn, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Imported chain data", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 // ExportChaindata exports all known chain data into the given file,
 // truncating any data already present in the file.
-func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key, val []byte) []byte, prefixes [][]byte, interrupt chan struct{}) error {
+func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key []byte) bool, prefixes [][]byte, interrupt chan struct{}) error {
 	log.Info("Exporting chain data", "file", fn, "kind", kind)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -448,8 +453,17 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, encode func(key,
 	for _, prefix := range prefixes {
 		it := db.NewIterator(prefix, nil)
 		for it.Next() {
-			blob := encode(it.Key(), it.Value())
-			if err := rlp.Encode(writer, blob); err != nil {
+			// Filter out the non-requested data by the offered checker
+			if !checker(it.Key()) {
+				continue
+			}
+			// Encode the key value separately according to the predefined
+			// database scheme and they are supposed to be imported into
+			// another database instance without change.
+			if err := rlp.Encode(writer, it.Key()); err != nil {
+				return err
+			}
+			if err := rlp.Encode(writer, it.Value()); err != nil {
 				return err
 			}
 			// Check interruption emitted by ctrl+c
