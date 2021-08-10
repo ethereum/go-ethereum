@@ -488,11 +488,10 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	} else {
 		hi = b.pendingBlock.GasLimit()
 	}
-
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
-		return 0, errors.New("both gasPrice and (gasFeeCap or gasTipCap) specified")
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	} else if call.GasPrice != nil {
 		feeCap = call.GasPrice
 	} else if call.GasFeeCap != nil {
@@ -500,7 +499,6 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	} else {
 		feeCap = common.Big0
 	}
-
 	// Recap the highest gas allowance with account's balance.
 	if feeCap.BitLen() != 0 {
 		balance := b.pendingState.GetBalance(call.From) // from can't be nil
