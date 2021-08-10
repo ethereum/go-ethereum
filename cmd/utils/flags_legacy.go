@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -33,7 +34,9 @@ var ShowDeprecated = cli.Command{
 	Description: "Show flags that have been deprecated and will soon be removed",
 }
 
-var DeprecatedFlags = []cli.Flag{}
+var DeprecatedFlags = []cli.Flag{
+	LegacyMinerGasTargetFlag,
+}
 
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
@@ -42,7 +45,8 @@ func showDeprecated(*cli.Context) {
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
-	// TODO remove when there are newly deprecated flags
-	fmt.Println("no deprecated flags to show at this time")
+	for _, flag := range DeprecatedFlags {
+		fmt.Println(flag.String())
+	}
 	fmt.Println()
 }

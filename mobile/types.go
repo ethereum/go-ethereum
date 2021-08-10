@@ -292,19 +292,6 @@ func (tx *Transaction) GetNonce() int64      { return int64(tx.tx.Nonce()) }
 func (tx *Transaction) GetHash() *Hash   { return &Hash{tx.tx.Hash()} }
 func (tx *Transaction) GetCost() *BigInt { return &BigInt{tx.tx.Cost()} }
 
-// Deprecated: GetSigHash cannot know which signer to use.
-func (tx *Transaction) GetSigHash() *Hash { return &Hash{types.HomesteadSigner{}.Hash(tx.tx)} }
-
-// Deprecated: use EthereumClient.TransactionSender
-func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
-	var signer types.Signer = types.HomesteadSigner{}
-	if chainID != nil {
-		signer = types.NewEIP155Signer(chainID.bigint)
-	}
-	from, err := types.Sender(signer, tx.tx)
-	return &Address{from}, err
-}
-
 func (tx *Transaction) GetTo() *Address {
 	if to := tx.tx.To(); to != nil {
 		return &Address{*to}

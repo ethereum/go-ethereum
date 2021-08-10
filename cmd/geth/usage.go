@@ -182,7 +182,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MinerNotifyFlag,
 			utils.MinerNotifyFullFlag,
 			utils.MinerGasPriceFlag,
-			utils.MinerGasTargetFlag,
 			utils.MinerGasLimitFlag,
 			utils.MinerEtherbaseFlag,
 			utils.MinerExtraDataFlag,
@@ -221,7 +220,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.NoUSBFlag,
 		},
-	},
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{
