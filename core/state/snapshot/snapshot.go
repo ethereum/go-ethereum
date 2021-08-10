@@ -177,6 +177,7 @@ type Tree struct {
 // a gap) or the journal is missing, there are two repair cases:
 // 
 // - if the 'recovery' parameter is true, all memory diff-layers will be discarded.
+//   This case happens when the snapshot is 'ahead' of the state trie.
 // - otherwise, the entire snapshot is considered invalid and will be recreated on
 //   a background thread.
 func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
