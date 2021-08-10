@@ -182,13 +182,13 @@ func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
 }
 
-// AccountSnapshotKey = SnapshotAccountPrefix + hash
-func AccountSnapshotKey(hash common.Hash) []byte {
+// accountSnapshotKey = SnapshotAccountPrefix + hash
+func accountSnapshotKey(hash common.Hash) []byte {
 	return append(SnapshotAccountPrefix, hash.Bytes()...)
 }
 
-// StorageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
-func StorageSnapshotKey(accountHash, storageHash common.Hash) []byte {
+// storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
+func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 	return append(append(SnapshotStoragePrefix, accountHash.Bytes()...), storageHash.Bytes()...)
 }
 
