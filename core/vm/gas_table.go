@@ -92,6 +92,9 @@ var (
 	gasCodeCopy       = memoryCopierGas(2)
 	gasExtCodeCopy    = memoryCopierGas(3)
 	gasReturnDataCopy = memoryCopierGas(2)
+
+	gasWitnessBranchCost = uint64(1900)
+	gasWitnessChunkCost  = uint64(200)
 )
 
 func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -104,12 +107,12 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 	_, ok := evm.TxContext.Accesses[subtree]
 	if !ok {
 		evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
-		usedGas += 1900 // WITNESS_BRANCH_COST
+		usedGas += gasWitnessBranchCost
 	}
 
 	_, ok = evm.TxContext.Accesses[subtree][subleaf]
 	if !ok {
-		usedGas += 200 // WITNESS_CHUNK_COST
+		usedGas += gasWitnessChunkCost
 		evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
 	}
 

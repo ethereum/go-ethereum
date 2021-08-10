@@ -101,6 +101,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	// IsVerkle returns true if the trie is verkle-tree based
+	IsVerkle() bool
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -115,7 +118,14 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &VerkleDB{
+	if config != nil && config.UseVerkle {
+		return &VerkleDB{
+			db:            trie.NewDatabaseWithConfig(db, config),
+			codeSizeCache: csc,
+			codeCache:     fastcache.New(codeCacheSize),
+		}
+	}
+	return &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),

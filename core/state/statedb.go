@@ -459,41 +459,52 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 
-	// TODO rewrite this code in go-verkle to have only verkle.TryUpdateAccount()
-	var err error
-	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyVersion(addr), []byte{0}); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-	}
-	nonce := make([]byte, 32)
-	binary.BigEndian.PutUint64(nonce, obj.data.Nonce)
-	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyNonce(addr), nonce); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-	}
-	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-	}
-	if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-	}
-	if len(obj.code) > 0 {
-		cs := make([]byte, 32)
-		binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
-		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr), cs); err != nil {
+	if !s.trie.IsVerkle() {
+		data, err := rlp.EncodeToBytes(obj)
+		if err != nil {
+			panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
+		}
+		if err = s.trie.TryUpdate(addr[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
-	}
 
-	// If the code has been modified, update the associated entries.
-	// TODO it might make sense to do the storage updates here as well,
-	// since the prefetcher doesn't need to load the values from a
-	// different trie anyway.
-	if obj.dirtyCode {
-		if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
-			for i, chunk := range chunks {
-				s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i))), chunk[:])
+	} else {
+		// TODO rewrite this code in go-verkle to have only verkle.TryUpdateAccount()
+		var err error
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyVersion(addr), []byte{0}); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		nonce := make([]byte, 32)
+		binary.BigEndian.PutUint64(nonce, obj.data.Nonce)
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyNonce(addr), nonce); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeKeccak(addr), obj.CodeHash()); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		if len(obj.code) > 0 {
+			cs := make([]byte, 32)
+			binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+			if err = s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr), cs); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 			}
-		} else {
-			s.setError(err)
+		}
+
+		// If the code has been modified, update the associated entries.
+		// TODO it might make sense to do the storage updates here as well,
+		// since the prefetcher doesn't need to load the values from a
+		// different trie anyway.
+		if obj.dirtyCode {
+			if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
+				for i, chunk := range chunks {
+					s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i))), chunk[:])
+				}
+			} else {
+				s.setError(err)
+			}
 		}
 	}
 
@@ -886,7 +897,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateTrie(s.db)
+			if s.trie.IsVerkle() {
+				obj.updateTrie(s.db)
+			} else {
+				obj.updateRoot(s.db)
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
