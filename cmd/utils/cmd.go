@@ -407,7 +407,7 @@ func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key
 				if err := batch.Write(); err != nil {
 					return err
 				}
-				log.Info("Snapshot data importing interruptted")
+				log.Info("Snapshot data importing interruptted", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
 				return nil
 			default:
 			}
@@ -457,9 +457,6 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 			if !checker(it.Key()) {
 				continue
 			}
-			// Encode the key value separately according to the predefined
-			// database scheme and they are supposed to be imported into
-			// another database instance without change.
 			if err := rlp.Encode(writer, it.Key()); err != nil {
 				return err
 			}
@@ -471,7 +468,7 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 				select {
 				case <-interrupt:
 					it.Release()
-					log.Info("Chain data exporting interruptted")
+					log.Info("Chain data exporting interruptted", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 					return nil
 				default:
 				}
