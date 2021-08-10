@@ -492,20 +492,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 			}
 		}
-
-		// If the code has been modified, update the associated entries.
-		// TODO it might make sense to do the storage updates here as well,
-		// since the prefetcher doesn't need to load the values from a
-		// different trie anyway.
-		if obj.dirtyCode {
-			if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
-				for i, chunk := range chunks {
-					s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i))), chunk[:])
-				}
-			} else {
-				s.setError(err)
-			}
-		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -968,7 +954,17 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
-				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+				if s.trie.IsVerkle() {
+					if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
+						for i, chunk := range chunks {
+							s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i))), chunk[:])
+						}
+					} else {
+						s.setError(err)
+					}
+				} else {
+					rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+				}
 				obj.dirtyCode = false
 			}
 		}

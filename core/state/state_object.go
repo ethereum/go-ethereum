@@ -255,9 +255,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 				return common.Hash{}
 			}
 		} else {
-			// Get the data from the db, not the trie. XXX this should
-			// be an error when the snapshot is activated for verkle trees.
-			s.db.db.TrieDB().DiskDB().Get(append(s.address[:], key[:]...))
+			panic("verkle trees use the snapshot")
 		}
 	}
 	var value common.Hash
@@ -369,7 +367,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			if tr.IsVerkle() {
 				k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
 				s.setError(tr.TryDelete(k))
-				s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
+				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
 			} else {
 				s.setError(tr.TryDelete(key[:]))
 			}
@@ -383,12 +381,6 @@ func (s *stateObject) updateTrie(db Database) Trie {
 				k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
 				// Update the trie, with v as a value
 				s.setError(tr.TryUpdate(k, v))
-
-				// Also save the account data in a location that is easy to
-				// find, i.e. right after the account's key. XXX this is only
-				// a temporary measure until the snapshot can be activated
-				// with verkle trees.
-				s.db.db.TrieDB().DiskDB().Put(append(s.address[:], key[:]...), v)
 			}
 
 		}
