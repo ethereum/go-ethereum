@@ -500,6 +500,7 @@ web3._extend({
 				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionReceiptsByBlockHash' : 'eth_getTransactionReceiptsByBlockNumber';
 			},
 			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
 		new web3._extend.Method({
 			name: 'chainId',
