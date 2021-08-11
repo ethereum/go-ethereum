@@ -495,8 +495,10 @@ web3._extend({
 	property: 'eth',
 	methods: [
 		new web3._extend.Method({
-			name: 'getTransactionReceiptsByBlockNumber',
-			call: 'eth_getTransactionReceiptsByBlockNumber',
+			name: 'getTransactionReceiptsByBlock',
+			call: function(args) {
+				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionReceiptsByBlockHash' : 'eth_getTransactionReceiptsByBlockNumber';
+			},
 			params: 1,
 		}),
 		new web3._extend.Method({

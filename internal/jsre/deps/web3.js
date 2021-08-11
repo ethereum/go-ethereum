@@ -5214,6 +5214,10 @@ var transactionFromBlockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionByBlockHashAndIndex' : 'eth_getTransactionByBlockNumberAndIndex';
 };
 
+var transactionReceiptsFromBlockCall = function (args) {
+    return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionReceiptsByBlockHash' : 'eth_getTransactionReceiptsByBlockNumber';
+};
+
 var uncleCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getUncleByBlockHashAndIndex' : 'eth_getUncleByBlockNumberAndIndex';
 };
@@ -5393,9 +5397,9 @@ var methods = function () {
         inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter]
     });
 
-    var getTransactionReceiptsByBlockNumber = new Method({
-        name: 'getTransactionReceiptsByBlockNumber',
-        call: 'eth_getTransactionReceiptsByBlockNumber',
+    var transactionReceiptsByBlock = new Method({
+        name: 'getTransactionReceiptsByBlock',
+        call: transactionReceiptsFromBlockCall,
         params: 1,
         outputFormatter: formatters.outputTransactionReceiptFormatter
     });
@@ -5461,7 +5465,8 @@ var methods = function () {
         compileLLL,
         compileSerpent,
         submitWork,
-        getWork
+        getWork,
+        transactionReceiptsByBlock
     ];
 };
 
