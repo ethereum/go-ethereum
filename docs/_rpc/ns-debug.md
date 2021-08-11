@@ -516,7 +516,7 @@ Usage example, returns the top element of the stack at each CALL opcode only:
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` on top of a given block. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
 It returns the same output as `debug_traceTransaction`. A tracer can be specified as a third argument, similar to `debug_traceTransaction`.
 
 `Object` - The transaction call object
