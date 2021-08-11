@@ -5214,10 +5214,6 @@ var transactionFromBlockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionByBlockHashAndIndex' : 'eth_getTransactionByBlockNumberAndIndex';
 };
 
-var transactionReceiptsFromBlockCall = function (args) {
-    return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionReceiptsByBlockHash' : 'eth_getTransactionReceiptsByBlockNumber';
-};
-
 var uncleCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getUncleByBlockHashAndIndex' : 'eth_getUncleByBlockNumberAndIndex';
 };
@@ -5397,11 +5393,10 @@ var methods = function () {
         inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter]
     });
 
-    var transactionReceiptsByBlock = new Method({
+    var getTransactionReceiptsByBlock = new Method({
         name: 'getTransactionReceiptsByBlock',
-        call: transactionReceiptsFromBlockCall,
-        params: 1,
-        outputFormatter: formatters.outputTransactionReceiptFormatter
+        call: 'eth_getTransactionReceiptsByBlock',
+        params: 1
     });
 
     var estimateGas = new Method({
@@ -5466,7 +5461,7 @@ var methods = function () {
         compileSerpent,
         submitWork,
         getWork,
-        transactionReceiptsByBlock
+        getTransactionReceiptsByBlock
     ];
 };
 

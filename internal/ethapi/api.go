@@ -531,19 +531,18 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 	return &PublicBlockChainAPI{b}
 }
 
-// GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) ([]map[string]interface{}, error) {
-	blockNumber := uint64(blockNr.Int64())
-	blockHash := rawdb.ReadCanonicalHash(s.b.ChainDb(), blockNumber)
+// GetTransactionReceiptsByBlock returns the transaction receipts for the given block number or hash.
+func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
 
-	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	receipts, err := s.b.GetReceipts(ctx, block.Hash())
 	if err != nil {
 		return nil, err
 	}
-	block, err := s.b.BlockByHash(ctx, blockHash)
-	if err != nil {
-		return nil, err
-	}
+
 	txs := block.Transactions()
 	if len(txs) != len(receipts) {
 		return nil, fmt.Errorf("txs length doesn't equal to receipts' length")
@@ -559,67 +558,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlockNumber(ctx context.Co
 		from, _ := types.Sender(signer, tx)
 
 		fields := map[string]interface{}{
-			"blockHash":         blockHash,
-			"blockNumber":       hexutil.Uint64(blockNumber),
-			"transactionHash":   tx.Hash(),
-			"transactionIndex":  hexutil.Uint64(idx),
-			"from":              from,
-			"to":                tx.To(),
-			"gasUsed":           hexutil.Uint64(receipt.GasUsed),
-			"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
-			"contractAddress":   nil,
-			"logs":              receipt.Logs,
-			"logsBloom":         receipt.Bloom,
-			"transactions":      []interface{}{tx},
-		}
-
-		// Assign receipt status or post state.
-		if len(receipt.PostState) > 0 {
-			fields["root"] = hexutil.Bytes(receipt.PostState)
-		} else {
-			fields["status"] = hexutil.Uint(receipt.Status)
-		}
-		if receipt.Logs == nil {
-			fields["logs"] = [][]*types.Log{}
-		}
-		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-		if receipt.ContractAddress != (common.Address{}) {
-			fields["contractAddress"] = receipt.ContractAddress
-		}
-		fields = s.appendRPCMarshalBorTransaction(ctx, block, fields, true)
-
-		txReceipts = append(txReceipts, fields)
-	}
-
-	return txReceipts, nil
-}
-
-// GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlockHash(ctx context.Context, hash common.Hash) ([]map[string]interface{}, error) {
-	receipts, err := s.b.GetReceipts(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
-	block, err := s.b.BlockByHash(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
-	txs := block.Transactions()
-	if len(txs) != len(receipts) {
-		return nil, fmt.Errorf("txs length doesn't equal to receipts' length")
-	}
-
-	txReceipts := make([]map[string]interface{}, 0, len(txs))
-	for idx, receipt := range receipts {
-		tx := txs[idx]
-		var signer types.Signer = types.FrontierSigner{}
-		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainId())
-		}
-		from, _ := types.Sender(signer, tx)
-
-		fields := map[string]interface{}{
-			"blockHash":         hash,
+			"blockHash":         block.Hash(),
 			"blockNumber":       hexutil.Uint64(block.NumberU64()),
 			"transactionHash":   tx.Hash(),
 			"transactionIndex":  hexutil.Uint64(idx),

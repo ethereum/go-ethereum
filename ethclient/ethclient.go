@@ -70,30 +70,13 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&result), err
 }
 
-func (ec *Client) TransactionReceiptsInBlockByBlockNumber(ctx context.Context, number *big.Int) ([]*types.Receipt, error) {
+func (ec *Client) TransactionReceiptsInBlockByBlockNumber(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	var rs []*types.Receipt
-	err := ec.c.CallContext(ctx, &rs, "eth_getTransactionReceiptsByBlockNumber", toBlockNumArg(number))
+	err := ec.c.CallContext(ctx, &rs, "eth_getTransactionReceiptsByBlock", blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
 	return rs, err
-}
-
-func (ec *Client) TransactionReceiptsInBlockByBlockHash(ctx context.Context, hash common.Hash) ([]*types.Receipt, error) {
-	var rs []*types.Receipt
-	err := ec.c.CallContext(ctx, &rs, "eth_getTransactionReceiptsByBlockHash", hash)
-	if err != nil {
-		return nil, err
-	}
-	return rs, err
-}
-
-// BlockByHash returns the given full block.
-//
-// Note that loading full blocks requires two requests. Use HeaderByHash
-// if you don't need all transactions or uncle headers.
-func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
 }
 
 // BlockByNumber returns a block from the current canonical chain. If number is nil, the
