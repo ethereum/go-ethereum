@@ -32,6 +32,8 @@ const (
 	Uint64Max = 18446744073709551615
 )
 
+// called by AddTransactions.  If the provided error is not nil, none of the trasactions were added.
+// If the error is nil, the receipts of all executed transactions are provided
 type AddTransactionsResultFunc func(error, []*types.Receipt) bool
 
 // BlockState represents a block-to-be-mined, which is being assembled.
@@ -42,13 +44,13 @@ type BlockState interface {
 	// AddTransactions adds the sequence of transactions to the blockstate. Either all
 	// transactions are added, or none of them. In the latter case, the error
 	// describes the reason why the txs could not be included.
-	// if ErrRecommit, the collator should not attempt to add more transactions to the
-	// block and submit the block for sealing.
-	// If ErrAbort is returned, the collator should immediately abort and return a
-	// value (true) from CollateBlock which indicates to the miner to discard the
-	// block
+	// If all transactions were successfully executed, the return value of the callback
+	// determines if the transactions are kept (true) or all reverted (false)
 	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
+	// Commit is called when the collator is done adding transactions to a block
+	// and wants to suggest it for sealing
 	Commit()
+	// deep copy of a blockState
 	Copy() BlockState
 	Gas() (remaining uint64)
 	Coinbase() common.Address
@@ -56,10 +58,21 @@ type BlockState interface {
 	Signer() types.Signer
 }
 
+// collatorWork is provided by the CollatorPool to each collator goroutine
+// when new work is being generated
 type collatorWork struct {
 	env       *environment
 	counter   uint64
 	interrupt *int32
+}
+
+func (w *collatorWork) Copy() collatorWork {
+	newEnv := w.env.copy()
+	return collatorWork{
+		env:       newEnv,
+		counter:   w.counter,
+		interrupt: w.interrupt,
+	}
 }
 
 // Pool is an interface to the transaction pool
@@ -73,6 +86,7 @@ var (
 	ErrUnsupportedEIP155Tx = errors.New("replay-protected tx when EIP155 not enabled")
 )
 
+// collatorBlockState is an implementation of BlockState
 type collatorBlockState struct {
 	work collatorWork
 	c    *collator
@@ -84,15 +98,6 @@ func (c *collatorBlockState) Copy() BlockState {
 		work: c.work.Copy(),
 		c:    c.c,
 		done: c.done,
-	}
-}
-
-func (w *collatorWork) Copy() collatorWork {
-	newEnv := w.env.copy()
-	return collatorWork{
-		env:       newEnv,
-		counter:   w.counter,
-		interrupt: w.interrupt,
 	}
 }
 
@@ -209,6 +214,8 @@ func (bs *collatorBlockState) Signer() types.Signer {
 	return bs.work.env.signer
 }
 
+// BlockCollator is the publicly-exposed interface
+// for implementing custom block collation strategies
 type BlockCollator interface {
 	CollateBlock(bs BlockState, pool Pool)
 	/*
@@ -232,8 +239,9 @@ type collator struct {
 	pool        Pool
 }
 
-// mainLoop runs in a separate goroutine and handles the lifecycle of an active collator.
-// TODO more explanation
+// each active collator runs mainLoop() in a goroutine.
+// It receives new work from the miner and listens for new blocks built from CollateBlock
+// calling Commit() on the provided collatorBlockState
 func (c *collator) mainLoop() {
 	for {
 		select {
@@ -264,6 +272,7 @@ var (
 	sideChainChSize  = 10
 )
 
+// MultiCollator manages multiple active collators
 type MultiCollator struct {
 	counter                 uint64
 	responsiveCollatorCount int
@@ -331,9 +340,9 @@ func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
 
 type WorkResult func(environment)
 
-// Collect retrieves filled blocks returned by active collators based on the block suggested by the previous call to SuggestedBlock.
+// Collect retrieves filled blocks returned by active collators in response to the block suggested by the previous call to SuggestBlock.
 // It blocks until all responsive collators (ones which accepted the block from SuggestBlock) signal that they are done
-// or the provided interrupt is set.
+// or the interrupt provided in SetBlock is set.
 func (m *MultiCollator) Collect(cb WorkResult) {
 	finishedCollators := []int{}
 	for {
