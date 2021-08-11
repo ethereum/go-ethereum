@@ -70,6 +70,14 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&result), err
 }
 
+// BlockByHash returns the given full block.
+//
+// Note that loading full blocks requires two requests. Use HeaderByHash
+// if you don't need all transactions or uncle headers.
+func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
+}
+
 func (ec *Client) TransactionReceiptsInBlockByBlockNumber(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	var rs []*types.Receipt
 	err := ec.c.CallContext(ctx, &rs, "eth_getTransactionReceiptsByBlock", blockNrOrHash)

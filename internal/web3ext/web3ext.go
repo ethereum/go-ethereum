@@ -496,11 +496,8 @@ web3._extend({
 	methods: [
 		new web3._extend.Method({
 			name: 'getTransactionReceiptsByBlock',
-			call: function(args) {
-				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionReceiptsByBlockHash' : 'eth_getTransactionReceiptsByBlockNumber';
-			},
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			call: 'eth_getTransactionReceiptsByBlock',
+			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'chainId',
