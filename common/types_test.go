@@ -453,6 +453,29 @@ func TestAddress_Format(t *testing.T) {
 	}
 }
 
+func TestCopyAddress(t *testing.T) {
+	addrBytes := make([]byte, 20)
+	addr := BytesToAddress(addrBytes)
+	if !bytes.Equal(addr.Bytes(), addrBytes) {
+		t.Fatalf("Expected original address bytes to be unmodified")
+	}
+	addrPtr := &addr
+	cpy := addrPtr.CopyPointer()
+	cpy.SetBytes([]byte("deadbeef"))
+	if !bytes.Equal(addr.Bytes(), addrBytes) {
+		t.Fatal("Expected original address bytes to be unmodified")
+	}
+	if bytes.Equal(cpy.Bytes(), addrBytes) {
+		t.Fatal("Expected modified address to no longer match original byte slice")
+	}
+
+	var nilAddr *Address
+	copiedNilAddr := nilAddr.CopyPointer()
+	if copiedNilAddr != nil {
+		t.Fatalf("Expected copied nil address to be nil, but got %s", copiedNilAddr)
+	}
+}
+
 func TestHash_Format(t *testing.T) {
 	var hash Hash
 	hash.SetBytes([]byte{

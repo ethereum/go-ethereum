@@ -339,6 +339,16 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
+// CopyPointer returns a new pointer to a copy of the address or nil
+// if [a] is nil.
+func (a *Address) CopyPointer() *Address {
+	if a == nil {
+		return nil
+	}
+	cpy := *a
+	return &cpy
+}
+
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.
 func (a Address) ImplementsGraphQLType(name string) bool { return name == "Address" }
 
