@@ -93,6 +93,8 @@ type environment struct {
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
     profit   *big.Int
+
+	logs []*types.Log
 }
 
 // copy creates a deep copy of environment.
@@ -105,6 +107,7 @@ func (env *environment) copy() *environment {
 		tcount:    env.tcount,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
+        logs: copyLogs(env.logs),
 	}
 	if env.gasPool != nil {
 		cpy.gasPool = &(*env.gasPool)
@@ -753,6 +756,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 		family:    mapset.NewSet(),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
+        logs: make([]*types.Log),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -1118,6 +1122,29 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
     }
     w.multiCollator.Collect(cb)
 
+	// Swap out the old work with the new one, terminating any leftover
+	// prefetcher processes in the mean time and starting a new one.
+	if w.current != nil {
+		w.current.discard()
+	}
+	w.current = curBest
+
+	if !w.isRunning() && len(coalescedLogs) > 0 {
+		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		cpy := make([]*types.Log, len(coalescedLogs))
+		for i, l := range coalescedLogs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		w.pendingLogsFeed.Send(cpy)
+	}
+
     // TODO how to determine how to adjust the resubmit interval here? i.e. how the ratio should be determined
 	/*
 	if interrupt != nil {
@@ -1136,12 +1163,6 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	}
 	*/
 
-	// Swap out the old work with the new one, terminating any leftover
-	// prefetcher processes in the mean time and starting a new one.
-	if w.current != nil {
-		w.current.discard()
-	}
-	w.current = curBest
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
@@ -1199,6 +1220,31 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64) (*types.B
 	case <-w.exitCh:
 		return nil, errors.New("miner closed")
 	}
+}
+
+func copyLogs(logs []*types.Log) []*types.Log {
+	result := make([]*types.Log, len(logs))
+	for i, l := range logs {
+		logCopy := types.Log{}
+        copy(logCopy.Address, l.Address)
+        for _, t := range l.Topics {
+            topic := common.Hash{}
+            copy(topic, t)
+            logCopy.Topics = append(logCopy.Topics, topic)
+        }
+        logCopy.Data = make([]byte, len(l.Data))
+        copy(logCopy.Data, l.Data, len(l.Data))
+        logCopy.BlockNumber = l.BlockNumber
+        copy(logCopy.TxHash, l.TxHash)
+        logCopy.TxIndex = l.TxIndex
+        copy(logCopy.BlockHash, l.BlockHash)
+        logCopy.Index = l.Index
+        logCopy.Removed = l.Removed
+
+        result = append(result, &logCopy)
+	}
+
+    return result
 }
 
 // copyReceipts makes a deep copy of the given receipts.

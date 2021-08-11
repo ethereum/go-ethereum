@@ -164,9 +164,10 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
         coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
         curProfit.Add(curProfit, coinbaseTransfer)
 		bs.work.env.logs = append(bs.work.env.logs, logs...)
-        bs.env.profit = curProfit
-		bs.env.tcount = tcount
+        bs.work.env.profit = curProfit
+		bs.work.env.tcount = tcount
 	}
+    return
 }
 
 func (bs *collatorBlockState) Commit() {
@@ -176,7 +177,7 @@ func (bs *collatorBlockState) Commit() {
     }
 }
 
-func (bs *collatorBlockState) Gas() uint64 {
+func (bs *collatorBlockState) Gas() core.GasPool {
     return *bs.work.env.gasPool
 }
 
@@ -186,7 +187,7 @@ func (bs *collatorBlockState) Coinbase() common.Address {
 }
 
 func (bs *collatorBlockState) BaseFee() *big.Int {
-    return new(big.Int).SetInt(bs.work.env.header.BaseFee)
+    return new(big.Int).Set(bs.work.env.header.BaseFee)
 }
 
 func (bs *collatorBlockState) Signer() types.Signer {
