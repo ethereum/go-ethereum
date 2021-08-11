@@ -49,7 +49,7 @@ func (w *collatorWork) Copy() collatorWork {
     }
 }
 
-func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
+func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) error {
 	var (
 		interrupt   = bs.work.env.interrupt
 		header = bs.work.env.header
@@ -67,8 +67,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		startTCount = bs.work.env.tcount
 	)
 	if bs.done {
-		cb(ErrRecommit, nil)
-		return
+		return ErrAbort
 	}
 
 	for _, tx := range sequence {
@@ -91,7 +90,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		}
         gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
         if err != nil {
-            return nil, err
+            return err
         }
 		// Start executing the transaction
 		state.Prepare(tx.Hash(), bs.work.env.tcount)
@@ -134,12 +133,14 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
         bs.env.profit = curProfit
 		bs.env.tcount = tcount
 	}
+
+	return nil
 }
 
 func (bs *collatorBlockState) Commit() {
     if !bs.done {
         bs.done = true
-        bs.c.workResultch <- bs.work
+        bs.c.workResultCh <- bs.work
     }
 }
 
@@ -200,11 +201,44 @@ func (c *collator) mainLoop() {
     }
 }
 
+var (
+    // MultiCollator
+    workResultChSize = 10
+
+    // collator 
+    newWorkChSize = 10
+    newHeadChSize = 10
+    sideChainChSize = 10
+)
+
 type MultiCollator struct {
-    workResultCh
+    workResultCh chan<- collatorWork
     counter uint64
     responsiveCollatorCount uint
     collators []collator
+}
+
+func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, strategies []BlockCollator) MultiCollator {
+    workResultCh := make(chan collatorWork, workResultChSize),
+    collators := []collator{}
+    for _, s := range strategies {
+        collators = append(collators, collator{
+            newWorkCh: make(chan collatorWork, newWorkChSize),
+            workResultCh: workResultCh,
+            exitCh: make(chan struct{}),
+            newHeadCh: make(chan types.Header, newHeadChSize),
+            blockCollatorImpl: s,
+            chainConfig: chainConfig,
+            chain: chain,
+        })
+    }
+
+    m := MultiCollator {
+        counter: 0,
+        responsiveCollatorCount: 0,
+        collators: collators,
+        workResultCh: workResultCh
+    }
 }
 
 func (m *MultiCollator) Start() {
@@ -213,7 +247,7 @@ func (m *MultiCollator) Start() {
     }
 }
 
-func (m *MultiCollator) Stop() {
+func (m *MultiCollator) Close() {
     for c := range m.collators {
         select {
         case c.exitCh<-true:

@@ -205,6 +205,7 @@ type worker struct {
 	resubmitAdjustCh   chan *intervalAdjust
 
 	current      *environment                 // An environment for current running cycle.
+    multiCollator MultiCollator // pool of active block collation strategies
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
 	unconfirmed  *unconfirmedBlocks           // A set of locally mined blocks pending canonicalness confirmations.
@@ -242,7 +243,7 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool, collators []BlockCollator) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -266,7 +267,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+        multiCollator: NewMultiCollator(chainConfig, chain, collators),
 	}
+    // start collator pool listening for new work
+    worker.multiCollator.Start()
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
@@ -379,6 +383,7 @@ func (w *worker) close() {
 	if w.current != nil {
 		w.current.discard()
 	}
+    w.multiCollator.Close()
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
@@ -1068,11 +1073,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-    w.multiCollator.SuggestBlock(work, nil)
-	if err := w.fillTransactions(nil, work); err != nil {
-		return nil, err
-	}
-
+    w.multiCollator.SuggestBlock(&work, nil)
     var bestWork environment = work
     profit := big.NewInt(0)
 
@@ -1101,21 +1102,16 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		w.commit(work.copy(), nil, false, start)
 	}
-    // start concurrent block collation for custom collators
-    w.multiCollator.SuggestBlock(&work)
-	// Fill pending transactions from the txpool
-	if err := w.fillTransactions(interrupt, work); err != nil {
-		return
-	}
-	w.commit(work.copy(), w.fullTaskHook, true, start)
 
+    // suggest the new block to the pool of active collators and interrupt sealing as more profitable strategies are fed back
+    w.multiCollator.SuggestBlock(&work)
     profit = new(big.Int)
     profit.Set(work.profit)
     curBest := work
     cb := func(newWork environment) {
         if newWork.profit.Gt(profit) {
             // probably don't need to copy work again here but do it for now just to be safe
-            w.commit(newWork.copy(), w.fullTaskHooke, true, start)
+            w.commit(newWork.copy(), w.fullTaskHook, true, start)
             profit.Set(newWork.profit)
             curBest = newWork
         }
