@@ -43,7 +43,7 @@ type DynamicFeeTx struct {
 func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
 		Nonce: tx.Nonce,
-		To:    tx.To.CopyPointer(),
+		To:    tx.To.Clone(),
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.

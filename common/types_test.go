@@ -460,7 +460,7 @@ func TestCopyAddress(t *testing.T) {
 		t.Fatalf("Expected original address bytes to be unmodified")
 	}
 	addrPtr := &addr
-	cpy := addrPtr.CopyPointer()
+	cpy := addrPtr.Clone()
 	cpy.SetBytes([]byte("deadbeef"))
 	if !bytes.Equal(addr.Bytes(), addrBytes) {
 		t.Fatal("Expected original address bytes to be unmodified")
@@ -470,7 +470,7 @@ func TestCopyAddress(t *testing.T) {
 	}
 
 	var nilAddr *Address
-	copiedNilAddr := nilAddr.CopyPointer()
+	copiedNilAddr := nilAddr.Clone()
 	if copiedNilAddr != nil {
 		t.Fatalf("Expected copied nil address to be nil, but got %s", copiedNilAddr)
 	}

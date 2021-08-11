@@ -339,9 +339,8 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-// CopyPointer returns a new pointer to a copy of the address or nil
-// if [a] is nil.
-func (a *Address) CopyPointer() *Address {
+// Clone returns a pointer to a copy of [a] (or nil if [a] is nil)
+func (a *Address) Clone() *Address {
 	if a == nil {
 		return nil
 	}
