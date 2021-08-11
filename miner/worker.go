@@ -92,7 +92,7 @@ type environment struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
-    profit   *big.Int
+	profit   *big.Int
 
 	logs []*types.Log
 }
@@ -107,7 +107,7 @@ func (env *environment) copy() *environment {
 		tcount:    env.tcount,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
-        logs: copyLogs(env.logs),
+		logs:      copyLogs(env.logs),
 	}
 	if env.gasPool != nil {
 		cpy.gasPool = &(*env.gasPool)
@@ -207,11 +207,11 @@ type worker struct {
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
 
-	current      *environment                 // An environment for current running cycle.
-    multiCollator MultiCollator // pool of active block collation strategies
-	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
-	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
-	unconfirmed  *unconfirmedBlocks           // A set of locally mined blocks pending canonicalness confirmations.
+	current       *environment                 // An environment for current running cycle.
+	multiCollator MultiCollator                // pool of active block collation strategies
+	localUncles   map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
+	remoteUncles  map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
+	unconfirmed   *unconfirmedBlocks           // A set of locally mined blocks pending canonicalness confirmations.
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -270,10 +270,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
-        multiCollator: NewMultiCollator(chainConfig, chain, collators),
+		multiCollator:      NewMultiCollator(chainConfig, eth.BlockChain(), eth.TxPool(), collators),
 	}
-    // start collator pool listening for new work
-    worker.multiCollator.Start()
+	// start collator pool listening for new work
+	worker.multiCollator.Start()
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
@@ -386,7 +386,7 @@ func (w *worker) close() {
 	if w.current != nil {
 		w.current.discard()
 	}
-    w.multiCollator.Close()
+	w.multiCollator.Close()
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
@@ -756,7 +756,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 		family:    mapset.NewSet(),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
-        logs: make([]*types.Log),
+		logs:      []*types.Log{},
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -808,17 +808,17 @@ func (w *worker) updateSnapshot(env *environment) {
 }
 
 func commitTransaction(chain *core.BlockChain, chainConfig *params.ChainConfig, env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-    snap := env.state.Snapshot()
+	snap := env.state.Snapshot()
 
-    receipt, err := core.ApplyTransaction(chainConfig, chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *chain.GetVMConfig())
-    if err != nil {
-        env.state.RevertToSnapshot(snap)
-        return nil, err
-    }
-    env.txs = append(env.txs, tx)
-    env.receipts = append(env.receipts, receipt)
+	receipt, err := core.ApplyTransaction(chainConfig, chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *chain.GetVMConfig())
+	if err != nil {
+		env.state.RevertToSnapshot(snap)
+		return nil, err
+	}
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
 
-    return receipt.Logs, nil
+	return receipt.Logs, nil
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
@@ -828,7 +828,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	var coalescedLogs []*types.Log
 
-    curProfit := big.NewInt(0).Add(env.profit)
+	curProfit := new(big.Int).Set(env.profit)
 
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
@@ -874,10 +874,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Pop()
 			continue
 		}
-        gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
-        if err != nil {
-            return nil, err
-        }
+		gasPrice, err := tx.EffectiveGasTip(env.header.BaseFee)
+		if err != nil {
+			txs.Shift()
+			continue
+		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
@@ -901,8 +902,8 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
-            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[-1].GasUsed)
-            curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
+			gasUsed := new(big.Int).SetUint64(env.receipts[len(env.receipts)-1].GasUsed)
+			curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			env.tcount++
 			txs.Shift()
 
@@ -919,9 +920,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 	}
 
-    if w.isRunning() {
-        env.profit = curProfit
-    }
+	if w.isRunning() {
+		env.profit = curProfit
+	}
 
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
@@ -1036,39 +1037,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	return env, nil
 }
 
-// fillTransactions retrieves the pending transactions from the txpool and fills them
-// into the given sealing block. The transaction selection and ordering strategy can
-// be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
-	// Split the pending transactions into locals and remotes
-	// Fill the block with all available pending transactions.
-	pending, err := w.eth.TxPool().Pending(true)
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return err
-	}
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
-	for _, account := range w.eth.TxPool().Locals() {
-		if txs := remoteTxs[account]; len(txs) > 0 {
-			delete(remoteTxs, account)
-			localTxs[account] = txs
-		}
-	}
-	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
-		if w.commitTransactions(env, txs, w.coinbase, interrupt) {
-			return nil
-		}
-	}
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
-		if w.commitTransactions(env, txs, w.coinbase, interrupt) {
-			return nil
-		}
-	}
-	return nil
-}
-
 // generateWork generates a sealing block based on the given parameters.
 func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	work, err := w.prepareWork(params)
@@ -1077,18 +1045,18 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-    w.multiCollator.SuggestBlock(&work, nil)
-    var bestWork environment = work
-    profit := big.NewInt(0)
+	w.multiCollator.SuggestBlock(work, nil)
+	var bestWork *environment = work
+	profit := big.NewInt(0)
 
-    chooseMostProfitableBlock := func(e environment) {
-        if e.profit.Gt(profit) {
-            bestWork.discard()
-            bestWork = e
-            profit.Set(e.profit)
-        }
-    }
-    w.multiCollator.Collect(chooseMostProfitableBlock)
+	chooseMostProfitableBlock := func(e environment) {
+		if e.profit.Cmp(profit) > 0 {
+			bestWork.discard()
+			bestWork = &e
+			profit.Set(e.profit)
+		}
+	}
+	w.multiCollator.Collect(chooseMostProfitableBlock)
 
 	return w.engine.FinalizeAndAssemble(w.chain, bestWork.header, bestWork.state, bestWork.txs, bestWork.unclelist(), bestWork.receipts)
 }
@@ -1107,20 +1075,20 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		w.commit(work.copy(), nil, false, start)
 	}
 
-    // suggest the new block to the pool of active collators and interrupt sealing as more profitable strategies are fed back
-    w.multiCollator.SuggestBlock(&work)
-    profit = new(big.Int)
-    profit.Set(work.profit)
-    curBest := work
-    cb := func(newWork environment) {
-        if newWork.profit.Gt(profit) {
-            // probably don't need to copy work again here but do it for now just to be safe
-            w.commit(newWork.copy(), w.fullTaskHook, true, start)
-            profit.Set(newWork.profit)
-            curBest = newWork
-        }
-    }
-    w.multiCollator.Collect(cb)
+	// suggest the new block to the pool of active collators and interrupt sealing as more profitable strategies are fed back
+	w.multiCollator.SuggestBlock(work, interrupt)
+	profit := new(big.Int)
+	profit.Set(work.profit)
+	curBest := work
+	cb := func(newWork environment) {
+		if newWork.profit.Cmp(profit) > 0 {
+			// probably don't need to copy work again here but do it for now just to be safe
+			w.commit(newWork.copy(), w.fullTaskHook, true, start)
+			profit.Set(newWork.profit)
+			curBest = &newWork
+		}
+	}
+	w.multiCollator.Collect(cb)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
@@ -1129,7 +1097,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	}
 	w.current = curBest
 
-	if !w.isRunning() && len(coalescedLogs) > 0 {
+	if !w.isRunning() && len(w.current.logs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
 		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
@@ -1137,30 +1105,30 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
+		cpy := make([]*types.Log, len(w.current.logs))
+		for i, l := range w.current.logs {
 			cpy[i] = new(types.Log)
 			*cpy[i] = *l
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
 
-    // TODO how to determine how to adjust the resubmit interval here? i.e. how the ratio should be determined
+	// TODO how to determine how to adjust the resubmit interval here? i.e. how the ratio should be determined
 	/*
-	if interrupt != nil {
-        if interrupt == commitInterruptNone {
-		    w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-        } else if interrupt == commitInterruptNone {
-			ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
-			if ratio < 0.1 {
-				ratio = 0.1
-			}
-			w.resubmitAdjustCh <- &intervalAdjust{
-				ratio: ratio,
-				inc:   true,
-			}
-        }
-	}
+		if interrupt != nil {
+	        if interrupt == commitInterruptNone {
+			    w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	        } else if interrupt == commitInterruptNone {
+				ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
+				if ratio < 0.1 {
+					ratio = 0.1
+				}
+				w.resubmitAdjustCh <- &intervalAdjust{
+					ratio: ratio,
+					inc:   true,
+				}
+	        }
+		}
 	*/
 
 }
@@ -1224,27 +1192,27 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64) (*types.B
 
 func copyLogs(logs []*types.Log) []*types.Log {
 	result := make([]*types.Log, len(logs))
-	for i, l := range logs {
+	for _, l := range logs {
 		logCopy := types.Log{}
-        copy(logCopy.Address, l.Address)
-        for _, t := range l.Topics {
-            topic := common.Hash{}
-            copy(topic, t)
-            logCopy.Topics = append(logCopy.Topics, topic)
-        }
-        logCopy.Data = make([]byte, len(l.Data))
-        copy(logCopy.Data, l.Data, len(l.Data))
-        logCopy.BlockNumber = l.BlockNumber
-        copy(logCopy.TxHash, l.TxHash)
-        logCopy.TxIndex = l.TxIndex
-        copy(logCopy.BlockHash, l.BlockHash)
-        logCopy.Index = l.Index
-        logCopy.Removed = l.Removed
+		copy(logCopy.Address[:], l.Address[:])
+		for _, t := range l.Topics {
+			topic := common.Hash{}
+			copy(topic[:], t[:])
+			logCopy.Topics = append(logCopy.Topics, topic)
+		}
+		logCopy.Data = make([]byte, len(l.Data))
+		copy(logCopy.Data[:], l.Data[:])
+		logCopy.BlockNumber = l.BlockNumber
+		copy(logCopy.TxHash[:], l.TxHash[:])
+		logCopy.TxIndex = l.TxIndex
+		copy(logCopy.BlockHash[:], l.BlockHash[:])
+		logCopy.Index = l.Index
+		logCopy.Removed = l.Removed
 
-        result = append(result, &logCopy)
+		result = append(result, &logCopy)
 	}
 
-    return result
+	return result
 }
 
 // copyReceipts makes a deep copy of the given receipts.

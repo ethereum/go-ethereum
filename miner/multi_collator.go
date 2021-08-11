@@ -17,16 +17,21 @@
 package miner
 
 import (
-    "errors"
+	"errors"
 	"math/big"
-    "sync/atomic"
+	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
+
+const (
+	Uint64Max = 18446744073709551615
+)
+
 type AddTransactionsResultFunc func(error, []*types.Receipt) bool
 
 // BlockState represents a block-to-be-mined, which is being assembled.
@@ -42,9 +47,9 @@ type BlockState interface {
 	// If ErrAbort is returned, the collator should immediately abort and return a
 	// value (true) from CollateBlock which indicates to the miner to discard the
 	// block
-	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) error
-    Commit()
-    Copy() BlockState
+	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
+	Commit()
+	Copy() BlockState
 	Gas() (remaining uint64)
 	Coinbase() common.Address
 	BaseFee() *big.Int
@@ -52,61 +57,71 @@ type BlockState interface {
 }
 
 type collatorWork struct {
-    env *environment
-    counter uint64
-    interrupt *int32
+	env       *environment
+	counter   uint64
+	interrupt *int32
 }
 
 // Pool is an interface to the transaction pool
 type Pool interface {
-        Pending(bool) (map[common.Address]types.Transactions, error)
-        Locals() []common.Address
+	Pending(bool) (map[common.Address]types.Transactions, error)
+	Locals() []common.Address
 }
 
 var (
-    ErrAbort = errors.New("abort sealing current work (resubmit/newHead interrupt)")
-    ErrUnsupportedEIP155Tx = errors.New("replay-protected tx when EIP155 not enabled")
+	ErrAbort               = errors.New("abort sealing current work (resubmit/newHead interrupt)")
+	ErrUnsupportedEIP155Tx = errors.New("replay-protected tx when EIP155 not enabled")
 )
 
 type collatorBlockState struct {
-    work collatorWork
-    c *collator
-    done bool
+	work collatorWork
+	c    *collator
+	done bool
+}
+
+func (c *collatorBlockState) Copy() BlockState {
+	return &collatorBlockState{
+		work: c.work.Copy(),
+		c:    c.c,
+		done: c.done,
+	}
 }
 
 func (w *collatorWork) Copy() collatorWork {
-    newEnv := w.env.copy()
-    return collatorWork{
-        env: newEnv,
-        counter: w.counter,
-        interrupt: w.interrupt,
-    }
+	newEnv := w.env.copy()
+	return collatorWork{
+		env:       newEnv,
+		counter:   w.counter,
+		interrupt: w.interrupt,
+	}
 }
 
-func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) error {
+func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) {
 	var (
-		interrupt   = bs.work.interrupt
-		header = bs.work.env.header
-        gasPool = bs.work.env.gasPool
-        signer = bs.work.env.signer
-        chainConfig = bs.c.chainConfig
-        chain = bs.c.chain
-        state = bs.work.env.state
-		snap        = state.Snapshot()
-        curProfit = big.NewInt(0)
+		interrupt             = bs.work.interrupt
+		header                = bs.work.env.header
+		gasPool               = bs.work.env.gasPool
+		signer                = bs.work.env.signer
+		chainConfig           = bs.c.chainConfig
+		chain                 = bs.c.chain
+		state                 = bs.work.env.state
+		snap                  = state.Snapshot()
+		curProfit             = big.NewInt(0)
 		coinbaseBalanceBefore = state.GetBalance(bs.work.env.header.Coinbase)
-		tcount      = bs.work.env.tcount
-		err         error
-		logs        []*types.Log
-		startTCount = bs.work.env.tcount
+		tcount                = bs.work.env.tcount
+		err                   error
+		logs                  []*types.Log
+		startTCount           = bs.work.env.tcount
 	)
 	if bs.done {
-		return ErrAbort
+		err = ErrAbort
+		cb(err, nil)
+		return
 	}
 
 	for _, tx := range sequence {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-            bs.done = true
+			bs.done = true
 			break
 		}
 		if gasPool.Gas() < params.TxGas {
@@ -122,10 +137,10 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 			err = ErrUnsupportedEIP155Tx
 			break
 		}
-        gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
-        if err != nil {
-            break
-        }
+		gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
+		if err != nil {
+			break
+		}
 		// Start executing the transaction
 		state.Prepare(tx.Hash(), bs.work.env.tcount)
 
@@ -133,8 +148,8 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		txLogs, err = commitTransaction(chain, chainConfig, bs.work.env, tx, bs.Coinbase())
 		if err == nil {
 			logs = append(logs, txLogs...)
-            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[len(bs.work.env.receipts) - 1].GasUsed)
-            curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
+			gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[len(bs.work.env.receipts)-1].GasUsed)
+			curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			tcount++
 		} else {
 			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
@@ -161,152 +176,157 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
 		coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.header.Coinbase)
-        coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
-        curProfit.Add(curProfit, coinbaseTransfer)
+		coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
+		curProfit.Add(curProfit, coinbaseTransfer)
 		bs.work.env.logs = append(bs.work.env.logs, logs...)
-        bs.work.env.profit = curProfit
+		bs.work.env.profit = curProfit
 		bs.work.env.tcount = tcount
 	}
-    return
+	return
 }
 
 func (bs *collatorBlockState) Commit() {
-    if !bs.done {
-        bs.done = true
-        bs.c.workResultCh <- bs.work
-    }
+	if !bs.done {
+		bs.done = true
+		bs.c.workResultCh <- bs.work
+	}
 }
 
-func (bs *collatorBlockState) Gas() core.GasPool {
-    return *bs.work.env.gasPool
+func (bs *collatorBlockState) Gas() uint64 {
+	return bs.work.env.gasPool.Gas()
 }
 
 func (bs *collatorBlockState) Coinbase() common.Address {
-    // TODO should clone this but I'm feeling lazy rn
-    return bs.work.env.header.Coinbase
+	// TODO should clone this but I'm feeling lazy rn
+	return bs.work.env.header.Coinbase
 }
 
 func (bs *collatorBlockState) BaseFee() *big.Int {
-    return new(big.Int).Set(bs.work.env.header.BaseFee)
+	return new(big.Int).Set(bs.work.env.header.BaseFee)
 }
 
 func (bs *collatorBlockState) Signer() types.Signer {
-    return bs.work.env.signer
+	return bs.work.env.signer
 }
 
 type BlockCollator interface {
-    CollateBlock(bs BlockState, pool Pool)
-    SideChainHook(header *types.Header)
-    NewHeadHook(header *types.Header)
+	CollateBlock(bs BlockState, pool Pool)
+	/*
+	   // TODO implement these
+	   SideChainHook(header *types.Header)
+	   NewHeadHook(header *types.Header)
+	*/
 }
 
 type collator struct {
-    newWorkCh chan<- collatorWork
-    workResultCh chan<-collatorWork
-    // channel signalling collator loop should exit
-    exitCh chan<-interface{}
-    newHeadCh chan<-types.Header
-    sideChainCh chan<-types.Header
-    blockCollatorImpl BlockCollator
-    chainConfig *params.ChainConfig
-    chain *core.BlockChain
+	newWorkCh    chan collatorWork
+	workResultCh chan collatorWork
+	// channel signalling collator loop should exit
+	exitCh            chan struct{}
+	newHeadCh         chan types.Header
+	sideChainCh       chan types.Header
+	blockCollatorImpl BlockCollator
+
+	chainConfig *params.ChainConfig
+	chain       *core.BlockChain
+	pool        Pool
 }
 
 // mainLoop runs in a separate goroutine and handles the lifecycle of an active collator.
 // TODO more explanation
 func (c *collator) mainLoop() {
-    for {
-        select {
-        case newWork := <-c.newWorkCh:
-            c.collateBlockImpl(collatorBlockState{work: newWork, c: c, done: false})
-            // signal to the exitCh that the collator is done
-            // computing this work.
-            c.workResultCh <- collatorWork{nil, newWork.counter}
-        case <-c.exitCh:
-            // TODO any cleanup needed?
-            return
-        case newHead := <-c.newHeadCh:
-            // TODO call hook here
-        case sideHeader := <-c.sideChainCh:
-            // TODO call hook here
-        default:
-        }
-    }
+	for {
+		select {
+		case newWork := <-c.newWorkCh:
+			c.blockCollatorImpl.CollateBlock(&collatorBlockState{work: newWork, c: c, done: false}, c.pool)
+			// signal to the exitCh that the collator is done
+			// computing this work.
+			c.workResultCh <- collatorWork{env: nil, interrupt: nil, counter: newWork.counter}
+		case <-c.exitCh:
+			// TODO any cleanup needed?
+			return
+		case newHead := <-c.newHeadCh:
+			// TODO call hook here
+			_ = newHead
+		case sideHeader := <-c.sideChainCh:
+			_ = sideHeader
+			// TODO call hook here
+		default:
+		}
+	}
 }
 
 var (
-    // MultiCollator
-    workResultChSize = 10
-
-    // collator 
-    newWorkChSize = 10
-    newHeadChSize = 10
-    sideChainChSize = 10
+	// collator
+	workResultChSize = 10
+	newWorkChSize    = 10
+	newHeadChSize    = 10
+	sideChainChSize  = 10
 )
 
 type MultiCollator struct {
-    workResultCh chan<- collatorWork
-    counter uint64
-    responsiveCollatorCount uint
-    collators []collator
+	counter                 uint64
+	responsiveCollatorCount int
+	collators               []collator
+	pool                    Pool
+	interrupt               *int32
 }
 
-func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, strategies []BlockCollator) MultiCollator {
-    workResultCh := make(chan collatorWork, workResultChSize)
-    collators := []collator{}
-    for _, s := range strategies {
-        collators = append(collators, collator{
-            newWorkCh: make(chan collatorWork, newWorkChSize),
-            workResultCh: workResultCh,
-            exitCh: make(chan struct{}),
-            newHeadCh: make(chan types.Header, newHeadChSize),
-            blockCollatorImpl: s,
-            chainConfig: chainConfig,
-            chain: chain,
-        })
-    }
-
-    m := MultiCollator {
-        counter: 0,
-        responsiveCollatorCount: 0,
-        collators: collators,
-        workResultCh: workResultCh,
-    }
+func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, pool Pool, strategies []BlockCollator) MultiCollator {
+	collators := []collator{}
+	for _, s := range strategies {
+		collators = append(collators, collator{
+			newWorkCh:         make(chan collatorWork, newWorkChSize),
+			workResultCh:      make(chan collatorWork, workResultChSize),
+			exitCh:            make(chan struct{}),
+			newHeadCh:         make(chan types.Header, newHeadChSize),
+			blockCollatorImpl: s,
+			chainConfig:       chainConfig,
+			chain:             chain,
+			pool:              pool,
+		})
+	}
+	return MultiCollator{
+		counter:                 0,
+		responsiveCollatorCount: 0,
+		collators:               collators,
+		interrupt:               nil,
+	}
 }
 
 func (m *MultiCollator) Start() {
-    for c := range m.collators {
-        go c.mainLoop()
-    }
+	for _, c := range m.collators {
+		go c.mainLoop()
+	}
 }
 
 func (m *MultiCollator) Close() {
-    for c := range m.collators {
-        select {
-        case c.exitCh<-true:
-        default:
-        }
-    }
+	for _, c := range m.collators {
+		select {
+		case c.exitCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // SuggestBlock sends a new empty block to each active collator.
 // collators whose receiving channels are full are noted as "unresponsive"
-// for the purpose of not expecting a response back (for this round) during 
+// for the purpose of not expecting a response back (for this round) during
 // polling performed by Collect
 func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
-    if m.counter == math.Uint64Max {
-        m.counter = 0
-    } else {
-        m.counter++
-    }
-    m.responsiveCollatorCount = 0
-    m.interrupt = interrupt
-    for c := range m.collators {
-        select {
-        case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}:
-            m.responsiveCollatorCount++
-        }
-    }
+	if m.counter == Uint64Max {
+		m.counter = 0
+	} else {
+		m.counter++
+	}
+	m.responsiveCollatorCount = 0
+	m.interrupt = interrupt
+	for _, c := range m.collators {
+		select {
+		case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}:
+			m.responsiveCollatorCount++
+		}
+	}
 }
 
 type WorkResult func(environment)
@@ -315,42 +335,42 @@ type WorkResult func(environment)
 // It blocks until all responsive collators (ones which accepted the block from SuggestBlock) signal that they are done
 // or the provided interrupt is set.
 func (m *MultiCollator) Collect(cb WorkResult) {
-    finishedCollators := []uint{}
-    for {
-        if finishedCollators == m.responsiveCollatorcount {
-            break
-        }
-        if m.interrupt != nil && atomic.LoadInt32(m.interrupt) != commitInterruptNone {
-            break
-        }
-        for i, c := range m.collators {
-            select {
-            case response := m.workResultCh:
-                // ignore collators responding from old work rounds
-                if response.counter != m.counter {
-                    break
-                }
-                // ignore responses from collators that have already signalled they are done
-                shouldIgnore := false
-                for _, finishedCollator := range finishedCollators {
-                    if i == finishedCollator {
-                        shouldIgnore = true
-                    }
-                }
-                if shouldIgnore {
-                    break
-                }
-                // nil for work signals the collator won't send back any more blocks for this round
-                if response.work == nil {
-                    finishedCollators = append(finishedCollators, i)
-                } else {
-                    cb(response.work)
-                }
-            default:
-            }
-        }
-    }
-    return
+	finishedCollators := []int{}
+	for {
+		if len(finishedCollators) == m.responsiveCollatorCount {
+			break
+		}
+		if m.interrupt != nil && atomic.LoadInt32(m.interrupt) != commitInterruptNone {
+			break
+		}
+		for i, c := range m.collators {
+			select {
+			case response := <-c.workResultCh:
+				// ignore collators responding from old work rounds
+				if response.counter != m.counter {
+					break
+				}
+				// ignore responses from collators that have already signalled they are done
+				shouldIgnore := false
+				for _, finishedCollator := range finishedCollators {
+					if i == finishedCollator {
+						shouldIgnore = true
+					}
+				}
+				if shouldIgnore {
+					break
+				}
+				// nil for work signals the collator won't send back any more blocks for this round
+				if response.env == nil {
+					finishedCollators = append(finishedCollators, i)
+				} else {
+					cb(*response.env)
+				}
+			default:
+			}
+		}
+	}
+	return
 }
 
 /*

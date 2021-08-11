@@ -66,6 +66,8 @@ type Miner struct {
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+	activeCollators := []BlockCollator{}
+	activeCollators = append(activeCollators, &DefaultCollator{})
 	miner := &Miner{
 		eth:     eth,
 		mux:     mux,
@@ -73,7 +75,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true, activeCollators),
 	}
 	go miner.update()
 

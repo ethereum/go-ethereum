@@ -17,18 +17,18 @@
 package miner
 
 import (
-    "errors"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
-type DefaultCollator struct {}
+type DefaultCollator struct{}
 
 func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) bool {
-    var shouldAbort bool
+	var shouldAbort bool
 	cb := func(err error, receipts []*types.Receipt) bool {
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
@@ -39,9 +39,9 @@ func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) b
 			txs.Pop()
 		case errors.Is(err, core.ErrNonceTooLow):
 			fallthrough
-        case errors.Is(err, ErrAbort):
-            shouldAbort = true
-            return false // don't need to waste time rolling back these transactions when this work will be thrown away anyways.
+		case errors.Is(err, ErrAbort):
+			shouldAbort = true
+			return false // don't need to waste time rolling back these transactions when this work will be thrown away anyways.
 		case errors.Is(err, nil):
 			fallthrough
 		default:
@@ -67,8 +67,8 @@ func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) b
 			continue
 		}
 		bs.AddTransactions(types.Transactions{tx}, cb)
-        if shouldAbort {
-            return true
+		if shouldAbort {
+			return true
 		}
 	}
 	return false
@@ -83,7 +83,7 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool) {
 		return
 	}
 	if len(txs) == 0 {
-        return
+		return
 	}
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), txs
@@ -100,11 +100,11 @@ func (w *DefaultCollator) CollateBlock(bs BlockState, pool Pool) {
 	}
 	if len(remoteTxs) > 0 {
 		if submitTransactions(bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, bs.BaseFee())) {
-            return
-        }
+			return
+		}
 	}
 
-    bs.Commit()
+	bs.Commit()
 
 	return
 }
