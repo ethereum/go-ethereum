@@ -89,6 +89,32 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		if op < PUSH1 || op > PUSH32 {
 			continue
 		}
+		if op < PUSH8 {
+			switch op {
+			case PUSH1:
+				bits.set(pc)
+				pc += 1
+			case PUSH2:
+				bits.set2(pc)
+				pc += 2
+			case PUSH3:
+				bits.set3(pc)
+				pc += 3
+			case PUSH4:
+				bits.set4(pc)
+				pc += 4
+			case PUSH5:
+				bits.set5(pc)
+				pc += 5
+			case PUSH6:
+				bits.set6(pc)
+				pc += 6
+			case PUSH7:
+				bits.set7(pc)
+				pc += 7
+			}
+			continue
+		}
 		numbits := op - PUSH1 + 1
 		for ; numbits >= 8; numbits -= 8 {
 			bits.set8(pc) // 8
