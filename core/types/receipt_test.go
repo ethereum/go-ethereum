@@ -253,6 +253,12 @@ func TestLegacyConversion(t *testing.T) {
 	}
 	receipt.Bloom = CreateBloom(Receipts{receipt})
 
+	stored := (*ReceiptForStorage)(receipt)
+	wantEncoding, err := rlp.EncodeToBytes(stored)
+	if err != nil {
+		t.Fatalf("Failed to encode receipt: %v", err)
+	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			enc, err := tc.encode(receipt)
@@ -262,7 +268,7 @@ func TestLegacyConversion(t *testing.T) {
 
 			var dec ReceiptForStorage
 			if err := rlp.DecodeBytes(enc, &dec); err != nil {
-				t.Fatalf("Error decoding RLP receipt: %v\n", err)
+				t.Fatalf("Error decoding RLP receipt: %v", err)
 			}
 
 			// Check whether all consensus fields are correct.
@@ -288,6 +294,15 @@ func TestLegacyConversion(t *testing.T) {
 				if !bytes.Equal(dec.Logs[i].Data, receipt.Logs[i].Data) {
 					t.Fatalf("Receipt log %d data mismatch, want %v, have %v", i, receipt.Logs[i].Data, dec.Logs[i].Data)
 				}
+			}
+
+			// Check that converted encoding matches expected fresh encoding
+			got, err := convertLegacyStoredReceipt(enc)
+			if err != nil {
+				t.Fatalf("Failed to convert legacy stored receipt: %v", err)
+			}
+			if !bytes.Equal(wantEncoding, got) {
+				t.Fatalf("Receipt conversion mismatch, want %x, have %x", wantEncoding, got)
 			}
 		})
 	}

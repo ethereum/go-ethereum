@@ -5,6 +5,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// convertLegacyStoredReceipt takes a legacy RLP-encoded stored receipt
+// and returns a fresh RLP-encoded stored receipt.
+func convertLegacyStoredReceipt(raw []byte) ([]byte, error) {
+	var receipt ReceiptForStorage
+	if err := rlp.DecodeBytes(raw, &receipt); err != nil {
+		return nil, err
+	}
+	return rlp.EncodeToBytes(&receipt)
+}
+
 // v4StoredReceiptRLPWithLogs is the storage encoding of a receipt used in database version 4.
 type v4StoredReceiptRLPWithLogs struct {
 	PostStateOrStatus []byte
