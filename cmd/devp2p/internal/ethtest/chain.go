@@ -39,14 +39,13 @@ type Chain struct {
 	chainConfig *params.ChainConfig
 }
 
-func (c *Chain) WriteTo(writer io.Writer) error {
+func (c *Chain) WriteTo(writer io.Writer) (int64, error) {
 	for _, block := range c.blocks {
 		if err := rlp.Encode(writer, block); err != nil {
-			return err
+			return 0, err
 		}
 	}
-
-	return nil
+	return int64(len(c.blocks)), nil
 }
 
 // Len returns the length of the chain.
