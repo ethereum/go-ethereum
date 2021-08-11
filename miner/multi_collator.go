@@ -1,3 +1,32 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package miner
+
+import (
+    "errors"
+	"math/big"
+    "sync/atomic"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/log"
+)
 type AddTransactionsResultFunc func(error, []*types.Receipt) bool
 
 // BlockState represents a block-to-be-mined, which is being assembled.
@@ -13,7 +42,7 @@ type BlockState interface {
 	// If ErrAbort is returned, the collator should immediately abort and return a
 	// value (true) from CollateBlock which indicates to the miner to discard the
 	// block
-	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc)
+	AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) error
     Commit()
     Copy() BlockState
 	Gas() (remaining uint64)
@@ -22,7 +51,7 @@ type BlockState interface {
 	Signer() types.Signer
 }
 
-type collatorWork {
+type collatorWork struct {
     env *environment
     counter uint64
     interrupt *int32
@@ -34,6 +63,11 @@ type Pool interface {
         Locals() []common.Address
 }
 
+var (
+    ErrAbort = errors.New("abort sealing current work (resubmit/newHead interrupt)")
+    ErrUnsupportedEIP155Tx = errors.New("replay-protected tx when EIP155 not enabled")
+)
+
 type collatorBlockState struct {
     work collatorWork
     c *collator
@@ -41,7 +75,7 @@ type collatorBlockState struct {
 }
 
 func (w *collatorWork) Copy() collatorWork {
-    newEnv := w.copy()
+    newEnv := w.env.copy()
     return collatorWork{
         env: newEnv,
         counter: w.counter,
@@ -51,7 +85,7 @@ func (w *collatorWork) Copy() collatorWork {
 
 func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb AddTransactionsResultFunc) error {
 	var (
-		interrupt   = bs.work.env.interrupt
+		interrupt   = bs.work.interrupt
 		header = bs.work.env.header
         gasPool = bs.work.env.gasPool
         signer = bs.work.env.signer
@@ -60,7 +94,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
         state = bs.work.env.state
 		snap        = state.Snapshot()
         curProfit = big.NewInt(0)
-		coinbaseBalanceBefore = state.GetBalance(bs.work.header.Coinbase)
+		coinbaseBalanceBefore = state.GetBalance(bs.work.env.header.Coinbase)
 		tcount      = bs.work.env.tcount
 		err         error
 		logs        []*types.Log
@@ -90,16 +124,16 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		}
         gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
         if err != nil {
-            return err
+            break
         }
 		// Start executing the transaction
 		state.Prepare(tx.Hash(), bs.work.env.tcount)
 
 		var txLogs []*types.Log
-		txLogs, err = commitTransaction(chain, chainConfig, tx, bs.Coinbase())
+		txLogs, err = commitTransaction(chain, chainConfig, bs.work.env, tx, bs.Coinbase())
 		if err == nil {
 			logs = append(logs, txLogs...)
-            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[-1].GasUsed)
+            gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[len(bs.work.env.receipts) - 1].GasUsed)
             curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
 			tcount++
 		} else {
@@ -126,15 +160,13 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		bs.work.env.txs = bs.work.env.txs[:startTCount]
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
-		coinbaseBalanceAfter := bs.work.state.GetBalance(bs.work.env.header.Coinbase)
+		coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.header.Coinbase)
         coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
         curProfit.Add(curProfit, coinbaseTransfer)
-		bs.work.env.logs = append(bs.logs, logs...)
+		bs.work.env.logs = append(bs.work.env.logs, logs...)
         bs.env.profit = curProfit
 		bs.env.tcount = tcount
 	}
-
-	return nil
 }
 
 func (bs *collatorBlockState) Commit() {
@@ -162,9 +194,9 @@ func (bs *collatorBlockState) Signer() types.Signer {
 }
 
 type BlockCollator interface {
-    func CollateBlock(bs BlockState, pool Pool)
-    func SideChainHook(header *types.Header)
-    func NewHeadHook(header *types.Header)
+    CollateBlock(bs BlockState, pool Pool)
+    SideChainHook(header *types.Header)
+    NewHeadHook(header *types.Header)
 }
 
 type collator struct {
@@ -219,7 +251,7 @@ type MultiCollator struct {
 }
 
 func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, strategies []BlockCollator) MultiCollator {
-    workResultCh := make(chan collatorWork, workResultChSize),
+    workResultCh := make(chan collatorWork, workResultChSize)
     collators := []collator{}
     for _, s := range strategies {
         collators = append(collators, collator{
@@ -237,7 +269,7 @@ func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, s
         counter: 0,
         responsiveCollatorCount: 0,
         collators: collators,
-        workResultCh: workResultCh
+        workResultCh: workResultCh,
     }
 }
 
@@ -251,9 +283,7 @@ func (m *MultiCollator) Close() {
     for c := range m.collators {
         select {
         case c.exitCh<-true:
-            fallthrough
         default:
-            continue
         }
     }
 }
@@ -272,7 +302,7 @@ func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
     m.interrupt = interrupt
     for c := range m.collators {
         select {
-        case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}
+        case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}:
             m.responsiveCollatorCount++
         }
     }
@@ -331,4 +361,4 @@ func (m *MultiCollator) NewHeadHook() {
 func (m *Multicollator) SideChainHook() {
 
 }
-/*
+*/

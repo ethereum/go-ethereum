@@ -803,7 +803,7 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func commitTransaction(chain *core.BlockChain, chainConfig *core.ChainConfig, env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+func commitTransaction(chain *core.BlockChain, chainConfig *params.ChainConfig, env *environment, tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
     snap := env.state.Snapshot()
 
     receipt, err := core.ApplyTransaction(chainConfig, chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *chain.GetVMConfig())
