@@ -76,15 +76,15 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database   ethdb.Database            // Database for direct sync insertions
-	Chain      *core.BlockChain          // Blockchain to serve data from
-	TxPool     txPool                    // Transaction pool to propagate from
-	Network    uint64                    // Network identifier to adfvertise
-	Sync       downloader.SyncMode       // Whether to fast or full sync
-	BloomCache uint64                    // Megabytes to alloc for fast sync bloom
-	EventMux   *event.TypeMux            // Legacy event mux, deprecate for `feed`
-	Checkpoint *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	Whitelist  map[uint64]common.Hash    // Hard coded whitelist for sync challenged
+	Database          ethdb.Database            // Database for direct sync insertions
+	Chain             *core.BlockChain          // Blockchain to serve data from
+	TxPool            txPool                    // Transaction pool to propagate from
+	Network           uint64                    // Network identifier to adfvertise
+	Sync              downloader.SyncMode       // Whether to fast or full sync
+	BloomCache        uint64                    // Megabytes to alloc for fast sync bloom
+	EventMux          *event.TypeMux            // Legacy event mux, deprecate for `feed`
+	Checkpoint        *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
+	AuthorizationList map[uint64]common.Hash    // Hard coded authorization list for sync challenged
 }
 
 type handler struct {
@@ -114,7 +114,7 @@ type handler struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
-	whitelist map[uint64]common.Hash
+	authorizationList map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
 	txsyncCh chan *txsync
@@ -132,16 +132,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
 	h := &handler{
-		networkID:  config.Network,
-		forkFilter: forkid.NewFilter(config.Chain),
-		eventMux:   config.EventMux,
-		database:   config.Database,
-		txpool:     config.TxPool,
-		chain:      config.Chain,
-		peers:      newPeerSet(),
-		whitelist:  config.Whitelist,
-		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+		networkID:         config.Network,
+		forkFilter:        forkid.NewFilter(config.Chain),
+		eventMux:          config.EventMux,
+		database:          config.Database,
+		txpool:            config.TxPool,
+		chain:             config.Chain,
+		peers:             newPeerSet(),
+		authorizationList: config.AuthorizationList,
+		txsyncCh:          make(chan *txsync),
+		quitSync:          make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
@@ -329,8 +329,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			}
 		}()
 	}
-	// If we have any explicit whitelist block hashes, request them
-	for number := range h.whitelist {
+	// If we have any explicit authorized block hashes, request them
+	for number := range h.authorizationList {
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
 			return err
 		}

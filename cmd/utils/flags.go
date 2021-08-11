@@ -234,9 +234,13 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	WhitelistFlag = cli.StringFlag{
+	DeprecatedAuthorizationListFlag = cli.StringFlag{
 		Name:  "whitelist",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+		Usage: "[DEPRECATED: will be replaced by 'authorizationlist'] Comma separated block number-to-hash mappings to authorize (<number>=<hash>)",
+	}
+	AuthorizationListFlag = cli.StringFlag{
+		Name:  "authorizationlist",
+		Usage: "Comma separated block number-to-hash mappings to authorize (<number>=<hash>)",
 	}
 	BloomFilterSizeFlag = cli.Uint64Flag{
 		Name:  "bloomfilter.size",
@@ -1398,26 +1402,29 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
-func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
-	whitelist := ctx.GlobalString(WhitelistFlag.Name)
-	if whitelist == "" {
+func setAuthorizationList(ctx *cli.Context, cfg *ethconfig.Config) {
+	authorizationList := ctx.GlobalString(AuthorizationListFlag.Name)
+	if authorizationList == "" {
+		authorizationList = ctx.GlobalString(DeprecatedAuthorizationListFlag.Name)
+	}
+	if authorizationList == "" {
 		return
 	}
-	cfg.Whitelist = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(whitelist, ",") {
+	cfg.AuthorizationList = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(authorizationList, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid whitelist entry: %s", entry)
+			Fatalf("Invalid authorized entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+			Fatalf("Invalid authorized block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+			Fatalf("Invalid authorized hash %s: %v", parts[1], err)
 		}
-		cfg.Whitelist[number] = hash
+		cfg.AuthorizationList[number] = hash
 	}
 }
 
@@ -1484,7 +1491,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
-	setWhitelist(ctx, cfg)
+	setAuthorizationList(ctx, cfg)
 	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
