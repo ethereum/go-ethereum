@@ -36,6 +36,14 @@ type v3StoredReceiptRLPWithLogs struct {
 	GasUsed           uint64
 }
 
+func EncodeAsLegacyStoredReceiptsRLP(receipts []*Receipt) ([]byte, error) {
+	stored := make([]v3StoredReceiptRLPWithLogs, len(receipts))
+	for i, r := range receipts {
+		stored[i] = *toV3StoredReceiptRLPWithLogs(r)
+	}
+	return rlp.EncodeToBytes(stored)
+}
+
 func encodeAsV4StoredReceiptRLPWithLogs(want *Receipt) ([]byte, error) {
 	stored := &v4StoredReceiptRLPWithLogs{
 		PostStateOrStatus: want.statusEncoding(),
@@ -51,16 +59,20 @@ func encodeAsV4StoredReceiptRLPWithLogs(want *Receipt) ([]byte, error) {
 	return rlp.EncodeToBytes(stored)
 }
 
-func encodeAsV3StoredReceiptRLPWithLogs(want *Receipt) ([]byte, error) {
-	stored := &v3StoredReceiptRLPWithLogs{
-		PostStateOrStatus: want.statusEncoding(),
-		CumulativeGasUsed: want.CumulativeGasUsed,
-		Bloom:             want.Bloom,
-		TxHash:            want.TxHash,
-		ContractAddress:   want.ContractAddress,
-		Logs:              make([]*legacyRlpStorageLog, len(want.Logs)),
-		GasUsed:           want.GasUsed,
+func toV3StoredReceiptRLPWithLogs(from *Receipt) *v3StoredReceiptRLPWithLogs {
+	return &v3StoredReceiptRLPWithLogs{
+		PostStateOrStatus: from.statusEncoding(),
+		CumulativeGasUsed: from.CumulativeGasUsed,
+		Bloom:             from.Bloom,
+		TxHash:            from.TxHash,
+		ContractAddress:   from.ContractAddress,
+		Logs:              make([]*legacyRlpStorageLog, len(from.Logs)),
+		GasUsed:           from.GasUsed,
 	}
+}
+
+func encodeAsV3StoredReceiptRLPWithLogs(want *Receipt) ([]byte, error) {
+	stored := toV3StoredReceiptRLPWithLogs(want)
 	for i, log := range want.Logs {
 		stored.Logs[i] = legacyFromLog(log)
 	}
