@@ -94,6 +94,8 @@ type environment struct {
 	uncles   map[common.Hash]*types.Header
 	profit   *big.Int
 
+	coinbase common.Address
+
 	logs []*types.Log
 }
 
@@ -120,6 +122,8 @@ func (env *environment) copy() *environment {
 	for hash, uncle := range env.uncles {
 		cpy.uncles[hash] = uncle
 	}
+	cpy.coinbase = common.Address{}
+	copy(cpy.coinbase[:], env.coinbase[:])
 	return cpy
 }
 
@@ -270,8 +274,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		multiCollator:      NewMultiCollator(chainConfig, eth.BlockChain(), eth.TxPool(), collators),
 	}
-	worker.multiCollator = NewMultiCollator(chainConfig, eth.BlockChain(), eth.TxPool(), collators, worker)
 	// start collator pool listening for new work
 	worker.multiCollator.Start()
 	// Subscribe NewTxsEvent for tx pool
@@ -304,14 +308,6 @@ func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
-}
-
-func (w *worker) getEtherbase() common.Address {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	coinbaseCopy := common.Address{}
-	copy(coinbaseCopy[:], w.coinbase[:])
-	return coinbaseCopy
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -757,6 +753,9 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 	}
 	state.StartPrefetcher("miner")
 
+	coinbaseCopy := common.Address{}
+	copy(coinbaseCopy[:], w.coinbase[:])
+
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
@@ -767,6 +766,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 		logs:      []*types.Log{},
 		profit:    new(big.Int).SetUint64(0),
 		gasPool:   new(core.GasPool).AddGas(header.GasLimit),
+		coinbase:  coinbaseCopy,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -1123,22 +1123,21 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	}
 
 	// TODO how to determine how to adjust the resubmit interval here? i.e. how the ratio should be determined
-	/*
-			if interrupt != nil {
-		        if interrupt == commitInterruptNone {
-				    w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-		        } else if interrupt == commitInterruptNone {
-					ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
-					if ratio < 0.1 {
-						ratio = 0.1
-					}
-					w.resubmitAdjustCh <- &intervalAdjust{
-						ratio: ratio,
-						inc:   true,
-					}
-		        }
+	if interrupt != nil {
+		if atomic.LoadInt32(interrupt) == commitInterruptNone {
+			w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+		} else if atomic.LoadInt32(interrupt) == commitInterruptNone {
+			gasLimit := w.current.header.GasLimit
+			ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
+			if ratio < 0.1 {
+				ratio = 0.1
 			}
-	*/
+			w.resubmitAdjustCh <- &intervalAdjust{
+				ratio: ratio,
+				inc:   true,
+			}
+		}
+	}
 
 }
 
