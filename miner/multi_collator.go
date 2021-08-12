@@ -112,7 +112,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		state                 = bs.work.env.state
 		snap                  = state.Snapshot()
 		curProfit             = big.NewInt(0)
-		coinbaseBalanceBefore = state.GetBalance(bs.work.env.header.Coinbase)
+		coinbaseBalanceBefore = state.GetBalance(bs.c.w.getEtherbase())
 		tcount                = bs.work.env.tcount
 		err                   error
 		logs                  []*types.Log
@@ -180,7 +180,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		bs.work.env.txs = bs.work.env.txs[:startTCount]
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
 	} else {
-		coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.header.Coinbase)
+		coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.c.w.getEtherbase())
 		coinbaseTransfer := big.NewInt(0).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
 		curProfit.Add(curProfit, coinbaseTransfer)
 		bs.work.env.logs = append(bs.work.env.logs, logs...)
@@ -202,8 +202,7 @@ func (bs *collatorBlockState) Gas() uint64 {
 }
 
 func (bs *collatorBlockState) Coinbase() common.Address {
-	// TODO should clone this but I'm feeling lazy rn
-	return bs.work.env.header.Coinbase
+	return bs.c.w.getEtherbase()
 }
 
 func (bs *collatorBlockState) BaseFee() *big.Int {
@@ -237,6 +236,8 @@ type collator struct {
 	chainConfig *params.ChainConfig
 	chain       *core.BlockChain
 	pool        Pool
+
+	w *worker
 }
 
 // each active collator runs mainLoop() in a goroutine.
@@ -281,7 +282,7 @@ type MultiCollator struct {
 	interrupt               *int32
 }
 
-func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, pool Pool, strategies []BlockCollator) MultiCollator {
+func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, pool Pool, strategies []BlockCollator, w *worker) MultiCollator {
 	collators := []collator{}
 	for _, s := range strategies {
 		collators = append(collators, collator{
@@ -293,6 +294,7 @@ func NewMultiCollator(chainConfig *params.ChainConfig, chain *core.BlockChain, p
 			chainConfig:       chainConfig,
 			chain:             chain,
 			pool:              pool,
+			w:                 w,
 		})
 	}
 	return MultiCollator{
