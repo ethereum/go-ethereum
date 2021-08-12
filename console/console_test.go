@@ -190,7 +190,7 @@ func TestEvaluate(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
 
-	tester.console.Evaluate("2 + 2")
+	tester.console.Evaluate("2 + 2", make(chan os.Signal))
 	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
 	}
@@ -232,7 +232,7 @@ func TestPreload(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
 
-	tester.console.Evaluate("preloaded")
+	tester.console.Evaluate("preloaded", make(chan os.Signal))
 	if output := tester.output.String(); !strings.Contains(output, "some-preloaded-string") {
 		t.Fatalf("preloaded variable missing: have %s, want %s", output, "some-preloaded-string")
 	}
@@ -245,7 +245,7 @@ func TestExecute(t *testing.T) {
 
 	tester.console.Execute("exec.js")
 
-	tester.console.Evaluate("execed")
+	tester.console.Evaluate("execed", make(chan os.Signal))
 	if output := tester.output.String(); !strings.Contains(output, "some-executed-string") {
 		t.Fatalf("execed variable missing: have %s, want %s", output, "some-executed-string")
 	}
@@ -257,7 +257,7 @@ func TestPrettyPrint(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
 
-	tester.console.Evaluate("obj = {int: 1, string: 'two', list: [3, 3, 3], obj: {null: null, func: function(){}}}")
+	tester.console.Evaluate("obj = {int: 1, string: 'two', list: [3, 3, 3], obj: {null: null, func: function(){}}}", make(chan os.Signal))
 
 	// Define some specially formatted fields
 	var (
@@ -287,7 +287,7 @@ func TestPrettyPrint(t *testing.T) {
 func TestPrettyError(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
-	tester.console.Evaluate("throw 'hello'")
+	tester.console.Evaluate("throw 'hello'", make(chan os.Signal))
 
 	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:7(1)\n\n"
 	if output := tester.output.String(); output != want {

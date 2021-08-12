@@ -282,6 +282,10 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
+func (re *JSRE) Interrupt(v interface{}){
+	re.vm.Interrupt(v)
+}
+
 // Compile compiles and then runs a piece of JS code.
 func (re *JSRE) Compile(filename string, src string) (err error) {
 	re.Do(func(vm *goja.Runtime) { _, err = compileAndRun(vm, filename, src) })

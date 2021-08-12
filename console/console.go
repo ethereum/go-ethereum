@@ -17,6 +17,7 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -330,13 +331,24 @@ func (c *Console) Welcome() {
 
 // Evaluate executes code and pretty prints the result to the specified output
 // stream.
-func (c *Console) Evaluate(statement string) {
+func (c *Console) Evaluate(statement string, abortCh chan os.Signal) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(c.printer, "[native] error: %v\n", r)
 		}
 	}()
-	c.jsre.Evaluate(statement, c.printer)
+	doneCh := make(chan struct{})
+	go func() {
+		c.jsre.Evaluate(statement, c.printer)
+		close(doneCh)
+	}()
+	select {
+	case <-doneCh:
+		return
+	case <-abortCh:
+		c.jsre.Interrupt(errors.New("aborted by caller"))
+		return
+	}
 }
 
 // Interactive starts an interactive user session, where input is propted from
@@ -407,7 +419,7 @@ func (c *Console) Interactive() {
 						}
 					}
 				}
-				c.Evaluate(input)
+				c.Evaluate(input, interrupt)
 				input = ""
 			}
 		}

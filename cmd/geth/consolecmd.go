@@ -100,7 +100,7 @@ func localConsole(ctx *cli.Context) error {
 
 	// If only a short execution was requested, evaluate and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		console.Evaluate(script)
+		console.Evaluate(script, make(chan os.Signal))
 		return nil
 	}
 	// Otherwise print the welcome screen and enter interactive mode
@@ -158,7 +158,7 @@ func remoteConsole(ctx *cli.Context) error {
 	defer console.Stop(false)
 
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		console.Evaluate(script)
+		console.Evaluate(script, make(chan os.Signal))
 		return nil
 	}
 
