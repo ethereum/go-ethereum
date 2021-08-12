@@ -1,9 +1,31 @@
 package types
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// IsLegacyStoredReceipts tries to parse the RLP-encoded blob
+// first as an array of v3 stored receipt, then v4 stored receipt and
+// returns true if successful.
+func IsLegacyStoredReceipts(raw []byte) (bool, error) {
+	var v3 []v3StoredReceiptRLP
+	if err := rlp.DecodeBytes(raw, &v3); err == nil {
+		return true, nil
+	}
+	var v4 []v4StoredReceiptRLP
+	if err := rlp.DecodeBytes(raw, &v4); err == nil {
+		return true, nil
+	}
+	var v5 []storedReceiptRLP
+	// Check to see valid fresh stored receipt
+	if err := rlp.DecodeBytes(raw, &v5); err == nil {
+		return false, nil
+	}
+	return false, errors.New("Value is not a valid receipt encoding")
+}
 
 // convertLegacyStoredReceipt takes a legacy RLP-encoded stored receipt
 // and returns a fresh RLP-encoded stored receipt.
