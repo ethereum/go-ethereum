@@ -41,6 +41,10 @@ var DeprecatedFlags = []cli.Flag{
 
 var (
 	// (Deprecated May 2020, shown in aliased flags section)
+	NoUSBFlag = cli.BoolFlag{
+		Name:  "nousb",
+		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
+	}
 	LegacyRPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server (deprecated and will be removed June 2021, use --http)",
