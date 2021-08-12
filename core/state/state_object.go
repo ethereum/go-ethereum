@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
@@ -250,8 +249,14 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		// Get the data from the db, not the trie.
-		s.db.db.TrieDB().DiskDB().Get(append(s.address[:], key[:]...))
+		if !s.db.trie.IsVerkle() {
+			if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+				s.setError(err)
+				return common.Hash{}
+			}
+		} else {
+			panic("verkle trees use the snapshot")
+		}
 	}
 	var value common.Hash
 	if len(enc) > 0 {
@@ -341,7 +346,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	tr := s.db.trie.(*trie.VerkleTrie)
+	var tr Trie
+	if s.db.trie.IsVerkle() {
+		tr = s.db.trie
+	} else {
+		tr = s.getTrie(db)
+	}
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
@@ -353,20 +363,26 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		s.originStorage[key] = value
 
 		var v []byte
-		k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(k))
-			s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
+			if tr.IsVerkle() {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
+				s.setError(tr.TryDelete(k))
+				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
+			} else {
+				s.setError(tr.TryDelete(key[:]))
+			}
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 
-			// Update the trie, with v as a value
-			s.setError(tr.TryUpdate(k, v))
+			if !tr.IsVerkle() {
+				s.setError(tr.TryUpdate(key[:], v))
+			} else {
+				k := trieUtils.GetTreeKeyStorageSlot(s.address, new(uint256.Int).SetBytes(key[:]))
+				// Update the trie, with v as a value
+				s.setError(tr.TryUpdate(k, v))
+			}
 
-			// Also save the account data in a location that is easy to
-			// find, i.e. right after the account's key.
-			s.db.db.TrieDB().DiskDB().Put(append(s.address[:], key[:]...), v)
 		}
 		// If state snapshotting is active, cache the data til commit
 		if s.db.snap != nil {
@@ -387,7 +403,20 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
-	return Trie(tr)
+	return tr
+}
+
+// UpdateRoot sets the trie root to the current root hash of
+func (s *stateObject) updateRoot(db Database) {
+	// If nothing changed, don't bother with hashing anything
+	if s.updateTrie(db) == nil {
+		return
+	}
+	// Track the amount of time wasted on hashing the storage trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
+	}
+	s.data.Root = s.trie.Hash()
 }
 
 // CommitTrie the storage trie of the object to db.

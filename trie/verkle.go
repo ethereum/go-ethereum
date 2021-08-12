@@ -126,6 +126,9 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 		db:   db,
 	}
 }
+func (trie *VerkleTrie) IsVerkle() bool {
+	return true
+}
 
 func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {
 	lastOffset := byte(0)
@@ -140,7 +143,7 @@ func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {
 			end = len(code)
 		}
 		copy(chunk[1:], code[31*i:end])
-		for j := lastOffset; j < 31; j++ {
+		for j := lastOffset; int(j) < len(code[31*i:end]); j++ {
 			if code[j] >= byte(vm.PUSH1) && code[j] <= byte(vm.PUSH32) {
 				j += code[j] - byte(vm.PUSH1) + 1
 				lastOffset = (j + 1) % 31

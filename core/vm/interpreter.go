@@ -195,16 +195,20 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// if the PC ends up in a new "page" of verkleized code, charge the
 		// associated witness costs.
-		index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
-		subtree := common.BytesToHash(index[:31])
-		subleaf := index[31]
-		if _, ok := in.evm.TxContext.Accesses[subtree]; !ok {
-			in.evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
-			contract.Gas -= 1900 // WITNESS_BRANCH_COST
-		}
-		if _, ok := in.evm.TxContext.Accesses[subtree][subleaf]; !ok {
-			in.evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
-			contract.Gas -= 200 // WITNESS_CHUNK_COST
+		// XXX pre-cache the account page in order not to pay for the witness
+		// costs on top of the costs for the call.
+		if in.evm.ChainConfig().UseVerkle {
+			index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
+			subtree := common.BytesToHash(index[:31])
+			subleaf := index[31]
+			if _, ok := in.evm.TxContext.Accesses[subtree]; !ok {
+				in.evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
+				contract.Gas -= gasWitnessBranchCost
+			}
+			if _, ok := in.evm.TxContext.Accesses[subtree][subleaf]; !ok {
+				in.evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
+				contract.Gas -= gasWitnessChunkCost
+			}
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
