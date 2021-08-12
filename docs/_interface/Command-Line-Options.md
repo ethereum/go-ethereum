@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.6-stable-576681f2
+   1.10.7-stable-12f0ff40
 
 COMMANDS:
    account                            Manage accounts
@@ -164,7 +164,6 @@ MINER OPTIONS:
   --miner.notify value                Comma separated HTTP URL list to notify of new work packages
   --miner.notify.full                 Notify with pending block headers instead of work packages
   --miner.gasprice value              Minimum gas price for mining a transaction (default: 1000000000)
-  --miner.gastarget value             Target gas floor for mined blocks (default: 8000000)
   --miner.gaslimit value              Target gas ceiling for mined blocks (default: 8000000)
   --miner.etherbase value             Public address for block mining rewards (default = first account) (default: "0")
   --miner.extradata value             Block extra data set by the miner (default = client version)
@@ -176,7 +175,7 @@ GAS PRICE ORACLE OPTIONS:
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
   --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
   --gpo.ignoreprice value             Gas price below which gpo will ignore transactions (default: 2)
-
+  
 VIRTUAL MACHINE OPTIONS:
   --vmdebug                           Record information useful for VM and contract debugging
 
@@ -216,15 +215,12 @@ ALIASED (deprecated) OPTIONS:
   --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)
   --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
   --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
-
+  --miner.gastarget value             Target gas floor for mined blocks (deprecated) (default: 0)
+  
 MISC OPTIONS:
   --snapshot                          Enables snapshot-database mode (default = enable)
   --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                          show help
   --catalyst                          Catalyst mode (eth2 integration testing)
   --override.london value             Manually specify London fork-block, overriding the bundled setting (default: 0)
-
-
-COPYRIGHT:
-   Copyright 2013-2021 The go-ethereum Authors
 ```
