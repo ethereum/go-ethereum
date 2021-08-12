@@ -312,17 +312,16 @@ func prepare(ctx *cli.Context) {
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
 	if err := plugins.Initialize(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "plugins"), ctx); err != nil { return err }
+	prepare(ctx)
+	stack, backend := makeFullNode(ctx)
+	pluginsInitializeNode(stack, backend)
+	defer stack.Close()
 	if ok, err := plugins.RunSubcommand(ctx); ok { return err }
 	if !plugins.ParseFlags(ctx.Args()) {
 		if args := ctx.Args(); len(args) > 0 {
 			return fmt.Errorf("invalid command: %q", args[0])
 		}
 	}
-
-	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
-	pluginsInitializeNode(stack, backend)
-	defer stack.Close()
 	stack.RegisterAPIs(pluginGetAPIs(stack, backend))
 
 	startNode(ctx, stack, backend)
