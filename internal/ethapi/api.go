@@ -582,7 +582,6 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 			"contractAddress":   nil,
 			"logs":              receipt.Logs,
 			"logsBloom":         receipt.Bloom,
-			"transactions":      []interface{}{tx},
 		}
 
 		// Assign receipt status or post state.
