@@ -544,8 +544,21 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 	}
 
 	txs := block.Transactions()
+
+	var txHash common.Hash
+
+	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64())
+	if borReceipt != nil {
+		receipts = append(receipts, borReceipt)
+		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
+		if txHash != (common.Hash{}) {
+			borTx, _, _, _, _ := s.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
+			txs = append(txs, borTx)
+		}
+	}
+
 	if len(txs) != len(receipts) {
-		return nil, fmt.Errorf("txs length doesn't equal to receipts' length")
+		return nil, fmt.Errorf("txs length doesn't equal to receipts' length", len(txs), len(receipts))
 	}
 
 	txReceipts := make([]map[string]interface{}, 0, len(txs))
@@ -581,11 +594,13 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 		if receipt.Logs == nil {
 			fields["logs"] = [][]*types.Log{}
 		}
+		if borReceipt != nil {
+			fields["transactionHash"] = txHash
+		}
 		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 		if receipt.ContractAddress != (common.Address{}) {
 			fields["contractAddress"] = receipt.ContractAddress
 		}
-		fields = s.appendRPCMarshalBorTransaction(ctx, block, fields, true)
 
 		txReceipts = append(txReceipts, fields)
 	}
