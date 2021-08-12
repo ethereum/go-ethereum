@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -69,6 +70,7 @@ Remove blockchain and state databases`,
 			dbDumpFreezerIndex,
 			dbImportCmd,
 			dbExportCmd,
+			dbMigrateFreezer,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -231,6 +233,21 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.GoerliFlag,
 		},
 		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
+	}
+	dbMigrateFreezer = cli.Command{
+		Action:    utils.MigrateFlags(freezerMigrate),
+		Name:      "freezer-migrate",
+		Usage:     "Migrate legacy parts of the freezer. (WARNING: may take a long time)",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "The import command imports the specific chain data from an RLP encoded stream.",
 	}
 )
 
@@ -683,4 +700,49 @@ func exportChaindata(ctx *cli.Context) error {
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
+}
+
+func freezerMigrate(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	/*path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	log.Info("Opening freezer", "location", path)
+	table, err := rawdb.NewFreezerTable(path, "receipts", rawdb.FreezerNoSnappy["receipts"])
+	if err != nil {
+		log.Info("Could not open freezer table", "error", err)
+		return err
+	}*/
+	/*if err := table.Close(); err != nil {
+		return err
+	}*/
+
+	// Check first block for legacy receipt format
+	numAncients, err := db.Ancients()
+	if err != nil {
+		return err
+	}
+	if numAncients < 1 {
+		log.Info("No blocks in freezer to migrate")
+		return nil
+	}
+	// TODO: check genesis or block 1?
+	// devnets might have an empty genesis
+	first, err := db.Ancient("receipts", 1)
+	if err != nil {
+		return err
+	}
+	isFirstLegacy, err := types.IsLegacyStoredReceipt(first)
+	if err != nil {
+		return err
+	}
+	if !isFirstLegacy {
+		log.Info("No legacy receipts to migrate")
+		return nil
+	}
+	log.Info("Starting migration")
+	return nil
 }
