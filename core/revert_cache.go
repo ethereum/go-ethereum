@@ -10,18 +10,24 @@ var (
   revertCache *lru.Cache
 )
 
-func CacheRevertReason(h common.Hash, reason []byte) {
+func CacheRevertReason(h, blockHash common.Hash, reason []byte) {
   if revertCache == nil { revertCache, _ = lru.New(10000) }
   if reason != nil {
+    key := [64]byte{}
+    copy(key[:32], blockHash[:])
+    copy(key[32:], h[:])
     if reasonString, err := abi.UnpackRevert(reason); err == nil {
-      revertCache.Add(h, reasonString)
+      revertCache.Add(key, reasonString)
     }
   }
 }
 
-func GetRevertReason(h common.Hash) (string, bool) {
+func GetRevertReason(h, blockHash common.Hash) (string, bool) {
   if revertCache == nil { revertCache, _ = lru.New(10000) }
-  if v, ok := revertCache.Get(h); ok {
+  key := [64]byte{}
+  copy(key[:32], blockHash[:])
+  copy(key[32:], h[:])
+  if v, ok := revertCache.Get(key); ok {
     return v.(string), true
   }
   return "", false
