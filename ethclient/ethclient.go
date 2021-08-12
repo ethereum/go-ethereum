@@ -78,6 +78,15 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
 }
 
+func (ec *Client) TransactionReceiptsInBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	var rs []map[string]interface{}
+	err := ec.c.CallContext(ctx, &rs, "eth_getTransactionReceiptsByBlock", blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	return rs, err
+}
+
 // BlockByNumber returns a block from the current canonical chain. If number is nil, the
 // latest known block is returned.
 //

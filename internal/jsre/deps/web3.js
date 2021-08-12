@@ -5393,6 +5393,12 @@ var methods = function () {
         inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter]
     });
 
+    var getTransactionReceiptsByBlock = new Method({
+        name: 'getTransactionReceiptsByBlock',
+        call: 'eth_getTransactionReceiptsByBlock',
+        params: 1
+    });
+
     var estimateGas = new Method({
         name: 'estimateGas',
         call: 'eth_estimateGas',
@@ -5454,7 +5460,8 @@ var methods = function () {
         compileLLL,
         compileSerpent,
         submitWork,
-        getWork
+        getWork,
+        getTransactionReceiptsByBlock
     ];
 };
 
