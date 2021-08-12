@@ -139,20 +139,12 @@ func Setup(ctx *cli.Context) error {
 	glogger.Vmodule(vmodule)
 
 	debug := ctx.GlobalBool(debugFlag.Name)
-	if ctx.GlobalIsSet(legacyDebugFlag.Name) {
-		debug = ctx.GlobalBool(legacyDebugFlag.Name)
-		log.Warn("The flag --debug is deprecated and will be removed in the future, please use --log.debug")
-	}
 	if ctx.GlobalIsSet(debugFlag.Name) {
 		debug = ctx.GlobalBool(debugFlag.Name)
 	}
 	log.PrintOrigins(debug)
 
 	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
-	if b := ctx.GlobalString(legacyBacktraceAtFlag.Name); b != "" {
-		backtrace = b
-		log.Warn("The flag --backtrace is deprecated and will be removed in the future, please use --log.backtrace")
-	}
 	if b := ctx.GlobalString(backtraceAtFlag.Name); b != "" {
 		backtrace = b
 	}
