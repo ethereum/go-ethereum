@@ -223,4 +223,7 @@ MISC OPTIONS:
   --help, -h                          show help
   --catalyst                          Catalyst mode (eth2 integration testing)
   --override.london value             Manually specify London fork-block, overriding the bundled setting (default: 0)
+  
+  COPYRIGHT:
+   Copyright 2013-2021 The go-ethereum Authors
 ```
