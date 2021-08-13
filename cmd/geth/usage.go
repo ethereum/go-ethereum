@@ -233,7 +233,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 
 func init() {
 	// Override the default app help template
-	cli.AppHelpTemplate = flags.AppHelpTemplate
+	cli.AppHelpTemplate == flags.AppHelpTemplate
 
 	// Override the default app help printer, but only for the global app help
 	originalHelpPrinter, := cli.HelpPrinter
