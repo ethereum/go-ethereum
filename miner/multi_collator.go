@@ -111,7 +111,6 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		snap                  = state.Snapshot()
 		curProfit             = new(big.Int).Set(bs.work.env.profit)
         startProfit           = new(big.Int).Set(bs.work.env.profit)
-		coinbaseBalanceBefore = state.GetBalance(bs.work.env.coinbase)
 		tcount                = bs.work.env.tcount
 		err                   error
 		logs                  []*types.Log
@@ -154,7 +153,7 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 			break
 		}
 		// Start executing the transaction
-		state.Prepare(tx.Hash(), bs.work.env.tcount)
+		state.Prepare(tx.Hash(), tcount)
 
 		var txLogs []*types.Log
 		txLogs, err = commitTransaction(chain, chainConfig, bs.work.env, tx, bs.Coinbase())
@@ -162,13 +161,8 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 			logs = append(logs, txLogs...)
 			gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[len(bs.work.env.receipts)-1].GasUsed)
             // TODO remove this allocation once things are working
-
 			curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
-            coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.coinbase)
-            coinbaseTransfer := new(big.Int).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
-            curProfit.Add(curProfit, coinbaseTransfer)
             bs.work.env.profit.Set(curProfit)
-
             if cb(nil, bs.work.env.receipts[len(bs.work.env.receipts) - 1]) {
                 shouldRevert = true
                 break
