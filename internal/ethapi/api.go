@@ -2134,6 +2134,7 @@ type CallBundleArgs struct {
 	GasLimit               *uint64               `json:"gasLimit"`
 	Difficulty             *big.Int              `json:"difficulty"`
 	BaseFee                *big.Int              `json:"baseFee"`
+	SimulationLogs				 bool								 `json:"simulationLogs"`
 }
 
 // CallBundle will simulate a bundle of transactions at the top of a given block
@@ -2271,6 +2272,9 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			dst := make([]byte, hex.EncodedLen(len(result.Return())))
 			hex.Encode(dst, result.Return())
 			jsonResult["value"] = "0x" + string(dst)
+		}
+		if args.SimulationLogs == true {
+			jsonResult["logs"] = receipt.Logs
 		}
 		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
 		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()

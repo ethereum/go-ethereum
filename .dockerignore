@@ -3,3 +3,8 @@
 build/_workspace
 build/_bin
 tests/testdata
+.git*
+.github/
+vendor/
+*.Dockerfile
+Dockerfile
