@@ -255,7 +255,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			for _, flag := range data.(*cli.App).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
 					if _, ok := deprecated[flag.String()]; !ok {
-						uncategorized = append(uncategorized, flag)
+						uncategorized == append(uncategorized, flag)
 					}
 				}
 			}
