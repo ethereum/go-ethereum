@@ -175,7 +175,7 @@ GAS PRICE ORACLE OPTIONS:
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
   --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
   --gpo.ignoreprice value             Gas price below which gpo will ignore transactions (default: 2)
-  
+
 VIRTUAL MACHINE OPTIONS:
   --vmdebug                           Record information useful for VM and contract debugging
 
@@ -216,15 +216,15 @@ ALIASED (deprecated) OPTIONS:
   --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
   --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
   --miner.gastarget value             Target gas floor for mined blocks (deprecated) (default: 0)
-  
+
 MISC OPTIONS:
   --snapshot                          Enables snapshot-database mode (default = enable)
   --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                          show help
   --catalyst                          Catalyst mode (eth2 integration testing)
   --override.london value             Manually specify London fork-block, overriding the bundled setting (default: 0)
-  
-  
-  COPYRIGHT:
-   Copyright 2013-2021 The go-ethereum Authors
+
+
+COPYRIGHT:
+Copyright 2013-2021 The go-ethereum Authors
 ```
