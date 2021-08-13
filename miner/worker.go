@@ -110,6 +110,7 @@ func (env *environment) copy() *environment {
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
 		logs:      copyLogs(env.logs),
+        profit:    new(big.Int).Set(env.profit),
 	}
 	if env.gasPool != nil {
 		cpy.gasPool = &(*env.gasPool)
