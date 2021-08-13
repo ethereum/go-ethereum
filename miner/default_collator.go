@@ -29,7 +29,7 @@ type DefaultCollator struct{}
 
 func submitTransactions(bs BlockState, txs *types.TransactionsByPriceAndNonce) bool {
 	var shouldAbort bool
-	cb := func(err error, receipts []*types.Receipt) bool {
+	cb := func(err error, receipts *types.Receipt) bool {
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			fallthrough

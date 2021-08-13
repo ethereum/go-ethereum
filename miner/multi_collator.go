@@ -18,6 +18,7 @@ package miner
 
 import (
 	"errors"
+    "math"
 	"math/big"
 	"sync/atomic"
 
@@ -28,13 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-const (
-	Uint64Max = 18446744073709551615
-)
-
 // called by AddTransactions.  If the provided error is not nil, none of the trasactions were added.
 // If the error is nil, the receipts of all executed transactions are provided
-type AddTransactionsResultFunc func(error, []*types.Receipt) bool
+type AddTransactionsResultFunc func(error, *types.Receipt) bool
 
 // BlockState represents a block-to-be-mined, which is being assembled.
 // A collator can add transactions by calling AddTransactions.
@@ -56,6 +53,7 @@ type BlockState interface {
 	Coinbase() common.Address
 	BaseFee() *big.Int
 	Signer() types.Signer
+    Profit() *big.Int
 }
 
 // collatorWork is provided by the CollatorPool to each collator goroutine
@@ -111,12 +109,14 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		chain                 = bs.c.chain
 		state                 = bs.work.env.state
 		snap                  = state.Snapshot()
-		curProfit             = big.NewInt(0)
+		curProfit             = new(big.Int).Set(bs.work.env.profit)
+        startProfit           = new(big.Int).Set(bs.work.env.profit)
 		coinbaseBalanceBefore = state.GetBalance(bs.work.env.coinbase)
 		tcount                = bs.work.env.tcount
 		err                   error
 		logs                  []*types.Log
 		startTCount           = bs.work.env.tcount
+        shouldRevert bool
 	)
 	if bs.done {
 		err = ErrAbort
@@ -127,11 +127,15 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 	for _, tx := range sequence {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			bs.done = true
+            shouldRevert = true
+            cb(ErrAbort, nil)
 			break
 		}
 		if gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", gasPool, "want", params.TxGas)
 			err = core.ErrGasLimitReached
+            cb(err, nil)
+            shouldRevert = true
 			break
 		}
 		from, _ := types.Sender(signer, tx)
@@ -140,10 +144,13 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		if tx.Protected() && !chainConfig.IsEIP155(header.Number) {
 			log.Trace("encountered replay-protected transaction when chain doesn't support replay protection", "hash", tx.Hash(), "eip155", chainConfig.EIP155Block)
 			err = ErrUnsupportedEIP155Tx
+            cb(err, nil)
 			break
 		}
 		gasPrice, err := tx.EffectiveGasTip(bs.work.env.header.BaseFee)
 		if err != nil {
+            shouldRevert = true
+            cb(err, nil)
 			break
 		}
 		// Start executing the transaction
@@ -154,37 +161,35 @@ func (bs *collatorBlockState) AddTransactions(sequence types.Transactions, cb Ad
 		if err == nil {
 			logs = append(logs, txLogs...)
 			gasUsed := new(big.Int).SetUint64(bs.work.env.receipts[len(bs.work.env.receipts)-1].GasUsed)
+            // TODO remove this allocation once things are working
+
 			curProfit.Add(curProfit, gasUsed.Mul(gasUsed, gasPrice))
-			tcount++
+            coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.coinbase)
+            coinbaseTransfer := new(big.Int).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
+            curProfit.Add(curProfit, coinbaseTransfer)
+            bs.work.env.profit.Set(curProfit)
+
+            if cb(nil, bs.work.env.receipts[len(bs.work.env.receipts) - 1]) {
+                shouldRevert = true
+                break
+            } else {
+			    tcount++
+            }
 		} else {
+            cb(err, nil)
+            shouldRevert = true
 			log.Trace("Tx block inclusion failed", "sender", from, "nonce", tx.Nonce(),
 				"type", tx.Type(), "hash", tx.Hash(), "err", err)
 			break
 		}
 	}
-	var txReceipts []*types.Receipt = nil
-	if err == nil {
-		txReceipts = bs.work.env.receipts[startTCount:tcount]
-	}
-	// TODO: deep copy the tx receipts here or add a disclaimer to implementors not to modify them?
-	shouldRevert := cb(err, txReceipts)
-
-	if err != nil || shouldRevert {
+	if shouldRevert {
 		state.RevertToSnapshot(snap)
-
-		// remove the txs and receipts that were added
-		for i := startTCount; i < tcount; i++ {
-			bs.work.env.txs[i] = nil
-			bs.work.env.receipts[i] = nil
-		}
 		bs.work.env.txs = bs.work.env.txs[:startTCount]
 		bs.work.env.receipts = bs.work.env.receipts[:startTCount]
+		bs.work.env.profit.Set(startProfit)
 	} else {
-		coinbaseBalanceAfter := bs.work.env.state.GetBalance(bs.work.env.coinbase)
-		coinbaseTransfer := new(big.Int).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
-		curProfit.Add(curProfit, coinbaseTransfer)
 		bs.work.env.logs = append(bs.work.env.logs, logs...)
-		bs.work.env.profit = curProfit
 		bs.work.env.tcount = tcount
 	}
 	return
@@ -213,6 +218,10 @@ func (bs *collatorBlockState) BaseFee() *big.Int {
 
 func (bs *collatorBlockState) Signer() types.Signer {
 	return bs.work.env.signer
+}
+
+func (bs *collatorBlockState) Profit() *big.Int {
+    return new(big.Int).Set(bs.work.env.profit)
 }
 
 // BlockCollator is the publicly-exposed interface
@@ -324,7 +333,7 @@ func (m *MultiCollator) Close() {
 // for the purpose of not expecting a response back (for this round) during
 // polling performed by Collect
 func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
-	if m.counter == Uint64Max {
+	if m.counter == math.MaxUint64 {
 		m.counter = 0
 	} else {
 		m.counter++
@@ -335,6 +344,7 @@ func (m *MultiCollator) SuggestBlock(work *environment, interrupt *int32) {
 		select {
 		case c.newWorkCh <- collatorWork{env: work.copy(), counter: m.counter, interrupt: interrupt}:
 			m.responsiveCollatorCount++
+        default:
 		}
 	}
 }
@@ -365,6 +375,7 @@ func (m *MultiCollator) Collect(cb WorkResult) {
 				for _, finishedCollator := range finishedCollators {
 					if i == finishedCollator {
 						shouldIgnore = true
+                        break
 					}
 				}
 				if shouldIgnore {
