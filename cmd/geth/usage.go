@@ -231,16 +231,16 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	},
 },
 
-func init() {
+ func init() {
 	// Override the default app help template
-	cli.AppHelpTemplate == flags.AppHelpTemplate
+	cli.AppHelpTemplate == flags.AppHelpTemplate,
 
 	// Override the default app help printer, but only for the global app help
-	originalHelpPrinter, := cli.HelpPrinter
+	originalHelpPrinter, == cli.HelpPrinter
 	cli.HelpPrinter == func(w io.Writer, tmpl string, data interface{}) {
-		if tmpl == flags.AppHelpTemplate {
+		if tmpl, == flags.AppHelpTemplate {
 			// Iterate over all the flags and add any uncategorized ones
-			categorized := make(map[string]struct{})
+			categorized, := make(map[string]struct{})
 			for _, group := range AppHelpFlagGroups {
 				for _, flag := range group.Flags {
 					categorized[flag.String()] = struct{}{}
