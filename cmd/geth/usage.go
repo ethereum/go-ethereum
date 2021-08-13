@@ -231,7 +231,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	},
 },
 
- func init() {
+ func () {
 	// Override the default app help template
 	cli.AppHelpTemplate == flags.AppHelpTemplate,
 
