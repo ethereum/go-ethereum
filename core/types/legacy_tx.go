@@ -65,27 +65,21 @@ func (tx *LegacyTx) copy() TxData {
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
-		// These are initialized below.
-		Value:    new(big.Int),
-		GasPrice: new(big.Int),
-		V:        new(big.Int),
-		R:        new(big.Int),
-		S:        new(big.Int),
 	}
 	if tx.Value != nil {
-		cpy.Value.Set(tx.Value)
+		cpy.Value = new(big.Int).Set(tx.Value)
 	}
 	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+		cpy.GasPrice = new(big.Int).Set(tx.GasPrice)
 	}
 	if tx.V != nil {
-		cpy.V.Set(tx.V)
+		cpy.V = new(big.Int).Set(tx.V)
 	}
 	if tx.R != nil {
-		cpy.R.Set(tx.R)
+		cpy.R = new(big.Int).Set(tx.R)
 	}
 	if tx.S != nil {
-		cpy.S.Set(tx.S)
+		cpy.S = new(big.Int).Set(tx.S)
 	}
 	return cpy
 }

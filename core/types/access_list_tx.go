@@ -58,37 +58,30 @@ type AccessListTx struct {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *AccessListTx) copy() TxData {
 	cpy := &AccessListTx{
-		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
-		Data:  common.CopyBytes(tx.Data),
-		Gas:   tx.Gas,
-		// These are copied below.
+		Nonce:      tx.Nonce,
+		To:         tx.To, // TODO: copy pointed-to address
+		Data:       common.CopyBytes(tx.Data),
+		Gas:        tx.Gas,
 		AccessList: make(AccessList, len(tx.AccessList)),
-		Value:      new(big.Int),
-		ChainID:    new(big.Int),
-		GasPrice:   new(big.Int),
-		V:          new(big.Int),
-		R:          new(big.Int),
-		S:          new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
-		cpy.Value.Set(tx.Value)
+		cpy.Value = new(big.Int).Set(tx.Value)
 	}
 	if tx.ChainID != nil {
-		cpy.ChainID.Set(tx.ChainID)
+		cpy.ChainID = new(big.Int).Set(tx.ChainID)
 	}
 	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+		cpy.GasPrice = new(big.Int).Set(tx.GasPrice)
 	}
 	if tx.V != nil {
-		cpy.V.Set(tx.V)
+		cpy.V = new(big.Int).Set(tx.V)
 	}
 	if tx.R != nil {
-		cpy.R.Set(tx.R)
+		cpy.R = new(big.Int).Set(tx.R)
 	}
 	if tx.S != nil {
-		cpy.S.Set(tx.S)
+		cpy.S = new(big.Int).Set(tx.S)
 	}
 	return cpy
 }

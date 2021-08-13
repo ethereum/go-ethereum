@@ -218,7 +218,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
 	default:
-		return nil, fmt.Errorf("Unsupported tx type %d", tx.Type())
+		return nil, fmt.Errorf("unsupported tx type %d", tx.Type())
 	}
 	// We should request the default chain id that we're operating with
 	// (the chain we're executing on)

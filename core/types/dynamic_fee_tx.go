@@ -42,41 +42,33 @@ type DynamicFeeTx struct {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
-		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
-		Data:  common.CopyBytes(tx.Data),
-		Gas:   tx.Gas,
-		// These are copied below.
+		Nonce:      tx.Nonce,
+		To:         tx.To, // TODO: copy pointed-to address
+		Data:       common.CopyBytes(tx.Data),
+		Gas:        tx.Gas,
 		AccessList: make(AccessList, len(tx.AccessList)),
-		Value:      new(big.Int),
-		ChainID:    new(big.Int),
-		GasTipCap:  new(big.Int),
-		GasFeeCap:  new(big.Int),
-		V:          new(big.Int),
-		R:          new(big.Int),
-		S:          new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
-		cpy.Value.Set(tx.Value)
+		cpy.Value = new(big.Int).Set(tx.Value)
 	}
 	if tx.ChainID != nil {
-		cpy.ChainID.Set(tx.ChainID)
+		cpy.ChainID = new(big.Int).Set(tx.ChainID)
 	}
 	if tx.GasTipCap != nil {
-		cpy.GasTipCap.Set(tx.GasTipCap)
+		cpy.GasTipCap = new(big.Int).Set(tx.GasTipCap)
 	}
 	if tx.GasFeeCap != nil {
-		cpy.GasFeeCap.Set(tx.GasFeeCap)
+		cpy.GasFeeCap = new(big.Int).Set(tx.GasFeeCap)
 	}
 	if tx.V != nil {
-		cpy.V.Set(tx.V)
+		cpy.V = new(big.Int).Set(tx.V)
 	}
 	if tx.R != nil {
-		cpy.R.Set(tx.R)
+		cpy.R = new(big.Int).Set(tx.R)
 	}
 	if tx.S != nil {
-		cpy.S.Set(tx.S)
+		cpy.S = new(big.Int).Set(tx.S)
 	}
 	return cpy
 }
