@@ -208,7 +208,7 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 					if receipt.ContractAddress != (common.Address{}) {
 						fields["contractAddress"] = receipt.ContractAddress
 					}
-					if reason, ok := core.GetRevertReason(receipt.TxHash); ok {
+					if reason, ok := core.GetRevertReason(receipt.TxHash, hash); ok {
 						fields["revertReason"] = reason
 					}
 					marshalReceipts[receipt.TxHash] = fields

@@ -104,7 +104,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	}
 
 	if revert := result.Revert(); revert != nil {
-		CacheRevertReason(tx.Hash(), revert)
+		CacheRevertReason(tx.Hash(), blockHash, revert)
 	}
 
 	// Update the state with pending changes.
