@@ -124,7 +124,7 @@ var (
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
-	}	
+	}
 	USBFlag = cli.BoolFlag{
 		Name:  "usb",
 		Usage: "Enable monitoring and management of USB hardware wallets",
