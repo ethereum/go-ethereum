@@ -83,8 +83,17 @@ func (bits *bitvec) set7(pos uint64) {
 func (bits *bitvec) set8(pos uint64) {
 	a := byte(0xFF >> (pos % 8))
 	(*bits)[pos/8] |= a
-	if ^a != 0{
+	if ^a != 0 {
 		(*bits)[pos/8+1] = ^a
+	}
+}
+
+func (bits *bitvec) set16(pos uint64) {
+	a := byte(0xFF >> (pos % 8))
+	(*bits)[pos/8] |= a
+	(*bits)[pos/8+1] = 0xFF
+	if ^a != 0 {
+		(*bits)[pos/8+2] = ^a
 	}
 }
 
@@ -113,9 +122,15 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 			continue
 		}
 		numbits := op - PUSH1 + 1
-		for ; numbits >= 8; numbits -= 8 {
-			bits.set8(pc)
-			pc += 8
+		if numbits >= 8 {
+			for ; numbits >= 16; numbits -= 16 {
+				bits.set16(pc)
+				pc += 16
+			}
+			for ; numbits >= 8; numbits -= 8 {
+				bits.set8(pc)
+				pc += 8
+			}
 		}
 		switch numbits {
 		case 1:
