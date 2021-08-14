@@ -31,38 +31,61 @@ func (bits *bitvec) set(pos uint64) {
 }
 
 func (bits *bitvec) set2(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1100_0000 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1100_0000 >> (pos % 8)
+	a := uint16(0b1100_0000_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		//	If the bit-setting affects the neigbouring byte, we can assign - no need to OR it,
+		//	since it's the first write to that byte
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set3(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1110_0000 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1110_0000 >> (pos % 8)
+	a := uint16(0b1110_0000_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set4(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1111_0000 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1111_0000 >> (pos % 8)
+	a := uint16(0b1111_0000_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set5(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1111_1000 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1111_1000 >> (pos % 8)
+	a := uint16(0b1111_1000_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set6(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1111_1100 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1111_1100 >> (pos % 8)
+	a := uint16(0b1111_1100_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set7(pos uint64) {
-	(*bits)[pos/8+1] |= 0b1111_1110 << (8 - pos%8)
-	(*bits)[pos/8] |= 0b1111_1110 >> (pos % 8)
+	a := uint16(0b1111_1110_0000_0000) >> (pos % 8)
+	(*bits)[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		(*bits)[pos/8+1] = b
+	}
 }
 
 func (bits *bitvec) set8(pos uint64) {
-	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))
-	(*bits)[pos/8] |= 0xFF >> (pos % 8)
+	a := byte(0xFF >> (pos % 8))
+	(*bits)[pos/8] |= a
+	if ^a != 0{
+		(*bits)[pos/8+1] = ^a
+	}
 }
 
 // codeSegment checks if the position is in a code segment.
@@ -89,55 +112,34 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		if op < PUSH1 || op > PUSH32 {
 			continue
 		}
-		if op < PUSH8 {
-			switch op {
-			case PUSH1:
-				bits.set(pc)
-				pc += 1
-			case PUSH2:
-				bits.set2(pc)
-				pc += 2
-			case PUSH3:
-				bits.set3(pc)
-				pc += 3
-			case PUSH4:
-				bits.set4(pc)
-				pc += 4
-			case PUSH5:
-				bits.set5(pc)
-				pc += 5
-			case PUSH6:
-				bits.set6(pc)
-				pc += 6
-			case PUSH7:
-				bits.set7(pc)
-				pc += 7
-			}
-			continue
-		}
 		numbits := op - PUSH1 + 1
 		for ; numbits >= 8; numbits -= 8 {
-			bits.set8(pc) // 8
+			bits.set8(pc)
 			pc += 8
 		}
-		// numbits now max 7
 		switch numbits {
 		case 1:
 			bits.set(pc)
+			pc += 1
 		case 2:
 			bits.set2(pc)
+			pc += 2
 		case 3:
 			bits.set3(pc)
+			pc += 3
 		case 4:
 			bits.set4(pc)
+			pc += 4
 		case 5:
 			bits.set5(pc)
+			pc += 5
 		case 6:
 			bits.set6(pc)
+			pc += 6
 		case 7:
 			bits.set7(pc)
+			pc += 7
 		}
-		pc += uint64(numbits)
 	}
 	return bits
 }

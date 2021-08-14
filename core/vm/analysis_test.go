@@ -47,10 +47,10 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH32)}, 0xFF, 1},
 		{[]byte{byte(PUSH32)}, 0xFF, 2},
 	}
-	for _, test := range tests {
+	for i, test := range tests {
 		ret := codeBitmap(test.code)
 		if ret[test.which] != test.exp {
-			t.Fatalf("expected %x, got %02x", test.exp, ret[test.which])
+			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
 	}
 }
