@@ -25,75 +25,75 @@ var lookup = [8]byte{
 	0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1,
 }
 
-func (bits *bitvec) set(pos uint64) {
+func (bits bitvec) set(pos uint64) {
 	//(*bits)[pos/8] |= 0x80 >> (pos % 8)
-	(*bits)[pos/8] |= lookup[pos%8]
+	bits[pos/8] |= lookup[pos%8]
 }
 
-func (bits *bitvec) set2(pos uint64) {
+func (bits bitvec) set2(pos uint64) {
 	a := uint16(0b1100_0000_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
 		//	If the bit-setting affects the neigbouring byte, we can assign - no need to OR it,
 		//	since it's the first write to that byte
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set3(pos uint64) {
+func (bits bitvec) set3(pos uint64) {
 	a := uint16(0b1110_0000_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set4(pos uint64) {
+func (bits bitvec) set4(pos uint64) {
 	a := uint16(0b1111_0000_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set5(pos uint64) {
+func (bits bitvec) set5(pos uint64) {
 	a := uint16(0b1111_1000_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set6(pos uint64) {
+func (bits bitvec) set6(pos uint64) {
 	a := uint16(0b1111_1100_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set7(pos uint64) {
+func (bits bitvec) set7(pos uint64) {
 	a := uint16(0b1111_1110_0000_0000) >> (pos % 8)
-	(*bits)[pos/8] |= byte(a >> 8)
+	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		(*bits)[pos/8+1] = b
+		bits[pos/8+1] = b
 	}
 }
 
-func (bits *bitvec) set8(pos uint64) {
+func (bits bitvec) set8(pos uint64) {
 	a := byte(0xFF >> (pos % 8))
-	(*bits)[pos/8] |= a
+	bits[pos/8] |= a
 	if ^a != 0 {
-		(*bits)[pos/8+1] = ^a
+		bits[pos/8+1] = ^a
 	}
 }
 
-func (bits *bitvec) set16(pos uint64) {
+func (bits bitvec) set16(pos uint64) {
 	a := byte(0xFF >> (pos % 8))
-	(*bits)[pos/8] |= a
-	(*bits)[pos/8+1] = 0xFF
+	bits[pos/8] |= a
+	bits[pos/8+1] = 0xFF
 	if ^a != 0 {
-		(*bits)[pos/8+2] = ^a
+		bits[pos/8+2] = ^a
 	}
 }
 
