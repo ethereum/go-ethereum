@@ -207,7 +207,11 @@ func (bs *collatorBlockState) Coinbase() common.Address {
 }
 
 func (bs *collatorBlockState) BaseFee() *big.Int {
-	return new(big.Int).Set(bs.work.env.header.BaseFee)
+	if bs.work.env.header.BaseFee != nil {
+		return new(big.Int).Set(bs.work.env.header.BaseFee)
+	}
+
+	return nil
 }
 
 func (bs *collatorBlockState) Signer() types.Signer {
