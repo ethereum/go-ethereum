@@ -20,12 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/golang-lru"
 	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -794,7 +795,7 @@ func (pm *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range pm.minedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
-			pm.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+			pm.BroadcastBlock(ev.Block, true) // First propagate block to peers
 			//pm.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}

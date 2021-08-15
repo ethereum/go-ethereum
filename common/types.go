@@ -33,7 +33,7 @@ import (
 // Lengths of hashes and addresses in bytes.
 const (
 	// HashLength is the expected length of the hash
-	HashLength          = 32
+	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength       = 20
 	MasternodeVotingSMC = "xdc0000000000000000000000000000000000000088"

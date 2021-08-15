@@ -26,7 +26,7 @@ import (
 // mechanisms of the proof-of-authority scheme.
 type API struct {
 	chain consensus.ChainReader
-	XDPoS  *XDPoS
+	XDPoS *XDPoS
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.

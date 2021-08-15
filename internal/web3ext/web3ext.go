@@ -23,7 +23,7 @@ var Modules = map[string]string{
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
 	"ethash":     Ethash_JS,
-	"XDPoS":       XDPoS_JS,
+	"XDPoS":      XDPoS_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,

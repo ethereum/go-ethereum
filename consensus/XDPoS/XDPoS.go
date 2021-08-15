@@ -45,7 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -117,7 +117,6 @@ var (
 	// errMismatchingCheckpointSigners is returned if a checkpoint block contains a
 	// list of signers different than the one the local node calculated.
 	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
-
 
 	errInvalidCheckpointPenalties = errors.New("invalid penalty list on checkpoint block")
 
@@ -219,7 +218,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
-	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
+	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
 	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -862,7 +861,7 @@ func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error
 
 	// Ensure the timestamp has the correct delay
 
-	header.Time = parent.Time+ c.config.Period
+	header.Time = parent.Time + c.config.Period
 	if int64(header.Time) < time.Now().Unix() {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -936,7 +935,7 @@ func (c *XDPoS) Authorize(signer common.Address, signFn clique.SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) (error) {
+func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 
 	// Sealing the genesis block is not supported

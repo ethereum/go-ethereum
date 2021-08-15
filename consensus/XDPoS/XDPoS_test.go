@@ -76,11 +76,11 @@ func TestCompareSignersLists(t *testing.T) {
 		t.Error("Failed with empty list")
 	}
 	if !compareSignersLists([]common.Address{common.BytesToAddress([]byte("cccccccccccccccccccccccccccccccccccccccc"))},
-		                    []common.Address{common.BytesToAddress([]byte("cccccccccccccccccccccccccccccccccccccccc"))}) {
+		[]common.Address{common.BytesToAddress([]byte("cccccccccccccccccccccccccccccccccccccccc"))}) {
 		t.Error("Failed with list has only one signer")
 	}
 	if compareSignersLists([]common.Address{common.BytesToAddress([]byte("aaaaaaaaaaaaaaaa"))},
-	                       []common.Address{common.BytesToAddress([]byte("cccccccccccccccccccccccccccccccccccccccc"))}) {
+		[]common.Address{common.BytesToAddress([]byte("cccccccccccccccccccccccccccccccccccccccc"))}) {
 		t.Error("Failed with list has only one signer")
 	}
 }

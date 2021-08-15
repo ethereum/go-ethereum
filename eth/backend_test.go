@@ -1,9 +1,10 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestRewardInflation(t *testing.T) {

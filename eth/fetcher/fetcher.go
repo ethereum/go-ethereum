@@ -19,9 +19,10 @@ package fetcher
 
 import (
 	"errors"
-	"github.com/hashicorp/golang-lru"
 	"math/rand"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
