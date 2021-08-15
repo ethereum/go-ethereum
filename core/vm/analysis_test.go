@@ -81,8 +81,9 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 		for i := range code {
 			code[i] = byte(op)
 		}
+		bits := make(bitvec, len(code)/8+1+4)
 		b.ResetTimer()
-		codeBitmap(code)
+		codeBitmapInternal(code, bits)
 	}
 	for op = PUSH1; op <= PUSH32; op++ {
 		bench.Run(op.String(), bencher)

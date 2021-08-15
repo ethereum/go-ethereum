@@ -40,6 +40,13 @@ func codeBitmap(code []byte) bitvec {
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
 	bits := make(bitvec, len(code)/8+1+4)
+	return codeBitmapInternal(code, bits)
+}
+
+// codeBitmapInternal is the internal implementation of codeBitmap.
+// It exists for the purpose of being able to run benchmark tests
+// without dynamic allocations affecting the results.
+func codeBitmapInternal(code, bits bitvec) bitvec {
 	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
 
