@@ -34,7 +34,7 @@ func (bits bitvec) set2(pos uint64) {
 	a := uint16(0b1100_0000_0000_0000) >> (pos % 8)
 	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
-		//	If the bit-setting affects the neigbouring byte, we can assign - no need to OR it,
+		//	If the bit-setting affects the neighbouring byte, we can assign - no need to OR it,
 		//	since it's the first write to that byte
 		bits[pos/8+1] = b
 	}
