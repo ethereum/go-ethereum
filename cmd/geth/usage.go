@@ -220,6 +220,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.NoUSBFlag,
 		},
+	},
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{
@@ -229,11 +230,11 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CatalystFlag,
 		},
 	},
-},
+}
 
- func () {
+func init() {
 	// Override the default app help template
-	if cli.AppHelpTemplate == flags.AppHelpTemplate,
+	cli.AppHelpTemplate = flags.AppHelpTemplate
 
 	// Override the default app help printer, but only for the global app help
 	originalHelpPrinter, == cli.HelpPrinter
