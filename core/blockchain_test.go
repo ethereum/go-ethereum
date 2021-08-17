@@ -1710,8 +1710,8 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 
 	// Try to insert blocks/receipts of the side chain.
 	_, err = ancientChain.InsertReceiptChain(sideblocks, sidechainReceipts, uint64(len(sideblocks)))
-	if err == nil || err != errSideChainReceipts {
-		t.Fatalf("wrong error from InsertReceiptChain: %v", err)
+	if err == nil {
+		t.Fatal("expected error from InsertReceiptChain.")
 	}
 	if ancientChain.CurrentFastBlock().NumberU64() != 0 {
 		t.Fatalf("failed to rollback ancient data, want %d, have %d", 0, ancientChain.CurrentFastBlock().NumberU64())
