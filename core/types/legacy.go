@@ -27,6 +27,16 @@ func IsLegacyStoredReceipts(raw []byte) (bool, error) {
 	return false, errors.New("Value is not a valid receipt encoding")
 }
 
+// ConvertLegacyStoredReceipts takes the RLP encoding of an array of legacy
+// stored receipts and returns a fresh RLP-encoded stored receipt.
+func ConvertLegacyStoredReceipts(raw []byte) ([]byte, error) {
+	var receipts []ReceiptForStorage
+	if err := rlp.DecodeBytes(raw, &receipts); err != nil {
+		return nil, err
+	}
+	return rlp.EncodeToBytes(&receipts)
+}
+
 // convertLegacyStoredReceipt takes a legacy RLP-encoded stored receipt
 // and returns a fresh RLP-encoded stored receipt.
 func convertLegacyStoredReceipt(raw []byte) ([]byte, error) {
