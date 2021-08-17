@@ -24,7 +24,6 @@ import (
 	"sort"
 	"time"
 	"strconv"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
