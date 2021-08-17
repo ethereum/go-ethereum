@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -592,4 +593,44 @@ func NewEmpty() *Trie {
 func (t *Trie) MyCommit() {
 	// triedb.Commit(root, false, nil)
 	t.db.Commit(t.Hash(), false, nil)
+}
+
+// get last key among leaf nodes (i.e., right-most key value) (jmlee)
+func (t *Trie) GetLastKey() (*big.Int) {
+	lastKey := t.getLastKey(t.root, nil)
+	return lastKey
+}
+
+// get last key among leaf nodes (i.e., right-most key value) (jmlee)
+func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
+	switch n := (origNode).(type) {
+	case nil:
+		return big.NewInt(0)
+	case valueNode:
+		hexToInt := new(big.Int)
+		hexToInt.SetString(common.BytesToHash(hexToKeybytes(lastKey)).Hex()[2:], 16)
+		return hexToInt
+	case *shortNode:
+		lastKey = append(lastKey, n.Key...)
+		return t.getLastKey(n.Val, lastKey)
+	case *fullNode:
+		last := 0
+		for i, node := range &n.Children {
+			if node != nil {
+				last = i
+			}
+		}
+		lastByte := common.HexToHash("0x" + indices[last])
+		lastKey = append(lastKey, lastByte[len(lastByte)-1])
+		return t.getLastKey(n.Children[last], lastKey)
+	case hashNode:
+		child, err := t.resolveHash(n, nil)
+		if err != nil {
+			lastKey = nil
+			return big.NewInt(0)
+		}
+		return t.getLastKey(child, lastKey)
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
 }

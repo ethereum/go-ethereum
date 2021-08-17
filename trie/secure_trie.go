@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -80,6 +81,11 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
+// set key as I want to implement Ethane (jmlee)
+func (t *SecureTrie) TryGet_SetKey(key []byte) ([]byte, error) {
+	return t.trie.TryGet(key)
+}
+
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
@@ -113,6 +119,17 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 		return err
 	}
 	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
+}
+
+// set key as I want to implement Ethane (jmlee)
+func (t *SecureTrie) TryUpdate_SetKey(key, value []byte) error {
+	hk := key
+	err := t.trie.TryUpdate(hk, value)
+	if err != nil {
+		return err
+	}
+	// t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
 	return nil
 }
 
@@ -228,4 +245,9 @@ func (t *SecureTrie) Trie() *Trie {
 
 func (t *SecureTrie) MyCommit() {
 	t.trie.MyCommit()
+}
+
+// get last key among leaf nodes (i.e., right-most key value) (jmlee)
+func (t *SecureTrie) GetLastKey() (*big.Int) {
+	return t.trie.GetLastKey()
 }

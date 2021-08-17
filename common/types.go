@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
@@ -44,10 +45,9 @@ var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
 
-	// temp map for verifying compactTrie idea (address: real address of the account / hash: specific key for the account in the state trie)
+	// temp map for verifying compactTrie idea (address: real address of the account / hash: specific key for the account in the state trie) (jmlee)
 	AddrToKey = make(map[Address]Hash)
-	// temp var to make compactTrie
-	AccountCounter = int64(0)
+	AddrToKeyMapMutex = sync.RWMutex{} // to avoid fatal error: "concurrent map read and map write"
 	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever
 	ZeroAddress = HexToAddress("0x0")
 )

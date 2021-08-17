@@ -119,10 +119,13 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	}
 	
 	// change addrHash: addressHash->specificKeyValue, to make compactTrie (jmlee)
+	common.AddrToKeyMapMutex.Lock() // to avoid fatal error: "concurrent map read and map write"
+	addressHash := common.AddrToKey[address]
+	common.AddrToKeyMapMutex.Unlock()
 	return &stateObject{
 		db:             db,
 		address:        address,
-		addrHash:       common.AddrToKey[address],
+		addrHash:       addressHash,
 		data:           data,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),

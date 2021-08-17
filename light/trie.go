@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -99,6 +100,21 @@ type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
 	trie *trie.Trie
+}
+
+// temp function for correct build, this will not be called in Ethane (jmlee)
+func (t *odrTrie) GetLastKey() (*big.Int) {
+	return big.NewInt(0)
+}
+
+// temp function for correct build, this will not be called in Ethane (jmlee)
+func (t *odrTrie) TryUpdate_SetKey(key, value []byte) error {
+	return nil
+}
+
+// temp function for correct build, this will not be called in Ethane (jmlee)
+func (t *odrTrie) TryGet_SetKey(key []byte) ([]byte, error) {
+	return nil, nil
 }
 
 func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
