@@ -709,17 +709,6 @@ func freezerMigrate(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
 
-	/*path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	log.Info("Opening freezer", "location", path)
-	table, err := rawdb.NewFreezerTable(path, "receipts", rawdb.FreezerNoSnappy["receipts"])
-	if err != nil {
-		log.Info("Could not open freezer table", "error", err)
-		return err
-	}*/
-	/*if err := table.Close(); err != nil {
-		return err
-	}*/
-
 	// Check first block for legacy receipt format
 	numAncients, err := db.Ancients()
 	if err != nil {
@@ -735,7 +724,7 @@ func freezerMigrate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	isFirstLegacy, err := types.IsLegacyStoredReceipt(first)
+	isFirstLegacy, err := types.IsLegacyStoredReceipts(first)
 	if err != nil {
 		return err
 	}
@@ -743,6 +732,52 @@ func freezerMigrate(ctx *cli.Context) error {
 		log.Info("No legacy receipts to migrate")
 		return nil
 	}
-	log.Info("Starting migration")
+
+	log.Info("Starting migration", "ancients", numAncients)
+	start := time.Now()
+	// Open new freezer table for the updated receipts
+	path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	table, err := rawdb.NewFreezerTable(path, "ureceipts", rawdb.FreezerNoSnappy["receipts"])
+	if err != nil {
+		log.Info("Could not open freezer table for updated receipts", "error", err)
+		return err
+	}
+
+	// Write new freezer table files until we reach a file
+	// that starts with modern receipts. From that point on
+	// we stop and re-use the existing files. Note the last
+	// table file might be significantly smaller than the max size.
+	for i := uint64(0); i < numAncients; i++ {
+		blob, err := db.Ancient("receipts", i)
+		if err != nil {
+			return err
+		}
+		// Stop when first v5 receipt is spotted.
+		// TODO: Combine detecting legacy and converting it
+		// to avoid 2 decoding.
+		legacy, err := types.IsLegacyStoredReceipts(blob)
+		if err != nil {
+			return err
+		}
+		if !legacy {
+			log.Info("Spotted non-legacy receipt", "index", i)
+			break
+		}
+
+		converted, err := types.ConvertLegacyStoredReceipts(blob)
+		if err != nil {
+			return err
+		}
+		if err := table.Append(i, converted); err != nil {
+			return err
+		}
+	}
+
+	if err := table.Close(); err != nil {
+		return err
+	}
+
+	log.Info("Migration finished", "duration", time.Since(start))
+
 	return nil
 }
