@@ -83,18 +83,14 @@ func (bits bitvec) set7(pos uint64) {
 func (bits bitvec) set8(pos uint64) {
 	a := byte(0xFF >> (pos % 8))
 	bits[pos/8] |= a
-	if ^a != 0 {
-		bits[pos/8+1] = ^a
-	}
+	bits[pos/8+1] = ^a
 }
 
 func (bits bitvec) set16(pos uint64) {
 	a := byte(0xFF >> (pos % 8))
 	bits[pos/8] |= a
 	bits[pos/8+1] = 0xFF
-	if ^a != 0 {
-		bits[pos/8+2] = ^a
-	}
+	bits[pos/8+2] = ^a
 }
 
 // codeSegment checks if the position is in a code segment.
