@@ -16,6 +16,15 @@
 
 package vm
 
+const (
+	set2BitsMask = uint16(0b1100_0000_0000_0000)
+	set3BitsMask = uint16(0b1110_0000_0000_0000)
+	set4BitsMask = uint16(0b1111_0000_0000_0000)
+	set5BitsMask = uint16(0b1111_1000_0000_0000)
+	set6BitsMask = uint16(0b1111_1100_0000_0000)
+	set7BitsMask = uint16(0b1111_1110_0000_0000)
+)
+
 // bitvec is a bit vector which maps bytes in a program.
 // An unset bit means the byte is an opcode, a set bit means
 // it's data (i.e. argument of PUSHxx).
@@ -25,57 +34,16 @@ var lookup = [8]byte{
 	0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1,
 }
 
-func (bits bitvec) set(pos uint64) {
-	//(*bits)[pos/8] |= 0x80 >> (pos % 8)
+func (bits bitvec) set1(pos uint64) {
 	bits[pos/8] |= lookup[pos%8]
 }
 
-func (bits bitvec) set2(pos uint64) {
-	a := uint16(0b1100_0000_0000_0000) >> (pos % 8)
+func (bits bitvec) setN(flag uint16, pos uint64) {
+	a := flag >> (pos % 8)
 	bits[pos/8] |= byte(a >> 8)
 	if b := byte(a); b != 0 {
 		//	If the bit-setting affects the neighbouring byte, we can assign - no need to OR it,
 		//	since it's the first write to that byte
-		bits[pos/8+1] = b
-	}
-}
-
-func (bits bitvec) set3(pos uint64) {
-	a := uint16(0b1110_0000_0000_0000) >> (pos % 8)
-	bits[pos/8] |= byte(a >> 8)
-	if b := byte(a); b != 0 {
-		bits[pos/8+1] = b
-	}
-}
-
-func (bits bitvec) set4(pos uint64) {
-	a := uint16(0b1111_0000_0000_0000) >> (pos % 8)
-	bits[pos/8] |= byte(a >> 8)
-	if b := byte(a); b != 0 {
-		bits[pos/8+1] = b
-	}
-}
-
-func (bits bitvec) set5(pos uint64) {
-	a := uint16(0b1111_1000_0000_0000) >> (pos % 8)
-	bits[pos/8] |= byte(a >> 8)
-	if b := byte(a); b != 0 {
-		bits[pos/8+1] = b
-	}
-}
-
-func (bits bitvec) set6(pos uint64) {
-	a := uint16(0b1111_1100_0000_0000) >> (pos % 8)
-	bits[pos/8] |= byte(a >> 8)
-	if b := byte(a); b != 0 {
-		bits[pos/8+1] = b
-	}
-}
-
-func (bits bitvec) set7(pos uint64) {
-	a := uint16(0b1111_1110_0000_0000) >> (pos % 8)
-	bits[pos/8] |= byte(a >> 8)
-	if b := byte(a); b != 0 {
 		bits[pos/8+1] = b
 	}
 }
@@ -130,25 +98,25 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		}
 		switch numbits {
 		case 1:
-			bits.set(pc)
+			bits.set1(pc)
 			pc += 1
 		case 2:
-			bits.set2(pc)
+			bits.setN(set2BitsMask, pc)
 			pc += 2
 		case 3:
-			bits.set3(pc)
+			bits.setN(set3BitsMask, pc)
 			pc += 3
 		case 4:
-			bits.set4(pc)
+			bits.setN(set4BitsMask, pc)
 			pc += 4
 		case 5:
-			bits.set5(pc)
+			bits.setN(set5BitsMask, pc)
 			pc += 5
 		case 6:
-			bits.set6(pc)
+			bits.setN(set6BitsMask, pc)
 			pc += 6
 		case 7:
-			bits.set7(pc)
+			bits.setN(set7BitsMask, pc)
 			pc += 7
 		}
 	}
