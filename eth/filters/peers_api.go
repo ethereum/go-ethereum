@@ -200,6 +200,7 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 						"contractAddress":   nil,
 						"logs":              receipt.Logs,
 						"logsBloom":         receipt.Bloom,
+						"status":            hexutil.Uint64(receipt.Status),
 					}
 					if receipt.Logs == nil {
 						fields["logs"] = [][]*types.Log{}
