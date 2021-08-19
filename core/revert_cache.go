@@ -1,6 +1,7 @@
 package core
 
 import (
+  "fmt"
   "github.com/ethereum/go-ethereum/common"
   "github.com/ethereum/go-ethereum/accounts/abi"
   lru "github.com/hashicorp/golang-lru"
@@ -18,6 +19,8 @@ func CacheRevertReason(h, blockHash common.Hash, reason []byte) {
     copy(key[32:], h[:])
     if reasonString, err := abi.UnpackRevert(reason); err == nil {
       revertCache.Add(key, reasonString)
+    } else {
+      revertCache.Add(key, fmt.Sprintf("%#x", reason))
     }
   }
 }
