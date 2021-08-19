@@ -348,7 +348,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 	}
 
 	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
-		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, true)
+		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, false)
 	return msg, nil
 }
 
