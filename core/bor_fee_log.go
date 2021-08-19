@@ -42,6 +42,7 @@ func AddTransferLog(
 }
 
 // AddFeeTransferLog adds transfer log into state
+// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
 func AddFeeTransferLog(
 	state vm.StateDB,
 
