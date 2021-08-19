@@ -39,10 +39,6 @@ var (
 )
 
 const (
-	// maxFeeHistory is the maximum number of blocks that can be retrieved for a
-	// fee history request.
-	maxFeeHistory = 1024
-
 	// maxBlockFetchers is the max number of goroutines to spin up to pull blocks
 	// for the fee history calculation (mostly relevant for LES).
 	maxBlockFetchers = 4
@@ -141,7 +137,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 // also returned if requested and available.
 // Note: an error is only returned if retrieving the head header has failed. If there are no
 // retrievable blocks in the specified range then zero block count is returned with no error.
-func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.BlockNumber, blocks, maxHistory int) (*types.Block, []*types.Receipt, uint64, int, error) {
+func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.BlockNumber, blocks int) (*types.Block, []*types.Receipt, uint64, int, error) {
 	var (
 		headBlock       rpc.BlockNumber
 		pendingBlock    *types.Block
@@ -174,17 +170,6 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	} else if pendingBlock == nil && lastBlock > headBlock {
 		return nil, nil, 0, 0, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, lastBlock, headBlock)
 	}
-	if maxHistory != 0 {
-		// limit retrieval to the given number of latest blocks
-		if tooOldCount := int64(headBlock) - int64(maxHistory) - int64(lastBlock) + int64(blocks); tooOldCount > 0 {
-			// tooOldCount is the number of requested blocks that are too old to be served
-			if int64(blocks) > tooOldCount {
-				blocks -= int(tooOldCount)
-			} else {
-				return nil, nil, 0, 0, nil
-			}
-		}
-	}
 	// ensure not trying to retrieve before genesis
 	if rpc.BlockNumber(blocks) > lastBlock+1 {
 		blocks = int(lastBlock + 1)
@@ -209,6 +194,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 	if blocks < 1 {
 		return common.Big0, nil, nil, nil, nil // returning with no data and no error means there are no retrievable blocks
 	}
+	maxFeeHistory := oracle.maxHeaderHistory
+	if len(rewardPercentiles) != 0 {
+		maxFeeHistory = oracle.maxBlockHistory
+	}
 	if blocks > maxFeeHistory {
 		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
 		blocks = maxFeeHistory
@@ -221,17 +210,12 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 			return common.Big0, nil, nil, nil, fmt.Errorf("%w: #%d:%f > #%d:%f", errInvalidPercentile, i-1, rewardPercentiles[i-1], i, p)
 		}
 	}
-	// Only process blocks if reward percentiles were requested
-	maxHistory := oracle.maxHeaderHistory
-	if len(rewardPercentiles) != 0 {
-		maxHistory = oracle.maxBlockHistory
-	}
 	var (
 		pendingBlock    *types.Block
 		pendingReceipts []*types.Receipt
 		err             error
 	)
-	pendingBlock, pendingReceipts, lastBlock, blocks, err := oracle.resolveBlockRange(ctx, unresolvedLastBlock, blocks, maxHistory)
+	pendingBlock, pendingReceipts, lastBlock, blocks, err := oracle.resolveBlockRange(ctx, unresolvedLastBlock, blocks)
 	if err != nil || blocks == 0 {
 		return common.Big0, nil, nil, nil, err
 	}
