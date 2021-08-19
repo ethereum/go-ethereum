@@ -546,3 +546,18 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 
 	return hashes, err
 }
+
+// dropTable removes all files belonging to a table. Caution: this puts the freezer
+// in an unstable position.
+// TODO: should be private
+func (f *freezer) DropTable(kind string) error {
+	table, ok := f.tables[kind]
+	if !ok {
+		return errUnknownTable
+	}
+	if err := table.drop(); err != nil {
+		return err
+	}
+	delete(f.tables, kind)
+	return nil
+}

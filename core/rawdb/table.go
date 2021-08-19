@@ -101,6 +101,10 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
+func (t *table) DropTable(kind string) error {
+	return t.db.DropTable(kind)
+}
+
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {

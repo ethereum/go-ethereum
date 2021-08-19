@@ -135,6 +135,10 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (e
 	return fn(db)
 }
 
+func (db *nofreezedb) DropTable(_ string) error {
+	return errNotSupported
+}
+
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {

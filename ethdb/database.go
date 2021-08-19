@@ -111,6 +111,9 @@ type AncientWriter interface {
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
+
+	// TODO: tmp, to delete table files
+	DropTable(string) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

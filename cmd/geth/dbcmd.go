@@ -759,24 +759,38 @@ func freezerMigrate(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if !legacy {
-			log.Info("Spotted non-legacy receipt", "index", i)
-			break
+
+		var out []byte
+		if legacy {
+			out, err = types.ConvertLegacyStoredReceipts(blob)
+			if err != nil {
+				return err
+			}
+		} else {
+			out = blob
 		}
 
-		converted, err := types.ConvertLegacyStoredReceipts(blob)
-		if err != nil {
-			return err
-		}
-		if err := table.Append(i, converted); err != nil {
+		if err := table.Append(i, out); err != nil {
 			return err
 		}
 	}
 
+	log.Info("before dropping table")
+	// Replace old receipt files by new ones
+	if err := db.DropTable("receipts"); err != nil {
+		log.Error("Failed to drop receipts table", "error", err)
+		return err
+	}
+
+	log.Info("Before closing table")
 	if err := table.Close(); err != nil {
 		return err
 	}
 
+	log.Info("Before closing db")
+	if err := db.Close(); err != nil {
+		return err
+	}
 	log.Info("Migration finished", "duration", time.Since(start))
 
 	return nil
