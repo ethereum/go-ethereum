@@ -112,7 +112,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 	from := 0
 	return func(i int, gen *BlockGen) {
 		block := gen.PrevBlock(i - 1)
-		gas := CalcGasLimit(block, block.GasLimit(), block.GasLimit())
+		gas := block.GasLimit()
 		for {
 			gas -= params.TxGas
 			if gas < params.TxGas {

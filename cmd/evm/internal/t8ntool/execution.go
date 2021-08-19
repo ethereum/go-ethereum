@@ -52,7 +52,7 @@ type ExecutionResult struct {
 	LogsHash    common.Hash    `json:"logsHash"`
 	Bloom       types.Bloom    `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts `json:"receipts"`
-	Rejected    []int          `json:"rejected,omitempty"`
+	Rejected    []*rejectedTx  `json:"rejected,omitempty"`
 }
 
 type ommer struct {
@@ -69,6 +69,7 @@ type stEnv struct {
 	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
 	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 	Ommers      []ommer                             `json:"ommers,omitempty"`
+	BaseFee     *big.Int                            `json:"currentBaseFee,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -77,6 +78,12 @@ type stEnvMarshaling struct {
 	GasLimit   math.HexOrDecimal64
 	Number     math.HexOrDecimal64
 	Timestamp  math.HexOrDecimal64
+	BaseFee    *math.HexOrDecimal256
+}
+
+type rejectedTx struct {
+	Index int    `json:"index"`
+	Err   string `json:"error"`
 }
 
 // Apply applies a set of transactions to a pre-state
@@ -103,7 +110,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
-		rejectedTxs []int
+		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
 		receipts    = make(types.Receipts, 0)
@@ -120,6 +127,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
 	}
+	// If currentBaseFee is defined, add it to the vmContext.
+	if pre.Env.BaseFee != nil {
+		vmContext.BaseFee = new(big.Int).Set(pre.Env.BaseFee)
+	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
@@ -129,10 +140,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 
 	for i, tx := range txs {
-		msg, err := tx.AsMessage(signer)
+		msg, err := tx.AsMessage(signer, pre.Env.BaseFee)
 		if err != nil {
-			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
-			rejectedTxs = append(rejectedTxs, i)
+			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
 		tracer, err := getTracerFn(txIndex, tx.Hash())
@@ -141,7 +152,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		vmConfig.Tracer = tracer
 		vmConfig.Debug = (tracer != nil)
-		statedb.Prepare(tx.Hash(), blockHash, txIndex)
+		statedb.Prepare(tx.Hash(), txIndex)
 		txContext := core.NewEVMTxContext(msg)
 		snapshot := statedb.Snapshot()
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
@@ -151,7 +162,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From(), "error", err)
-			rejectedTxs = append(rejectedTxs, i)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
 		includedTxs = append(includedTxs, tx)
@@ -186,7 +197,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			}
 
 			// Set the receipt logs and create the bloom filter.
-			receipt.Logs = statedb.GetLogs(tx.Hash())
+			receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
 			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 			// These three are non-consensus fields:
 			//receipt.BlockHash
