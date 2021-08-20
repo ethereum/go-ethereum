@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -516,7 +517,7 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 			hash := tx.Hash()
 			stats[i] = txStatus(backend, hash)
-			if stats[i].Status == core.TxStatusUnknown {
+			if stats[i].Status == txpool.TxStatusUnknown {
 				addFn := backend.TxPool().AddRemotes
 				// Add txs synchronously for testing purpose
 				if backend.AddTxsSync() {
@@ -556,12 +557,12 @@ func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
 	// Looking the transaction in txpool first.
 	if b.TxPool().Get(hash) != nil {
-		stat.Status = core.TxStatusPending
+		stat.Status = txpool.TxStatusPending
 	} else {
 		// If the transaction is unknown to the pool, try looking it up locally.
 		lookup := b.BlockChain().GetTransactionLookup(hash)
 		if lookup != nil {
-			stat.Status = core.TxStatusIncluded
+			stat.Status = txpool.TxStatusIncluded
 			stat.Lookup = lookup
 		}
 	}

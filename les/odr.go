@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 )
@@ -176,10 +177,10 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		// All the response is not verifiable, so always pick the first
 		// one we get.
 		for index, status := range req.Status {
-			if result[index].Status != core.TxStatusUnknown {
+			if result[index].Status != txpool.TxStatusUnknown {
 				continue
 			}
-			if status.Status == core.TxStatusUnknown {
+			if status.Status == txpool.TxStatusUnknown {
 				continue
 			}
 			result[index], missing = status, missing-1
