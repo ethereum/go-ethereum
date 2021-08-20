@@ -165,7 +165,7 @@ This package handles the transaction pool from which transactions are chosen for
 | PriceLimit              | uint64        | Minimum gas price to enforce for acceptance into the pool
 | PriceBump               | uint64        | Minimum price bump percentage to replace an already existing transaction (nonce)
 | AccountSlots            | uint64        | Number of executable transaction slots guaranteed per account
-| lobalSlots              | uint64        | Maximum number of executable transaction slots for all accounts
+| GlobalSlots              | uint64        | Maximum number of executable transaction slots for all accounts
 | AccountQueue            | uint64        | Maximum number of non-executable transaction slots permitted per account
 | GlobalQueue             | uint64        | Maximum number of non-executable transaction slots for all accounts
 | Lifetime                | [Duration](https://pkg.go.dev/time#Duration) | Maximum amount of time non-executable transaction are queued
