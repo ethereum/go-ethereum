@@ -602,19 +602,24 @@ func (w *worker) resultLoop() {
 			if block == nil {
 				continue
 			}
+
+			var (
+				hash      = block.Hash()
+				numberU64 = block.NumberU64()
+				number    = block.Number()
+			)
+
 			// Short circuit when receiving duplicate result caused by resubmitting.
-			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
+			if w.chain.HasBlock(hash, numberU64) {
 				continue
 			}
-			var (
-				sealhash = w.engine.SealHash(block.Header())
-				hash     = block.Hash()
-			)
+
+			sealhash := w.engine.SealHash(block.Header())
 			w.pendingMu.RLock()
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
 			if !exist {
-				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
+				log.Error("Block found but no relative pending task", "number", numberU64, "sealhash", sealhash, "hash", hash)
 				continue
 			}
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
@@ -625,7 +630,7 @@ func (w *worker) resultLoop() {
 			for i, receipt := range task.receipts {
 				// add block location fields
 				receipt.BlockHash = hash
-				receipt.BlockNumber = block.Number()
+				receipt.BlockNumber = number
 				receipt.TransactionIndex = uint(i)
 
 				receipts[i] = new(types.Receipt)
@@ -643,14 +648,14 @@ func (w *worker) resultLoop() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
-			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
+			log.Info("Successfully sealed new block", "number", numberU64, "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
 			// Insert the block into the set of pending ones to resultLoop for confirmations
-			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
+			w.unconfirmed.Insert(numberU64, hash)
 
 		case <-w.exitCh:
 			return
