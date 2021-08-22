@@ -52,6 +52,7 @@ var (
 		Value: ethconfig.Defaults.Miner.GasFloor,
 	}
 )
+
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
 func showDeprecated(*cli.Context) {
 	fmt.Println("--------------------------------------------------------------------")
