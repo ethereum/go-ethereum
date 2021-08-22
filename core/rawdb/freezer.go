@@ -180,6 +180,18 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errUnknownTable
 }
 
+// ReadAncients retrieves multiple items in sequence, starting from the index 'start'.
+// It will return
+//  - at most 'max' items,
+//  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
+//   return as many items as fit into maxByteSize.
+func (f *freezer) ReadAncients(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+	if table := f.tables[kind]; table != nil {
+		return table.RetrieveItems(start, count, maxBytes)
+	}
+	return nil, errUnknownTable
+}
+
 // Ancients returns the length of the frozen items.
 func (f *freezer) Ancients() (uint64, error) {
 	return atomic.LoadUint64(&f.frozen), nil
@@ -402,7 +414,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Wipe out side chains also and track dangling side chians
+		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
 		for number := first; number < f.frozen; number++ {
 			// Always keep the genesis block in active database

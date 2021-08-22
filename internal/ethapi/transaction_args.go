@@ -120,6 +120,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				args.GasPrice = (*hexutil.Big)(price)
 			}
 		}
+	} else {
+		// Both maxPriorityfee and maxFee set by caller. Sanity-check their internal relation
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
