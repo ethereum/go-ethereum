@@ -74,7 +74,7 @@ func TestFreezerBasics(t *testing.T) {
 		exp := getChunk(15, y)
 		got, err := f.Retrieve(uint64(y))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("reading item %d: %v", y, err)
 		}
 		if !bytes.Equal(got, exp) {
 			t.Fatalf("test %d, got \n%x != \n%x", y, got, exp)
@@ -689,6 +689,121 @@ func TestAppendTruncateParallel(t *testing.T) {
 			if !bytes.Equal(have, data0) {
 				t.Fatalf("have %x want %x", have, data0)
 			}
+		}
+	}
+}
+
+// TestSequentialRead does some basic tests on the RetrieveItems.
+func TestSequentialRead(t *testing.T) {
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("batchread-%d", rand.Uint64())
+	{ // Fill table
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 15 bytes 30 times
+		for x := 0; x < 30; x++ {
+			data := getChunk(15, x)
+			f.Append(uint64(x), data)
+		}
+		f.DumpIndex(0, 30)
+		f.Close()
+	}
+	{ // Open it, iterate, verify iteration
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := f.RetrieveItems(0, 10000, 100000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, want := len(items), 30; have != want {
+			t.Fatalf("want %d items, have %d ", want, have)
+		}
+		for i, have := range items {
+			want := getChunk(15, i)
+			if !bytes.Equal(want, have) {
+				t.Fatalf("data corruption: have\n%x\n, want \n%x\n", have, want)
+			}
+		}
+		f.Close()
+	}
+	{ // Open it, iterate, verify byte limit. The byte limit is less than item
+		// size, so each lookup should only return one item
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := f.RetrieveItems(0, 10000, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, want := len(items), 1; have != want {
+			t.Fatalf("want %d items, have %d ", want, have)
+		}
+		for i, have := range items {
+			want := getChunk(15, i)
+			if !bytes.Equal(want, have) {
+				t.Fatalf("data corruption: have\n%x\n, want \n%x\n", have, want)
+			}
+		}
+		f.Close()
+	}
+}
+
+// TestSequentialReadByteLimit does some more advanced tests on batch reads.
+// These tests check that when the byte limit hits, we correctly abort in time,
+// but also properly do all the deferred reads for the previous data, regardless
+// of whether the data crosses a file boundary or not.
+func TestSequentialReadByteLimit(t *testing.T) {
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("batchread-2-%d", rand.Uint64())
+	{ // Fill table
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 100, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 10 bytes 30 times,
+		// Splitting it at every 100 bytes (10 items)
+		for x := 0; x < 30; x++ {
+			data := getChunk(10, x)
+			f.Append(uint64(x), data)
+		}
+		f.Close()
+	}
+	for i, tc := range []struct {
+		items uint64
+		limit uint64
+		want  int
+	}{
+		{9, 89, 8},
+		{10, 99, 9},
+		{11, 109, 10},
+		{100, 89, 8},
+		{100, 99, 9},
+		{100, 109, 10},
+	} {
+		{
+			f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 100, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			items, err := f.RetrieveItems(0, tc.items, tc.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if have, want := len(items), tc.want; have != want {
+				t.Fatalf("test %d: want %d items, have %d ", i, want, have)
+			}
+			for ii, have := range items {
+				want := getChunk(10, ii)
+				if !bytes.Equal(want, have) {
+					t.Fatalf("test %d: data corruption item %d: have\n%x\n, want \n%x\n", i, ii, have, want)
+				}
+			}
+			f.Close()
 		}
 	}
 }

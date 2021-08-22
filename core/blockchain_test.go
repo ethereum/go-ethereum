@@ -473,8 +473,8 @@ func testBadHashes(t *testing.T, full bool) {
 
 		_, err = blockchain.InsertHeaderChain(headers, 1)
 	}
-	if !errors.Is(err, ErrBlacklistedHash) {
-		t.Errorf("error mismatch: have: %v, want: %v", err, ErrBlacklistedHash)
+	if !errors.Is(err, ErrBannedHash) {
+		t.Errorf("error mismatch: have: %v, want: %v", err, ErrBannedHash)
 	}
 }
 

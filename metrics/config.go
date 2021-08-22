@@ -28,6 +28,11 @@ type Config struct {
 	InfluxDBUsername string `toml:",omitempty"`
 	InfluxDBPassword string `toml:",omitempty"`
 	InfluxDBTags     string `toml:",omitempty"`
+
+	EnableInfluxDBV2     bool   `toml:",omitempty"`
+	InfluxDBToken        string `toml:",omitempty"`
+	InfluxDBBucket       string `toml:",omitempty"`
+	InfluxDBOrganization string `toml:",omitempty"`
 }
 
 // DefaultConfig is the default config for metrics used in go-ethereum.
@@ -42,4 +47,10 @@ var DefaultConfig = Config{
 	InfluxDBUsername: "test",
 	InfluxDBPassword: "test",
 	InfluxDBTags:     "host=localhost",
+
+	// influxdbv2-specific flags
+	EnableInfluxDBV2:     false,
+	InfluxDBToken:        "test",
+	InfluxDBBucket:       "geth",
+	InfluxDBOrganization: "geth",
 }

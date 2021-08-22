@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package apitypes
 
 import (
 	"encoding/json"
@@ -52,7 +52,7 @@ func (vs *ValidationMessages) Info(msg string) {
 }
 
 /// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
-func (v *ValidationMessages) getWarnings() error {
+func (v *ValidationMessages) GetWarnings() error {
 	var messages []string
 	for _, msg := range v.Messages {
 		if msg.Typ == WARN || msg.Typ == CRIT {
@@ -97,7 +97,7 @@ func (args SendTxArgs) String() string {
 	return err.Error()
 }
 
-func (args *SendTxArgs) toTransaction() *types.Transaction {
+func (args *SendTxArgs) ToTransaction() *types.Transaction {
 	txArgs := ethapi.TransactionArgs{
 		Gas:                  &args.Gas,
 		GasPrice:             args.GasPrice,
