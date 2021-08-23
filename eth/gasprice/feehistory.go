@@ -52,8 +52,8 @@ type blockFees struct {
 	block       *types.Block // only set if reward percentiles are requested
 	receipts    types.Receipts
 	// filled by processBlock
-	processedFees
-	err error
+	results processedFees
+	err     error
 }
 
 // processedFees contains the results of a processed block and is also used for caching
@@ -85,15 +85,15 @@ func (s sortGasAndReward) Less(i, j int) bool {
 // fills in the rest of the fields.
 func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	chainconfig := oracle.backend.ChainConfig()
-	if bf.baseFee = bf.header.BaseFee; bf.baseFee == nil {
-		bf.baseFee = new(big.Int)
+	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
+		bf.results.baseFee = new(big.Int)
 	}
 	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+		bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
 	} else {
-		bf.nextBaseFee = new(big.Int)
+		bf.results.nextBaseFee = new(big.Int)
 	}
-	bf.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
+	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null
 		return
@@ -103,11 +103,11 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return
 	}
 
-	bf.reward = make([]*big.Int, len(percentiles))
+	bf.results.reward = make([]*big.Int, len(percentiles))
 	if len(bf.block.Transactions()) == 0 {
 		// return an all zero row if there are no transactions to gather data from
-		for i := range bf.reward {
-			bf.reward[i] = new(big.Int)
+		for i := range bf.results.reward {
+			bf.results.reward[i] = new(big.Int)
 		}
 		return
 	}
@@ -128,7 +128,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 			txIndex++
 			sumGasUsed += sorter[txIndex].gasUsed
 		}
-		bf.reward[i] = sorter[txIndex].reward
+		bf.results.reward[i] = sorter[txIndex].reward
 	}
 }
 
@@ -249,7 +249,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 					pending = true
 				} else {
 					if p, ok := oracle.historyCache.Get(cacheKey); ok {
-						fees.processedFees = p.(processedFees)
+						fees.results = p.(processedFees)
 					} else {
 						if len(rewardPercentiles) != 0 {
 							fees.block, fees.err = oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNumber))
@@ -267,7 +267,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 				if fees.header != nil {
 					oracle.processBlock(fees, rewardPercentiles)
 					if fees.err == nil && !pending {
-						oracle.historyCache.Add(cacheKey, fees.processedFees)
+						oracle.historyCache.Add(cacheKey, fees.results)
 					}
 				}
 				// send to results even if empty to guarantee that blocks items are sent in total
@@ -287,8 +287,8 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 			return common.Big0, nil, nil, nil, fees.err
 		}
 		i := int(fees.blockNumber - oldestBlock)
-		if fees.baseFee != nil {
-			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.reward, fees.baseFee, fees.nextBaseFee, fees.gasUsedRatio
+		if fees.results.baseFee != nil {
+			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.nextBaseFee, fees.results.gasUsedRatio
 		} else {
 			// getting no block and no error means we are requesting into the future (might happen because of a reorg)
 			if i < firstMissing {
