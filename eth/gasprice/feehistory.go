@@ -238,40 +238,41 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 					return
 				}
 
-				var pending bool
-				cacheKey := struct {
-					number      uint64
-					percentiles string
-				}{blockNumber, string(percentileKey)}
 				fees := &blockFees{blockNumber: blockNumber}
 				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64() {
 					fees.block, fees.receipts = pendingBlock, pendingReceipts
-					pending = true
+					fees.header = fees.block.Header()
+					oracle.processBlock(fees, rewardPercentiles)
+					results <- fees
 				} else {
+					cacheKey := struct {
+						number      uint64
+						percentiles string
+					}{blockNumber, string(percentileKey)}
+
 					if p, ok := oracle.historyCache.Get(cacheKey); ok {
 						fees.results = p.(processedFees)
+						results <- fees
 					} else {
 						if len(rewardPercentiles) != 0 {
 							fees.block, fees.err = oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNumber))
 							if fees.block != nil && fees.err == nil {
 								fees.receipts, fees.err = oracle.backend.GetReceipts(ctx, fees.block.Hash())
+								fees.header = fees.block.Header()
 							}
 						} else {
 							fees.header, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
 						}
+						if fees.header != nil && fees.err == nil {
+							oracle.processBlock(fees, rewardPercentiles)
+							if fees.err == nil {
+								oracle.historyCache.Add(cacheKey, fees.results)
+							}
+						}
+						// send to results even if empty to guarantee that blocks items are sent in total
+						results <- fees
 					}
 				}
-				if fees.block != nil {
-					fees.header = fees.block.Header()
-				}
-				if fees.header != nil {
-					oracle.processBlock(fees, rewardPercentiles)
-					if fees.err == nil && !pending {
-						oracle.historyCache.Add(cacheKey, fees.results)
-					}
-				}
-				// send to results even if empty to guarantee that blocks items are sent in total
-				results <- fees
 			}
 		}()
 	}
