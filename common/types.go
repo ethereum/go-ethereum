@@ -50,6 +50,7 @@ var (
 	// temp map for verifying compactTrie idea (address: real address of the account / hash: specific key for the account in the state trie) (jmlee)
 	AddrToKey = make(map[Address]Hash)
 	AddrToKeyMapMutex = sync.RWMutex{} // to avoid fatal error: "concurrent map read and map write"
+	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/)
 	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever
 	ZeroAddress = HexToAddress("0x0")
 )
@@ -100,6 +101,42 @@ func LoadFromFile(path string, v interface{}) error {
 	}
 	defer f.Close()
 	return Unmarshal(f, v)
+}
+
+// save AddrToKey as a file (jmlee)
+func SaveAddrToKey(blockHash string) error {
+	// for k, v := range AddrToKey {
+	// 	fmt.Println("common.AddrToKey -> k:", k, " / v:", v)
+	// }
+	AddrToKeyMapMutex.Lock()
+	path := AddrToKeyPath + blockHash + ".map"
+	fmt.Println("save AddrToKey path:", path)
+	err := SaveAsFile(path, AddrToKey)
+	if err != nil {
+		fmt.Println("save AddrToKey fail:", err)
+	} else {
+		fmt.Println("save AddrToKey suceess!")
+	}
+	AddrToKeyMapMutex.Unlock()
+	return err
+}
+
+// load AddrToKey from a file (jmlee)
+func LoadAddrToKey(blockHash string) error {
+	AddrToKeyMapMutex.Lock()
+	path := AddrToKeyPath + blockHash + ".map"
+	fmt.Println("load AddrToKey path:", path)
+	err := LoadFromFile(path, &AddrToKey)
+	if err != nil {
+		fmt.Println("load AddrToKey fail:", err)
+	} else {
+		fmt.Println("load AddrToKey suceess!")
+	}
+	AddrToKeyMapMutex.Unlock()
+	// for k, v := range AddrToKey {
+	// 	fmt.Println("common.AddrToKey -> k:", k, " / v:", v)
+	// }
+	return err
 }
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

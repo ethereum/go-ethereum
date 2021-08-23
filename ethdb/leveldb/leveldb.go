@@ -114,6 +114,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 		logCtx = append(logCtx, "readonly", "true")
 	}
 	logger.Info("Allocated cache and file handles", logCtx...)
+	common.AddrToKeyPath = file + "/"
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)

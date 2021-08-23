@@ -447,22 +447,7 @@ func (bc *BlockChain) loadLastState() error {
 	bc.hc.SetCurrentHeader(currentHeader)
 
 	// load common.AddrToKey from disk (jmlee)
-	common.AddrToKeyMapMutex.Lock()
-	path := "."
-	if bc.cacheConfig.TrieCleanJournal != "" {
-		path = bc.cacheConfig.TrieCleanJournal // path can be changed, this dir is just for convenience
-	}
-	path += "/" + head.Hex() + ".map"
-	fmt.Println("load AddrToKey path:", path)
-	if err := common.LoadFromFile(path, &common.AddrToKey); err != nil {
-		fmt.Println("load AddrToKey fail:", err)
-	} else {
-		fmt.Println("load AddrToKey suceess!")
-	}
-	common.AddrToKeyMapMutex.Unlock()
-	// for k, v := range common.AddrToKey {
-	// 	fmt.Println("common.AddrToKey -> k:", k, " / v:", v)
-	// }
+	common.LoadAddrToKey(head.Hex())
 
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
@@ -1063,23 +1048,8 @@ func (bc *BlockChain) Stop() {
 	}
 
 	// save common.AddrToKey into disk (jmlee)
-	// for k, v := range common.AddrToKey {
-	// 	fmt.Println("common.AddrToKey -> k:", k, " / v:", v)
-	// }
-	common.AddrToKeyMapMutex.Lock()
-	path := "."
-	if bc.cacheConfig.TrieCleanJournal != "" {
-		path = bc.cacheConfig.TrieCleanJournal // path can be changed, this dir is just for convenience
-	}
 	head := rawdb.ReadHeadBlockHash(bc.db)
-	path += "/" + head.Hex() + ".map"
-	fmt.Println("save AddrToKey path:", path)
-	if err := common.SaveAsFile(path, common.AddrToKey); err != nil {
-		fmt.Println("save AddrToKey fail:", err)
-	} else {
-		fmt.Println("save AddrToKey suceess!")
-	}
-	common.AddrToKeyMapMutex.Unlock()
+	common.SaveAddrToKey(head.Hex())
 
 	log.Info("Blockchain stopped")
 }
