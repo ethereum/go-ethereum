@@ -108,7 +108,7 @@ def sendTransactions(num, offset):
         while True:
             try:
                 fullnode.eth.sendTransaction(
-                    {'to': to, 'from': fullnode.eth.coinbase, 'value': str(amount), 'gas': '21000', 'data': ""})
+                    {'to': to, 'from': fullnode.eth.coinbase, 'value': hex(amount), 'gas': '21000', 'data': ""})
                 break
             except:
                 time.sleep(1)
