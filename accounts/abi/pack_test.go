@@ -140,7 +140,7 @@ func TestMethodPack(t *testing.T) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 
-	sig = abi.Methods["nestedArray2"].ID
+	sig = abi.Methods["nestedArray20"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{0x20}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x40}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x80}, 32)...)
@@ -148,7 +148,7 @@ func TestMethodPack(t *testing.T) {
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
-	packed, err = abi.Pack("nestedArray2", [2][]uint8{{1}, {1}})
+	packed, err = abi.Pack("nestedArray20", [2][]uint8{{1}, {1}})
 	if err != nil {
 		t.Fatal(err)
 	}

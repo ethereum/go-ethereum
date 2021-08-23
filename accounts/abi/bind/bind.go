@@ -89,6 +89,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			eventIdentifiers    = make(map[string]bool)
 		)
 		for _, original := range evmABI.Methods {
+			// Skip unnamed functions because it means, they are duplicates
+			if original.Name == "" {
+				continue
+			}
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))

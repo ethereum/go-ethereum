@@ -51,6 +51,9 @@ const jsondata = `
 	{ "type" : "function", "name" : "sliceAddress", "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
 	{ "type" : "function", "name" : "sliceMultiAddress", "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
 	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint32[][2]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint64[][2]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint128[][2]" } ] },
 	{ "type" : "function", "name" : "nestedArray2", "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
 	{ "type" : "function", "name" : "nestedSlice", "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] },
 	{ "type" : "function", "name" : "receive", "inputs" : [ { "name" : "memo", "type" : "bytes" }], "outputs" : [], "payable" : true, "stateMutability" : "payable" },
@@ -82,6 +85,9 @@ var (
 	Uint256Arr3, _      = NewType("uint256[3]", "", nil)
 	Uint256ArrNested, _ = NewType("uint256[2][2]", "", nil)
 	Uint8ArrNested, _   = NewType("uint8[][2]", "", nil)
+	Uint32ArrNested, _  = NewType("uint32[][2]", "", nil)
+	Uint64ArrNested, _  = NewType("uint64[][2]", "", nil)
+	Uint128ArrNested, _ = NewType("uint128[][2]", "", nil)
 	Uint8SliceNested, _ = NewType("uint8[][]", "", nil)
 	TupleF, _           = NewType("tuple", "struct Overloader.F", []ArgumentMarshaling{
 		{Name: "_f", Type: "uint256"},
@@ -108,7 +114,10 @@ var methods = map[string]Method{
 	"sliceAddress":        NewMethod("sliceAddress", "sliceAddress", Function, "", false, false, []Argument{{"inputs", AddressArr, false}}, nil),
 	"sliceMultiAddress":   NewMethod("sliceMultiAddress", "sliceMultiAddress", Function, "", false, false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
 	"nestedArray":         NewMethod("nestedArray", "nestedArray", Function, "", false, false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
-	"nestedArray2":        NewMethod("nestedArray2", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
+	"nestedArray0":        NewMethod("nestedArray0", "nestedArray", Function, "", false, false, []Argument{{"a", Uint32ArrNested, false}}, nil),
+	"nestedArray1":        NewMethod("nestedArray1", "nestedArray", Function, "", false, false, []Argument{{"a", Uint64ArrNested, false}}, nil),
+	"nestedArray2":        NewMethod("nestedArray2", "nestedArray", Function, "", false, false, []Argument{{"a", Uint128ArrNested, false}}, nil),
+	"nestedArray20":       NewMethod("nestedArray20", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
 	"nestedSlice":         NewMethod("nestedSlice", "nestedSlice", Function, "", false, false, []Argument{{"a", Uint8SliceNested, false}}, nil),
 	"receive":             NewMethod("receive", "receive", Function, "payable", false, true, []Argument{{"memo", Bytes, false}}, []Argument{}),
 	"fixedArrStr":         NewMethod("fixedArrStr", "fixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
@@ -117,6 +126,37 @@ var methods = map[string]Method{
 	"doubleFixedArrStr":   NewMethod("doubleFixedArrStr", "doubleFixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
 	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
 	"overloadedNames":     NewMethod("overloadedNames", "overloadedNames", Function, "view", false, false, []Argument{{"f", TupleF, false}}, nil),
+	// Methods mapped by Method.Sig
+	"()":                 NewMethod("", "", Function, "", false, false, nil, nil),
+	"address(address)":   NewMethod("", "address", Function, "", false, false, []Argument{{"inputs", Address, false}}, nil),
+	"balance()":          NewMethod("", "balance", Function, "view", false, false, nil, nil),
+	"bar(uint32,uint16)": NewMethod("", "bar", Function, "", false, false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
+	"bool(bool)":         NewMethod("", "bool", Function, "", false, false, []Argument{{"inputs", Bool, false}}, nil),
+	"bytes32(bytes32)":   NewMethod("", "bytes32", Function, "", false, false, []Argument{{"inputs", Bytes32, false}}, nil),
+	"doubleFixedArrStr(string,uint256[2],uint256[3])":             NewMethod("", "doubleFixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+	"fixedArrBytes(bytes,uint256[2])":                             NewMethod("", "fixedArrBytes", Function, "view", false, false, []Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"fixedArrStr(string,uint256[2])":                              NewMethod("", "fixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"foo(uint32)":                                                 NewMethod("", "foo", Function, "", false, false, []Argument{{"inputs", Uint32, false}}, nil),
+	"int8(int8)":                                                  NewMethod("", "int8", Function, "", false, false, []Argument{{"inputs", Int8, false}}, nil),
+	"mixedArrStr(string,uint256[2],uint256[])":                    NewMethod("", "mixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}}, nil),
+	"multipleMixedArrStr(string,uint256[2],uint256[],uint256[3])": NewMethod("", "multipleMixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+	"nestedArray(uint32[][2])":                                    NewMethod("", "nestedArray", Function, "", false, false, []Argument{{"a", Uint32ArrNested, false}}, nil),
+	"nestedArray(uint64[][2])":                                    NewMethod("", "nestedArray", Function, "", false, false, []Argument{{"a", Uint64ArrNested, false}}, nil),
+	"nestedArray(uint128[][2])":                                   NewMethod("", "nestedArray", Function, "", false, false, []Argument{{"a", Uint128ArrNested, false}}, nil),
+	"nestedArray(uint256[2][2],address[])":                        NewMethod("", "nestedArray", Function, "", false, false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
+	"nestedArray2(uint8[][2])":                                    NewMethod("", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
+	"nestedSlice(uint8[][])":                                      NewMethod("", "nestedSlice", Function, "", false, false, []Argument{{"a", Uint8SliceNested, false}}, nil),
+	"overloadedNames((uint256,uint256,uint256))":                  NewMethod("", "overloadedNames", Function, "view", false, false, []Argument{{"f", TupleF, false}}, nil),
+	"receive(bytes)":                                              NewMethod("", "receive", Function, "payable", false, true, []Argument{{"memo", Bytes, false}}, []Argument{}),
+	"send(uint256)":                                               NewMethod("", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
+	"slice(uint32[2])":                                            NewMethod("", "slice", Function, "", false, false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
+	"slice256(uint256[2])":                                        NewMethod("", "slice256", Function, "", false, false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
+	"sliceAddress(address[])":                                     NewMethod("", "sliceAddress", Function, "", false, false, []Argument{{"inputs", AddressArr, false}}, nil),
+	"sliceMultiAddress(address[],address[])":                      NewMethod("", "sliceMultiAddress", Function, "", false, false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
+	"string(string)":                                              NewMethod("", "string", Function, "", false, false, []Argument{{"inputs", String, false}}, nil),
+	"test(uint32)":                                                NewMethod("", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
+	"uint64[2](uint64[2])":                                        NewMethod("", "uint64[2]", Function, "", false, false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
+	"uint64[](uint64[])":                                          NewMethod("", "uint64[]", Function, "", false, false, []Argument{{"inputs", Uint64Arr, false}}, nil),
 }
 
 func TestReader(t *testing.T) {
@@ -135,7 +175,7 @@ func TestReader(t *testing.T) {
 			t.Errorf("Missing expected method %v", name)
 		}
 		if !reflect.DeepEqual(gotM, expM) {
-			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+			t.Errorf("\nGot abi method for %s: \n%#v\ndoes not match expected method\n%#v", name, gotM, expM)
 		}
 	}
 
@@ -145,7 +185,7 @@ func TestReader(t *testing.T) {
 			t.Errorf("Found extra method %v", name)
 		}
 		if !reflect.DeepEqual(gotM, expM) {
-			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+			t.Errorf("\nGot abi method %s: \n%#v\ndoes not match expected method\n%#v", name, gotM, expM)
 		}
 	}
 }

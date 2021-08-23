@@ -163,7 +163,11 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		case "function":
 			name := abi.overloadedMethodName(field.Name)
-			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
+			method := NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
+			abi.Methods[name] = method
+			// Introducing new Method.Sig => Method mapping allows for ABI method ordering independence
+			method.Name = ""
+			abi.Methods[method.Sig] = method
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
