@@ -414,7 +414,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Wipe out side chains also and track dangling side chians
+		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
 		for number := first; number < f.frozen; number++ {
 			// Always keep the genesis block in active database
