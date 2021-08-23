@@ -318,6 +318,8 @@ func (w *worker) isRunning() bool {
 // close terminates all background threads maintained by the worker.
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.current != nil && w.current.state != nil {
 		w.current.state.StopPrefetcher()
 	}
