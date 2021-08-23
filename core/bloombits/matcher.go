@@ -507,11 +507,11 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 type MatcherSession struct {
 	matcher *Matcher
 
-	closer sync.Once     	// Sync object to ensure we only ever close once
-	quit   chan struct{} 	// Quit channel to request pipeline termination
+	closer sync.Once     // Sync object to ensure we only ever close once
+	quit   chan struct{} // Quit channel to request pipeline termination
 
 	ctx     context.Context // Context used by the light client to abort filtering
-	err     error 			// Global error to track retrieval failures deep in the chain
+	err     error           // Global error to track retrieval failures deep in the chain
 	errLock sync.Mutex
 
 	pend sync.WaitGroup
