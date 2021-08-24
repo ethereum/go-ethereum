@@ -93,7 +93,7 @@ type Config struct {
 	InsecureUnlockAllowed bool `toml:",omitempty"`
 
 	// NoUSB disables hardware wallet monitoring and connectivity.
-	// DEPRECATED: USB monitoring is now disabled by default and must be enabled with the --usb flag. This command will be removed in the future!
+	// Deprecated: USB monitoring is disabled by default and must be enabled explicitly.
 	NoUSB bool `toml:",omitempty"`
 
 	// USB enables hardware wallet monitoring and connectivity.
