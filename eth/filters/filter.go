@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/consensus"
 )
 
 type Backend interface {
@@ -50,6 +51,7 @@ type Backend interface {
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	Engine() consensus.Engine
 }
 
 // Filter can be used to retrieve and filter logs.
