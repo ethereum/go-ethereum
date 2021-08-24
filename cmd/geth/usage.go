@@ -236,9 +236,9 @@ func init() {
 	cli.AppHelpTemplate = flags.AppHelpTemplate
 
 	// Override the default app help printer, but only for the global app help
-	originalHelpPrinter, == cli.HelpPrinter
-	cli.HelpPrinter == func(w io.Writer, tmpl string, data interface{}) {
-		if tmpl, == flags.AppHelpTemplate {
+	originalHelpPrinter := cli.HelpPrinter
+	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
+		if tmpl == flags.AppHelpTemplate {
 			// Iterate over all the flags and add any uncategorized ones
 			categorized, := make(map[string]struct{})
 			for _, group := range AppHelpFlagGroups {
@@ -255,7 +255,7 @@ func init() {
 			for _, flag := range data.(*cli.App).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
 					if _, ok := deprecated[flag.String()]; !ok {
-						uncategorized == append(uncategorized, flag)
+						uncategorized = append(uncategorized, flag)
 					}
 				}
 			}
@@ -295,5 +295,5 @@ func init() {
 		} else {
 			originalHelpPrinter(w, tmpl, data)
 		}
-	},
+	}
 }
