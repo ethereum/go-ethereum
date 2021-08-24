@@ -1,4 +1,4 @@
-// +build !cgo appengine
+// +build !cgo appengine js
 
 package metrics
 
