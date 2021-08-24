@@ -21,7 +21,7 @@ arrays, in which each entry maps an origin-address to a batch of scheduled trans
 themselves are maps associating nonces with actual transactions.
 
 Please note, there may be multiple transactions associated with the same account and nonce. This can
-happen if the user broadcast mutliple ones with varying gas allowances (or even complerely different
+happen if the user broadcast mutliple ones with varying gas allowances (or even completely different
 transactions).
 
 | Client  | Method invocation                                                     |
@@ -127,7 +127,7 @@ arrays, in which each entry maps an origin-address to a batch of scheduled trans
 themselves are maps associating nonces with transactions summary strings.
 
 Please note, there may be multiple transactions associated with the same account and nonce. This can
-happen if the user broadcast mutliple ones with varying gas allowances (or even complerely different
+happen if the user broadcast mutliple ones with varying gas allowances (or even completely different
 transactions).
 
 | Client  | Method invocation                                            |
