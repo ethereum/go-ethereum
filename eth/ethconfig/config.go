@@ -43,8 +43,8 @@ import (
 var FullNodeGPO = gasprice.Config{
 	Blocks:           20,
 	Percentile:       60,
-	MaxHeaderHistory: 0,
-	MaxBlockHistory:  0,
+	MaxHeaderHistory: 1024,
+	MaxBlockHistory:  1024,
 	MaxPrice:         gasprice.DefaultMaxPrice,
 	IgnorePrice:      gasprice.DefaultIgnorePrice,
 }
@@ -83,7 +83,6 @@ var Defaults = Config{
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
 	Miner: miner.Config{
-		GasFloor: 8000000,
 		GasCeil:  8000000,
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
