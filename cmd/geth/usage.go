@@ -240,7 +240,7 @@ func init() {
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
 		if tmpl == flags.AppHelpTemplate {
 			// Iterate over all the flags and add any uncategorized ones
-			categorized, := make(map[string]struct{})
+			categorized := make(map[string]struct{})
 			for _, group := range AppHelpFlagGroups {
 				for _, flag := range group.Flags {
 					categorized[flag.String()] = struct{}{}
