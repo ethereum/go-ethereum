@@ -64,21 +64,30 @@ func TestState(t *testing.T) {
 			for _, subtest := range test.Subtests() {
 				subtest := subtest
 				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-				name := name + "/" + key
 
 				t.Run(key+"/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						_, _, err := test.Run(subtest, vmconfig, false)
-						return st.checkFailure(t, name+"/trie", err)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
+						return st.checkFailure(t, err)
 					})
 				})
 				t.Run(key+"/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
-							return err
+						if snaps != nil && statedb != nil {
+							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+								return err
+							}
 						}
-						return st.checkFailure(t, name+"/snap", err)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
+						return st.checkFailure(t, err)
 					})
 				})
 			}
@@ -91,7 +100,7 @@ const traceErrorLimit = 400000
 
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	// Use config from command line arguments.
-	config := vm.Config{EVMInterpreter: *testEVM, EWASMInterpreter: *testEWASM}
+	config := vm.Config{}
 	err := test(config)
 	if err == nil {
 		return
@@ -117,6 +126,6 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	} else {
 		t.Log("EVM operation log:\n" + buf.String())
 	}
-	//t.Logf("EVM output: 0x%x", tracer.Output())
-	//t.Logf("EVM error: %v", tracer.Error())
+	// t.Logf("EVM output: 0x%x", tracer.Output())
+	// t.Logf("EVM error: %v", tracer.Error())
 }

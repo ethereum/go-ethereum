@@ -310,12 +310,22 @@ type Tracer struct {
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
+
+	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+}
+
+// Context contains some contextual infos for a transaction execution that is not
+// available from within the EVM object.
+type Context struct {
+	BlockHash common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
+	TxIndex   int         // Index of the transaction within a block (zero if dangling tx or call)
+	TxHash    common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
-func New(code string, txCtx vm.TxContext) (*Tracer, error) {
+func New(code string, ctx *Context) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
@@ -334,8 +344,14 @@ func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 		depthValue:      new(uint),
 		refundValue:     new(uint),
 	}
-	tracer.ctx["gasPrice"] = txCtx.GasPrice
+	if ctx.BlockHash != (common.Hash{}) {
+		tracer.ctx["blockHash"] = ctx.BlockHash
 
+		if ctx.TxHash != (common.Hash{}) {
+			tracer.ctx["txIndex"] = ctx.TxIndex
+			tracer.ctx["txHash"] = ctx.TxHash
+		}
+	}
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
@@ -400,8 +416,14 @@ func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
-		_, ok := vm.PrecompiledContractsIstanbul[common.BytesToAddress(popSlice(ctx))]
-		ctx.PushBoolean(ok)
+		addr := common.BytesToAddress(popSlice(ctx))
+		for _, p := range tracer.activePrecompiles {
+			if p == addr {
+				ctx.PushBoolean(true)
+				return 1
+			}
+		}
+		ctx.PushBoolean(false)
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("slice", func(ctx *duktape.Context) int {
@@ -505,7 +527,7 @@ func (jst *Tracer) Stop(err error) {
 
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
-func (jst *Tracer) call(method string, args ...string) (json.RawMessage, error) {
+func (jst *Tracer) call(noret bool, method string, args ...string) (json.RawMessage, error) {
 	// Execute the JavaScript call and return any error
 	jst.vm.PushString(method)
 	for _, arg := range args {
@@ -519,7 +541,21 @@ func (jst *Tracer) call(method string, args ...string) (json.RawMessage, error) 
 		return nil, errors.New(err)
 	}
 	// No error occurred, extract return value and return
-	return json.RawMessage(jst.vm.JsonEncode(-1)), nil
+	if noret {
+		return nil, nil
+	}
+	// Push a JSON marshaller onto the stack. We can't marshal from the out-
+	// side because duktape can crash on large nestings and we can't catch
+	// C++ exceptions ourselves from Go. TODO(karalabe): Yuck, why wrap?!
+	jst.vm.PushString("(JSON.stringify)")
+	jst.vm.Eval()
+
+	jst.vm.Swap(-1, -2)
+	if code = jst.vm.Pcall(1); code != 0 {
+		err := jst.vm.SafeToString(-1)
+		return nil, errors.New(err)
+	}
+	return json.RawMessage(jst.vm.SafeToString(-1)), nil
 }
 
 func wrapError(context string, err error) error {
@@ -536,11 +572,16 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	jst.ctx["to"] = to
 	jst.ctx["input"] = input
 	jst.ctx["gas"] = gas
+	jst.ctx["gasPrice"] = env.TxContext.GasPrice
 	jst.ctx["value"] = value
 
 	// Initialize the context
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 	jst.dbWrapper.db = env.StateDB
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	jst.activePrecompiles = vm.ActivePrecompiles(rules)
+
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
 	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
@@ -578,7 +619,7 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 		*jst.errorValue = err.Error()
 	}
 
-	if _, err := jst.call("step", "log", "db"); err != nil {
+	if _, err := jst.call(true, "step", "log", "db"); err != nil {
 		jst.err = wrapError("step", err)
 	}
 }
@@ -592,7 +633,7 @@ func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 	jst.errorValue = new(string)
 	*jst.errorValue = err.Error()
 
-	if _, err := jst.call("fault", "log", "db"); err != nil {
+	if _, err := jst.call(true, "fault", "log", "db"); err != nil {
 		jst.err = wrapError("fault", err)
 	}
 }
@@ -632,6 +673,13 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 		case *big.Int:
 			pushBigInt(val, jst.vm)
 
+		case int:
+			jst.vm.PushInt(val)
+
+		case common.Hash:
+			ptr := jst.vm.PushFixedBuffer(32)
+			copy(makeSlice(ptr, 32), val[:])
+
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", val))
 		}
@@ -640,7 +688,7 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	jst.vm.PutPropString(jst.stateObject, "ctx")
 
 	// Finalize the trace and return the results
-	result, err := jst.call("result", "ctx", "db")
+	result, err := jst.call(false, "result", "ctx", "db")
 	if err != nil {
 		jst.err = wrapError("result", err)
 	}

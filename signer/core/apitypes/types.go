@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package apitypes
 
 import (
 	"encoding/json"
@@ -52,7 +52,7 @@ func (vs *ValidationMessages) Info(msg string) {
 }
 
 /// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
-func (v *ValidationMessages) getWarnings() error {
+func (v *ValidationMessages) GetWarnings() error {
 	var messages []string
 	for _, msg := range v.Messages {
 		if msg.Typ == WARN || msg.Typ == CRIT {
@@ -66,14 +66,21 @@ func (v *ValidationMessages) getWarnings() error {
 }
 
 // SendTxArgs represents the arguments to submit a transaction
+// This struct is identical to ethapi.TransactionArgs, except for the usage of
+// common.MixedcaseAddress in From and To
 type SendTxArgs struct {
-	From     common.MixedcaseAddress  `json:"from"`
-	To       *common.MixedcaseAddress `json:"to"`
-	Gas      hexutil.Uint64           `json:"gas"`
-	GasPrice hexutil.Big              `json:"gasPrice"`
-	Value    hexutil.Big              `json:"value"`
-	Nonce    hexutil.Uint64           `json:"nonce"`
+	From                 common.MixedcaseAddress  `json:"from"`
+	To                   *common.MixedcaseAddress `json:"to"`
+	Gas                  hexutil.Uint64           `json:"gas"`
+	GasPrice             *hexutil.Big             `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big             `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big             `json:"maxPriorityFeePerGas"`
+	Value                hexutil.Big              `json:"value"`
+	Nonce                hexutil.Uint64           `json:"nonce"`
+
 	// We accept "data" and "input" for backwards-compatibility reasons.
+	// "input" is the newer name and should be preferred by clients.
+	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
 
@@ -90,38 +97,59 @@ func (args SendTxArgs) String() string {
 	return err.Error()
 }
 
-func (args *SendTxArgs) toTransaction() *types.Transaction {
-	var input []byte
-	if args.Data != nil {
-		input = *args.Data
-	} else if args.Input != nil {
-		input = *args.Input
-	}
+// ToTransaction converts the arguments to a transaction.
+func (args *SendTxArgs) ToTransaction() *types.Transaction {
+	// Add the To-field, if specified
 	var to *common.Address
 	if args.To != nil {
-		_to := args.To.Address()
-		to = &_to
+		dstAddr := args.To.Address()
+		to = &dstAddr
 	}
+
+	var input []byte
+	if args.Input != nil {
+		input = *args.Input
+	} else if args.Data != nil {
+		input = *args.Data
+	}
+
 	var data types.TxData
-	if args.AccessList == nil {
-		data = &types.LegacyTx{
-			To:       to,
-			Nonce:    uint64(args.Nonce),
-			Gas:      uint64(args.Gas),
-			GasPrice: (*big.Int)(&args.GasPrice),
-			Value:    (*big.Int)(&args.Value),
-			Data:     input,
+	switch {
+	case args.MaxFeePerGas != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
 		}
-	} else {
+		data = &types.DynamicFeeTx{
+			To:         to,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(&args.Value),
+			Data:       input,
+			AccessList: al,
+		}
+	case args.AccessList != nil:
 		data = &types.AccessListTx{
 			To:         to,
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(args.Nonce),
 			Gas:        uint64(args.Gas),
-			GasPrice:   (*big.Int)(&args.GasPrice),
+			GasPrice:   (*big.Int)(args.GasPrice),
 			Value:      (*big.Int)(&args.Value),
 			Data:       input,
 			AccessList: *args.AccessList,
+		}
+	default:
+		data = &types.LegacyTx{
+			To:       to,
+			Nonce:    uint64(args.Nonce),
+			Gas:      uint64(args.Gas),
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(&args.Value),
+			Data:     input,
 		}
 	}
 	return types.NewTx(data)

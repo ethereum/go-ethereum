@@ -866,7 +866,7 @@ func (c *Bor) GetCurrentSpan(headerHash common.Hash) (*Span, error) {
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -916,7 +916,7 @@ func (c *Bor) GetCurrentValidators(headerHash common.Hash, blockNumber uint64) (
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,

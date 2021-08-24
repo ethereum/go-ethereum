@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,26 +14,29 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package tests
+package misc
 
 import (
-	"testing"
+	"errors"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestVM(t *testing.T) {
-	t.Parallel()
-	vmt := new(testMatcher)
-	vmt.slow("^vmPerformance")
-	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")
-
-	vmt.walk(t, vmTestDir, func(t *testing.T, name string, test *VMTest) {
-		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {
-			return vmt.checkFailure(t, name+"/trie", test.Run(vmconfig, false))
-		})
-		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {
-			return vmt.checkFailure(t, name+"/snap", test.Run(vmconfig, true))
-		})
-	})
+// VerifyGaslimit verifies the header gas limit according increase/decrease
+// in relation to the parent gas limit.
+func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
+	// Verify that the gas limit remains within allowed bounds
+	diff := int64(parentGasLimit) - int64(headerGasLimit)
+	if diff < 0 {
+		diff *= -1
+	}
+	limit := parentGasLimit / params.GasLimitBoundDivisor
+	if uint64(diff) >= limit {
+		return fmt.Errorf("invalid gas limit: have %d, want %d +-= %d", headerGasLimit, parentGasLimit, limit-1)
+	}
+	if headerGasLimit < params.MinGasLimit {
+		return errors.New("invalid gas limit below 5000")
+	}
+	return nil
 }

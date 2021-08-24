@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 // GnosisSafeTx is a type to parse the safe-tx returned by the relayer,
@@ -76,12 +77,13 @@ func (tx *GnosisSafeTx) ToTypedData() TypedData {
 
 // ArgsForValidation returns a SendTxArgs struct, which can be used for the
 // common validations, e.g. look up 4byte destinations
-func (tx *GnosisSafeTx) ArgsForValidation() *SendTxArgs {
-	args := &SendTxArgs{
+func (tx *GnosisSafeTx) ArgsForValidation() *apitypes.SendTxArgs {
+	gp := hexutil.Big(tx.GasPrice)
+	args := &apitypes.SendTxArgs{
 		From:     tx.Safe,
 		To:       &tx.To,
 		Gas:      hexutil.Uint64(tx.SafeTxGas.Uint64()),
-		GasPrice: hexutil.Big(tx.GasPrice),
+		GasPrice: &gp,
 		Value:    hexutil.Big(tx.Value),
 		Nonce:    hexutil.Uint64(tx.Nonce.Uint64()),
 		Data:     tx.Data,

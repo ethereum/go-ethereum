@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
-	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -80,25 +79,57 @@ func BasicPing(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// checkPong verifies that reply is a valid PONG matching the given ping hash.
+// checkPingPong verifies that the remote side sends both a PONG with the
+// correct hash, and a PING.
+// The two packets do not have to be in any particular order.
+func (te *testenv) checkPingPong(pingHash []byte) error {
+	var (
+		pings int
+		pongs int
+	)
+	for i := 0; i < 2; i++ {
+		reply, _, err := te.read(te.l1)
+		if err != nil {
+			return err
+		}
+		switch reply.Kind() {
+		case v4wire.PongPacket:
+			if err := te.checkPong(reply, pingHash); err != nil {
+				return err
+			}
+			pongs++
+		case v4wire.PingPacket:
+			pings++
+		default:
+			return fmt.Errorf("expected PING or PONG, got %v %v", reply.Name(), reply)
+		}
+	}
+	if pongs == 1 && pings == 1 {
+		return nil
+	}
+	return fmt.Errorf("expected 1 PING  (got %d) and 1 PONG (got %d)", pings, pongs)
+}
+
+// checkPong verifies that reply is a valid PONG matching the given ping hash,
+// and a PING. The two packets do not have to be in any particular order.
 func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
-	if reply == nil || reply.Kind() != v4wire.PongPacket {
-		return fmt.Errorf("expected PONG reply, got %v", reply)
+	if reply == nil {
+		return fmt.Errorf("expected PONG reply, got nil")
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		return fmt.Errorf("expected PONG reply, got %v %v", reply.Name(), reply)
 	}
 	pong := reply.(*v4wire.Pong)
 	if !bytes.Equal(pong.ReplyTok, pingHash) {
 		return fmt.Errorf("PONG reply token mismatch: got %x, want %x", pong.ReplyTok, pingHash)
 	}
-	wantEndpoint := te.localEndpoint(te.l1)
-	if !reflect.DeepEqual(pong.To, wantEndpoint) {
-		return fmt.Errorf("PONG 'to' endpoint mismatch: got %+v, want %+v", pong.To, wantEndpoint)
+	if want := te.localEndpoint(te.l1); !want.IP.Equal(pong.To.IP) || want.UDP != pong.To.UDP {
+		return fmt.Errorf("PONG 'to' endpoint mismatch: got %+v, want %+v", pong.To, want)
 	}
 	if v4wire.Expired(pong.Expiration) {
 		return fmt.Errorf("PONG is expired (%v)", pong.Expiration)
@@ -118,9 +149,7 @@ func PingWrongTo(t *utesting.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -138,8 +167,7 @@ func PingWrongFrom(t *utesting.T) {
 		Expiration: futureExpiration(),
 	})
 
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -160,8 +188,7 @@ func PingExtraData(t *utesting.T) {
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	})
 
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -182,8 +209,7 @@ func PingExtraDataWrongFrom(t *utesting.T) {
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
 	pingHash := te.send(te.l1, &req)
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -239,9 +265,9 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if reply, _, err := te.read(te.l1); err != nil {
+		t.Fatal(err)
+	} else if err := te.checkPong(reply, pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
