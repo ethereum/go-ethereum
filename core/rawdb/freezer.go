@@ -599,30 +599,18 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		if !stop {
 			newTable.Append(i, out)
 		} else {
-			// what we want is the byte offsets in the file
-			// for leftover items in file
-
-			// 1. loop getBounds until filenum exceeds threshold filenum
-			// 2. copy verbatim to new table
-			// 3. need to copy rest of old index and repair the filenum in the entries
 			_, _, filenum, err = table.getBounds(i)
 			if err != nil {
 				return err
 			}
 			break
-			/*_, _, filenum, err := table.getBounds(i)
-			if err != nil {
-				return err
-			}
-			fstart, fend, err := table.getFileBounds(filenum)
-			if err != nil {
-				return err
-			}
-			log.Info("Got file bounds after stop signal", "fstart", fstart, "fend", fend)*/
 		}
 	}
 	log.Info("Copying over leftover receipts", "i", i)
-	// Copy over left-over receipts in the file with last legacy receipt
+	// Copy over left-over receipts in the file with last legacy receipt:
+	// 1. loop getBounds until filenum exceeds threshold filenum
+	// 2. copy verbatim to new table
+	// 3. need to copy rest of old index and repair the filenum in the entries
 	for ; i < numAncients; i++ {
 		_, _, fn, err := table.getBounds(i)
 		if err != nil {
