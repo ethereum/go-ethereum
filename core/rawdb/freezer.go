@@ -19,6 +19,7 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -559,5 +560,107 @@ func (f *freezer) DropTable(kind string) error {
 		return err
 	}
 	delete(f.tables, kind)
+	return nil
+}
+
+type TransformerFn = func([]byte) ([]byte, bool, error)
+
+func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
+	// TODO: Do we need to recover anything after error?
+
+	table, ok := f.tables[kind]
+	if !ok {
+		return errUnknownTable
+	}
+
+	numAncients, err := f.Ancients()
+	if err != nil {
+		return err
+	}
+
+	ancientsPath := filepath.Dir(table.index.Name())
+	migrationPath := filepath.Join(ancientsPath, "migration")
+	newTable, err := NewFreezerTable(migrationPath, kind, FreezerNoSnappy[kind])
+	if err != nil {
+		return err
+	}
+
+	var i uint64
+	var filenum uint32
+	for i = 0; i < numAncients; i++ {
+		blob, err := table.Retrieve(i)
+		if err != nil {
+			return err
+		}
+		out, stop, err := fn(blob)
+		if err != nil {
+			return err
+		}
+		if !stop {
+			newTable.Append(i, out)
+		} else {
+			// what we want is the byte offsets in the file
+			// for leftover items in file
+
+			// 1. loop getBounds until filenum exceeds threshold filenum
+			// 2. copy verbatim to new table
+			// 3. need to copy rest of old index and repair the filenum in the entries
+			_, _, filenum, err = table.getBounds(i)
+			if err != nil {
+				return err
+			}
+			break
+			/*_, _, filenum, err := table.getBounds(i)
+			if err != nil {
+				return err
+			}
+			fstart, fend, err := table.getFileBounds(filenum)
+			if err != nil {
+				return err
+			}
+			log.Info("Got file bounds after stop signal", "fstart", fstart, "fend", fend)*/
+		}
+	}
+	log.Info("Copying over leftover receipts", "i", i)
+	// Copy over left-over receipts in the file with last legacy receipt
+	for ; i < numAncients; i++ {
+		_, _, fn, err := table.getBounds(i)
+		if err != nil {
+			return err
+		}
+		if fn > filenum {
+			break
+		}
+		blob, err := table.Retrieve(i)
+		if err != nil {
+			return err
+		}
+		newTable.Append(i, blob)
+	}
+	log.Info("Finished copying leftovers", "i", i)
+
+	if i < numAncients {
+		log.Info("Need to copy over index bits")
+	}
+
+	if err := newTable.Close(); err != nil {
+		return err
+	}
+
+	// Move new table files to ancients dir
+	files, err := ioutil.ReadDir(migrationPath)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := os.Rename(filepath.Join(migrationPath, f.Name()), filepath.Join(ancientsPath, f.Name())); err != nil {
+			return err
+		}
+	}
+
+	/*if err := table.drop(); err != nil {
+		return err
+	}*/
+	log.Info("Dropped old table files")
 	return nil
 }

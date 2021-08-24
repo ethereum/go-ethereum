@@ -114,6 +114,8 @@ type AncientWriter interface {
 
 	// TODO: tmp, to delete table files
 	DropTable(string) error
+
+	TransformTable(string, func([]byte) ([]byte, bool, error)) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

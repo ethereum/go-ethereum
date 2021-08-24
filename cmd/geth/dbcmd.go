@@ -733,57 +733,28 @@ func freezerMigrate(ctx *cli.Context) error {
 		return nil
 	}
 
-	log.Info("Starting migration", "ancients", numAncients)
-	start := time.Now()
-	// Open new freezer table for the updated receipts
-	path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	table, err := rawdb.NewFreezerTable(path, "ureceipts", rawdb.FreezerNoSnappy["receipts"])
-	if err != nil {
-		log.Info("Could not open freezer table for updated receipts", "error", err)
-		return err
-	}
-
-	// Write new freezer table files until we reach a file
-	// that starts with modern receipts. From that point on
-	// we stop and re-use the existing files. Note the last
-	// table file might be significantly smaller than the max size.
-	for i := uint64(0); i < numAncients; i++ {
-		blob, err := db.Ancient("receipts", i)
-		if err != nil {
-			return err
-		}
+	transformer := func(blob []byte) ([]byte, bool, error) {
 		// Stop when first v5 receipt is spotted.
 		// TODO: Combine detecting legacy and converting it
 		// to avoid 2 decoding.
 		legacy, err := types.IsLegacyStoredReceipts(blob)
 		if err != nil {
-			return err
+			return nil, false, err
+		}
+		if !legacy {
+			return blob, true, nil
 		}
 
-		var out []byte
-		if legacy {
-			out, err = types.ConvertLegacyStoredReceipts(blob)
-			if err != nil {
-				return err
-			}
-		} else {
-			out = blob
+		out, err := types.ConvertLegacyStoredReceipts(blob)
+		if err != nil {
+			return nil, false, err
 		}
-
-		if err := table.Append(i, out); err != nil {
-			return err
-		}
+		return out, false, nil
 	}
 
-	log.Info("before dropping table")
-	// Replace old receipt files by new ones
-	if err := db.DropTable("receipts"); err != nil {
-		log.Error("Failed to drop receipts table", "error", err)
-		return err
-	}
-
-	log.Info("Before closing table")
-	if err := table.Close(); err != nil {
+	log.Info("Starting migration", "ancients", numAncients)
+	start := time.Now()
+	if err := db.TransformTable("receipts", transformer); err != nil {
 		return err
 	}
 
