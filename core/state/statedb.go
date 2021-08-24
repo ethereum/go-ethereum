@@ -508,11 +508,10 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], nil); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
-
 		// additional update for new leaf node
-		// if s.snap != nil {
-		// 	delete(s.snapAccounts, obj.addrHash)
-		// }
+		if s.snap != nil {
+			delete(s.snapAccounts, addrKey)
+		}
 
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
