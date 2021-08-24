@@ -112,8 +112,24 @@
     ],
     "introduced": "v1.10.1",
     "fixed": "v1.10.6",
-    "published": "2020-12-10",
+    "published": "2020-07-22",
     "severity": "High",
     "check": "(Geth\\/v1\\.10\\.(1|2|3|4|5)-.*)$"
+  },
+  {
+    "name": " EVM flaw during block processing ",
+    "uid": "GETH-2021-02",
+    "summary": "A vulnerability in the Geth EVM could cause a node to no longer being able to process the chain. Further details about the vulnerability will be disclosed at a later date.",
+    "description": "The exact attack vector will be provided at a later date to give node operators and dependent downstream projects time to update their nodes and software.\n\nAll Geth versions supporting the London hard fork are vulnerable (the bug is older than London), so all users should update.\n\nCredits for the discovery go to @guidovranken (working for Sentnl during an audit of the Telos EVM) and reported via bounty@ethereum.org.",
+    "links": [
+      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-9856-9gg9-qcmq",
+      "https://github.com/ethereum/go-ethereum/releases/tag/v1.10.8"
+    ],
+    "introduced": "v1.10.0",
+    "fixed": "v1.10.8",
+    "published": "2021-08-24",
+    "severity": "High",
+    "CVE": "CVE-2021-39137",
+    "check": "(Geth\\/v1\\.10\\.(0|1|2|3|4|5|6|7)-.*)$"
   }
 ]
