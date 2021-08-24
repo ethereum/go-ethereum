@@ -232,7 +232,7 @@ func verifyState(ctx *cli.Context) error {
 		}
 	}
 	if err := snaptree.Verify(root); err != nil {
-		log.Error("Failed to verfiy state", "root", root, "err", err)
+		log.Error("Failed to verify state", "root", root, "err", err)
 		return err
 	}
 	log.Info("Verified the state", "root", root)
