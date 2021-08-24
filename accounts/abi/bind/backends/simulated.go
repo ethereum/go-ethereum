@@ -488,8 +488,19 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	} else {
 		hi = b.pendingBlock.GasLimit()
 	}
+	// Normalize the max fee per gas the call is willing to spend.
+	var feeCap *big.Int
+	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	} else if call.GasPrice != nil {
+		feeCap = call.GasPrice
+	} else if call.GasFeeCap != nil {
+		feeCap = call.GasFeeCap
+	} else {
+		feeCap = common.Big0
+	}
 	// Recap the highest gas allowance with account's balance.
-	if call.GasPrice != nil && call.GasPrice.BitLen() != 0 {
+	if feeCap.BitLen() != 0 {
 		balance := b.pendingState.GetBalance(call.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
@@ -498,14 +509,14 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 			}
 			available.Sub(available, call.Value)
 		}
-		allowance := new(big.Int).Div(available, call.GasPrice)
+		allowance := new(big.Int).Div(available, feeCap)
 		if allowance.IsUint64() && hi > allowance.Uint64() {
 			transfer := call.Value
 			if transfer == nil {
 				transfer = new(big.Int)
 			}
 			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", transfer, "gasprice", call.GasPrice, "fundable", allowance)
+				"sent", transfer, "feecap", feeCap, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
@@ -784,7 +795,7 @@ type callMsg struct {
 
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
 func (m callMsg) Nonce() uint64                { return 0 }
-func (m callMsg) CheckNonce() bool             { return false }
+func (m callMsg) IsFake() bool                 { return true }
 func (m callMsg) To() *common.Address          { return m.CallMsg.To }
 func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
 func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
