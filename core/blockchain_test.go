@@ -3053,7 +3053,7 @@ func testSendingStateChangeEvents(t *testing.T, numberOfEventsToSend int) {
 		key2, _    = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr2      = crypto.PubkeyToAddress(key2.PublicKey)
 		db         = rawdb.NewMemoryDatabase()
-		gspec      = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}}}
+		gspec      = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(100000000000000)}}}
 		genesis    = gspec.MustCommit(db)
 		signer     = types.NewEIP155Signer(gspec.Config.ChainID)
 		newEventCh = make(chan bool)
@@ -3067,7 +3067,7 @@ func testSendingStateChangeEvents(t *testing.T, numberOfEventsToSend int) {
 
 	// create numberOfEventsToSend blocks that include State Changes
 	chain, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, numberOfEventsToSend, func(i int, block *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, block.header.BaseFee, nil), signer, key1)
 		block.AddTx(tx)
 	})
 

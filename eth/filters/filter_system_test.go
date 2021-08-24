@@ -690,11 +690,13 @@ func flattenLogs(pl [][]*types.Log) []*types.Log {
 }
 
 func TestStateChangeSubscription(t *testing.T) {
+	t.Parallel()
+
 	var (
 		db             = rawdb.NewMemoryDatabase()
 		backend        = &testBackend{db: db}
-		api            = NewPublicFilterAPI(backend, false)
-		genesis        = new(core.Genesis).MustCommit(db)
+		api            = NewPublicFilterAPI(backend, false, deadline)
+		genesis        = (&core.Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		numberOfBlocks = 3
 		chain, _       = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, numberOfBlocks, func(i int, gen *core.BlockGen) {})
 
