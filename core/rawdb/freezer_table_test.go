@@ -726,20 +726,17 @@ func TestSequentialRead(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("batchread-%d", rand.Uint64())
 	{ // Fill table
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 30 times
-		for x := 0; x < 30; x++ {
-			data := getChunk(15, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 30, 15)
 		f.DumpIndex(0, 30)
 		f.Close()
 	}
 	{ // Open it, iterate, verify iteration
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -760,7 +757,7 @@ func TestSequentialRead(t *testing.T) {
 	}
 	{ // Open it, iterate, verify byte limit. The byte limit is less than item
 		// size, so each lookup should only return one item
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -789,16 +786,13 @@ func TestSequentialReadByteLimit(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("batchread-2-%d", rand.Uint64())
 	{ // Fill table
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 100, true)
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 100, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Write 10 bytes 30 times,
 		// Splitting it at every 100 bytes (10 items)
-		for x := 0; x < 30; x++ {
-			data := getChunk(10, x)
-			f.Append(uint64(x), data)
-		}
+		writeChunks(t, f, 30, 10)
 		f.Close()
 	}
 	for i, tc := range []struct {
@@ -814,7 +808,7 @@ func TestSequentialReadByteLimit(t *testing.T) {
 		{100, 109, 10},
 	} {
 		{
-			f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 100, true)
+			f, err := newTable(os.TempDir(), fname, rm, wm, sg, 100, true)
 			if err != nil {
 				t.Fatal(err)
 			}
