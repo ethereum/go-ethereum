@@ -1,5 +1,6 @@
 # This file contains sha256 checksums of optional build dependencies.
 
+3a70e5055509f347c0fb831ca07a2bf3b531068f349b14a3c652e9b5b67beb5d  go1.17.src.tar.gz
 355bd544ce08d7d484d9d7de05a71b5c6f5bc10aa4b316688c2192aeb3dacfd1  go1.17.darwin-amd64.tar.gz
 da4e3e3c194bf9eed081de8842a157120ef44a7a8d7c820201adae7b0e28b20b  go1.17.darwin-arm64.tar.gz
 6819a7a11b8351d5d5768f2fff666abde97577602394f132cb7f85b3a7151f05  go1.17.freebsd-386.tar.gz
