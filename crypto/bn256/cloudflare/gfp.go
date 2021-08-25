@@ -61,6 +61,7 @@ func (e *gfP) Marshal(out []byte) {
 func (e *gfP) Unmarshal(in []byte) error {
 	// Unmarshal the bytes into little endian form
 	for w := uint(0); w < 4; w++ {
+		e[3-w] = 0
 		for b := uint(0); b < 8; b++ {
 			e[3-w] += uint64(in[8*w+b]) << (56 - 8*b)
 		}
