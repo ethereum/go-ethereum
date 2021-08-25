@@ -173,7 +173,7 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, err := trieA.Commit(nil)
+	rootA, _, err := trieA.Commit(nil)
 	if err != nil {
 		panic(err)
 	}

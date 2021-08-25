@@ -47,10 +47,10 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH32)}, 0xFF, 1},
 		{[]byte{byte(PUSH32)}, 0xFF, 2},
 	}
-	for _, test := range tests {
+	for i, test := range tests {
 		ret := codeBitmap(test.code)
 		if ret[test.which] != test.exp {
-			t.Fatalf("expected %x, got %02x", test.exp, ret[test.which])
+			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
 	}
 }
@@ -72,4 +72,24 @@ func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 		crypto.Keccak256Hash(code)
 	}
 	bench.StopTimer()
+}
+
+func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
+	var op OpCode
+	bencher := func(b *testing.B) {
+		code := make([]byte, 32*b.N)
+		for i := range code {
+			code[i] = byte(op)
+		}
+		bits := make(bitvec, len(code)/8+1+4)
+		b.ResetTimer()
+		codeBitmapInternal(code, bits)
+	}
+	for op = PUSH1; op <= PUSH32; op++ {
+		bench.Run(op.String(), bencher)
+	}
+	op = JUMPDEST
+	bench.Run(op.String(), bencher)
+	op = STOP
+	bench.Run(op.String(), bencher)
 }
