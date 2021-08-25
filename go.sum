@@ -150,6 +150,8 @@ github.com/gballet/go-verkle v0.0.0-20210604161259-9b2384ccc273 h1:Pru4iuqTkFSRE
 github.com/gballet/go-verkle v0.0.0-20210604161259-9b2384ccc273/go.mod h1:akFOShdOMvQRvRG2A3HzMV6hasi/0jRUo5PwIfVvS0o=
 github.com/gballet/go-verkle v0.0.0-20210805103937-fb1c9604ae43 h1:U0iiHWLbhg0fsdJaITgWqn6KUwSI8+++ObqO57HarIo=
 github.com/gballet/go-verkle v0.0.0-20210805103937-fb1c9604ae43/go.mod h1:DYUthw4jqdQ4bii2oWajFNNisXeHf/MPowrwwDJI9nk=
+github.com/gballet/go-verkle v0.0.0-20210812082731-87d2e97111ed h1:RuaZ0iiO6gYYv2o/c/DQxmjrH9jOx2vUUjSZrOczT1g=
+github.com/gballet/go-verkle v0.0.0-20210812082731-87d2e97111ed/go.mod h1:DYUthw4jqdQ4bii2oWajFNNisXeHf/MPowrwwDJI9nk=
 github.com/glycerine/go-unsnap-stream v0.0.0-20180323001048-9f0cb55181dd/go.mod h1:/20jfyN9Y5QPEAprSgKAUr+glWDY39ZiUEAYOEv5dsE=
 github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31/go.mod h1:Ogl1Tioa0aV7gstGFO7KhffUsb9M4ydbEbbxpcEDc24=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
@@ -368,6 +370,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/protolambda/go-kzg v0.0.0-20210604135214-fb4a41b60480/go.mod h1:P9wXBp1WMjLHx2C22Gg7FyqQcJktMAohrKj3tdaWIH0=
 github.com/protolambda/go-kzg v0.0.0-20210611120117-98afb8f0b71f h1:OMaCx0zQT5Gk/5CgwSGvrpmDyPKiezkuDc+c8bwZXiY=
 github.com/protolambda/go-kzg v0.0.0-20210611120117-98afb8f0b71f/go.mod h1:P9wXBp1WMjLHx2C22Gg7FyqQcJktMAohrKj3tdaWIH0=
+github.com/protolambda/go-kzg v0.0.0-20210811124852-a7e557c7732a h1:GzLwhH40oYoGZx3NCoVCG2J8m8X3QF0/kde0qbhIjkY=
+github.com/protolambda/go-kzg v0.0.0-20210811124852-a7e557c7732a/go.mod h1:P9wXBp1WMjLHx2C22Gg7FyqQcJktMAohrKj3tdaWIH0=
 github.com/retailnext/hllpp v1.0.1-0.20180308014038-101a6d2f8b52/go.mod h1:RDpi1RftBQPUCDRw6SmxeaREsAaRKnOclghuzp/WRzc=
 github.com/rjeczalik/notify v0.9.1 h1:CLCKso/QK1snAlnhNR/CNvNiFU2saUtjV0bx3EwNeCE=
 github.com/rjeczalik/notify v0.9.1/go.mod h1:rKwnCoCGeuQnwBtTSPL9Dad03Vh2n40ePRrjvIXnJho=
@@ -541,6 +545,8 @@ golang.org/x/sys v0.0.0-20210603125802-9665404d3644/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c h1:F1jZWGFhYfh0Ci55sIpILtKKK8p3i2/krTr0H1rg74I=
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e h1:WUoyKPm6nCo1BnNUvPGnFG3T5DUVem42yDJZZ4CNxMA=
+golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 h1:v+OssWQX+hTHEmOBgwxdZxK4zHq3yOs8F9J7mk0PY8E=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

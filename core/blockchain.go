@@ -1861,7 +1861,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		var (
+			usedGas  uint64
+			receipts types.Receipts
+			logs     []*types.Log
+		)
+		if len(block.Header().VerkleProof) > 0 {
+			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+		} else {
+			var leaves map[common.Hash]common.Hash
+			_, _, _, leaves = trie.DeserializeVerkleProof(block.Header().VerkleProof)
+			receipts, logs, usedGas, err = bc.processor.ProcessStateless(block, statedb, bc.vmConfig, leaves)
+		}
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

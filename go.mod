@@ -21,7 +21,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
-	github.com/gballet/go-verkle v0.0.0-20210805103937-fb1c9604ae43
+	github.com/gballet/go-verkle v0.0.0-20210812082731-87d2e97111ed
 	github.com/go-stack/stack v1.8.0
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.3
@@ -44,7 +44,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/prometheus/tsdb v0.7.1
-	github.com/protolambda/go-kzg v0.0.0-20210611120117-98afb8f0b71f // indirect
+	github.com/protolambda/go-kzg v0.0.0-20210811124852-a7e557c7732a // indirect
 	github.com/rjeczalik/notify v0.9.1
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
@@ -55,7 +55,7 @@ require (
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
 	golang.org/x/text v0.3.6
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce

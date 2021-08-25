@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -84,7 +85,7 @@ type TxContext struct {
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
 
-	Accesses map[common.Hash]map[byte]struct{}
+	Accesses *types.AccessWitness
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -122,11 +123,13 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	accesses map[common.Hash]common.Hash
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, accesses map[common.Hash]common.Hash) *EVM {
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
@@ -134,6 +137,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		accesses:    accesses,
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm

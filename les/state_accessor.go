@@ -63,7 +63,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 			return msg, context, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
+		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{}, nil)
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gballet/go-verkle"
 	"github.com/protolambda/go-kzg/bls"
 )
@@ -128,6 +129,33 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 }
 func (trie *VerkleTrie) IsVerkle() bool {
 	return true
+}
+
+type verkleproof struct {
+	D *bls.G1Point
+	Y *bls.Fr
+	Σ *bls.G1Point
+
+	Leaves map[common.Hash]common.Hash
+}
+
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) ([]byte, error) {
+	d, y, σ := verkle.MakeVerkleMultiProof(trie.root, keys)
+	leaves := make(map[common.Hash]common.Hash)
+	for _, key := range keys {
+		payload, err := trie.TryGet(key)
+		if err != nil {
+			return nil, err
+		}
+		leaves[common.Hash{}] = common.BytesToHash(payload)
+	}
+	return rlp.EncodeToBytes(verkleproof{D: d, Y: y, Σ: σ, Leaves: leaves})
+}
+
+func DeserializeVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, map[common.Hash]common.Hash) {
+	var vp verkleproof
+	rlp.DecodeBytes(proof, &vp)
+	return vp.D, vp.Y, vp.Σ, vp.Leaves
 }
 
 func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {

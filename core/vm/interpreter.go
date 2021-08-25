@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"hash"
 	"sync/atomic"
 
@@ -195,25 +196,45 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// if the PC ends up in a new "page" of verkleized code, charge the
 		// associated witness costs.
-		// XXX pre-cache the account page in order not to pay for the witness
-		// costs on top of the costs for the call.
+		inWitness := false
+		var codePage common.Hash
 		if in.evm.ChainConfig().UseVerkle {
 			index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
 			subtree := common.BytesToHash(index[:31])
 			subleaf := index[31]
-			if _, ok := in.evm.TxContext.Accesses[subtree]; !ok {
-				in.evm.TxContext.Accesses[subtree] = make(map[byte]struct{})
+			if _, ok := in.evm.TxContext.Accesses.Witness[subtree]; !ok {
+				in.evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
 				contract.Gas -= gasWitnessBranchCost
 			}
-			if _, ok := in.evm.TxContext.Accesses[subtree][subleaf]; !ok {
-				in.evm.TxContext.Accesses[subtree][subleaf] = struct{}{}
+			if _, ok := in.evm.TxContext.Accesses.Witness[subtree][subleaf]; !ok {
+				in.evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 				contract.Gas -= gasWitnessChunkCost
 			}
+
+			if in.evm.accesses != nil {
+				codePage, inWitness = in.evm.accesses[common.BytesToHash(index)]
+				// Return an error if we're in stateless mode
+				// and the code isn't in the witness. It means
+				// that if code is read beyond the actual code
+				// size, pages of 0s need to be added to the
+				// witness.
+				if !inWitness {
+					return nil, errors.New("code chunk missing from proof")
+				}
+			}
+		}
+
+		if inWitness {
+			// Get the op from the tree, skipping the header byte
+			op = OpCode(codePage[1+pc%31])
+		} else {
+			// If we are in witness mode, then raise an error
+			op = contract.GetOp(pc)
+
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
-		op = contract.GetOp(pc)
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}

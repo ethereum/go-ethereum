@@ -469,7 +469,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		}
 
 	} else {
-		// TODO rewrite this code in go-verkle to have only verkle.TryUpdateAccount()
 		var err error
 		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyVersion(addr), []byte{0}); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
@@ -934,6 +933,11 @@ func (s *StateDB) clearJournalAndRefund() {
 		s.refund = 0
 	}
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entires
+}
+
+// GetTrie returns the account trie.
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
 }
 
 // Commit writes the state to the underlying in-memory trie database.
