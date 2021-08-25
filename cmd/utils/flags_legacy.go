@@ -18,10 +18,8 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -45,7 +43,7 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
 	}
-  // (Deprecated July 2021, shown in aliased flags section)
+	// (Deprecated July 2021, shown in aliased flags section)
 	LegacyMinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks (deprecated)",
