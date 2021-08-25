@@ -501,6 +501,8 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // GetHeadersFrom returns a contiguous segment of headers, in rlp-form, going
 // backwards from the given number.
+// If the 'number' is higher than the highest local header, this method will
+// return a best-effort response, containing the headers that we do have.
 func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	// If the request is for future headers, we still return the portion of
 	// headers that we are able to serve
