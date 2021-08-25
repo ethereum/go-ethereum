@@ -47,14 +47,14 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot   common.Hash    `json:"stateRoot"`
-	TxRoot      common.Hash    `json:"txRoot"`
-	ReceiptRoot common.Hash    `json:"receiptRoot"`
-	LogsHash    common.Hash    `json:"logsHash"`
-	Bloom       types.Bloom    `json:"logsBloom"        gencodec:"required"`
-	Receipts    types.Receipts `json:"receipts"`
-	Rejected    []*rejectedTx  `json:"rejected,omitempty"`
-	Difficulty  *big.Int       `json:"currentDifficulty" gencodec:"required"`
+	StateRoot   common.Hash           `json:"stateRoot"`
+	TxRoot      common.Hash           `json:"txRoot"`
+	ReceiptRoot common.Hash           `json:"receiptRoot"`
+	LogsHash    common.Hash           `json:"logsHash"`
+	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
+	Receipts    types.Receipts        `json:"receipts"`
+	Rejected    []*rejectedTx         `json:"rejected,omitempty"`
+	Difficulty  *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
 }
 
 type ommer struct {
@@ -254,7 +254,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
-		Difficulty:  vmContext.Difficulty,
+		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
 	}
 	return statedb, execRs, nil
 }
