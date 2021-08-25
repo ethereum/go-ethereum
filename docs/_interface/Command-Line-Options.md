@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.6-stable-576681f2
+   1.10.8-stable-26675454
 
 COMMANDS:
    account                            Manage accounts
@@ -53,7 +53,6 @@ ETHEREUM OPTIONS:
   --mainnet                           Ethereum mainnet
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
-  --calaveras                         Calaveras network: pre-configured proof-of-authority shortlived test network.
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
   --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
@@ -164,13 +163,12 @@ MINER OPTIONS:
   --miner.notify value                Comma separated HTTP URL list to notify of new work packages
   --miner.notify.full                 Notify with pending block headers instead of work packages
   --miner.gasprice value              Minimum gas price for mining a transaction (default: 1000000000)
-  --miner.gastarget value             Target gas floor for mined blocks (default: 8000000)
   --miner.gaslimit value              Target gas ceiling for mined blocks (default: 8000000)
   --miner.etherbase value             Public address for block mining rewards (default = first account) (default: "0")
   --miner.extradata value             Block extra data set by the miner (default = client version)
   --miner.recommit value              Time interval to recreate the block being mined (default: 3s)
   --miner.noverify                    Disable remote sealing verification
-
+  
 GAS PRICE ORACLE OPTIONS:
   --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
@@ -197,16 +195,20 @@ LOGGING AND DEBUGGING OPTIONS:
   --trace value                       Write execution trace to the given file
 
 METRICS AND STATS OPTIONS:
-  --metrics                           Enable metrics collection and reporting
-  --metrics.expensive                 Enable expensive metrics collection and reporting
-  --metrics.addr value                Enable stand-alone metrics HTTP server listening interface (default: "127.0.0.1")
-  --metrics.port value                Metrics HTTP server listening port (default: 6060)
-  --metrics.influxdb                  Enable metrics export/push to an external InfluxDB database
-  --metrics.influxdb.endpoint value   InfluxDB API endpoint to report metrics to (default: "http://localhost:8086")
-  --metrics.influxdb.database value   InfluxDB database name to push reported metrics to (default: "geth")
-  --metrics.influxdb.username value   Username to authorize access to the database (default: "test")
-  --metrics.influxdb.password value   Password to authorize access to the database (default: "test")
-  --metrics.influxdb.tags value       Comma-separated InfluxDB tags (key/values) attached to all measurements (default: "host=localhost")
+  --metrics                              Enable metrics collection and reporting
+  --metrics.expensive                    Enable expensive metrics collection and reporting
+  --metrics.addr value                   Enable stand-alone metrics HTTP server listening interface (default: "127.0.0.1")
+  --metrics.port value                   Metrics HTTP server listening port (default: 6060)
+  --metrics.influxdb                     Enable metrics export/push to an external InfluxDB database
+  --metrics.influxdb.endpoint value      InfluxDB API endpoint to report metrics to (default: "http://localhost:8086")
+  --metrics.influxdb.database value      InfluxDB database name to push reported metrics to (default: "geth")
+  --metrics.influxdb.username value      Username to authorize access to the database (default: "test")
+  --metrics.influxdb.password value      Password to authorize access to the database (default: "test")
+  --metrics.influxdb.tags value          Comma-separated InfluxDB tags (key/values) attached to all measurements (default: "host=localhost")
+  --metrics.influxdbv2                   Enable metrics export/push to an external InfluxDB v2 database
+  --metrics.influxdb.token value         Token to authorize access to the database (v2 only) (default: "test")
+  --metrics.influxdb.bucket value        InfluxDB bucket name to push reported metrics to (v2 only) (default: "geth")
+  --metrics.influxdb.organization value  InfluxDB organization name (v2 only) (default: "geth")
 
 ALIASED (deprecated) OPTIONS:
   --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
@@ -216,6 +218,7 @@ ALIASED (deprecated) OPTIONS:
   --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)
   --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
   --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
+  --miner.gastarget value             Target gas floor for mined blocks (deprecated) (default: 0)
 
 MISC OPTIONS:
   --snapshot                          Enables snapshot-database mode (default = enable)
