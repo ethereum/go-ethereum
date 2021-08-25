@@ -116,7 +116,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	peer1, peer2, err := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	peer1, peer2, err := newTestPeerPair("peer", protocol, server.handler, client.handler, false)
 	if err != nil {
 		t.Fatalf("Failed to connect testing peers %v", err)
 	}
@@ -218,7 +218,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 		}
 	}
 	// Create connected peer pair.
-	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler, false); err != nil {
 		t.Fatalf("Failed to connect testing peers %v", err)
 	}
 	select {
@@ -291,7 +291,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		}
 	}
 	// Create connected peer pair.
-	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler, false); err != nil {
 		t.Fatalf("Failed to connect testing peers %v", err)
 	}
 
@@ -364,7 +364,7 @@ func testSyncAll(t *testing.T, protocol int) {
 		}
 	}
 	// Create connected peer pair.
-	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler, false); err != nil {
 		t.Fatalf("Failed to connect testing peers %v", err)
 	}
 
