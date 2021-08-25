@@ -87,6 +87,7 @@ type environment struct {
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
+	coinbase  common.Address
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -102,11 +103,13 @@ func (env *environment) copy() *environment {
 		ancestors: env.ancestors.Clone(),
 		family:    env.family.Clone(),
 		tcount:    env.tcount,
+		coinbase:  env.coinbase,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
 	}
 	if env.gasPool != nil {
-		cpy.gasPool = &(*env.gasPool)
+		gasPool := *env.gasPool
+		cpy.gasPool = &gasPool
 	}
 	// The content of txs and uncles are immutable, unnecessary
 	// to do the expensive deep copy for them.
@@ -574,10 +577,6 @@ func (w *worker) mainLoop() {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
-				w.mu.RLock()
-				coinbase := w.coinbase
-				w.mu.RUnlock()
-
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
@@ -585,8 +584,9 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, coinbase, nil)
-				// Only update the snapshot if any new transactons were added
+				w.commitTransactions(w.current, txset, w.current.coinbase, nil)
+
+				// Only update the snapshot if any new transactions were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
@@ -728,7 +728,7 @@ func (w *worker) resultLoop() {
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environment, error) {
+func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit. Note since the sealing block
 	// can be created upon the arbitrary parent block, but the state of parent
@@ -740,9 +740,11 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header) (*environmen
 	}
 	state.StartPrefetcher("miner")
 
+	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
+		coinbase:  coinbase,
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,
@@ -780,8 +782,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	return nil
 }
 
-// updateSnapshot updates pending snapshot block and state.
-// Note this function assumes the current variable is thread safe.
+// updateSnapshot updates pending snapshot block, receipts and state.
 func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
@@ -991,7 +992,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		return nil, err
 	}
 	// Could potentially happen if starting to mine in an odd state.
-	env, err := w.makeEnv(parent, header)
+	env, err := w.makeEnv(parent, header, w.coinbase)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1037,13 +1038,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 	}
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
-		if w.commitTransactions(env, txs, w.coinbase, interrupt) {
+		if w.commitTransactions(env, txs, env.coinbase, interrupt) {
 			return nil
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
-		if w.commitTransactions(env, txs, w.coinbase, interrupt) {
+		if w.commitTransactions(env, txs, env.coinbase, interrupt) {
 			return nil
 		}
 	}
