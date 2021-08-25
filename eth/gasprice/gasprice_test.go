@@ -112,7 +112,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 
 		var txdata types.TxData
 		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
-			txdata := &types.DynamicFeeTx{
+			txdata = &types.DynamicFeeTx{
 				ChainID:   gspec.Config.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
@@ -122,7 +122,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Data:      []byte{},
 			}
 		} else {
-			txdata := &types.LegacyTx{
+			txdata = &types.LegacyTx{
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
 				Gas:      21000,
@@ -131,11 +131,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Data:     []byte{},
 			}
 		}
-		tx, err := types.SignNewTx(txdata, signer, key)
-		if err != nil {
-			t.Fatalf("failed to create tx: %v", err)
-		}
-		b.AddTx(tx)
+		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
