@@ -80,40 +80,50 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	// After london, default to 1559 unless gasPrice is set
 	head := b.CurrentHeader()
-	if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
-		if args.MaxPriorityFeePerGas == nil {
-			tip, err := b.SuggestGasTipCap(ctx)
-			if err != nil {
-				return err
+	// If user specifies both maxPriorityfee and maxFee, then we do not
+	// need to consult the chain for defaults. It's definitely a London tx.
+	if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
+		// In this clause, user left some fields unspecified.
+		if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
+			if args.MaxPriorityFeePerGas == nil {
+				tip, err := b.SuggestGasTipCap(ctx)
+				if err != nil {
+					return err
+				}
+				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
-			args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
-		}
-		if args.MaxFeePerGas == nil {
-			gasFeeCap := new(big.Int).Add(
-				(*big.Int)(args.MaxPriorityFeePerGas),
-				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-			)
-			args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
-		}
-		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+			if args.MaxFeePerGas == nil {
+				gasFeeCap := new(big.Int).Add(
+					(*big.Int)(args.MaxPriorityFeePerGas),
+					new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+				)
+				args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
+			}
+			if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+				return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+			}
+		} else {
+			if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+				return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+			}
+			if args.GasPrice == nil {
+				price, err := b.SuggestGasTipCap(ctx)
+				if err != nil {
+					return err
+				}
+				if b.ChainConfig().IsLondon(head.Number) {
+					// The legacy tx gas price suggestion should not add 2x base fee
+					// because all fees are consumed, so it would result in a spiral
+					// upwards.
+					price.Add(price, head.BaseFee)
+				}
+				args.GasPrice = (*hexutil.Big)(price)
+			}
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
-		}
-		if args.GasPrice == nil {
-			price, err := b.SuggestGasTipCap(ctx)
-			if err != nil {
-				return err
-			}
-			if b.ChainConfig().IsLondon(head.Number) {
-				// The legacy tx gas price suggestion should not add 2x base fee
-				// because all fees are consumed, so it would result in a spiral
-				// upwards.
-				price.Add(price, head.BaseFee)
-			}
-			args.GasPrice = (*hexutil.Big)(price)
+		// Both maxPriorityfee and maxFee set by caller. Sanity-check their internal relation
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
 	}
 	if args.Value == nil {
@@ -161,7 +171,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	return nil
 }
 
-// ToMessage converts th transaction arguments to the Message type used by the
+// ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
@@ -228,7 +238,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
 	return msg, nil
 }
 
