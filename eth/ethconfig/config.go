@@ -43,8 +43,8 @@ import (
 var FullNodeGPO = gasprice.Config{
 	Blocks:           20,
 	Percentile:       60,
-	MaxHeaderHistory: 0,
-	MaxBlockHistory:  0,
+	MaxHeaderHistory: 1024,
+	MaxBlockHistory:  1024,
 	MaxPrice:         gasprice.DefaultMaxPrice,
 	IgnorePrice:      gasprice.DefaultIgnorePrice,
 }

@@ -217,7 +217,7 @@ func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) e
 
 // Commit implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Commit() error {
-	root, err := c.trie.Commit(nil)
+	root, _, err := c.trie.Commit(nil)
 	if err != nil {
 		return err
 	}
@@ -454,7 +454,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			b.trie.Delete(encKey[:])
 		}
 	}
-	root, err := b.trie.Commit(nil)
+	root, _, err := b.trie.Commit(nil)
 	if err != nil {
 		return err
 	}
