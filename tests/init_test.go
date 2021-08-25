@@ -39,7 +39,6 @@ var (
 	stateTestDir       = filepath.Join(baseDir, "GeneralStateTests")
 	legacyStateTestDir = filepath.Join(baseDir, "LegacyTests", "Constantinople", "GeneralStateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
-	vmTestDir          = filepath.Join(baseDir, "VMTests")
 	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
 	difficultyTestDir  = filepath.Join(baseDir, "BasicTests")
 )
@@ -89,11 +88,11 @@ func findLine(data []byte, offset int64) (line int) {
 
 // testMatcher controls skipping and chain config assignment to tests.
 type testMatcher struct {
-	configpat    []testConfig
-	failpat      []testFailure
-	skiploadpat  []*regexp.Regexp
-	slowpat      []*regexp.Regexp
-	whitelistpat *regexp.Regexp
+	configpat      []testConfig
+	failpat        []testFailure
+	skiploadpat    []*regexp.Regexp
+	slowpat        []*regexp.Regexp
+	runonlylistpat *regexp.Regexp
 }
 
 type testConfig struct {
@@ -124,8 +123,8 @@ func (tm *testMatcher) fails(pattern string, reason string) {
 	tm.failpat = append(tm.failpat, testFailure{regexp.MustCompile(pattern), reason})
 }
 
-func (tm *testMatcher) whitelist(pattern string) {
-	tm.whitelistpat = regexp.MustCompile(pattern)
+func (tm *testMatcher) runonly(pattern string) {
+	tm.runonlylistpat = regexp.MustCompile(pattern)
 }
 
 // config defines chain config for tests matching the pattern.
@@ -217,9 +216,9 @@ func (tm *testMatcher) runTestFile(t *testing.T, path, name string, runTest inte
 	if r, _ := tm.findSkip(name); r != "" {
 		t.Skip(r)
 	}
-	if tm.whitelistpat != nil {
-		if !tm.whitelistpat.MatchString(name) {
-			t.Skip("Skipped by whitelist")
+	if tm.runonlylistpat != nil {
+		if !tm.runonlylistpat.MatchString(name) {
+			t.Skip("Skipped by runonly")
 		}
 	}
 	t.Parallel()
@@ -276,10 +275,10 @@ func runTestFunc(runTest interface{}, t *testing.T, name string, m reflect.Value
 	})
 }
 
-func TestMatcherWhitelist(t *testing.T) {
+func TestMatcherRunonlylist(t *testing.T) {
 	t.Parallel()
 	tm := new(testMatcher)
-	tm.whitelist("invalid*")
+	tm.runonly("invalid*")
 	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
 		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
 			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)

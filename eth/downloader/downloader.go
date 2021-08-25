@@ -465,7 +465,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	if mode == FastSync && pivot == nil {
 		// If no pivot block was returned, the head is below the min full block
-		// threshold (i.e. new chian). In that case we won't really fast sync
+		// threshold (i.e. new chain). In that case we won't really fast sync
 		// anyway, but still need a valid pivot block to avoid some code hitting
 		// nil panics on an access.
 		pivot = d.blockchain.CurrentBlock().Header()
@@ -681,7 +681,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 				return head, nil, nil
 			}
 			// At this point we have 2 headers in total and the first is the
-			// validated head of the chian. Check the pivot number and return,
+			// validated head of the chain. Check the pivot number and return,
 			pivot := headers[1]
 			if pivot.Number.Uint64() != head.Number.Uint64()-uint64(fsMinFullBlocks) {
 				return nil, nil, fmt.Errorf("%w: remote pivot %d != requested %d", errInvalidChain, pivot.Number, head.Number.Uint64()-uint64(fsMinFullBlocks))
