@@ -100,11 +100,11 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	defer peer.close()
 	h.wg.Add(1)
 	defer h.wg.Done()
-	err := h.handle(peer)
+	err := h.handle(peer, false)
 	return err
 }
 
-func (h *clientHandler) handle(p *serverPeer) error {
+func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	if h.backend.peers.len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
@@ -143,8 +143,11 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
-	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
-
+	// It's mainly used in testing which requires discarding initial
+	// signal to prevent syncing.
+	if !noInitAnnounce {
+		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
+	}
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
 	defer atomic.StoreUint32(&p.serving, 0)
