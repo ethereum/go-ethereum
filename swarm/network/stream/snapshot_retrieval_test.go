@@ -42,27 +42,27 @@ const (
 //provided to the test.
 //Files are uploaded to nodes, other nodes try to retrieve the file
 //Number of nodes can be provided via commandline too.
-func TestFileRetrieval(t *testing.T) {
-	if *nodes != 0 {
-		err := runFileRetrievalTest(*nodes)
-		if err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		nodeCnt := []int{16}
-		//if the `longrunning` flag has been provided
-		//run more test combinations
-		if *longrunning {
-			nodeCnt = append(nodeCnt, 32, 64, 128)
-		}
-		for _, n := range nodeCnt {
-			err := runFileRetrievalTest(n)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-}
+// func TestFileRetrieval(t *testing.T) {
+// 	if *nodes != 0 {
+// 		err := runFileRetrievalTest(*nodes)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 	} else {
+// 		nodeCnt := []int{16}
+// 		//if the `longrunning` flag has been provided
+// 		//run more test combinations
+// 		if *longrunning {
+// 			nodeCnt = append(nodeCnt, 32, 64, 128)
+// 		}
+// 		for _, n := range nodeCnt {
+// 			err := runFileRetrievalTest(n)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+// 		}
+// 	}
+// }
 
 //This test is a retrieval test for nodes.
 //One node is randomly selected to be the pivot node.
@@ -70,39 +70,39 @@ func TestFileRetrieval(t *testing.T) {
 //provided to the test, the number of chunks is uploaded
 //to the pivot node and other nodes try to retrieve the chunk(s).
 //Number of chunks and nodes can be provided via commandline too.
-func TestRetrieval(t *testing.T) {
-	//if nodes/chunks have been provided via commandline,
-	//run the tests with these values
-	if *nodes != 0 && *chunks != 0 {
-		err := runRetrievalTest(t, *chunks, *nodes)
-		if err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		var nodeCnt []int
-		var chnkCnt []int
-		//if the `longrunning` flag has been provided
-		//run more test combinations
-		if *longrunning {
-			nodeCnt = []int{16, 32, 128}
-			chnkCnt = []int{4, 32, 256}
-		} else {
-			//default test
-			nodeCnt = []int{16}
-			chnkCnt = []int{32}
-		}
-		for _, n := range nodeCnt {
-			for _, c := range chnkCnt {
-				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
-					err := runRetrievalTest(t, c, n)
-					if err != nil {
-						t.Fatal(err)
-					}
-				})
-			}
-		}
-	}
-}
+// func TestRetrieval(t *testing.T) {
+// 	//if nodes/chunks have been provided via commandline,
+// 	//run the tests with these values
+// 	if *nodes != 0 && *chunks != 0 {
+// 		err := runRetrievalTest(t, *chunks, *nodes)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 	} else {
+// 		var nodeCnt []int
+// 		var chnkCnt []int
+// 		//if the `longrunning` flag has been provided
+// 		//run more test combinations
+// 		if *longrunning {
+// 			nodeCnt = []int{16, 32, 128}
+// 			chnkCnt = []int{4, 32, 256}
+// 		} else {
+// 			//default test
+// 			nodeCnt = []int{16}
+// 			chnkCnt = []int{32}
+// 		}
+// 		for _, n := range nodeCnt {
+// 			for _, c := range chnkCnt {
+// 				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
+// 					err := runRetrievalTest(t, c, n)
+// 					if err != nil {
+// 						t.Fatal(err)
+// 					}
+// 				})
+// 			}
+// 		}
+// 	}
+// }
 
 var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {

@@ -37,13 +37,13 @@ import (
 )
 
 var (
-	loglevel    = flag.Int("loglevel", 4, "verbosity of logs")
+	loglevel    = flag.Int("loglevel", 1, "verbosity of logs")
 	rawlog      = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
 	longrunning = flag.Bool("longrunning", false, "do run long-running tests")
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }

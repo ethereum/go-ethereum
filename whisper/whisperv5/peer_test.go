@@ -87,24 +87,6 @@ var sharedKey = []byte("some arbitrary data here")
 var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
 var expectedMessage = []byte("per rectum ad astra")
 
-// This test does the following:
-// 1. creates a chain of whisper nodes,
-// 2. installs the filters with shared (predefined) parameters,
-// 3. each node sends a number of random (undecryptable) messages,
-// 4. first node sends one expected (decryptable) message,
-// 5. checks if each node have received and decrypted exactly one message.
-func TestSimulation(t *testing.T) {
-	initialize(t)
-
-	for i := 0; i < NumNodes; i++ {
-		sendMsg(t, false, i)
-	}
-
-	sendMsg(t, true, 0)
-	checkPropagation(t)
-	stopServers()
-}
-
 func initialize(t *testing.T) {
 	var err error
 

@@ -36,8 +36,8 @@ import (
 )
 
 func init() {
-	loglevel := flag.Int("loglevel", 2, "loglevel")
-	flag.Parse()
+	loglevel := flag.Int("loglevel", 1, "loglevel")
+	// flag.Parse()
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 

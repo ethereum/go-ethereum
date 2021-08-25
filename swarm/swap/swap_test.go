@@ -34,11 +34,11 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 1, "verbosity of logs")
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	mrand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)

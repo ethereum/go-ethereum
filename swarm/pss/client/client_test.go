@@ -61,17 +61,12 @@ var (
 var services = newServices()
 
 func init() {
-	flag.Parse()
+
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
 
 	loglevel := log.LvlInfo
-	if *debugflag {
-		loglevel = log.LvlDebug
-	} else if *debugdebugflag {
-		loglevel = log.LvlTrace
-	}
 
 	psslogmain = log.New("psslog", "*")
 	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))

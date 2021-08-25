@@ -30,7 +30,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
 	hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
 	h := log.CallerFileHandler(hf)

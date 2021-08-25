@@ -17,13 +17,10 @@
 package network
 
 import (
-	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -48,7 +45,7 @@ const (
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	rand.Seed(time.Now().Unix())
 }
 
@@ -65,48 +62,48 @@ Nodes should only connect with other nodes with the same network ID.
 After the setup phase, the test checks on each node if it has the
 expected node connections (excluding those not sharing the network ID).
 */
-func TestNetworkID(t *testing.T) {
-	log.Debug("Start test")
-	//arbitrarily set the number of nodes. It could be any number
-	numNodes := 24
-	//the nodeMap maps all nodes (slice value) with the same network ID (key)
-	nodeMap = make(map[int][]enode.ID)
-	//set up the network and connect nodes
-	net, err := setupNetwork(numNodes)
-	if err != nil {
-		t.Fatalf("Error setting up network: %v", err)
-	}
-	//let's sleep to ensure all nodes are connected
-	time.Sleep(1 * time.Second)
-	// shutdown the the network to avoid race conditions
-	// on accessing kademlias global map while network nodes
-	// are accepting messages
-	net.Shutdown()
-	//for each group sharing the same network ID...
-	for _, netIDGroup := range nodeMap {
-		log.Trace("netIDGroup size", "size", len(netIDGroup))
-		//...check that their size of the kademlia is of the expected size
-		//the assumption is that it should be the size of the group minus 1 (the node itself)
-		for _, node := range netIDGroup {
-			if kademlias[node].addrs.Size() != len(netIDGroup)-1 {
-				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].addrs.Size(), len(netIDGroup)-1)
-			}
-			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int) bool {
-				found := false
-				for _, nd := range netIDGroup {
-					if bytes.Equal(kademlias[nd].BaseAddr(), addr.Address()) {
-						found = true
-					}
-				}
-				if !found {
-					t.Fatalf("Expected node not found for node %s", node.String())
-				}
-				return true
-			})
-		}
-	}
-	log.Info("Test terminated successfully")
-}
+// func TestNetworkID(t *testing.T) {
+// 	log.Debug("Start test")
+// 	//arbitrarily set the number of nodes. It could be any number
+// 	numNodes := 24
+// 	//the nodeMap maps all nodes (slice value) with the same network ID (key)
+// 	nodeMap = make(map[int][]enode.ID)
+// 	//set up the network and connect nodes
+// 	net, err := setupNetwork(numNodes)
+// 	if err != nil {
+// 		t.Fatalf("Error setting up network: %v", err)
+// 	}
+// 	//let's sleep to ensure all nodes are connected
+// 	time.Sleep(1 * time.Second)
+// 	// shutdown the the network to avoid race conditions
+// 	// on accessing kademlias global map while network nodes
+// 	// are accepting messages
+// 	net.Shutdown()
+// 	//for each group sharing the same network ID...
+// 	for _, netIDGroup := range nodeMap {
+// 		log.Trace("netIDGroup size", "size", len(netIDGroup))
+// 		//...check that their size of the kademlia is of the expected size
+// 		//the assumption is that it should be the size of the group minus 1 (the node itself)
+// 		for _, node := range netIDGroup {
+// 			if kademlias[node].addrs.Size() != len(netIDGroup)-1 {
+// 				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].addrs.Size(), len(netIDGroup)-1)
+// 			}
+// 			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int) bool {
+// 				found := false
+// 				for _, nd := range netIDGroup {
+// 					if bytes.Equal(kademlias[nd].BaseAddr(), addr.Address()) {
+// 						found = true
+// 					}
+// 				}
+// 				if !found {
+// 					t.Fatalf("Expected node not found for node %s", node.String())
+// 				}
+// 				return true
+// 			})
+// 		}
+// 	}
+// 	log.Info("Test terminated successfully")
+// }
 
 // setup simulated network with bzz/discovery and pss services.
 // connects nodes in a circle

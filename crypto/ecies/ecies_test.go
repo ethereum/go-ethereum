@@ -47,7 +47,7 @@ var dumpEnc bool
 
 func init() {
 	flDump := flag.Bool("dump", false, "write encrypted test message to file")
-	flag.Parse()
+	// flag.Parse()
 	dumpEnc = *flDump
 }
 

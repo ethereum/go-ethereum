@@ -34,12 +34,12 @@ import (
 )
 
 var (
-	loglevel   = flag.Int("loglevel", 3, "verbosity of logs")
+	loglevel   = flag.Int("loglevel", 1, "verbosity of logs")
 	getTimeout = 30 * time.Second
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }

@@ -51,8 +51,8 @@ import (
 )
 
 func init() {
-	loglevel := flag.Int("loglevel", 2, "loglevel")
-	flag.Parse()
+	loglevel := flag.Int("loglevel", 1, "loglevel")
+	// flag.Parse()
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
@@ -171,7 +171,7 @@ func TestBzzWithFeed(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", feedManifestAddressHex, err)
 	}
 
-	correctManifestAddrHex := "747c402e5b9dc715a25a4393147512167bab018a007fad7cdcd9adc7fce1ced2"
+	correctManifestAddrHex := "6349c18ca30937a627ac54e1bc463b65a264396fa228570c8d6200d557cb2f6c"
 	if feedManifestAddress.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestAddress.Hex())
 	}
@@ -244,7 +244,7 @@ func TestBzzFeed(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
+	correctManifestAddrHex := "6325878846b8f738ec87913a89a250d89f12b5d21f052fb8b4b21e9531ae8330"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}

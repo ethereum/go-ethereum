@@ -15,21 +15,21 @@ jobs:
       script:
         - go run build/ci.go lint
 
+    - stage: build
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=auto
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
     # These builders run the tests
     # - stage: build
     #   os: linux
     #   arch: amd64
     #   dist: bionic
     #   go: 1.16.x
-    #   env:
-    #     - GO111MODULE=auto
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # - stage: build
-    #   os: linux
-    #   dist: bionic
-    #   go: 1.15.x
     #   env:
     #     - GO111MODULE=auto
     #   script:

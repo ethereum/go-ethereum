@@ -84,12 +84,12 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 var (
 	nodeCount = flag.Int("nodes", 32, "number of nodes to create (default 32)")
 	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
+	loglevel  = flag.Int("loglevel", 1, "verbosity of logs")
 	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
@@ -121,9 +121,9 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func TestDiscoverySimulationExecAdapter(t *testing.T) {
-	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
-}
+// func TestDiscoverySimulationExecAdapter(t *testing.T) {
+// 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
+// }
 
 func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 	baseDir, err := ioutil.TempDir("", "swarm-test")
@@ -134,13 +134,13 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 }
 
-func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
-}
+// func TestDiscoverySimulationSimAdapter(t *testing.T) {
+// 	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
+// }
 
-func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
-	testDiscoveryPersistenceSimulationSimAdapter(t, *nodeCount, *initCount)
-}
+// func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
+// 	testDiscoveryPersistenceSimulationSimAdapter(t, *nodeCount, *initCount)
+// }
 
 func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int) {
 	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
