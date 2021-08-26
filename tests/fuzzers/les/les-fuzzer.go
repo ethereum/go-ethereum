@@ -114,7 +114,7 @@ func init() {
 
 type fuzzer struct {
 	chain *core.BlockChain
-	pool  core.TxPoolIf
+	pool  core.TxPool
 
 	chainLen  int
 	addr, txs []common.Hash
@@ -232,7 +232,7 @@ func (f *fuzzer) BlockChain() *core.BlockChain {
 	return f.chain
 }
 
-func (f *fuzzer) TxPool() core.TxPoolIf {
+func (f *fuzzer) TxPool() core.TxPool {
 	return f.pool
 }
 

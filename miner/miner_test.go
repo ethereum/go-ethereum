@@ -37,10 +37,10 @@ import (
 
 type mockBackend struct {
 	bc     *core.BlockChain
-	txPool core.TxPoolIf
+	txPool core.TxPool
 }
 
-func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
+func NewMockBackend(bc *core.BlockChain, txPool core.TxPool) *mockBackend {
 	return &mockBackend{
 		bc:     bc,
 		txPool: txPool,
@@ -51,7 +51,7 @@ func (m *mockBackend) BlockChain() *core.BlockChain {
 	return m.bc
 }
 
-func (m *mockBackend) TxPool() core.TxPoolIf {
+func (m *mockBackend) TxPool() core.TxPool {
 	return m.txPool
 }
 

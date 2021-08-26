@@ -49,7 +49,7 @@ type ethBackend interface {
 	BloomIndexer() *core.ChainIndexer
 	ChainDb() ethdb.Database
 	Synced() bool
-	TxPool() core.TxPoolIf
+	TxPool() core.TxPool
 }
 
 type LesServer struct {

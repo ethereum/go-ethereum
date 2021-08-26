@@ -67,7 +67,7 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool             core.TxPoolIf
+	txPool             core.TxPool
 	blockchain         *core.BlockChain
 	handler            *handler
 	ethDialCandidates  enode.Iterator
@@ -502,7 +502,7 @@ func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() core.TxPoolIf              { return s.txPool }
+func (s *Ethereum) TxPool() core.TxPool                { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }

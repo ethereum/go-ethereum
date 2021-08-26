@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type TxPoolIf interface {
+type TxPool interface {
 	Stop()
 	SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription
 	SetGasPrice(price *big.Int)

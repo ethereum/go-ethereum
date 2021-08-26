@@ -108,7 +108,7 @@ func init() {
 // testWorkerBackend implements worker.Backend interfaces and wraps all information needed during the testing.
 type testWorkerBackend struct {
 	db         ethdb.Database
-	txPool     core.TxPoolIf
+	txPool     core.TxPool
 	chain      *core.BlockChain
 	testTxFeed event.Feed
 	genesis    *core.Genesis
@@ -164,7 +164,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 }
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() core.TxPoolIf        { return b.txPool }
+func (b *testWorkerBackend) TxPool() core.TxPool          { return b.txPool }
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block

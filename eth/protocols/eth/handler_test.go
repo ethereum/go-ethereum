@@ -52,7 +52,7 @@ var (
 type testBackend struct {
 	db     ethdb.Database
 	chain  *core.BlockChain
-	txpool core.TxPoolIf
+	txpool core.TxPool
 }
 
 // newTestBackend creates an empty chain and wraps it into a mock backend.

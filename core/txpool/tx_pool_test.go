@@ -113,11 +113,11 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 	return tx
 }
 
-func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
+func setupTxPool() (*standardTxPool, *ecdsa.PrivateKey) {
 	return setupTxPoolWithConfig(params.TestChainConfig)
 }
 
-func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateKey) {
+func setupTxPoolWithConfig(config *params.ChainConfig) (*standardTxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
@@ -128,7 +128,7 @@ func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateK
 }
 
 // validateTxPoolInternals checks various consistency invariants within the pool.
-func validateTxPoolInternals(pool *TxPool) error {
+func validateTxPoolInternals(pool *standardTxPool) error {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -263,13 +263,13 @@ func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
 	}
 }
 
-func testAddBalance(pool *TxPool, addr common.Address, amount *big.Int) {
+func testAddBalance(pool *standardTxPool, addr common.Address, amount *big.Int) {
 	pool.mu.Lock()
 	pool.currentState.AddBalance(addr, amount)
 	pool.mu.Unlock()
 }
 
-func testSetNonce(pool *TxPool, addr common.Address, nonce uint64) {
+func testSetNonce(pool *standardTxPool, addr common.Address, nonce uint64) {
 	pool.mu.Lock()
 	pool.currentState.SetNonce(addr, nonce)
 	pool.mu.Unlock()
