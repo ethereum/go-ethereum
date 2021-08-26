@@ -353,7 +353,7 @@ func (c *Console) Evaluate(statement string, abortCh chan os.Signal) {
 
 // Interactive starts an interactive user session, where input is propted from
 // the configured user prompter.
-func (c *Console) Interactive() {
+func (c *Console) Interactive(exitCh chan struct{}) {
 	var (
 		prompt      = c.prompt             // the current prompt line (used for multi-line inputs)
 		indents     = 0                    // the current number of input indents (used for multi-line inputs)
@@ -380,7 +380,10 @@ func (c *Console) Interactive() {
 		requestLine <- prompt
 
 		select {
-		case <-interrupt:
+		case <-exitCh: // Exit via external notification (backend closed)
+			fmt.Fprintln(c.printer, "exiting console")
+			return
+		case <-interrupt: // Exit via our own os.Signal interrupt
 			fmt.Fprintln(c.printer, "caught interrupt, exiting")
 			return
 

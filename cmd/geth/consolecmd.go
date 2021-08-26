@@ -96,6 +96,13 @@ func localConsole(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
 	}
+	exitCh := make(chan struct{})
+	go func() {
+		// In case the blockchain is stopped, e.g. via ctrl-c, we should
+		// also close down the console.
+		stack.Wait()
+		close(exitCh)
+	}()
 	defer console.Stop(false)
 
 	// If only a short execution was requested, evaluate and return
@@ -105,7 +112,7 @@ func localConsole(ctx *cli.Context) error {
 	}
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
-	console.Interactive()
+	console.Interactive(exitCh)
 
 	return nil
 }
@@ -164,7 +171,7 @@ func remoteConsole(ctx *cli.Context) error {
 
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
-	console.Interactive()
+	console.Interactive(nil)
 
 	return nil
 }
