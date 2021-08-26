@@ -284,7 +284,6 @@ OUTER_TWO:
 // connected in a ring topology, checks that all nodes successfully handshake
 // with each other and that a snapshot fully represents the desired topology
 func TestNetworkSimulation(t *testing.T) {
-	t.Skip("Test flaky")
 	// create simulation network with 20 testService nodes
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"test": newTestService,
