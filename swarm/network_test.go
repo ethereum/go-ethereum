@@ -63,29 +63,29 @@ func TestSwarmNetwork(t *testing.T) {
 		options  *testSwarmNetworkOptions
 		disabled bool
 	}{
-		{
-			name: "10_nodes",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 10,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout: 45 * time.Second,
-			},
-		},
-		{
-			name: "10_nodes_skip_check",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 10,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout:   45 * time.Second,
-				SkipCheck: true,
-			},
-		},
+		// {
+		// 	name: "10_nodes",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 10,
+		// 		},
+		// 	},
+		// 	options: &testSwarmNetworkOptions{
+		// 		Timeout: 45 * time.Second,
+		// 	},
+		// },
+		// {
+		// 	name: "10_nodes_skip_check",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 10,
+		// 		},
+		// 	},
+		// 	options: &testSwarmNetworkOptions{
+		// 		Timeout:   45 * time.Second,
+		// 		SkipCheck: true,
+		// 	},
+		// },
 		{
 			name: "50_nodes",
 			steps: []testSwarmNetworkStep{

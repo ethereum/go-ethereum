@@ -1362,6 +1362,9 @@ func worker(id int, jobs <-chan Job, rpcs map[enode.ID]*rpc.Client, pubkeys map[
 }
 
 func TestNetwork(t *testing.T) {
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("16/1000/4/sim", testNetwork)
 }
 
