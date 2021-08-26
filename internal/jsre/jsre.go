@@ -282,7 +282,7 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
-func (re *JSRE) Interrupt(v interface{}){
+func (re *JSRE) Interrupt(v interface{}) {
 	re.vm.Interrupt(v)
 }
 

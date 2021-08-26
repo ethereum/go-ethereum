@@ -202,7 +202,7 @@ func TestInteractive(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
 
-	go tester.console.Interactive()
+	go tester.console.Interactive(nil)
 
 	// Wait for a prompt and send a statement back
 	select {
