@@ -15,22 +15,47 @@ jobs:
       script:
         - go run build/ci.go lint
 
-    - stage: build
+    - stage: test A-B packages
       os: linux
       dist: bionic
       go: 1.15.x
       env:
         - GO111MODULE=auto
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[a-b].*")
 
-    # These builders run the tests
-    # - stage: build
-    #   os: linux
-    #   arch: amd64
-    #   dist: bionic
-    #   go: 1.16.x
-    #   env:
-    #     - GO111MODULE=auto
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: test C packages
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=auto
+      script:
+        - go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[c].*")
+
+    - stage: test D-N packages
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=auto
+      script:
+        - go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[d-n].*")
+    
+    - stage: test O-R packages
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=auto
+      script:
+        - go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[o-r].*")
+
+    - stage: test S-Z packages
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=auto
+      script:
+        - go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[s-z].*")
