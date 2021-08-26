@@ -43,6 +43,7 @@ import (
 const dataChunkCount = 200
 
 func TestSyncerSimulation(t *testing.T) {
+	t.Skip()
 	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
 	// This test uses much more memory when running with
 	// race detector. Allow it to finish successfully by
@@ -231,6 +232,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 //TestSameVersionID just checks that if the version is not changed,
 //then streamer peers see each other
 func TestSameVersionID(t *testing.T) {
+	t.Skip()
 	//test version ID
 	v := uint(1)
 	sim := simulation.New(map[string]simulation.ServiceFunc{

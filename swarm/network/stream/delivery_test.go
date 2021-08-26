@@ -442,6 +442,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 }
 
 func TestDeliveryFromNodes(t *testing.T) {
+	t.Skip()
 	testDeliveryFromNodes(t, 2, dataChunkCount, true)
 	testDeliveryFromNodes(t, 2, dataChunkCount, false)
 	testDeliveryFromNodes(t, 4, dataChunkCount, true)
