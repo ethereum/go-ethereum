@@ -124,7 +124,8 @@ func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateK
 	key, _ := crypto.GenerateKey()
 	pool := NewTxPool(testTxPoolConfig, config, blockchain)
 
-	pool.chainHeadCh <- ChainHeadEvent{}
+	// wait for the pool to initialize
+	<-pool.initDoneCh
 	return pool, key
 }
 
@@ -428,9 +429,7 @@ func TestTransactionChainFork(t *testing.T) {
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		statedb.AddBalance(addr, big.NewInt(100000000000000))
 
-		pool.mu.Lock()
 		pool.chain = &testBlockChain{statedb, 1000000, new(event.Feed)}
-		pool.mu.Unlock()
 		<-pool.requestReset(nil, nil)
 	}
 	resetState()
@@ -459,9 +458,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		statedb.AddBalance(addr, big.NewInt(100000000000000))
 
-		pool.mu.Lock()
 		pool.chain = &testBlockChain{statedb, 1000000, new(event.Feed)}
-		pool.mu.Unlock()
 		<-pool.requestReset(nil, nil)
 	}
 	resetState()

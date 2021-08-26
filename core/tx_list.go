@@ -601,6 +601,7 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 func (l *txPricedList) Reheap() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.reheap()
 }
 
 // reheap forcibly rebuilds the heap based on the current remote transaction set.

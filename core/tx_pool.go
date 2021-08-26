@@ -266,6 +266,7 @@ type TxPool struct {
 	reorgDoneCh        chan chan struct{}
 	reorgShutdownCh    chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg                 sync.WaitGroup // tracks loop, scheduleReorgLoop
+	initDoneCh         chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
 }
@@ -297,6 +298,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:        make(chan chan struct{}),
 		reorgShutdownCh:    make(chan struct{}),
 		updateBlockchainCh: make(chan blockChain),
+		initDoneCh:         make(chan struct{}),
 		gasPrice:           new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
@@ -350,6 +352,8 @@ func (pool *TxPool) loop() {
 	defer evict.Stop()
 	defer journal.Stop()
 
+	// Notify tests that the init phase is done
+	close(pool.initDoneCh)
 	for {
 		select {
 		// Handle ChainHeadEvent
