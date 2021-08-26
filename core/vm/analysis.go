@@ -30,12 +30,8 @@ const (
 // it's data (i.e. argument of PUSHxx).
 type bitvec []byte
 
-var lookup = [8]byte{
-	0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1,
-}
-
 func (bits bitvec) set1(pos uint64) {
-	bits[pos/8] |= lookup[pos%8]
+	bits[pos/8] |= 0x80 >> (pos & 7)
 }
 
 func (bits bitvec) setN(flag uint16, pos uint64) {
