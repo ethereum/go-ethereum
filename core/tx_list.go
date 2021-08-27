@@ -518,7 +518,7 @@ func (l *txPricedList) Removed(count int) {
 		return
 	}
 	// Seems we've reached a critical number of stale transactions, reheap
-	l.reheap()
+	l.Reheap()
 }
 
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
@@ -597,12 +597,6 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.
 func (l *txPricedList) Reheap() {
-	l.reheap()
-}
-
-// reheap forcibly rebuilds the heap based on the current remote transaction set.
-// Expects the reheap mutex to be held
-func (l *txPricedList) reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
 	start := time.Now()
@@ -632,5 +626,5 @@ func (l *txPricedList) reheap() {
 // necessary to call right before SetBaseFee when processing a new block.
 func (l *txPricedList) SetBaseFee(baseFee *big.Int) {
 	l.urgent.baseFee = baseFee
-	l.reheap()
+	l.Reheap()
 }
