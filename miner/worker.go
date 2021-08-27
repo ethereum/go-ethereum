@@ -318,11 +318,6 @@ func (w *worker) isRunning() bool {
 // close terminates all background threads maintained by the worker.
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.current != nil && w.current.state != nil {
-		w.current.state.StopPrefetcher()
-	}
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
@@ -451,6 +446,11 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	defer func() {
+		if w.current != nil && w.current.state != nil {
+			w.current.state.StopPrefetcher()
+		}
+	}()
 
 	for {
 		select {
