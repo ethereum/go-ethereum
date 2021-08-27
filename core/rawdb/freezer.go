@@ -606,17 +606,21 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			break
 		}
 	}
-	log.Info("Copying over leftover receipts", "i", i)
+	log.Info("Copying over leftover receipts", "i", i, "filenum", filenum)
 	// Copy over left-over receipts in the file with last legacy receipt:
 	// 1. loop getBounds until filenum exceeds threshold filenum
 	// 2. copy verbatim to new table
-	// 3. need to copy rest of old index and repair the filenum in the entries
 	for ; i < numAncients; i++ {
-		_, _, fn, err := table.getBounds(i)
+		/*_, _, fn, err := table.getBounds(i)
+		if err != nil {
+			return err
+		}*/
+		idx, err := table.readEntry(i)
 		if err != nil {
 			return err
 		}
-		if fn > filenum {
+		if idx.filenum > filenum {
+			log.Info("Reached new file with updated receipts", "fn", fn, "i", i)
 			break
 		}
 		blob, err := table.Retrieve(i)
@@ -627,8 +631,25 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	}
 	log.Info("Finished copying leftovers", "i", i)
 
+	// 3. need to copy rest of old index and repair the filenum in the entries
 	if i < numAncients {
-		log.Info("Need to copy over index bits")
+		idx, err := table.readEntry(i)
+		if err != nil {
+			return err
+		}
+
+		lastFilenum := atomic.LoadUint32(&newTable.headId)
+		diff := int32(lastFilenum) - int32(idx.filenum)
+		for ; i < numAncients; i++ {
+			idx, err := table.readEntry(i)
+			if err != nil {
+				return err
+			}
+			// (idx.filenum + diff) is always > 0
+			idx.filenum = uint32(int32(idx.filenum) + diff)
+			newTable.writeEntry(idx)
+		}
+		log.Info("Duplicated rest of index in new table", "i", i)
 	}
 
 	if err := newTable.Close(); err != nil {

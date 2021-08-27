@@ -850,3 +850,23 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
 }
+
+func (t *freezerTable) readEntry(item uint64) (indexEntry, error) {
+	buffer := make([]byte, indexEntrySize)
+	var idx indexEntry
+	if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
+		return idx, err
+	}
+	idx.unmarshalBinary(buffer)
+	return idx, nil
+}
+
+// low-level, doesnt increase counters, assumes lock
+func (t *freezerTable) writeEntry(idx indexEntry) error {
+	// Ensure the table is still accessible
+	if t.index == nil {
+		return errClosed
+	}
+	_, err := t.index.Write(idx.marshallBinary())
+	return err
+}
