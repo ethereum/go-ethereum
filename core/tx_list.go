@@ -483,7 +483,7 @@ type txPricedList struct {
 	all              *txLookup  // Pointer to the map of all transactions
 	urgent, floating priceHeap  // Heaps of prices of all the stored **remote** transactions
 	stales           int64      // Number of stale price points to (re-heap trigger)
-	mu               sync.Mutex // Mutex asserts that only one routine is reheaping the list
+	reheapMu         sync.Mutex // Mutex asserts that only one routine is reheaping the list
 }
 
 const (
@@ -603,8 +603,8 @@ func (l *txPricedList) Reheap() {
 // reheap forcibly rebuilds the heap based on the current remote transaction set.
 // Expects the reheap mutex to be held
 func (l *txPricedList) reheap() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.reheapMu.Lock()
+	defer l.reheapMu.Unlock()
 	start := time.Now()
 	atomic.StoreInt64(&l.stales, 0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
