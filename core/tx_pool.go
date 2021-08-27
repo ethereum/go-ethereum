@@ -257,16 +257,15 @@ type TxPool struct {
 	all     *txLookup                    // All transactions to allow lookups
 	priced  *txPricedList                // All transactions sorted by price
 
-	chainHeadCh        chan ChainHeadEvent
-	chainHeadSub       event.Subscription
-	reqResetCh         chan *txpoolResetRequest
-	reqPromoteCh       chan *accountSet
-	updateBlockchainCh chan blockChain
-	queueTxEventCh     chan *types.Transaction
-	reorgDoneCh        chan chan struct{}
-	reorgShutdownCh    chan struct{}  // requests shutdown of scheduleReorgLoop
-	wg                 sync.WaitGroup // tracks loop, scheduleReorgLoop
-	initDoneCh         chan struct{}  // is closed once the pool is initialized (for tests)
+	chainHeadCh     chan ChainHeadEvent
+	chainHeadSub    event.Subscription
+	reqResetCh      chan *txpoolResetRequest
+	reqPromoteCh    chan *accountSet
+	queueTxEventCh  chan *types.Transaction
+	reorgDoneCh     chan chan struct{}
+	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
+	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
 }
@@ -283,23 +282,22 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:             config,
-		chainconfig:        chainconfig,
-		chain:              chain,
-		signer:             types.LatestSigner(chainconfig),
-		pending:            make(map[common.Address]*txList),
-		queue:              make(map[common.Address]*txList),
-		beats:              make(map[common.Address]time.Time),
-		all:                newTxLookup(),
-		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:         make(chan *txpoolResetRequest),
-		reqPromoteCh:       make(chan *accountSet),
-		queueTxEventCh:     make(chan *types.Transaction),
-		reorgDoneCh:        make(chan chan struct{}),
-		reorgShutdownCh:    make(chan struct{}),
-		updateBlockchainCh: make(chan blockChain),
-		initDoneCh:         make(chan struct{}),
-		gasPrice:           new(big.Int).SetUint64(config.PriceLimit),
+		config:          config,
+		chainconfig:     chainconfig,
+		chain:           chain,
+		signer:          types.LatestSigner(chainconfig),
+		pending:         make(map[common.Address]*txList),
+		queue:           make(map[common.Address]*txList),
+		beats:           make(map[common.Address]time.Time),
+		all:             newTxLookup(),
+		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:      make(chan *txpoolResetRequest),
+		reqPromoteCh:    make(chan *accountSet),
+		queueTxEventCh:  make(chan *types.Transaction),
+		reorgDoneCh:     make(chan chan struct{}),
+		reorgShutdownCh: make(chan struct{}),
+		initDoneCh:      make(chan struct{}),
+		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
