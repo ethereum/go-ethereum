@@ -263,3 +263,15 @@ jobs:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
+
+    # This builder executes race tests
+    - stage: build
+      if: type = cron
+      os: linux
+      dist: bionic
+      go: 1.17.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test  -race -coverage $TEST_PACKAGES
+
