@@ -512,8 +512,6 @@ func (l *txPricedList) Put(tx *types.Transaction, local bool) {
 // from the pool. The list will just keep a counter of stale objects and update
 // the heap if a large enough ratio of transactions go stale.
 func (l *txPricedList) Removed(count int) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	// Bump the stale counter, but exit if still too low (< 25%)
 	stales := atomic.AddInt64(&l.stales, int64(count))
 	if int(stales) <= (len(l.urgent.list)+len(l.floating.list))/4 {
@@ -599,14 +597,14 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.
 func (l *txPricedList) Reheap() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	l.reheap()
 }
 
 // reheap forcibly rebuilds the heap based on the current remote transaction set.
 // Expects the reheap mutex to be held
 func (l *txPricedList) reheap() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	start := time.Now()
 	atomic.StoreInt64(&l.stales, 0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
@@ -634,7 +632,5 @@ func (l *txPricedList) reheap() {
 // necessary to call right before SetBaseFee when processing a new block.
 func (l *txPricedList) SetBaseFee(baseFee *big.Int) {
 	l.urgent.baseFee = baseFee
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	l.reheap()
 }
