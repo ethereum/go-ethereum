@@ -125,9 +125,9 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, int, error) {
+func (t *odrTrie) Commit(onleaf trie.LeafCallback) (*trie.CommitResult, error) {
 	if t.trie == nil {
-		return t.id.Root, 0, nil
+		return &trie.CommitResult{Root: t.id.Root}, nil
 	}
 	return t.trie.Commit(onleaf)
 }
