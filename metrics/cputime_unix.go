@@ -14,10 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !windows && !js
+// +build !windows,!js
+
 package metrics
 
-// getProcessCPUTime returns 0 on Windows as there is no system call to resolve
-// the actual process' CPU time.
+import (
+	syscall "golang.org/x/sys/unix"
+
+	"github.com/ethereum/go-ethereum/log"
+)
+
+// getProcessCPUTime retrieves the process' CPU time since program startup.
 func getProcessCPUTime() int64 {
-	return 0
+	var usage syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
+		log.Warn("Failed to retrieve CPU time", "err", err)
+		return 0
+	}
+	return int64(usage.Utime.Sec+usage.Stime.Sec)*100 + int64(usage.Utime.Usec+usage.Stime.Usec)/10000 //nolint:unconvert
 }
