@@ -268,22 +268,21 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 				if err != nil {
 					return nil, err
 				}
-				opts.GasPrice = price
+				tip = price.Sub(price, head.BaseFee)
 			} else if err != nil {
 				return nil, err
-			} else {
-				opts.GasTipCap = tip
 			}
+			opts.GasTipCap = tip
 		}
 		// Skip remaining branches if gas price has been set in the special case above
-		if opts.GasPrice == nil && opts.GasFeeCap == nil {
+		if opts.GasFeeCap == nil {
 			gasFeeCap := new(big.Int).Add(
 				opts.GasTipCap,
 				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 			)
 			opts.GasFeeCap = gasFeeCap
 		}
-		if opts.GasPrice == nil && opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
+		if opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
 			return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", opts.GasFeeCap, opts.GasTipCap)
 		}
 	} else {
