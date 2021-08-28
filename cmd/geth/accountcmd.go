@@ -268,10 +268,15 @@ func accountCreate(ctx *cli.Context) error {
 		}
 	}
 	utils.SetNodeConfig(ctx, &cfg.Node)
-	scryptN, scryptP, keydir, err := cfg.Node.AccountConfig()
-
+	keydir, err := cfg.Node.KeyDirConfig()
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
+	}
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if cfg.Node.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
 	}
 
 	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))

@@ -436,7 +436,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, _ := snapTrie.Commit(nil)
+		root, _, _ := snapTrie.Commit(nil)
 		snapTrieDb.Commit(root, false, nil)
 	}
 	tr := result.tr
