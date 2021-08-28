@@ -154,6 +154,7 @@ var (
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
+		utils.HTTPRpcTimeoutFlag,
 		utils.HTTPListenAddrFlag,
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,

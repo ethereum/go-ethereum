@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -352,4 +353,8 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) HTTPRpcTimeout() time.Duration {
+	return b.eth.config.HTTPRpcTimeout
 }

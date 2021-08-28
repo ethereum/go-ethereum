@@ -87,10 +87,11 @@ var Defaults = Config{
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   50000000,
-	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 ether
+	TxPool:         core.DefaultTxPoolConfig,
+	RPCGasCap:      50000000,
+	GPO:            FullNodeGPO,
+	RPCTxFeeCap:    1, // 1 ether
+	HTTPRpcTimeout: time.Second * 5,
 }
 
 func init() {
@@ -200,6 +201,9 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
+
+	// Http Rpc request timeout.
+	HTTPRpcTimeout time.Duration
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

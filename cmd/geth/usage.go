@@ -134,6 +134,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
 			utils.HTTPEnabledFlag,
+			utils.HTTPRpcTimeoutFlag,
 			utils.HTTPListenAddrFlag,
 			utils.HTTPPortFlag,
 			utils.HTTPApiFlag,

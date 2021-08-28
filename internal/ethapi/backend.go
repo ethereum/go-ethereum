@@ -20,6 +20,7 @@ package ethapi
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -90,6 +91,8 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+
+	HTTPRpcTimeout() time.Duration
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

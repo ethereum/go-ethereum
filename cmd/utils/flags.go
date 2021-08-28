@@ -775,6 +775,12 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	HTTPRpcTimeoutFlag = cli.StringFlag{
+		Name:  "http.timeout",
+		Usage: "Sets rpc http request timeout",
+		Value: fmt.Sprint(ethconfig.Defaults.HTTPRpcTimeout.Nanoseconds(), "ns"),
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1599,6 +1605,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
+	}
+	if ctx.GlobalIsSet(HTTPRpcTimeoutFlag.Name) {
+		arg := ctx.GlobalString(HTTPRpcTimeoutFlag.Name)
+		_, err := strconv.Atoi(arg)
+		if err == nil {
+			arg = arg + "ns"
+		}
+		timeout, err := time.ParseDuration(arg)
+		if err != nil {
+			log.Warn("Bad http.timeout setting", arg)
+			timeout = ethconfig.Defaults.HTTPRpcTimeout
+		}
+		cfg.HTTPRpcTimeout = timeout
 	}
 	// Override any default configs for hard coded networks.
 	switch {
