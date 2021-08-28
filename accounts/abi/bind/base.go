@@ -261,19 +261,29 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if head.BaseFee != nil && opts.GasPrice == nil {
 		if opts.GasTipCap == nil {
 			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
-			if err != nil {
+			if err.Error() == "Method not found" {
+				// Special case where the base fee is set (implies EIP-1559 support),
+				// but SuggestGasTipCap() is not implemented
+				price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
+				if err != nil {
+					return nil, err
+				}
+				opts.GasPrice = price
+			} else if err != nil {
 				return nil, err
+			} else {
+				opts.GasTipCap = tip
 			}
-			opts.GasTipCap = tip
 		}
-		if opts.GasFeeCap == nil {
+		// Skip remaining branches if gas price has been set in the special case above
+		if opts.GasPrice == nil && opts.GasFeeCap == nil {
 			gasFeeCap := new(big.Int).Add(
 				opts.GasTipCap,
 				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 			)
 			opts.GasFeeCap = gasFeeCap
 		}
-		if opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
+		if opts.GasPrice == nil && opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
 			return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", opts.GasFeeCap, opts.GasTipCap)
 		}
 	} else {
