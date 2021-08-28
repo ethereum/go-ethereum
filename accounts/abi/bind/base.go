@@ -263,7 +263,8 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
 			if err.Error() == "Method not found" {
 				// Special case where the base fee is set (implies EIP-1559 support),
-				// but SuggestGasTipCap() is not implemented
+				// but SuggestGasTipCap() is not implemented. In this case we use
+				// tip = eth_gasPrice - baseFee
 				price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 				if err != nil {
 					return nil, err
@@ -274,7 +275,6 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 			opts.GasTipCap = tip
 		}
-		// Skip remaining branches if gas price has been set in the special case above
 		if opts.GasFeeCap == nil {
 			gasFeeCap := new(big.Int).Add(
 				opts.GasTipCap,
