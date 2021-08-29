@@ -7,7 +7,7 @@ jobs:
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.14.x
       env:
         - lint
       git:
@@ -15,22 +15,67 @@ jobs:
       script:
         - go run build/ci.go lint
 
-    # These builders run the tests
-    # - stage: build
-    #   os: linux
-    #   arch: amd64
-    #   dist: bionic
-    #   go: 1.16.x
-    #   env:
-    #     - GO111MODULE=auto
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # - stage: build
-    #   os: linux
-    #   dist: bionic
-    #   go: 1.15.x
-    #   env:
-    #     - GO111MODULE=auto
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: Tests
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: A-B tests
+      script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[a-b].*")
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/c[a-m].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: C-[a-m] tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/c[n-o].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: C-[n-o] tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/c[p-z].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: C-[p-z] tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[d-i].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: D-I tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[j-n].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: J-N tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[o-r].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: O-R tests
+    - script: travis_retry go run build/ci.go test -v -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/s.*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: S tests
+    - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/ethereum\/go-ethereum\/[t-z].*")
+      os: linux
+      dist: bionic
+      go: 1.14.x
+      env:
+        - GO111MODULE=auto
+      name: T-Z tests

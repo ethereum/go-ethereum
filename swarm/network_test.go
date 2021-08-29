@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 1, "verbosity of logs")
 	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 )
@@ -48,7 +48,7 @@ var (
 func init() {
 	rand.Seed(time.Now().UnixNano())
 
-	flag.Parse()
+	// flag.Parse()
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
@@ -63,29 +63,29 @@ func TestSwarmNetwork(t *testing.T) {
 		options  *testSwarmNetworkOptions
 		disabled bool
 	}{
-		{
-			name: "10_nodes",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 10,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout: 45 * time.Second,
-			},
-		},
-		{
-			name: "10_nodes_skip_check",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 10,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout:   45 * time.Second,
-				SkipCheck: true,
-			},
-		},
+		// {
+		// 	name: "10_nodes",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 10,
+		// 		},
+		// 	},
+		// 	options: &testSwarmNetworkOptions{
+		// 		Timeout: 45 * time.Second,
+		// 	},
+		// },
+		// {
+		// 	name: "10_nodes_skip_check",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 10,
+		// 		},
+		// 	},
+		// 	options: &testSwarmNetworkOptions{
+		// 		Timeout:   45 * time.Second,
+		// 		SkipCheck: true,
+		// 	},
+		// },
 		{
 			name: "50_nodes",
 			steps: []testSwarmNetworkStep{

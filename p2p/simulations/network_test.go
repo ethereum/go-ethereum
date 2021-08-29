@@ -35,6 +35,7 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
+	t.Skip("Test unstable")
 
 	// PART I
 	// create snapshot from ring network

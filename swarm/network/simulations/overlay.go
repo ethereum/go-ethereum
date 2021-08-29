@@ -45,7 +45,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	//initialize the logger
 	//this is a demonstration on how to use Vmodule for filtering logs
 	//provide -vmodule as param, and comma-separated values, e.g.:

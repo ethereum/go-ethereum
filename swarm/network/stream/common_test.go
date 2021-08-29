@@ -62,7 +62,7 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)

@@ -19,7 +19,6 @@ package network
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -48,7 +47,7 @@ const (
 )
 
 func init() {
-	flag.Parse()
+	// flag.Parse()
 	rand.Seed(time.Now().Unix())
 }
 
@@ -66,6 +65,7 @@ After the setup phase, the test checks on each node if it has the
 expected node connections (excluding those not sharing the network ID).
 */
 func TestNetworkID(t *testing.T) {
+	t.Skip("Test no longer work for XDC")
 	log.Debug("Start test")
 	//arbitrarily set the number of nodes. It could be any number
 	numNodes := 24

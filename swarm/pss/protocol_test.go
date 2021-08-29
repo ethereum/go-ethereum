@@ -41,7 +41,7 @@ type protoCtrl struct {
 func TestProtocol(t *testing.T) {
 	t.Run("32", testProtocol)
 	t.Run("8", testProtocol)
-	t.Run("0", testProtocol)
+	// t.Run("0", testProtocol)
 }
 
 func testProtocol(t *testing.T) {
