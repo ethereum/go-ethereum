@@ -778,7 +778,7 @@ var (
 
 	HTTPRpcTimeoutFlag = cli.StringFlag{
 		Name:  "http.timeout",
-		Usage: "Sets rpc http request timeout",
+		Usage: "Sets http rpc request timeout",
 		Value: fmt.Sprint(ethconfig.Defaults.HTTPRpcTimeout.Nanoseconds(), "ns"),
 	}
 )
