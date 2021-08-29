@@ -1,4 +1,4 @@
-package end_to_end
+package tests
 
 import (
 	"bytes"
@@ -26,6 +26,8 @@ import (
 
 type masterNodes map[string]big.Int
 type signersList map[string]bool
+
+const GAP = int(450)
 
 var (
 	acc1Key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -245,7 +247,7 @@ func PrepareXDCTestBlockChain(t *testing.T) (*BlockChain, *backends.SimulatedBac
 	currentBlock := blockchain.Genesis()
 
 	// Insert initial 9 blocks
-	for i := 1; i <= 9; i++ {
+	for i := 1; i < GAP; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
 		merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 		block, err := insertBlock(blockchain, i, blockCoinBase, currentBlock, merkleRoot)
@@ -267,9 +269,9 @@ func PrepareXDCTestBlockChain(t *testing.T) (*BlockChain, *backends.SimulatedBac
 func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
 	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t)
-	// Insert first Block 10 A
-	t.Logf("Inserting block with propose at 10 A...")
-	blockCoinbaseA := "0xaaa0000000000000000000000000000000000010"
+	// Insert first Block 450 A
+	t.Logf("Inserting block with propose at 450 A...")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000000450"
 	tx, err := voteTX(37117, 0, acc1Addr.String())
 	if err != nil {
 		t.Fatal(err)
@@ -277,7 +279,7 @@ func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
 	//Get from block validator error message
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	blockA, err := insertBlockTxs(blockchain, 10, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,16 +315,16 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		t.Fatalf("voterAddr should sit in the signer list")
 	}
 
-	// Insert first Block 10 A
-	t.Logf("Inserting block with propose at 10 A...")
-	blockCoinbaseA := "0xaaa0000000000000000000000000000000000010"
+	// Insert first Block 450 A
+	t.Logf("Inserting block with propose at 450 A...")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000000450"
 	tx, err := voteTX(37117, 0, acc1Addr.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	blockA, err := insertBlockTxs(blockchain, 10, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,20 +339,20 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	}
 
 	// Insert forked Block 10 B
-	t.Logf("Inserting block with propose at 10 B...")
+	t.Logf("Inserting block with propose at 450 B...")
 
-	blockCoinBase10B := "0xbbb0000000000000000000000000000000000010"
+	blockCoinBase450B := "0xbbb0000000000000000000000000000000000450"
 	tx, err = voteTX(37117, 0, acc2Addr.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	merkleRoot = "068dfa09d7b4093441c0cc4d9807a71bc586f6101c072d939b214c21cd136eb3"
-	block10B, err := insertBlockTxs(blockchain, 10, blockCoinBase10B, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, currentBlock, []*types.Transaction{tx}, merkleRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	signers, err = GetSnapshotSigner(blockchain, block10B.Header())
+	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,18 +362,18 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		t.Fatalf("account 3 should sit in the signer list as previos block result")
 	}
 
-	//Insert block 11 parent is 11 B
-	t.Logf("Inserting block with propose at 11 B...")
+	//Insert block 451 parent is 451 B
+	t.Logf("Inserting block with propose at 451 B...")
 
-	blockCoinBase11B := "0xbbb0000000000000000000000000000000000011"
+	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "068dfa09d7b4093441c0cc4d9807a71bc586f6101c072d939b214c21cd136eb3"
-	block11B, err := insertBlock(blockchain, 11, blockCoinBase11B, block10B, merkleRoot)
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	signers, err = GetSnapshotSigner(blockchain, block10B.Header())
+	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +382,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		t.Fatalf("account 2 should sit in the signer list")
 	}
 
-	signers, err = GetSnapshotSigner(blockchain, block11B.Header())
+	signers, err = GetSnapshotSigner(blockchain, block451B.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +456,7 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 		Difficulty:  big.NewInt(int64(1)),
 		Number:      big.NewInt(int64(number)),
 		GasLimit:    1200000000,
-		Time:        big.NewInt(int64(number * 10)),
+		Time:        uint64(number * 10),
 		Extra:       extraByte,
 	}
 
