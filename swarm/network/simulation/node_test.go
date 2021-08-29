@@ -17,12 +17,18 @@
 package simulation
 
 import (
+	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 func TestUpDownNodeIDs(t *testing.T) {
@@ -270,43 +276,44 @@ func TestAddNodesAndConnectStar(t *testing.T) {
 }
 
 //To test that uploading a snapshot works
-// func TestUploadSnapshot(t *testing.T) {
-// 	log.Debug("Creating simulation")
-// 	s := New(map[string]ServiceFunc{
-// 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-// 			addr := network.NewAddr(ctx.Config.Node())
-// 			hp := network.NewHiveParams()
-// 			hp.Discovery = false
-// 			config := &network.BzzConfig{
-// 				OverlayAddr:  addr.Over(),
-// 				UnderlayAddr: addr.Under(),
-// 				HiveParams:   hp,
-// 			}
-// 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-// 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
-// 		},
-// 	})
-// 	defer s.Close()
+func TestUploadSnapshot(t *testing.T) {
+	t.Skip("Broken test for XDC")
+	log.Debug("Creating simulation")
+	s := New(map[string]ServiceFunc{
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			hp := network.NewHiveParams()
+			hp.Discovery = false
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   hp,
+			}
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+		},
+	})
+	defer s.Close()
 
-// 	nodeCount := 16
-// 	log.Debug("Uploading snapshot")
-// 	err := s.UploadSnapshot(fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
-// 	if err != nil {
-// 		t.Fatalf("Error uploading snapshot to simulation network: %v", err)
-// 	}
+	nodeCount := 16
+	log.Debug("Uploading snapshot")
+	err := s.UploadSnapshot(fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
+	if err != nil {
+		t.Fatalf("Error uploading snapshot to simulation network: %v", err)
+	}
 
-// 	ctx := context.Background()
-// 	log.Debug("Starting simulation...")
-// 	s.Run(ctx, func(ctx context.Context, sim *Simulation) error {
-// 		log.Debug("Checking")
-// 		nodes := sim.UpNodeIDs()
-// 		if len(nodes) != nodeCount {
-// 			t.Fatal("Simulation network node number doesn't match snapshot node number")
-// 		}
-// 		return nil
-// 	})
-// 	log.Debug("Done.")
-// }
+	ctx := context.Background()
+	log.Debug("Starting simulation...")
+	s.Run(ctx, func(ctx context.Context, sim *Simulation) error {
+		log.Debug("Checking")
+		nodes := sim.UpNodeIDs()
+		if len(nodes) != nodeCount {
+			t.Fatal("Simulation network node number doesn't match snapshot node number")
+		}
+		return nil
+	})
+	log.Debug("Done.")
+}
 
 func TestStartStopNode(t *testing.T) {
 	sim := New(noopServiceFuncMap)

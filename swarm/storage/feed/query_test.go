@@ -16,6 +16,8 @@
 
 package feed
 
+import "testing"
+
 func getTestQuery() *Query {
 	id := getTestID()
 	return &Query{
@@ -25,10 +27,11 @@ func getTestQuery() *Query {
 	}
 }
 
-// func TestQueryValues(t *testing.T) {
-// 	var expected = KV{"hint.level": "25", "hint.time": "1000", "time": "5000", "topic": "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000", "user": "0x876A8936A7Cd0b79Ef0735AD0896c1AFe278781c"}
+func TestQueryValues(t *testing.T) {
+	t.Skip("Test no longer work for XDC")
+	var expected = KV{"hint.level": "25", "hint.time": "1000", "time": "5000", "topic": "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000", "user": "0x876A8936A7Cd0b79Ef0735AD0896c1AFe278781c"}
 
-// 	query := getTestQuery()
-// 	testValueSerializer(t, query, expected)
+	query := getTestQuery()
+	testValueSerializer(t, query, expected)
 
-// }
+}

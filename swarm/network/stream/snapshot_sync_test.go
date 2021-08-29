@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -74,45 +76,46 @@ func dummyRequestFromPeers(_ context.Context, req *network.Request) (*enode.ID, 
 //to the pivot node, and we check that nodes get the chunks
 //they are expected to store based on the syncing protocol.
 //Number of chunks and nodes can be provided via commandline too.
-// func TestSyncingViaGlobalSync(t *testing.T) {
-// 	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
-// 		t.Skip("Flaky on mac on travis")
-// 	}
-// 	//if nodes/chunks have been provided via commandline,
-// 	//run the tests with these values
-// 	if *nodes != 0 && *chunks != 0 {
-// 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
-// 		testSyncingViaGlobalSync(t, *chunks, *nodes)
-// 	} else {
-// 		var nodeCnt []int
-// 		var chnkCnt []int
-// 		//if the `longrunning` flag has been provided
-// 		//run more test combinations
-// 		if *longrunning {
-// 			chnkCnt = []int{1, 8, 32, 256, 1024}
-// 			nodeCnt = []int{16, 32, 64, 128, 256}
-// 		} else if raceTest {
-// 			// TestSyncingViaGlobalSync allocates a lot of memory
-// 			// with race detector. By reducing the number of chunks
-// 			// and nodes, memory consumption is lower and data races
-// 			// are still checked, while correctness of syncing is
-// 			// tested with more chunks and nodes in regular (!race)
-// 			// tests.
-// 			chnkCnt = []int{4}
-// 			nodeCnt = []int{16}
-// 		} else {
-// 			//default test
-// 			chnkCnt = []int{4, 32}
-// 			nodeCnt = []int{32, 16}
-// 		}
-// 		for _, chnk := range chnkCnt {
-// 			for _, n := range nodeCnt {
-// 				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
-// 				testSyncingViaGlobalSync(t, chnk, n)
-// 			}
-// 		}
-// 	}
-// }
+func TestSyncingViaGlobalSync(t *testing.T) {
+	t.Skip("Flaky test")
+	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
+		t.Skip("Flaky on mac on travis")
+	}
+	//if nodes/chunks have been provided via commandline,
+	//run the tests with these values
+	if *nodes != 0 && *chunks != 0 {
+		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
+		testSyncingViaGlobalSync(t, *chunks, *nodes)
+	} else {
+		var nodeCnt []int
+		var chnkCnt []int
+		//if the `longrunning` flag has been provided
+		//run more test combinations
+		if *longrunning {
+			chnkCnt = []int{1, 8, 32, 256, 1024}
+			nodeCnt = []int{16, 32, 64, 128, 256}
+		} else if raceTest {
+			// TestSyncingViaGlobalSync allocates a lot of memory
+			// with race detector. By reducing the number of chunks
+			// and nodes, memory consumption is lower and data races
+			// are still checked, while correctness of syncing is
+			// tested with more chunks and nodes in regular (!race)
+			// tests.
+			chnkCnt = []int{4}
+			nodeCnt = []int{16}
+		} else {
+			//default test
+			chnkCnt = []int{4, 32}
+			nodeCnt = []int{32, 16}
+		}
+		for _, chnk := range chnkCnt {
+			for _, n := range nodeCnt {
+				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
+				testSyncingViaGlobalSync(t, chnk, n)
+			}
+		}
+	}
+}
 
 var simServiceMap = map[string]simulation.ServiceFunc{
 	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
