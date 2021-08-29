@@ -60,7 +60,7 @@ func getCommonBackend(t *testing.T) *backends.SimulatedBackend {
 	// initial helper backend
 	contractBackendForSC := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
-	})
+	}, 10000000)
 
 	transactOpts := bind.NewKeyedTransactor(voterKey)
 
@@ -71,7 +71,7 @@ func getCommonBackend(t *testing.T) *backends.SimulatedBackend {
 
 	for i := 1; i <= 16; i++ {
 		addr := fmt.Sprintf("%02d", i)
-		candidates = append(candidates, common.StringToAddress(addr))
+		candidates = append(candidates, common.StringToAddress(addr)) // StringToAddress does not exist
 		caps = append(caps, defalutCap)
 	}
 
@@ -127,7 +127,7 @@ func getCommonBackend(t *testing.T) *backends.SimulatedBackend {
 		acc3Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 		common.HexToAddress(common.MasternodeVotingSMC): {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
-	})
+	}, 10000000)
 
 	return contractBackend2
 

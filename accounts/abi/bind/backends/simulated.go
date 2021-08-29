@@ -65,10 +65,10 @@ type SimulatedBackend struct {
 }
 
 // XDC simulated backend for testing purpose.
-func NewXDCSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
+func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	database := ethdb.NewMemDatabase()
 	genesis := core.Genesis{
-		GasLimit:  10000000, // need this big, support initial smart contract
+		GasLimit:  gasLimit, // need this big, support initial smart contract
 		Config:    params.TestXDPoSMockChainConfig,
 		Alloc:     alloc,
 		ExtraData: append(make([]byte, 32), make([]byte, 65)...),
@@ -82,6 +82,7 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 		config:     genesis.Config,
 		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
 	}
+	blockchain.Client = backend
 	backend.rollback()
 	return backend
 }
