@@ -81,7 +81,7 @@ type input struct {
 	TxRlp string            `json:"txsRlp,omitempty"`
 }
 
-func Main(ctx *cli.Context) error {
+func Transition(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
