@@ -151,7 +151,7 @@ type BlockChain struct {
 	badBlocks      *lru.Cache              // Bad block cache
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 	IPCEndpoint    string
-	Client         *ethclient.Client // Global ipc client instance.
+	Client         bind.ContractBackend // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1067,6 +1067,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+		// prepare set of masternodes for the next epoch
+		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+			err := bc.UpdateM1()
+			if err != nil {
+				log.Crit("Error when update masternodes set. Stopping node", "err", err)
+			}
+		}
 	}
 	// save cache BlockSigners
 	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
@@ -1283,13 +1290,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			if (chain[it.index].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
-			// prepare set of masternodes for the next epoch
-			if (chain[it.index].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
-				err := bc.UpdateM1()
-				if err != nil {
-					log.Crit("Error when update masternodes set. Stopping node", "err", err)
-				}
-			}
 		}
 	}
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -1502,14 +1502,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 		// epoch block
 		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 			CheckpointCh <- 1
-		}
-		// prepare set of masternodes for the next epoch
-		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
-			err := bc.UpdateM1()
-			if err != nil {
-				log.Error("Error when update masternodes set. Stopping node", "err", err)
-				os.Exit(1)
-			}
 		}
 	}
 	// Append a single chain head event if we've progressed the chain
@@ -1738,6 +1730,13 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Write lookup entries for hash based transaction/receipt searches
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
+		// prepare set of masternodes for the next epoch
+		if (newChain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+			err := bc.UpdateM1()
+			if err != nil {
+				log.Crit("Error when update masternodes set. Stopping node", "err", err)
+			}
+		}
 	}
 	// When transactions get deleted from the database, the receipts that were
 	// created in the fork must also be deleted
@@ -1989,7 +1988,7 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 }
 
 // Get current IPC Client.
-func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
+func (bc *BlockChain) GetClient() (bind.ContractBackend, error) {
 	if bc.Client == nil {
 		// Inject ipc client global instance.
 		client, err := ethclient.Dial(bc.IPCEndpoint)
