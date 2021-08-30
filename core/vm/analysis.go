@@ -81,13 +81,20 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		}
 		numbits := op - PUSH1 + 1
 		if numbits >= 8 {
-			for ; numbits >= 16; numbits -= 16 {
+			if numbits >= 16 {
 				bits.set16(pc)
 				pc += 16
+				numbits -= 16
 			}
-			for ; numbits >= 8; numbits -= 8 {
+			if numbits >= 16 {
+				bits.set16(pc)
+				pc += 16
+				numbits -= 16
+			}
+			if numbits >= 8 {
 				bits.set8(pc)
 				pc += 8
+				numbits -= 8
 			}
 		}
 		switch numbits {
