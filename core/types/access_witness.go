@@ -27,13 +27,27 @@ func NewAccessWitness() *AccessWitness {
 }
 
 func (aw *AccessWitness) Merge(other *AccessWitness) {
-	for k, _ := range other.Witness {
-		if _, ok := aw.Witness[k]; ok {
+	for k, mo := range other.Witness {
+		if ma, ok := aw.Witness[k]; ok {
+			// merge the two lists
+			for b, y := range mo {
+				ma[b] = y
+			}
 		} else {
+			aw.Witness[k] = mo
 		}
 	}
 }
 
 func (aw *AccessWitness) Keys() [][]byte {
-	return [][]byte{} // aw.Witness.Keys()
+	var keys [][]byte
+	for stem, branches := range aw.Witness {
+		for selector := range branches {
+			var key [32]byte
+			copy(key[:31], stem[:31])
+			key[31] = selector
+			keys = append(keys, key[:])
+		}
+	}
+	return keys
 }
