@@ -65,9 +65,14 @@ func (n *NumberedError) Error() string {
 	return fmt.Sprintf("ERROR(%d): %v", n.errorCode, n.err.Error())
 }
 
-func (n *NumberedError) Code() int {
+func (n *NumberedError) ExitCode() int {
 	return n.errorCode
 }
+
+// compile-time conformance test
+var (
+	_ cli.ExitCoder = (*NumberedError)(nil)
+)
 
 type input struct {
 	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
@@ -409,7 +414,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		return err
 	}
 	if len(stdOutObject) > 0 {
-		b, err := json.MarshalIndent(stdOutObject, "", " ")
+		b, err := json.MarshalIndent(stdOutObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
@@ -417,7 +422,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stdout.Write([]byte("\n"))
 	}
 	if len(stdErrObject) > 0 {
-		b, err := json.MarshalIndent(stdErrObject, "", " ")
+		b, err := json.MarshalIndent(stdErrObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
