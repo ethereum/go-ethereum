@@ -92,6 +92,19 @@ func TestTripartiteDiffieHellman(t *testing.T) {
 	}
 }
 
+func TestG2SelfAddition(t *testing.T) {
+	s, _ := rand.Int(rand.Reader, Order)
+	p := new(G2).ScalarBaseMult(s)
+
+	if !p.p.IsOnCurve() {
+		t.Fatal("p isn't on curve")
+	}
+	m := p.Add(p, p).Marshal()
+	if _, err := p.Unmarshal(m); err != nil {
+		t.Fatalf("p.Add(p, p) ∉ G₂: %v", err)
+	}
+}
+
 func BenchmarkG1(b *testing.B) {
 	x, _ := rand.Int(rand.Reader, Order)
 	b.ResetTimer()

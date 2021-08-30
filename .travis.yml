@@ -5,7 +5,7 @@ jobs:
   allow_failures:
     - stage: build
       os: osx
-      go: 1.15.x
+      go: 1.17.x
       env:
         - azure-osx
         - azure-ios
@@ -16,7 +16,7 @@ jobs:
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - lint
       git:
@@ -31,7 +31,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - docker
       services:
@@ -48,7 +48,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - docker
       services:
@@ -65,7 +65,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -90,7 +90,7 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.16.x
+      go: 1.17.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -127,7 +127,7 @@ jobs:
       dist: bionic
       services:
         - docker
-      go: 1.16.x
+      go: 1.17.x
       env:
         - azure-linux-mips
         - GO111MODULE=on
@@ -192,7 +192,7 @@ jobs:
     - stage: build
       if: type = push
       os: osx
-      go: 1.16.x
+      go: 1.17.x
       env:
         - azure-osx
         - azure-ios
@@ -224,7 +224,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
@@ -235,7 +235,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
@@ -244,7 +244,7 @@ jobs:
     - stage: build
       os: linux
       dist: bionic
-      go: 1.15.x
+      go: 1.16.x
       env:
         - GO111MODULE=on
       script:
@@ -255,7 +255,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - azure-purge
         - GO111MODULE=on
