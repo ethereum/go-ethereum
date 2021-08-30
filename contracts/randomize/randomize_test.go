@@ -71,7 +71,7 @@ func TestRandomize(t *testing.T) {
 
 func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewXDCSimulatedBackend(genesis, 10000000)
+	backend := backends.NewSimulatedBackend(genesis, 10000000)
 	backend.Commit()
 	signer := types.HomesteadSigner{}
 	ctx := context.Background()

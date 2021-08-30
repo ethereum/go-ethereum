@@ -264,11 +264,10 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	}
 }
 
-var fakeEngine *XDPoS
-
 // NewFullFaker creates an ethash consensus engine with a full fake scheme that
 // accepts all blocks as valid, without checking any consensus rules whatsoever.
 func NewFaker(db ethdb.Database) *XDPoS {
+	var fakeEngine *XDPoS
 	// Set any missing consensus parameters to their defaults
 	conf := params.TestXDPoSMockChainConfig.XDPoS
 
@@ -288,10 +287,6 @@ func NewFaker(db ethdb.Database) *XDPoS {
 		validatorSignatures: validatorSignatures,
 		proposals:           make(map[common.Address]bool),
 	}
-	return fakeEngine
-}
-
-func GetFaker() *XDPoS {
 	return fakeEngine
 }
 
