@@ -27,7 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var (
+	bloomHitsMeter   = metrics.NewRegisteredMeter("rpc/filter/bloom/hits", nil)
+	bloomMissesMeter = metrics.NewRegisteredMeter("rpc/filter/bloom/misses", nil)
 )
 
 type Backend interface {
@@ -255,6 +261,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 	}
 	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 	if len(logs) > 0 {
+		bloomHitsMeter.Mark(1)
 		// We have matching logs, check if we need to resolve full logs via the light client
 		if logs[0].TxHash == (common.Hash{}) {
 			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
@@ -268,6 +275,8 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 		}
 		return logs, nil
+	} else {
+		bloomMissesMeter.Mark(1)
 	}
 	return nil, nil
 }
