@@ -145,9 +145,6 @@ func Setup(ctx *cli.Context) error {
 	log.PrintOrigins(debug)
 
 	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
-	if b := ctx.GlobalString(backtraceAtFlag.Name); b != "" {
-		backtrace = b
-	}
 	glogger.BacktraceAt(backtrace)
 
 	log.Root().SetHandler(glogger)
@@ -158,10 +155,7 @@ func Setup(ctx *cli.Context) error {
 		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
 	}
 
-	blockProfileRate := blockprofilerateFlag.Value
-	if ctx.GlobalIsSet(blockprofilerateFlag.Name) {
-		blockProfileRate = ctx.GlobalInt(blockprofilerateFlag.Name)
-	}
+	blockProfileRate := ctx.GlobalInt(blockprofilerateFlag.Name)
 	Handler.SetBlockProfileRate(blockProfileRate)
 
 	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
