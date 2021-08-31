@@ -248,6 +248,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
+	case ghash == params.MumbaiGenesisHash:
+		return params.MumbaiChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -397,6 +399,20 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultMumbaiGenesisBlock returns the Mumbai network genesis block.
+func DefaultMumbaiGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.MumbaiChainConfig,
+		Nonce:      0,
+		Timestamp:  1558348305,
+		GasLimit:   10000000,
+		Difficulty: big.NewInt(1),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
+		Alloc:      decodePrealloc(mumbaiAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
@@ -429,7 +445,10 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 }
 
 func decodePrealloc(data string) GenesisAlloc {
-	var p []struct{ Addr, Balance *big.Int }
+	var p []struct {
+		Addr, Balance *big.Int
+		Code          []byte
+	}
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
