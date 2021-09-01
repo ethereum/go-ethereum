@@ -52,6 +52,80 @@ var (
 // for extracting the raw states(leaf nodes) with corresponding paths.
 type LeafCallback func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
 
+// diffTracker keeps track of the newly inserted/deleted trie nodes
+// since the last commit operation. Note if the node is resurrected
+// after deletion, or it's deleted after creation, then it's marked
+// as untouched.
+type diffTracker struct {
+	lock     sync.RWMutex
+	owner    common.Hash
+	inserted map[string]struct{}
+	deleted  map[string]struct{}
+	updated  map[string][]byte
+}
+
+func newTracker(owner common.Hash) *diffTracker {
+	return &diffTracker{
+		owner:    owner,
+		inserted: make(map[string]struct{}),
+		deleted:  make(map[string]struct{}),
+		updated:  make(map[string][]byte),
+	}
+}
+
+// onInsert tracks the newly inserted trie node. If it's already
+// in the deletion set(resurrected node), then just wipe it from
+// the deletion set as the "untouched".
+func (tracker *diffTracker) onInsert(key []byte) {
+	tracker.lock.Lock()
+	defer tracker.lock.Unlock()
+
+	if _, present := tracker.deleted[string(key)]; present {
+		delete(tracker.deleted, string(key))
+		return
+	}
+	tracker.inserted[string(key)] = struct{}{}
+}
+
+// onDelete tracks the newly deleted trie node. If it's already
+// in the addition set, then just wipe it from the addition set
+// as the "untouched".
+func (tracker *diffTracker) onDelete(key []byte) {
+	tracker.lock.Lock()
+	defer tracker.lock.Unlock()
+
+	if _, present := tracker.inserted[string(key)]; present {
+		delete(tracker.inserted, string(key))
+		return
+	}
+	tracker.deleted[string(key)] = struct{}{}
+}
+
+// onUpdate tracks the committed trie node during the commit
+// operation. The committed nodes include the newly inserted
+// and updated nodes. The deleted nodes are not included here.
+func (tracker *diffTracker) onUpdate(key, val []byte) {
+	tracker.lock.Lock()
+	defer tracker.lock.Unlock()
+
+	tracker.updated[string(key)] = common.CopyBytes(val)
+}
+
+// keylist returns the tracked inserted/deleted node keys in list.
+func (tracker *diffTracker) keylist() ([][]byte, [][]byte) {
+	tracker.lock.RLock()
+	defer tracker.lock.RUnlock()
+
+	var inserted, deleted [][]byte
+	for key := range tracker.inserted {
+		inserted = append(inserted, []byte(key))
+	}
+	for key := range tracker.deleted {
+		deleted = append(deleted, []byte(key))
+	}
+	return inserted, deleted
+}
+
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
 // Use New to create a trie that sits on top of a database.
@@ -62,15 +136,31 @@ type Trie struct {
 	root  node
 	owner common.Hash
 
-	// Keep track of the number leafs which have been inserted since the last
+	// Keep track of the number leaves which have been inserted since the last
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
 	unhashed int
+	tracker  *diffTracker
 }
 
 // newFlag returns the cache flag value for a newly created node.
 func (t *Trie) newFlag() nodeFlag {
 	return nodeFlag{dirty: true}
+}
+
+func (t *Trie) finalize(root common.Hash) *CommitResult {
+	if t.tracker == nil {
+		return &CommitResult{Root: root}
+	}
+	inserted, deleted := t.tracker.keylist()
+	result := &CommitResult{
+		Root:          root,
+		UpdatedNodes:  t.tracker.updated,
+		DeletedNodes:  deleted,
+		insertedNodes: inserted,
+	}
+	t.tracker = newTracker(t.owner)
+	return result
 }
 
 // New creates a trie with an existing root node from db.
@@ -95,8 +185,9 @@ func NewWithOwner(owner common.Hash, root common.Hash, db *Database) (*Trie, err
 		panic("trie.New called without a database")
 	}
 	trie := &Trie{
-		db:    db,
-		owner: owner,
+		db:      db,
+		owner:   owner,
+		tracker: newTracker(owner),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -322,6 +413,11 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
+		// In the meantime, evict the newly inserted branch node if it's in
+		// the deletion set.
+		if t.tracker != nil {
+			t.tracker.onInsert(append(prefix, key[:matchlen]...))
+		}
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
 	case *fullNode:
@@ -335,6 +431,10 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, n, nil
 
 	case nil:
+		// Evict the newly inserted short node if it's in the deletion set.
+		if t.tracker != nil {
+			t.tracker.onInsert(prefix)
+		}
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
 	case hashNode:
@@ -387,6 +487,10 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, nil // don't replace n on mismatch
 		}
 		if matchlen == len(key) {
+			// Mark the entire short node as deleted.
+			if t.tracker != nil {
+				t.tracker.onDelete(prefix)
+			}
 			return true, nil, nil // remove n entirely for whole matches
 		}
 		// The key is longer than n.Key. Remove the remaining suffix
@@ -399,6 +503,11 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		}
 		switch child := child.(type) {
 		case *shortNode:
+			// Merge the two consequent short node together, mark the
+			// latter one as deleted.
+			if t.tracker != nil {
+				t.tracker.onDelete(append(prefix, n.Key...))
+			}
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
 			// shortNode{..., shortNode{...}}. Use concat (which
@@ -460,6 +569,12 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					return false, nil, err
 				}
 				if cnode, ok := cnode.(*shortNode); ok {
+					// Replace the entire full node with the short node.
+					// Mark the original short node as deleted since the
+					// value is embedded into the parent now.
+					if t.tracker != nil {
+						t.tracker.onDelete(append(prefix, byte(pos)))
+					}
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
 				}
@@ -526,20 +641,38 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
+// CommitResult wraps the trie commit result in the single struct.
+type CommitResult struct {
+	Root common.Hash // The re-calculated trie root hash after commit
+
+	// UpdatedNodes is the collection of newly updated and created nodes since
+	// last commit.
+	UpdatedNodes map[string][]byte
+
+	// DeletedNodes is the key list of newly deleted nodes since last commit
+	// The embedded node will also be included here which doesn't have a
+	// corresponding database entry, but it shouldn't affect the correctness.
+	DeletedNodes [][]byte
+
+	// insertedNodes is the key list of newly inserted nodes since last commit.
+	// It's mainly for testing right now.
+	insertedNodes [][]byte
+}
+
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
+func (t *Trie) Commit(onleaf LeafCallback) (*CommitResult, error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
 	if t.root == nil {
-		return emptyRoot, 0, nil
+		return t.finalize(emptyRoot), nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
 
-	h := newCommitter()
+	h := newCommitter(t.tracker)
 	defer returnCommitterToPool(h)
 	h.owner = t.owner
 
@@ -547,7 +680,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 	// up goroutines. This can happen e.g. if we load a trie for
 	// reading storage values, but don't write to it.
 	if _, dirty := t.root.cache(); !dirty {
-		return rootHash, 0, nil
+		return t.finalize(rootHash), nil
 	}
 	var wg sync.WaitGroup
 	if onleaf != nil {
@@ -558,7 +691,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 			h.commitLoop(t.db)
 		}()
 	}
-	newRoot, committed, err := h.Commit(t.root, t.db)
+	newRoot, err := h.Commit(t.root, t.db)
 	if onleaf != nil {
 		// The leafch is created in newCommitter if there was an onleaf callback
 		// provided. The commitLoop only _reads_ from it, and the commit
@@ -568,10 +701,10 @@ func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 		wg.Wait()
 	}
 	if err != nil {
-		return common.Hash{}, 0, err
+		return nil, err
 	}
 	t.root = newRoot
-	return rootHash, committed, nil
+	return t.finalize(rootHash), nil
 }
 
 // hashRoot calculates the root hash of the given trie

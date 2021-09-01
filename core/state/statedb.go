@@ -910,7 +910,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	s.IntermediateRoot(deleteEmptyObjects)
 
 	// Commit objects to the trie, measuring the elapsed time
-	var storageCommitted int
+	var (
+		storageUpdated int
+		storageDeleted int
+	)
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
@@ -920,11 +923,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			committed, err := obj.CommitTrie(s.db)
+			updated, deleted, err := obj.CommitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
 			}
-			storageCommitted += committed
+			storageUpdated += updated
+			storageDeleted += deleted
 		}
 	}
 	if len(s.stateObjectsDirty) > 0 {
@@ -943,7 +947,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
-	root, accountCommitted, err := s.trie.Commit(func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
+	result, err := s.trie.Commit(func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
@@ -956,15 +960,19 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+	root := result.Root
+
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
 
-		accountUpdatedMeter.Mark(int64(s.AccountUpdated))
-		storageUpdatedMeter.Mark(int64(s.StorageUpdated))
-		accountDeletedMeter.Mark(int64(s.AccountDeleted))
-		storageDeletedMeter.Mark(int64(s.StorageDeleted))
-		accountCommittedMeter.Mark(int64(accountCommitted))
-		storageCommittedMeter.Mark(int64(storageCommitted))
+		rawAccountUpdatedMeter.Mark(int64(s.AccountUpdated))
+		rawStorageUpdatedMeter.Mark(int64(s.StorageUpdated))
+		rawAccountDeletedMeter.Mark(int64(s.AccountDeleted))
+		rawStorageDeletedMeter.Mark(int64(s.StorageDeleted))
+		trieAccountUpdatedMeter.Mark(int64(len(result.UpdatedNodes)))
+		trieAccountDeletedMeter.Mark(int64(len(result.DeletedNodes)))
+		trieStorageUpdatedMeter.Mark(int64(storageUpdated))
+		trieStorageDeletedMeter.Mark(int64(storageDeleted))
 		s.AccountUpdated, s.AccountDeleted = 0, 0
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}

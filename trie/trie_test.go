@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"hash"
 	"io/ioutil"
 	"math/big"
@@ -172,10 +173,11 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
-	root, _, err := trie.Commit(nil)
+	result, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
+	root = result.Root
 	if root != exp {
 		t.Errorf("case 2: exp %x got %x", exp, root)
 	}
@@ -270,10 +272,11 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	exp, _, err := trie.Commit(nil)
+	result, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
+	exp := result.Root
 
 	// create a new trie on top of the database and check that lookups work.
 	trie2, err := New(exp, trie.db)
@@ -285,10 +288,11 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, _, err := trie2.Commit(nil)
+	result, err = trie2.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
+	hash := result.Root
 	if hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
@@ -429,15 +433,16 @@ func runRandTest(rt randTest) bool {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, _, rt[i].err = tr.Commit(nil)
+			_, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, _, err := tr.Commit(nil)
+			result, err := tr.Commit(nil)
 			if err != nil {
 				rt[i].err = err
 				return false
 			}
+			hash := result.Root
 			newtr, err := New(hash, triedb)
 			if err != nil {
 				rt[i].err = err
@@ -633,7 +638,8 @@ func TestCommitAfterHash(t *testing.T) {
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
-	root, _, _ = trie.Commit(nil)
+	result, _ := trie.Commit(nil)
+	root = result.Root
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -740,7 +746,8 @@ func TestCommitSequence(t *testing.T) {
 			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
-		root, _, _ := trie.Commit(nil)
+		result, _ := trie.Commit(nil)
+		root := result.Root
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(key []byte) {
 			// And spongify the callback-order
@@ -792,7 +799,8 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			trie.Update(key, val)
 		}
 		// Flush trie -> database
-		root, _, _ := trie.Commit(nil)
+		result, _ := trie.Commit(nil)
+		root := result.Root
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(key []byte) {
 			// And spongify the callback-order
@@ -834,7 +842,8 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			stTrie.TryUpdate(key, val)
 		}
 		// Flush trie -> database
-		root, _, _ := trie.Commit(nil)
+		result, _ := trie.Commit(nil)
+		root := result.Root
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, nil)
 		// And flush stacktrie -> disk
@@ -879,7 +888,8 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie.TryUpdate(key, []byte{0x1})
 	stTrie.TryUpdate(key, []byte{0x1})
 	// Flush trie -> database
-	root, _, _ := trie.Commit(nil)
+	result, _ := trie.Commit(nil)
+	root := result.Root
 	// Flush memdb -> disk (sponge)
 	db.Commit(root, false, nil)
 	// And flush stacktrie -> disk
@@ -893,6 +903,86 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	fmt.Printf("root: %x\n", stRoot)
 	if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
 		t.Fatalf("test, disk write sequence wrong:\ngot %x exp %x\n", got, exp)
+	}
+}
+
+// Tests if the inserted/deleted trie nodes are tracked correctly.
+func TestTrieTracker(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	trie, _ := New(common.Hash{}, db)
+
+	// Insert a batch of entries, all the nodes should be marked as inserted
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		key := crypto.Keccak256([]byte(val.k))
+		trie.Update(key, []byte(val.v))
+	}
+	trie.Hash()
+	result, err := trie.Commit(nil)
+	if err != nil {
+		t.Fatalf("Failed to commit trie %v", err)
+	}
+	inserted := result.insertedNodes
+
+	// Ensure all the newly inserted nodes are indeed in the trie.
+	if len(result.DeletedNodes) != 0 {
+		t.Fatalf("Unexpected deleted node tracked %d", len(result.DeletedNodes))
+	}
+	for _, path := range inserted {
+		compact := hexToCompact(path)
+		_, _, err := trie.TryGetNode(compact)
+		if err != nil {
+			t.Fatalf("Failed to resolve newly inserted node %v %v", path, err)
+		}
+	}
+	// Ensure all the trie nodes are captured as the inserted nodes
+	inset := func(key []byte, set [][]byte) bool {
+		for _, elem := range set {
+			if bytes.Equal(key, elem) {
+				return true
+			}
+		}
+		return false
+	}
+	iter := trie.NodeIterator(nil)
+	for iter.Next(true) {
+		if iter.Leaf() {
+			continue
+		}
+		if !inset(iter.Path(), inserted) {
+			t.Fatalf("Untracked trie node %v", iter.Path())
+		}
+	}
+
+	// Delete all the elements, check deletion set
+	for _, val := range vals {
+		key := crypto.Keccak256([]byte(val.k))
+		trie.Delete(key)
+	}
+	trie.Hash()
+	result, err = trie.Commit(nil)
+	if err != nil {
+		t.Fatalf("Failed to commit trie %v", err)
+	}
+	if len(result.insertedNodes) != 0 {
+		t.Fatalf("Unexpected inserted node tracked %d", len(result.insertedNodes))
+	}
+	deleted := result.DeletedNodes
+	if len(deleted) != len(inserted) {
+		t.Fatalf("All nodes are expected to be tracked, %d - %d", len(deleted), len(inserted))
+	}
+	for _, path := range deleted {
+		if !inset(path, inserted) {
+			t.Fatalf("Untracked deleted trie node %v", iter.Path())
+		}
 	}
 }
 

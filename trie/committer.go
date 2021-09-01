@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -48,9 +49,10 @@ type committer struct {
 	tmp sliceBuffer
 	sha crypto.KeccakState
 
-	owner  common.Hash
-	onleaf LeafCallback
-	leafCh chan *leaf
+	owner   common.Hash
+	onleaf  LeafCallback
+	leafCh  chan *leaf
+	tracker *diffTracker
 }
 
 // committers live in a global sync.Pool
@@ -64,37 +66,40 @@ var committerPool = sync.Pool{
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter() *committer {
-	return committerPool.Get().(*committer)
+func newCommitter(tracker *diffTracker) *committer {
+	committer := committerPool.Get().(*committer)
+	committer.tracker = tracker
+	return committer
 }
 
 func returnCommitterToPool(h *committer) {
 	h.onleaf = nil
 	h.leafCh = nil
 	h.owner = common.Hash{}
+	h.tracker = nil
 	committerPool.Put(h)
 }
 
 // Commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) Commit(n node, db *Database) (hashNode, int, error) {
+func (c *committer) Commit(n node, db *Database) (hashNode, error) {
 	if db == nil {
-		return nil, 0, errors.New("no db provided")
+		return nil, errors.New("no db provided")
 	}
-	h, committed, err := c.commit(nil, n, db)
+	h, err := c.commit(nil, n, db)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return h.(hashNode), committed, nil
+	return h.(hashNode), nil
 }
 
 // commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) commit(path []byte, n node, db *Database) (node, int, error) {
+func (c *committer) commit(path []byte, n node, db *Database) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
-		return hash, 0, nil
+		return hash, nil
 	}
-	// Commit children, then parent, and remove remove the dirty flag.
+	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
 		// Commit child
@@ -102,36 +107,37 @@ func (c *committer) commit(path []byte, n node, db *Database) (node, int, error)
 
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
-		var childCommitted int
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV, committed, err := c.commit(append(append([]byte{}, path...), cn.Key...), cn.Val, db)
+			// Use concat here instead of append since the passed path
+			// might be mutated.
+			childV, err := c.commit(concat(path, cn.Key...), cn.Val, db)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
-			collapsed.Val, childCommitted = childV, committed
+			collapsed.Val = childV
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed, db)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, childCommitted + 1, nil
+			return hn, nil
 		}
-		return collapsed, childCommitted, nil
+		return collapsed, nil
 	case *fullNode:
-		hashedKids, childCommitted, err := c.commitChildren(path, cn, db)
+		hashedKids, err := c.commitChildren(path, cn, db)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
 		hashedNode := c.store(path, collapsed, db)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, childCommitted + 1, nil
+			return hn, nil
 		}
-		return collapsed, childCommitted, nil
+		return collapsed, nil
 	case hashNode:
-		return cn, 0, nil
+		return cn, nil
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -139,11 +145,8 @@ func (c *committer) commit(path []byte, n node, db *Database) (node, int, error)
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]node, int, error) {
-	var (
-		committed int
-		children  [17]node
-	)
+func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]node, error) {
+	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -159,18 +162,17 @@ func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, childCommitted, err := c.commit(append(append([]byte{}, path...), byte(i)), child, db)
+		hashed, err := c.commit(concat(path, byte(i)), child, db)
 		if err != nil {
-			return children, 0, err
+			return children, err
 		}
 		children[i] = hashed
-		committed += childCommitted
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
-	return children, committed, nil
+	return children, nil
 }
 
 // store hashes the node n and if we have a storage layer specified, it writes
@@ -181,7 +183,7 @@ func (c *committer) store(path []byte, n node, db *Database) node {
 	var hash, _ = n.cache()
 
 	// This was not generated - must be a small node stored in the parent.
-	// In theory we should apply the leafCall here if it's not nil(embedded
+	// In theory, we should apply the leafCall here if it's not nil(embedded
 	// node usually contains value). But small value(less than 32bytes) is
 	// not our target.
 	if hash == nil {
@@ -191,6 +193,11 @@ func (c *committer) store(path []byte, n node, db *Database) node {
 	// The size is used for mem tracking, does not need to be exact
 	size := estimateSize(n)
 
+	// Track the updated trie nodes during the commit operation.
+	if c.tracker != nil {
+		blob, _ := rlp.EncodeToBytes(n)
+		c.tracker.onUpdate(path, blob)
+	}
 	// If we're using channel-based leaf-reporting, send to channel.
 	// The leaf channel will be active only when there an active leaf-callback
 	if c.leafCh != nil {

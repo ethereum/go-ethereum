@@ -411,7 +411,8 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
-	root, _, _ := ctr.Commit(nil)
+	result, _ := ctr.Commit(nil)
+	root := result.Root
 
 	var (
 		barNodeHash = common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")

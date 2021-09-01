@@ -173,10 +173,12 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, _, err := trieA.Commit(nil)
+	result, err := trieA.Commit(nil)
 	if err != nil {
 		panic(err)
 	}
+	rootA := result.Root
+
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false, nil)
 

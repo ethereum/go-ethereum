@@ -184,7 +184,8 @@ func (t *testHelper) makeStorageTrie(owner common.Hash, keys []string, vals []st
 	}
 	var root common.Hash
 	if commit {
-		root, _, _ = stTrie.Commit(nil)
+		result, _ := stTrie.Commit(nil)
+		root = result.Root
 	} else {
 		root = stTrie.Hash()
 	}
@@ -192,7 +193,8 @@ func (t *testHelper) makeStorageTrie(owner common.Hash, keys []string, vals []st
 }
 
 func (t *testHelper) Generate() (common.Hash, *diskLayer) {
-	root, _, _ := t.accTrie.Commit(nil)
+	result, _ := t.accTrie.Commit(nil)
+	root := result.Root
 	t.triedb.Commit(root, false, nil)
 	snap := generateSnapshot(t.diskdb, t.triedb, 16, root)
 	return root, snap
@@ -578,7 +580,8 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("b-key-2")), []byte("b-val-2"))
 		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("b-key-3")), []byte("b-val-3"))
 	}
-	root, _, _ := accTrie.Commit(nil)
+	result, _ := accTrie.Commit(nil)
+	root := result.Root
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
 
@@ -643,7 +646,8 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 			rawdb.WriteAccountSnapshot(diskdb, key, val)
 		}
 	}
-	root, _, _ := accTrie.Commit(nil)
+	result, _ := accTrie.Commit(nil)
+	root := result.Root
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
 
@@ -696,7 +700,8 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x07"), val)
 	}
 
-	root, _, _ := accTrie.Commit(nil)
+	result, _ := accTrie.Commit(nil)
+	root := result.Root
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
 
@@ -740,7 +745,8 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x05"), junk)
 	}
 
-	root, _, _ := accTrie.Commit(nil)
+	result, _ := accTrie.Commit(nil)
+	root := result.Root
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
 
