@@ -63,6 +63,12 @@ var (
 	// snapshotSyncStatusKey tracks the snapshot sync status across restarts.
 	snapshotSyncStatusKey = []byte("SnapshotSyncStatus")
 
+	// persistTrieRootKey tracks the hash of the persisted trie in disk.
+	persistTrieRootKey = []byte("DiskTrieRoot")
+
+	// triesJournalKey tracks the in-memory diff trie node layers across restarts.
+	triesJournalKey = []byte("TriesJournal")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 

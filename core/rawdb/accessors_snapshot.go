@@ -72,6 +72,43 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 	}
 }
 
+func ReadPersistedTrieRoot(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(persistTrieRootKey)
+	if len(data) != common.HashLength {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+func WritePersistedTrieRoot(db ethdb.KeyValueWriter, root common.Hash) {
+	if err := db.Put(persistTrieRootKey, root[:]); err != nil {
+		log.Crit("Failed to store snapshot root", "err", err)
+	}
+}
+
+func DeletePersistedTrieRoot(db ethdb.KeyValueWriter) {
+	if err := db.Delete(persistTrieRootKey); err != nil {
+		log.Crit("Failed to remove snapshot root", "err", err)
+	}
+}
+
+func ReadTriesJournal(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(triesJournalKey)
+	return data
+}
+
+func WriteTriesJournal(db ethdb.KeyValueWriter, journal []byte) {
+	if err := db.Put(triesJournalKey, journal); err != nil {
+		log.Crit("Failed to store tries journal", "err", err)
+	}
+}
+
+func DeleteTriesJournal(db ethdb.KeyValueWriter) {
+	if err := db.Delete(triesJournalKey); err != nil {
+		log.Crit("Failed to remove tries journal", "err", err)
+	}
+}
+
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(accountSnapshotKey(hash))
