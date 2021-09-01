@@ -41,7 +41,6 @@ var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
 	RopstenGenesisHash: RopstenTrustedCheckpoint,
 	RinkebyGenesisHash: RinkebyTrustedCheckpoint,
 	GoerliGenesisHash:  GoerliTrustedCheckpoint,
-	MumbaiGenesisHash:  MumbaiTrustedCheckpoint,
 }
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
@@ -51,7 +50,6 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	RopstenGenesisHash: RopstenCheckpointOracle,
 	RinkebyGenesisHash: RinkebyCheckpointOracle,
 	GoerliGenesisHash:  GoerliCheckpointOracle,
-	MumbaiGenesisHash:  MumbaiCheckpointOracle,
 }
 
 var (
@@ -247,27 +245,6 @@ var (
 			ValidatorContract:     "0x0000000000000000000000000000000000001000",
 			StateReceiverContract: "0x0000000000000000000000000000000000001001",
 		},
-	}
-
-	// MumbaiTrustedCheckpoint contains the light client trusted checkpoint for the Mumbai test network.
-	MumbaiTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 160,
-		SectionHead:  common.HexToHash("0xb5a666c790dc35a5613d04ebba8ba47a850b45a15d9b95ad7745c35ae034b5a5"),
-		CHTRoot:      common.HexToHash("0x6b4e00df52bdc38fa6c26c8ef595c2ad6184963ea36ab08ee744af460aa735e1"),
-		BloomRoot:    common.HexToHash("0x8fa88f5e50190cb25243aeee262a1a9e4434a06f8d455885dcc1b5fc48c33836"),
-	}
-
-	// MumbaiCheckpointOracle contains a set of configs for the Mumbai test network oracle.
-	MumbaiCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x18CA0E045F0D772a851BC7e48357Bcaab0a0795D"),
-		Signers: []common.Address{
-			common.HexToAddress("0x4769bcaD07e3b938B7f43EB7D278Bc7Cb9efFb38"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
 	}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced

@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -41,6 +42,9 @@ import (
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+
+//go:embed allocs
+var allocs embed.FS
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
@@ -409,7 +413,7 @@ func DefaultMumbaiGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1),
 		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Alloc:      decodePrealloc(mumbaiAllocData),
+		Alloc:      readPrealloc("allocs/mumbai.json"),
 	}
 }
 
@@ -445,16 +449,28 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 }
 
 func decodePrealloc(data string) GenesisAlloc {
-	var p []struct {
-		Addr, Balance *big.Int
-		Code          []byte
-	}
+	var p []struct{ Addr, Balance *big.Int }
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
 	ga := make(GenesisAlloc, len(p))
 	for _, account := range p {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
+	}
+	return ga
+}
+
+func readPrealloc(filename string) GenesisAlloc {
+	f, err := allocs.Open(filename)
+	if err != nil {
+		panic(fmt.Sprintf("Could not open genesis preallocation for %s: %v", filename, err))
+	}
+	defer f.Close()
+	decoder := json.NewDecoder(f)
+	ga := make(GenesisAlloc)
+	err = decoder.Decode(&ga)
+	if err != nil {
+		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
 	}
 	return ga
 }
