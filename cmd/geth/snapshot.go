@@ -383,9 +383,13 @@ func traverseRawState(ctx *cli.Context) error {
 		if node != (common.Hash{}) {
 			// Check the present for non-empty hash node(embedded node doesn't
 			// have their own hash).
-			blob := rawdb.ReadTrieNode(chaindb, accIter.ComposedKey())
+			blob, nodeHash := rawdb.ReadTrieNode(chaindb, accIter.ComposedKey())
 			if len(blob) == 0 {
 				log.Error("Missing trie node(account)", "hash", node)
+				return errors.New("missing account")
+			}
+			if nodeHash != node {
+				log.Error("Unexpected trie node(account)", "want", node, "got", nodeHash)
 				return errors.New("missing account")
 			}
 		}
@@ -412,10 +416,14 @@ func traverseRawState(ctx *cli.Context) error {
 					// Check the present for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
-						blob := rawdb.ReadTrieNode(chaindb, storageIter.ComposedKey())
+						blob, nodeHash := rawdb.ReadTrieNode(chaindb, storageIter.ComposedKey())
 						if len(blob) == 0 {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
+						}
+						if nodeHash != node {
+							log.Error("Unexpected trie node(storage)", "want", node, "got", nodeHash)
+							return errors.New("missing account")
 						}
 					}
 					// Bump the counter if it's leaf node.

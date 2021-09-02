@@ -48,7 +48,7 @@ type Snapshot interface {
 	Root() common.Hash
 
 	// TrieNode retrieves the trie node associated with a particular key.
-	TrieNode(key string) ([]byte, error)
+	TrieNode(key string, hash common.Hash) ([]byte, error)
 }
 
 // snapshot is the internal version of the snapshot data layer that supports some

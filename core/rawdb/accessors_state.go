@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -75,10 +76,14 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadTrieNode retrieves the trie node of the provided hash.
-func ReadTrieNode(db ethdb.KeyValueReader, key []byte) []byte {
-	data, _ := db.Get(trieNodeKey(key))
-	return data
+// ReadTrieNode retrieves the trie node and the associated node hash of
+// the provided node key.
+func ReadTrieNode(db ethdb.KeyValueReader, key []byte) ([]byte, common.Hash) {
+	data, err := db.Get(trieNodeKey(key))
+	if err != nil {
+		return nil, common.Hash{}
+	}
+	return data, crypto.Keccak256Hash(data)
 }
 
 // WriteTrieNode writes the provided trie node database.
@@ -89,7 +94,14 @@ func WriteTrieNode(db ethdb.KeyValueWriter, key []byte, node []byte) {
 }
 
 // DeleteTrieNode deletes the specified trie node from the database.
-func DeleteTrieNode(db ethdb.KeyValueWriter, key []byte) {
+func DeleteTrieNode(db ethdb.KeyValueStore, key []byte, hash common.Hash) {
+	blob, err := db.Get(trieNodeKey(key))
+	if err != nil {
+		return // nothing to delete
+	}
+	if result := crypto.Keccak256Hash(blob); result != hash {
+		return // nothing to delete
+	}
 	if err := db.Delete(trieNodeKey(key)); err != nil {
 		log.Crit("Failed to delete trie node", "err", err)
 	}

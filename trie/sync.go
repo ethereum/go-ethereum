@@ -138,15 +138,16 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if len(path) == 2*common.HashLength {
 		owner = common.BytesToHash(HexToKeybytes(path))
 	}
-	byteKey := EncodeNodeKey(owner, nil, root)
+	rawKey := EncodeNodeKey(owner, nil)
+	byteKey := internalKey(rawKey, root)
 	key := string(byteKey)
 	if s.membatch.hasNode(key) {
 		return
 	}
 	if s.bloom == nil || s.bloom.Contains(byteKey) {
 		// Bloom filter says this might be a duplicate, double check.
-		blob := rawdb.ReadTrieNode(s.database, byteKey)
-		if len(blob) > 0 {
+		blob, nodeHash := rawdb.ReadTrieNode(s.database, rawKey)
+		if len(blob) > 0 && nodeHash == root {
 			return
 		}
 		// False positive, bump fault meter
@@ -160,7 +161,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		parentKey := string(EncodeNodeKey(common.Hash{}, parentPath, parent))
+		parentKey := string(internalKey(EncodeNodeKey(common.Hash{}, parentPath), parent))
 		ancestor := s.nodeReqs[parentKey]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
@@ -202,7 +203,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		parentKey := string(EncodeNodeKey(common.Hash{}, parentPath, parent))
+		parentKey := string(internalKey(EncodeNodeKey(common.Hash{}, parentPath), parent))
 		ancestor := s.nodeReqs[parentKey] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
@@ -246,7 +247,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []NodePath, []common.H
 				log.Warn("Missing node request", "key", key)
 				continue // System very wrong, shouldn't happen
 			}
-			_, _, hash := DecodeNodeKey([]byte(key))
+			_, hash := rawKey([]byte(key))
 			nodeKeys = append(nodeKeys, key)
 			nodeHashes = append(nodeHashes, hash)
 			nodePaths = append(nodePaths, newNodePath(req.path))
@@ -255,7 +256,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []NodePath, []common.H
 	return nodeKeys, nodeHashes, nodePaths, codeHashes
 }
 
-// Process injects the received data for requested item. Note it can
+// ProcessCode injects the received data for requested item. Note it can
 // happpen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
@@ -274,7 +275,7 @@ func (s *Sync) ProcessCode(result CodeSyncResult) error {
 	return s.commitCodeRequest(req)
 }
 
-// Process injects the received data for requested item. Note it can
+// ProcessNode injects the received data for requested item. Note it can
 // happpen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
@@ -290,7 +291,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 		return ErrAlreadyProcessed
 	}
 	// Decode the node data content and update the request
-	_, _, hash := DecodeNodeKey([]byte(result.Key))
+	_, hash := rawKey([]byte(result.Key))
 	node, err := decodeNode(hash[:], result.Data)
 	if err != nil {
 		return err
@@ -318,7 +319,8 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
-		rawdb.WriteTrieNode(dbw, []byte(key), value)
+		rawkey, _ := rawKey([]byte(key))
+		rawdb.WriteTrieNode(dbw, rawkey, value)
 		if s.bloom != nil {
 			s.bloom.Add([]byte(key))
 		}
@@ -447,14 +449,15 @@ func (s *Sync) children(req *nodeRequest, hash common.Hash, object node) ([]*nod
 			} else {
 				inner = child.path
 			}
-			childKey := EncodeNodeKey(owner, inner, common.BytesToHash(node))
+			rawkey := EncodeNodeKey(owner, inner)
+			childKey := internalKey(rawkey, common.BytesToHash(node))
 			// Try to resolve the node from the local database
 			if s.membatch.hasNode(string(childKey)) {
 				continue
 			}
 			if s.bloom == nil || s.bloom.Contains(childKey) {
 				// Bloom filter says this might be a duplicate, double check.
-				if blob := rawdb.ReadTrieNode(s.database, childKey); len(blob) > 0 {
+				if blob, hash := rawdb.ReadTrieNode(s.database, rawkey); len(blob) > 0 && hash == common.BytesToHash(node) {
 					continue
 				}
 				// False positive, bump fault meter

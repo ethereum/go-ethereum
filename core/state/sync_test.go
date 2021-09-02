@@ -652,7 +652,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		rawdb.WriteCode(dstDb, node, val)
 	}
 	for _, node := range addedNodes {
-		var val = rawdb.ReadTrieNode(dstDb, []byte(node))
+		val, _ := rawdb.ReadTrieNode(dstDb, []byte(node))
 		rawdb.DeleteTrieNode(dstDb, []byte(node))
 		if err := checkStateConsistency(dstDb, srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %v", node)

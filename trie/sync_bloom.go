@@ -19,6 +19,7 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,10 +100,9 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 		// If the database entry is a trie node, add it to the bloom
 		key := it.Key()
 		if ok, rawkey := rawdb.IsTrieNodeKey(key); ok {
-			if len(rawkey) <= 8 {
-				continue
-			}
-			b.bloom.AddHash(binary.BigEndian.Uint64(rawkey[len(rawkey)-8:]))
+			valHash := crypto.Keccak256Hash(it.Value())
+			ikey := internalKey(rawkey, valHash)
+			b.bloom.AddHash(binary.BigEndian.Uint64(ikey[len(ikey)-8:]))
 			bloomLoadMeter.Mark(1)
 		} else if ok, hash := rawdb.IsCodeKey(key); ok {
 			if len(hash) <= 8 {
@@ -168,10 +168,6 @@ func (b *SyncBloom) Close() error {
 
 // Add inserts a new trie node hash into the bloom filter.
 func (b *SyncBloom) Add(key []byte) {
-	// Filtered out invalid key, in theory it shouldn't happen.
-	if len(key) < 8 {
-		return
-	}
 	if atomic.LoadUint32(&b.closed) == 1 {
 		return
 	}

@@ -241,7 +241,7 @@ func trieNodeKey(key []byte) []byte {
 // IsTrieNodeKey reports whether the given byte slice is the key of trie node.
 // if so return the raw encoded trie key as well.
 func IsTrieNodeKey(key []byte) (bool, []byte) {
-	if bytes.HasPrefix(key, TrieNodePrefix) && len(key) > common.HashLength+len(TrieNodePrefix) {
+	if bytes.HasPrefix(key, TrieNodePrefix) {
 		return true, key[len(TrieNodePrefix):]
 	}
 	return false, nil

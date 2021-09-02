@@ -53,59 +53,21 @@ func newNodePath(path []byte) NodePath {
 	return NodePath{HexToKeybytes(path[:64]), hexToCompact(path[64:])}
 }
 
-// EncodeNodeKey combines the node path and node hash together to act as
-// the unique database key for the trie node. The benefits of this key scheme
-// are that:
-//
-// - it can group all the relevant trie nodes together to have data locality
-//   in the database perspective.
-// - it's space efficient. Although the path prefix is added compared with
-//   the legacy scheme(raw node hash as the key), but the underlying
-//   database will do the key compression by sharing the key prefix with
-//   the preceding key. So the overhead is acceptable.
-// - it's pruning friendly. A list of trie nodes with same trie path can be
-//   easily obtained for pruning.
-//
-// What's more, the prefix(a few bytes) of node hash is necessary for identifying
-// the trie node since the hash collision under the same path prefix is very low.
-// And even the collision happens it's also super easy to fix it by extending one
-// more byte for the new key. TODO(rjl493456442) explore this idea later.
-func EncodeNodeKey(owner common.Hash, path []byte, hash common.Hash) []byte {
-	if owner == (common.Hash{}) && hash == (common.Hash{}) && len(path) == 0 {
-		return nil // special case, metaroot
-	}
+func EncodeNodeKey(owner common.Hash, path []byte) []byte {
 	var ret []byte
 	if owner != (common.Hash{}) {
 		ret = append(ret, owner.Bytes()...)
 	}
-	ret = append(ret, hexToCompact(path)...)
-	return append(ret, hash.Bytes()...)
+	return append(ret, hexToCompact(path)...)
 }
 
-// DecodeNodeKey returns the composing hashes of a trie node key.
-// The key is composed by two parts:
-// - the trie node owner
-// - the trie node path
-// - the trie node hash
-func DecodeNodeKey(key []byte) (common.Hash, []byte, common.Hash) {
-	if len(key) == 0 {
-		return common.Hash{}, nil, common.Hash{} // special case, metaroot
-	}
+func DecodeNodeKey(key []byte) (common.Hash, []byte) {
 	if len(key) <= common.HashLength {
-		return common.Hash{}, nil, common.Hash{}
+		return common.Hash{}, compactToHex(key)
 	}
-	hash := common.BytesToHash(key[len(key)-common.HashLength:])
-	path := key[:len(key)-common.HashLength]
-
-	// Single trie node(account)
-	if len(path) <= common.HashLength {
-		return common.Hash{}, compactToHex(path), hash
-	}
-	// Layered trie node(storage)
-	return common.BytesToHash(path[:common.HashLength]), compactToHex(path[common.HashLength:]), hash
+	return common.BytesToHash(key[:common.HashLength]), compactToHex(key[common.HashLength:])
 }
 
-// TrieRootKey returns the composed trie node key for trie root node.
-func TrieRootKey(owner common.Hash, root common.Hash) []byte {
-	return EncodeNodeKey(owner, nil, root)
+func TrieRootKey(owner common.Hash) []byte {
+	return EncodeNodeKey(owner, nil)
 }

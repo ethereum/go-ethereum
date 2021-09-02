@@ -146,7 +146,8 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		}
 		if checkKey != nil {
 			if isNode {
-				owner, _, hash := trie.DecodeNodeKey(checkKey)
+				owner, _ := trie.DecodeNodeKey(checkKey)
+				hash := crypto.Keccak256Hash(iter.Value())
 				if owner == (common.Hash{}) && middleStateRoots[hash] {
 					log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))
 				} else {
@@ -272,7 +273,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
 	// entire trie.
-	if blob := rawdb.ReadTrieNode(p.db, trie.TrieRootKey(common.Hash{}, root)); len(blob) == 0 {
+	blob, nodeHash := rawdb.ReadTrieNode(p.db, trie.TrieRootKey(common.Hash{}))
+	if len(blob) == 0 || nodeHash != root {
 		// The special case is for clique based networks(rinkeby, goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
@@ -286,7 +288,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// as the pruning target.
 		var found bool
 		for i := len(layers) - 2; i >= 2; i-- {
-			if blob := rawdb.ReadTrieNode(p.db, trie.TrieRootKey(common.Hash{}, root)); len(blob) != 0 {
+			if blob, nodeHash := rawdb.ReadTrieNode(p.db, trie.TrieRootKey(common.Hash{})); len(blob) != 0 && nodeHash == root {
 				root = layers[i].Root()
 				found = true
 				log.Info("Selecting middle-layer as the pruning target", "root", root, "depth", i)

@@ -238,7 +238,7 @@ func (it *nodeIterator) ComposedKey() []byte {
 	if it.Hash() == (common.Hash{}) {
 		return nil
 	}
-	return EncodeNodeKey(it.trie.owner, it.path, it.Hash())
+	return EncodeNodeKey(it.trie.owner, it.path)
 }
 
 func (it *nodeIterator) Error() error {

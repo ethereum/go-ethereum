@@ -1771,8 +1771,8 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != emptyRoot {
-			blob := rawdb.ReadTrieNode(s.db, trie.TrieRootKey(res.hashes[i], account.Root))
-			if len(blob) == 0 {
+			blob, nodeHash := rawdb.ReadTrieNode(s.db, trie.TrieRootKey(res.hashes[i]))
+			if len(blob) == 0 || nodeHash != account.Root {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle
 				// is interrupted and resumed later. However, *do* update the

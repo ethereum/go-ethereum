@@ -17,6 +17,7 @@
 package tries
 
 import (
+	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 	"sync/atomic"
 
@@ -44,10 +45,11 @@ type diffLayer struct {
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
 
-	root  common.Hash       // Root hash to which this snapshot diff belongs to
-	stale uint32            // Signals that the layer became stale (state progressed)
-	nodes map[string][]byte // Keyed trie nodes for retrieval. (nil means deleted)
-	lock  sync.RWMutex
+	root   common.Hash            // Root hash to which this snapshot diff belongs to
+	stale  uint32                 // Signals that the layer became stale (state progressed)
+	nodes  map[string][]byte      // Keyed trie nodes for retrieval. (nil means deleted)
+	hashes map[string]common.Hash // List of trie node hashes
+	lock   sync.RWMutex
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -81,7 +83,7 @@ func (dl *diffLayer) Stale() bool {
 }
 
 // TrieNode retrieves the trie node associated with a particular key.
-func (dl *diffLayer) TrieNode(key string) ([]byte, error) {
+func (dl *diffLayer) TrieNode(key string, hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -92,9 +94,12 @@ func (dl *diffLayer) TrieNode(key string) ([]byte, error) {
 	}
 	// If the trie node is known locally, return it
 	if data, ok := dl.nodes[key]; ok {
-		return data, nil
+		nodeHash := crypto.Keccak256Hash(data)
+		if nodeHash == hash {
+			return data, nil
+		}
 	}
-	return dl.parent.TrieNode(key)
+	return dl.parent.TrieNode(key, hash)
 }
 
 // Update creates a new layer on top of the existing snapshot diff tree with

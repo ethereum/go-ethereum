@@ -241,7 +241,7 @@ func (c *ChtIndexerBackend) Commit() error {
 			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
 			if ok, rawkey := rawdb.IsTrieNodeKey(trimmed); ok {
 				if !c.trieset.Contains(rawkey) {
-					rawdb.DeleteTrieNode(c.trieTable, rawkey)
+					rawdb.DeleteTrieNode(c.trieTable, rawkey, common.Hash{})
 					deleted += 1
 				} else {
 					remaining += 1
@@ -482,7 +482,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
 			if ok, rawkey := rawdb.IsTrieNodeKey(trimmed); ok {
 				if !b.trieset.Contains(rawkey) {
-					rawdb.DeleteTrieNode(b.trieTable, rawkey)
+					rawdb.DeleteTrieNode(b.trieTable, rawkey, common.Hash{}) // TODO FIX IT
 					deleted += 1
 				} else {
 					remaining += 1
