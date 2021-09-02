@@ -802,7 +802,8 @@ func MakeDataDir(ctx *cli.Context) string {
 			return filepath.Join(path, "goerli")
 		}
 		if ctx.GlobalBool(MumbaiFlag.Name) {
-			return filepath.Join(path, "mumbai")
+			homeDir, _ := os.UserHomeDir()
+			return filepath.Join(homeDir, "/.bor/data")
 		}
 		return path
 	}
@@ -1302,7 +1303,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.GlobalBool(MumbaiFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "mumbai")
+		homeDir, _ := os.UserHomeDir()
+		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
 	}
 }
 

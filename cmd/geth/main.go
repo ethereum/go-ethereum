@@ -284,7 +284,7 @@ func prepare(ctx *cli.Context) {
 		log.Info("Starting Geth on Görli testnet...")
 
 	case ctx.GlobalIsSet(utils.MumbaiFlag.Name):
-		log.Info("Starting Geth on Mumbai testnet...")
+		log.Info("Starting Bor on Mumbai testnet...")
 
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
