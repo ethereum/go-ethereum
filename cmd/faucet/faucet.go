@@ -343,9 +343,10 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 	// Gather the initial stats from the network to report
 	var (
-		head    *types.Header
-		balance *big.Int
-		nonce   uint64
+		head     *types.Header
+		balance  *big.Int
+		nonce    uint64
+		attempts = 0
 	)
 	for head == nil || balance == nil {
 		// Retrieve the current stats cached by the faucet
@@ -364,6 +365,11 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			//lint:ignore ST1005 This error is to be displayed in the browser
 			if err = sendError(wsconn, errors.New("Faucet offline")); err != nil {
 				log.Warn("Failed to send faucet error to client", "err", err)
+				return
+			}
+			// We can't block indefinitiely, let's just abort after 30s
+			attempts++
+			if attempts > 10 {
 				return
 			}
 			time.Sleep(3 * time.Second)
