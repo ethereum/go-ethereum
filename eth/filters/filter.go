@@ -36,6 +36,7 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
+	GetLogsFiltered(ctx context.Context, blockHash common.Hash, fn func([]*types.Log) []*types.Log) ([]*types.Log, error)
 
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
@@ -244,19 +245,22 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*t
 // checkMatches checks if the receipts belonging to the given header contain any log events that
 // match the filter criteria. This function is called when the bloom filter signals a potential match.
 func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
+	filterFn := func(unfiltered []*types.Log) []*types.Log {
+		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	}
 	// Get the logs of the block
-	logsList, err := f.backend.GetLogs(ctx, header.Hash())
+	logs, err = f.backend.GetLogsFiltered(ctx, header.Hash(), filterFn)
 	if err != nil {
 		return nil, err
 	}
-	var unfiltered []*types.Log
+	/*var unfiltered []*types.Log
 	for _, logs := range logsList {
 		unfiltered = append(unfiltered, logs...)
 	}
-	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)*/
 	if len(logs) > 0 {
 		// We have matching logs, check if we need to resolve full logs via the light client
-		if logs[0].TxHash == (common.Hash{}) {
+		/*if logs[0].TxHash == (common.Hash{}) {
 			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
 			if err != nil {
 				return nil, err
@@ -266,7 +270,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 				unfiltered = append(unfiltered, receipt.Logs...)
 			}
 			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
-		}
+		}*/
 		return logs, nil
 	}
 	return nil, nil

@@ -174,6 +174,10 @@ func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return nil, nil
 }
 
+func (b *LesApiBackend) GetLogsFiltered(ctx context.Context, hash common.Hash, _ func([]*types.Log) []*types.Log) ([]*types.Log, error) {
+	panic("hi")
+}
+
 func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)

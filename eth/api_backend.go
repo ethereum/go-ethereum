@@ -186,7 +186,21 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	if number == nil {
 		return nil, errors.New("failed to get block number from hash")
 	}
-	logs := rawdb.ReadLogs(db, hash, *number)
+	return nil, nil
+	/*logs := rawdb.ReadLogs(db, hash, *number, filterFn)
+	if logs == nil {
+		return nil, errors.New("failed to get logs for block")
+	}
+	return logs, nil*/
+}
+
+func (b *EthAPIBackend) GetLogsFiltered(ctx context.Context, hash common.Hash, filterFn func([]*types.Log) []*types.Log) ([]*types.Log, error) {
+	db := b.eth.ChainDb()
+	number := rawdb.ReadHeaderNumber(db, hash)
+	if number == nil {
+		return nil, errors.New("failed to get block number from hash")
+	}
+	logs := rawdb.ReadLogs(db, hash, *number, filterFn)
 	if logs == nil {
 		return nil, errors.New("failed to get logs for block")
 	}
