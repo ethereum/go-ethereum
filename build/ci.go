@@ -249,7 +249,7 @@ func doInstall(cmdline []string) {
 
 // buildFlags returns the go tool flags for building.
 func buildFlags(env build.Environment) (flags []string) {
-	var ld []string
+	var ld []string = []string{"-buildid", "''"} // to get reproducible binaries
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "main.gitDate="+env.Date)
