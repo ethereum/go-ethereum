@@ -171,39 +171,21 @@ type Decoder interface {
 	Time() time.Time
 }
 
-var eth65 = map[uint64]msgHandler{
-	GetBlockHeadersMsg:            handleGetBlockHeaders,
-	BlockHeadersMsg:               handleBlockHeaders,
-	GetBlockBodiesMsg:             handleGetBlockBodies,
-	BlockBodiesMsg:                handleBlockBodies,
-	GetNodeDataMsg:                handleGetNodeData,
-	NodeDataMsg:                   handleNodeData,
-	GetReceiptsMsg:                handleGetReceipts,
-	ReceiptsMsg:                   handleReceipts,
-	NewBlockHashesMsg:             handleNewBlockhashes,
-	NewBlockMsg:                   handleNewBlock,
-	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
-	GetPooledTransactionsMsg:      handleGetPooledTransactions,
-	PooledTransactionsMsg:         handlePooledTransactions,
-}
-
 var eth66 = map[uint64]msgHandler{
 	NewBlockHashesMsg:             handleNewBlockhashes,
 	NewBlockMsg:                   handleNewBlock,
 	TransactionsMsg:               handleTransactions,
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
-	// eth66 messages with request-id
-	GetBlockHeadersMsg:       handleGetBlockHeaders66,
-	BlockHeadersMsg:          handleBlockHeaders66,
-	GetBlockBodiesMsg:        handleGetBlockBodies66,
-	BlockBodiesMsg:           handleBlockBodies66,
-	GetNodeDataMsg:           handleGetNodeData66,
-	NodeDataMsg:              handleNodeData66,
-	GetReceiptsMsg:           handleGetReceipts66,
-	ReceiptsMsg:              handleReceipts66,
-	GetPooledTransactionsMsg: handleGetPooledTransactions66,
-	PooledTransactionsMsg:    handlePooledTransactions66,
+	GetBlockHeadersMsg:            handleGetBlockHeaders66,
+	BlockHeadersMsg:               handleBlockHeaders66,
+	GetBlockBodiesMsg:             handleGetBlockBodies66,
+	BlockBodiesMsg:                handleBlockBodies66,
+	GetNodeDataMsg:                handleGetNodeData66,
+	NodeDataMsg:                   handleNodeData66,
+	GetReceiptsMsg:                handleGetReceipts66,
+	ReceiptsMsg:                   handleReceipts66,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions66,
+	PooledTransactionsMsg:         handlePooledTransactions66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
@@ -219,10 +201,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 
-	var handlers = eth65
-	if peer.Version() >= ETH66 {
-		handlers = eth66
-	}
+	var handlers = eth66
+	//if peer.Version() >= ETH67 { // Left in as a sample when new protocol is added
+	//	handlers = eth67
+	//}
+
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)

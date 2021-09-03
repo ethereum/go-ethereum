@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,10 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package metrics
+package state
 
-// getProcessCPUTime returns 0 on Windows as there is no system call to resolve
-// the actual process' CPU time.
-func getProcessCPUTime() int64 {
-	return 0
-}
+import "github.com/ethereum/go-ethereum/metrics"
+
+var (
+	accountUpdatedMeter   = metrics.NewRegisteredMeter("state/update/account", nil)
+	storageUpdatedMeter   = metrics.NewRegisteredMeter("state/update/storage", nil)
+	accountDeletedMeter   = metrics.NewRegisteredMeter("state/delete/account", nil)
+	storageDeletedMeter   = metrics.NewRegisteredMeter("state/delete/storage", nil)
+	accountCommittedMeter = metrics.NewRegisteredMeter("state/commit/account", nil)
+	storageCommittedMeter = metrics.NewRegisteredMeter("state/commit/storage", nil)
+)

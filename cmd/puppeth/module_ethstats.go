@@ -158,7 +158,7 @@ func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
 	if port != 80 && port != 443 {
 		config += fmt.Sprintf(":%d", port)
 	}
-	// Retrieve the IP blacklist
+	// Retrieve the IP banned list
 	banned := strings.Split(infos.envvars["BANNED"], ",")
 
 	// Run a sanity check to see if the port is reachable

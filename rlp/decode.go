@@ -379,7 +379,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	if err != nil {
 		return err
 	}
-	slice := byteArrayBytes(val)
+	slice := byteArrayBytes(val, val.Len())
 	switch kind {
 	case Byte:
 		if len(slice) == 0 {

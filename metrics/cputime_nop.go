@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,26 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package tests
+//go:build windows || js
+// +build windows js
 
-import (
-	"testing"
+package metrics
 
-	"github.com/ethereum/go-ethereum/core/vm"
-)
-
-func TestVM(t *testing.T) {
-	t.Parallel()
-	vmt := new(testMatcher)
-	vmt.slow("^vmPerformance")
-	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")
-
-	vmt.walk(t, vmTestDir, func(t *testing.T, name string, test *VMTest) {
-		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {
-			return vmt.checkFailure(t, test.Run(vmconfig, false))
-		})
-		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {
-			return vmt.checkFailure(t, test.Run(vmconfig, true))
-		})
-	})
+// getProcessCPUTime returns 0 on Windows as there is no system call to resolve
+// the actual process' CPU time.
+func getProcessCPUTime() int64 {
+	return 0
 }

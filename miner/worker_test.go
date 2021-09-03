@@ -67,7 +67,6 @@ var (
 
 	testConfig = &Config{
 		Recommit: time.Second,
-		GasFloor: params.GenesisGasLimit,
 		GasCeil:  params.GenesisGasLimit,
 	}
 )

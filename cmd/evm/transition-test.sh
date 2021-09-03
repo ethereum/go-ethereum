@@ -11,6 +11,8 @@ function showjson(){
 function demo(){
   echo "$ticks"
   echo "$1"
+  $1
+  echo ""
   echo "$ticks"
   echo ""
 }
@@ -152,9 +154,7 @@ echo ""
 echo "The \`BLOCKHASH\` opcode requires blockhashes to be provided by the caller, inside the \`env\`."
 echo "If a required blockhash is not provided, the exit code should be \`4\`:"
 echo "Example where blockhashes are provided: "
-cmd="./evm t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace"
-tick && echo $cmd && tick
-$cmd 2>&1 >/dev/null
+demo "./evm --verbosity=1 t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace"
 cmd="cat trace-0-0x72fadbef39cd251a437eea619cfeda752271a5faaaa2147df012e112159ffb81.jsonl | grep BLOCKHASH -C2"
 tick && echo $cmd && tick
 echo "$ticks"
@@ -164,13 +164,11 @@ echo ""
 
 echo "In this example, the caller has not provided the required blockhash:"
 cmd="./evm t8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json  --trace"
-tick && echo $cmd && tick
-tick
-$cmd
+tick && echo $cmd && $cmd
 errc=$?
 tick
 echo "Error code: $errc"
-
+echo ""
 
 echo "### Chaining"
 echo ""
@@ -189,3 +187,28 @@ echo ""
 echo "In order to meaningfully chain invocations, one would need to provide meaningful new \`env\`, otherwise the"
 echo "actual blocknumber (exposed to the EVM) would not increase."
 echo ""
+
+echo "### Transactions in RLP form"
+echo ""
+echo "It is possible to provide already-signed transactions as input to, using an \`input.txs\` which ends with the \`rlp\` suffix."
+echo "The input format for RLP-form transactions is _identical_ to the _output_ format for block bodies. Therefore, it's fully possible"
+echo "to use the evm to go from \`json\` input to \`rlp\` input."
+echo ""
+echo "The following command takes **json** the transactions in \`./testdata/13/txs.json\` and signs them. After execution, they are output to \`signed_txs.rlp\`.:"
+demo "./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./testdata/13/txs.json --input.env=./testdata/13/env.json --output.result=alloc_jsontx.json --output.body=signed_txs.rlp"
+echo "The \`output.body\` is the rlp-list of transactions, encoded in hex and placed in a string a'la \`json\` encoding rules:"
+demo "cat signed_txs.rlp"
+echo "We can use \`rlpdump\` to check what the contents are: "
+echo "$ticks"
+echo "rlpdump -hex \$(cat signed_txs.rlp | jq -r )"
+rlpdump -hex $(cat signed_txs.rlp | jq -r )
+echo "$ticks"
+echo "Now, we can now use those (or any other already signed transactions), as input, like so: "
+demo "./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./signed_txs.rlp --input.env=./testdata/13/env.json --output.result=alloc_rlptx.json"
+
+echo "You might have noticed that the results from these two invocations were stored in two separate files. "
+echo "And we can now finally check that they match."
+echo "$ticks"
+echo "cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot"
+cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot
+echo "$ticks"
