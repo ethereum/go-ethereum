@@ -118,16 +118,7 @@ func (b *SimulatedBackend) Commit() {
 
 	blocks, _ := core.GenerateChain(b.config, parentBlock, ethash.NewFaker(), b.database, 1,
 		func(number int, block *core.BlockGen) {
-
-			for _, tx := range b.pendingBlock.Transactions() {
-				if b.marketGasPrice == nil || b.marketGasPrice.Cmp(tx.GasPrice()) <= 0 {
-					block.AddTxWithChain(b.blockchain, tx)
-				} else {
-					remainingTx = append(remainingTx, tx)
-				}
-			}
-
-			for _, tx := range b.stuckTransactions {
+			for _, tx := range append(b.pendingBlock.Transactions(), b.stuckTransactions...) {
 				if b.marketGasPrice == nil || b.marketGasPrice.Cmp(tx.GasPrice()) <= 0 {
 					block.AddTxWithChain(b.blockchain, tx)
 				} else {
