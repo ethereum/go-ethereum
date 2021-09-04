@@ -36,6 +36,7 @@ import (
 type result struct {
 	Error   error
 	Address common.Address
+	Hash    common.Hash
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -43,13 +44,17 @@ func (r *result) MarshalJSON() ([]byte, error) {
 	type xx struct {
 		Error   string          `json:"error,omitempty"`
 		Address *common.Address `json:"address,omitempty"`
+		Hash    *common.Hash    `json:"hash,omitempty"`
 	}
 	var out xx
+	if r.Error != nil {
+		out.Error = r.Error.Error()
+	}
 	if r.Address != (common.Address{}) {
 		out.Address = &r.Address
 	}
-	if r.Error != nil {
-		out.Error = r.Error.Error()
+	if r.Hash != (common.Hash{}) {
+		out.Hash = &r.Hash
 	}
 	return json.Marshal(out)
 }
@@ -124,7 +129,7 @@ func Transaction(ctx *cli.Context) error {
 			results = append(results, result{Error: err})
 			continue
 		}
-		results = append(results, result{Address: sender})
+		results = append(results, result{Address: sender, Hash: tx.Hash()})
 	}
 	out, err := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
