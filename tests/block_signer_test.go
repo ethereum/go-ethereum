@@ -400,7 +400,7 @@ func TestNotUpdateSignerListIfNotOnGapBlock(t *testing.T) {
 func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 	blockchain, _, parentBlock := PrepareXDCTestBlockChain(t, GAP-1)
 	// Insert block 450
-	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 450)
+	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 449)
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 	block, err := insertBlock(blockchain, 450, blockCoinBase, parentBlock, merkleRoot)
 	if err != nil {
@@ -420,6 +420,61 @@ func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 		t.Logf("Signers unchanged")
 	} else {
 		t.Fatalf("Singers should not be changed!")
+	}
+}
+
+//Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
+func TestUpdateSignerListIfProposedBeforeGap(t *testing.T) {
+
+	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-2)
+	// Insert first Block 450 A
+	t.Logf("Inserting block with propose at 449...")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000000449"
+	tx, err := voteTX(37117, 0, acc1Addr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//Get from block validator error message
+	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
+	block449, err := insertBlockTxs(blockchain, 449, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentBlock = block449
+
+	signers, err := GetSnapshotSigner(blockchain, block449.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// At block 449, we should not update signerList. we need to update it till block 450 gap block.
+	// Acc3 is the default account that is on the signerList
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 3 should sit in the signer list")
+	}
+	if signers[acc1Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 1 should NOT sit in the signer list")
+	}
+
+	// Now, let's mine another block to trigger the GAP block signerList update
+	block450CoinbaseAddress := "0xaaa0000000000000000000000000000000000450"
+	merkleRoot = "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
+	block450, err := insertBlock(blockchain, 450, block450CoinbaseAddress, parentBlock, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, block450.Header())
+	// Now, we voted acc 1 to be in the signerList, which will kick out acc3 because it has less funds
+	if signers[acc3Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 3 should NOT sit in the signer list")
+	}
+	if signers[acc1Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 1 should sit in the signer list")
 	}
 }
 
@@ -584,7 +639,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 
 func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testing.T) {
 
-	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t, GAP-1)
+	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-1)
 
 	state, err := blockchain.State()
 	t.Logf("Account %v have balance of: %v", acc1Addr.String(), state.GetBalance(acc1Addr))
@@ -609,7 +664,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	transferTransaction := transferTx(t, acc1Addr, 999)
 
 	merkleRoot := "ea465415b60d88429f181fec9fae67c0f19cbf5a4fa10971d96d4faa57d96ffa"
-	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -641,7 +696,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	transferTransaction = transferTx(t, acc1Addr, 888)
 
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, currentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -702,5 +757,90 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 
 	if state.GetBalance(acc1Addr).Cmp(new(big.Int).SetUint64(10000000888)) != 0 {
 		t.Fatalf("account 1 should have 10000000888 in balance")
+	}
+}
+
+func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
+	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-1)
+	// Check initial signer, by default, acc3 is in the signerList
+	signers, err := GetSnapshotSigner(blockchain, blockchain.CurrentBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc3 should sit in the signer list")
+	}
+	if (signers[acc1Addr.Hex()] == true) || (signers[acc2Addr.Hex()] == true) {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,2should NOT sit in the signer list")
+	}
+
+	// Insert normal blocks 450 A
+	blockCoinBase450A := "0xaaa0000000000000000000000000000000000450"
+	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+	block450A, err := insertBlock(blockchain, 450, blockCoinBase450A, parentBlock, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert 451 A with vote
+	blockCoinbase451A := "0xaaa0000000000000000000000000000000000451"
+	tx, err := voteTX(37117, 0, acc1Addr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merkleRoot = "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
+	block451A, err := insertBlockTxs(blockchain, 451, blockCoinbase451A, block450A, []*types.Transaction{tx}, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// SignerList should be unchanged as the vote happen after GAP block
+	signers, err = GetSnapshotSigner(blockchain, block451A.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc1Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 1 should NOT sit in the signer list")
+	}
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 3 should sit in the signer list")
+	}
+
+	// Now, we going to inject normal blocks of 450B, 451B and 452B. Because it's the longest, it will become the mainchain
+	// Insert forked Block 450 B
+	blockCoinBase450B := "0xbbb0000000000000000000000000000000000450"
+	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+	block450B, err := insertBlock(blockchain, 450, blockCoinBase450B, parentBlock, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
+	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockCoinBase452B := "0xbbb0000000000000000000000000000000000452"
+	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+	block452B, err := insertBlock(blockchain, 452, blockCoinBase452B, block451B, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signers, err = GetSnapshotSigner(blockchain, block452B.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should run the `updateM1` for forked chain, but it should not be affected by the voted block 451A which is not on the mainchain anymore
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 3 should sit in the signer list as previos block result")
 	}
 }
