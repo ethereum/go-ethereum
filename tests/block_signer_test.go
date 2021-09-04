@@ -507,12 +507,6 @@ func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 	}
 }
 
-// Should have previous smart contract transcation, then have 2 blocks at Gap Step.
-// Both Block should have update signer whenever they be added into main chain.
-
-func Test1(t *testing.T) {
-}
-
 // Should call updateM1 and update snapshot when a forked block(at gap block number) is inserted back into main chain (Edge case)
 func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 
