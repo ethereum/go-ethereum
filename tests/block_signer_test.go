@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -135,21 +136,22 @@ func getCommonBackend(t *testing.T) *backends.SimulatedBackend {
 
 }
 
-/*
-func transferTx(t *testing.T) *types.Transaction {
+func transferTx(t *testing.T, to common.Address, transferAmount int64) *types.Transaction {
+	t.Logf("Transfering %v to address: %v", transferAmount, to.String())
 	data := []byte{}
-	gasPrice := big.NewInt(int64(1))
+	gasPrice := big.NewInt(int64(0))
 	gasLimit := uint64(21000)
-	amount := big.NewInt(int64(999))
-	nonce := uint64(0)
-	to := common.HexToAddress("35658f7b2a9E7701e65E7a654659eb1C481d1dC5")
+	amount := big.NewInt(transferAmount)
+	nonce := uint64(1)
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), acc4Key)
+	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return signedTX
 }
+
+/*
 func proposeTX(t *testing.T) *types.Transaction {
 	data := common.Hex2Bytes("012679510000000000000000000000000d3ab14bbad3d99f4203bd7a11acb94882050e7e")
 	//data := []byte{}
@@ -192,6 +194,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 
 	return signedTX, nil
 }
+
 func UpdateSigner(bc *BlockChain) error {
 	err := bc.UpdateM1()
 	return err
@@ -237,7 +240,7 @@ func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testi
 	return ms
 }
 
-func PrepareXDCTestBlockChain(t *testing.T) (*BlockChain, *backends.SimulatedBackend, *types.Block) {
+func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int) (*BlockChain, *backends.SimulatedBackend, *types.Block) {
 	// Preparation
 	var err error
 	backend := getCommonBackend(t)
@@ -246,8 +249,8 @@ func PrepareXDCTestBlockChain(t *testing.T) (*BlockChain, *backends.SimulatedBac
 
 	currentBlock := blockchain.Genesis()
 
-	// Insert initial 9 blocks
-	for i := 1; i < GAP; i++ {
+	// Insert initial blocks
+	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
 		merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 		block, err := insertBlock(blockchain, i, blockCoinBase, currentBlock, merkleRoot)
@@ -265,10 +268,165 @@ func PrepareXDCTestBlockChain(t *testing.T) (*BlockChain, *backends.SimulatedBac
 	return blockchain, backend, currentBlock
 }
 
+// insert Block without transcation attached
+func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, root string) (*types.Block, error) {
+	block, err := createXDPoSTestBlock(
+		blockchain,
+		parentBlock.Hash().Hex(),
+		blockCoinBase, blockNum, nil,
+		"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+		common.HexToHash(root),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = blockchain.InsertBlock(block)
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
+// insert Block with transcation attached
+func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, txs []*types.Transaction, root string) (*types.Block, error) {
+	block, err := createXDPoSTestBlock(
+		blockchain,
+		parentBlock.Hash().Hex(),
+		blockCoinBase, blockNum, txs,
+		"0x9319777b782ba2c83a33c995481ff894ac96d9a92a1963091346a3e1e386705c",
+		common.HexToHash(root),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = blockchain.InsertBlock(block)
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
+func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number int, txs []*types.Transaction, receiptHash string, root common.Hash) (*types.Block, error) {
+	extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
+	//ReceiptHash = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	//Root := "0xc99c095e53ff1afe3b86750affd13c7550a2d24d51fb8e41b3c3ef2ea8274bcc"
+	extraByte, _ := hex.DecodeString(extraSubstring)
+	header := types.Header{
+		ParentHash: common.HexToHash(parentHash),
+		UncleHash:  types.EmptyUncleHash,
+		TxHash:     types.EmptyRootHash,
+		// ReceiptHash: types.EmptyRootHash,
+		ReceiptHash: common.HexToHash(receiptHash),
+		Root:        root,
+		Coinbase:    common.HexToAddress(coinbase),
+		Difficulty:  big.NewInt(int64(1)),
+		Number:      big.NewInt(int64(number)),
+		GasLimit:    1200000000,
+		Time:        uint64(number * 10),
+		Extra:       extraByte,
+	}
+
+	var block *types.Block
+	if len(txs) == 0 {
+		block = types.NewBlockWithHeader(&header)
+	} else {
+
+		// Prepare Receipt
+		statedb, err := bc.StateAt(bc.GetBlockByNumber(uint64(number - 1)).Root()) //Get parent root
+		if err != nil {
+			return nil, fmt.Errorf("%v when get state", err)
+		}
+		gp := new(GasPool).AddGas(header.GasLimit)
+		// usedGas := uint64(0)
+
+		var gasUsed = new(uint64)
+		var receipts types.Receipts
+		for i, tx := range txs {
+			statedb.Prepare(tx.Hash(), header.Hash(), i)
+			receipt, _, err := ApplyTransaction(bc.Config(), bc, &header.Coinbase, gp, statedb, &header, tx, gasUsed, vm.Config{})
+			if err != nil {
+				return nil, fmt.Errorf("%v when applying transaction", err)
+			}
+			receipts = append(receipts, receipt)
+		}
+
+		header.GasUsed = *gasUsed
+
+		block = types.NewBlock(&header, txs, nil, receipts)
+	}
+
+	return block, nil
+}
+
+// Should NOT update signerList if not on the gap block
+func TestNotUpdateSignerListIfNotOnGapBlock(t *testing.T) {
+	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, 400)
+	parentSigners, err := GetSnapshotSigner(blockchain, parentBlock.Header())
+
+	t.Logf("Inserting block with propose at 401")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000000401"
+	tx, err := voteTX(37117, 0, acc1Addr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//Get from block validator error message
+	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
+	blockA, err := insertBlockTxs(blockchain, 401, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signers, err := GetSnapshotSigner(blockchain, blockA.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if signers[acc1Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 1 should NOT sit in the signer list")
+	}
+	eq := reflect.DeepEqual(parentSigners, signers)
+	if eq {
+		t.Logf("Signers unchanged")
+	} else {
+		t.Fatalf("Singers should not be changed!")
+	}
+}
+
+// Should call updateM1 at the gap block, and have the same snapshot values as the parent block if no SM transaction is involved
+func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
+	blockchain, _, parentBlock := PrepareXDCTestBlockChain(t, GAP-1)
+	// Insert block 450
+	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 450)
+	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+	block, err := insertBlock(blockchain, 450, blockCoinBase, parentBlock, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentSigners, err := GetSnapshotSigner(blockchain, parentBlock.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	signers, err := GetSnapshotSigner(blockchain, block.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	eq := reflect.DeepEqual(parentSigners, signers)
+	if eq {
+		t.Logf("Signers unchanged")
+	} else {
+		t.Fatalf("Singers should not be changed!")
+	}
+}
+
 //Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
 func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
-	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t)
+	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t, GAP-1)
 	// Insert first Block 450 A
 	t.Logf("Inserting block with propose at 450 A...")
 	blockCoinbaseA := "0xaaa0000000000000000000000000000000000450"
@@ -303,16 +461,19 @@ func Test1(t *testing.T) {
 // Should call updateM1 and update snapshot when a forked block(at gap block number) is inserted back into main chain (Edge case)
 func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 
-	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t)
-
-	// Check initial signer
+	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t, GAP-1)
+	// Check initial signer, by default, acc3 is in the signerList
 	signers, err := GetSnapshotSigner(blockchain, blockchain.CurrentBlock().Header())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if signers[acc3Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
-		t.Fatalf("voterAddr should sit in the signer list")
+		t.Fatalf("acc3 should sit in the signer list")
+	}
+	if (signers[acc1Addr.Hex()] == true) || (signers[acc2Addr.Hex()] == true) {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,2should NOT sit in the signer list")
 	}
 
 	// Insert first Block 450 A
@@ -337,9 +498,13 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 1 should sit in the signer list")
 	}
+	if signers[acc2Addr.Hex()] == true || signers[acc3Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 2,3 should NOT sit in the signer list")
+	}
 
-	// Insert forked Block 10 B
-	t.Logf("Inserting block with propose at 450 B...")
+	// Insert forked Block 450 B
+	t.Logf("Inserting block with propose for acc2 at 450 B...")
 
 	blockCoinBase450B := "0xbbb0000000000000000000000000000000000450"
 	tx, err = voteTX(37117, 0, acc2Addr.String())
@@ -361,12 +526,145 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 3 should sit in the signer list as previos block result")
 	}
+	if (signers[acc1Addr.Hex()] == true) || (signers[acc2Addr.Hex()] == true) {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,2should NOT sit in the signer list")
+	}
 
 	//Insert block 451 parent is 451 B
 	t.Logf("Inserting block with propose at 451 B...")
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "068dfa09d7b4093441c0cc4d9807a71bc586f6101c072d939b214c21cd136eb3"
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc2Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 2 should sit in the signer list")
+	}
+	if signers[acc1Addr.Hex()] == true || signers[acc3Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,3should NOT sit in the signer list")
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, block451B.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc2Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 2 should sit in the signer list")
+	}
+	if signers[acc1Addr.Hex()] == true || signers[acc3Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,3should NOT sit in the signer list")
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, blockchain.CurrentBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc2Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc2Addr should sit in the signer list")
+	}
+	if signers[acc1Addr.Hex()] == true || signers[acc3Addr.Hex()] == true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc1,3should NOT sit in the signer list")
+	}
+}
+
+func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testing.T) {
+
+	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t, GAP-1)
+
+	state, err := blockchain.State()
+	t.Logf("Account %v have balance of: %v", acc1Addr.String(), state.GetBalance(acc1Addr))
+	// Check initial signer
+	signers, err := GetSnapshotSigner(blockchain, blockchain.CurrentBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("acc3Addr should sit in the signer list")
+	}
+
+	// Insert first Block 450 A
+	t.Logf("Inserting block with propose and transfer at 450 A...")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000000450"
+	tx, err := voteTX(58117, 0, acc1Addr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	transferTransaction := transferTx(t, acc1Addr, 999)
+
+	merkleRoot := "ea465415b60d88429f181fec9fae67c0f19cbf5a4fa10971d96d4faa57d96ffa"
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = blockchain.State()
+	t.Log("After transfer transaction at block 450 A, Account 1 have balance of: ", state.GetBalance(acc1Addr))
+
+	if state.GetBalance(acc1Addr).Cmp(new(big.Int).SetUint64(10000000999)) != 0 {
+		t.Fatalf("account 1 should have 10000000999 in balance")
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, blockA.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signers[acc1Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 1 should sit in the signer list")
+	}
+
+	// Insert forked Block 450 B
+	t.Logf("Inserting block with propose at 450 B...")
+
+	blockCoinBase450B := "0xbbb0000000000000000000000000000000000450"
+	tx, err = voteTX(37117, 0, acc2Addr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	transferTransaction = transferTx(t, acc1Addr, 888)
+
+	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
+	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, currentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = blockchain.State()
+	if state.GetBalance(acc1Addr).Cmp(new(big.Int).SetUint64(10000000999)) != 0 {
+		t.Fatalf("account 1 should have 10000000999 in balance as the block is forked, not on the main chain")
+	}
+
+	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Should not run the `updateM1` for forked chain, hence account3 still exit
+	if signers[acc3Addr.Hex()] != true {
+		debugMessage(backend, signers, t)
+		t.Fatalf("account 3 should sit in the signer list as previos block result")
+	}
+
+	//Insert block 451 parent is 451 B
+	t.Logf("Inserting block with propose at 451 B...")
+
+	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
+	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
 	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
 
 	if err != nil {
@@ -399,87 +697,10 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 		debugMessage(backend, signers, t)
 		t.Fatalf("acc2Addr should sit in the signer list")
 	}
-}
+	state, err = blockchain.State()
+	t.Log("After transfer transaction at block 450 B and the B fork has been merged into main chain, Account 1 have balance of: ", state.GetBalance(acc1Addr))
 
-// insert Block without transcation attached
-func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, root string) (*types.Block, error) {
-	block, err := createXDPoSTestBlock(
-		blockchain,
-		parentBlock.Hash().Hex(),
-		blockCoinBase, blockNum, nil,
-		"56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-		common.HexToHash(root),
-	)
-	if err != nil {
-		return nil, err
+	if state.GetBalance(acc1Addr).Cmp(new(big.Int).SetUint64(10000000888)) != 0 {
+		t.Fatalf("account 1 should have 10000000888 in balance")
 	}
-
-	err = blockchain.InsertBlock(block)
-	if err != nil {
-		return nil, err
-	}
-	return block, nil
-}
-
-// insert Block with transcation attached
-func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, txs []*types.Transaction, root string) (*types.Block, error) {
-	block, err := createXDPoSTestBlock(
-		blockchain,
-		parentBlock.Hash().Hex(),
-		blockCoinBase, blockNum, txs,
-		"9319777b782ba2c83a33c995481ff894ac96d9a92a1963091346a3e1e386705c",
-		common.HexToHash(root),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	err = blockchain.InsertBlock(block)
-	if err != nil {
-		return nil, err
-	}
-	return block, nil
-}
-
-func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number int, txs []*types.Transaction, receiptHash string, root common.Hash) (*types.Block, error) {
-	extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
-	//ReceiptHash = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	//Root := "0xc99c095e53ff1afe3b86750affd13c7550a2d24d51fb8e41b3c3ef2ea8274bcc"
-	extraByte, _ := hex.DecodeString(extraSubstring)
-	header := types.Header{
-		ParentHash:  common.HexToHash(parentHash),
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-		Root:        root,
-		Coinbase:    common.HexToAddress(coinbase),
-		Difficulty:  big.NewInt(int64(1)),
-		Number:      big.NewInt(int64(number)),
-		GasLimit:    1200000000,
-		Time:        uint64(number * 10),
-		Extra:       extraByte,
-	}
-
-	var block *types.Block
-	if len(txs) == 0 {
-		block = types.NewBlockWithHeader(&header)
-	} else {
-
-		// Prepare Receipt
-		statedb, err := bc.StateAt(bc.GetBlockByNumber(uint64(number - 1)).Root()) //Get parent root
-		if err != nil {
-			return nil, fmt.Errorf("%v when get state", err)
-		}
-		gp := new(GasPool).AddGas(header.GasLimit)
-		usedGas := uint64(0)
-		statedb.Prepare(txs[0].Hash(), header.Hash(), 0)
-		receipt, _, err := ApplyTransaction(bc.Config(), bc, &header.Coinbase, gp, statedb, &header, txs[0], &usedGas, vm.Config{})
-		if err != nil {
-			return nil, fmt.Errorf("%v when creating block", err)
-		}
-		header.GasUsed = txs[0].Gas()
-		block = types.NewBlock(&header, txs, nil, []*types.Receipt{receipt})
-	}
-
-	return block, nil
 }
