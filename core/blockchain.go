@@ -1071,8 +1071,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		if bc.chainConfig.XDPoS != nil && ((block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap)) {
 			err := bc.UpdateM1()
 			if err != nil {
-				log.Error("Error when update masternodes set. Stopping node", "err", err)
-				os.Exit(1)
+				log.Crit("Error when update masternodes set. Stopping node", "err", err)
 			}
 		}
 	}

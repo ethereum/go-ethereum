@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/big"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -620,14 +619,6 @@ func (w *worker) resultLoop() {
 				// epoch block
 				if (block.NumberU64() % w.config.XDPoS.Epoch) == 0 {
 					core.CheckpointCh <- 1
-				}
-				// prepare set of masternodes for the next epoch
-				if (block.NumberU64() % w.config.XDPoS.Epoch) == (w.config.XDPoS.Epoch - w.config.XDPoS.Gap) {
-					err := w.chain.UpdateM1()
-					if err != nil {
-						log.Error("Error when update masternodes set. Stopping node", "err", err)
-						os.Exit(1)
-					}
 				}
 			}
 			w.chain.PostChainEvents(events, logs)
