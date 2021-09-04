@@ -372,7 +372,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
 			recover = true
 		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover, bc.Config().UseVerkle)
 	}
 	// Take ownership of this particular state
 	go bc.update()
@@ -1866,7 +1866,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			receipts types.Receipts
 			logs     []*types.Log
 		)
-		if len(block.Header().VerkleProof) > 0 {
+		if len(block.Header().VerkleProof) == 0 {
 			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
 		} else {
 			var leaves map[common.Hash]common.Hash

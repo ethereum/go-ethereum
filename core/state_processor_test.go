@@ -84,7 +84,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db)
+			genesis       = gspec.MustCommit(db, nil)
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
@@ -219,7 +219,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db)
+			genesis       = gspec.MustCommit(db, nil)
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
@@ -286,4 +286,57 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+}
+
+func TestProcessStateless(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			Ethash:              new(params.EthashConfig),
+			UseVerkle:           true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		db         = rawdb.NewMemoryDatabase()
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+			},
+		}
+	)
+	// Verkle trees use the snapshot, which must be enabled before the
+	// data is saved into the tree+database.
+	genesis := gspec.MustCommit(db, nil)
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+	var makeTx = func(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
+		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, testKey)
+		return tx
+	}
+	bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	tooBigNumber := new(big.Int).Set(bigNumber)
+	tooBigNumber.Add(tooBigNumber, common.Big1)
+	txs := []*types.Transaction{
+		makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+	}
+	block := GenerateBadBlock(genesis, ethash.NewFaker(), txs, gspec.Config)
+	_, err := blockchain.InsertChain(types.Blocks{block})
+	if err != nil {
+		t.Fatalf("block imported with error: %v", err)
+	}
 }

@@ -142,13 +142,18 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 	}
-	if sdb.snaps != nil {
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
-			sdb.snapDestructs = make(map[common.Hash]struct{})
-			sdb.snapAccounts = make(map[common.Hash][]byte)
-			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+	if sdb.snaps == nil {
+		sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
+		if err != nil {
+			return nil, err
 		}
 	}
+	if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+		sdb.snapDestructs = make(map[common.Hash]struct{})
+		sdb.snapAccounts = make(map[common.Hash][]byte)
+		sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+	}
+
 	return sdb, nil
 }
 
@@ -473,9 +478,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyVersion(addr), []byte{0}); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
-		nonce := make([]byte, 32)
-		binary.BigEndian.PutUint64(nonce, obj.data.Nonce)
-		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyNonce(addr), nonce); err != nil {
+		var nonce [32]byte
+		binary.BigEndian.PutUint64(nonce[:], obj.data.Nonce)
+		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyNonce(addr), nonce[:]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 		if err = s.trie.TryUpdate(trieUtils.GetTreeKeyBalance(addr), obj.data.Balance.Bytes()); err != nil {
@@ -938,6 +943,10 @@ func (s *StateDB) clearJournalAndRefund() {
 // GetTrie returns the account trie.
 func (s *StateDB) GetTrie() Trie {
 	return s.trie
+}
+
+func (s *StateDB) Cap(root common.Hash) error {
+	return s.snaps.Cap(root, 0)
 }
 
 // Commit writes the state to the underlying in-memory trie database.

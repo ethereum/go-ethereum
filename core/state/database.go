@@ -227,7 +227,7 @@ func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
 		return nil, err
 	}
 
-	r, err := verkle.ParseNode(payload, 0, 8)
+	r, err := verkle.ParseNode(payload, 0)
 	if err != nil {
 		panic(err)
 	}
