@@ -364,7 +364,9 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 func TestNotUpdateSignerListIfNotOnGapBlock(t *testing.T) {
 	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, 400)
 	parentSigners, err := GetSnapshotSigner(blockchain, parentBlock.Header())
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("Inserting block with propose at 401")
 	blockCoinbaseA := "0xaaa0000000000000000000000000000000000401"
 	tx, err := voteTX(37117, 0, acc1Addr.String())
@@ -400,7 +402,7 @@ func TestNotUpdateSignerListIfNotOnGapBlock(t *testing.T) {
 func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 	blockchain, _, parentBlock := PrepareXDCTestBlockChain(t, GAP-1)
 	// Insert block 450
-	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 449)
+	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 450)
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 	block, err := insertBlock(blockchain, 450, blockCoinBase, parentBlock, merkleRoot)
 	if err != nil {
@@ -424,7 +426,7 @@ func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 }
 
 //Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
-func TestUpdateSignerListIfProposedBeforeGap(t *testing.T) {
+func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 
 	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-2)
 	// Insert first Block 450 A
@@ -478,7 +480,7 @@ func TestUpdateSignerListIfProposedBeforeGap(t *testing.T) {
 	}
 }
 
-//Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
+//Should call updateM1 before gap block, and update the snapshot if there are SM transactions involved
 func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
 	blockchain, backend, currentBlock := PrepareXDCTestBlockChain(t, GAP-1)
