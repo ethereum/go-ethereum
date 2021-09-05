@@ -429,7 +429,7 @@ func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 
 	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-2)
-	// Insert first Block 450 A
+	// Insert first Block 449
 	t.Logf("Inserting block with propose at 449...")
 	blockCoinbaseA := "0xaaa0000000000000000000000000000000000449"
 	tx, err := voteTX(37117, 0, acc1Addr.String())
