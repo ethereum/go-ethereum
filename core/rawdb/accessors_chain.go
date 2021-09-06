@@ -763,7 +763,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, fn func([]*types
 		  }*/
 		return filtered
 	} else {
-		return nil
+		return []*types.Log{}
 	}
 }
 
