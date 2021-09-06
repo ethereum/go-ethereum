@@ -138,15 +138,14 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if len(path) == 2*common.HashLength {
 		owner = common.BytesToHash(HexToKeybytes(path))
 	}
-	rawKey := EncodeNodeKey(owner, nil)
-	byteKey := internalKey(rawKey, root)
-	key := string(byteKey)
-	if s.membatch.hasNode(key) {
+	nodeKey := encodeNodeKey(owner, nil)
+	iKey := internalKeyWithRaw(nodeKey, root)
+	if s.membatch.hasNode(string(iKey)) {
 		return
 	}
-	if s.bloom == nil || s.bloom.Contains(byteKey) {
+	if s.bloom == nil || s.bloom.Contains(iKey) {
 		// Bloom filter says this might be a duplicate, double check.
-		blob, nodeHash := rawdb.ReadTrieNode(s.database, rawKey)
+		blob, nodeHash := rawdb.ReadTrieNode(s.database, nodeKey)
 		if len(blob) > 0 && nodeHash == root {
 			return
 		}
@@ -155,13 +154,13 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	}
 	// Assemble the new sub-trie sync request
 	req := &nodeRequest{
-		key:      key,
+		key:      string(iKey),
 		path:     path,
 		callback: callback,
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		parentKey := string(internalKey(EncodeNodeKey(common.Hash{}, parentPath), parent))
+		parentKey := string(internalKey(common.Hash{}, parentPath, parent))
 		ancestor := s.nodeReqs[parentKey]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
@@ -203,7 +202,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		parentKey := string(internalKey(EncodeNodeKey(common.Hash{}, parentPath), parent))
+		parentKey := string(internalKey(common.Hash{}, parentPath, parent))
 		ancestor := s.nodeReqs[parentKey] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
@@ -449,8 +448,8 @@ func (s *Sync) children(req *nodeRequest, hash common.Hash, object node) ([]*nod
 			} else {
 				inner = child.path
 			}
-			rawkey := EncodeNodeKey(owner, inner)
-			childKey := internalKey(rawkey, common.BytesToHash(node))
+			rawkey := encodeNodeKey(owner, inner)
+			childKey := internalKeyWithRaw(rawkey, common.BytesToHash(node))
 			// Try to resolve the node from the local database
 			if s.membatch.hasNode(string(childKey)) {
 				continue

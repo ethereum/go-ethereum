@@ -105,7 +105,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		}
 		if basic.snapshotBlock > 0 && basic.snapshotBlock == point {
 			// Flushing the entire snap tree into the disk, the
-			// relavant (a) snapshot root and (b) snapshot generator
+			// relevant (a) snapshot root and (b) snapshot generator
 			// will be persisted atomically.
 			chain.snaps.Cap(blocks[point-1].Root(), 0)
 			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()

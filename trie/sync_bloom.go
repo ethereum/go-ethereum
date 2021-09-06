@@ -101,7 +101,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 		key := it.Key()
 		if ok, rawkey := rawdb.IsTrieNodeKey(key); ok {
 			valHash := crypto.Keccak256Hash(it.Value())
-			ikey := internalKey(rawkey, valHash)
+			ikey := internalKeyWithRaw(rawkey, valHash)
 			b.bloom.AddHash(binary.BigEndian.Uint64(ikey[len(ikey)-8:]))
 			bloomLoadMeter.Mark(1)
 		} else if ok, hash := rawdb.IsCodeKey(key); ok {

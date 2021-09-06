@@ -727,11 +727,11 @@ func TestCommitSequence(t *testing.T) {
 		expWriteSeqHash    []byte
 		expCallbackSeqHash []byte
 	}{
-		{20, common.FromHex("1e18bb4c9fbddbe56cbfb3b791335a9f779b7983842c5bbf0e2ced0e96c6499e"),
+		{20, common.FromHex("0e00dfd3d9ae274babcc2608d0886a285789af8076fa6a377ebd46994e50c9db"),
 			common.FromHex("326691b1ae9db8092d9edd9dfdf9903197d0661f9ee9255cde058324c4838b83")},
-		{200, common.FromHex("d4953a5ce5ed8af8b27ae35c37e68d0d463bd748e0d01446087fcf15e0af108d"),
+		{200, common.FromHex("862c593c3e5c628671d4827dd359f9b53fc1d1bf234cfd0de815e6f6111ff3eb"),
 			common.FromHex("c94186c41b59ed5105cd18c771b62d93571d5666000143a83d09769e48d2252c")},
-		{2000, common.FromHex("4628d442486fb297076208c1cf70e1a76a443bf9135367dfd8f46186816e5339"),
+		{2000, common.FromHex("8e5ca47cdabe0810d34a98f0bfda37f5da1a34bca193a6f237e3b40401405516"),
 			common.FromHex("82d4b65dbf4a1c4aebf41382e9841fc2d759746c2b618c282751e157a94abe5d")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
@@ -770,11 +770,11 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		expWriteSeqHash    []byte
 		expCallbackSeqHash []byte
 	}{
-		{20, common.FromHex("3756a14cfa02a9ba15cb0eff806e595c71298913d2dc4267f470e8e1920b9ba9"),
+		{20, common.FromHex("29e7b6088e5b1d03b54d6a04a82bbcf311d5bd520596435f5be5415940e5df4a"),
 			common.FromHex("c3edece380265b49a7fc8b0da2f64af1e6f7da60532d08fce5badaaab46aa058")},
-		{200, common.FromHex("6322b796d2ff5326851130ca9c9cffe6d4a4bf10b830e6afdd6aab9c4c0783d4"),
+		{200, common.FromHex("7427c63c2f46aa52086f9ea70ded67e7b0f669cc9bc28d6d51065f458469870a"),
 			common.FromHex("06432b279160e16ee7bce1dd10ddbceb2f6d76599f4e4fd73c1dc71e14e1f563")},
-		{2000, common.FromHex("ff7bb9b2d8898347600221aa89006046478ffaeff721a061fd0514f6bb9458f7"),
+		{2000, common.FromHex("b8d4091e7612e8158276a0ed26806b9ae9df41b38b13e30b7f7cf82045bebe38"),
 			common.FromHex("e56578c547d6905108bc9d4a8bcefd1b7c987804fbca5b97ee4fb1d9de757b07")},
 	} {
 		prng := rand.New(rand.NewSource(int64(i)))

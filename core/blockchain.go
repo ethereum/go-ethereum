@@ -1493,15 +1493,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			var (
 				nodes, imgs = triedb.Size()
 				limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+				oversize    bool
 			)
-			if nodes > limit || imgs > 4*1024*1024 {
-				triedb.Cap(limit - ethdb.IdealBatchSize)
-			}
 			// Find the next state trie we need to commit
 			chosen := current - TriesInMemory
-
+			if nodes > limit || imgs > 4*1024*1024 {
+				log.Debug("Too much state in memory, committing", "nodes", nodes, "imgs", imgs, "chosen", chosen)
+				oversize = true
+			}
 			// If we exceeded out time allowance, flush an entire trie to disk
-			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+			if bc.gcproc > bc.cacheConfig.TrieTimeLimit || oversize {
 				// If the header is missing (canonical chain behind), we're reorging a low
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := bc.GetHeaderByNumber(chosen)

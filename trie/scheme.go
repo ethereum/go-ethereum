@@ -53,7 +53,7 @@ func newNodePath(path []byte) NodePath {
 	return NodePath{HexToKeybytes(path[:64]), hexToCompact(path[64:])}
 }
 
-func EncodeNodeKey(owner common.Hash, path []byte) []byte {
+func encodeNodeKey(owner common.Hash, path []byte) []byte {
 	var ret []byte
 	if owner != (common.Hash{}) {
 		ret = append(ret, owner.Bytes()...)
@@ -61,7 +61,7 @@ func EncodeNodeKey(owner common.Hash, path []byte) []byte {
 	return append(ret, hexToCompact(path)...)
 }
 
-func DecodeNodeKey(key []byte) (common.Hash, []byte) {
+func decodeNodeKey(key []byte) (common.Hash, []byte) {
 	if len(key) <= common.HashLength {
 		return common.Hash{}, compactToHex(key)
 	}
@@ -69,5 +69,5 @@ func DecodeNodeKey(key []byte) (common.Hash, []byte) {
 }
 
 func TrieRootKey(owner common.Hash) []byte {
-	return EncodeNodeKey(owner, nil)
+	return encodeNodeKey(owner, nil)
 }

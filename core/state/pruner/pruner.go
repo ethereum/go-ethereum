@@ -146,7 +146,10 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		}
 		if checkKey != nil {
 			if isNode {
-				owner, _ := trie.DecodeNodeKey(checkKey)
+				var owner common.Hash
+				if len(checkKey) > common.HashLength {
+					owner = common.BytesToHash(checkKey[:common.HashLength])
+				}
 				hash := crypto.Keccak256Hash(iter.Value())
 				if owner == (common.Hash{}) && middleStateRoots[hash] {
 					log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))

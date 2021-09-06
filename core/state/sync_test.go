@@ -651,12 +651,14 @@ func TestIncompleteStateSync(t *testing.T) {
 		}
 		rawdb.WriteCode(dstDb, node, val)
 	}
-	for _, node := range addedNodes {
-		val, _ := rawdb.ReadTrieNode(dstDb, []byte(node))
-		rawdb.DeleteTrieNode(dstDb, []byte(node))
+	for _, key := range addedNodes {
+		bytekey := []byte(key)
+		nodeKey, nodeHash := bytekey[:len(bytekey)-common.HashLength], common.BytesToHash(bytekey[len(bytekey)-common.HashLength:])
+		val, _ := rawdb.ReadTrieNode(dstDb, nodeKey)
+		rawdb.DeleteTrieNode(dstDb, nodeKey, nodeHash)
 		if err := checkStateConsistency(dstDb, srcRoot); err == nil {
-			t.Errorf("trie inconsistency not caught, missing: %v", node)
+			t.Errorf("trie inconsistency not caught, missing: %v", nodeKey)
 		}
-		rawdb.WriteTrieNode(dstDb, []byte(node), val)
+		rawdb.WriteTrieNode(dstDb, nodeKey, val)
 	}
 }

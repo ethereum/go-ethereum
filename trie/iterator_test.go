@@ -113,7 +113,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	var elements = make(map[string]iterationElement)
 	for it := trie.NodeIterator(nil); it.Next(true); {
 		if it.Hash() != (common.Hash{}) {
-			elements[string(it.ComposedKey())] = iterationElement{
+			elements[string(internalKeyWithRaw(it.ComposedKey(), it.Hash()))] = iterationElement{
 				hash: it.Hash(),
 				key:  it.ComposedKey(),
 			}
@@ -121,7 +121,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 	// Cross check the hashes and the database itself
 	for key, element := range elements {
-		if _, err := db.NodeByKey([]byte(key), element.hash); err != nil {
+		if _, err := db.NodeByKey([]byte(key)); err != nil {
 			t.Errorf("failed to retrieve reported node %x: %v", element.hash, err)
 		}
 	}
@@ -135,11 +135,12 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	it := db.diskdb.NewIterator(nil, nil)
 	for it.Next() {
 		key := it.Key()
-		ok, rawKey := rawdb.IsTrieNodeKey(key)
+		ok, nodeKey := rawdb.IsTrieNodeKey(key)
 		if !ok {
 			t.Errorf("state entry not reported %v", key)
 		}
-		if _, ok := elements[string(rawKey)]; !ok {
+		hash := crypto.Keccak256Hash(it.Value())
+		if _, ok := elements[string(internalKeyWithRaw(nodeKey, hash))]; !ok {
 			t.Errorf("state entry not reported %v", key)
 		}
 	}
@@ -330,9 +331,9 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	} else {
 		it := diskdb.NewIterator(nil, nil)
 		for it.Next() {
-			ok, rawKey := rawdb.IsTrieNodeKey(it.Key())
+			ok, nodeKey := rawdb.IsTrieNodeKey(it.Key())
 			if ok {
-				diskKeys = append(diskKeys, common.CopyBytes(rawKey))
+				diskKeys = append(diskKeys, common.CopyBytes(nodeKey))
 			}
 		}
 		it.Release()
@@ -352,10 +353,11 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 		for {
 			if memonly {
 				rkey = []byte(memKeys[rand.Intn(len(memKeys))])
+				_, rhash = rawKey(rkey)
 			} else {
 				rkey = common.CopyBytes(diskKeys[rand.Intn(len(diskKeys))])
+				_, rhash = rawdb.ReadTrieNode(diskdb, rkey)
 			}
-			_, _, rhash = DecodeNodeKey(rkey)
 			if rhash != tr.Hash() {
 				break
 			}
@@ -364,8 +366,8 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 			robj = triedb.dirties[string(rkey)]
 			delete(triedb.dirties, string(rkey))
 		} else {
-			rval = rawdb.ReadTrieNode(diskdb, rkey)
-			rawdb.DeleteTrieNode(diskdb, rkey)
+			rval, _ = rawdb.ReadTrieNode(diskdb, rkey)
+			rawdb.DeleteTrieNode(diskdb, rkey, rhash)
 		}
 		// Iterate until the error is hit.
 		seen := make(map[string]bool)
@@ -420,7 +422,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	)
 	if !memonly {
 		triedb.Commit(root, true, func(key []byte) {
-			_, _, hash := DecodeNodeKey(key)
+			_, hash := rawKey(key)
 			if hash == barNodeHash {
 				barNodeKey = common.CopyBytes(key)
 			}
@@ -432,7 +434,10 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	)
 	if memonly {
 		for key, obj := range triedb.dirties {
-			_, _, hash := DecodeNodeKey([]byte(key))
+			if key == metaRoot {
+				continue
+			}
+			_, hash := rawKey([]byte(key))
 			if hash == barNodeHash {
 				barNodeObj = obj
 				barNodeKey = []byte(key)
@@ -440,8 +445,10 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 		}
 		delete(triedb.dirties, string(barNodeKey))
 	} else {
-		barNodeBlob = rawdb.ReadTrieNode(diskdb, barNodeKey)
-		rawdb.DeleteTrieNode(diskdb, barNodeKey)
+		rawkey, hash := rawKey(barNodeKey)
+		blob, _ := rawdb.ReadTrieNode(diskdb, rawkey)
+		rawdb.DeleteTrieNode(diskdb, rawkey, hash)
+		barNodeBlob = blob
 	}
 	// Create a new iterator that seeks to "bars". Seeking can't proceed because
 	// the node is missing.
@@ -457,7 +464,8 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	if memonly {
 		triedb.dirties[string(barNodeKey)] = barNodeObj
 	} else {
-		rawdb.WriteTrieNode(diskdb, barNodeKey, barNodeBlob)
+		rawkey, _ := rawKey(barNodeKey)
+		rawdb.WriteTrieNode(diskdb, rawkey, barNodeBlob)
 	}
 	// Check that iteration produces the right set of values.
 	if err := checkIteratorOrder(testdata1[2:], NewIterator(it)); err != nil {

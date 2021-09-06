@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/crypto"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -474,7 +475,7 @@ func TestIncompleteSync(t *testing.T) {
 		batch.Write()
 		for _, result := range results {
 			// Check that all known sub-tries in the synced trie are complete
-			_, _, hash := DecodeNodeKey([]byte(result.Key))
+			hash := crypto.Keccak256Hash(result.Data)
 			if hash != root {
 				addedKeys = append(addedKeys, result.Key)
 			}
@@ -495,14 +496,13 @@ func TestIncompleteSync(t *testing.T) {
 	}
 	// Sanity check that removing any node from the database is detected
 	for _, key := range addedKeys {
-		dbKey := []byte(key)
-		value, _ := diskdb.Get(dbKey)
-
-		rawdb.DeleteTrieNode(diskdb, dbKey)
+		nodeKey, hash := rawKey([]byte(key))
+		value, _ := rawdb.ReadTrieNode(diskdb, nodeKey)
+		rawdb.DeleteTrieNode(diskdb, nodeKey, hash)
 		if err := checkTrieConsistency(triedb, root); err == nil {
 			t.Fatalf("trie inconsistency not caught, missing: %x", key)
 		}
-		rawdb.WriteTrieNode(diskdb, dbKey, value)
+		rawdb.WriteTrieNode(diskdb, nodeKey, value)
 	}
 }
 

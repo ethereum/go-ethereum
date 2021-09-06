@@ -486,7 +486,7 @@ func (st *StackTrie) hash(path []byte) {
 	if st.db != nil {
 		// TODO! Is it safe to Put the slice here?
 		// Do all db implementations copy the value provided?
-		key := EncodeNodeKey(st.owner, path)
+		key := encodeNodeKey(st.owner, path)
 		rawdb.WriteTrieNode(st.db, key, h.tmp)
 	}
 }
@@ -532,7 +532,7 @@ func (st *StackTrie) Commit() (common.Hash, error) {
 		h.sha.Write(st.val)
 		h.sha.Read(ret)
 
-		key := EncodeNodeKey(st.owner, nil)
+		key := encodeNodeKey(st.owner, nil)
 		rawdb.WriteTrieNode(st.db, key, st.val)
 		return common.BytesToHash(ret), nil
 	}

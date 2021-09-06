@@ -58,7 +58,7 @@ func TestEncodeNodeKey(t *testing.T) {
 		{randomOwner, []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, append(randomOwner.Bytes(), []byte{0x20, 0x0f, 0x1c, 0xb8}...)},
 	}
 	for _, c := range cases {
-		got := EncodeNodeKey(c.owner, c.path)
+		got := encodeNodeKey(c.owner, c.path)
 		if !bytes.Equal(got, c.expect) {
 			t.Fatal("Encoding result mismatch", "want", c.expect, "got", got)
 		}
@@ -100,7 +100,7 @@ func TestDecodeNodeKey(t *testing.T) {
 		{randomOwner, []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, append(randomOwner.Bytes(), []byte{0x20, 0x0f, 0x1c, 0xb8}...)},
 	}
 	for _, c := range cases {
-		owner, path := DecodeNodeKey(c.input)
+		owner, path := decodeNodeKey(c.input)
 		if !bytes.Equal(owner.Bytes(), c.owner.Bytes()) {
 			t.Fatal("Decode owner mismatch", "want", c.owner, "got", owner)
 		}

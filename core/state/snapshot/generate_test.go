@@ -382,7 +382,9 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 			deletionKey = append([]byte{}, key...)
 		}
 	})
-	rawdb.DeleteTrieNode(helper.diskdb, deletionKey)
+	key := deletionKey[:len(deletionKey)-common.HashLength]
+	hash := common.BytesToHash(deletionKey[len(deletionKey)-common.HashLength:])
+	rawdb.DeleteTrieNode(helper.diskdb, key, hash)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, common.HexToHash("0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978"))
 	select {
@@ -451,7 +453,9 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 		}
 	})
 	// Delete a storage trie root and ensure the generator chokes
-	rawdb.DeleteTrieNode(helper.diskdb, deletionKey)
+	key := deletionKey[:len(deletionKey)-common.HashLength]
+	hash := common.BytesToHash(deletionKey[len(deletionKey)-common.HashLength:])
+	rawdb.DeleteTrieNode(helper.diskdb, key, hash)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"))
 	select {
@@ -519,7 +523,9 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 		}
 	})
 	// Delete a storage trie leaf and ensure the generator chokes
-	rawdb.DeleteTrieNode(helper.diskdb, deletionKey)
+	key := deletionKey[:len(deletionKey)-common.HashLength]
+	hash := common.BytesToHash(deletionKey[len(deletionKey)-common.HashLength:])
+	rawdb.DeleteTrieNode(helper.diskdb, key, hash)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"))
 	select {

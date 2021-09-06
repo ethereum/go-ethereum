@@ -63,10 +63,34 @@ var (
 const metaRoot = ""
 
 // internalKey appends the node hash in the end as a part of internal node key.
-// This key format should be used in Database internally for distinguishing
-// different versions of trie nodes.
-func internalKey(key []byte, hash common.Hash) []byte {
-	return append(key, hash.Bytes()...)
+// This key format should be used in memory for distinguishing different versions
+// of trie nodes.
+func internalKey(owner common.Hash, path []byte, hash common.Hash) []byte {
+	if hash == (common.Hash{}) {
+		return nil
+	}
+	return append(encodeNodeKey(owner, path), hash.Bytes()...)
+}
+
+// internalKeyWithRaw appends the node hash in the end as a part of internal node
+// key. This key format should be used in memory for distinguishing different
+// versions of trie nodes.
+func internalKeyWithRaw(raw []byte, hash common.Hash) []byte {
+	if hash == (common.Hash{}) {
+		return nil
+	}
+	return append(raw, hash.Bytes()...)
+}
+
+// internalKey appends the node hash in the end as a part of internal node key.
+// This key format should be used in memory for distinguishing different versions
+// of trie nodes.
+func internalAndRawKey(owner common.Hash, path []byte, hash common.Hash) (string, []byte) {
+	if hash == (common.Hash{}) {
+		return metaRoot, nil
+	}
+	rawKey := encodeNodeKey(owner, path)
+	return string(append(rawKey, hash.Bytes()...)), rawKey
 }
 
 // rawKey resolves the internalKey by removing the suffix hash.
@@ -326,7 +350,7 @@ func (db *Database) DiskDB() ethdb.KeyValueStore {
 // and in theory should only used for **trie nodes** insertion.
 func (db *Database) insert(owner common.Hash, path []byte, hash common.Hash, size int, node node) {
 	// If the node's already cached, skip
-	key := string(internalKey(EncodeNodeKey(owner, path), hash))
+	key := string(internalKey(owner, path, hash))
 	if _, ok := db.dirties[key]; ok {
 		return
 	}
@@ -339,7 +363,7 @@ func (db *Database) insert(owner common.Hash, path []byte, hash common.Hash, siz
 		flushPrev: db.newest,
 	}
 	entry.iterateRefs(path, func(childPath []byte, child common.Hash) error {
-		if c := db.dirties[string(internalKey(EncodeNodeKey(owner, childPath), child))]; c != nil {
+		if c := db.dirties[string(internalKey(owner, childPath, child))]; c != nil {
 			c.parents++
 		}
 		return nil
@@ -377,19 +401,17 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 // found in the memory cache.
 func (db *Database) node(owner common.Hash, path []byte, hash common.Hash) node {
 	// Retrieve the node from the clean cache if available
-	rawKey := EncodeNodeKey(owner, path)
-	ikey := internalKey(rawKey, hash)
+	iKey, nodeKey := internalAndRawKey(owner, path, hash)
 	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, ikey); enc != nil {
+		if enc := db.cleans.Get(nil, []byte(iKey)); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return mustDecodeNode(hash[:], enc)
 		}
 	}
 	// Retrieve the node from the dirty cache if available
-	key := string(ikey)
 	db.lock.RLock()
-	dirty := db.dirties[key]
+	dirty := db.dirties[iKey]
 	db.lock.RUnlock()
 
 	if dirty != nil {
@@ -400,7 +422,7 @@ func (db *Database) node(owner common.Hash, path []byte, hash common.Hash) node 
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, nodeHash := rawdb.ReadTrieNode(db.diskdb, rawKey)
+	enc, nodeHash := rawdb.ReadTrieNode(db.diskdb, nodeKey)
 	if enc == nil {
 		return nil
 	}
@@ -408,7 +430,7 @@ func (db *Database) node(owner common.Hash, path []byte, hash common.Hash) node 
 		return nil
 	}
 	if db.cleans != nil {
-		db.cleans.Set(ikey, enc)
+		db.cleans.Set([]byte(iKey), enc)
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
@@ -417,20 +439,18 @@ func (db *Database) node(owner common.Hash, path []byte, hash common.Hash) node 
 
 // NodeByKey retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
-func (db *Database) NodeByKey(byteKey []byte, hash common.Hash) ([]byte, error) {
+func (db *Database) NodeByKey(iKey []byte) ([]byte, error) {
 	// Retrieve the node from the clean cache if available
-	ikey := internalKey(byteKey, hash)
 	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, ikey); enc != nil {
+		if enc := db.cleans.Get(nil, iKey); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return enc, nil
 		}
 	}
 	// Retrieve the node from the dirty cache if available
-	key := string(ikey)
 	db.lock.RLock()
-	dirty := db.dirties[key]
+	dirty := db.dirties[string(iKey)]
 	db.lock.RUnlock()
 
 	if dirty != nil {
@@ -441,10 +461,11 @@ func (db *Database) NodeByKey(byteKey []byte, hash common.Hash) ([]byte, error) 
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, nodeHash := rawdb.ReadTrieNode(db.diskdb, byteKey)
+	nodeKey, hash := rawKey(iKey)
+	enc, nodeHash := rawdb.ReadTrieNode(db.diskdb, nodeKey)
 	if len(enc) != 0 && nodeHash == hash {
 		if db.cleans != nil {
-			db.cleans.Set(ikey, enc)
+			db.cleans.Set(iKey, enc)
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
@@ -460,7 +481,7 @@ func (db *Database) Node(owner common.Hash, path []byte, hash common.Hash) ([]by
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
-	return db.NodeByKey(EncodeNodeKey(owner, path), hash)
+	return db.NodeByKey([]byte(internalKey(owner, path, hash)))
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
@@ -511,13 +532,13 @@ func (db *Database) Reference(owner common.Hash, child common.Hash, parent commo
 // reference is the private locked version of Reference.
 func (db *Database) reference(owner common.Hash, child common.Hash, parent common.Hash, parentPath []byte) {
 	// If the node does not exist, it's a node pulled from disk, skip.
-	childKey := string(internalKey(EncodeNodeKey(owner, []byte{}), child))
+	childKey := string(internalKey(owner, []byte{}, child))
 	node, ok := db.dirties[childKey]
 	if !ok {
 		return
 	}
 	// If the reference already exists, only duplicate for roots
-	parentKey := string(internalKey(EncodeNodeKey(common.Hash{}, parentPath), parent))
+	parentKey := string(internalKey(common.Hash{}, parentPath, parent))
 	if db.dirties[parentKey].children == nil {
 		db.dirties[parentKey].children = make(map[string]uint16)
 		db.childrenSize += cachedNodeChildrenSize
@@ -559,10 +580,10 @@ func (db *Database) Dereference(root common.Hash) {
 // dereference is the private locked version of Dereference.
 func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, childPath []byte, parentOwner common.Hash, parentHash common.Hash, parentPath []byte) {
 	// Dereference the parent-child
-	parentKey := string(internalKey(EncodeNodeKey(parentOwner, parentPath), parentHash))
+	parentKey := string(internalKey(parentOwner, parentPath, parentHash))
 	parent := db.dirties[parentKey]
 
-	childKey := string(internalKey(EncodeNodeKey(childOwner, childPath), childHash))
+	childKey := string(internalKey(childOwner, childPath, childHash))
 	if parent.children != nil && parent.children[childKey] > 0 {
 		parent.children[childKey]--
 		if parent.children[childKey] == 0 {
@@ -743,7 +764,8 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(key []by
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
-	// Trie mostly committed to disk, flush any batch leftovers
+	// All the trie nodes belong to a single state version are persisted in the
+	// atomic way.
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to write trie to disk", "err", err)
 		return err
@@ -781,10 +803,8 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(key []by
 // commit is the private locked version of Commit.
 func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, batch ethdb.Batch, callback func(key []byte)) error {
 	// If the node does not exist, it's a previously committed node
-	nodeKey := EncodeNodeKey(owner, path)
-	byteKey := internalKey(nodeKey, hash)
-	key := string(byteKey)
-	node, ok := db.dirties[key]
+	iKey, nodeKey := internalAndRawKey(owner, path, hash)
+	node, ok := db.dirties[iKey]
 	if !ok {
 		return nil
 	}
@@ -795,7 +815,7 @@ func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, bat
 	}
 	for child := range node.children {
 		key, hash := rawKey([]byte(child))
-		owner, path := DecodeNodeKey(key)
+		owner, path := decodeNodeKey(key)
 		if err := db.commit(owner, path, hash, batch, callback); err != nil {
 			return err
 		}
@@ -803,16 +823,15 @@ func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, bat
 	// If we've reached an optimal batch size, commit and start over
 	rawdb.WriteTrieNode(batch, nodeKey, node.rlp())
 	if callback != nil {
-		callback(byteKey)
+		callback([]byte(iKey))
 	}
 	return nil
 }
 
 func (db *Database) clean(owner common.Hash, path []byte, hash common.Hash) error {
 	// If the node does not exist, it's a previously committed node
-	byteKey := internalKey(EncodeNodeKey(owner, path), hash)
-	key := string(byteKey)
-	node, ok := db.dirties[key]
+	iKey := string(internalKey(owner, path, hash))
+	node, ok := db.dirties[iKey]
 	if !ok {
 		return nil
 	}
@@ -823,13 +842,13 @@ func (db *Database) clean(owner common.Hash, path []byte, hash common.Hash) erro
 	}
 	for child := range node.children {
 		key, hash := rawKey([]byte(child))
-		owner, path := DecodeNodeKey(key)
+		owner, path := decodeNodeKey(key)
 		if err := db.clean(owner, path, hash); err != nil {
 			return err
 		}
 	}
 	// Node still exists, remove it from the flush-list
-	switch string(byteKey) {
+	switch iKey {
 	case db.oldest:
 		db.oldest = node.flushNext
 		db.dirties[node.flushNext].flushPrev = metaRoot
@@ -841,14 +860,14 @@ func (db *Database) clean(owner common.Hash, path []byte, hash common.Hash) erro
 		db.dirties[node.flushNext].flushPrev = node.flushPrev
 	}
 	// Remove the node from the dirty cache
-	delete(db.dirties, string(byteKey))
+	delete(db.dirties, iKey)
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
 		db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if db.cleans != nil {
-		db.cleans.Set(byteKey, node.rlp())
+		db.cleans.Set([]byte(iKey), node.rlp())
 		memcacheCleanWriteMeter.Mark(int64(len(node.rlp())))
 	}
 	return nil
