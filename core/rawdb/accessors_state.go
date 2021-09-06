@@ -106,3 +106,27 @@ func DeleteTrieNode(db ethdb.KeyValueStore, key []byte, hash common.Hash) {
 		log.Crit("Failed to delete trie node", "err", err)
 	}
 }
+
+// ReadPreservedTrieNode retrieves the trie node and the associated node hash of
+// the provided node key.
+func ReadPreservedTrieNode(db ethdb.KeyValueReader, key []byte) []byte {
+	data, err := db.Get(preservedTrieNodeKey(key))
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// WritePreservedTrieNode writes the provided trie node database.
+func WritePreservedTrieNode(db ethdb.KeyValueWriter, key []byte, node []byte) {
+	if err := db.Put(preservedTrieNodeKey(key), node); err != nil {
+		log.Crit("Failed to store trie node", "err", err)
+	}
+}
+
+// DeletePreservedTrieNode deletes the specified trie node from the database.
+func DeletePreservedTrieNode(db ethdb.KeyValueWriter, key []byte) {
+	if err := db.Delete(preservedTrieNodeKey(key)); err != nil {
+		log.Crit("Failed to delete trie node", "err", err)
+	}
+}

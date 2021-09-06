@@ -227,7 +227,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	if !c.disablePruning {
 		// Flush the triedb and track the latest trie nodes.
 		c.trieset.Clear()
-		c.triedb.Commit(root, false, func(key []byte) { c.trieset.Add(key) })
+		c.triedb.Commit(root, false, func(key, val []byte) { c.trieset.Add(key) })
 
 		it := c.trieTable.NewIterator(nil, nil)
 		defer it.Release()
@@ -468,7 +468,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	if !b.disablePruning {
 		// Flush the triedb and track the latest trie nodes.
 		b.trieset.Clear()
-		b.triedb.Commit(root, false, func(key []byte) { b.trieset.Add(key) })
+		b.triedb.Commit(root, false, func(key, val []byte) { b.trieset.Add(key) })
 
 		it := b.trieTable.NewIterator(nil, nil)
 		defer it.Release()

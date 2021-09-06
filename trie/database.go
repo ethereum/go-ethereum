@@ -423,11 +423,11 @@ func (db *Database) node(owner common.Hash, path []byte, hash common.Hash) node 
 
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, nodeHash := rawdb.ReadTrieNode(db.diskdb, nodeKey)
-	if enc == nil {
-		return nil
-	}
-	if nodeHash != hash {
-		return nil
+	if enc == nil || nodeHash != hash {
+		enc = rawdb.ReadPreservedTrieNode(db.diskdb, []byte(iKey))
+		if len(enc) == 0 {
+			return nil
+		}
 	}
 	if db.cleans != nil {
 		db.cleans.Set([]byte(iKey), enc)
@@ -471,6 +471,15 @@ func (db *Database) NodeByKey(iKey []byte) ([]byte, error) {
 		}
 		return enc, nil
 	}
+	enc = rawdb.ReadPreservedTrieNode(db.diskdb, iKey)
+	if len(enc) != 0 {
+		if db.cleans != nil {
+			db.cleans.Set(iKey, enc)
+			memcacheCleanMissMeter.Mark(1)
+			memcacheCleanWriteMeter.Mark(int64(len(enc)))
+		}
+		return enc, nil
+	}
 	return nil, errors.New("not found")
 }
 
@@ -481,7 +490,7 @@ func (db *Database) Node(owner common.Hash, path []byte, hash common.Hash) ([]by
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
-	return db.NodeByKey([]byte(internalKey(owner, path, hash)))
+	return db.NodeByKey(internalKey(owner, path, hash))
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
@@ -739,7 +748,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool, callback func(key []byte)) error {
+func (db *Database) Commit(node common.Hash, report bool, callback func(key, val []byte)) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -801,7 +810,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(key []by
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, batch ethdb.Batch, callback func(key []byte)) error {
+func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, batch ethdb.Batch, callback func(key []byte, val []byte)) error {
 	// If the node does not exist, it's a previously committed node
 	iKey, nodeKey := internalAndRawKey(owner, path, hash)
 	node, ok := db.dirties[iKey]
@@ -821,9 +830,10 @@ func (db *Database) commit(owner common.Hash, path []byte, hash common.Hash, bat
 		}
 	}
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteTrieNode(batch, nodeKey, node.rlp())
+	blob := node.rlp()
+	rawdb.WriteTrieNode(batch, nodeKey, blob)
 	if callback != nil {
-		callback([]byte(iKey))
+		callback([]byte(iKey), blob)
 	}
 	return nil
 }

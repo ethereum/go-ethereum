@@ -300,8 +300,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true, nil)
-
+	statedb.Database().TrieDB().Commit(root, true, func(key, val []byte) {
+		rawdb.WritePreservedTrieNode(db, key, val)
+	})
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
 }
 
