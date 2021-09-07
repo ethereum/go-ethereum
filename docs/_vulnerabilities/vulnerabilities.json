@@ -122,7 +122,7 @@
     "summary": "A consensus-flaw in the Geth EVM could cause a node to deviate from the canonical chain.",
     "description": "A memory-corruption bug within the EVM can cause a consensus error, where vulnerable nodes obtain a different `stateRoot` when processing a maliciously crafted transaction. This, in turn, would lead to the chain being split: mainnet splitting in two forks.\n\nAll Geth versions supporting the London hard fork are vulnerable (the bug is older than London), so all users should update.\n\nThis bug was exploited on Mainnet at block 13107518.\n\nCredits for the discovery go to @guidovranken (working for Sentnl during an audit of the Telos EVM) and reported via bounty@ethereum.org.",
     "links": [
-      "TODO: link to postmortem writeup",
+      "https://github.com/ethereum/go-ethereum/blob/master/docs/postmortems/2021-08-22-split-postmortem.md",
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-9856-9gg9-qcmq",
       "https://github.com/ethereum/go-ethereum/releases/tag/v1.10.8"
     ],
