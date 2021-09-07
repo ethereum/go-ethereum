@@ -1,0 +1,36 @@
+name: "Linters for Pull Request"
+
+on:
+  pull_request:
+    branches:
+      - 'debank'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16.x
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Configure git for private modules
+        run: |
+          git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}:x-oauth-basic@github.com/DeBankDeFi".insteadOf "https://github.com/DeBankDeFi"
+
+      - name: Golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.42.1
+          only-new-issues: true

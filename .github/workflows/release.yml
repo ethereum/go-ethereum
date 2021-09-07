@@ -1,4 +1,4 @@
-name: geth unit tests
+name: "Release new artifacts"
 
 on:
   push:
@@ -18,40 +18,9 @@ env:
   OSS_ARCHIVE_FILE_PREFIX: downloads
   OSS_DOMESTIC_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
 
-defaults:
-  run:
-    working-directory: ./
-
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.16.x
-
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Configure git for private modules
-        run: |
-          git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}:x-oauth-basic@github.com/DeBankDeFi".insteadOf "https://github.com/DeBankDeFi"
-
-      - name: Golangci-lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.42.1
-          only-new-issues: true
-
   build:
     runs-on: ubuntu-latest
-
-    needs: lint
-
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
@@ -86,9 +55,7 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
-
     needs: build
-
     steps:
       - name: Download built binaries
         uses: actions/download-artifact@v2
