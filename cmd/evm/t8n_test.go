@@ -290,25 +290,3 @@ func cmpJson(a, b []byte) (bool, error) {
 	}
 	return reflect.DeepEqual(j2, j), nil
 }
-
-//func TestFoo(t *testing.T){
-//	d, _ := rlp.EncodeToBytes(types.Header{
-//		ParentHash:  common.Hash{},
-//		UncleHash:   common.Hash{},
-//		Coinbase:    common.Address{},
-//		Root:        common.Hash{},
-//		TxHash:      common.Hash{},
-//		ReceiptHash: common.Hash{},
-//		Bloom:       types.Bloom{},
-//		Difficulty:  big.NewInt(123),
-//		Number:      big.NewInt(1),
-//		GasLimit:    1,
-//		GasUsed:     2,
-//		Time:        3,
-//		Extra:       []byte{1,2,3},
-//		MixDigest:   common.Hash{},
-//		Nonce:       types.BlockNonce{},
-//		BaseFee:     nil,
-//	})
-//	fmt.Printf("%x\n", d)
-//}
