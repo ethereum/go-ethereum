@@ -96,7 +96,7 @@ In this case, it was decided that public pre-announce + patch would likely lead 
 
 ### Disclosure path
 
-Several subprojects were informed about the upcoming security patch; 
+Several subprojects were informed about the upcoming security patch:
 
 - Polygon/Matic
 - MEV
