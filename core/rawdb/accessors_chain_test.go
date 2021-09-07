@@ -857,3 +857,29 @@ func TestDeriveLogFields(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkDecodeRLPLogs(b *testing.B) {
+	// Encoded receipts from block 0x14ee094309fbe8f70b65f45ebcc08fb33f126942d97464aad5eb91cfd1e2d269
+	buf, err := ioutil.ReadFile("testdata/stored_receipts.bin")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Run("ReceiptForStorage", func(b *testing.B) {
+		b.ReportAllocs()
+		var r []*types.ReceiptForStorage
+		for i := 0; i < b.N; i++ {
+			if err := rlp.DecodeBytes(buf, &r); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("rlpLogs", func(b *testing.B) {
+		b.ReportAllocs()
+		var r []*receiptLogs
+		for i := 0; i < b.N; i++ {
+			if err := rlp.DecodeBytes(buf, &r); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}

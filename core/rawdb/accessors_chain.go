@@ -673,7 +673,8 @@ type storedReceiptRLP struct {
 }
 
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
-// the list of logs.
+// the list of logs. When decoding a stored receipt into this object we
+// avoid creating the bloom filter.
 type receiptLogs struct {
 	Logs []*types.Log
 }
