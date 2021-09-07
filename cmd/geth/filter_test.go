@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -68,12 +69,15 @@ func (e *filterEnv) checkFilters(t *testing.T) {
 				},
 				{
 					"Event2",
-					nil,
+					map[string]interface{}{
+						"src": e.auth.From,
+					},
 				},
 				{
 					"Event3",
 					map[string]interface{}{
 						"amt": big.NewInt(30000),
+						"src": e.auth.From,
 					},
 				},
 			},
@@ -109,17 +113,14 @@ func checkResult(expected result, logEvent event) error {
 	if logEvent.event.Name != expected.name {
 		return fmt.Errorf("log/event names do not match: expected %s got %s", expected.name, logEvent.event.Name)
 	}
-	if logEvent.args == nil && expected.args == nil {
-		return nil
+	if expected.args == nil {
+		expected.args = make(map[string]interface{})
 	}
-	if logEvent.args == nil {
-		return fmt.Errorf("expected log args")
+	if !reflect.DeepEqual(expected.args, logEvent.args) {
+		return fmt.Errorf("log/event arguments do not match: expected %s got %s",
+			fmt.Sprint(expected.args),
+			fmt.Sprint(logEvent.args))
 	}
-	return checkResultArgs(expected.args, logEvent.args)
-}
-
-func checkResultArgs(map[string]interface{}, map[string]interface{}) error {
-	// todo
 	return nil
 }
 
