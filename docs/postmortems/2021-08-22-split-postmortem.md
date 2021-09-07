@@ -1,6 +1,6 @@
 # Minority split 2021-08-22 post mortem
 
-This is a post-mortem concerning the minority split that occurred on Ethereum mainnet on block TODO, at 2021-08-22 TODO UTC
+This is a post-mortem concerning the minority split that occurred on Ethereum mainnet on block [13107518](https://etherscan.io/block/13107518), mined at Aug-27-2021 12:50:07 UTC, at which a minority chain split occurred.
 
 ## Timeline
 
