@@ -480,9 +480,14 @@ func (h *priceHeap) Pop() interface{} {
 // better candidates for inclusion while in other cases (at the top of the baseFee peak)
 // the floating heap is better. When baseFee is decreasing they behave similarly.
 type txPricedList struct {
+	// Number of stale price points to (re-heap trigger).
+	// This field is accessed atomically, and must be the first field
+	// to ensure it has correct alignment for atomic.AddInt64.
+	// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+	stales int64
+
 	all              *txLookup  // Pointer to the map of all transactions
 	urgent, floating priceHeap  // Heaps of prices of all the stored **remote** transactions
-	stales           int64      // Number of stale price points to (re-heap trigger)
 	reheapMu         sync.Mutex // Mutex asserts that only one routine is reheaping the list
 }
 
