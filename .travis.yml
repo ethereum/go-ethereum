@@ -1,15 +1,10 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
-sudo: false
 jobs:
   allow_failures:
     - stage: build
       os: osx
       go: 1.17.x
-      env:
-        - azure-osx
-        - azure-ios
-        - cocoapods-ios
 
   include:
     # This builder only tests code linters on latest version of Go
@@ -68,7 +63,6 @@ jobs:
       go: 1.17.x
       env:
         - ubuntu-ppa
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -89,11 +83,9 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      sudo: required
       go: 1.17.x
       env:
         - azure-linux
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -130,7 +122,6 @@ jobs:
       go: 1.17.x
       env:
         - azure-linux-mips
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -162,7 +153,6 @@ jobs:
       env:
         - azure-android
         - maven-android
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
@@ -197,7 +187,6 @@ jobs:
         - azure-osx
         - azure-ios
         - cocoapods-ios
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -225,8 +214,6 @@ jobs:
       arch: amd64
       dist: bionic
       go: 1.17.x
-      env:
-        - GO111MODULE=on
       script:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
@@ -236,8 +223,6 @@ jobs:
       arch: arm64
       dist: bionic
       go: 1.17.x
-      env:
-        - GO111MODULE=on
       script:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
@@ -245,8 +230,6 @@ jobs:
       os: linux
       dist: bionic
       go: 1.16.x
-      env:
-        - GO111MODULE=on
       script:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
@@ -258,7 +241,6 @@ jobs:
       go: 1.17.x
       env:
         - azure-purge
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
