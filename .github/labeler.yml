@@ -1,0 +1,23 @@
+Need-Review:
+  - '*/**/*'
+
+CI:
+  - any: ['.github/**/*']
+
+Eth:
+  - any: ['eth/**/*']
+
+P2p:
+  - any: ['p2p/**/*']
+
+Ops:
+  - any: ['metrics/**/*']
+
+Node:
+  - any: ['node/**/*']
+
+Core:
+  - any: ['core/**/*']
+
+Version-Bump:
+  - any: ['params/version.go']

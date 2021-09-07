@@ -1,0 +1,22 @@
+name: "Pull Request Labeler"
+on:
+  push:
+    branches:
+      - 'debank'
+  pull_request:
+    branches:
+      - 'debank'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v3
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: .github/labeler.yml
