@@ -60,7 +60,7 @@ It was decided that in this specific instance, it would be possible to make a pu
 
 Since we had merged the removal of `ETH65`, if the entire network were to upgrade, then nodes which have not yet implemented `ETH66` would be cut off from the network. After further discussions, we decided to:
 
-- Announce an upcoming security release on Tuesday (August 24th), via Twitter and official channels, plus reach out downstream projects.
+- Announce an upcoming security release on Tuesday (August 24th), via Twitter and official channels, plus reach out to downstream projects.
 - Temporarily revert the `ETH65`-removal.
 - Place the fix into the PR optimizing the jumpdest analysis [233381](https://github.com/ethereum/go-ethereum/pull/23381). 
 - After 4-8 weeks, release details about the vulnerability. 
