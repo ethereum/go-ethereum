@@ -112,16 +112,17 @@
     ],
     "introduced": "v1.10.1",
     "fixed": "v1.10.6",
-    "published": "2020-07-22",
+    "published": "2021-07-22",
     "severity": "High",
     "check": "(Geth\\/v1\\.10\\.(1|2|3|4|5)-.*)$"
   },
   {
-    "name": " EVM flaw during block processing ",
+    "name": "RETURNDATA corruption via datacopy",
     "uid": "GETH-2021-02",
-    "summary": "A vulnerability in the Geth EVM could cause a node to no longer being able to process the chain. Further details about the vulnerability will be disclosed at a later date.",
-    "description": "The exact attack vector will be provided at a later date to give node operators and dependent downstream projects time to update their nodes and software.\n\nAll Geth versions supporting the London hard fork are vulnerable (the bug is older than London), so all users should update.\n\nCredits for the discovery go to @guidovranken (working for Sentnl during an audit of the Telos EVM) and reported via bounty@ethereum.org.",
+    "summary": "A consensus-flaw in the Geth EVM could cause a node to deviate from the canonical chain.",
+    "description": "A memory-corruption bug within the EVM can cause a consensus error, where vulnerable nodes obtain a different `stateRoot` when processing a maliciously crafted transaction. This, in turn, would lead to the chain being split: mainnet splitting in two forks.\n\nAll Geth versions supporting the London hard fork are vulnerable (the bug is older than London), so all users should update.\n\nThis bug was exploited on Mainnet at block 13107518.\n\nCredits for the discovery go to @guidovranken (working for Sentnl during an audit of the Telos EVM) and reported via bounty@ethereum.org.",
     "links": [
+      "https://github.com/ethereum/go-ethereum/blob/master/docs/postmortems/2021-08-22-split-postmortem.md",
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-9856-9gg9-qcmq",
       "https://github.com/ethereum/go-ethereum/releases/tag/v1.10.8"
     ],
