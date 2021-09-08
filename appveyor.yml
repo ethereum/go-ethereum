@@ -15,7 +15,6 @@ environment:
 install:
   - git submodule update --init --depth 1
   - go version
-  - "%GETH_CC% --version"
     
 for:
   - matrix:
@@ -42,6 +41,7 @@ for:
       GETH_CC: %GETH_MINGW%\bin\gcc.exe
       PATH: %GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%
     build_script:
+      - "%GETH_CC% --version"
       - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
     after_build:
       - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
