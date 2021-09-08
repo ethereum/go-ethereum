@@ -41,7 +41,7 @@ func TestDefaultGenesisBlock(t *testing.T) {
 	}
 	block = DefaultRinkebyGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.RinkebyGenesisHash {
-		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RinkebyGenesisHash)
+		t.Errorf("wrong rinkeby genesis hash, got %v, want %v", block.Hash(), params.RinkebyGenesisHash)
 	}
 	block = DefaultGoerliGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.GoerliGenesisHash {
