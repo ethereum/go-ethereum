@@ -38,8 +38,8 @@ for:
       # We use gcc from MSYS2 because it is the most recent compiler version available on
       # AppVeyor. Note: gcc.exe only works properly if the corresponding bin/ directory is
       # contained in PATH.
-      GETH_CC: %GETH_MINGW%\bin\gcc.exe
-      PATH: %GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%
+      GETH_CC: "%GETH_MINGW%\bin\gcc.exe"
+      PATH: "%GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%"
     build_script:
       - "%GETH_CC% --version"
       - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
