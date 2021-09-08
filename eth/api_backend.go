@@ -284,8 +284,12 @@ func (b *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestTipCap(ctx)
+func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, *big.Int, error) {
+	suggestion, err := b.gpo.SuggestTipCap(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return suggestion, b.gpo.MaxTransactionPrice(), nil
 }
 
 func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {

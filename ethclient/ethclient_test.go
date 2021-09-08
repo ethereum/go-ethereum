@@ -458,7 +458,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gasPrice.Cmp(big.NewInt(1875000000)) != 0 { // 1 gwei tip + 0.875 basefee after a 1 gwei fee empty block
+	if gasPrice.Cmp(big.NewInt(1765625000)) != 0 { // 1 gwei tip + 0.765625 basefee after two 1 gwei fee empty blocks(genesis, block1)
 		t.Fatalf("unexpected gas price: %v", gasPrice)
 	}
 	// SuggestGasTipCap (should suggest 1 Gwei)

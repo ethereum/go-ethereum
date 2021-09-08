@@ -61,19 +61,24 @@ func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	tipcap, err := s.b.SuggestGasTipCap(ctx)
+	tipcap, maxPrice, err := s.b.SuggestGasTipCap(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if head := s.b.CurrentHeader(); head.BaseFee != nil {
-		tipcap.Add(tipcap, head.BaseFee)
+	head := s.b.CurrentHeader()
+	if s.b.ChainConfig().IsLondon(new(big.Int).Add(head.Number, common.Big1)) {
+		baseFee := misc.CalcBaseFee(s.b.ChainConfig(), head)
+		tipcap.Add(tipcap, baseFee)
+		if tipcap.Cmp(maxPrice) > 0 {
+			tipcap = maxPrice
+		}
 	}
 	return (*hexutil.Big)(tipcap), err
 }
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	tipcap, err := s.b.SuggestGasTipCap(ctx)
+	tipcap, _, err := s.b.SuggestGasTipCap(ctx)
 	if err != nil {
 		return nil, err
 	}

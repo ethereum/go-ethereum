@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -1191,18 +1192,23 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 }
 
 func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
-	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	tipcap, maxPrice, err := r.backend.SuggestGasTipCap(ctx)
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
-		tipcap.Add(tipcap, head.BaseFee)
+	head := r.backend.CurrentHeader()
+	if r.backend.ChainConfig().IsLondon(new(big.Int).Add(head.Number, common.Big1)) {
+		baseFee := misc.CalcBaseFee(r.backend.ChainConfig(), head)
+		tipcap.Add(tipcap, baseFee)
+		if tipcap.Cmp(maxPrice) > 0 {
+			tipcap = maxPrice
+		}
 	}
 	return (hexutil.Big)(*tipcap), nil
 }
 
 func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error) {
-	tipcap, err := r.backend.SuggestGasTipCap(ctx)
+	tipcap, _, err := r.backend.SuggestGasTipCap(ctx)
 	if err != nil {
 		return hexutil.Big{}, err
 	}

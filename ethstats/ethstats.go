@@ -77,7 +77,7 @@ type fullNodeBackend interface {
 	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, *big.Int, error)
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -780,9 +780,12 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		price, _ := fullBackend.SuggestGasTipCap(context.Background())
+		price, _, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
 		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
+			// In theory, the baseFee of pending block should be applied,
+			// but the accuracy requirement in ethstat is not that high. It's
+			// fine to use the head block basefee instead here.
 			gasprice += int(basefee.Uint64())
 		}
 	} else {

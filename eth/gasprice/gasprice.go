@@ -212,6 +212,14 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	return new(big.Int).Set(price), nil
 }
 
+// MaxTransactionPrice returns the user-configured maximum transaction price
+// they can afford. Before the london it's only applied for the transaction
+// tip but after the london the sum of tip and baseFee should be applied with
+// this limitation.
+func (oracle *Oracle) MaxTransactionPrice() *big.Int {
+	return oracle.maxPrice
+}
+
 type results struct {
 	values []*big.Int
 	err    error

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -86,7 +87,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// In this clause, user left some fields unspecified.
 		if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
+				tip, _, err := b.SuggestGasTipCap(ctx)
 				if err != nil {
 					return err
 				}
@@ -107,15 +108,19 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 			}
 			if args.GasPrice == nil {
-				price, err := b.SuggestGasTipCap(ctx)
+				price, maxPrice, err := b.SuggestGasTipCap(ctx)
 				if err != nil {
 					return err
 				}
-				if b.ChainConfig().IsLondon(head.Number) {
+				if b.ChainConfig().IsLondon(new(big.Int).Add(head.Number, common.Big1)) {
 					// The legacy tx gas price suggestion should not add 2x base fee
 					// because all fees are consumed, so it would result in a spiral
 					// upwards.
-					price.Add(price, head.BaseFee)
+					baseFee := misc.CalcBaseFee(b.ChainConfig(), head)
+					price.Add(price, baseFee)
+					if price.Cmp(maxPrice) > 0 {
+						price = maxPrice
+					}
 				}
 				args.GasPrice = (*hexutil.Big)(price)
 			}

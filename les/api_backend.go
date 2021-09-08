@@ -265,8 +265,12 @@ func (b *LesApiBackend) ProtocolVersion() int {
 	return b.eth.LesVersion() + 10000
 }
 
-func (b *LesApiBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestTipCap(ctx)
+func (b *LesApiBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, *big.Int, error) {
+	suggestion, err := b.gpo.SuggestTipCap(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return suggestion, b.gpo.MaxTransactionPrice(), nil
 }
 
 func (b *LesApiBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
