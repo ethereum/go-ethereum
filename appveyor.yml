@@ -10,7 +10,7 @@ for:
       only:
         - image: Ubuntu
       environment:
-        GETH_CC: gcc
+        - GETH_CC: gcc
       build_script:
         - go run build\ci.go lint
         - go run build\ci.go install -dlgo
