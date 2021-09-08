@@ -11,9 +11,7 @@ for:
         - image: Ubuntu
       environment:
         - GETH_CC: gcc
-      build_script:
-        - go run build\ci.go lint
-        - go run build\ci.go install -dlgo
+          GETCH_ARCH: amd64
       test_script:
         - go run build\ci.go test -dlgo -coverage
         
@@ -37,7 +35,11 @@ for:
         - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       test_script:
         - go run build\ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -coverage
-      
+
+build_script:
+  - go run build\ci.go lint
+  - go run build\ci.go install -dlgo
+        
 install:
   - git submodule update --init --depth 1
   - go version
