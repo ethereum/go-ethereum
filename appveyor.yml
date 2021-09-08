@@ -45,8 +45,8 @@ for:
       GETH_CC: '%GETH_MINGW%\bin\gcc.exe'
       PATH: '%GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%'
     build_script:
-      - 'echo GETH_ARCH: %GETH_ARCH%'
-      - 'echo GETH_CC: %GETH_CC%'
+      - 'echo %GETH_ARCH%'
+      - 'echo %GETH_CC%'
       - '%GETH_CC% --version'
       - go run build/ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
     after_build:
