@@ -29,7 +29,7 @@ for:
   - matrix:
       exclude:
         - image: Ubuntu
-        - GETH_ARCH: 386
+          GETH_ARCH: 386
 
   - matrix:
       only:
