@@ -5,6 +5,13 @@ image:
   - Visual Studio 2019
   - Ubuntu
 
+environment:
+  matrix:
+    - GETH_ARCH: amd64
+      GETH_MINGW: C:\msys64\mingw64
+    - GETH_ARCH: 386
+      GETH_MINGW: C:\msys64\mingw32
+  
 install:
   - git submodule update --init --depth 1
   - go version
@@ -19,6 +26,11 @@ for:
       - go run build\ci.go install -dlgo
     test_script:
       - go run build\ci.go test -dlgo -coverage
+
+  - matrix:
+      exclude:
+        - image: Ubuntu
+        - GETH_ARCH: 386
         
   - matrix:
       only:
@@ -27,13 +39,8 @@ for:
       # We use gcc from MSYS2 because it is the most recent compiler version available on
       # AppVeyor. Note: gcc.exe only works properly if the corresponding bin/ directory is
       # contained in PATH.
-      matrix:
-        - GETH_ARCH: amd64
-          GETH_CC: C:\msys64\mingw64\bin\gcc.exe
-          PATH: C:\msys64\mingw64\bin;C:\Program Files (x86)\NSIS\;%PATH%
-        - GETH_ARCH: 386
-          GETH_CC: C:\msys64\mingw32\bin\gcc.exe
-          PATH: C:\msys64\mingw32\bin;C:\Program Files (x86)\NSIS\;%PATH%
+      GETH_CC: %GETH_MINGW%\bin\gcc.exe
+      PATH: %GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%
     build_script:
       - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
     after_build:
