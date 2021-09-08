@@ -50,6 +50,7 @@ for:
       - "%GETH_CC% --version"
       - go run build/ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
     after_build:
+      # Upload builds. Note that ci.go makes this a no-op PR builds.
       - go run build/ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
