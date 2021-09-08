@@ -26,11 +26,11 @@ for:
   - matrix:
       only:
         - image: Ubuntu
-      build_script:
-        - go run build\ci.go lint
-        - go run build\ci.go install -dlgo
-      test_script:
-        - go run build\ci.go test -dlgo -coverage
+    build_script:
+      - go run build\ci.go lint
+      - go run build\ci.go install -dlgo
+    test_script:
+      - go run build\ci.go test -dlgo -coverage
         
   - matrix:
       exclude:
@@ -39,10 +39,10 @@ for:
   - matrix:
       only:
         - image: Visual Studio 2019
-      build_script:
-        - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
-      after_build:
-        - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-        - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-      test_script:
-        - go run build\ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -coverage
+    build_script:
+      - go run build\ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
+    after_build:
+      - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+      - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+    test_script:
+      - go run build\ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -coverage
