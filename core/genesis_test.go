@@ -45,7 +45,7 @@ func TestDefaultGenesisBlock(t *testing.T) {
 	}
 	block = DefaultGoerliGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.GoerliGenesisHash {
-		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.GoerliGenesisHash)
+		t.Errorf("wrong goerli genesis hash, got %v, want %v", block.Hash(), params.GoerliGenesisHash)
 	}
 }
 
