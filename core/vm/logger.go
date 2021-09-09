@@ -160,7 +160,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
-	if !l.cfg.EnableMemory {
+	if l.cfg.EnableMemory {
 		mem = make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 	}
@@ -199,7 +199,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	var rdata []byte
-	if !l.cfg.EnableReturnData {
+	if l.cfg.EnableReturnData {
 		rdata = make([]byte, len(rData))
 		copy(rdata, rData)
 	}
