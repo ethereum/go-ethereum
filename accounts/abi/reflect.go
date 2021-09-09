@@ -109,8 +109,10 @@ func set(dst, src reflect.Value) error {
 		return setSlice(dst, src)
 	case dstType.Kind() == reflect.Array:
 		return setArray(dst, src)
-	case dstType.Kind() == reflect.Struct:
+	case srcType.Kind() == reflect.Struct && dstType.Kind() == reflect.Struct:
 		return setStruct(dst, src)
+	case srcType.Kind() == reflect.Ptr && dstType.Kind() == reflect.Struct:
+		return setStruct(dst, src.Elem())
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
