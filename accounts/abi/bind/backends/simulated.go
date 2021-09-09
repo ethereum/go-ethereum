@@ -63,13 +63,16 @@ type SimulatedBackend struct {
 	database   ethdb.Database   // In memory database to store our testing data
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
-	mu           sync.Mutex
-	pendingBlock *types.Block   // Currently pending block that will be imported on request
-	pendingState *state.StateDB // Currently pending state that will be the active on request
+	mu                sync.Mutex
+	stuckTransactions types.Transactions // holds onto all txes that don't go into the pending block due to low gas
+	pendingBlock      *types.Block       // Currently pending block that will be imported on request
+	pendingState      *state.StateDB     // Currently pending state that will be the active on request
 
 	events *filters.EventSystem // Event system for filtering log events live
 
 	config *params.ChainConfig
+
+	marketGasPrice *big.Int // minimum gas price it needs to have the block mined in simulated blockchain
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
@@ -109,12 +112,28 @@ func (b *SimulatedBackend) Commit() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if _, err := b.blockchain.InsertChain([]*types.Block{b.pendingBlock}); err != nil {
+	// Get the last block
+	parentBlock := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())
+	var remainingTx types.Transactions
+
+	blocks, _ := core.GenerateChain(b.config, parentBlock, ethash.NewFaker(), b.database, 1,
+		func(number int, block *core.BlockGen) {
+			for _, tx := range append(b.pendingBlock.Transactions(), b.stuckTransactions...) {
+				if b.marketGasPrice == nil || b.marketGasPrice.Cmp(tx.GasPrice()) <= 0 {
+					block.AddTxWithChain(b.blockchain, tx)
+				} else {
+					remainingTx = append(remainingTx, tx)
+				}
+			}
+		})
+
+	if _, err := b.blockchain.InsertChain([]*types.Block{blocks[0]}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
 	// Using the last inserted block here makes it possible to build on a side
 	// chain after a fork.
-	b.rollback(b.pendingBlock)
+	b.stuckTransactions = remainingTx
+	b.rollback(blocks[0])
 }
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
@@ -127,7 +146,6 @@ func (b *SimulatedBackend) Rollback() {
 
 func (b *SimulatedBackend) rollback(parent *types.Block) {
 	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
-
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
 }
@@ -208,6 +226,15 @@ func (b *SimulatedBackend) NonceAt(ctx context.Context, contract common.Address,
 	}
 
 	return stateDB.GetNonce(contract), nil
+}
+
+// SetMarketGasPrice sets the simulated blockchain's market gas price, which is
+// the minimum price point for the transaction to be committed to the simulated chain.
+func (b *SimulatedBackend) SetMarketGasPrice(gasPrice int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.marketGasPrice = big.NewInt(gasPrice)
 }
 
 // StorageAt returns the value of key in the storage of an account in the blockchain.
@@ -653,17 +680,30 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if tx.Nonce() != nonce {
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
+	var remainingTxes types.Transactions
 	// Include tx in chain
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
-			block.AddTxWithChain(b.blockchain, tx)
+			// if market gas price is not set or tx gas price is lower than the set market gas price
+			if b.marketGasPrice == nil || b.marketGasPrice.Cmp(tx.GasPrice()) <= 0 {
+				block.AddTxWithChain(b.blockchain, tx)
+			} else {
+				remainingTxes = append(remainingTxes, tx)
+			}
 		}
-		block.AddTxWithChain(b.blockchain, tx)
+		if b.marketGasPrice == nil || b.marketGasPrice.Cmp(tx.GasPrice()) <= 0 {
+			block.AddTxWithChain(b.blockchain, tx)
+		} else {
+			remainingTxes = append(remainingTxes, tx)
+		}
 	})
+
 	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.stuckTransactions = remainingTxes
+
 	return nil
 }
 

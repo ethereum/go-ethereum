@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -1334,5 +1337,203 @@ func TestForkResendTx(t *testing.T) {
 	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 2 {
 		t.Errorf("TX included in wrong block: %d", h)
+	}
+}
+
+// TestLowGasTxNotBeingMined checks that the lower gas fee tx with same nonce does not get mined
+// Steps:
+// 1. Send a tx lower than the set market gas price
+// 2. Commit to chain, check nonce stays the same
+// 3. Send a tx meets the market gas price with same nonce.
+// 4. Commit to chain
+// 5. Check tx2 is not in pending state and nonce has increased
+func TestLowGasTxNotBeingMined(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	var gas uint64 = 21000
+
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+
+	var testCases = []struct {
+		name     string
+		txType	 byte
+	}{
+		{
+			name: "LegacyTx",
+			txType: types.LegacyTxType,
+		},
+		{
+			name: "dynamicTx",
+			txType: types.DynamicFeeTxType,
+		},
+	}
+	for i, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			bgCtx := context.Background()
+			// Create tx and send
+			head, _ := sim.HeaderByNumber(context.Background(), nil)
+			tip, err := sim.SuggestGasTipCap(bgCtx)
+			require.NoError(t, err)
+			gasPrice := new(big.Int).Add(head.BaseFee, tip)
+			sim.SetMarketGasPrice(int64(gasPrice.Uint64()))
+
+			lowFeeGas := new(big.Int).Sub(gasPrice, tip)
+			txValue := big.NewInt(1)
+
+			var lowGasFeeTx *types.Transaction
+
+			if test.txType == types.LegacyTxType {
+				lowGasFeeTx = types.NewTx(&types.LegacyTx{
+					Nonce:    uint64(i),
+					To:       &testAddr,
+					Value:    txValue,
+					GasPrice: lowFeeGas,
+					Gas:      gas,
+				})
+			} else if test.txType == types.DynamicFeeTxType {
+				lowGasFeeTx = types.NewTx(&types.DynamicFeeTx{
+					Nonce:     uint64(i),
+					Gas:       gas,
+					To:        &testAddr,
+					Value:     txValue,
+					GasTipCap: lowFeeGas,
+					GasFeeCap: lowFeeGas,
+				})
+			} else {
+				t.Fatal("unexpected txType received")
+			}
+
+			signedTx, err := types.SignTx(lowGasFeeTx, types.LatestSigner(sim.config), testKey)
+			require.NoError(t, err)
+
+			// send tx to simulated backend
+			err = sim.SendTransaction(bgCtx, signedTx)
+			require.NoError(t, err)
+			sim.Commit()
+
+			// expect nonce be the same because low gas fee tx will not be mined
+			nonce, err := sim.PendingNonceAt(bgCtx, testAddr)
+			require.NoError(t, err)
+			assert.Equal(t,  uint64(i), nonce)
+
+			// send tx with higher gas fee
+			sufficientGasFeeTx := types.NewTx(&types.LegacyTx{
+				Nonce:    uint64(i),
+				To:       &testAddr,
+				Value:    txValue,
+				GasPrice: gasPrice,
+				Gas:      gas,
+			})
+
+			signedSufficientTx, err := types.SignTx(sufficientGasFeeTx, types.HomesteadSigner{}, testKey)
+			require.NoError(t, err)
+
+			err = sim.SendTransaction(bgCtx, signedSufficientTx)
+			require.NoError(t, err)
+			sim.Commit()
+
+			// the higher gas transaction should have been mined
+			_, isPending, err := sim.TransactionByHash(bgCtx, signedSufficientTx.Hash())
+			require.NoError(t, err)
+			assert.False(t, isPending)
+
+			// expect nonce has increased
+			nonce, err = sim.PendingNonceAt(bgCtx, testAddr)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(i) + 1, nonce)
+		})
+	}
+}
+
+// TestLowGasTxGetMinedOnceGasFeeDropped checks that lower gas fee txes still stay in mem pool
+// and get mined once gas fee requirement has been met
+// Steps:
+// 1. Send a tx lower than the set market gas price
+// 2. Commit to chain, tx does not get mined
+// 3. Gas fee drops, commit again
+// 4. Check tx get mined
+func TestLowGasTxGetMinedOnceGasFeeDropped(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		txType	 byte
+	}{
+		{
+			name: "LegacyTx",
+			txType: types.LegacyTxType,
+		},
+		{
+			name: "dynamicTx",
+			txType: types.DynamicFeeTxType,
+		},
+	}
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	var gas uint64 = 21000
+
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+
+	for i, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			bgCtx := context.Background()
+			// Create tx and send
+			head, _ := sim.HeaderByNumber(context.Background(), nil)
+			tip, err := sim.SuggestGasTipCap(bgCtx)
+			require.NoError(t, err)
+			normalGasPrice := new(big.Int).Add(head.BaseFee, tip)
+			highGasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(5))
+
+			sim.SetMarketGasPrice(int64(highGasPrice.Uint64()))
+
+			var normalGasFeeTx *types.Transaction
+			txValue := big.NewInt(1)
+
+			if test.txType == types.LegacyTxType {
+				normalGasFeeTx = types.NewTx(&types.LegacyTx{
+					Nonce:    uint64(i),
+					To:       &testAddr,
+					Value:    txValue,
+					GasPrice: normalGasPrice,
+					Gas:      gas,
+				})
+			} else if test.txType == types.DynamicFeeTxType {
+				normalGasFeeTx = types.NewTx(&types.DynamicFeeTx{
+					Nonce:     uint64(i),
+					Gas:       gas,
+					To:        &testAddr,
+					Value:     txValue,
+					GasTipCap: normalGasPrice,
+					GasFeeCap: normalGasPrice,
+				})
+			} else {
+				t.Fatal("unexpected txType received")
+			}
+
+			signedTx, err := types.SignTx(normalGasFeeTx, types.LatestSigner(sim.config), testKey)
+			require.NoError(t, err)
+
+			// send tx to simulated backend
+			err = sim.SendTransaction(bgCtx, signedTx)
+			require.NoError(t, err)
+			sim.Commit()
+
+			// check that the nonce stays the same because nothing has been mined
+			pendingNonce, err := sim.PendingNonceAt(bgCtx, testAddr)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(i), pendingNonce)
+
+			// gas fee has dropped
+			sim.SetMarketGasPrice(int64(normalGasPrice.Uint64()))
+			sim.Commit()
+
+			// nonce has increased
+			pendingNonce, err = sim.PendingNonceAt(bgCtx, testAddr)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(i) + 1, pendingNonce)
+
+			// the transaction should have been mined
+			_, isPending, err := sim.TransactionByHash(bgCtx, signedTx.Hash())
+			require.NoError(t, err)
+			assert.False(t, isPending)
+		})
 	}
 }
