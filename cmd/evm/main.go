@@ -113,9 +113,9 @@ var (
 		Name:  "receiver",
 		Usage: "The transaction receiver (execution context)",
 	}
-	DisableMemoryFlag = cli.BoolFlag{
-		Name:  "nomemory",
-		Usage: "disable memory output",
+	EnableMemoryFlag = cli.BoolFlag{
+		Name:  "memory",
+		Usage: "enable memory output",
 	}
 	DisableStackFlag = cli.BoolFlag{
 		Name:  "nostack",
@@ -125,9 +125,9 @@ var (
 		Name:  "nostorage",
 		Usage: "disable storage output",
 	}
-	DisableReturnDataFlag = cli.BoolFlag{
-		Name:  "noreturndata",
-		Usage: "disable return data output",
+	EnableReturnDataFlag = cli.BoolFlag{
+		Name:  "returndata",
+		Usage: "enable return data output",
 	}
 )
 
@@ -138,9 +138,9 @@ var stateTransitionCommand = cli.Command{
 	Action:  t8ntool.Main,
 	Flags: []cli.Flag{
 		t8ntool.TraceFlag,
-		t8ntool.TraceDisableMemoryFlag,
+		t8ntool.TraceEnableMemoryFlag,
 		t8ntool.TraceDisableStackFlag,
-		t8ntool.TraceDisableReturnDataFlag,
+		t8ntool.TraceEnableReturnDataFlag,
 		t8ntool.OutputBasedir,
 		t8ntool.OutputAllocFlag,
 		t8ntool.OutputResultFlag,
@@ -176,10 +176,10 @@ func init() {
 		MachineFlag,
 		SenderFlag,
 		ReceiverFlag,
-		DisableMemoryFlag,
+		EnableMemoryFlag,
 		DisableStackFlag,
 		DisableStorageFlag,
-		DisableReturnDataFlag,
+		EnableReturnDataFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,
