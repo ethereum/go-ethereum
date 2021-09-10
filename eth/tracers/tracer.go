@@ -312,6 +312,7 @@ type Tracer struct {
 	reason    error  // Textual reason for the interruption
 
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	traceSteps        bool             // When true, will invoke step() on each opcode
 	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
 }
 
@@ -451,9 +452,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	}
 	tracer.tracerObject = 0 // yeah, nice, eval can't return the index itself
 
-	if !tracer.vm.GetPropString(tracer.tracerObject, "step") {
-		return nil, fmt.Errorf("trace object must expose a function step()")
-	}
+	hasStep := tracer.vm.GetPropString(tracer.tracerObject, "step")
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
@@ -470,13 +469,18 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	tracer.vm.Pop()
 	hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
 	tracer.vm.Pop()
+
 	if hasEnter != hasExit {
 		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 	}
-	// Maintain backwards-compatibility with old tracing scripts
-	if hasEnter {
-		tracer.traceCallFrames = true
+	if !hasStep {
+		// If there's no step function, the enter and exit must be present
+		if !hasEnter {
+			return nil, fmt.Errorf("trace object must expose either step() or both enter() and exit()")
+		}
 	}
+	tracer.traceCallFrames = hasEnter
+	tracer.traceSteps = hasStep
 
 	// Tracer is valid, inject the big int library to access large numbers
 	tracer.vm.EvalString(bigIntegerJS)
@@ -607,6 +611,9 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
 func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	if !jst.traceSteps {
+		return
+	}
 	if jst.err != nil {
 		return
 	}

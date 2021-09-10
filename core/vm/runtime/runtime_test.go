@@ -760,7 +760,6 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	_, _, err = Call(main, nil, &Config{
 		State: state,
 		EVMConfig: vm.Config{
@@ -775,6 +774,41 @@ func TestRuntimeJSTracer(t *testing.T) {
 		t.Fatal(err)
 	}
 	if have, want := string(res), `"4,4,4294956962,6,47"`; have != want {
+		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
+	}
+	// This time without steps
+	jsTracer = `
+	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
+	fault: function() {}, 
+	result: function() { 
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
+	}, 
+	enter: function(frame) { 
+		this.enters++; 
+		this.enterGas = frame.gas; 
+	}, 
+	exit: function(res) { 
+		this.exits++; 
+		this.gasUsed = res.gasUsed; 
+	}}`
+	tracer, err = tracers.New(jsTracer, new(tracers.Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = Call(main, nil, &Config{
+		State: state,
+		EVMConfig: vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+	res, err = tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(res), `"4,4,4294966805,6,0"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
 }
