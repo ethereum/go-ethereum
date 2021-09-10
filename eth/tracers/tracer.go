@@ -662,7 +662,7 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 	}
 }
 
-func (jst *Tracer) CaptureEnter(typ vm.CallFrameType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (jst *Tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !jst.traceCallFrames {
 		return
 	}

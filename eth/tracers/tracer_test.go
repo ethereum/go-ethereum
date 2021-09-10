@@ -238,7 +238,6 @@ func TestIsPrecompile(t *testing.T) {
 }
 
 func TestEnterExit(t *testing.T) {
-	vmctx := testCtx()
 	// test that either both or none of enter() and exit() are defined
 	if _, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(Context)); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
@@ -253,13 +252,12 @@ func TestEnterExit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
 
-	tracer.CaptureEnter(env, vm.CallType, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
-	tracer.CaptureExit(env, []byte{}, 400)
+	tracer.CaptureEnter(vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
+	tracer.CaptureExit([]byte{}, 400, nil)
 
 	have, err := tracer.GetResult()
 	if err != nil {

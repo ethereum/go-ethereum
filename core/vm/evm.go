@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -31,38 +30,6 @@ import (
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
 var emptyCodeHash = crypto.Keccak256Hash(nil)
-
-// Type of an executing call frame
-type CallFrameType int
-
-const (
-	CallType CallFrameType = iota
-	CallCodeType
-	DelegateCallType
-	StaticCallType
-	// Init code execution
-	CreateType
-	Create2Type
-)
-
-func (t CallFrameType) String() string {
-	switch t {
-	case CallType:
-		return "call"
-	case CallCodeType:
-		return "callcode"
-	case DelegateCallType:
-		return "delegatecall"
-	case StaticCallType:
-		return "staticcall"
-	case CreateType:
-		return "create"
-	case Create2Type:
-		return "create2"
-	default:
-		panic(fmt.Sprintf("unsupported call frame type: %T", t))
-	}
-}
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
@@ -234,7 +201,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			}(gas, time.Now())
 		} else {
 			// Handle tracer events for entering and exiting a call frame
-			evm.Config.Tracer.CaptureEnter(CallType, caller.Address(), addr, input, gas, value)
+			evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
 			defer func(startGas uint64) {
 				evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 			}(gas)
@@ -300,7 +267,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Debug {
-		evm.Config.Tracer.CaptureEnter(CallCodeType, caller.Address(), addr, input, gas, value)
+		evm.Config.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
@@ -344,7 +311,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Debug {
-		evm.Config.Tracer.CaptureEnter(DelegateCallType, caller.Address(), addr, input, gas, nil)
+		evm.Config.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
@@ -397,7 +364,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Debug {
-		evm.Config.Tracer.CaptureEnter(StaticCallType, caller.Address(), addr, input, gas, nil)
+		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
@@ -442,7 +409,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ CallFrameType) ([]byte, common.Address, uint64, error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -537,7 +504,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CreateType)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -547,7 +514,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, Create2Type)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
 }
 
 // ChainConfig returns the environment's chain configuration
