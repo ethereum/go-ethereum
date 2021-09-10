@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -686,5 +687,94 @@ func TestColdAccountAccessCost(t *testing.T) {
 			}
 			t.Fatalf("tescase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
 		}
+	}
+}
+
+func TestRuntimeJSTracer(t *testing.T) {
+	// A does four calls
+	//  CALL to 0xbb
+	//  CALLCODE to 0xcc
+	//  STATICCALL to 0xdd
+	//  DELEGATECALL to 0xee
+	mainCode := []byte{
+		// CALL
+		// outsize, outoffset, insize, inoffset
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0, // value
+		byte(vm.PUSH1), 0xbb, //address
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),
+		// CALLCODE
+		// outsize, outoffset, insize, inoffset
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0, // value
+		byte(vm.PUSH1), 0xcc, //address
+		byte(vm.GAS), // gas
+		byte(vm.CALLCODE),
+		byte(vm.POP),
+		// STATICCALL
+		// outsize, outoffset, insize, inoffset
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0xdd, //address
+		byte(vm.GAS), // gas
+		byte(vm.STATICCALL),
+		byte(vm.POP),
+		// DELEGATECALL
+		// outsize, outoffset, insize, inoffset
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0xee, //address
+		byte(vm.GAS), // gas
+		byte(vm.DELEGATECALL),
+		byte(vm.POP),
+	}
+	calleeCode := []byte{
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	}
+	main := common.HexToAddress("0xaa")
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state.SetCode(main, mainCode)
+	state.SetCode(common.HexToAddress("0xbb"), calleeCode)
+	state.SetCode(common.HexToAddress("0xcc"), calleeCode)
+	state.SetCode(common.HexToAddress("0xdd"), calleeCode)
+	state.SetCode(common.HexToAddress("0xee"), calleeCode)
+
+	jsTracer := `
+	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
+	step: function() { this.steps++}, 
+	fault: function() {}, 
+	result: function() { 
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
+	}, 
+	enter: function(frame) { 
+		this.enters++; 
+		this.enterGas = frame.gas; 
+	}, 
+	exit: function(res) { 
+		this.exits++; 
+		this.gasUsed = res.gasUsed; 
+	}}`
+	tracer, err := tracers.New(jsTracer, new(tracers.Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = Call(main, nil, &Config{
+		State: state,
+		EVMConfig: vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(res), `"4,4,4294956962,6,47"`; have != want {
+		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
 }
