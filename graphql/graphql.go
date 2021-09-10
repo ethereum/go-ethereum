@@ -1248,7 +1248,7 @@ func (s *SyncState) KnownStates() *hexutil.Uint64 {
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (r *Resolver) Syncing() (*SyncState, error) {
-	progress := r.backend.Downloader().Progress()
+	progress := r.backend.SyncProgress()
 
 	// Return not syncing if the synchronisation already completed
 	if progress.CurrentBlock >= progress.HighestBlock {
