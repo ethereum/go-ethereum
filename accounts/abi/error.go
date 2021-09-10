@@ -63,7 +63,7 @@ func NewError(name string, inputs Arguments) Error {
 		types[i] = input.Type.String()
 	}
 
-	str := fmt.Sprintf("event %v(%v)", name, strings.Join(names, ", "))
+	str := fmt.Sprintf("error %v(%v)", name, strings.Join(names, ", "))
 	sig := fmt.Sprintf("%v(%v)", name, strings.Join(types, ","))
 	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
 
