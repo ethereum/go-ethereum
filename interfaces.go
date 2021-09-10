@@ -130,7 +130,7 @@ type CallMsg struct {
 // execute such calls. For applications which are structured around specific contracts,
 // the abigen tool provides a nicer, properly typed way to perform calls.
 type ContractCaller interface {
-	CallContract(ctx context.Context, call CallMsg, blockNumber *big.Int) ([]byte, error)
+	CallContract(ctx context.Context, call CallMsg, blockNumber *big.Int) ([]byte, []byte, error)
 }
 
 // FilterQuery contains options for contract log filtering.
@@ -197,7 +197,7 @@ type PendingStateReader interface {
 
 // PendingContractCaller can be used to perform calls against the pending state.
 type PendingContractCaller interface {
-	PendingCallContract(ctx context.Context, call CallMsg) ([]byte, error)
+	PendingCallContract(ctx context.Context, call CallMsg) ([]byte, []byte, error)
 }
 
 // GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a

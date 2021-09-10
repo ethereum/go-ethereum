@@ -301,12 +301,12 @@ func TestCustomErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check := func(name string, expect string) {
-		if abi.Errors[name].Sig != expect {
-			t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig)
+	check := func(id [4]byte, expect string) {
+		if abi.Errors[id].Sig != expect {
+			t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Errors[id].Sig)
 		}
 	}
-	check("MyError", "MyError(uint256)")
+	check([4]byte{0x30, 0xb1, 0xb5, 0x65}, "MyError(uint256)")
 }
 
 func TestMultiPack(t *testing.T) {
@@ -1142,9 +1142,10 @@ func TestUnpackRevert(t *testing.T) {
 		{"08c379a1", "", errors.New("invalid data for unpacking")},
 		{"08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000", "revert reason", nil},
 	}
+	abi := new(ABI)
 	for index, c := range cases {
 		t.Run(fmt.Sprintf("case %d", index), func(t *testing.T) {
-			got, err := UnpackRevert(common.Hex2Bytes(c.input))
+			got, err := abi.UnpackRevert(common.Hex2Bytes(c.input))
 			if c.expectErr != nil {
 				if err == nil {
 					t.Fatalf("Expected non-nil error")

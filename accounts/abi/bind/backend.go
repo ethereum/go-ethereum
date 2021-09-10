@@ -49,8 +49,8 @@ type ContractCaller interface {
 	CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error)
 
 	// CallContract executes an Ethereum contract call with the specified data as the
-	// input.
-	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
+	// input. Returns output, revert data and an error if the call failed.
+	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, []byte, error)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.
@@ -61,7 +61,7 @@ type PendingContractCaller interface {
 	PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error)
 
 	// PendingCallContract executes an Ethereum contract call against the pending state.
-	PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error)
+	PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, []byte, error)
 }
 
 // ContractTransactor defines the methods needed to allow operating with a contract

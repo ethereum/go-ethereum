@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -381,13 +380,8 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 }
 
 func newRevertError(result *core.ExecutionResult) *revertError {
-	reason, errUnpack := abi.UnpackRevert(result.Revert())
-	err := errors.New("execution reverted")
-	if errUnpack == nil {
-		err = fmt.Errorf("execution reverted: %v", reason)
-	}
 	return &revertError{
-		error:  err,
+		error:  errors.New("execution reverted"),
 		reason: hexutil.Encode(result.Revert()),
 	}
 }
@@ -411,43 +405,35 @@ func (e *revertError) ErrorData() interface{} {
 }
 
 // CallContract executes a contract call.
-func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, []byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, errBlockNumberUnsupported
+		return nil, nil, errBlockNumberUnsupported
 	}
 	stateDB, err := b.blockchain.State()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(res.Revert()) > 0 {
-		return nil, newRevertError(res)
-	}
-	return res.Return(), res.Err
+	return res.Return(), res.Revert(), res.Err
 }
 
 // PendingCallContract executes a contract call on the pending state.
-func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, []byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
 	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(res.Revert()) > 0 {
-		return nil, newRevertError(res)
-	}
-	return res.Return(), res.Err
+	return res.Return(), res.Revert(), res.Err
 }
 
 // PendingNonceAt implements PendingStateReader.PendingNonceAt, retrieving

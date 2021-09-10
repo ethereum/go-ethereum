@@ -459,24 +459,26 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 // blockNumber selects the block height at which the call runs. It can be nil, in which
 // case the code is taken from the latest known block. Note that state from very old
 // blocks might not be available.
-func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, []byte, error) {
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
+	// TODO (MariusVanDerWijden) unmarshall revert reason here
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return hex, nil
+	return hex, nil, nil
 }
 
 // PendingCallContract executes a message call transaction using the EVM.
 // The state seen by the contract call is the pending state.
-func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, []byte, error) {
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
+	// TODO (MariusVanDerWijden) unmarshall revert reason here
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return hex, nil
+	return hex, nil, nil
 }
 
 // SuggestGasPrice retrieves the currently suggested gas price to allow a timely

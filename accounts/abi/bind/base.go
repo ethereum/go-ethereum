@@ -139,13 +139,22 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
+		revert []byte
 	)
 	if opts.Pending {
 		pb, ok := c.caller.(PendingContractCaller)
 		if !ok {
 			return ErrNoPendingState
 		}
-		output, err = pb.PendingCallContract(ctx, msg)
+		output, revert, err = pb.PendingCallContract(ctx, msg)
+		if err == nil && len(revert) != 0 {
+			revertReason, err := c.abi.UnpackRevert(revert)
+			if err != nil {
+				return err
+			}
+			_ = revertReason
+			// TODO: do something with the revert reason
+		}
 		if err == nil && len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = pb.PendingCodeAt(ctx, c.address); err != nil {
@@ -154,10 +163,19 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 				return ErrNoCode
 			}
 		}
+
 	} else {
-		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
+		output, revert, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
 		if err != nil {
 			return err
+		}
+		if len(revert) != 0 {
+			revertReason, err := c.abi.UnpackRevert(revert)
+			if err != nil {
+				return err
+			}
+			_ = revertReason
+			// TODO: do something with the revert reason
 		}
 		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.

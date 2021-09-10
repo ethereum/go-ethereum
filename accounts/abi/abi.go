@@ -34,7 +34,7 @@ type ABI struct {
 	Constructor Method
 	Methods     map[string]Method
 	Events      map[string]Event
-	Errors      map[string]Error
+	Errors      map[[4]byte]Error
 
 	// Additional "special" functions introduced in solidity v0.6.0.
 	// It's separated from the original default fallback. Each contract
@@ -158,7 +158,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	}
 	abi.Methods = make(map[string]Method)
 	abi.Events = make(map[string]Event)
-	abi.Errors = make(map[string]Error)
+	abi.Errors = make(map[[4]byte]Error)
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
@@ -187,7 +187,10 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		case "error":
-			abi.Errors[field.Name] = NewError(field.Name, field.Inputs)
+			newErr := NewError(field.Name, field.Inputs)
+			var fourByte [4]byte
+			copy(fourByte[:], newErr.ID[:][:4])
+			abi.Errors[fourByte] = newErr
 		default:
 			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
 		}
@@ -233,10 +236,31 @@ func (abi *ABI) HasReceive() bool {
 // revertSelector is a special function selector for revert reason unpacking.
 var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
 
-// UnpackRevert resolves the abi-encoded revert reason. According to the solidity
-// spec https://solidity.readthedocs.io/en/latest/control-structures.html#revert,
-// the provided revert reason is abi-encoded as if it were a call to a function
-// `Error(string)`. So it's a special tool for it.
+func (abi *ABI) UnpackRevert(data []byte) (interface{}, error) {
+	if len(data) < 4 {
+		return nil, errors.New("invalid data for unpacking")
+	}
+	var fourByte [4]byte
+	copy(fourByte[:], data[:4])
+	if errDef, ok := abi.Errors[fourByte]; ok {
+		return errDef.Unpack(data)
+	}
+	// If not a custom error, check revert selector
+	if !bytes.Equal(fourByte[:], revertSelector) {
+		return nil, errors.New("invalid data for unpacking")
+	}
+	// UnpackRevert resolves the abi-encoded revert reason. According to the solidity
+	// spec https://solidity.readthedocs.io/en/latest/control-structures.html#revert,
+	// the provided revert reason is abi-encoded as if it were a call to a function
+	// `Error(string)`. So it's a special tool for it.
+	typ, _ := NewType("string", "", nil)
+	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:])
+	if err != nil {
+		return "", err
+	}
+	return unpacked[0], nil
+}
+
 func UnpackRevert(data []byte) (string, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
@@ -244,12 +268,7 @@ func UnpackRevert(data []byte) (string, error) {
 	if !bytes.Equal(data[:4], revertSelector) {
 		return "", errors.New("invalid data for unpacking")
 	}
-	typ, _ := NewType("string", "", nil)
-	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:])
-	if err != nil {
-		return "", err
-	}
-	return unpacked[0].(string), nil
+	return "", nil
 }
 
 // overloadedName returns the next available name for a given thing.

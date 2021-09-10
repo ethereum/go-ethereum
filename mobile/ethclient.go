@@ -278,7 +278,7 @@ func (ec *EthereumClient) GetPendingTransactionCount(ctx *Context) (count int, _
 // blockNumber selects the block height at which the call runs. It can be <0, in which
 // case the code is taken from the latest known block. Note that state from very old
 // blocks might not be available.
-func (ec *EthereumClient) CallContract(ctx *Context, msg *CallMsg, number int64) (output []byte, _ error) {
+func (ec *EthereumClient) CallContract(ctx *Context, msg *CallMsg, number int64) (output []byte, revert []byte, _ error) {
 	if number < 0 {
 		return ec.client.CallContract(ctx.context, msg.msg, nil)
 	}
@@ -287,7 +287,7 @@ func (ec *EthereumClient) CallContract(ctx *Context, msg *CallMsg, number int64)
 
 // PendingCallContract executes a message call transaction using the EVM.
 // The state seen by the contract call is the pending state.
-func (ec *EthereumClient) PendingCallContract(ctx *Context, msg *CallMsg) (output []byte, _ error) {
+func (ec *EthereumClient) PendingCallContract(ctx *Context, msg *CallMsg) (output []byte, revert []byte, _ error) {
 	return ec.client.PendingCallContract(ctx.context, msg.msg)
 }
 
