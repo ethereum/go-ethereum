@@ -325,8 +325,11 @@ func TestProcessStateless(t *testing.T) {
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(_ int, gen *BlockGen) {
-		toaddr := common.Address{}
-		tx, _ := types.SignTx(types.NewTransaction(0, toaddr, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil), signer, testKey)
+		tx, _ := types.SignTx(types.NewTransaction(0, common.Address{1, 2, 3}, big.NewInt(999), params.TxGas, big.NewInt(875000000), nil), signer, testKey)
+		gen.AddTx(tx)
+		tx, _ = types.SignTx(types.NewTransaction(1, common.Address{}, big.NewInt(999), params.TxGas, big.NewInt(875000000), nil), signer, testKey)
+		gen.AddTx(tx)
+		tx, _ = types.SignTx(types.NewTransaction(2, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
 
 	})
