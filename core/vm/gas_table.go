@@ -97,12 +97,12 @@ func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	_, ok := evm.TxContext.Accesses.Witness[subtree]
 	if !ok {
 		evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-		usedGas += gasWitnessBranchCost
+		usedGas += params.WitnessBranchCost
 	}
 
 	_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
 	if !ok {
-		usedGas += gasWitnessChunkCost
+		usedGas += params.WitnessChunkCost
 		evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 	}
 
@@ -114,9 +114,6 @@ var (
 	gasCodeCopyStateful    = memoryCopierGas(2)
 	gasExtCodeCopyStateful = memoryCopierGas(3)
 	gasReturnDataCopy      = memoryCopierGas(2)
-
-	gasWitnessBranchCost = uint64(1900)
-	gasWitnessChunkCost  = uint64(200)
 )
 
 func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -147,12 +144,12 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 			_, ok := evm.TxContext.Accesses.Witness[subtree]
 			if !ok {
 				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				statelessGas += gasWitnessBranchCost
+				statelessGas += params.WitnessBranchCost
 			}
 
 			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
 			if !ok {
-				statelessGas += gasWitnessChunkCost
+				statelessGas += params.WitnessChunkCost
 				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 			}
 
@@ -192,12 +189,12 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 			_, ok := evm.TxContext.Accesses.Witness[subtree]
 			if !ok {
 				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				statelessGas += gasWitnessBranchCost
+				statelessGas += params.WitnessBranchCost
 			}
 
 			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
 			if !ok {
-				statelessGas += gasWitnessChunkCost
+				statelessGas += params.WitnessChunkCost
 				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 			}
 
@@ -218,12 +215,12 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 	_, ok := evm.TxContext.Accesses.Witness[subtree]
 	if !ok {
 		evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-		usedGas += gasWitnessBranchCost
+		usedGas += params.WitnessBranchCost
 	}
 
 	_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
 	if !ok {
-		usedGas += gasWitnessChunkCost
+		usedGas += params.WitnessChunkCost
 		evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 	}
 
@@ -480,12 +477,12 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 			_, ok := evm.TxContext.Accesses.Witness[subtree]
 			if !ok {
 				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				gas += gasWitnessBranchCost
+				gas += params.WitnessBranchCost
 			}
 
 			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
 			if !ok {
-				gas += gasWitnessChunkCost
+				gas += params.WitnessChunkCost
 				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
 			}
 		}

@@ -57,7 +57,9 @@ func (trie *VerkleTrie) TryGet(key []byte) ([]byte, error) {
 // by the caller while they are stored in the trie. If a node was not found in the
 // database, a trie.MissingNodeError is returned.
 func (trie *VerkleTrie) TryUpdate(key, value []byte) error {
-	return trie.root.Insert(key, value)
+	return trie.root.Insert(key, value, func(h []byte) ([]byte, error) {
+		return trie.db.DiskDB().Get(h)
+	})
 }
 
 // TryDelete removes any existing value for key from the trie. If a node was not
@@ -131,31 +133,48 @@ func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
 
+type KeyValuePair struct {
+	Key   []byte
+	Value []byte
+}
+
 type verkleproof struct {
 	D *bls.G1Point
 	Y *bls.Fr
 	Σ *bls.G1Point
 
-	Leaves map[common.Hash]common.Hash
+	Leaves []KeyValuePair
 }
 
 func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) ([]byte, error) {
 	d, y, σ := verkle.MakeVerkleMultiProof(trie.root, keys)
-	leaves := make(map[common.Hash]common.Hash)
+	vp := verkleproof{
+		D: d,
+		Y: y,
+		Σ: σ,
+	}
 	for _, key := range keys {
 		payload, err := trie.TryGet(key)
 		if err != nil {
 			return nil, err
 		}
-		leaves[common.Hash{}] = common.BytesToHash(payload)
+
+		vp.Leaves = append(vp.Leaves, KeyValuePair{
+			Key:   key,
+			Value: payload,
+		})
 	}
-	return rlp.EncodeToBytes(verkleproof{D: d, Y: y, Σ: σ, Leaves: leaves})
+	return rlp.EncodeToBytes(vp)
 }
 
 func DeserializeVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, map[common.Hash]common.Hash) {
 	var vp verkleproof
+	var leaves map[common.Hash]common.Hash
 	rlp.DecodeBytes(proof, &vp)
-	return vp.D, vp.Y, vp.Σ, vp.Leaves
+	for _, kvp := range vp.Leaves {
+		leaves[common.BytesToHash(kvp.Key)] = common.BytesToHash(kvp.Value)
+	}
+	return vp.D, vp.Y, vp.Σ, leaves
 }
 
 func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {

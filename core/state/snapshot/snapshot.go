@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -193,6 +194,17 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	}
 	if err != nil {
 		if rebuild {
+			if useVerkle {
+				snap.layers = map[common.Hash]snapshot{
+					root: &diskLayer{
+						diskdb: diskdb,
+						triedb: triedb,
+						root:   root,
+						cache:  fastcache.New(cache * 1024 * 1024),
+					},
+				}
+				return snap, nil
+			}
 			log.Warn("Failed to load snapshot, regenerating", "err", err)
 			snap.Rebuild(root)
 			return snap, nil

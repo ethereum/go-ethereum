@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
@@ -204,11 +205,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			subleaf := index[31]
 			if _, ok := in.evm.TxContext.Accesses.Witness[subtree]; !ok {
 				in.evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				contract.Gas -= gasWitnessBranchCost
+				contract.Gas -= params.WitnessBranchCost
 			}
 			if _, ok := in.evm.TxContext.Accesses.Witness[subtree][subleaf]; !ok {
 				in.evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-				contract.Gas -= gasWitnessChunkCost
+				contract.Gas -= params.WitnessChunkCost
 			}
 
 			if in.evm.accesses != nil {

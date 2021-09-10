@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 /*
@@ -112,7 +113,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -288,6 +289,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+	}
+	if st.evm.TxContext.Accesses != nil {
+		toBalance := trieUtils.GetTreeKeyBalance(*msg.To())
+		fromBalance := trieUtils.GetTreeKeyBalance(msg.From())
+		fromNonce := trieUtils.GetTreeKeyNonce(msg.From())
+		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(toBalance)
+		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromNonce)
+		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromBalance)
 	}
 	st.gas -= gas
 

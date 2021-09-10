@@ -324,18 +324,13 @@ func TestProcessStateless(t *testing.T) {
 	genesis := gspec.MustCommit(db, nil)
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
-	var makeTx = func(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
-		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, testKey)
-		return tx
-	}
-	bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
-	tooBigNumber := new(big.Int).Set(bigNumber)
-	tooBigNumber.Add(tooBigNumber, common.Big1)
-	txs := []*types.Transaction{
-		makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
-	}
-	block := GenerateBadBlock(genesis, ethash.NewFaker(), txs, gspec.Config)
-	_, err := blockchain.InsertChain(types.Blocks{block})
+	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(_ int, gen *BlockGen) {
+		toaddr := common.Address{}
+		tx, _ := types.SignTx(types.NewTransaction(0, toaddr, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil), signer, testKey)
+		gen.AddTx(tx)
+
+	})
+	_, err := blockchain.InsertChain(chain)
 	if err != nil {
 		t.Fatalf("block imported with error: %v", err)
 	}
