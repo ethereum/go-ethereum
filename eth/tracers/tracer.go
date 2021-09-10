@@ -682,7 +682,11 @@ func (jst *Tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 	jst.addToObj(obj, "to", to)
 	jst.addToObj(obj, "input", input)
 	jst.addToObj(obj, "gas", gas)
-	jst.addToObj(obj, "value", value)
+	if value != nil {
+		jst.addToObj(obj, "value", value)
+	} else {
+		jst.addToObj(obj, "value", new(big.Int))
+	}
 	jst.vm.PutPropString(jst.stateObject, "frame")
 
 	if _, err := jst.call(true, "enter", "frame"); err != nil {
