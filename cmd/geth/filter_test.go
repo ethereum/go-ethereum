@@ -93,6 +93,19 @@ func (e *filterEnv) checkFilters(t *testing.T) {
 				},
 			},
 		},
+		{
+			filter: ethereum.FilterQuery{
+				Topics: [][]common.Hash{{e.contractAbi.Events["Event2"].ID}},
+			},
+			expected: []result{
+				{
+					"Event2",
+					map[string]interface{}{
+						"src": e.auth.From,
+					},
+				},
+			},
+		},
 	}
 	for _, v := range tests {
 		res := e.query(t, v.filter)
