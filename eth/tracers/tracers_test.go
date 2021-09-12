@@ -204,6 +204,13 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracer(t *testing.T) {
+	testCallTracer(t, "callTracer")
+}
+func TestScopeCallTracer(t *testing.T) {
+	testCallTracer(t, "callTracer2")
+}
+
+func testCallTracer(t *testing.T, tracer string) {
 	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -248,7 +255,7 @@ func TestCallTracer(t *testing.T) {
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
 			// Create the tracer, the EVM environment and run it
-			tracer, err := New("callTracer", new(Context))
+			tracer, err := New(tracer, new(Context))
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -269,7 +276,7 @@ func TestCallTracer(t *testing.T) {
 			}
 			ret := new(callTrace)
 			if err := json.Unmarshal(res, ret); err != nil {
-				t.Fatalf("failed to unmarshal trace result: %v", err)
+				t.Fatalf("failed to unmarshal trace result: %v \n%v", err, string(res))
 			}
 
 			if !jsonEqual(ret, test.Result) {
