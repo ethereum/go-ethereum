@@ -343,11 +343,21 @@ func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, co
 
 // benchmarkNonModifyingCode benchmarks code, but if the code modifies the
 // state, this should not be used, since it does not reset the state between runs.
-func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.B) {
+func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode string, b *testing.B) {
 	cfg := new(Config)
 	setDefaults(cfg)
 	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	cfg.GasLimit = gas
+	if len(tracerCode) > 0 {
+		tracer, err := tracers.New(tracerCode, new(tracers.Context))
+		if err != nil {
+			b.Fatal(err)
+		}
+		cfg.EVMConfig = vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}
+	}
 	var (
 		destination = common.BytesToAddress([]byte("contract"))
 		vmenv       = NewEnv(cfg)
@@ -487,12 +497,12 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//		Tracer: tracer,
 	//	}})
 	// 100M gas
-	benchmarkNonModifyingCode(100000000, staticCallIdentity, "staticcall-identity-100M", b)
-	benchmarkNonModifyingCode(100000000, callIdentity, "call-identity-100M", b)
-	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", b)
-	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", b)
-	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", b)
-	benchmarkNonModifyingCode(100000000, calllRevertingContractWithInput, "call-reverting-100M", b)
+	benchmarkNonModifyingCode(100000000, staticCallIdentity, "staticcall-identity-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callIdentity, "call-identity-100M", "", b)
+	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
+	benchmarkNonModifyingCode(100000000, calllRevertingContractWithInput, "call-reverting-100M", "", b)
 
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
@@ -811,4 +821,34 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if have, want := string(res), `"4,4,4294966805,6,0"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
+}
+
+func BenchmarkTracerStepVsCallFrame(b *testing.B) {
+	// Simply pushes and pops some values in a loop
+	code := []byte{
+		byte(vm.JUMPDEST),
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.POP),
+		byte(vm.POP),
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
+	stepTracer := `
+	{
+	step: function() {},
+	fault: function() {},
+	result: function() {},
+	}`
+	callFrameTracer := `
+	{
+	enter: function() {},
+	exit: function() {},
+	fault: function() {},
+	result: function() {},
+	}`
+
+	benchmarkNonModifyingCode(10000000, code, "tracer-step-10M", stepTracer, b)
+	benchmarkNonModifyingCode(10000000, code, "tracer-call-frame-10M", callFrameTracer, b)
 }
