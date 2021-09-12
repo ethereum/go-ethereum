@@ -107,5 +107,9 @@ func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
 		Err     string              `json:"error,omitempty"`
 	}
-	l.encoder.Encode(exitLog{output, math.HexOrDecimal64(gasUsed), err.Error()})
+	var errMsg string
+	if err != nil {
+		errMsg = err.Error()
+	}
+	l.encoder.Encode(exitLog{output, math.HexOrDecimal64(gasUsed), errMsg})
 }

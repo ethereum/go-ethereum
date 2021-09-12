@@ -493,10 +493,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
-	if evm.Config.Debug && evm.depth == 0 {
-		evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
-	} else if evm.Config.Debug && evm.depth > 0 {
-		evm.Config.Tracer.CaptureExit(ret, gas-contract.Gas, err)
+	if evm.Config.Debug {
+		if evm.depth == 0 {
+			evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
+		} else {
+			evm.Config.Tracer.CaptureExit(ret, gas-contract.Gas, err)
+		}
 	}
 	return ret, address, contract.Gas, err
 }
