@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -90,26 +89,9 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 }
 
 func (l *JSONLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	frame := StructFrame{
-		Type:  typ.String(),
-		From:  from,
-		To:    to,
-		Input: input,
-		Gas:   gas,
-		Value: value,
-	}
-	l.encoder.Encode(frame)
+	// Noop
 }
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
-	type exitLog struct {
-		Output  hexutil.Bytes       `json:"output"`
-		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
-		Err     string              `json:"error,omitempty"`
-	}
-	var errMsg string
-	if err != nil {
-		errMsg = err.Error()
-	}
-	l.encoder.Encode(exitLog{output, math.HexOrDecimal64(gasUsed), errMsg})
+	// Noop
 }
