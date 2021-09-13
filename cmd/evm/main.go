@@ -113,7 +113,7 @@ var (
 		Name:  "receiver",
 		Usage: "The transaction receiver (execution context)",
 	}
-	DisableMemoryFlag = cli.BoolFlag{
+	DisableMemoryFlag = cli.BoolTFlag{
 		Name:  "nomemory",
 		Usage: "disable memory output",
 	}
@@ -125,9 +125,9 @@ var (
 		Name:  "nostorage",
 		Usage: "disable storage output",
 	}
-	DisableReturnDataFlag = cli.BoolFlag{
+	DisableReturnDataFlag = cli.BoolTFlag{
 		Name:  "noreturndata",
-		Usage: "disable return data output",
+		Usage: "enable return data output",
 	}
 )
 

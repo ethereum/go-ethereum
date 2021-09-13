@@ -61,13 +61,13 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 		RefundCounter: env.StateDB.GetRefund(),
 		Err:           err,
 	}
-	if !l.cfg.DisableMemory {
+	if l.cfg.EnableMemory {
 		log.Memory = memory.Data()
 	}
 	if !l.cfg.DisableStack {
 		log.Stack = stack.data
 	}
-	if !l.cfg.DisableReturnData {
+	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
 	}
 	l.encoder.Encode(log)

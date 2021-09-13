@@ -46,12 +46,12 @@ func (s Storage) Copy() Storage {
 
 // LogConfig are the configuration options for structured logger the EVM
 type LogConfig struct {
-	DisableMemory     bool // disable memory capture
-	DisableStack      bool // disable stack capture
-	DisableStorage    bool // disable storage capture
-	DisableReturnData bool // disable return data capture
-	Debug             bool // print output during capture end
-	Limit             int  // maximum length of output, but zero means unlimited
+	EnableMemory     bool // enable memory capture
+	DisableStack     bool // disable stack capture
+	DisableStorage   bool // disable storage capture
+	EnableReturnData bool // enable return data capture
+	Debug            bool // print output during capture end
+	Limit            int  // maximum length of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -160,7 +160,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
-	if !l.cfg.DisableMemory {
+	if l.cfg.EnableMemory {
 		mem = make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 	}
@@ -199,7 +199,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	var rdata []byte
-	if !l.cfg.DisableReturnData {
+	if l.cfg.EnableReturnData {
 		rdata = make([]byte, len(rData))
 		copy(rdata, rData)
 	}
