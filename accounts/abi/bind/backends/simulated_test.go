@@ -469,7 +469,7 @@ func TestEstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("d8b98391"),
-		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
+		}, 0, errors.New("execution reverted"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
 		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
@@ -1105,7 +1105,7 @@ func TestCallContractRevert(t *testing.T) {
 				t.Errorf("could not pack %v function on contract: %v", key, err)
 			}
 
-			res, _, err := cl(input)
+			res, revert, err := cl(input)
 			if err == nil {
 				t.Errorf("call to %v was not reverted", key)
 			}
@@ -1115,7 +1115,9 @@ func TestCallContractRevert(t *testing.T) {
 			if val != nil {
 				rerr, ok := err.(*revertError)
 				if !ok {
-					t.Errorf("expect revert error")
+					if len(revert) == 0 {
+						t.Fatalf("expected revert reason")
+					}
 				}
 				_ = rerr
 				// TODO (MariusVanDerWijden) rewrite this test once the logic is done
