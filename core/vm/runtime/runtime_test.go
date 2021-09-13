@@ -707,6 +707,17 @@ func TestRuntimeJSTracer(t *testing.T) {
 	//  STATICCALL to 0xdd
 	//  DELEGATECALL to 0xee
 	mainCode := []byte{
+		// CREATE
+		// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+		byte(vm.PUSH5),
+		// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		// length, offset, value
+		byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+		byte(vm.CREATE),
+		byte(vm.POP),
 		// CALL
 		// outsize, outoffset, insize, inoffset
 		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
@@ -783,7 +794,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := string(res), `"4,4,4294956962,6,47"`; have != want {
+	if have, want := string(res), `"5,5,4294925433,6,58"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
 	// This time without steps
@@ -818,7 +829,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := string(res), `"4,4,4294966805,6,0"`; have != want {
+	if have, want := string(res), `"5,5,4294935277,6,0"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
 }
