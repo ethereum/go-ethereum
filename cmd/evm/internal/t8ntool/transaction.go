@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -115,10 +115,8 @@ func Transaction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	i := -1
 	var results []result
 	for it.Next() {
-		i++
 		var tx types.Transaction
 		err := rlp.DecodeBytes(it.Value(), &tx)
 		if err != nil {
