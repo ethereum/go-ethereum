@@ -260,7 +260,6 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	in := make([]byte, len(input))
 	copy(in, input)
-	// TODO: should we honor `l.Cfg.Limit` for frames too?
 	frame := StructFrame{typ.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil, nil}
 	l.frames = append(l.frames, frame)
 }
