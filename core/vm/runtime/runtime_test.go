@@ -701,80 +701,8 @@ func TestColdAccountAccessCost(t *testing.T) {
 }
 
 func TestRuntimeJSTracer(t *testing.T) {
-	// A does four calls
-	//  CALL to 0xbb
-	//  CALLCODE to 0xcc
-	//  STATICCALL to 0xdd
-	//  DELEGATECALL to 0xee
-	mainCode := []byte{
-		// CREATE
-		// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
-		byte(vm.PUSH5),
-		// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
-		byte(vm.PUSH1), 0,
-		byte(vm.MSTORE),
-		// length, offset, value
-		byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
-		byte(vm.CREATE),
-		byte(vm.POP),
-		// CREATE2
-		// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
-		byte(vm.PUSH5),
-		// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
-		byte(vm.PUSH1), 0,
-		byte(vm.MSTORE),
-		// salt, length, offset, value
-		byte(vm.PUSH1), 1, byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
-		byte(vm.CREATE2),
-		byte(vm.POP),
-		// CALL
-		// outsize, outoffset, insize, inoffset
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0, // value
-		byte(vm.PUSH1), 0xbb, //address
-		byte(vm.GAS), // gas
-		byte(vm.CALL),
-		byte(vm.POP),
-		// CALLCODE
-		// outsize, outoffset, insize, inoffset
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0, // value
-		byte(vm.PUSH1), 0xcc, //address
-		byte(vm.GAS), // gas
-		byte(vm.CALLCODE),
-		byte(vm.POP),
-		// STATICCALL
-		// outsize, outoffset, insize, inoffset
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0xdd, //address
-		byte(vm.GAS), // gas
-		byte(vm.STATICCALL),
-		byte(vm.POP),
-		// DELEGATECALL
-		// outsize, outoffset, insize, inoffset
-		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0xee, //address
-		byte(vm.GAS), // gas
-		byte(vm.DELEGATECALL),
-		byte(vm.POP),
-	}
-	calleeCode := []byte{
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		byte(vm.RETURN),
-	}
-	main := common.HexToAddress("0xaa")
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	statedb.SetCode(main, mainCode)
-	statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
-
-	jsTracer := `
-	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
+	jsTracers := []string{
+		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
 	step: function() { this.steps++}, 
 	fault: function() {}, 
 	result: function() { 
@@ -787,39 +715,8 @@ func TestRuntimeJSTracer(t *testing.T) {
 	exit: function(res) { 
 		this.exits++; 
 		this.gasUsed = res.gasUsed; 
-	}}`
-	tracer, err := tracers.New(jsTracer, new(tracers.Context))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = Call(main, nil, &Config{
-		State: statedb,
-		EVMConfig: vm.Config{
-			Debug:  true,
-			Tracer: tracer,
-		}})
-	if err != nil {
-		t.Fatal("didn't expect error", err)
-	}
-	res, err := tracer.GetResult()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if have, want := string(res), `"6,6,4294893899,6,70"`; have != want {
-		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
-	}
-
-	// Reset state
-	statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	statedb.SetCode(main, mainCode)
-	statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
-	statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
-
-	// This time without steps
-	jsTracer = `
-	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
+	}}`,
+		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
 	fault: function() {}, 
 	result: function() { 
 		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
@@ -831,26 +728,131 @@ func TestRuntimeJSTracer(t *testing.T) {
 	exit: function(res) { 
 		this.exits++; 
 		this.gasUsed = res.gasUsed; 
-	}}`
-	tracer, err = tracers.New(jsTracer, new(tracers.Context))
-	if err != nil {
-		t.Fatal(err)
+	}}`}
+	tests := []struct {
+		code []byte
+		// One result per tracer
+		results []string
+	}{
+		{
+			// CREATE
+			code: []byte{
+				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+				byte(vm.PUSH5),
+				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+				byte(vm.PUSH1), 0,
+				byte(vm.MSTORE),
+				// length, offset, value
+				byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+				byte(vm.CREATE),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294935775,6,12"`, `"1,1,4294935775,6,0"`},
+		},
+		{
+			// CREATE2
+			code: []byte{
+				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+				byte(vm.PUSH5),
+				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+				byte(vm.PUSH1), 0,
+				byte(vm.MSTORE),
+				// salt, length, offset, value
+				byte(vm.PUSH1), 1, byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+				byte(vm.CREATE2),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294935766,6,13"`, `"1,1,4294935766,6,0"`},
+		},
+		{
+			// CALL
+			code: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+				byte(vm.PUSH1), 0, // value
+				byte(vm.PUSH1), 0xbb, //address
+				byte(vm.GAS), // gas
+				byte(vm.CALL),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294964716,6,13"`, `"1,1,4294964716,6,0"`},
+		},
+		{
+			// CALLCODE
+			code: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+				byte(vm.PUSH1), 0, // value
+				byte(vm.PUSH1), 0xcc, //address
+				byte(vm.GAS), // gas
+				byte(vm.CALLCODE),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294964716,6,13"`, `"1,1,4294964716,6,0"`},
+		},
+		{
+			// STATICCALL
+			code: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+				byte(vm.PUSH1), 0xdd, //address
+				byte(vm.GAS), // gas
+				byte(vm.STATICCALL),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294964719,6,12"`, `"1,1,4294964719,6,0"`},
+		},
+		{
+			// DELEGATECALL
+			code: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+				byte(vm.PUSH1), 0xee, //address
+				byte(vm.GAS), // gas
+				byte(vm.DELEGATECALL),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294964719,6,12"`, `"1,1,4294964719,6,0"`},
+		},
 	}
-	_, _, err = Call(main, nil, &Config{
-		State: statedb,
-		EVMConfig: vm.Config{
-			Debug:  true,
-			Tracer: tracer,
-		}})
-	if err != nil {
-		t.Fatal("didn't expect error", err)
+	calleeCode := []byte{
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
 	}
-	res, err = tracer.GetResult()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if have, want := string(res), `"6,6,4294893899,6,0"`; have != want {
-		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
+	main := common.HexToAddress("0xaa")
+	for i, jsTracer := range jsTracers {
+		for j, tc := range tests {
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb.SetCode(main, tc.code)
+			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
+			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
+			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
+			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
+
+			tracer, err := tracers.New(jsTracer, new(tracers.Context))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = Call(main, nil, &Config{
+				State: statedb,
+				EVMConfig: vm.Config{
+					Debug:  true,
+					Tracer: tracer,
+				}})
+			if err != nil {
+				t.Fatal("didn't expect error", err)
+			}
+			res, err := tracer.GetResult()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if have, want := string(res), tc.results[i]; have != want {
+				t.Errorf("wrong result for tracer %d testcase %d, have \n%v\nwant\n%v\n", i, j, have, want)
+			}
+		}
 	}
 }
 
