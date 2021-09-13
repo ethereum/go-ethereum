@@ -106,7 +106,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 
 	// import pre accounts & construct test genesis block & state root
 	db := rawdb.NewMemoryDatabase()
-	gblock, err := t.genesis(config).Commit(db)
+	gblock, err := t.genesis(config).Commit(db, nil)
 	if err != nil {
 		return err
 	}

@@ -153,7 +153,7 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Difficulty:  t.json.Env.Difficulty,
 	}
 	vmconfig.NoRecursion = true
-	return vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vmconfig)
+	return vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vmconfig, nil)
 }
 
 func vmTestBlockHash(n uint64) common.Hash {

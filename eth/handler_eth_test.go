@@ -103,8 +103,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}
 
-		genesisNoFork  = gspecNoFork.MustCommit(dbNoFork)
-		genesisProFork = gspecProFork.MustCommit(dbProFork)
+		genesisNoFork  = gspecNoFork.MustCommit(dbNoFork, nil)
+		genesisProFork = gspecProFork.MustCommit(dbProFork, nil)
 
 		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil)
 		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil)

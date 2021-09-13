@@ -143,7 +143,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock := gen.ToBlock(nil)
+	gblock := gen.ToBlock(nil, nil)
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {

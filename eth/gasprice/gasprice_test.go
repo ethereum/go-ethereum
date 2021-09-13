@@ -108,7 +108,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	}
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis, _ := gspec.Commit(db)
+	genesis, _ := gspec.Commit(db, nil)
 
 	// Generate testing blocks
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
@@ -145,7 +145,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	})
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
-	gspec.Commit(diskdb)
+	gspec.Commit(diskdb, nil)
 	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)

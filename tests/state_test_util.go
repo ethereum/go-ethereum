@@ -182,7 +182,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		return nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
-	block := t.genesis(config).ToBlock(nil)
+	block := t.genesis(config).ToBlock(nil, nil)
 	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
@@ -218,7 +218,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
-	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig, nil)
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()
@@ -261,7 +261,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 
 	var snaps *snapshot.Tree
 	if snapshotter {
-		snaps, _ = snapshot.New(db, sdb.TrieDB(), 1, root, false, true, false)
+		snaps, _ = snapshot.New(db, sdb.TrieDB(), 1, root, false, true, false, false)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb
