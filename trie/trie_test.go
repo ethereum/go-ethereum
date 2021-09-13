@@ -90,7 +90,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	trie, _ := New(common.Hash{}, triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
-	root, _ := trie.Commit(nil)
+	root, _, _ := trie.Commit(nil)
 	if !memonly {
 		triedb.Commit(root, true, nil)
 	}
@@ -172,7 +172,7 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
-	root, err := trie.Commit(nil)
+	root, _, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	exp, err := trie.Commit(nil)
+	exp, _, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, err := trie2.Commit(nil)
+	hash, _, err := trie2.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -429,11 +429,11 @@ func runRandTest(rt randTest) bool {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, rt[i].err = tr.Commit(nil)
+			_, _, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, err := tr.Commit(nil)
+			hash, _, err := tr.Commit(nil)
 			if err != nil {
 				rt[i].err = err
 				return false
@@ -633,7 +633,7 @@ func TestCommitAfterHash(t *testing.T) {
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
-	root, _ = trie.Commit(nil)
+	root, _, _ = trie.Commit(nil)
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -740,7 +740,7 @@ func TestCommitSequence(t *testing.T) {
 			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(c common.Hash) {
 			// And spongify the callback-order
@@ -792,7 +792,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			trie.Update(key, val)
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(c common.Hash) {
 			// And spongify the callback-order
@@ -834,7 +834,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			stTrie.TryUpdate(key, val)
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, nil)
 		// And flush stacktrie -> disk
@@ -879,7 +879,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie.TryUpdate(key, []byte{0x1})
 	stTrie.TryUpdate(key, []byte{0x1})
 	// Flush trie -> database
-	root, _ := trie.Commit(nil)
+	root, _, _ := trie.Commit(nil)
 	// Flush memdb -> disk (sponge)
 	db.Commit(root, false, nil)
 	// And flush stacktrie -> disk

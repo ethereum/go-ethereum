@@ -512,9 +512,6 @@ func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.
 	db, _ := enode.OpenDB("")
 	n.ln = enode.NewLocalNode(db, key)
 	n.ln.SetStaticIP(ip)
-	if n.ln.Node().Seq() != 1 {
-		panic(fmt.Errorf("unexpected seq %d", n.ln.Node().Seq()))
-	}
 	n.c = NewCodec(n.ln, key, clock)
 }
 

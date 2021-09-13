@@ -36,20 +36,25 @@ const (
 	iptrackMinStatements = 10
 	iptrackWindow        = 5 * time.Minute
 	iptrackContactWindow = 10 * time.Minute
+
+	// time needed to wait between two updates to the local ENR
+	recordUpdateThrottle = time.Millisecond
 )
 
 // LocalNode produces the signed node record of a local node, i.e. a node run in the
 // current process. Setting ENR entries via the Set method updates the record. A new version
 // of the record is signed on demand when the Node method is called.
 type LocalNode struct {
-	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date.
+	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date
+
 	id  ID
 	key *ecdsa.PrivateKey
 	db  *DB
 
 	// everything below is protected by a lock
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	seq       uint64
+	update    time.Time // timestamp when the record was last updated
 	entries   map[string]enr.Entry
 	endpoint4 lnEndpoint
 	endpoint6 lnEndpoint
@@ -76,7 +81,8 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 		},
 	}
 	ln.seq = db.localSeq(ln.id)
-	ln.invalidate()
+	ln.update = time.Now()
+	ln.cur.Store((*Node)(nil))
 	return ln
 }
 
@@ -87,14 +93,34 @@ func (ln *LocalNode) Database() *DB {
 
 // Node returns the current version of the local node record.
 func (ln *LocalNode) Node() *Node {
+	// If we have a valid record, return that
 	n := ln.cur.Load().(*Node)
 	if n != nil {
 		return n
 	}
+
 	// Record was invalidated, sign a new copy.
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
+
+	// Double check the current record, since multiple goroutines might be waiting
+	// on the write mutex.
+	if n = ln.cur.Load().(*Node); n != nil {
+		return n
+	}
+
+	// The initial sequence number is the current timestamp in milliseconds. To ensure
+	// that the initial sequence number will always be higher than any previous sequence
+	// number (assuming the clock is correct), we want to avoid updating the record faster
+	// than once per ms. So we need to sleep here until the next possible update time has
+	// arrived.
+	lastChange := time.Since(ln.update)
+	if lastChange < recordUpdateThrottle {
+		time.Sleep(recordUpdateThrottle - lastChange)
+	}
+
 	ln.sign()
+	ln.update = time.Now()
 	return ln.cur.Load().(*Node)
 }
 
@@ -114,6 +140,10 @@ func (ln *LocalNode) ID() ID {
 // Set puts the given entry into the local record, overwriting any existing value.
 // Use Set*IP and SetFallbackUDP to set IP addresses and UDP port, otherwise they'll
 // be overwritten by the endpoint predictor.
+//
+// Since node record updates are throttled to one per second, Set is asynchronous.
+// Any update will be queued up and published when at least one second passes from
+// the last change.
 func (ln *LocalNode) Set(e enr.Entry) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
@@ -287,4 +317,13 @@ func (ln *LocalNode) sign() {
 func (ln *LocalNode) bumpSeq() {
 	ln.seq++
 	ln.db.storeLocalSeq(ln.id, ln.seq)
+}
+
+// nowMilliseconds gives the current timestamp at millisecond precision.
+func nowMilliseconds() uint64 {
+	ns := time.Now().UnixNano()
+	if ns < 0 {
+		return 0
+	}
+	return uint64(ns / 1000 / 1000)
 }

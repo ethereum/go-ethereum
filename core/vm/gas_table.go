@@ -60,7 +60,7 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 // as argument:
 // CALLDATACOPY (stack position 2)
 // CODECOPY (stack position 2)
-// EXTCODECOPY (stack poition 3)
+// EXTCODECOPY (stack position 3)
 // RETURNDATACOPY (stack position 2)
 func memoryCopierGas(stackpos int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {

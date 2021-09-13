@@ -129,6 +129,8 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 func (b *SyncBloom) meter() {
 	// check every second
 	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+
 	for {
 		select {
 		case <-tick.C:
