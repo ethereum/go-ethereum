@@ -816,11 +816,28 @@ func TestRuntimeJSTracer(t *testing.T) {
 			},
 			results: []string{`"1,1,4294964719,6,12"`, `"1,1,4294964719,6,0"`},
 		},
+		{
+			// CALL self-destructing contract
+			code: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
+				byte(vm.PUSH1), 0, // value
+				byte(vm.PUSH1), 0xff, //address
+				byte(vm.GAS), // gas
+				byte(vm.CALL),
+				byte(vm.POP),
+			},
+			results: []string{`"1,1,4294964716,5003,12"`, `"1,1,4294964716,5003,0"`},
+		},
 	}
 	calleeCode := []byte{
 		byte(vm.PUSH1), 0,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
+	}
+	depressedCode := []byte{
+		byte(vm.PUSH1), 0xaa,
+		byte(vm.SELFDESTRUCT),
 	}
 	main := common.HexToAddress("0xaa")
 	for i, jsTracer := range jsTracers {
@@ -831,6 +848,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
+			statedb.SetCode(common.HexToAddress("0xff"), depressedCode)
 
 			tracer, err := tracers.New(jsTracer, new(tracers.Context))
 			if err != nil {
