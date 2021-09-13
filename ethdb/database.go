@@ -88,6 +88,11 @@ type AncientReader interface {
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
+
+	// AtomicReadAncients runs the given read operation while ensuring that no writes take place
+	// on the underlying freezer.
+	AtomicReadAncients(fn func(AncientReader) error) (err error)
+
 }
 
 // AncientWriter contains the methods required to write to immutable ancient data.

@@ -394,30 +394,18 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
-	data, _ := db.Ancient(freezerBodiesTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
+	var data []byte
+	db.AtomicReadAncients(func (reader ethdb.AncientReader) error{
+		// Check if the data is in ancients
+		if h, _ := db.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+			data, _ = db.Ancient(freezerBodiesTable, number)
+			return nil
 		}
-	}
-	// Then try to look up the data in leveldb.
-	data, _ = db.Get(blockBodyKey(number, hash))
-	if len(data) > 0 {
-		return data
-	}
-	// In the background freezer is moving data from leveldb to flatten files.
-	// So during the first check for ancient db, the data is not yet in there,
-	// but when we reach into leveldb, the data was already moved. That would
-	// result in a not found error.
-	data, _ = db.Ancient(freezerBodiesTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
-		}
-	}
-	return nil // Can't find the data anywhere.
+		// If not, try reading from leveldb
+		data, _ = db.Get(blockBodyKey(number, hash))
+		return nil
+	})
+	return data
 }
 
 // ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
