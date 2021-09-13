@@ -20,7 +20,9 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/account"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -83,6 +85,22 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 	return t.trie.TryGetNode(path)
+}
+
+// TryUpdate account will abstract the write of an account to the
+// secure trie.
+func (t *SecureTrie) TryUpdateAccount(key []byte, acc account.Account) error {
+	hk := t.hashKey(key)
+	data, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return err
+	}
+	err = t.trie.TryUpdate(hk, data)
+	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
 }
 
 // Update associates key with value in the trie. Subsequent calls to

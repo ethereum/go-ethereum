@@ -24,9 +24,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/account"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -109,6 +111,17 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 		return err
 	})
 	return res, err
+}
+
+func (t *odrTrie) TryUpdateAccount(key []byte, acc account.Account) error {
+	key = crypto.Keccak256(key)
+	value, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return fmt.Errorf("Decoding error in account update: %w", err)
+	}
+	return t.do(key, func() error {
+		return t.trie.TryUpdate(key, value)
+	})
 }
 
 func (t *odrTrie) TryUpdate(key, value []byte) error {

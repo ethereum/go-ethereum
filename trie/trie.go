@@ -25,7 +25,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/core/state/account"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -244,6 +246,14 @@ func (t *Trie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
+}
+
+func (t *Trie) TryUpdateAccount(addr []byte, account account.Account) error {
+	data, err := rlp.EncodeToBytes(account)
+	if err != nil {
+		return fmt.Errorf("can't encode object at %x: %w", addr[:], err)
+	}
+	return t.TryUpdate(addr, data)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to

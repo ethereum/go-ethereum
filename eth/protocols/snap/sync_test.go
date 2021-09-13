@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/account"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
@@ -1349,7 +1350,7 @@ func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
 	accTrie, _ := trie.New(common.Hash{}, db)
 	var entries entrySlice
 	for i := uint64(1); i <= uint64(n); i++ {
-		value, _ := rlp.EncodeToBytes(state.Account{
+		value, _ := rlp.EncodeToBytes(account.Account{
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
@@ -1394,7 +1395,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	}
 	// Fill boundary accounts
 	for i := 0; i < len(boundaries); i++ {
-		value, _ := rlp.EncodeToBytes(state.Account{
+		value, _ := rlp.EncodeToBytes(account.Account{
 			Nonce:    uint64(0),
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
@@ -1406,7 +1407,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	}
 	// Fill other accounts if required
 	for i := uint64(1); i <= uint64(n); i++ {
-		value, _ := rlp.EncodeToBytes(state.Account{
+		value, _ := rlp.EncodeToBytes(account.Account{
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
@@ -1442,7 +1443,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		stTrie, stEntries := makeStorageTrieWithSeed(uint64(slots), i, db)
 		stRoot := stTrie.Hash()
 		stTrie.Commit(nil)
-		value, _ := rlp.EncodeToBytes(state.Account{
+		value, _ := rlp.EncodeToBytes(account.Account{
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     stRoot,
@@ -1489,7 +1490,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 		if code {
 			codehash = getCodeHash(i)
 		}
-		value, _ := rlp.EncodeToBytes(state.Account{
+		value, _ := rlp.EncodeToBytes(account.Account{
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     stRoot,
