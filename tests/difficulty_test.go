@@ -52,11 +52,8 @@ func TestDifficulty(t *testing.T) {
 
 	// files are 2 years old, contains strange values
 	dt.skipLoad("difficultyCustomHomestead\\.json")
-	dt.skipLoad("difficultyMorden\\.json")
-	dt.skipLoad("difficultyOlimpic\\.json")
 
 	dt.config("Ropsten", *params.RopstenChainConfig)
-	dt.config("Morden", *params.RopstenChainConfig)
 	dt.config("Frontier", params.ChainConfig{})
 
 	dt.config("Homestead", params.ChainConfig{
