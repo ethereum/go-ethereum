@@ -37,7 +37,7 @@ import (
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
-		data, _ := db.Ancient(freezerHashTable, number)
+		data, _ := reader.Ancient(freezerHashTable, number)
 		if len(data) == 0 {
 			// Get it by hash from leveldb
 			data, _ = db.Get(headerHashKey(number))
@@ -304,7 +304,7 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		// First try to look up the data in ancient database. Extra hash
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
-		d, _ := db.Ancient(freezerHeaderTable, number)
+		d, _ := reader.Ancient(freezerHeaderTable, number)
 		if len(d) > 0 && crypto.Keccak256Hash(d) == hash {
 			d = data
 			return nil
@@ -386,8 +386,8 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := db.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
-			data, _ = db.Ancient(freezerBodiesTable, number)
+		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+			data, _ = reader.Ancient(freezerBodiesTable, number)
 			return nil
 		}
 		// If not, try reading from leveldb
@@ -402,11 +402,11 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
-		if d, err := db.Ancient(freezerBodiesTable, number); err == nil {
+		if d, err := reader.Ancient(freezerBodiesTable, number); err == nil {
 			data = d
 			return nil
-			// Get it by hash from leveldb
 		}
+		// Get it by hash from leveldb
 		data, _ = db.Get(blockBodyKey(number, ReadCanonicalHash(db, number)))
 		return nil
 	})
@@ -466,8 +466,8 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := db.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
-			data, _ = db.Ancient(freezerDifficultyTable, number)
+		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+			data, _ = reader.Ancient(freezerDifficultyTable, number)
 			return nil
 		}
 		// If not, try reading from leveldb
@@ -526,8 +526,8 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := db.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
-			data, _ = db.Ancient(freezerReceiptTable, number)
+		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+			data, _ = reader.Ancient(freezerReceiptTable, number)
 			return nil
 		}
 		// If not, try reading from leveldb
