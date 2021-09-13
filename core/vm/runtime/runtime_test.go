@@ -827,7 +827,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.CALL),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294964716,5003,12"`, `"1,1,4294964716,5003,0"`},
+			results: []string{`"2,2,0,5003,12"`, `"2,2,0,5003,0"`},
 		},
 	}
 	calleeCode := []byte{
