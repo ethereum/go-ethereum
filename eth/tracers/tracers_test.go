@@ -204,6 +204,15 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracer(t *testing.T) {
+	testCallTracer("callTracer", t)
+}
+
+func TestCallFrameTracer(t *testing.T) {
+	t.Skip("not yet passing all tests")
+	testCallTracer("callframeTracer", t)
+}
+
+func testCallTracer(tracer string, t *testing.T) {
 	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -248,7 +257,7 @@ func TestCallTracer(t *testing.T) {
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
 			// Create the tracer, the EVM environment and run it
-			tracer, err := New("callTracer", new(Context))
+			tracer, err := New(tracer, new(Context))
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}

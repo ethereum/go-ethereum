@@ -63,7 +63,9 @@
             to: toHex(frame.to),
             input: toHex(frame.input),
             gas: '0x' + bigInt(frame.gas).toString('16'),
-            value: '0x' + frame.value.toString('16'),
+        }
+        if (frame.value !== undefined){
+            call.value='0x' + bigInt(frame.value).toString(16)
         }
         this.callstack.push(call)
     },
