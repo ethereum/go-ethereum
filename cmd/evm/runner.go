@@ -108,10 +108,10 @@ func runCmd(ctx *cli.Context) error {
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 	logconfig := &vm.LogConfig{
-		EnableMemory:     ctx.GlobalBool(EnableMemoryFlag.Name),
+		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
 		DisableStorage:   ctx.GlobalBool(DisableStorageFlag.Name),
-		EnableReturnData: ctx.GlobalBool(EnableReturnDataFlag.Name),
+		EnableReturnData: !ctx.GlobalBool(DisableReturnDataFlag.Name),
 		Debug:            ctx.GlobalBool(DebugFlag.Name),
 	}
 
