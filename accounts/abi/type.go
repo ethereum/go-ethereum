@@ -41,6 +41,7 @@ const (
 	BytesTy
 	HashTy
 	FixedPointTy
+	UfixedPointTy
 	FunctionTy
 )
 
@@ -57,6 +58,9 @@ type Type struct {
 	TupleElems    []*Type      // Type information of all tuple fields
 	TupleRawNames []string     // Raw field name of all tuple fields
 	TupleType     reflect.Type // Underlying struct of the tuple
+
+	// Related to fixed and ufixed
+	FixedFractionSize int
 }
 
 var (
@@ -89,23 +93,28 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		// grab the last cell and create a type from there
 		sliced := t[i:]
 		// grab the slice size with regexp
-		re := regexp.MustCompile("[0-9]+")
-		intz := re.FindAllString(sliced, -1)
+		re := regexp.MustCompile(`^\[([0-9]*)\]$`)
+		intz := re.FindAllStringSubmatch(sliced, -1)
 
-		if len(intz) == 0 {
-			// is a slice
-			typ.T = SliceTy
-			typ.Elem = &embeddedType
-			typ.stringKind = embeddedType.stringKind + sliced
-		} else if len(intz) == 1 {
-			// is an array
-			typ.T = ArrayTy
-			typ.Elem = &embeddedType
-			typ.Size, err = strconv.Atoi(intz[0])
-			if err != nil {
-				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+		if len(intz) == 1 {
+			if len(intz[0][1]) == 0 {
+				// is a slice
+				typ.T = SliceTy
+				typ.Elem = &embeddedType
+				typ.stringKind = embeddedType.stringKind + sliced
+			} else {
+				// is an array
+				typ.T = ArrayTy
+				typ.Elem = &embeddedType
+				typ.Size, err = strconv.Atoi(intz[0][1])
+				if err != nil {
+					return Type{}, fmt.Errorf("abi: error parsing array size: %v", err)
+				}
+				if strconv.Itoa(typ.Size) != intz[0][1] {
+					return Type{}, fmt.Errorf("abi: wrong array size: %s", intz[0][1])
+				}
+				typ.stringKind = embeddedType.stringKind + sliced
 			}
-			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
@@ -121,18 +130,44 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	// varSize is the size of the variable
 	var varSize int
 	if len(parsedType[3]) > 0 {
+		if !map[string]bool{"int": true, "uint": true, "fixed": true, "ufixed": true, "bytes": true}[parsedType[1]] {
+			return Type{}, fmt.Errorf("only int, uint, fixed, ufixed, bytes types can have variable size specified: %s", t)
+		}
 		var err error
-		varSize, err = strconv.Atoi(parsedType[2])
+		varSize, err = strconv.Atoi(parsedType[3])
 		if err != nil {
 			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 		}
+		if strconv.Itoa(varSize) != parsedType[3] || varSize == 0 ||
+			(map[string]bool{"int": true, "uint": true, "fixed": true, "ufixed": true}[parsedType[1]] &&
+				(varSize == 0 || varSize%8 != 0 || varSize > 256)) ||
+			(parsedType[1] == "bytes" && varSize > 32) {
+			return Type{}, fmt.Errorf("abi: wrong variable size: %s", parsedType[3])
+		}
 	} else {
-		if parsedType[0] == "uint" || parsedType[0] == "int" {
+		if parsedType[0] == "uint" || parsedType[0] == "int" || parsedType[0] == "fixed" || parsedType[0] == "ufixed" {
 			// this should fail because it means that there's something wrong with
 			// the abi type (the compiler should always format it to the size...always)
 			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		}
 	}
+
+	var fractionDigitsNumber int
+	if len(parsedType[5]) > 0 {
+		if parsedType[1] != "fixed" && parsedType[1] != "ufixed" {
+			return Type{}, fmt.Errorf("unsupported type %s: only fixed and ufixed can have number of fraction digits", parsedType[0])
+		}
+		fractionDigitsNumber, err = strconv.Atoi(parsedType[5])
+		if err != nil {
+			return Type{}, fmt.Errorf("abi: error parsing fraction digits number: %v", err)
+		}
+		if strconv.Itoa(fractionDigitsNumber) != parsedType[5] || fractionDigitsNumber > 80 || fractionDigitsNumber == 0 {
+			return Type{}, fmt.Errorf("abi: wrong fraction digits number: %s", parsedType[5])
+		}
+	} else if parsedType[1] == "fixed" || parsedType[1] == "ufixed" {
+		return Type{}, fmt.Errorf("abi: %s type requires fraction digits number to be specified: %s", parsedType[1], parsedType[0])
+	}
+
 	// varType is the parsed abi type
 	switch varType := parsedType[1]; varType {
 	case "int":
@@ -141,6 +176,14 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	case "uint":
 		typ.Size = varSize
 		typ.T = UintTy
+	case "fixed":
+		typ.Size = varSize
+		typ.FixedFractionSize = fractionDigitsNumber
+		typ.T = FixedPointTy
+	case "ufixed":
+		typ.Size = varSize
+		typ.FixedFractionSize = fractionDigitsNumber
+		typ.T = UfixedPointTy
 	case "bool":
 		typ.T = BoolTy
 	case "address":
@@ -217,9 +260,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 // GetType returns the reflection type of the ABI type.
 func (t Type) GetType() reflect.Type {
 	switch t.T {
-	case IntTy:
+	case IntTy, FixedPointTy:
 		return reflectIntType(false, t.Size)
-	case UintTy:
+	case UintTy, UfixedPointTy:
 		return reflectIntType(true, t.Size)
 	case BoolTy:
 		return reflect.TypeOf(false)
@@ -239,9 +282,6 @@ func (t Type) GetType() reflect.Type {
 		return reflect.SliceOf(reflect.TypeOf(byte(0)))
 	case HashTy:
 		// hashtype currently not used
-		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
-	case FixedPointTy:
-		// fixedpoint type currently not used
 		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
 	case FunctionTy:
 		return reflect.ArrayOf(24, reflect.TypeOf(byte(0)))

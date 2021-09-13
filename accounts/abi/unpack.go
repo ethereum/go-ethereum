@@ -34,7 +34,7 @@ var (
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
 func ReadInteger(typ Type, b []byte) interface{} {
-	if typ.T == UintTy {
+	if typ.T == UintTy || typ.T == UfixedPointTy {
 		switch typ.Size {
 		case 8:
 			return b[len(b)-1]
@@ -234,7 +234,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 		return forEachUnpack(t, output[index:], 0, t.Size)
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
-	case IntTy, UintTy:
+	case IntTy, UintTy, FixedPointTy, UfixedPointTy:
 		return ReadInteger(t, returnOutput), nil
 	case BoolTy:
 		return readBool(returnOutput)

@@ -98,7 +98,7 @@ var unpackTests = []unpackTest{
 		err:  "abi: cannot unmarshal uint32 in to uint16",
 	},
 	{
-		def:  `[{"type": "uint17"}]`,
+		def:  `[{"type": "uint24"}]`,
 		enc:  "0000000000000000000000000000000000000000000000000000000000000001",
 		want: uint16(0),
 		err:  "abi: cannot unmarshal *big.Int in to uint16",
@@ -110,7 +110,7 @@ var unpackTests = []unpackTest{
 		err:  "abi: cannot unmarshal int32 in to int16",
 	},
 	{
-		def:  `[{"type": "int17"}]`,
+		def:  `[{"type": "int24"}]`,
 		enc:  "0000000000000000000000000000000000000000000000000000000000000001",
 		want: int16(0),
 		err:  "abi: cannot unmarshal *big.Int in to int16",
