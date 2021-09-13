@@ -779,7 +779,6 @@ var (
 	HTTPRpcTimeoutFlag = cli.DurationFlag{
 		Name:  "http.timeout",
 		Usage: "Sets http rpc request timeout (use \"s\" suffix for seconds, eg: --http.timeout 10s)",
-		// uses time.ParseDuration() which requires a unit suffix, "h", "m", "s", "ms" etc.
 		Value: ethconfig.Defaults.HTTPRpcTimeout,
 	}
 )
