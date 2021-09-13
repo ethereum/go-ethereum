@@ -268,9 +268,7 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 	frame := l.frames[len(l.frames)-1]
 	frame.GasUsed = gasUsed
-	out := make([]byte, len(output))
-	copy(out, output)
-	frame.Output = out
+	frame.Output = common.CopyBytes(output)
 	frame.Err = err
 }
 
