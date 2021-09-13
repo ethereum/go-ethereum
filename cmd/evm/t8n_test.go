@@ -70,7 +70,6 @@ type t8nOutput struct {
 }
 
 func (args *t8nOutput) get() (out []string) {
-	out = append(out, "t8n")
 	if args.body {
 		out = append(out, "--output.body", "stdout")
 	} else {
@@ -173,7 +172,9 @@ func TestT8n(t *testing.T) {
 		},
 	} {
 
-		args := append(tc.output.get(), tc.input.get(tc.base)...)
+		args := []string{"t8n"}
+		args = append(args, tc.output.get()...)
+		args = append(args, tc.input.get(tc.base)...)
 		tt.Run("evm-test", args...)
 		tt.Logf("args: %v\n", strings.Join(args, " "))
 		// Compare the expected output, if provided
@@ -186,6 +187,86 @@ func TestT8n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
+				t.Fatalf("test %d, json parsing failed: %v", i, err)
+			case !ok:
+				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
+			}
+		}
+		tt.WaitExit()
+		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
+			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
+		}
+	}
+}
+
+type t9nInput struct {
+	inTxs  string
+	stFork string
+}
+
+func (args *t9nInput) get(base string) []string {
+	var out []string
+	if opt := args.inTxs; opt != "" {
+		out = append(out, "--input.txs")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.stFork; opt != "" {
+		out = append(out, "--state.fork", opt)
+	}
+	return out
+}
+
+func TestT9n(t *testing.T) {
+	tt := new(testT8n)
+	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	for i, tc := range []struct {
+		base        string
+		input       t9nInput
+		expExitCode int
+		expOut      string
+	}{
+		{ // London txs on homestead
+			base: "./testdata/15",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "Homestead",
+			},
+			expOut: "exp.json",
+		},
+		{ // London txs on homestead
+			base: "./testdata/15",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "London",
+			},
+			expOut: "exp2.json",
+		},
+		{ // An RLP list (a blockheader really)
+			base: "./testdata/15",
+			input: t9nInput{
+				inTxs:  "blockheader.rlp",
+				stFork: "London",
+			},
+			expOut: "exp3.json",
+		},
+	} {
+
+		args := []string{"t9n"}
+		args = append(args, tc.input.get(tc.base)...)
+
+		tt.Run("evm-test", args...)
+		tt.Logf("args:\n go run . %v\n", strings.Join(args, " "))
+		// Compare the expected output, if provided
+		if tc.expOut != "" {
+			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
+			if err != nil {
+				t.Fatalf("test %d: could not read expected output: %v", i, err)
+			}
+			have := tt.Output()
+			ok, err := cmpJson(have, want)
+			switch {
+			case err != nil:
+				t.Logf(string(have))
 				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
