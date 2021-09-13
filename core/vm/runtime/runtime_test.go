@@ -718,6 +718,17 @@ func TestRuntimeJSTracer(t *testing.T) {
 		byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
 		byte(vm.CREATE),
 		byte(vm.POP),
+		// CREATE2
+		// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+		byte(vm.PUSH5),
+		// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		// salt, length, offset, value
+		byte(vm.PUSH1), 1, byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+		byte(vm.CREATE2),
+		byte(vm.POP),
 		// CALL
 		// outsize, outoffset, insize, inoffset
 		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
@@ -755,12 +766,12 @@ func TestRuntimeJSTracer(t *testing.T) {
 		byte(vm.RETURN),
 	}
 	main := common.HexToAddress("0xaa")
-	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	state.SetCode(main, mainCode)
-	state.SetCode(common.HexToAddress("0xbb"), calleeCode)
-	state.SetCode(common.HexToAddress("0xcc"), calleeCode)
-	state.SetCode(common.HexToAddress("0xdd"), calleeCode)
-	state.SetCode(common.HexToAddress("0xee"), calleeCode)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb.SetCode(main, mainCode)
+	statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
 
 	jsTracer := `
 	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
@@ -782,7 +793,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = Call(main, nil, &Config{
-		State: state,
+		State: statedb,
 		EVMConfig: vm.Config{
 			Debug:  true,
 			Tracer: tracer,
@@ -794,9 +805,18 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := string(res), `"5,5,4294925433,6,58"`; have != want {
+	if have, want := string(res), `"6,6,4294893899,6,70"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
+
+	// Reset state
+	statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb.SetCode(main, mainCode)
+	statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
+	statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
+
 	// This time without steps
 	jsTracer = `
 	{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
@@ -817,7 +837,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = Call(main, nil, &Config{
-		State: state,
+		State: statedb,
 		EVMConfig: vm.Config{
 			Debug:  true,
 			Tracer: tracer,
@@ -829,7 +849,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := string(res), `"5,5,4294935277,6,0"`; have != want {
+	if have, want := string(res), `"6,6,4294893899,6,0"`; have != want {
 		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
 	}
 }
