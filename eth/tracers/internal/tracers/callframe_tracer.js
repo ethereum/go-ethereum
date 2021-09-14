@@ -58,14 +58,14 @@
     },
     enter: function(frame) {
         var call = {
-            type: frame.type,
-            from: toHex(frame.from),
-            to: toHex(frame.to),
-            input: toHex(frame.input),
-            gas: '0x' + bigInt(frame.gas).toString('16'),
+            type: frame.getType(),
+            from: toHex(frame.getFrom()),
+            to: toHex(frame.getTo()),
+            input: toHex(frame.getInput()),
+            gas: '0x' + bigInt(frame.getGas()).toString('16'),
         }
-        if (frame.value !== undefined){
-            call.value='0x' + bigInt(frame.value).toString(16)
+        if (frame.getValue() !== undefined){
+            call.value='0x' + bigInt(frame.getValue()).toString(16)
         }
         this.callstack.push(call)
     },
@@ -73,10 +73,10 @@
         var len = this.callstack.length
         if (len > 1) {
             var call = this.callstack.pop()
-            call.gasUsed = '0x' + bigInt(frameResult.gasUsed).toString('16')
-            call.output = toHex(frameResult.output)
-            if (frameResult.error !== undefined) {
-                call.error = frameResult.error
+            call.gasUsed = '0x' + bigInt(frameResult.getGasUsed()).toString('16')
+            call.output = toHex(frameResult.getOutput())
+            if (frameResult.getError() !== undefined) {
+                call.error = frameResult.getError()
             }
             len -= 1
             if (this.callstack[len-1].calls === undefined) {

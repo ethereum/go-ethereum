@@ -710,11 +710,11 @@ func TestRuntimeJSTracer(t *testing.T) {
 	}, 
 	enter: function(frame) { 
 		this.enters++; 
-		this.enterGas = frame.gas; 
+		this.enterGas = frame.getGas();
 	}, 
 	exit: function(res) { 
 		this.exits++; 
-		this.gasUsed = res.gasUsed; 
+		this.gasUsed = res.getGasUsed();
 	}}`,
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
 	fault: function() {}, 
@@ -723,11 +723,11 @@ func TestRuntimeJSTracer(t *testing.T) {
 	}, 
 	enter: function(frame) { 
 		this.enters++; 
-		this.enterGas = frame.gas; 
+		this.enterGas = frame.getGas();
 	}, 
 	exit: function(res) { 
 		this.exits++; 
-		this.gasUsed = res.gasUsed; 
+		this.gasUsed = res.getGasUsed();
 	}}`}
 	tests := []struct {
 		code []byte

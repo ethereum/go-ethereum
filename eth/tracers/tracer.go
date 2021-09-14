@@ -284,6 +284,85 @@ func (cw *contractWrapper) pushObject(vm *duktape.Context) {
 	vm.PutPropString(obj, "getInput")
 }
 
+type frame struct {
+	typ   *string
+	from  *common.Address
+	to    *common.Address
+	input []byte
+	gas   *uint
+	value *big.Int
+}
+
+func newFrame() *frame {
+	return &frame{
+		typ:  new(string),
+		from: new(common.Address),
+		to:   new(common.Address),
+		gas:  new(uint),
+	}
+}
+
+func (f *frame) pushObject(vm *duktape.Context) {
+	obj := vm.PushObject()
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, *f.typ); return 1 })
+	vm.PutPropString(obj, "getType")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, *f.from); return 1 })
+	vm.PutPropString(obj, "getFrom")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, *f.to); return 1 })
+	vm.PutPropString(obj, "getTo")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, f.input); return 1 })
+	vm.PutPropString(obj, "getInput")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, *f.gas); return 1 })
+	vm.PutPropString(obj, "getGas")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int {
+		if f.value != nil {
+			pushValue(ctx, f.value)
+		} else {
+			ctx.PushUndefined()
+		}
+		return 1
+	})
+	vm.PutPropString(obj, "getValue")
+}
+
+type frameResult struct {
+	gasUsed    *uint
+	output     []byte
+	errorValue *string
+}
+
+func newFrameResult() *frameResult {
+	return &frameResult{
+		gasUsed: new(uint),
+	}
+}
+
+func (r *frameResult) pushObject(vm *duktape.Context) {
+	obj := vm.PushObject()
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, *r.gasUsed); return 1 })
+	vm.PutPropString(obj, "getGasUsed")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int { pushValue(ctx, r.output); return 1 })
+	vm.PutPropString(obj, "getOutput")
+
+	vm.PushGoFunction(func(ctx *duktape.Context) int {
+		if r.errorValue != nil {
+			pushValue(ctx, *r.errorValue)
+		} else {
+			ctx.PushUndefined()
+		}
+		return 1
+	})
+	vm.PutPropString(obj, "getError")
+}
+
 // Tracer provides an implementation of Tracer that evaluates a Javascript
 // function for each VM execution step.
 type Tracer struct {
@@ -304,6 +383,9 @@ type Tracer struct {
 	depthValue  *uint   // Swappable depth value wrapped by a log accessor
 	errorValue  *string // Swappable error value wrapped by a log accessor
 	refundValue *uint   // Swappable refund value wrapped by a log accessor
+
+	frame       *frame       // Represents entry into call frame. Fields are swappable
+	frameResult *frameResult // Represents exit from a call frame. Fields are swappable
 
 	ctx map[string]interface{} // Transaction context gathered throughout execution
 	err error                  // Error, if one has occurred
@@ -345,6 +427,8 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		costValue:       new(uint),
 		depthValue:      new(uint),
 		refundValue:     new(uint),
+		frame:           newFrame(),
+		frameResult:     newFrameResult(),
 	}
 	if ctx.BlockHash != (common.Hash{}) {
 		tracer.ctx["blockHash"] = ctx.BlockHash
@@ -530,6 +614,12 @@ func New(code string, ctx *Context) (*Tracer, error) {
 
 	tracer.vm.PutPropString(tracer.stateObject, "log")
 
+	tracer.frame.pushObject(tracer.vm)
+	tracer.vm.PutPropString(tracer.stateObject, "frame")
+
+	tracer.frameResult.pushObject(tracer.vm)
+	tracer.vm.PutPropString(tracer.stateObject, "frameResult")
+
 	tracer.dbWrapper.pushObject(tracer.vm)
 	tracer.vm.PutPropString(tracer.stateObject, "db")
 
@@ -669,6 +759,7 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 	}
 }
 
+// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (jst *Tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !jst.traceCallFrames {
 		return
@@ -682,23 +773,23 @@ func (jst *Tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 		return
 	}
 
-	// Transform the frame into a JavaScript object and inject into the state
-	obj := jst.vm.PushObject()
-	jst.addToObj(obj, "type", typ.String())
-	jst.addToObj(obj, "from", from)
-	jst.addToObj(obj, "to", to)
-	jst.addToObj(obj, "input", input)
-	jst.addToObj(obj, "gas", gas)
+	*jst.frame.typ = typ.String()
+	*jst.frame.from = from
+	*jst.frame.to = to
+	jst.frame.input = common.CopyBytes(input)
+	*jst.frame.gas = uint(gas)
+	jst.frame.value = nil
 	if value != nil {
-		jst.addToObj(obj, "value", value)
+		jst.frame.value = new(big.Int).SetBytes(value.Bytes())
 	}
-	jst.vm.PutPropString(jst.stateObject, "frame")
 
 	if _, err := jst.call(true, "enter", "frame"); err != nil {
 		jst.err = wrapError("enter", err)
 	}
 }
 
+// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// execute any code.
 func (jst *Tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if !jst.traceCallFrames {
 		return
@@ -712,13 +803,14 @@ func (jst *Tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 		return
 	}
 
-	obj := jst.vm.PushObject()
-	jst.addToObj(obj, "output", output)
-	jst.addToObj(obj, "gasUsed", gasUsed)
+	jst.frameResult.output = common.CopyBytes(output)
+	*jst.frameResult.gasUsed = uint(gasUsed)
+	jst.frameResult.errorValue = nil
 	if err != nil {
-		jst.addToObj(obj, "error", err.Error())
+		jst.frameResult.errorValue = new(string)
+		*jst.frameResult.errorValue = err.Error()
 	}
-	jst.vm.PutPropString(jst.stateObject, "frameResult")
+
 	if _, err := jst.call(true, "exit", "frameResult"); err != nil {
 		jst.err = wrapError("exit", err)
 	}
@@ -748,26 +840,32 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 // addToObj pushes a field to a JS object.
 func (jst *Tracer) addToObj(obj int, key string, val interface{}) {
+	pushValue(jst.vm, val)
+	jst.vm.PutPropString(obj, key)
+}
+
+func pushValue(ctx *duktape.Context, val interface{}) {
 	switch val := val.(type) {
 	case uint64:
-		jst.vm.PushUint(uint(val))
+		ctx.PushUint(uint(val))
 	case string:
-		jst.vm.PushString(val)
+		ctx.PushString(val)
 	case []byte:
-		ptr := jst.vm.PushFixedBuffer(len(val))
+		ptr := ctx.PushFixedBuffer(len(val))
 		copy(makeSlice(ptr, uint(len(val))), val)
 	case common.Address:
-		ptr := jst.vm.PushFixedBuffer(20)
+		ptr := ctx.PushFixedBuffer(20)
 		copy(makeSlice(ptr, 20), val[:])
 	case *big.Int:
-		pushBigInt(val, jst.vm)
+		pushBigInt(val, ctx)
 	case int:
-		jst.vm.PushInt(val)
+		ctx.PushInt(val)
+	case uint:
+		ctx.PushUint(val)
 	case common.Hash:
-		ptr := jst.vm.PushFixedBuffer(32)
+		ptr := ctx.PushFixedBuffer(32)
 		copy(makeSlice(ptr, 32), val[:])
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", val))
 	}
-	jst.vm.PutPropString(obj, key)
 }
