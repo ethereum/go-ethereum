@@ -351,9 +351,6 @@ func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, e
 }
 
 func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// TODO
 }
 
-func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// TODO
-}
+func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
