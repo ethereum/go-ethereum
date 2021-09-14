@@ -74,9 +74,11 @@
         if (len > 1) {
             var call = this.callstack.pop()
             call.gasUsed = '0x' + bigInt(frameResult.getGasUsed()).toString('16')
-            call.output = toHex(frameResult.getOutput())
-            if (frameResult.getError() !== undefined) {
-                call.error = frameResult.getError()
+            var error = frameResult.getError()
+            if (error === undefined) {
+                call.output = toHex(frameResult.getOutput())
+            } else {
+                call.error = error
             }
             len -= 1
             if (this.callstack[len-1].calls === undefined) {
