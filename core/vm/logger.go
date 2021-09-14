@@ -57,7 +57,6 @@ type LogConfig struct {
 }
 
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
-//go:generate gencodec -type StructFrame -field-override structFrameMarshaling -out gen_structframe.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
@@ -99,34 +98,6 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
-// StructFrame is emitted to the EVM upon stepping into a new call frame.
-type StructFrame struct {
-	Type    string         `json:"type"`
-	From    common.Address `json:"from"`
-	To      common.Address `json:"to"`
-	Input   []byte         `json:"input"`
-	Gas     uint64         `json:"gas"`
-	Value   *big.Int       `json:"value"`
-	GasUsed uint64         `json:"-"`
-	Output  []byte         `json:"-"`
-	Err     error          `json:"-"`
-}
-
-// ErrorString formats the log's error as a string.
-func (s *StructFrame) ErrorString() string {
-	if s.Err != nil {
-		return s.Err.Error()
-	}
-	return ""
-}
-
-type structFrameMarshaling struct {
-	Input       hexutil.Bytes         `json:"input"`
-	Gas         math.HexOrDecimal64   `json:"gas"`
-	Value       *math.HexOrDecimal256 `json:"value"`
-	ErrorString string                `json:"error"`
-}
-
 // Tracer is used to collect execution traces from an EVM transaction
 // execution. CaptureState is called for each step of the VM with the
 // current VM state.
@@ -151,7 +122,6 @@ type StructLogger struct {
 
 	storage map[common.Address]Storage
 	logs    []StructLog
-	frames  []StructFrame
 	output  []byte
 	err     error
 }
@@ -258,24 +228,12 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 }
 
 func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	in := make([]byte, len(input))
-	copy(in, input)
-	frame := StructFrame{typ.String(), from, to, in, gas, new(big.Int).Set(value), 0, nil, nil}
-	l.frames = append(l.frames, frame)
 }
 
-func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
-	frame := l.frames[len(l.frames)-1]
-	frame.GasUsed = gasUsed
-	frame.Output = common.CopyBytes(output)
-	frame.Err = err
-}
+func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
-
-// StructFrames returns the captured call frames.
-func (l *StructLogger) StructFrames() []StructFrame { return l.frames }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }

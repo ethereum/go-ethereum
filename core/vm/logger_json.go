@@ -89,9 +89,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 }
 
 func (l *JSONLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Noop
 }
 
-func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// Noop
-}
+func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
