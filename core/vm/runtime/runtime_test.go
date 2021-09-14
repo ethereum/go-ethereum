@@ -874,6 +874,40 @@ func TestRuntimeJSTracer(t *testing.T) {
 	}
 }
 
+func TestJSTracerCreateTx(t *testing.T) {
+	jsTracer := `
+	{enters: 0, exits: 0,
+	step: function() {},
+	fault: function() {},
+	result: function() { return [this.enters, this.exits].join(",") },
+	enter: function(frame) { this.enters++ },
+	exit: function(res) { this.exits++ }}`
+	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
+
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	tracer, err := tracers.New(jsTracer, new(tracers.Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = Create(code, &Config{
+		State: statedb,
+		EVMConfig: vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(res), `"0,0"`; have != want {
+		t.Errorf("wrong result for tracer, have \n%v\nwant\n%v\n", have, want)
+	}
+}
+
 func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	// Simply pushes and pops some values in a loop
 	code := []byte{
