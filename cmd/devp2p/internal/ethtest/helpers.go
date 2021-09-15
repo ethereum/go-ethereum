@@ -242,9 +242,17 @@ func (s *Suite) createSendAndRecvConns(isEth66 bool) (*Conn, *Conn, error) {
 	return sendConn, recvConn, nil
 }
 
+func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
+	if c.negotiatedProtoVersion == 66 {
+		_, msg := c.readAndServe66(chain, timeout)
+		return msg
+	}
+	return c.readAndServe65(chain, timeout)
+}
+
 // readAndServe serves GetBlockHeaders requests while waiting
 // on another message from the node.
-func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
+func (c *Conn) readAndServe65(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
 	for time.Since(start) < timeout {
 		c.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -279,8 +287,8 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 		switch msg := msg.(type) {
 		case *Ping:
 			c.Write(&Pong{})
-		case *GetBlockHeaders:
-			headers, err := chain.GetHeaders(*msg)
+		case GetBlockHeaders:
+			headers, err := chain.GetHeaders(msg)
 			if err != nil {
 				return 0, errorf("could not get headers for inbound header request: %v", err)
 			}
