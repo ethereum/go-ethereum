@@ -213,6 +213,9 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
 	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
 		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -392,6 +395,9 @@ func BenchmarkTracers(b *testing.B) {
 	}
 
 	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
 			// Call tracer test found, read if from disk
