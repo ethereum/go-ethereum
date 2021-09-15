@@ -288,7 +288,6 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 }
 
 func TestCallFrameTracer(t *testing.T) {
-	t.Skip("not yet passing all tests")
 	testCallTracer("callframeTracer", "call_tracer", t)
 }
 
