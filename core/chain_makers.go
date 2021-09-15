@@ -109,7 +109,13 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	if err != nil {
 		panic(err)
 	}
-	b.witness.Merge(accesses)
+	if accesses != nil {
+		if b.witness != nil {
+			b.witness.Merge(accesses)
+		} else {
+			b.witness = accesses
+		}
+	}
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 }

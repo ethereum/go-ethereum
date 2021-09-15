@@ -291,10 +291,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	if st.evm.TxContext.Accesses != nil {
-		toBalance := trieUtils.GetTreeKeyBalance(*msg.To())
+		if msg.To() != nil {
+			toBalance := trieUtils.GetTreeKeyBalance(*msg.To())
+			gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(toBalance)
+		}
 		fromBalance := trieUtils.GetTreeKeyBalance(msg.From())
 		fromNonce := trieUtils.GetTreeKeyNonce(msg.From())
-		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(toBalance)
 		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromNonce)
 		gas += st.evm.TxContext.Accesses.TouchAddressAndChargeGas(fromBalance)
 	}

@@ -142,16 +142,18 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 	}
-	if sdb.snaps == nil {
+	if sdb.snaps == nil && tr.IsVerkle() {
 		sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
-		sdb.snapDestructs = make(map[common.Hash]struct{})
-		sdb.snapAccounts = make(map[common.Hash][]byte)
-		sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+	if sdb.snaps != nil {
+		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+			sdb.snapDestructs = make(map[common.Hash]struct{})
+			sdb.snapAccounts = make(map[common.Hash][]byte)
+			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		}
 	}
 
 	return sdb, nil
@@ -946,7 +948,12 @@ func (s *StateDB) GetTrie() Trie {
 }
 
 func (s *StateDB) Cap(root common.Hash) error {
-	return s.snaps.Cap(root, 0)
+	if s.snaps != nil {
+		return s.snaps.Cap(root, 0)
+	}
+	// pre-verkle path: noop if s.snaps hasn't been
+	// initialized.
+	return nil
 }
 
 // Commit writes the state to the underlying in-memory trie database.
