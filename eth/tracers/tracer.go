@@ -600,6 +600,7 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 	// If tracing was interrupted, set the error and stop
 	if atomic.LoadUint32(&jst.interrupt) > 0 {
 		jst.err = jst.reason
+		env.Cancel()
 		return
 	}
 	jst.opWrapper.op = op
