@@ -79,6 +79,9 @@
                 call.output = toHex(frameResult.getOutput())
             } else {
                 call.error = error
+                if (call.type === 'CREATE' || call.type === 'CREATE2') {
+                    delete call.to
+                }
             }
             len -= 1
             if (this.callstack[len-1].calls === undefined) {

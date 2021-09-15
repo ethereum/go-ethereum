@@ -56,7 +56,7 @@
   "result": {
     "calls": [
       {
-        "error": "internal failure",
+        "error": "contract creation code storage out of gas",
         "from": "0x1d3ddf7caf024f253487e18bc4a15b1a360c170a",
         "gas": "0x39ff0",
         "gasUsed": "0x39ff0",
