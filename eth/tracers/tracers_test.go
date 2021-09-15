@@ -204,24 +204,21 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracer(t *testing.T) {
-	testCallTracer("callTracer", t)
+	testCallTracer("callTracer", "call_tracer_legacy", t)
 }
 
-func testCallTracer(tracer string, t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+func testCallTracer(tracer string, dirPath string, t *testing.T) {
+	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
 	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "call_tracer_") {
-			continue
-		}
 		file := file // capture range variable
-		t.Run(camel(strings.TrimSuffix(strings.TrimPrefix(file.Name(), "call_tracer_"), ".json")), func(t *testing.T) {
+		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
 			// Call tracer test found, read if from disk
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+			blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, file.Name()))
 			if err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			}
@@ -289,7 +286,7 @@ func testCallTracer(tracer string, t *testing.T) {
 
 func TestCallFrameTracer(t *testing.T) {
 	t.Skip("not yet passing all tests")
-	testCallTracer("callframeTracer", t)
+	testCallTracer("callframeTracer", "call_tracer", t)
 }
 
 // jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
@@ -389,21 +386,27 @@ func BenchmarkTransactionTrace(b *testing.B) {
 }
 
 func BenchmarkTracers(b *testing.B) {
-	files, err := ioutil.ReadDir("testdata")
+	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer_legacy"))
 	if err != nil {
 		b.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
 
 	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "call_tracer_") {
-			continue
-		}
 		file := file // capture range variable
-		b.Run(camel(strings.TrimSuffix(strings.TrimPrefix(file.Name(), "call_tracer_"), ".json")), func(b *testing.B) {
+		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
 			// Call tracer test found, read if from disk
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+			legacyBlob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer_legacy", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
+			}
+			// Read out test for call frame tracer
+			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
+			if err != nil {
+				b.Fatalf("failed to read testcase: %v", err)
+			}
+			legacyTest := new(callTracerTest)
+			if err := json.Unmarshal(legacyBlob, legacyTest); err != nil {
+				b.Fatalf("failed to parse testcase: %v", err)
 			}
 			test := new(callTracerTest)
 			if err := json.Unmarshal(blob, test); err != nil {
@@ -411,7 +414,7 @@ func BenchmarkTracers(b *testing.B) {
 			}
 
 			b.Run("legacy", func(b *testing.B) {
-				benchTracer("callTracer", test, b)
+				benchTracer("callTracer", legacyTest, b)
 			})
 			b.Run("scoped", func(b *testing.B) {
 				benchTracer("callframeTracer", test, b)
