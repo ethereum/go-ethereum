@@ -119,8 +119,20 @@ func (db *nofreezedb) Sync() error {
 	return errNotSupported
 }
 
-func (db *nofreezedb) AtomicReadAncients(fn func(reader ethdb.AncientReader) error) (err error){
-	return errNotSupported
+func (db *nofreezedb) AtomicReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+	// Unlike other ancient-related methods, this method does not return
+	// errNotSupported when invoked.
+	// The reason for this is that the caller might want to do several things:
+	// 1. Check if something is in freezer,
+	// 2. If not, check leveldb.
+	//
+	// This will work, since the ancient-checks inside 'fn' will return errors,
+	// and the leveldb work will continue.
+	//
+	// If we instead were to return errNotSupported here, then the caller would
+	// have to explicitly check for that, having an extra clause to do the
+	// non-ancient operations.
+	return fn(db)
 }
 
 // NewDatabase creates a high level database on top of a given key-value data

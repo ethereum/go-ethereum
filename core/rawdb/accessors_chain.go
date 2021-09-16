@@ -37,7 +37,7 @@ import (
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
-		data, _ := reader.Ancient(freezerHashTable, number)
+		data, _ = reader.Ancient(freezerHashTable, number)
 		if len(data) == 0 {
 			// Get it by hash from leveldb
 			data, _ = db.Get(headerHashKey(number))
@@ -306,7 +306,7 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		// the canonical data.
 		d, _ := reader.Ancient(freezerHeaderTable, number)
 		if len(d) > 0 && crypto.Keccak256Hash(d) == hash {
-			d = data
+			data = d
 			return nil
 		}
 		// If not, try reading from leveldb
