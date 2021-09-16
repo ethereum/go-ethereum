@@ -254,33 +254,33 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	head, err := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil)
-	if err != nil {
-		return nil, err
-	}
-	if head.BaseFee != nil && opts.GasPrice == nil {
-		if opts.GasTipCap == nil {
-			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
-			if err != nil {
-				return nil, err
+	if opts.GasPrice == nil {
+		head, err := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil)
+		if err != nil {
+			return nil, err
+		}
+		if head.BaseFee != nil {
+			if opts.GasTipCap == nil {
+				tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
+				if err != nil {
+					return nil, err
+				}
+				opts.GasTipCap = tip
 			}
-			opts.GasTipCap = tip
-		}
-		if opts.GasFeeCap == nil {
-			gasFeeCap := new(big.Int).Add(
-				opts.GasTipCap,
-				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-			)
-			opts.GasFeeCap = gasFeeCap
-		}
-		if opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
-			return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", opts.GasFeeCap, opts.GasTipCap)
-		}
-	} else {
-		if opts.GasFeeCap != nil || opts.GasTipCap != nil {
-			return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
-		}
-		if opts.GasPrice == nil {
+			if opts.GasFeeCap == nil {
+				gasFeeCap := new(big.Int).Add(
+					opts.GasTipCap,
+					new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+				)
+				opts.GasFeeCap = gasFeeCap
+			}
+			if opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
+				return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", opts.GasFeeCap, opts.GasTipCap)
+			}
+		} else {
+			if opts.GasFeeCap != nil || opts.GasTipCap != nil {
+				return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+			}
 			price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
