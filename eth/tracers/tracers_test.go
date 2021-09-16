@@ -388,42 +388,25 @@ func BenchmarkTransactionTrace(b *testing.B) {
 }
 
 func BenchmarkTracers(b *testing.B) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer_legacy"))
+	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer"))
 	if err != nil {
 		b.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
-
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
-			// Call tracer test found, read if from disk
-			legacyBlob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer_legacy", file.Name()))
-			if err != nil {
-				b.Fatalf("failed to read testcase: %v", err)
-			}
-			// Read out test for call frame tracer
 			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
-			}
-			legacyTest := new(callTracerTest)
-			if err := json.Unmarshal(legacyBlob, legacyTest); err != nil {
-				b.Fatalf("failed to parse testcase: %v", err)
 			}
 			test := new(callTracerTest)
 			if err := json.Unmarshal(blob, test); err != nil {
 				b.Fatalf("failed to parse testcase: %v", err)
 			}
-
-			b.Run("legacy", func(b *testing.B) {
-				benchTracer("callTracerLegacy", legacyTest, b)
-			})
-			b.Run("scoped", func(b *testing.B) {
-				benchTracer("callTracer", test, b)
-			})
+			benchTracer("callTracer", test, b)
 		})
 	}
 }
