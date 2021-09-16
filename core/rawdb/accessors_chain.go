@@ -402,8 +402,8 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
-		if d, err := reader.Ancient(freezerBodiesTable, number); err == nil {
-			data = d
+		data, _ = reader.Ancient(freezerBodiesTable, number)
+		if len(data) > 0 {
 			return nil
 		}
 		// Get it by hash from leveldb
