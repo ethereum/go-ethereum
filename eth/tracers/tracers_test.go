@@ -203,8 +203,8 @@ func TestPrestateTracerCreate2(t *testing.T) {
 
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
-func TestCallTracer(t *testing.T) {
-	testCallTracer("callTracer", "call_tracer_legacy", t)
+func TestCallTracerLegacy(t *testing.T) {
+	testCallTracer("callTracerLegacy", "call_tracer_legacy", t)
 }
 
 func testCallTracer(tracer string, dirPath string, t *testing.T) {
@@ -287,8 +287,8 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 	}
 }
 
-func TestCallFrameTracer(t *testing.T) {
-	testCallTracer("callframeTracer", "call_tracer", t)
+func TestCallTracer(t *testing.T) {
+	testCallTracer("callTracer", "call_tracer", t)
 }
 
 // jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
@@ -419,10 +419,10 @@ func BenchmarkTracers(b *testing.B) {
 			}
 
 			b.Run("legacy", func(b *testing.B) {
-				benchTracer("callTracer", legacyTest, b)
+				benchTracer("callTracerLegacy", legacyTest, b)
 			})
 			b.Run("scoped", func(b *testing.B) {
-				benchTracer("callframeTracer", test, b)
+				benchTracer("callTracer", test, b)
 			})
 		})
 	}
@@ -472,5 +472,4 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		}
 		statedb.RevertToSnapshot(snap)
 	}
-
 }
