@@ -19,7 +19,6 @@
 // about internal messages of a transaction.
 {
     callstack: [{}],
-    step: function(log, db) {},
     fault: function(log, db) {
         var len = this.callstack.length
         if (len > 1) {
