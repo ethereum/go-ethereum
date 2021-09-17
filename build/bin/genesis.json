@@ -3,7 +3,7 @@
     "mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "difficulty": "0x1",
     "alloc": {
-        "0xc4422d1C18E9Ead8A9bB98Eb0d8bB9dbdf2811D7": {"balance": "100000000000000000000000000000000000"}
+        "0xc4422d1C18E9Ead8A9bB98Eb0d8bB9dbdf2811D7": {"balance": "5000000000000010000"}
     },
     "coinbase": "0xc4422d1C18E9Ead8A9bB98Eb0d8bB9dbdf2811D7", 
     "timestamp": "0x0",

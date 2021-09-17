@@ -1661,9 +1661,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	bc.chainmu.Unlock()
 	bc.wg.Done()
 
-	// print database inspection (jmlee)
-	fmt.Println("block inserted -> blocknumber:", chain[len(chain)-1].Header().Number.Int64())
-
 	return n, err
 }
 
