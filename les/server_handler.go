@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
@@ -358,18 +358,18 @@ func (h *serverHandler) AddTxsSync() bool {
 }
 
 // getAccount retrieves an account from the state based on root.
-func getAccount(triedb *trie.Database, root, hash common.Hash) (account.Account, error) {
+func getAccount(triedb *trie.Database, root, hash common.Hash) (accounts.Account, error) {
 	trie, err := trie.New(root, triedb)
 	if err != nil {
-		return account.Account{}, err
+		return accounts.Account{}, err
 	}
 	blob, err := trie.TryGet(hash[:])
 	if err != nil {
-		return account.Account{}, err
+		return accounts.Account{}, err
 	}
-	var acc account.Account
+	var acc accounts.Account
 	if err = rlp.DecodeBytes(blob, &acc); err != nil {
-		return account.Account{}, err
+		return accounts.Account{}, err
 	}
 	return acc, nil
 }

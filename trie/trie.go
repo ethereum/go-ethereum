@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -248,7 +248,7 @@ func (t *Trie) Update(key, value []byte) {
 	}
 }
 
-func (t *Trie) TryUpdateAccount(addr []byte, account account.Account) error {
+func (t *Trie) TryUpdateAccount(addr []byte, account accounts.Account) error {
 	data, err := rlp.EncodeToBytes(account)
 	if err != nil {
 		return fmt.Errorf("can't encode object at %x: %w", addr[:], err)

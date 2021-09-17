@@ -20,7 +20,7 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -44,7 +44,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, bloom *trie.S
 				return err
 			}
 		}
-		var obj account.Account
+		var obj accounts.Account
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
 			return err
 		}

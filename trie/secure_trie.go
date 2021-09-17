@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -89,7 +89,7 @@ func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 
 // TryUpdate account will abstract the write of an account to the
 // secure trie.
-func (t *SecureTrie) TryUpdateAccount(key []byte, acc account.Account) error {
+func (t *SecureTrie) TryUpdateAccount(key []byte, acc *accounts.Account) error {
 	hk := t.hashKey(key)
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {

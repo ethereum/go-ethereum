@@ -32,7 +32,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accs "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
@@ -562,7 +562,7 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 	b.Run("no-onleaf", func(b *testing.B) {
 		benchmarkCommitAfterHash(b, nil)
 	})
-	var a account.Account
+	var a accs.Account
 	onleaf := func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error {
 		rlp.DecodeBytes(leaf, &a)
 		return nil
@@ -658,7 +658,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(big.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&account.Account{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
+		data, _ := rlp.EncodeToBytes(&accs.Account{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
 		accounts[i] = data
 	}
 	return addresses, accounts

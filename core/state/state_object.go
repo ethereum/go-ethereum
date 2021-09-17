@@ -19,11 +19,12 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/account"
+	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -65,7 +66,7 @@ func (s Storage) Copy() Storage {
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
-	data     account.Account
+	data     accounts.Account
 	db       *StateDB
 
 	// DB error.
@@ -98,7 +99,7 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data account.Account) *stateObject {
+func newObject(db *StateDB, address common.Address, data accounts.Account) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -117,6 +118,11 @@ func newObject(db *StateDB, address common.Address, data account.Account) *state
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
 	}
+}
+
+// EncodeRLP implements rlp.Encoder.
+func (s *stateObject) EncodeRLP(io.Writer) error {
+	panic("deprecated code, should not be called")
 }
 
 // setError remembers the first non-nil error it is called with.
