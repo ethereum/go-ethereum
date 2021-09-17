@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -272,13 +271,15 @@ func ImportPreimages(db *ethdb.LDBDatabase, fn string) error {
 		// Accumulate the preimages and flush when enough ws gathered
 		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
 		if len(preimages) > 1024 {
-			rawdb.WritePreimages(db, preimages)
+			if err := core.WritePreimages(db, 0, preimages); err != nil {
+				return err
+			}
 			preimages = make(map[common.Hash][]byte)
 		}
 	}
 	// Flush the last batch preimage data
 	if len(preimages) > 0 {
-		rawdb.WritePreimages(db, preimages)
+		return core.WritePreimages(db, 0, preimages)
 	}
 	return nil
 }

@@ -62,12 +62,6 @@ func (c *ConcreteSigar) GetSwap() (Swap, error) {
 	return s, err
 }
 
-func (c *ConcreteSigar) GetHugeTLBPages() (HugeTLBPages, error) {
-	p := HugeTLBPages{}
-	err := p.Get()
-	return p, err
-}
-
 func (c *ConcreteSigar) GetFileSystemUsage(path string) (FileSystemUsage, error) {
 	f := FileSystemUsage{}
 	err := f.Get(path)

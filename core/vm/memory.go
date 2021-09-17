@@ -16,12 +16,7 @@
 
 package vm
 
-import (
-	"fmt"
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/common/math"
-)
+import "fmt"
 
 // Memory implements a simple memory model for the ethereum virtual machine.
 type Memory struct {
@@ -29,37 +24,23 @@ type Memory struct {
 	lastGasCost uint64
 }
 
-// NewMemory returns a new memory model.
 func NewMemory() *Memory {
 	return &Memory{}
 }
 
 // Set sets offset + size to value
 func (m *Memory) Set(offset, size uint64, value []byte) {
+	// length of store may never be less than offset + size.
+	// The store should be resized PRIOR to setting the memory
+	if size > uint64(len(m.store)) {
+		panic("INVALID memory: store empty")
+	}
+
 	// It's possible the offset is greater than 0 and size equals 0. This is because
 	// the calcMemSize (common.go) could potentially return 0 when size is zero (NO-OP)
 	if size > 0 {
-		// length of store may never be less than offset + size.
-		// The store should be resized PRIOR to setting the memory
-		if offset+size > uint64(len(m.store)) {
-			panic("invalid memory: store empty")
-		}
 		copy(m.store[offset:offset+size], value)
 	}
-}
-
-// Set32 sets the 32 bytes starting at offset to the value of val, left-padded with zeroes to
-// 32 bytes.
-func (m *Memory) Set32(offset uint64, val *big.Int) {
-	// length of store may never be less than offset + size.
-	// The store should be resized PRIOR to setting the memory
-	if offset+32 > uint64(len(m.store)) {
-		panic("invalid memory: store empty")
-	}
-	// Zero the memory area
-	copy(m.store[offset:offset+32], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-	// Fill in relevant bits
-	math.ReadBits(val, m.store[offset:offset+32])
 }
 
 // Resize resizes the memory to size
@@ -70,14 +51,14 @@ func (m *Memory) Resize(size uint64) {
 }
 
 // Get returns offset + size as a new slice
-func (m *Memory) Get(offset, size int64) (cpy []byte) {
+func (self *Memory) Get(offset, size int64) (cpy []byte) {
 	if size == 0 {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
+	if len(self.store) > int(offset) {
 		cpy = make([]byte, size)
-		copy(cpy, m.store[offset:offset+size])
+		copy(cpy, self.store[offset:offset+size])
 
 		return
 	}
@@ -86,13 +67,13 @@ func (m *Memory) Get(offset, size int64) (cpy []byte) {
 }
 
 // GetPtr returns the offset + size
-func (m *Memory) GetPtr(offset, size int64) []byte {
+func (self *Memory) GetPtr(offset, size int64) []byte {
 	if size == 0 {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
-		return m.store[offset : offset+size]
+	if len(self.store) > int(offset) {
+		return self.store[offset : offset+size]
 	}
 
 	return nil
@@ -108,7 +89,6 @@ func (m *Memory) Data() []byte {
 	return m.store
 }
 
-// Print dumps the content of the memory.
 func (m *Memory) Print() {
 	fmt.Printf("### mem %d bytes ###\n", len(m.store))
 	if len(m.store) > 0 {

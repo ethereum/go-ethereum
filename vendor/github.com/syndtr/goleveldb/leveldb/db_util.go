@@ -84,7 +84,7 @@ func (db *DB) checkAndCleanFiles() error {
 		var mfds []storage.FileDesc
 		for num, present := range tmap {
 			if !present {
-				mfds = append(mfds, storage.FileDesc{Type: storage.TypeTable, Num: num})
+				mfds = append(mfds, storage.FileDesc{storage.TypeTable, num})
 				db.logf("db@janitor table missing @%d", num)
 			}
 		}

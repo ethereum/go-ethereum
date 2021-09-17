@@ -26,16 +26,6 @@ import Icon from 'material-ui/Icon';
 import MenuIcon from 'material-ui-icons/Menu';
 import Typography from 'material-ui/Typography';
 
-// styles contains the constant styles of the component.
-const styles = {
-	header: {
-		height: '8%',
-	},
-	toolbar: {
-		height: '100%',
-	},
-};
-
 // themeStyles returns the styles generated from the theme for the component.
 const themeStyles = (theme: Object) => ({
 	header: {
@@ -64,8 +54,8 @@ class Header extends Component<Props> {
 		const {classes} = this.props;
 
 		return (
-			<AppBar position='static' className={classes.header} style={styles.header}>
-				<Toolbar className={classes.toolbar} style={styles.toolbar}>
+			<AppBar position='static' className={classes.header}>
+				<Toolbar className={classes.toolbar}>
 					<IconButton onClick={this.props.switchSideBar}>
 						<Icon>
 							<MenuIcon />

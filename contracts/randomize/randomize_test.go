@@ -40,7 +40,7 @@ var (
 )
 
 func TestRandomize(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(100000000000000)}}, 10000000)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(100000000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 	transactOpts.GasLimit = 1000000
 
@@ -71,7 +71,7 @@ func TestRandomize(t *testing.T) {
 
 func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewSimulatedBackend(genesis, 10000000)
+	backend := backends.NewSimulatedBackend(genesis)
 	backend.Commit()
 	signer := types.HomesteadSigner{}
 	ctx := context.Background()

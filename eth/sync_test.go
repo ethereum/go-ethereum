@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
@@ -42,8 +42,8 @@ func TestFastSyncDisabling(t *testing.T) {
 	// Sync up the two peers
 	io1, io2 := p2p.MsgPipe()
 
-	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(enode.ID{}, "empty", nil), io2))
-	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(enode.ID{}, "full", nil), io1))
+	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(discover.NodeID{}, "empty", nil), io2))
+	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(discover.NodeID{}, "full", nil), io1))
 
 	time.Sleep(250 * time.Millisecond)
 	pmEmpty.synchronise(pmEmpty.peers.BestPeer())

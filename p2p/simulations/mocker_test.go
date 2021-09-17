@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package simulations simulates p2p networks.
-// A mocker simulates starting and stopping real nodes in a network.
+// A mokcer simulates starting and stopping real nodes in a network.
 package simulations
 
 import (
@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 func TestMocker(t *testing.T) {
@@ -82,7 +82,7 @@ func TestMocker(t *testing.T) {
 	defer sub.Unsubscribe()
 	//wait until all nodes are started and connected
 	//store every node up event in a map (value is irrelevant, mimic Set datatype)
-	nodemap := make(map[enode.ID]bool)
+	nodemap := make(map[discover.NodeID]bool)
 	wg.Add(1)
 	nodesComplete := false
 	connCount := 0
@@ -90,12 +90,15 @@ func TestMocker(t *testing.T) {
 		for {
 			select {
 			case event := <-events:
-				if isNodeUp(event) {
+				//if the event is a node Up event only
+				if event.Node != nil && event.Node.Up {
 					//add the correspondent node ID to the map
 					nodemap[event.Node.Config.ID] = true
 					//this means all nodes got a nodeUp event, so we can continue the test
 					if len(nodemap) == nodeCount {
 						nodesComplete = true
+						//wait for 3s as the mocker will need time to connect the nodes
+						//time.Sleep( 3 *time.Second)
 					}
 				} else if event.Conn != nil && nodesComplete {
 					connCount += 1
@@ -132,13 +135,13 @@ func TestMocker(t *testing.T) {
 	wg.Wait()
 
 	//check there are nodeCount number of nodes in the network
-	nodesInfo, err := client.GetNodes()
+	nodes_info, err := client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodesInfo) != nodeCount {
-		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodesInfo))
+	if len(nodes_info) != nodeCount {
+		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodes_info))
 	}
 
 	//stop the mocker
@@ -157,16 +160,12 @@ func TestMocker(t *testing.T) {
 	}
 
 	//now the number of nodes in the network should be zero
-	nodesInfo, err = client.GetNodes()
+	nodes_info, err = client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodesInfo) != 0 {
-		t.Fatalf("Expected empty list of nodes, got: %d", len(nodesInfo))
+	if len(nodes_info) != 0 {
+		t.Fatalf("Expected empty list of nodes, got: %d", len(nodes_info))
 	}
-}
-
-func isNodeUp(event *Event) bool {
-	return event.Node != nil && event.Node.Up()
 }

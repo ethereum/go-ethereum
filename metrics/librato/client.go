@@ -65,7 +65,7 @@ type Batch struct {
 	Source      string        `json:"source"`
 }
 
-func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
+func (self *LibratoClient) PostMetrics(batch Batch) (err error) {
 	var (
 		js   []byte
 		req  *http.Request
@@ -85,7 +85,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(c.Email, c.Token)
+	req.SetBasicAuth(self.Email, self.Token)
 
 	if resp, err = http.DefaultClient.Do(req); err != nil {
 		return

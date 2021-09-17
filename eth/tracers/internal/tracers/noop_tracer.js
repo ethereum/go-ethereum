@@ -25,5 +25,5 @@
 
 	// result is invoked when all the opcodes have been iterated over and returns
 	// the final result of the tracing.
-	result: function(ctx, db) { return {}; }
+	result: function(ctx, db) { }
 }

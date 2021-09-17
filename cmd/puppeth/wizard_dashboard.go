@@ -92,7 +92,7 @@ func (w *wizard) deployDashboard() {
 				pages = append(pages, page)
 			}
 		}
-		// Prompt the user to chose one, enter manually or simply not list this service
+		// Promt the user to chose one, enter manually or simply not list this service
 		defLabel, defChoice := "don't list", len(pages)+2
 		if len(pages) > 0 {
 			defLabel, defChoice = pages[0], 1
@@ -137,14 +137,14 @@ func (w *wizard) deployDashboard() {
 	if w.conf.ethstats != "" {
 		fmt.Println()
 		fmt.Println("Include ethstats secret on dashboard (y/n)? (default = yes)")
-		infos.trusted = w.readDefaultYesNo(true)
+		infos.trusted = w.readDefaultString("y") == "y"
 	}
 	// Try to deploy the dashboard container on the host
 	nocache := false
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultYesNo(false)
+		nocache = w.readDefaultString("n") != "n"
 	}
 	if out, err := deployDashboard(client, w.network, &w.conf, infos, nocache); err != nil {
 		log.Error("Failed to deploy dashboard container", "err", err)

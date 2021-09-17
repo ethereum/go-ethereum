@@ -34,20 +34,20 @@ type testPromise struct {
 	amount *big.Int
 }
 
-func (test *testInPayment) Receive(promise Promise) (*big.Int, error) {
+func (self *testInPayment) Receive(promise Promise) (*big.Int, error) {
 	p := promise.(*testPromise)
-	test.received = append(test.received, p)
+	self.received = append(self.received, p)
 	return p.amount, nil
 }
 
-func (test *testInPayment) AutoCash(interval time.Duration, limit *big.Int) {
-	test.autocashInterval = interval
-	test.autocashLimit = limit
+func (self *testInPayment) AutoCash(interval time.Duration, limit *big.Int) {
+	self.autocashInterval = interval
+	self.autocashLimit = limit
 }
 
-func (test *testInPayment) Cash() (string, error) { return "", nil }
+func (self *testInPayment) Cash() (string, error) { return "", nil }
 
-func (test *testInPayment) Stop() {}
+func (self *testInPayment) Stop() {}
 
 type testOutPayment struct {
 	deposits             []*big.Int
@@ -56,22 +56,22 @@ type testOutPayment struct {
 	autodepositBuffer    *big.Int
 }
 
-func (test *testOutPayment) Issue(amount *big.Int) (promise Promise, err error) {
+func (self *testOutPayment) Issue(amount *big.Int) (promise Promise, err error) {
 	return &testPromise{amount}, nil
 }
 
-func (test *testOutPayment) Deposit(amount *big.Int) (string, error) {
-	test.deposits = append(test.deposits, amount)
+func (self *testOutPayment) Deposit(amount *big.Int) (string, error) {
+	self.deposits = append(self.deposits, amount)
 	return "", nil
 }
 
-func (test *testOutPayment) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
-	test.autodepositInterval = interval
-	test.autodepositThreshold = threshold
-	test.autodepositBuffer = buffer
+func (self *testOutPayment) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
+	self.autodepositInterval = interval
+	self.autodepositThreshold = threshold
+	self.autodepositBuffer = buffer
 }
 
-func (test *testOutPayment) Stop() {}
+func (self *testOutPayment) Stop() {}
 
 type testProtocol struct {
 	drop     bool
@@ -79,18 +79,18 @@ type testProtocol struct {
 	promises []*testPromise
 }
 
-func (test *testProtocol) Drop() {
-	test.drop = true
+func (self *testProtocol) Drop() {
+	self.drop = true
 }
 
-func (test *testProtocol) String() string {
+func (self *testProtocol) String() string {
 	return ""
 }
 
-func (test *testProtocol) Pay(amount int, promise Promise) {
+func (self *testProtocol) Pay(amount int, promise Promise) {
 	p := promise.(*testPromise)
-	test.promises = append(test.promises, p)
-	test.amounts = append(test.amounts, amount)
+	self.promises = append(self.promises, p)
+	self.amounts = append(self.amounts, amount)
 }
 
 func TestSwap(t *testing.T) {

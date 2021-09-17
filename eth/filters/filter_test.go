@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -85,14 +84,20 @@ func BenchmarkFilters(b *testing.B) {
 		}
 	})
 	for i, block := range chain {
-		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		core.WriteBlock(db, block)
+		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
+			b.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
+			b.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
+			b.Fatal("error writing block receipts:", err)
+		}
 	}
 	b.ResetTimer()
 
-	filter := NewRangeFilter(backend, 0, -1, []common.Address{addr1, addr2, addr3, addr4}, nil)
+	filter := New(backend, 0, -1, []common.Address{addr1, addr2, addr3, addr4}, nil)
 
 	for i := 0; i < b.N; i++ {
 		logs, _ := filter.Logs(context.Background())
@@ -169,20 +174,26 @@ func TestFilters(t *testing.T) {
 		}
 	})
 	for i, block := range chain {
-		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		core.WriteBlock(db, block)
+		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
+			t.Fatal("error writing block receipts:", err)
+		}
 	}
 
-	filter := NewRangeFilter(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	filter := New(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = NewRangeFilter(backend, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = New(backend, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
@@ -191,7 +202,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewRangeFilter(backend, 990, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = New(backend, 990, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
@@ -200,7 +211,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewRangeFilter(backend, 1, 10, nil, [][]common.Hash{{hash1, hash2}})
+	filter = New(backend, 1, 10, nil, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 2 {
@@ -208,7 +219,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = NewRangeFilter(backend, 0, -1, nil, [][]common.Hash{{failHash}})
+	filter = New(backend, 0, -1, nil, [][]common.Hash{{failHash}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
@@ -216,14 +227,14 @@ func TestFilters(t *testing.T) {
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = NewRangeFilter(backend, 0, -1, []common.Address{failAddr}, nil)
+	filter = New(backend, 0, -1, []common.Address{failAddr}, nil)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = NewRangeFilter(backend, 0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
+	filter = New(backend, 0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {

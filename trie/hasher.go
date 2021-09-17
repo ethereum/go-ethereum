@@ -17,48 +17,27 @@
 package trie
 
 import (
+	"bytes"
 	"hash"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 type hasher struct {
-	tmp        sliceBuffer
-	sha        keccakState
+	tmp        *bytes.Buffer
+	sha        hash.Hash
 	cachegen   uint16
 	cachelimit uint16
 	onleaf     LeafCallback
 }
 
-// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
-// Read to get a variable amount of data from the hash state. Read is faster than Sum
-// because it doesn't copy the internal state, but also modifies the internal state.
-type keccakState interface {
-	hash.Hash
-	Read([]byte) (int, error)
-}
-
-type sliceBuffer []byte
-
-func (b *sliceBuffer) Write(data []byte) (n int, err error) {
-	*b = append(*b, data...)
-	return len(data), nil
-}
-
-func (b *sliceBuffer) Reset() {
-	*b = (*b)[:0]
-}
-
 // hashers live in a global db.
 var hasherPool = sync.Pool{
 	New: func() interface{} {
-		return &hasher{
-			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewLegacyKeccak256().(keccakState),
-		}
+		return &hasher{tmp: new(bytes.Buffer), sha: sha3.NewKeccak256()}
 	},
 }
 
@@ -137,6 +116,9 @@ func (h *hasher) hashChildren(original Node, db *Database) (Node, Node, error) {
 				return original, original, err
 			}
 		}
+		if collapsed.Val == nil {
+			collapsed.Val = ValueNode(nil) // Ensure that nil children are encoded as empty strings.
+		}
 		return collapsed, cached, nil
 
 	case *FullNode:
@@ -149,9 +131,14 @@ func (h *hasher) hashChildren(original Node, db *Database) (Node, Node, error) {
 				if err != nil {
 					return original, original, err
 				}
+			} else {
+				collapsed.Children[i] = ValueNode(nil) // Ensure that nil children are encoded as empty strings.
 			}
 		}
 		cached.Children[16] = n.Children[16]
+		if collapsed.Children[16] == nil {
+			collapsed.Children[16] = ValueNode(nil)
+		}
 		return collapsed, cached, nil
 
 	default:
@@ -170,24 +157,39 @@ func (h *hasher) store(n Node, db *Database, force bool) (Node, error) {
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := rlp.Encode(h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
-	if len(h.tmp) < 32 && !force {
+	if h.tmp.Len() < 32 && !force {
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.Cache()
 	if hash == nil {
-		hash = h.makeHashNode(h.tmp)
+		h.sha.Reset()
+		h.sha.Write(h.tmp.Bytes())
+		hash = HashNode(h.sha.Sum(nil))
 	}
-
 	if db != nil {
 		// We are pooling the trie nodes into an intermediate memory cache
-		hash := common.BytesToHash(hash)
-
 		db.lock.Lock()
-		db.insert(hash, h.tmp, n)
+
+		hash := common.BytesToHash(hash)
+		db.insert(hash, h.tmp.Bytes())
+
+		// Track all direct parent->child node references
+		switch n := n.(type) {
+		case *ShortNode:
+			if child, ok := n.Val.(HashNode); ok {
+				db.reference(common.BytesToHash(child), hash)
+			}
+		case *FullNode:
+			for i := 0; i < 16; i++ {
+				if child, ok := n.Children[i].(HashNode); ok {
+					db.reference(common.BytesToHash(child), hash)
+				}
+			}
+		}
 		db.lock.Unlock()
 
 		// Track external references from account->storage trie
@@ -207,12 +209,4 @@ func (h *hasher) store(n Node, db *Database, force bool) (Node, error) {
 		}
 	}
 	return hash, nil
-}
-
-func (h *hasher) makeHashNode(data []byte) HashNode {
-	n := make(HashNode, h.sha.Size())
-	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(n)
-	return n
 }

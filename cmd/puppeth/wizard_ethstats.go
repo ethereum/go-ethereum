@@ -67,11 +67,11 @@ func (w *wizard) deployEthstats() {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Keep existing IP %v blacklist (y/n)? (default = yes)\n", infos.banned)
-		if !w.readDefaultYesNo(true) {
+		if w.readDefaultString("y") != "y" {
 			// The user might want to clear the entire list, although generally probably not
 			fmt.Println()
 			fmt.Printf("Clear out blacklist and start over (y/n)? (default = no)\n")
-			if w.readDefaultYesNo(false) {
+			if w.readDefaultString("n") != "n" {
 				infos.banned = nil
 			}
 			// Offer the user to explicitly add/remove certain IP addresses
@@ -106,7 +106,7 @@ func (w *wizard) deployEthstats() {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the ethstats be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultYesNo(false)
+		nocache = w.readDefaultString("n") != "n"
 	}
 	trusted := make([]string, 0, len(w.servers))
 	for _, client := range w.servers {

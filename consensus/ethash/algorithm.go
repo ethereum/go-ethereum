@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -94,25 +94,14 @@ func calcDatasetSize(epoch int) uint64 {
 // reused between hash runs instead of requiring new ones to be created.
 type hasher func(dest []byte, data []byte)
 
-// makeHasher creates a repetitive hasher, allowing the same hash data structures to
-// be reused between hash runs instead of requiring new ones to be created. The returned
-// function is not thread safe!
+// makeHasher creates a repetitive hasher, allowing the same hash data structures
+// to be reused between hash runs instead of requiring new ones to be created.
+// The returned function is not thread safe!
 func makeHasher(h hash.Hash) hasher {
-	// sha3.state supports Read to get the sum, use it to avoid the overhead of Sum.
-	// Read alters the state but we reset the hash before every operation.
-	type readerHash interface {
-		hash.Hash
-		Read([]byte) (int, error)
-	}
-	rh, ok := h.(readerHash)
-	if !ok {
-		panic("can't find Read method on hash")
-	}
-	outputLen := rh.Size()
 	return func(dest []byte, data []byte) {
-		rh.Reset()
-		rh.Write(data)
-		rh.Read(dest[:outputLen])
+		h.Write(data)
+		h.Sum(dest[:0])
+		h.Reset()
 	}
 }
 
@@ -123,7 +112,7 @@ func seedHash(block uint64) []byte {
 	if block < epochLength {
 		return seed
 	}
-	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
+	keccak256 := makeHasher(sha3.NewKeccak256())
 	for i := 0; i < int(block/epochLength); i++ {
 		keccak256(seed, seed)
 	}
@@ -177,7 +166,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 		}
 	}()
 	// Create a hasher to reuse between invocations
-	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
+	keccak512 := makeHasher(sha3.NewKeccak512())
 
 	// Sequentially produce the initial dataset
 	keccak512(cache, seed)
@@ -211,6 +200,15 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 func swap(buffer []byte) {
 	for i := 0; i < len(buffer); i += 4 {
 		binary.BigEndian.PutUint32(buffer[i:], binary.LittleEndian.Uint32(buffer[i:]))
+	}
+}
+
+// prepare converts an ethash cache or dataset from a byte stream into the internal
+// int representation. All ethash methods work with ints to avoid constant byte to
+// int conversions as well as to handle both little and big endian systems.
+func prepare(dest []uint32, src []byte) {
+	for i := 0; i < len(dest); i++ {
+		dest[i] = binary.LittleEndian.Uint32(src[i*4:])
 	}
 }
 
@@ -301,7 +299,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 			defer pend.Done()
 
 			// Create a hasher to reuse between invocations
-			keccak512 := makeHasher(sha3.NewLegacyKeccak512())
+			keccak512 := makeHasher(sha3.NewKeccak512())
 
 			// Calculate the data segment this thread should generate
 			batch := uint32((size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads)))
@@ -375,7 +373,7 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 // in-memory cache) in order to produce our final value for a particular header
 // hash and nonce.
 func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]byte, []byte) {
-	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
+	keccak512 := makeHasher(sha3.NewKeccak512())
 
 	lookup := func(index uint32) []uint32 {
 		rawData := generateDatasetItem(cache, index, keccak512)

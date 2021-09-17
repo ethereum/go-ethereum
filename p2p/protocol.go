@@ -19,8 +19,7 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -36,7 +35,7 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
-	// Run is called in a new goroutine when the protocol has been
+	// Run is called in a new groutine when the protocol has been
 	// negotiated with a peer. It should read and write messages from
 	// rw. The Payload for each message must be fully consumed.
 	//
@@ -52,10 +51,7 @@ type Protocol struct {
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id enode.ID) interface{}
-
-	// Attributes contains protocol specific information for the node record.
-	Attributes []enr.Entry
+	PeerInfo func(id discover.NodeID) interface{}
 }
 
 func (p Protocol) cap() Cap {
@@ -66,6 +62,10 @@ func (p Protocol) cap() Cap {
 type Cap struct {
 	Name    string
 	Version uint
+}
+
+func (cap Cap) RlpData() interface{} {
+	return []interface{}{cap.Name, cap.Version}
 }
 
 func (cap Cap) String() string {
@@ -79,5 +79,3 @@ func (cs capsByNameAndVersion) Swap(i, j int) { cs[i], cs[j] = cs[j], cs[i] }
 func (cs capsByNameAndVersion) Less(i, j int) bool {
 	return cs[i].Name < cs[j].Name || (cs[i].Name == cs[j].Name && cs[i].Version < cs[j].Version)
 }
-
-func (capsByNameAndVersion) ENRKey() string { return "cap" }

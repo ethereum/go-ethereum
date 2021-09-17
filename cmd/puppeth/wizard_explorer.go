@@ -100,7 +100,7 @@ func (w *wizard) deployExplorer() {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the explorer be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultYesNo(false)
+		nocache = w.readDefaultString("n") != "n"
 	}
 	if out, err := deployExplorer(client, w.network, chain, infos, nocache); err != nil {
 		log.Error("Failed to deploy explorer container", "err", err)

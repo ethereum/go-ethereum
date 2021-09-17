@@ -306,7 +306,7 @@ func (c *Client) Write(bp BatchPoints) (*Response, error) {
 
 	precision := bp.Precision
 	if precision == "" {
-		precision = c.precision
+		precision = "ns"
 	}
 
 	params := req.URL.Query()

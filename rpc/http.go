@@ -31,20 +31,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/rs/cors"
 )
 
 const (
-	maxRequestContentLength = 1024 * 512
+	contentType             = "application/json"
+	maxRequestContentLength = 1024 * 128
 )
 
-var (
-	// https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
-	acceptedContentTypes = []string{"application/json", "application/json-rpc", "application/jsonrequest"}
-	contentType          = acceptedContentTypes[0]
-	nullAddr, _          = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
-)
+var nullAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
 
 type httpConn struct {
 	client    *http.Client
@@ -71,38 +66,6 @@ func (hc *httpConn) Close() error {
 	return nil
 }
 
-// HTTPTimeouts represents the configuration params for the HTTP RPC server.
-type HTTPTimeouts struct {
-	// ReadTimeout is the maximum duration for reading the entire
-	// request, including the body.
-	//
-	// Because ReadTimeout does not let Handlers make per-request
-	// decisions on each request body's acceptable deadline or
-	// upload rate, most users will prefer to use
-	// ReadHeaderTimeout. It is valid to use them both.
-	ReadTimeout time.Duration
-
-	// WriteTimeout is the maximum duration before timing out
-	// writes of the response. It is reset whenever a new
-	// request's header is read. Like ReadTimeout, it does not
-	// let Handlers make decisions on a per-request basis.
-	WriteTimeout time.Duration
-
-	// IdleTimeout is the maximum amount of time to wait for the
-	// next request when keep-alives are enabled. If IdleTimeout
-	// is zero, the value of ReadTimeout is used. If both are
-	// zero, ReadHeaderTimeout is used.
-	IdleTimeout time.Duration
-}
-
-// DefaultHTTPTimeouts represents the default timeout values used if further
-// configuration is not provided.
-var DefaultHTTPTimeouts = HTTPTimeouts{
-	ReadTimeout:  30 * time.Second,
-	WriteTimeout: 30 * time.Second,
-	IdleTimeout:  120 * time.Second,
-}
-
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
@@ -127,19 +90,10 @@ func DialHTTP(endpoint string) (*Client, error) {
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
 	respBody, err := hc.doRequest(ctx, msg)
-	if respBody != nil {
-		defer respBody.Close()
-	}
-
 	if err != nil {
-		if respBody != nil {
-			buf := new(bytes.Buffer)
-			if _, err2 := buf.ReadFrom(respBody); err2 == nil {
-				return fmt.Errorf("%v %v", err, buf.String())
-			}
-		}
 		return err
 	}
+	defer respBody.Close()
 	var respmsg jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
 		return err
@@ -178,9 +132,6 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.Body, errors.New(resp.Status)
-	}
 	return resp.Body, nil
 }
 
@@ -198,30 +149,15 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, vhosts []string, timeouts HTTPTimeouts, srv *Server) *http.Server {
+func NewHTTPServer(cors []string, vhosts []string, srv *Server) *http.Server {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
-
-	// Make sure timeout values are meaningful
-	if timeouts.ReadTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
-		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
-	}
-	if timeouts.WriteTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
-		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
-	}
-	if timeouts.IdleTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
-		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
-	}
-	// Bundle and start the HTTP server
 	return &http.Server{
 		Handler:      handler,
-		ReadTimeout:  timeouts.ReadTimeout,
-		WriteTimeout: timeouts.WriteTimeout,
-		IdleTimeout:  timeouts.IdleTimeout,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 }
 
@@ -238,23 +174,12 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// All checks passed, create a codec that reads direct from the request body
 	// untilEOF and writes the response to w and order the server to process a
 	// single request.
-	ctx := r.Context()
-	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
-	ctx = context.WithValue(ctx, "scheme", r.Proto)
-	ctx = context.WithValue(ctx, "local", r.Host)
-	if ua := r.Header.Get("User-Agent"); ua != "" {
-		ctx = context.WithValue(ctx, "User-Agent", ua)
-	}
-	if origin := r.Header.Get("Origin"); origin != "" {
-		ctx = context.WithValue(ctx, "Origin", origin)
-	}
-
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	codec := NewJSONCodec(&httpReadWriteNopCloser{body, w})
 	defer codec.Close()
 
 	w.Header().Set("content-type", contentType)
-	srv.ServeSingleRequest(ctx, codec, OptionMethodInvocation)
+	srv.ServeSingleRequest(codec, OptionMethodInvocation)
 }
 
 // validateRequest returns a non-zero response code and error message if the
@@ -267,21 +192,12 @@ func validateRequest(r *http.Request) (int, error) {
 		err := fmt.Errorf("content length too large (%d>%d)", r.ContentLength, maxRequestContentLength)
 		return http.StatusRequestEntityTooLarge, err
 	}
-	// Allow OPTIONS (regardless of content-type)
-	if r.Method == http.MethodOptions {
-		return 0, nil
+	mt, _, err := mime.ParseMediaType(r.Header.Get("content-type"))
+	if r.Method != http.MethodOptions && (err != nil || mt != contentType) {
+		err := fmt.Errorf("invalid content type, only %s is supported", contentType)
+		return http.StatusUnsupportedMediaType, err
 	}
-	// Check content-type
-	if mt, _, err := mime.ParseMediaType(r.Header.Get("content-type")); err == nil {
-		for _, accepted := range acceptedContentTypes {
-			if accepted == mt {
-				return 0, nil
-			}
-		}
-	}
-	// Invalid content-type
-	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
-	return http.StatusUnsupportedMediaType, err
+	return 0, nil
 }
 
 func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {

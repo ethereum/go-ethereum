@@ -22,10 +22,6 @@ func (s *Swap) Get() error {
 	return ErrNotImplemented{runtime.GOOS}
 }
 
-func (s *HugeTLBPages) Get() error {
-	return ErrNotImplemented{runtime.GOOS}
-}
-
 func (f *FDUsage) Get() error {
 	return ErrNotImplemented{runtime.GOOS}
 }

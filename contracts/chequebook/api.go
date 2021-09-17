@@ -27,40 +27,40 @@ const Version = "1.0"
 
 var errNoChequebook = errors.New("no chequebook")
 
-type API struct {
+type Api struct {
 	chequebookf func() *Chequebook
 }
 
-func NewAPI(ch func() *Chequebook) *API {
-	return &API{ch}
+func NewApi(ch func() *Chequebook) *Api {
+	return &Api{ch}
 }
 
-func (a *API) Balance() (string, error) {
-	ch := a.chequebookf()
+func (self *Api) Balance() (string, error) {
+	ch := self.chequebookf()
 	if ch == nil {
 		return "", errNoChequebook
 	}
 	return ch.Balance().String(), nil
 }
 
-func (a *API) Issue(beneficiary common.Address, amount *big.Int) (cheque *Cheque, err error) {
-	ch := a.chequebookf()
+func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *Cheque, err error) {
+	ch := self.chequebookf()
 	if ch == nil {
 		return nil, errNoChequebook
 	}
 	return ch.Issue(beneficiary, amount)
 }
 
-func (a *API) Cash(cheque *Cheque) (txhash string, err error) {
-	ch := a.chequebookf()
+func (self *Api) Cash(cheque *Cheque) (txhash string, err error) {
+	ch := self.chequebookf()
 	if ch == nil {
 		return "", errNoChequebook
 	}
 	return ch.Cash(cheque)
 }
 
-func (a *API) Deposit(amount *big.Int) (txhash string, err error) {
-	ch := a.chequebookf()
+func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
+	ch := self.chequebookf()
 	if ch == nil {
 		return "", errNoChequebook
 	}

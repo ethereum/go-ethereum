@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -65,11 +64,8 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
-	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
-}
 
-func (b *LesApiBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return b.eth.blockchain.GetHeaderByHash(hash), nil
+	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
 }
 
 func (b *LesApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
@@ -92,28 +88,22 @@ func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*t
 	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
 }
 
-func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
-	}
-	return nil, nil
+func (b *LesApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
+	return light.GetBlockReceipts(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
 }
 
-func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
-	}
-	return nil, nil
+func (b *LesApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
+	return light.GetBlockLogs(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
 }
 
-func (b *LesApiBackend) GetTd(hash common.Hash) *big.Int {
-	return b.eth.blockchain.GetTdByHash(hash)
+func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
+	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
+func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
 	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
+	return vm.NewEVM(context, state, b.eth.chainConfig, vmCfg), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -144,8 +134,8 @@ func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.txPool.SubscribeNewTxsEvent(ch)
+func (b *LesApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+	return b.eth.txPool.SubscribeTxPreEvent(ch)
 }
 
 func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -192,16 +182,12 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
 
-func (b *LesApiBackend) RPCGasCap() *big.Int {
-	return b.eth.config.RPCGasCap
-}
-
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0
 	}
 	sections, _, _ := b.eth.bloomIndexer.Sections()
-	return params.BloomBitsBlocksClient, sections
+	return light.BloomTrieFrequency, sections
 }
 
 func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
@@ -239,4 +225,31 @@ func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 		}
 	}
 	return make(map[string]interface{})
+}
+
+// GetVotersRewards return a map of voters of snapshot at given block hash
+func (b *LesApiBackend) GetVotersRewards(masternodeAddr common.Address) map[common.Address]*big.Int {
+	return map[common.Address]*big.Int{}
+}
+
+// GetVotersCap return all voters's capability at a checkpoint
+func (b *LesApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Address, voters []common.Address) map[common.Address]*big.Int {
+	return map[common.Address]*big.Int{}
+}
+
+func (b *LesApiBackend) GetEpochDuration() *big.Int {
+	return nil
+}
+
+// GetMasternodesCap return a cap of all masternode at a checkpoint
+func (b *LesApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
+	return nil
+}
+
+func (b *LesApiBackend) GetBlocksHashCache(blockNr uint64) []common.Hash {
+	return []common.Hash{}
+}
+
+func (b *LesApiBackend) AreTwoBlockSamePath(bh1 common.Hash, bh2 common.Hash) bool {
+	return true
 }

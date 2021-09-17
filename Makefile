@@ -36,16 +36,12 @@ all:
 test: all
 	build/env.sh go run build/ci.go test
 
-lint: ## Run linters.
-	build/env.sh go run build/ci.go lint
-
 clean:
-	./build/clean_go_build_cache.sh
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # Cross Compilation Targets (xgo)
 
-XDC-cross: XDC-linux XDC-darwin
+XDC-cross: XDC-windows-amd64 XDC-darwin-amd64 XDC-linux
 	@echo "Full cross compilation done:"
 	@ls -ld $(GOBIN)/XDC-*
 
@@ -97,6 +93,10 @@ XDC-darwin-amd64:
 	@echo "Darwin amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/XDC-darwin-* | grep amd64
 
+XDC-windows-amd64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/XDC
+	@echo "Darwin amd64 cross compilation done:"
+	@ls -ld $(GOBIN)/XDC-windows-* | grep amd64
 gofmt:
 	$(GOFMT) -s -w $(GO_FILES)
 	$(GIT) checkout vendor

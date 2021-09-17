@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
+
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -51,14 +52,11 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
 	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
 	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray2", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
-	{ "type" : "function", "name" : "nestedSlice", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] }
+	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
 ]`
 
 func TestReader(t *testing.T) {
-	Uint256, _ := NewType("uint256", nil)
+	Uint256, _ := NewType("uint256")
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": {
@@ -179,7 +177,7 @@ func TestTestSlice(t *testing.T) {
 }
 
 func TestMethodSignature(t *testing.T) {
-	String, _ := NewType("string", nil)
+	String, _ := NewType("string")
 	m := Method{"foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
@@ -191,28 +189,9 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
 	}
 
-	uintt, _ := NewType("uint256", nil)
+	uintt, _ := NewType("uint256")
 	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
-	}
-
-	// Method with tuple arguments
-	s, _ := NewType("tuple", []ArgumentMarshaling{
-		{Name: "a", Type: "int256"},
-		{Name: "b", Type: "int256[]"},
-		{Name: "c", Type: "tuple[]", Components: []ArgumentMarshaling{
-			{Name: "x", Type: "int256"},
-			{Name: "y", Type: "int256"},
-		}},
-		{Name: "d", Type: "tuple[2]", Components: []ArgumentMarshaling{
-			{Name: "x", Type: "int256"},
-			{Name: "y", Type: "int256"},
-		}},
-	})
-	m = Method{"foo", false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
-	exp = "foo((int256,int256[],(int256,int256)[],(int256,int256)[2]),string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
 	}
@@ -585,13 +564,11 @@ func TestBareEvents(t *testing.T) {
 	const definition = `[
 	{ "type" : "event", "name" : "balance" },
 	{ "type" : "event", "name" : "anon", "anonymous" : true},
-	{ "type" : "event", "name" : "args", "inputs" : [{ "indexed":false, "name":"arg0", "type":"uint256" }, { "indexed":true, "name":"arg1", "type":"address" }] },
-	{ "type" : "event", "name" : "tuple", "inputs" : [{ "indexed":false, "name":"t", "type":"tuple", "components":[{"name":"a", "type":"uint256"}] }, { "indexed":true, "name":"arg1", "type":"address" }] }
+	{ "type" : "event", "name" : "args", "inputs" : [{ "indexed":false, "name":"arg0", "type":"uint256" }, { "indexed":true, "name":"arg1", "type":"address" }] }
 	]`
 
-	arg0, _ := NewType("uint256", nil)
-	arg1, _ := NewType("address", nil)
-	tuple, _ := NewType("tuple", []ArgumentMarshaling{{Name: "a", Type: "uint256"}})
+	arg0, _ := NewType("uint256")
+	arg1, _ := NewType("address")
 
 	expectedEvents := map[string]struct {
 		Anonymous bool
@@ -601,10 +578,6 @@ func TestBareEvents(t *testing.T) {
 		"anon":    {true, nil},
 		"args": {false, []Argument{
 			{Name: "arg0", Type: arg0, Indexed: false},
-			{Name: "arg1", Type: arg1, Indexed: true},
-		}},
-		"tuple": {false, []Argument{
-			{Name: "t", Type: tuple, Indexed: false},
 			{Name: "arg1", Type: arg1, Indexed: true},
 		}},
 	}
@@ -673,24 +646,28 @@ func TestUnpackEvent(t *testing.T) {
 	}
 
 	type ReceivedEvent struct {
-		Sender common.Address
-		Amount *big.Int
-		Memo   []byte
+		Address common.Address
+		Amount  *big.Int
+		Memo    []byte
 	}
 	var ev ReceivedEvent
 
 	err = abi.Unpack(&ev, "received", data)
 	if err != nil {
 		t.Error(err)
+	} else {
+		t.Logf("len(data): %d; received event: %+v", len(data), ev)
 	}
 
 	type ReceivedAddrEvent struct {
-		Sender common.Address
+		Address common.Address
 	}
 	var receivedAddrEv ReceivedAddrEvent
 	err = abi.Unpack(&receivedAddrEv, "receivedAddr", data)
 	if err != nil {
 		t.Error(err)
+	} else {
+		t.Logf("len(data): %d; received event: %+v", len(data), receivedAddrEv)
 	}
 }
 
@@ -734,14 +711,5 @@ func TestABI_MethodById(t *testing.T) {
 			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.Id()))
 		}
 	}
-	// Also test empty
-	if _, err := abi.MethodById([]byte{0x00}); err == nil {
-		t.Errorf("Expected error, too short to decode data")
-	}
-	if _, err := abi.MethodById([]byte{}); err == nil {
-		t.Errorf("Expected error, too short to decode data")
-	}
-	if _, err := abi.MethodById(nil); err == nil {
-		t.Errorf("Expected error, nil is short to decode data")
-	}
+
 }

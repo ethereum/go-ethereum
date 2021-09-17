@@ -18,24 +18,24 @@
 
 export type Content = {
 	general: General,
-	home:    Home,
-	chain:   Chain,
-	txpool:  TxPool,
+	home: Home,
+	chain: Chain,
+	txpool: TxPool,
 	network: Network,
-	system:  System,
-	logs:    Logs,
+	system: System,
+	logs: Logs,
 };
 
 export type ChartEntries = Array<ChartEntry>;
 
 export type ChartEntry = {
-	time:  Date,
+	time: Date,
 	value: number,
 };
 
 export type General = {
-	version: ?string,
-	commit:  ?string,
+    version: ?string,
+    commit: ?string,
 };
 
 export type Home = {
@@ -55,42 +55,16 @@ export type Network = {
 };
 
 export type System = {
-	activeMemory:   ChartEntries,
-	virtualMemory:  ChartEntries,
-	networkIngress: ChartEntries,
-	networkEgress:  ChartEntries,
-	processCPU:     ChartEntries,
-	systemCPU:      ChartEntries,
-	diskRead:       ChartEntries,
-	diskWrite:      ChartEntries,
-};
-
-export type Record = {
-	t:   string,
-	lvl: Object,
-	msg: string,
-	ctx: Array<string>
-};
-
-export type Chunk = {
-	content: string,
-	name:    string,
+    activeMemory: ChartEntries,
+    virtualMemory: ChartEntries,
+    networkIngress: ChartEntries,
+    networkEgress: ChartEntries,
+    processCPU: ChartEntries,
+    systemCPU: ChartEntries,
+    diskRead: ChartEntries,
+    diskWrite: ChartEntries,
 };
 
 export type Logs = {
-	chunks:        Array<Chunk>,
-	endTop:        boolean,
-	endBottom:     boolean,
-	topChanged:    number,
-	bottomChanged: number,
-};
-
-export type LogsMessage = {
-	source: ?LogFile,
-	chunk:  Array<Record>,
-};
-
-export type LogFile = {
-	name: string,
-	last: string,
+	log: Array<string>,
 };

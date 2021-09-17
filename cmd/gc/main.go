@@ -12,13 +12,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -53,26 +52,15 @@ type ResultProcessNode struct {
 func main() {
 	flag.Parse()
 	lddb, _ := ethdb.NewLDBDatabase(*dir, eth.DefaultConfig.DatabaseCache, utils.MakeDatabaseHandles())
-	head := rawdb.ReadHeadBlockHash(lddb)
-	headNumber := rawdb.ReadHeaderNumber(lddb, head)
-	if headNumber == nil {
-		fmt.Println("Unable to retrieve header number for block ", head)
-	}
-	currentHeader := rawdb.ReadHeader(lddb, head, *headNumber)
-	if currentHeader == nil {
-		fmt.Println("Unable to retrieve header number for block ", head)
-	}
+	head := core.GetHeadBlockHash(lddb)
+	currentHeader := core.GetHeader(lddb, head, core.GetBlockNumber(lddb, head))
 	tridb := trie.NewDatabase(lddb)
 	catchEventInterupt(lddb.LDB())
 	cache, _ = lru.New(*cacheSize)
 	go func() {
 		for i := uint64(1); i <= currentHeader.Number.Uint64(); i++ {
-			hash := rawdb.ReadCanonicalHash(lddb, i)
-			header := rawdb.ReadHeader(lddb, hash, i)
-			if header == nil {
-				continue
-			}
-			root := header.Root
+			hash := core.GetCanonicalHash(lddb, i)
+			root := core.GetHeader(lddb, hash, i).Root
 			trieRoot, err := trie.NewSecure(root, tridb, 0)
 			if err != nil {
 				continue

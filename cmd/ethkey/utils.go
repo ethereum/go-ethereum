@@ -28,32 +28,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// promptPassphrase prompts the user for a passphrase.  Set confirmation to true
-// to require the user to confirm the passphrase.
-func promptPassphrase(confirmation bool) string {
-	passphrase, err := console.Stdin.PromptPassword("Passphrase: ")
-	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
-	}
-
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if passphrase != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-
-	return passphrase
-}
-
-// getPassphrase obtains a passphrase given by the user.  It first checks the
-// --passfile command line flag and ultimately prompts the user for a
+// getPassPhrase obtains a passphrase given by the user.  It first checks the
+// --passphrase command line flag and ultimately prompts the user for a
 // passphrase.
-func getPassphrase(ctx *cli.Context) string {
-	// Look for the --passwordfile flag.
+func getPassPhrase(ctx *cli.Context, confirmation bool) string {
+	// Look for the --passphrase flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
 		content, err := ioutil.ReadFile(passphraseFile)
@@ -65,7 +44,20 @@ func getPassphrase(ctx *cli.Context) string {
 	}
 
 	// Otherwise prompt the user for the passphrase.
-	return promptPassphrase(false)
+	passphrase, err := console.Stdin.PromptPassword("Passphrase: ")
+	if err != nil {
+		utils.Fatalf("Failed to read passphrase: %v", err)
+	}
+	if confirmation {
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		if err != nil {
+			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+		}
+		if passphrase != confirm {
+			utils.Fatalf("Passphrases do not match")
+		}
+	}
+	return passphrase
 }
 
 // signHash is a helper function that calculates a hash for the given message

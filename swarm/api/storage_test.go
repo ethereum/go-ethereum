@@ -17,37 +17,30 @@
 package api
 
 import (
-	"context"
 	"testing"
 )
 
-func testStorage(t *testing.T, f func(*Storage, bool)) {
-	testAPI(t, func(api *API, toEncrypt bool) {
-		f(NewStorage(api), toEncrypt)
+func testStorage(t *testing.T, f func(*Storage)) {
+	testApi(t, func(api *Api) {
+		f(NewStorage(api))
 	})
 }
 
 func TestStoragePutGet(t *testing.T) {
-	testStorage(t, func(api *Storage, toEncrypt bool) {
+	testStorage(t, func(api *Storage) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		ctx := context.TODO()
-		bzzkey, wait, err := api.Put(ctx, content, exp.MimeType, toEncrypt)
+		bzzhash, err := api.Put(content, exp.MimeType)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		err = wait(ctx)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		bzzhash := bzzkey.Hex()
-		// to check put against the API#Get
+		// to check put against the Api#Get
 		resp0 := testGet(t, api.api, bzzhash, "")
 		checkResponse(t, resp0, exp)
 
 		// check storage#Get
-		resp, err := api.Get(context.TODO(), bzzhash)
+		resp, err := api.Get(bzzhash)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -13,7 +13,6 @@
         "babel-runtime": "^6.26.0",
         "classnames": "^2.2.5",
         "css-loader": "^0.28.9",
-        "escape-html": "^1.0.3",
         "eslint": "^4.16.0",
         "eslint-config-airbnb": "^16.1.0",
         "eslint-loader": "^2.0.0",
@@ -42,7 +41,7 @@
     "scripts": {
         "build": "NODE_ENV=production webpack",
         "stats": "webpack --profile --json > stats.json",
-        "dev": "webpack-dev-server --port 8081",
-        "flow": "flow-typed install"
+        "dev":   "webpack-dev-server --port 8081",
+        "flow":  "flow-typed install"
     }
 }

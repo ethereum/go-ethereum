@@ -49,7 +49,7 @@ const (
 	// history request.
 	historyUpdateRange = 50
 
-	// txChanSize is the size of channel listening to NewTxsEvent.
+	// txChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
@@ -57,9 +57,9 @@ const (
 )
 
 type txPool interface {
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 }
 
 type blockChain interface {
@@ -150,8 +150,8 @@ func (s *Service) loop() {
 	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
-	txEventCh := make(chan core.NewTxsEvent, txChanSize)
-	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
+	txEventCh := make(chan core.TxPreEvent, txChanSize)
+	txSub := txpool.SubscribeTxPreEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
@@ -362,7 +362,7 @@ type nodeInfo struct {
 
 // authMsg is the authentication infos needed to login to a monitoring server.
 type authMsg struct {
-	ID     string   `json:"id"`
+	Id     string   `json:"id"`
 	Info   nodeInfo `json:"info"`
 	Secret string   `json:"secret"`
 }
@@ -381,7 +381,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
 	}
 	auth := &authMsg{
-		ID: s.node,
+		Id: s.node,
 		Info: nodeInfo{
 			Name:     s.node,
 			Node:     infos.Name,
@@ -499,7 +499,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 	return []byte("[]"), nil
 }
 
-// reportBlock retrieves the current chain head and reports it to the stats server.
+// reportBlock retrieves the current chain head and repors it to the stats server.
 func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 	// Gather the block details from the header or block chain
 	details := s.assembleBlockStats(block)
@@ -557,7 +557,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Number:     header.Number,
 		Hash:       header.Hash(),
 		ParentHash: header.ParentHash,
-		Timestamp:  new(big.Int).SetUint64(header.Time),
+		Timestamp:  header.Time,
 		Miner:      author,
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,
@@ -689,7 +689,7 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 		sync := s.eth.Downloader().Progress()
 		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		price, _ := s.eth.APIBackend.SuggestPrice(context.Background())
+		price, _ := s.eth.ApiBackend.SuggestPrice(context.Background())
 		gasprice = int(price.Uint64())
 	} else {
 		sync := s.les.Downloader().Progress()

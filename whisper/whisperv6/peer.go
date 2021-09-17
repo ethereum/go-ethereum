@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	set "gopkg.in/fatih/set.v0"
 )
 
 // Peer represents a whisper protocol peer connection.
@@ -41,7 +41,7 @@ type Peer struct {
 	bloomFilter    []byte
 	fullNode       bool
 
-	known mapset.Set // Messages already known by the peer to avoid wasting bandwidth
+	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
 
 	quit chan struct{}
 }
@@ -54,7 +54,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		ws:             rw,
 		trusted:        false,
 		powRequirement: 0.0,
-		known:          mapset.NewSet(),
+		known:          set.New(),
 		quit:           make(chan struct{}),
 		bloomFilter:    MakeFullNodeBloom(),
 		fullNode:       true,
@@ -79,14 +79,11 @@ func (peer *Peer) stop() {
 func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
-	isLightNode := peer.host.LightClientMode()
-	isRestrictedLightNodeConnection := peer.host.LightClientModeConnectionRestricted()
 	go func() {
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
 		bloom := peer.host.BloomFilter()
-
-		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom, isLightNode)
+		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom)
 	}()
 
 	// Fetch the remote status packet and verify protocol match
@@ -130,11 +127,6 @@ func (peer *Peer) handshake() error {
 		}
 	}
 
-	isRemotePeerLightNode, err := s.Bool()
-	if isRemotePeerLightNode && isLightNode && isRestrictedLightNodeConnection {
-		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
-	}
-
 	if err := <-errc; err != nil {
 		return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
 	}
@@ -173,7 +165,7 @@ func (peer *Peer) mark(envelope *Envelope) {
 
 // marked checks if an envelope is already known to the remote peer.
 func (peer *Peer) marked(envelope *Envelope) bool {
-	return peer.known.Contains(envelope.Hash())
+	return peer.known.Has(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all

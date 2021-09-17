@@ -24,9 +24,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
@@ -89,7 +88,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{"", params.MainnetChainConfig.DAOForkBlock, true},
+		// {"", params.XDCMainnetChainConfig.DAOForkBlock, false},
 		// test DAO Init Old Privnet
 		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet
@@ -131,8 +130,8 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
-	config := rawdb.ReadChainConfig(db, genesisHash)
-	if config == nil {
+	config, err := core.GetChainConfig(db, genesisHash)
+	if err != nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
 		return // we want to return here, the other checks can't make it past this point (nil panic).
 	}

@@ -40,11 +40,11 @@ type IteratorSeeker interface {
 	Seek(key []byte) bool
 
 	// Next moves the iterator to the next key/value pair.
-	// It returns false if the iterator is exhausted.
+	// It returns whether the iterator is exhausted.
 	Next() bool
 
 	// Prev moves the iterator to the previous key/value pair.
-	// It returns false if the iterator is exhausted.
+	// It returns whether the iterator is exhausted.
 	Prev() bool
 }
 

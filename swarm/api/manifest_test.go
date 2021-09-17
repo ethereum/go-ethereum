@@ -42,9 +42,7 @@ func manifest(paths ...string) (manifestReader storage.LazySectionReader) {
 
 func testGetEntry(t *testing.T, path, match string, multiple bool, paths ...string) *manifestTrie {
 	quitC := make(chan bool)
-	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
-	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(manifest(paths...), ref, fileStore, false, quitC, NOOPDecrypt)
+	trie, err := readManifest(manifest(paths...), nil, nil, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -99,9 +97,7 @@ func TestGetEntry(t *testing.T) {
 func TestExactMatch(t *testing.T) {
 	quitC := make(chan bool)
 	mf := manifest("shouldBeExactMatch.css", "shouldBeExactMatch.css.map")
-	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
-	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(mf, ref, fileStore, false, quitC, nil)
+	trie, err := readManifest(mf, nil, nil, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -132,9 +128,7 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	reader := &storage.LazyTestSectionReader{
 		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
 	}
-	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
-	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(reader, ref, fileStore, false, nil, NOOPDecrypt)
+	trie, err := readManifest(reader, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,27 +143,4 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	checkEntry(t, "ab", "ab", false, trie)
 	checkEntry(t, "ac", "ac", false, trie)
 	checkEntry(t, "a", "a", false, trie)
-}
-
-// TestReadManifestOverSizeLimit creates a manifest reader with data longer then
-// manifestSizeLimit and checks if readManifest function will return the exact error
-// message.
-// The manifest data is not in json-encoded format, preventing possbile
-// successful parsing attempts if limit check fails.
-func TestReadManifestOverSizeLimit(t *testing.T) {
-	manifest := make([]byte, manifestSizeLimit+1)
-	reader := &storage.LazyTestSectionReader{
-		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
-	}
-	_, err := readManifest(reader, storage.Address{}, nil, false, nil, NOOPDecrypt)
-	if err == nil {
-		t.Fatal("got no error from readManifest")
-	}
-	// Error message is part of the http response body
-	// which justifies exact string validation.
-	got := err.Error()
-	want := fmt.Sprintf("Manifest size of %v bytes exceeds the %v byte limit", len(manifest), manifestSizeLimit)
-	if got != want {
-		t.Fatalf("got error mesage %q, expected %q", got, want)
-	}
 }
