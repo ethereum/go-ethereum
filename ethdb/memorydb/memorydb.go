@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -105,6 +106,7 @@ func (db *Database) Put(key []byte, value []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
+	fmt.Println("key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
 	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
@@ -203,6 +205,8 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
+	// 흠 여기서 중복 검사를 했으면 좋았을텐데 안하네 이게 문제인듯? (jmlee)
+	fmt.Println("batch.Put() - key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
 	b.size += len(value)
 	return nil
@@ -230,6 +234,7 @@ func (b *batch) Write() error {
 			delete(b.db.db, string(keyvalue.key))
 			continue
 		}
+		fmt.Println("batch.Write() - key:", common.BytesToHash(keyvalue.key), "/ value:", common.BytesToHash(keyvalue.value))
 		b.db.db[string(keyvalue.key)] = keyvalue.value
 	}
 	return nil

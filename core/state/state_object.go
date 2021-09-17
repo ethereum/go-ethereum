@@ -121,9 +121,9 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	// set addrHash as a specific key value to implement compactTrie (jmlee)
 	addressHash, doExist := db.AddrToKeyDirty[address]
 	if !doExist {
-	common.AddrToKeyMapMutex.Lock() // to avoid fatal error: "concurrent map read and map write"
+		common.AddrToKeyMapMutex.Lock() // to avoid fatal error: "concurrent map read and map write"
 		addressHash = common.AddrToKey[address]
-	common.AddrToKeyMapMutex.Unlock()
+		common.AddrToKeyMapMutex.Unlock()
 	}
 	
 	return &stateObject{
@@ -376,7 +376,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+			s.setError(tr.TryUpdate(key[:], v)) // maybe related to storage trie update? (jmlee)
 		}
 		// If state snapshotting is active, cache the data til commit
 		if s.db.snap != nil {

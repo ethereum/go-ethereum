@@ -603,6 +603,7 @@ func (t *Trie) MyCommit() {
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
 func (t *Trie) GetLastKey() *big.Int {
 	lastKey := t.getLastKey(t.root, nil)
+	// fmt.Println("lastKey:", lastKey)
 	return lastKey
 }
 
@@ -617,6 +618,7 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) *big.Int {
 		return hexToInt
 	case *shortNode:
 		lastKey = append(lastKey, n.Key...)
+		// fmt.Println("at getLastKey -> lastKey: ", lastKey, "/ appended key:", n.Key, " (short node)")
 		return t.getLastKey(n.Val, lastKey)
 	case *fullNode:
 		last := 0
@@ -627,6 +629,7 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) *big.Int {
 		}
 		lastByte := common.HexToHash("0x" + indices[last])
 		lastKey = append(lastKey, lastByte[len(lastByte)-1])
+		// fmt.Println("at getLastKey -> lastKey: ", indices[last], "/ appended key:", indices[last], " (full node)")
 		return t.getLastKey(n.Children[last], lastKey)
 	case hashNode:
 		child, err := t.resolveHash(n, nil)

@@ -118,7 +118,14 @@ func (it *NodeIterator) step() error {
 	}
 	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		addrHash := common.BytesToHash(it.stateIt.LeafKey())
+
+		addrHash := common.BytesToHash(it.stateIt.LeafKey()) // original code
+		// TODO: might need to change like this (jmlee)
+		// _, doExist := common.AddrToKey[addrHash]
+		// if doExist {
+		// 	addrKey = common.AddrToKey[addrHash]
+		// }
+		
 		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)

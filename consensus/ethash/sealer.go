@@ -51,7 +51,7 @@ var (
 func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 
 	// do not seal with 0 tx (jmlee)
-	if block.Number().Int64() > 5 && len(block.Transactions()) == 0 {
+	if len(block.Transactions()) == 0 {
 		// log.Info("Sealing paused, waiting for transactions")
 		return nil
 	}

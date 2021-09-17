@@ -135,8 +135,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	
 	// set NextKey as lastKey+1 (jmlee)
 	lastKey := tr.GetLastKey()
-	counter := new(big.Int)
-	counter.Add(lastKey, big.NewInt(1))
+	nextKey := new(big.Int)
+	nextKey.Add(lastKey, big.NewInt(1))
+	fmt.Println("next trie key to insert new leaf node:", nextKey.Int64())
 	sdb := &StateDB{
 		db:                  db,
 		trie:                tr,
@@ -150,8 +151,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
-		NextKey:		 	 counter.Int64(),
-		CheckpointKey: 		 counter.Int64(),
+		NextKey:		 	 nextKey.Int64(),
+		CheckpointKey: 		 nextKey.Int64(),
 		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
 		KeysToDeleteDirty:	 make([]common.Hash, 0),
 	}
@@ -478,6 +479,8 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
+	fmt.Println("updateStateObject() executed -> address:", obj.Address().Hex(), "/ nonce:", obj.Nonce(), "/ balance:", obj.Balance(), "/ addrHash:", obj.addrHash.Hex())
+
 	// Track the amount of time wasted on updating the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -498,18 +501,22 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	addrKey_bigint := new(big.Int)
 	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
+	// fmt.Println("addrKey_bigint:", addrKey_bigint.Int64(), "/ CheckpointKey:", s.CheckpointKey)
 	if addrKey_bigint.Int64() >= s.CheckpointKey {
 		// this address is newly created address OR already moved address. so just update
+		// fmt.Println("insert -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-	}
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
 	} else {
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
-		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later
+		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later (periodical delete)
+		// fmt.Println("append this to KeysToDeleteDirty to delete later -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
 		s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey)
 		// additional update to delete this leaf node from snapshot
 		if s.snap != nil {
+			// fmt.Println("addr:", obj.Address().Hex(), "delete snapAccounts -> addrKey:", addrKey.Hex())
 			delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
 			s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
 		}
@@ -517,9 +524,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		s.AddrToKeyDirty[addr] = newAddrHash
+		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
 		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
+		// fmt.Println("move leaf node to right -> addr:", addr.Hex(), "/ keyHash:", newAddrHash)
 		obj.addrHash = newAddrHash
 		s.NextKey += 1
 	}
@@ -534,6 +543,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
+		// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
 		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
 	}
 }
@@ -577,6 +587,21 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		err  error
 	)
 	if s.snap != nil {
+		// print some of snapshot info for debugging (jmlee)
+		// maxIndexToPrint := 15
+		// if s.snap != nil {
+		// 	for i := int64(0); i < maxIndexToPrint; i++ {
+		// 		key := common.HexToHash(strconv.FormatInt(i, 16))
+		// 		if acc, err := s.snap.Account(key); err == nil {
+		// 			if acc == nil {
+		// 				fmt.Println("snapshot[",i,"]: nil")
+		// 			} else {
+		// 				fmt.Println("snapshot[",i,"]: exist ->", acc)
+		// 			}
+		// 		}
+		// 	}
+		// }
+
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
@@ -591,6 +616,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		if acc, err = s.snap.Account(key); err == nil {
 		// if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
 			if acc == nil {
+				// fmt.Println("  cannot find the address at the snapshot")
 				return nil
 			}
 			data = &Account{
@@ -609,15 +635,17 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	}
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
+		// fmt.Println("Try to find account without snapshot -> addr:", addr.Hex())
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}
-		enc, err := s.trie.TryGet(addr.Bytes())
+		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
 			return nil
 		}
 		if len(enc) == 0 {
+			// fmt.Println("  cannot find the address outside of the snapshot")
 			return nil
 		}
 		data = new(Account)
@@ -653,6 +681,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	_, doExist := common.AddrToKey[addr]
 	if !doExist && addr != common.ZeroAddress {
 		newAddrKey := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
+		// fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", newAddrKey)
 		s.AddrToKeyDirty[addr] = newAddrKey
 		s.NextKey += 1
 	}
@@ -869,6 +898,7 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+	fmt.Println("state.Finalise() executed")
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
@@ -915,6 +945,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+	fmt.Println("state.IntermediateRoot() executed")
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -991,6 +1022,7 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	fmt.Println("state.Commit() executed")
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
@@ -1001,6 +1033,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
+			// maybe this updates storage tries (jmlee)
+
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
@@ -1012,14 +1046,22 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 		}
 	}
+	
 	// apply dirties to common.AddrToKey (jmlee)
 	common.AddrToKeyMapMutex.Lock()
 	for key, value := range s.AddrToKeyDirty {
 		common.AddrToKey[key] = value
 	}
 	common.AddrToKeyMapMutex.Unlock()
+
 	// apply dirties to common.KeysToDelete (jmlee)
+	// for i := 0; i < len(s.KeysToDeleteDirty); i++ {
+	// 	fmt.Println("s.KeysToDeleteDirty[",i,"]:", s.KeysToDeleteDirty[i])
+	// }
 	common.KeysToDelete = append(common.KeysToDelete, s.KeysToDeleteDirty...)
+	// for i := 0; i < len(common.KeysToDelete); i++ {
+	// 	fmt.Println("common.KeysToDelete[",i,"]:", common.KeysToDelete[i])
+	// }
 
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
@@ -1065,6 +1107,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
+			// code for debugging (jmlee)
+			// for k, v := range s.snapAccounts {
+			// 	fmt.Println("s.snapAccounts -> k:", k, "/ v:", v)
+			// }
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}

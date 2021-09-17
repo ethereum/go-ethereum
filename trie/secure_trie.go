@@ -78,11 +78,13 @@ func (t *SecureTrie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
+	// fmt.Println("at SecureTrie.TryGet() -> address:", common.BytesToHash(key).Hex(), "/ key:", common.BytesToHash(t.hashKey(key)).Hex())
 	return t.trie.TryGet(t.hashKey(key))
 }
 
 // set key as I want to implement Ethane (jmlee)
 func (t *SecureTrie) TryGet_SetKey(key []byte) ([]byte, error) {
+	// fmt.Println("at SecureTrie.TryGet_SetKey() -> key:", common.BytesToHash(key).Hex())
 	return t.trie.TryGet(key)
 }
 

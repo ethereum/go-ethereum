@@ -627,6 +627,13 @@ var (
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+
+	// skip block reward over certain block number (jmlee)
+	// if header.Number.Int64() > 4 {
+	// 	fmt.Println("skip block reward")
+	// 	return
+	// }
+	
 	// Skip block reward in catalyst mode
 	if config.IsCatalyst(header.Number) {
 		return
@@ -652,5 +659,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
+	// fmt.Println("AddBalance() executed for block reward")
 	state.AddBalance(header.Coinbase, reward)
 }
