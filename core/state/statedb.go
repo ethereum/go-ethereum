@@ -123,6 +123,7 @@ type StateDB struct {
 	NextKey				int64 // key of the first 'will be inserted' account
 	CheckpointKey		int64 // save initial NextKey value to determine whether move leaf nodes or not
 	AddrToKeyDirty		map[common.Address]common.Hash // dirty cache for common.AddrToKey
+	KeysToDeleteDirty	[]common.Hash // dirty cache for common.KeysToDelete
 }
 
 // New creates a new state from a given trie.
@@ -152,6 +153,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		NextKey:		 	 counter.Int64(),
 		CheckpointKey: 		 counter.Int64(),
 		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
+		KeysToDeleteDirty:	 make([]common.Hash, 0),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -504,10 +506,8 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	} else {
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
-		// delete previous leaf node (comment out this block if you want to leave previous leaf nodes)
-		if err = s.trie.TryUpdate_SetKey(addrKey[:], nil); err != nil {
-			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
-		}
+		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later
+		s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey)
 		// additional update to delete this leaf node from snapshot
 		if s.snap != nil {
 			delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
@@ -745,10 +745,14 @@ func (s *StateDB) Copy() *StateDB {
 		NextKey:		 	 s.NextKey,
 		CheckpointKey: 		 s.CheckpointKey,
 		AddrToKeyDirty:		 make(map[common.Address]common.Hash, len(s.AddrToKeyDirty)),
+		KeysToDeleteDirty:	 make([]common.Hash, len(s.KeysToDeleteDirty)),
 	}
 	// Copy the dirty states, logs, and preimages
 	for key, value := range s.AddrToKeyDirty {
 		state.AddrToKeyDirty[key] = value
+	}
+	for i := 0; i < len(s.KeysToDeleteDirty); i++ {
+		state.KeysToDeleteDirty[i] = s.KeysToDeleteDirty[i]
 	}
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
@@ -1014,6 +1018,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		common.AddrToKey[key] = value
 	}
 	common.AddrToKeyMapMutex.Unlock()
+	// apply dirties to common.KeysToDelete (jmlee)
+	common.KeysToDelete = append(common.KeysToDelete, s.KeysToDeleteDirty...)
 
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
@@ -1027,6 +1033,15 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	var start time.Time
 	if metrics.EnabledExpensive {
 		start = time.Now()
+	}
+	// decide whether to delete leaf nodes or not (jmlee)
+	// this might be needed for full sync
+	if common.DoDeleteLeafNode {
+		// delete previous leaf nodes from state trie
+		s.DeletePreviousLeafNodes(common.KeysToDelete)
+
+		// reset common.KeysToDelete
+		common.KeysToDelete = make([]common.Hash, 0)
 	}
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
@@ -1125,4 +1140,17 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+// DeletePreviousLeafNodes deletes previous leaf nodes from state trie (jmlee)
+func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
+	fmt.Println("trie root before delete leaf nodes:", s.trie.Hash().Hex())
+	// delete previous leaf nodes from state trie
+	for i := 0; i < len(keysToDelete); i++ {
+		fmt.Println("delete previous leaf node -> key:", keysToDelete[i].Hex())
+		if err := s.trie.TryUpdate_SetKey(keysToDelete[i][:], nil); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keysToDelete[i][:], err))
+		}
+	}
+	fmt.Println("trie root after delete leaf nodes:", s.trie.Hash().Hex())
 }

@@ -984,6 +984,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			return
 		}
 	}
+
+	// delete previous leaf nodes (jmlee)
+	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+		keysToDelete := append(common.KeysToDelete, w.current.state.KeysToDeleteDirty...)
+		w.current.state.DeletePreviousLeafNodes(keysToDelete)
+	}
+
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 

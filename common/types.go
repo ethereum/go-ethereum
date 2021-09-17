@@ -51,6 +51,9 @@ var (
 	AddrToKey = make(map[Address]Hash)
 	AddrToKeyMapMutex = sync.RWMutex{} // to avoid fatal error: "concurrent map read and map write"
 	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/)
+	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
+	DeleteLeafNodeEpoch = int64(250) // block epoch to delete previous leaf nodes
+	DoDeleteLeafNode bool // flag to determine whether to delete leaf nodes or not
 	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever
 	ZeroAddress = HexToAddress("0x0")
 )

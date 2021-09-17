@@ -1598,10 +1598,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
 
 		// print state trie (jmlee)
-		fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
-		ldb := trie.NewDatabase(bc.db)
-		stateTrie, _ := trie.NewSecure(bc.CurrentBlock().Root(), ldb)
-		stateTrie.Print()
+
+	// set common.DoDeleteLeafNode (jmlee)
+	if (block.Header().Number.Int64()+1) % common.DeleteLeafNodeEpoch == 0 {
+		common.DoDeleteLeafNode = true
+	} else {
+		common.DoDeleteLeafNode = false
 	}
 
 	return status, nil
