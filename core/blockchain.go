@@ -1271,7 +1271,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+		if bc.chainConfig.XDPoS != nil {
 			// epoch block
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 				CheckpointCh <- 1

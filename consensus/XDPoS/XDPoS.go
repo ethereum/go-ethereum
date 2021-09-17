@@ -417,20 +417,11 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 	if err == nil {
 		return c.verifySeal(chain, header, parents, fullVerify)
 	}
-
-	// try again the progress with signers querying from smart contract
-	// for example the checkpoint is 886500 -> the start gap block is 886495
-	startGapBlockHeader := header
-	for step := uint64(1); step <= chain.Config().XDPoS.Gap; step++ {
-		startGapBlockHeader = chain.GetHeader(startGapBlockHeader.ParentHash, number-step)
-	}
-	signers, err = c.HookGetSignersFromContract(startGapBlockHeader.Hash())
+	signers, err = c.GetSignersFromContract(chain, header)
 	if err != nil {
-		log.Debug("Can't get signers from Smart Contract ", err)
 		return err
 	}
 
-	err = c.checkSignersOnCheckpoint(chain, header, signers)
 	if err == nil {
 		return c.verifySeal(chain, header, parents, fullVerify)
 	}
@@ -440,6 +431,10 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 
 func (c *XDPoS) checkSignersOnCheckpoint(chain consensus.ChainReader, header *types.Header, signers []common.Address) error {
 	number := header.Number.Uint64()
+	// ignore signerCheck at checkpoint block 27307800 due to wrong snapshot at gap 27307799
+	if number == common.IgnoreSignerCheckBlock {
+		return nil
+	}
 	penPenalties := []common.Address{}
 	if c.HookPenalty != nil || c.HookPenaltyTIPSigning != nil {
 		var err error
@@ -1280,4 +1275,17 @@ func (c *XDPoS) CheckMNTurn(chain consensus.ChainReader, parent *types.Header, s
 		return true
 	}
 	return false
+}
+
+func (c *XDPoS) GetSignersFromContract(chain consensus.ChainReader, checkpointHeader *types.Header) ([]common.Address, error) {
+	startGapBlockHeader := checkpointHeader
+	number := checkpointHeader.Number.Uint64()
+	for step := uint64(1); step <= chain.Config().XDPoS.Gap; step++ {
+		startGapBlockHeader = chain.GetHeader(startGapBlockHeader.ParentHash, number-step)
+	}
+	signers, err := c.HookGetSignersFromContract(startGapBlockHeader.Hash())
+	if err != nil {
+		return []common.Address{}, fmt.Errorf("Can't get signers from Smart Contract . Err: %v", err)
+	}
+	return signers, nil
 }
