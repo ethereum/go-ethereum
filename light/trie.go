@@ -117,7 +117,7 @@ func (t *odrTrie) TryUpdateAccount(key []byte, acc account.Account) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {
-		return fmt.Errorf("Decoding error in account update: %w", err)
+		return fmt.Errorf("decoding error in account update: %w", err)
 	}
 	return t.do(key, func() error {
 		return t.trie.TryUpdate(key, value)

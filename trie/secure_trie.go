@@ -95,8 +95,7 @@ func (t *SecureTrie) TryUpdateAccount(key []byte, acc account.Account) error {
 	if err != nil {
 		return err
 	}
-	err = t.trie.TryUpdate(hk, data)
-	if err != nil {
+	if err := t.trie.TryUpdate(hk, data); err != nil {
 		return err
 	}
 	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
