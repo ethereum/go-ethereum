@@ -386,7 +386,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
 			data, _ = reader.Ancient(freezerBodiesTable, number)
 			return nil
 		}
@@ -466,7 +466,7 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
 			data, _ = reader.Ancient(freezerDifficultyTable, number)
 			return nil
 		}
@@ -526,7 +526,7 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, _ := reader.Ancient(freezerHashTable, number); common.BytesToHash(h) == hash {
+		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
 			data, _ = reader.Ancient(freezerReceiptTable, number)
 			return nil
 		}
