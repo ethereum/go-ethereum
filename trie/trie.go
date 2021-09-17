@@ -21,12 +21,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"runtime/debug"
 	"strconv"
 	"sync"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -600,15 +600,14 @@ func (t *Trie) MyCommit() {
 	t.db.Commit(t.Hash(), false, nil)
 }
 
-<<<<<<< HEAD
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
-func (t *Trie) GetLastKey() (*big.Int) {
+func (t *Trie) GetLastKey() *big.Int {
 	lastKey := t.getLastKey(t.root, nil)
 	return lastKey
 }
 
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
-func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
+func (t *Trie) getLastKey(origNode node, lastKey []byte) *big.Int {
 	switch n := (origNode).(type) {
 	case nil:
 		return big.NewInt(0)
@@ -639,7 +638,8 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
-=======
+}
+
 // Trie size inspection from nakamoto.snu.ac.kr(jhkim)
 
 // trie inspecting results (jhkim)
@@ -942,5 +942,4 @@ func increaseSize(nodeSize int, node string, tir *TrieInspectResult, depth int) 
 		os.Exit(1)
 	}
 	rwMutex.Unlock()
->>>>>>> 9acfb0cc9... add stateTrie inspection
 }

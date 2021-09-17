@@ -248,9 +248,9 @@ func (t *SecureTrie) MyCommit() {
 }
 
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
-func (t *SecureTrie) GetLastKey() (*big.Int) {
+func (t *SecureTrie) GetLastKey() *big.Int {
 	return t.trie.GetLastKey()
-// trie/secure_trie.go
+}
 
 func (t *SecureTrie) InspectTrie() TrieInspectResult {
 	return t.trie.InspectTrie()
