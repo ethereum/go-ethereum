@@ -445,12 +445,11 @@ func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *Tra
 // EVM against a block pulled from the pool of bad ones and returns them as a JSON
 // object.
 func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
-	for _, block := range rawdb.ReadAllBadBlocks(api.backend.ChainDb()) {
-		if block.Hash() == hash {
-			return api.traceBlock(ctx, block, config)
-		}
+	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
+	if block == nil {
+		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
-	return nil, fmt.Errorf("bad block %#x not found", hash)
+	return api.traceBlock(ctx, block, config)
 }
 
 // StandardTraceBlockToFile dumps the structured logs created during the
@@ -469,12 +468,8 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
 	block, _ := api.blockByHash(ctx, hash)
 	if block == nil {
-		// Check if the block is one of the bad ones
-		for _, b := range rawdb.ReadAllBadBlocks(api.backend.ChainDb()) {
-			if b.Hash() == hash {
-				block = b
-			}
-		}
+		// Check in the bad blocks
+		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
 	}
 	if block == nil {
 		return nil, fmt.Errorf("block %#x not found", hash)
@@ -524,12 +519,11 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 // execution of EVM against a block pulled from the pool of bad ones to the
 // local file system and returns a list of files to the caller.
 func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	for _, block := range rawdb.ReadAllBadBlocks(api.backend.ChainDb()) {
-		if block.Hash() == hash {
-			return api.standardTraceBlockToFile(ctx, block, config)
-		}
+	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
+	if block == nil {
+		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
-	return nil, fmt.Errorf("bad block %#x not found", hash)
+	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and
