@@ -224,7 +224,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return nil
 			}
 			if block.NumberU64()%common.MergeSignRange == 0 || !eth.chainConfig.IsTIP2019(block.Number()) {
-				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb, eb); err != nil {
 					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 				}
 			}
@@ -472,12 +472,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			sort.Slice(candidates, func(i, j int) bool {
 				return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
 			})
-			candidates = candidates[:150]
+			if len(candidates) > 150 {
+				candidates = candidates[:150]
+			}
 			result := []common.Address{}
 			for _, candidate := range candidates {
 				result = append(result, candidate.Address)
 			}
-			return result[:150], nil
+			return result, nil
 		}
 
 		// Hook calculates reward for masternodes

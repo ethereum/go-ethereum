@@ -413,7 +413,7 @@ func (self *worker) wait() {
 				}
 				// Send tx sign to smart contract blockSigners.
 				if block.NumberU64()%common.MergeSignRange == 0 || !self.config.IsTIP2019(block.Number()) {
-					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb); err != nil {
+					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb, self.coinbase); err != nil {
 						log.Error("Fail to create tx sign for signer", "error", "err")
 					}
 				}
