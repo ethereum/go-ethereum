@@ -249,6 +249,9 @@ func Setup(ctx *cli.Context) error {
 	} else if ctx.GlobalIsSet("mumbai") {
 		address := fmt.Sprintf("%s:%d", "0.0.0.0", 7071)
 		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
+	} else if ctx.GlobalIsSet("bor-mainnet") {
+		address := fmt.Sprintf("%s:%d", "0.0.0.0", 7071)
+		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
 	}
 	return nil
 }

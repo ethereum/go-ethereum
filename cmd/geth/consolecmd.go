@@ -137,6 +137,9 @@ func remoteConsole(ctx *cli.Context) error {
 			} else if ctx.GlobalBool(utils.MumbaiFlag.Name) {
 				homeDir, _ := os.UserHomeDir()
 				path = filepath.Join(homeDir, "/.bor/data")
+			} else if ctx.GlobalBool(utils.BorMainnetFlag.Name) {
+				homeDir, _ := os.UserHomeDir()
+				path = filepath.Join(homeDir, "/.bor/data")
 			}
 		}
 		endpoint = fmt.Sprintf("%s/geth.ipc", path)

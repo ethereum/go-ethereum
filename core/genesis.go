@@ -254,6 +254,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.GoerliChainConfig
 	case ghash == params.MumbaiGenesisHash:
 		return params.MumbaiChainConfig
+	case ghash == params.BorMainnetGenesisHash:
+		return params.BorMainnetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -414,6 +416,23 @@ func DefaultMumbaiGenesisBlock() *Genesis {
 		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
 		Alloc:      readPrealloc("allocs/mumbai.json"),
+	}
+}
+
+//DefaultBorMainnet returns the Bor Mainnet network gensis block.
+func DefaultBorMainnetGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BorMainnetChainConfig,
+		Nonce:      0x0,
+		Timestamp:  0x5ED20F84,
+		GasLimit:   0x989680,
+		Difficulty: big.NewInt(1),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
+		Alloc:      readPrealloc("allocs/bormainnet.json"),
+		Number:     0x0,
+		GasUsed:    0x0,
+		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 }
 

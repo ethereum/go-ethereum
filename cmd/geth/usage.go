@@ -44,6 +44,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MainnetFlag,
 			utils.GoerliFlag,
 			utils.MumbaiFlag,
+			utils.BorMainnetFlag,
 			utils.RinkebyFlag,
 			utils.RopstenFlag,
 			utils.SyncModeFlag,
