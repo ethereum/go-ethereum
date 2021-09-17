@@ -21,13 +21,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"strconv"
 	"sync"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -595,6 +600,7 @@ func (t *Trie) MyCommit() {
 	t.db.Commit(t.Hash(), false, nil)
 }
 
+<<<<<<< HEAD
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
 func (t *Trie) GetLastKey() (*big.Int) {
 	lastKey := t.getLastKey(t.root, nil)
@@ -633,4 +639,308 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
+=======
+// Trie size inspection from nakamoto.snu.ac.kr(jhkim)
+
+// trie inspecting results (jhkim)
+type TrieInspectResult struct {
+	Count                   int // number of calling function TriInspectNode
+	TrieSize                int // bytes
+	LeafNodeNum             int // # of leaf nodes in the trie (if this trie is state trie, then = EOANum + CANum)
+	LeafNodeSize            int
+	EOANum                  int // # of Externally Owned Accounts in the trie
+	CANum                   int // # of Contract Accounts in the trie
+	FullNodeNum             int // # of full node in the trie
+	FullNodeSize            int
+	ShortNodeNum            int // # of short node in the trie
+	ShortNodeSize           int
+	IntermediateNodeNum     int // # of short/full node in the trie
+	StorageTrieNum          int // # of non-empty storage tries (for state trie inspection)
+	StorageTrieSizeSum      int // total size of storage tries (for state trie inspection)
+	StorageTrieLeafNodeNum  int // # of nodes in all storage trie
+	StorageTrieFullNodeNum  int
+	StorageTrieShortNodeNum int
+	ErrorNum                int // # of error occurence while inspecting the trie
+	StateTrieFullNodeDepth  [20]int
+	StateTrieShortNodeDepth [20]int
+	StateTrieLeafNodeDepth  [20]int
+}
+
+func (tir *TrieInspectResult) PrintTrieInspectResult(blockNumber uint64, elapsedTime int) {
+	f1, err := os.Create("/home/jhkim/go/src/github.com/ethereum/result_" + strconv.FormatUint(blockNumber, 10) + ".txt")
+	if err != nil {
+		fmt.Printf("Cannot create result file.\n")
+		os.Exit(1)
+	}
+	defer f1.Close()
+	fmt.Fprintln(f1, "trie inspect result at block", blockNumber, "with", maxGoroutine, "goroutines (it took", elapsedTime, "seconds)")
+	fmt.Fprintln(f1, "  total trie size:", tir.TrieSize, "bytes (about", tir.TrieSize/1000000, "MB)")
+	fmt.Fprintln(f1, "  # of full nodes:", tir.FullNodeNum)
+	fmt.Fprintln(f1, "  total size of full nodes:", tir.FullNodeSize)
+	fmt.Fprintln(f1, "  # of short nodes:", tir.ShortNodeNum)
+	fmt.Fprintln(f1, "  total size of short nodes:", tir.ShortNodeSize)
+	fmt.Fprintln(f1, "  # of intermediate nodes:", tir.IntermediateNodeNum)
+	fmt.Fprintln(f1, "  # of leaf nodes:", tir.LeafNodeNum, "( EOA:", tir.EOANum, "/ CA:", tir.CANum, ")")
+	fmt.Fprintln(f1, "  total size of leaf nodes:", tir.LeafNodeSize)
+	fmt.Fprintln(f1, "  depth distribution of Full nodes:", tir.StateTrieFullNodeDepth)
+	fmt.Fprintln(f1, "  depth distribution of Short nodes:", tir.StateTrieShortNodeDepth)
+	fmt.Fprintln(f1, "")
+	fmt.Fprintln(f1, "  # of non-empty storage tries:", tir.StorageTrieNum, "(", tir.StorageTrieSizeSum, "bytes =", tir.StorageTrieSizeSum/1000000, "MB )")
+	fmt.Fprintln(f1, "  # of Full nodes of storage tries:", tir.StorageTrieFullNodeNum)
+	fmt.Fprintln(f1, "  # of short nodes of storage tries:", tir.StorageTrieShortNodeNum)
+	fmt.Fprintln(f1, "  # of leaf nodes of storage tries:", tir.StorageTrieLeafNodeNum)
+	fmt.Fprintln(f1, "  # of errors:", tir.ErrorNum)
+
+	fmt.Println("\n\n\ntrie inspect result at block", blockNumber, "with", maxGoroutine, "goroutines(it took", elapsedTime, "seconds)")
+	fmt.Println("  total trie size:", tir.TrieSize, "bytes (about", tir.TrieSize/1000000, "MB)")
+	fmt.Println("  # of full nodes:", tir.FullNodeNum)
+	fmt.Println("  total size of full nodes:", tir.FullNodeSize)
+	fmt.Println("  # of short nodes:", tir.ShortNodeNum)
+	fmt.Println("  total size of short nodes:", tir.ShortNodeSize)
+	fmt.Println("  # of intermediate nodes:", tir.IntermediateNodeNum)
+	fmt.Println("  # of leaf nodes:", tir.LeafNodeNum, "( EOA:", tir.EOANum, "/ CA:", tir.CANum, ")")
+	fmt.Println("  total size of leaf nodes:", tir.LeafNodeSize)
+	fmt.Println("  depth distribution of Full nodes:", tir.StateTrieFullNodeDepth)
+	fmt.Println("  depth distribution of Short nodes:", tir.StateTrieShortNodeDepth)
+	fmt.Println("")
+	fmt.Println("  # of non-empty storage tries:", tir.StorageTrieNum, "(", tir.StorageTrieSizeSum, "bytes =", tir.StorageTrieSizeSum/1000000, "MB )")
+	fmt.Println("  # of Full nodes of storage tries:", tir.StorageTrieFullNodeNum)
+	fmt.Println("  # of short nodes of storage tries:", tir.StorageTrieShortNodeNum)
+	fmt.Println("  # of leaf nodes of storage tries:", tir.StorageTrieLeafNodeNum)
+	fmt.Println("  # of errors:", tir.ErrorNum) // this should be 0, of course
+
+}
+
+// get shortnode's size (for debugging)
+func getShortnodeSize(n shortNode) int {
+	h := newHasher(false)
+	defer returnHasherToPool(h)
+	collapsed, _ := h.hashShortNodeChildren(&n)
+	h.tmp.Reset()
+	if err := rlp.Encode(&h.tmp, collapsed); err != nil {
+		panic("encode error: " + err.Error())
+	}
+	return len(h.tmp)
+}
+
+// get fullnode's size (for debugging)
+func getFullnodeSize(n fullNode) int {
+	h := newHasher(false)
+	defer returnHasherToPool(h)
+	collapsed, _ := h.hashFullNodeChildren(&n)
+	h.tmp.Reset()
+	if err := rlp.Encode(&h.tmp, collapsed); err != nil {
+		panic("encode error: " + err.Error())
+	}
+	return len(h.tmp)
+}
+
+var wg sync.WaitGroup
+var isFirst = true
+
+// inspect the trie
+func (t *Trie) InspectTrie() TrieInspectResult {
+	if isFirst {
+		// fmt.Println("First call: InspectTrie function. This should be printed only once")
+		isFirst = false
+		debug.SetMaxThreads(15000) // default MaxThread is 10000
+
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+	debug.FreeOSMemory()
+	var tir TrieInspectResult
+	t.inspectTrieNodes(t.root, &tir, &wg, 0, "state") // Inspect Start
+	wg.Wait()
+	return tir
+}
+
+func (t *Trie) InspectStorageTrie() TrieInspectResult {
+
+	var tir TrieInspectResult
+	t.inspectTrieNodes(t.root, &tir, &wg, 0, "storage")
+	return tir
+}
+
+var cnt = 0
+var rwMutex = new(sync.RWMutex)
+var maxGoroutine = 10000
+
+func (t *Trie) inspectTrieNodes(n node, tir *TrieInspectResult, wg *sync.WaitGroup, depth int, trie string) {
+
+	cnt += 1
+	if cnt%100000 == 0 && trie == "state" {
+		cnt = 0
+		fmt.Println("  intermediate result -> trie size:", tir.TrieSize/1000000, "MB / goroutines", runtime.NumGoroutine(), "/ EOA:", tir.EOANum, "/ CA:", tir.CANum, "/ inter nodes:", tir.IntermediateNodeNum, "/ err:", tir.ErrorNum)
+
+	}
+
+	switch n := n.(type) {
+	case *shortNode:
+		hn, _ := n.cache()
+		hash := common.BytesToHash(hn)
+		if hn == nil { // storage trie case
+			// this node is smaller than 32 bytes, cause there is no cached hash
+			// "Nodes smaller than 32 bytes are stored inside their parent"
+			if getShortnodeSize(*n) >= 32 {
+				// ERROR: this must not be printed, this is big error
+				fmt.Println("ERROR: this shortnode is larger than 32 bytes, but has no cache()")
+				os.Exit(1)
+			}
+			rwMutex.Lock()
+			tir.LeafNodeNum++
+			tir.ShortNodeNum++
+			rwMutex.Unlock()
+			return
+		}
+		nodeBytes, err := t.db.Node(hash) // DB acceess
+		if err != nil {
+			// in normal case (ex. archive node), it will not come in here
+			fmt.Println("ERROR: short node not found -> node hash:", hash.Hex())
+			os.Exit(1)
+		}
+		increaseSize(len(nodeBytes), "short", tir, depth) // increase tir
+		t.inspectTrieNodes(n.Val, tir, wg, depth+1, trie) // go child node
+
+	case *fullNode:
+		hn, _ := n.cache()
+		nodeBytes, err := t.db.Node(common.BytesToHash(hn))
+		if err != nil {
+			// in normal case (ex. archive node), it will not come in here
+			fmt.Println("ERROR: full node not found -> node hash:", common.BytesToHash(hn).Hex())
+			os.Exit(1)
+		}
+		increaseSize(len(nodeBytes), "full", tir, depth) // increase tir
+		gortn := runtime.NumGoroutine()
+
+		// // vanilla version
+		// for _, child := range &n.Children {
+		// 	if child != nil {
+		// 		t.inspectTrieNodes(child, tir, wg, depth+1, trie)
+		// 	}
+		// }
+
+		// goroutine version
+		if gortn < maxGoroutine && depth < 6 { // if current number of goroutines exceed max goroutine number
+			for _, child := range &n.Children {
+				if child != nil {
+					wg.Add(1)
+					go func(child node, tir *TrieInspectResult, wg *sync.WaitGroup, depth int, trie string) {
+						defer wg.Done()
+						t.inspectTrieNodes(child, tir, wg, depth+1, trie)
+					}(child, tir, wg, depth, trie)
+				}
+			}
+		} else {
+			for _, child := range &n.Children {
+				if child != nil {
+					t.inspectTrieNodes(child, tir, wg, depth+1, trie)
+				}
+			}
+		}
+
+	case hashNode:
+		hash := common.BytesToHash([]byte(n))
+		resolvedNode := t.db.node(hash) // error
+		if resolvedNode != nil {
+			t.inspectTrieNodes(resolvedNode, tir, wg, depth, trie)
+		} else {
+			// in normal case (ex. archive node), it will not come in here
+			fmt.Println("ERROR: cannot resolve hash node -> node hash:", hash.Hex())
+			os.Exit(1)
+		}
+
+	case valueNode:
+		// Value nodes don't have children so they're left as were
+		// fmt.Println("this node is value node (size:", len(n), "bytes)")
+		increaseSize(len(n), "value", tir, depth)
+		// value node has account info, decode it
+		var acc Account
+		if err := rlp.DecodeBytes(n, &acc); err != nil {
+			// if this leaf node is from state trie, this decoding will not fail
+			// but if this leaf node is from storage trie, this decoding will fail, but not error
+			// so I just not add error count
+
+			// log.Error("Failed to decode state object", "err", err)
+			// tir.ErrorNum += 1
+		} else {
+			// check if account has empty codeHash value or not
+			codeHash := common.Bytes2Hex(acc.CodeHash)
+			if codeHash == "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470" { // empty code hash
+				rwMutex.Lock()
+				tir.EOANum += 1
+				rwMutex.Unlock()
+			} else {
+				rwMutex.Lock()
+				tir.CANum += 1
+				rwMutex.Unlock()
+
+				// inspect CA's storage trie (if it is not empty trie)
+				if acc.Root.Hex() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" { // empty root hash
+					storageTrie, err := NewSecure(acc.Root, t.db) // storage trie is secure trie
+					if err != nil {
+						fmt.Println("ERROR: cannot find the storage trie")
+						rwMutex.Lock()
+						tir.ErrorNum += 1
+						rwMutex.Unlock()
+					} else {
+						stateTrieRootHash := storageTrie.Hash()
+						if acc.Root.Hex() != stateTrieRootHash.Hex() {
+							fmt.Println("maybe this is problem")
+							fmt.Println("saved storage root:", acc.Root.Hex(), "/ rehashed storage root:", stateTrieRootHash.Hex())
+						}
+
+						// storage trie inspect
+						storageTir := storageTrie.InspectStorageTrie()
+						// storageTir.PrintTrieInspectResult()
+						rwMutex.Lock()
+						tir.StorageTrieNum += 1
+						tir.StorageTrieSizeSum += storageTir.TrieSize
+						tir.ErrorNum += storageTir.ErrorNum
+
+						tir.StorageTrieFullNodeNum += storageTir.FullNodeNum
+						tir.StorageTrieShortNodeNum += storageTir.ShortNodeNum
+						tir.StorageTrieLeafNodeNum += storageTir.LeafNodeNum
+						// if you want to see storage trie's node distribution, add fields of storageTrie
+						rwMutex.Unlock()
+
+						if storageTir.ErrorNum != 0 {
+							fmt.Print("!!! ERROR: something is wrong while inspecting storage trie ->", storageTir.ErrorNum, "errors\n\n")
+							// os.Exit(1)
+						}
+					}
+				}
+			}
+		}
+	default:
+		// should not reach here! maybe there is something wrong
+		fmt.Println("ERROR: unknown trie node type? node:", n)
+		os.Exit(1)
+	}
+}
+
+func increaseSize(nodeSize int, node string, tir *TrieInspectResult, depth int) {
+	rwMutex.Lock()
+	tir.TrieSize += nodeSize
+	if node == "short" {
+		tir.IntermediateNodeNum++
+		tir.ShortNodeNum++
+		tir.ShortNodeSize += nodeSize
+		tir.StateTrieShortNodeDepth[depth]++
+
+	} else if node == "full" {
+		tir.IntermediateNodeNum++
+		tir.FullNodeNum++
+		tir.FullNodeSize += nodeSize
+		tir.StateTrieFullNodeDepth[depth]++
+
+	} else if node == "value" {
+		tir.LeafNodeNum++
+		tir.LeafNodeSize += nodeSize
+		tir.StateTrieLeafNodeDepth[depth]++
+	} else {
+		fmt.Println("wrong node format in increaseSize")
+		os.Exit(1)
+	}
+	rwMutex.Unlock()
+>>>>>>> 9acfb0cc9... add stateTrie inspection
 }

@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -654,8 +655,28 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 // * When blockNr is -2 the pending chain head is returned.
 // * When fullTx is true all transactions in the block are returned, otherwise
 //   only the transaction hash is returned.
+var isFirst = true
+
+// stateTrie inspect (jhkim)
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
+	fmt.Printf("getblockbynumber in api.go\n")
+
+	if isFirst {
+		fmt.Println("skip state trie inspection at the first time")
+		isFirst = false
+	} else if block != nil && err == nil {
+		fmt.Println("start inspecting state trie at block", block.NumberU64())
+
+		startTime := time.Now()
+		triedb := core.GlobalBC.StateCache().TrieDB()        // get leveldb (codes from eth/api.go L:501)
+		stateTrie, _ := trie.NewSecure(block.Root(), triedb) // get the state trie (triedb is same as stateTrie.db)
+		tir := stateTrie.InspectTrie()
+		elapsedTime := time.Since(startTime)
+		// fmt.Println("\n\n\ntrie inspect result at block", block.NumberU64(), "(it took", int(elapsedTime.Seconds()), "seconds)")
+		tir.PrintTrieInspectResult(block.NumberU64(), int(elapsedTime.Seconds()))
+		fmt.Println("")
+	}
 	if block != nil && err == nil {
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {

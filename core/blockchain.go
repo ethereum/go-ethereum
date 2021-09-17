@@ -47,6 +47,8 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+var GlobalBC *BlockChain
+
 var (
 	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
@@ -394,6 +396,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+	GlobalBC = bc
 	return bc, nil
 }
 
@@ -1591,8 +1594,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// print database inspect result (jmlee)
-	if block.Header().Number.Int64() % 1 == 0 {
-		// inspect database
+	if block.Header().Number.Int64()%1 == 0 {
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
 
 		// print state trie (jmlee)
@@ -1661,7 +1663,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 	// print database inspection (jmlee)
 	fmt.Println("block inserted -> blocknumber:", chain[len(chain)-1].Header().Number.Int64())
-
 
 	return n, err
 }
