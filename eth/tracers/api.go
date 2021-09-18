@@ -490,27 +490,32 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		return nil, err
 	}
 	var (
-		roots       []common.Hash
-		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number())
-		chainConfig = api.backend.ChainConfig()
-		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		vmConf      vm.Config
+		roots              []common.Hash
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		chainConfig        = api.backend.ChainConfig()
+		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	for i, tx := range block.Transactions() {
 		var (
 			msg, _    = tx.AsMessage(signer, block.BaseFee())
 			txContext = core.NewEVMTxContext(msg)
-			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
+			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
 		statedb.Prepare(tx.Hash(), i)
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
-			return roots, err
+			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
+			// We intentionally don't return the error here: if we do, then the RPC server will not
+			// return the roots. Most likely, the caller already knows that a certain transaction fails to
+			// be included, but still want the intermediate roots that led to that point.
+			// It may happen the tx_N causes an erroneous state, which in turn causes tx_N+M to not be
+			// executable.
+			// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
+			return roots, nil
 		}
 		// calling IntermediateRoot will internally call Finalize on the state
 		// so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		root := statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
-		roots = append(roots, root)
+		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	}
 	return roots, nil
 }
