@@ -33,8 +33,8 @@ Keys are stored under `<DATADIR>/keystore`. Make sure you backup your keys regul
 for more information. If a custom datadir and keystore option are given the keystore
 option takes preference over the datadir option.
 
-The newest format of the keyfiles is: `UTC--<created_at UTC ISO8601>-<address hex>`. The
-order of accounts when listing, is lexicographic, but as a consequence of the timespamp
+The newest format of the keyfiles is: `UTC--<created_at UTC ISO8601>--<address hex>`. The
+order of accounts when listing, is lexicographic, but as a consequence of the timestamp
 format, it is actually order of creation
 
 It is safe to transfer the entire directory or the individual keys therein between
