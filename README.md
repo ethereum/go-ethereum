@@ -1,4 +1,4 @@
-## Bor Overview
+# Bor Overview
 The Bor or the Block Producer implementation is basically the sidechain operator. The sidechain VM is EVM-compatible. It is an official Golang implementation of the Matic protocol (fork of [Go Ethereum](https://github.com/ethereum/go-ethereum))
 
 ![Forks](https://img.shields.io/github/forks/maticnetwork/bor?style=social)
@@ -13,7 +13,7 @@ The Bor or the Block Producer implementation is basically the sidechain operator
 [![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.gg/zdwkdvMNY2)
 [![Twitter Follow](https://img.shields.io/twitter/follow/0xPolygon.svg?style=social)](https://twitter.com/0xPolygon)
 
-# How to contribute
+## How to contribute
 
 ### Contribution  Guidelines
 We believe one of the things that makes Polygon special is its coherent design and we seek to retain this defining characteristic. From the outset we defined some guidelines to ensure new contributions only ever enhance the project:
