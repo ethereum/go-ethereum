@@ -815,7 +815,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		return 0, err
 	}
 
-	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
+	ancestor, err = d.findAncestorBinarySearch(p, mode, localHeight, floor)
 	if err != nil {
 		return 0, err
 	}
