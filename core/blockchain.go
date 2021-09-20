@@ -2067,8 +2067,8 @@ func (bc *BlockChain) insertBlock(block *types.Block) error {
 	}
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
-		bc.reportBlock(block, nil, ErrBlacklistedHash)
-		return ErrBlacklistedHash
+		bc.reportBlock(block, nil, ErrBannedHash)
+		return ErrBannedHash
 	}
 	// Retrieve the parent block and it's state to execute on top
 	start := time.Now()
