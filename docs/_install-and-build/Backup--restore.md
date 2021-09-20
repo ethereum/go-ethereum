@@ -59,7 +59,7 @@ Import binary-format blockchain exports with:
 geth import <filename>
 ```
 
-_See https://github.com/ethereum/wiki/wiki/Blockchain-import-export for more info_
+_See https://eth.wiki/en/howto/blockchain-import-and-export-instructions for more info_
 
 
 And finally: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**
