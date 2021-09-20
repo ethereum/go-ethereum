@@ -42,14 +42,13 @@ var (
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errTooManyUncles     = errors.New("too many uncles")
-	errInvalidDifficulty = errors.New("invalid difficulty")
-	errInvalidMixDigest  = errors.New("invalid mix digest")
-	errInvalidNonce      = errors.New("invalid nonce")
-	errInvalidUncleHash  = errors.New("invalid uncle hash")
+	errTooManyUncles    = errors.New("too many uncles")
+	errInvalidMixDigest = errors.New("invalid mix digest")
+	errInvalidNonce     = errors.New("invalid nonce")
+	errInvalidUncleHash = errors.New("invalid uncle hash")
 )
 
-// Beacon is a consensus engine combines the ethereum 1 consensus and proof-of-stake
+// Beacon is a consensus engine combines the eth1 consensus and proof-of-stake
 // algorithm. There is a special flag inside to decide whether to use legacy consensus
 // rules or new rules. The transition rule is described in the eth1/2 merge spec.
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md
@@ -58,7 +57,7 @@ var (
 // is only used for necessary consensus checks. The legacy consensus engine can be any
 // engine implements the consensus interface(except the beacon itself).
 type Beacon struct {
-	ethone consensus.Engine // Classic consensus engine used in the eth1, ethash or clique
+	ethone consensus.Engine // Classic consensus engine used in eth1, e.g. ethash or clique
 
 	// transitioned is the flag whether the transition has been triggered.
 	// It's triggered by receiving the first "POS_CHAINHEAD_SET" message
@@ -67,7 +66,7 @@ type Beacon struct {
 	lock         sync.RWMutex
 }
 
-// New creates a consensus engine with the given embedded ethereum 1 engine.
+// New creates a consensus engine with the given embedded eth1 engine.
 func New(ethone consensus.Engine, transitioned bool) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")

@@ -23,10 +23,12 @@ import (
 
 //go:generate go run github.com/fjl/gencodec -type AssembleBlockParams -field-override assembleBlockParamsMarshaling -out gen_blockparams.go
 
-// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
+// Structure described at https://github.com/ethereum/execution-apis/pull/74
 type AssembleBlockParams struct {
-	ParentHash common.Hash `json:"parentHash"    gencodec:"required"`
-	Timestamp  uint64      `json:"timestamp"     gencodec:"required"`
+	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
+	Timestamp    uint64         `json:"timestamp"     gencodec:"required"`
+	Random       common.Hash    `json:"random"        gencodec:"required"`
+	FeeRecipient common.Address `json:"feeRecipient"  gencodec:"required"`
 }
 
 // JSON type overrides for assembleBlockParams.
@@ -36,29 +38,34 @@ type assembleBlockParamsMarshaling struct {
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
 
-// Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
+// Structure described at https://github.com/ethereum/execution-apis/pull/74/files
 type ExecutableData struct {
-	BlockHash    common.Hash    `json:"blockHash"     gencodec:"required"`
-	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
-	Miner        common.Address `json:"miner"         gencodec:"required"`
-	StateRoot    common.Hash    `json:"stateRoot"     gencodec:"required"`
-	Number       uint64         `json:"number"        gencodec:"required"`
-	GasLimit     uint64         `json:"gasLimit"      gencodec:"required"`
-	GasUsed      uint64         `json:"gasUsed"       gencodec:"required"`
-	Timestamp    uint64         `json:"timestamp"     gencodec:"required"`
-	ReceiptRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom    []byte         `json:"logsBloom"     gencodec:"required"`
-	Transactions [][]byte       `json:"transactions"  gencodec:"required"`
+	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
+	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
+	Coinbase      common.Address `json:"coinbase"      gencodec:"required"`
+	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
+	ReceiptRoot   common.Hash    `json:"receiptRoot"   gencodec:"required"`
+	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
+	Random        common.Hash    `json:"random"        gencodec:"required"`
+	Number        uint64         `json:"blockNumber"   gencodec:"required"`
+	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
+	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
+	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
+	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas uint64         `json:"baseFeePerGas" gencodec:"required"`
+	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }
 
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number       hexutil.Uint64
-	GasLimit     hexutil.Uint64
-	GasUsed      hexutil.Uint64
-	Timestamp    hexutil.Uint64
-	LogsBloom    hexutil.Bytes
-	Transactions []hexutil.Bytes
+	Number        hexutil.Uint64
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Timestamp     hexutil.Uint64
+	BaseFeePerGas hexutil.Uint64
+	ExtraData     hexutil.Bytes
+	LogsBloom     hexutil.Bytes
+	Transactions  []hexutil.Bytes
 }
 
 type NewBlockResponse struct {
@@ -67,4 +74,18 @@ type NewBlockResponse struct {
 
 type GenericResponse struct {
 	Success bool `json:"success"`
+}
+
+type GenericStringResponse struct {
+	Status string `json:"status"`
+}
+
+type ConsensusValidatedParams struct {
+	BlockHash common.Hash `json:"blockHash"`
+	Status    string      `json:"status"`
+}
+
+type ForkChoiceParams struct {
+	HeadBlockHash      common.Hash `json:"headBlockHash"`
+	FinalizedBlockHash common.Hash `json:"finalizedBlockHash"`
 }

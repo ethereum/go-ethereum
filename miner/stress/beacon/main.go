@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -122,6 +123,7 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	enode := stack.Server().Self()
 
 	// Inject the signer key and start sealing with it
+	stack.AccountManager().AddBackend(keystore.NewPlaintextKeyStore("beacon-stress"))
 	store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	if _, err := store.NewAccount(""); err != nil {
 		panic(err)
@@ -140,21 +142,24 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
-	return n.api.AssembleBlock(catalyst.AssembleBlockParams{
+	payload, err := n.api.PreparePayload(catalyst.AssembleBlockParams{
 		ParentHash: parentHash,
 		Timestamp:  uint64(time.Now().Unix()),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return n.api.GetPayload(hexutil.Uint64(payload.PayloadID))
 }
 
 func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
-	response, err := n.api.NewBlock(eb)
+	newResp, err := n.api.ExecutePayload(eb)
 	if err != nil {
 		return err
-	}
-	if !response.Valid {
+	} else if newResp.Status != "VALID" {
 		return errors.New("failed to insert block")
 	}
 	return nil
@@ -173,16 +178,12 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	} else {
 		config = n.ethBackend.BlockChain().Config()
 	}
-	block, err := catalyst.InsertBlockParamsToBlock(config, parent, ed)
+	block, err := catalyst.ExecutableDataToBlock(config, parent, ed)
 	if err != nil {
 		return err
 	}
-	response, err := n.api.SetHead(block.Hash())
-	if err != nil {
+	if err := n.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: block.Hash(), Status: "VALID"}); err != nil {
 		return err
-	}
-	if !response.Success {
-		return errors.New("failed to set head")
 	}
 	return nil
 }
@@ -280,7 +281,7 @@ func (mgr *nodeManager) run() {
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range append(nodes) {
-			node.api.FinalizeBlock(oldest.Hash())
+			node.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: oldest.Hash(), Status: catalyst.VALID.Status})
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]
@@ -318,7 +319,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := catalyst.InsertBlockParamsToBlock(chain.Config(), parentBlock.Header(), *ed)
+			block, _ := catalyst.ExecutableDataToBlock(chain.Config(), parentBlock.Header(), *ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
