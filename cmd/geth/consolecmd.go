@@ -138,8 +138,8 @@ func remoteConsole(ctx *cli.Context) error {
 				homeDir, _ := os.UserHomeDir()
 				path = filepath.Join(homeDir, "/.bor/data")
 			}
-			endpoint = fmt.Sprintf("%s/geth.ipc", path)
 		}
+		endpoint = fmt.Sprintf("%s/geth.ipc", path)
 	}
 	client, err := dialRPC(endpoint)
 	if err != nil {
