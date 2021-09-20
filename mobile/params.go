@@ -68,6 +68,15 @@ func MumbaiGenesis() string {
 	return string(enc)
 }
 
+// BorMainnetGenesis returns the JSON spec to use for the Mumbai test network
+func BorMainnetGenesis() string {
+	enc, err := json.Marshal(core.DefaultBorMainnetGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
+}
+
 // FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
 // by the foundation running the V5 discovery protocol.
 func FoundationBootnodes() *Enodes {
