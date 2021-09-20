@@ -232,9 +232,9 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 	return 0, errUnknownTable
 }
 
-// AtomicReadAncients runs the given read operation while ensuring that no writes take place
+// ReadAncients runs the given read operation while ensuring that no writes take place
 // on the underlying freezer.
-func (f *freezer) AtomicReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *freezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
 	f.writeLock.RLock()
 	defer f.writeLock.RUnlock()
 	return fn(f)

@@ -85,8 +85,8 @@ func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, erro
 	return t.db.ModifyAncients(fn)
 }
 
-func (t *table) AtomicReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
-	return t.db.AtomicReadAncients(fn)
+func (t *table) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+	return t.db.ReadAncients(fn)
 }
 
 // TruncateAncients is a noop passthrough that just forwards the request to the underlying

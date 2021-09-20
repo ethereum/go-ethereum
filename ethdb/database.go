@@ -93,9 +93,9 @@ type AncientReader interface {
 // AncientBatchReader is the interface for 'batched' or 'atomic' reading.
 type AncientBatchReader interface {
 	AncientReader
-	// AtomicReadAncients runs the given read operation while ensuring that no writes take place
+	// ReadAncients runs the given read operation while ensuring that no writes take place
 	// on the underlying freezer.
-	AtomicReadAncients(fn func(AncientReader) error) (err error)
+	ReadAncients(fn func(AncientReader) error) (err error)
 }
 
 // AncientWriter contains the methods required to write to immutable ancient data.
