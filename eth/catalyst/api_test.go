@@ -126,7 +126,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 		ParentHash: blocks[9].Hash(),
 		Timestamp:  blocks[9].Time() + 5,
 	}
-	execData, err := api.AssembleBlock(blockParams)
+	execData, err := api.assembleBlock(blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
 	}
@@ -148,7 +148,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 		ParentHash: blocks[8].Hash(),
 		Timestamp:  blocks[8].Time() + 5,
 	}
-	execData, err := api.AssembleBlock(blockParams)
+	execData, err := api.assembleBlock(blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
 	}
@@ -196,10 +196,10 @@ func TestEth2NewBlock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
 		nonce := statedb.GetNonce(testAddr)
-		tx, err := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := api.AssembleBlock(AssembleBlockParams{
+		execData, err := api.assembleBlock(AssembleBlockParams{
 			ParentHash: parent.Hash(),
 			Timestamp:  parent.Time() + 5,
 		})
@@ -237,7 +237,7 @@ func TestEth2NewBlock(t *testing.T) {
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
-		execData, err := api.AssembleBlock(AssembleBlockParams{
+		execData, err := api.assembleBlock(AssembleBlockParams{
 			ParentHash: parent.Hash(),
 			Timestamp:  parent.Time() + 6,
 		})
@@ -281,7 +281,7 @@ func TestEth2DeepReorg(t *testing.T) {
 		t.Errorf("Block %d not pruned", parent.NumberU64())
 	}
 	for i := 0; i < 10; i++ {
-		execData, err := api.AssembleBlock(AssembleBlockParams{
+		execData, err := api.assembleBlock(AssembleBlockParams{
 			ParentHash: parent.Hash(),
 			Timestamp:  parent.Time() + 5,
 		})

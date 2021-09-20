@@ -140,10 +140,14 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
-	return n.api.AssembleBlock(catalyst.AssembleBlockParams{
+	payload, err := n.api.PreparePayload(catalyst.AssembleBlockParams{
 		ParentHash: parentHash,
 		Timestamp:  uint64(time.Now().Unix()),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return n.api.GetPayload(payload.PayloadID)
 }
 
 func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {

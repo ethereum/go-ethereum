@@ -58,7 +58,7 @@ func RegisterLight(stack *node.Node, backend *les.LightEthereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "consensus",
+			Namespace: "engine",
 			Version:   "1.0",
 			Service:   NewConsensusAPI(nil, backend),
 			Public:    true,
@@ -68,11 +68,12 @@ func RegisterLight(stack *node.Node, backend *les.LightEthereum) error {
 }
 
 type ConsensusAPI struct {
-	light  bool
-	eth    *eth.Ethereum
-	les    *les.LightEthereum
-	engine consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	syncer *syncer          // syncer is responsible for triggering chain sync
+	light          bool
+	eth            *eth.Ethereum
+	les            *les.LightEthereum
+	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
+	syncer         *syncer          // syncer is responsible for triggering chain sync
+	preparedBlocks map[int]*ExecutableData
 }
 
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
@@ -155,9 +156,45 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
+func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadResponse, error) {
+	data, err := api.assembleBlock(params)
+	if err != nil {
+		return nil, err
+	}
+	id := len(api.preparedBlocks)
+	api.preparedBlocks[id] = data
+	return &PayloadResponse{PayloadID: uint64(id)}, nil
+}
+
+func (api *ConsensusAPI) GetPayload(PayloadID uint64) (*ExecutableData, error) {
+	data, ok := api.preparedBlocks[int(PayloadID)]
+	if !ok {
+		return nil, errors.New("payload not found")
+	}
+	return data, nil
+}
+
+// ConsensusValidated is called to mark a block as valid, so
+// that data that is no longer needed can be removed.
+func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) error {
+	if params.Status == "VALID" {
+		// Finalize the transition if it's the first `FinalisedBlock` event.
+		merger := api.merger()
+		if !merger.EnteredPoS() {
+			merger.EnterPoS()
+		}
+	}
+	return nil
+}
+
+func (api *ConsensusAPI) ForkChoiceUpdated(params ForkChoiceParams) error {
+	_, err := api.SetHead(params.FinalizedBlockHash)
+	return err
+}
+
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
-func (api *ConsensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
+func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
 	if api.light {
 		return nil, errors.New("not supported")
 	}
@@ -264,7 +301,7 @@ func (api *ConsensusAPI) AssembleBlock(params AssembleBlockParams) (*ExecutableD
 	return &ExecutableData{
 		BlockHash:    block.Hash(),
 		ParentHash:   block.ParentHash(),
-		Miner:        block.Coinbase(),
+		Coinbase:     block.Coinbase(),
 		StateRoot:    block.Root(),
 		Number:       block.NumberU64(),
 		GasLimit:     block.GasLimit(),
@@ -306,7 +343,7 @@ func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.Miner,
+		Coinbase:    params.Coinbase,
 		Root:        params.StateRoot,
 		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
 		ReceiptHash: params.ReceiptRoot,
