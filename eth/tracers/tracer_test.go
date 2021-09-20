@@ -59,7 +59,7 @@ func testCtx() *vmContext {
 }
 
 func runTrace(tracer *Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
-	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer}, nil)
+	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
 	var (
 		startGas uint64 = 10000
 		value           = big.NewInt(0)
@@ -151,7 +151,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, nil)
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
@@ -169,7 +169,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 // in 'result'
 func TestNoStepExec(t *testing.T) {
 	runEmptyTrace := func(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
-		env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, nil)
+		env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 		startGas := uint64(10000)
 		contract := vm.NewContract(account{}, account{}, big.NewInt(0), startGas)
 		tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, big.NewInt(0))

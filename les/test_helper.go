@@ -201,7 +201,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
-	genesis := gspec.MustCommit(db, nil)
+	genesis := gspec.MustCommit(db)
 	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil)
 	if indexers != nil {
 		checkpointConfig := &params.CheckpointOracleConfig{
@@ -261,7 +261,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
-	genesis := gspec.MustCommit(db, nil)
+	genesis := gspec.MustCommit(db)
 
 	// create a simulation backend and pre-commit several customized block to the database.
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)

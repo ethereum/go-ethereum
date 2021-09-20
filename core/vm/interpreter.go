@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
@@ -201,16 +200,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		var codePage common.Hash
 		if in.evm.ChainConfig().UseVerkle {
 			index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
-			subtree := common.BytesToHash(index[:31])
-			subleaf := index[31]
-			if _, ok := in.evm.TxContext.Accesses.Witness[subtree]; !ok {
-				in.evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				contract.Gas -= params.WitnessBranchCost
-			}
-			if _, ok := in.evm.TxContext.Accesses.Witness[subtree][subleaf]; !ok {
-				in.evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-				contract.Gas -= params.WitnessChunkCost
-			}
+			contract.Gas -= in.evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 
 			if in.evm.accesses != nil {
 				codePage, inWitness = in.evm.accesses[common.BytesToHash(index)]

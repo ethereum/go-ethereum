@@ -34,12 +34,12 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Generate a common prefix for both pro-forkers and non-forkers
 	db := rawdb.NewMemoryDatabase()
 	gspec := &Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}
-	genesis := gspec.MustCommit(db, nil)
+	genesis := gspec.MustCommit(db)
 	prefix, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
 	// Create the concurrent, conflicting two nodes
 	proDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(proDb, nil)
+	gspec.MustCommit(proDb)
 
 	proConf := *params.TestChainConfig
 	proConf.DAOForkBlock = forkBlock
@@ -49,7 +49,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	defer proBc.Stop()
 
 	conDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(conDb, nil)
+	gspec.MustCommit(conDb)
 
 	conConf := *params.TestChainConfig
 	conConf.DAOForkBlock = forkBlock
@@ -68,7 +68,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for i := int64(0); i < params.DAOForkExtraRange.Int64(); i++ {
 		// Create a pro-fork block, and try to feed into the no-fork chain
 		db = rawdb.NewMemoryDatabase()
-		gspec.MustCommit(db, nil)
+		gspec.MustCommit(db)
 		bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 		defer bc.Stop()
 
@@ -93,7 +93,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		}
 		// Create a no-fork block, and try to feed into the pro-fork chain
 		db = rawdb.NewMemoryDatabase()
-		gspec.MustCommit(db, nil)
+		gspec.MustCommit(db)
 		bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 		defer bc.Stop()
 
@@ -119,7 +119,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	}
 	// Verify that contra-forkers accept pro-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
-	gspec.MustCommit(db, nil)
+	gspec.MustCommit(db)
 	bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer bc.Stop()
 
@@ -139,7 +139,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	}
 	// Verify that pro-forkers accept contra-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
-	gspec.MustCommit(db, nil)
+	gspec.MustCommit(db)
 	bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer bc.Stop()
 

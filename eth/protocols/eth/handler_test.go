@@ -67,7 +67,7 @@ func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)
 	(&core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
-	}).MustCommit(db, nil)
+	}).MustCommit(db)
 
 	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 

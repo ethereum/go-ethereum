@@ -84,7 +84,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db, nil)
+			genesis       = gspec.MustCommit(db)
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
@@ -219,7 +219,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db, nil)
+			genesis       = gspec.MustCommit(db)
 			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
@@ -321,7 +321,7 @@ func TestProcessStateless(t *testing.T) {
 	)
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
-	genesis := gspec.MustCommit(db, nil)
+	genesis := gspec.MustCommit(db)
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(_ int, gen *BlockGen) {
@@ -333,6 +333,7 @@ func TestProcessStateless(t *testing.T) {
 		gen.AddTx(tx)
 
 	})
+
 	_, err := blockchain.InsertChain(chain)
 	if err != nil {
 		t.Fatalf("block imported with error: %v", err)

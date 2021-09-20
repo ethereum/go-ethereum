@@ -1870,7 +1870,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
 		} else {
 			var leaves map[common.Hash]common.Hash
-			_, _, _, leaves = trie.DeserializeVerkleProof(block.Header().VerkleProof)
+			_, _, _, leaves, err = trie.DeserializeVerkleProof(block.Header().VerkleProof)
+			if err != nil {
+				return it.index, err
+			}
+			statedb.SetStateless(leaves)
 			receipts, logs, usedGas, err = bc.processor.ProcessStateless(block, statedb, bc.vmConfig, leaves)
 		}
 		if err != nil {

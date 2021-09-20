@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,6 +19,9 @@ package types
 import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/params"
 
+// AccessWitness lists the locations of the state that are being accessed
+// during the production of a block.
+// TODO(@gballet) this doesn't support deletions
 type AccessWitness struct {
 	Witness map[common.Hash]map[byte]struct{}
 }
@@ -51,6 +54,10 @@ func (aw *AccessWitness) TouchAddress(addr []byte) (bool, bool) {
 	return newStem, newSelector
 }
 
+// TouchAddressAndChargeGas checks if a location has already been touched in
+// the current witness, and charge extra gas if that isn't the case. This is
+// meant to only be called on a tx-context access witness (i.e. before it is
+// merged), not a block-context witness: witness costs are charged per tx.
 func (aw *AccessWitness) TouchAddressAndChargeGas(addr []byte) uint64 {
 	var gas uint64
 
@@ -64,12 +71,20 @@ func (aw *AccessWitness) TouchAddressAndChargeGas(addr []byte) uint64 {
 	return gas
 }
 
+// Merge is used to merge the witness that got generated during the execution
+// of a tx, with the accumulation of witnesses that were generated during the
+// execution of all the txs preceding this one in a given block.
 func (aw *AccessWitness) Merge(other *AccessWitness) {
 	for k, mo := range other.Witness {
+		// LeafNode-level merge
 		if ma, ok := aw.Witness[k]; ok {
-			// merge the two lists
 			for b, y := range mo {
-				ma[b] = y
+				// If a particular location isn't already
+				// present, then flag it. The block witness
+				// require only the initial value be present.
+				if _, ok := ma[b]; !ok {
+					ma[b] = y
+				}
 			}
 		} else {
 			aw.Witness[k] = mo
@@ -77,8 +92,10 @@ func (aw *AccessWitness) Merge(other *AccessWitness) {
 	}
 }
 
+// Key returns, predictably, the list of keys that were touched during the
+// buildup of the access witness.
 func (aw *AccessWitness) Keys() [][]byte {
-	var keys [][]byte
+	keys := make([][]byte, 0, len(aw.Witness))
 	for stem, branches := range aw.Witness {
 		for selector := range branches {
 			var key [32]byte

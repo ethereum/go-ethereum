@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -167,14 +169,17 @@ func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) ([]byte, error) {
 	return rlp.EncodeToBytes(vp)
 }
 
-func DeserializeVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, map[common.Hash]common.Hash) {
+func DeserializeVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, map[common.Hash]common.Hash, error) {
 	var vp verkleproof
-	var leaves map[common.Hash]common.Hash
-	rlp.DecodeBytes(proof, &vp)
+	err := rlp.DecodeBytes(proof, &vp)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
+	}
+	leaves := make(map[common.Hash]common.Hash, len(vp.Leaves))
 	for _, kvp := range vp.Leaves {
 		leaves[common.BytesToHash(kvp.Key)] = common.BytesToHash(kvp.Value)
 	}
-	return vp.D, vp.Y, vp.Σ, leaves
+	return vp.D, vp.Y, vp.Σ, leaves, nil
 }
 
 func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {

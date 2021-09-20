@@ -38,5 +38,5 @@ func NewEnv(cfg *Config) *vm.EVM {
 		BaseFee:     cfg.BaseFee,
 	}
 
-	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig, nil)
+	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
 }

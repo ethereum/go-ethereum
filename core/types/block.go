@@ -334,6 +334,10 @@ func (b *Block) SanityCheck() error {
 	return b.header.SanityCheck()
 }
 
+func (b *Block) SetVerkleProof(vp []byte) {
+	b.header.VerkleProof = vp
+}
+
 type writeCounter common.StorageSize
 
 func (c *writeCounter) Write(b []byte) (int, error) {

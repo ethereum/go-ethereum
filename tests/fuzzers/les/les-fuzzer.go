@@ -60,7 +60,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 		Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
 		GasLimit: 100000000,
 	}
-	genesis := gspec.MustCommit(db, nil)
+	genesis := gspec.MustCommit(db)
 	signer := types.HomesteadSigner{}
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, testChainLen,
 		func(i int, gen *core.BlockGen) {

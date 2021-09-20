@@ -92,19 +92,7 @@ func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	usedGas := uint64(0)
 	slot := stack.Back(0)
 	index := trieUtils.GetTreeKeyCodeSize(common.Address(slot.Bytes20()))
-	subtree := common.BytesToHash(index[:31])
-	subleaf := index[31]
-	_, ok := evm.TxContext.Accesses.Witness[subtree]
-	if !ok {
-		evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-		usedGas += params.WitnessBranchCost
-	}
-
-	_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
-	if !ok {
-		usedGas += params.WitnessChunkCost
-		evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-	}
+	usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 
 	return usedGas, nil
 }
@@ -138,21 +126,8 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		for ; chunk < endChunk; chunk++ {
 
 			// TODO make a version of GetTreeKeyCodeChunk without the bigint
-			index := common.BytesToHash(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(chunk)))
-			subtree := common.BytesToHash(index[:31])
-			subleaf := index[31]
-			_, ok := evm.TxContext.Accesses.Witness[subtree]
-			if !ok {
-				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				statelessGas += params.WitnessBranchCost
-			}
-
-			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
-			if !ok {
-				statelessGas += params.WitnessChunkCost
-				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-			}
-
+			index := trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(chunk))
+			statelessGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 		}
 
 	}
@@ -183,21 +158,8 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		for ; chunk < endChunk; chunk++ {
 
 			// TODO make a version of GetTreeKeyCodeChunk without the bigint
-			index := common.BytesToHash(trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(chunk)))
-			subtree := common.BytesToHash(index[:31])
-			subleaf := index[31]
-			_, ok := evm.TxContext.Accesses.Witness[subtree]
-			if !ok {
-				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				statelessGas += params.WitnessBranchCost
-			}
-
-			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
-			if !ok {
-				statelessGas += params.WitnessChunkCost
-				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-			}
-
+			index := trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(chunk))
+			statelessGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 		}
 
 	}
@@ -210,19 +172,7 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 	where := stack.Back(0)
 	addr := contract.Address()
 	index := trieUtils.GetTreeKeyStorageSlot(addr, where)
-	subtree := common.BytesToHash(index[:31])
-	subleaf := index[31]
-	_, ok := evm.TxContext.Accesses.Witness[subtree]
-	if !ok {
-		evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-		usedGas += params.WitnessBranchCost
-	}
-
-	_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
-	if !ok {
-		usedGas += params.WitnessChunkCost
-		evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-	}
+	usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 
 	return usedGas, nil
 }
@@ -471,20 +421,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if evm.accesses != nil {
 		// Charge witness costs
 		for i := trieUtils.VersionLeafKey; i <= trieUtils.CodeSizeLeafKey; i++ {
-			index := common.BytesToHash(trieUtils.GetTreeKeyAccountLeaf(address, byte(i)))
-			subtree := common.BytesToHash(index[:31])
-			subleaf := index[31]
-			_, ok := evm.TxContext.Accesses.Witness[subtree]
-			if !ok {
-				evm.TxContext.Accesses.Witness[subtree] = make(map[byte]struct{})
-				gas += params.WitnessBranchCost
-			}
-
-			_, ok = evm.TxContext.Accesses.Witness[subtree][subleaf]
-			if !ok {
-				gas += params.WitnessChunkCost
-				evm.TxContext.Accesses.Witness[subtree][subleaf] = struct{}{}
-			}
+			index := trieUtils.GetTreeKeyAccountLeaf(address, byte(i))
+			gas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
 		}
 	}
 

@@ -342,8 +342,8 @@ func (g *Genesis) Commit(db ethdb.Database, snaps *snapshot.Tree) (*types.Block,
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, snaps *snapshot.Tree) *types.Block {
-	block, err := g.Commit(db, snaps)
+func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
+	block, err := g.Commit(db, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -356,7 +356,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	return g.MustCommit(db, nil)
+	return g.MustCommit(db)
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
