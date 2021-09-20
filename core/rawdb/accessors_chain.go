@@ -318,7 +318,7 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 
 // HasHeader verifies the existence of a block header corresponding to the hash.
 func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
+	if isCanon(db, number, hash) {
 		return true
 	}
 	if has, err := db.Has(headerKey(number, hash)); !has || err != nil {
@@ -378,6 +378,16 @@ func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number
 	}
 }
 
+// isCanon is an internal utility method, to check whether the given number/hash
+// is part of the ancient (canon) set.
+func isCanon(reader ethdb.AncientReader, number uint64, hash common.Hash) bool {
+	h, err := reader.Ancient(freezerHashTable, number)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(h, hash[:])
+}
+
 // ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -386,7 +396,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
+		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(freezerBodiesTable, number)
 			return nil
 		}
@@ -422,7 +432,7 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 
 // HasBody verifies the existence of a block body corresponding to the hash.
 func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
+	if isCanon(db, number, hash) {
 		return true
 	}
 	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
@@ -466,7 +476,7 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
+		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(freezerDifficultyTable, number)
 			return nil
 		}
@@ -512,7 +522,7 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
 func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
+	if isCanon(db, number, hash) {
 		return true
 	}
 	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
@@ -526,7 +536,7 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	var data []byte
 	db.AtomicReadAncients(func(reader ethdb.AncientReader) error {
 		// Check if the data is in ancients
-		if h, err := reader.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(h) == hash {
+		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(freezerReceiptTable, number)
 			return nil
 		}
