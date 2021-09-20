@@ -127,4 +127,4 @@ included in our repository in the `COPYING` file.
 
 ## Join our Discord server
 
-We have a space to discuss all things ethereum.org – share your ideas or just say hi over [on Discord](https://discord.gg/zdwkdvMNY2).
+Join Polygon community  – share your ideas or just say hi over [on Discord](https://discord.gg/zdwkdvMNY2).
