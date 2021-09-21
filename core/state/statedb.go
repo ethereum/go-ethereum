@@ -1200,3 +1200,56 @@ func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 	}
 	fmt.Println("trie root after delete leaf nodes:", s.trie.Hash().Hex())
 }
+
+// InactivateLeafNodes inactivates inactive accounts (i.e., move old leaf nodes to left) (jmlee)
+func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64) int64 {
+	fmt.Println("inspect trie to inactivate:", inactiveBoundaryKey, "~",lastKeyToCheck)
+	fmt.Println("trie root before inactivate leaf nodes:", s.trie.Hash().Hex())
+
+	// TODO: optimize this code, this is too naive
+	normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
+	AccountsToInactivate := make([][]byte, 0)
+	KeysToInactivate := make([]common.Hash, 0)
+	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
+		// check there is leaf node with this key
+		hash := common.Int64ToHash(i)
+		leafNode, err := normTrie.TryGet(hash[:])
+
+		// find inactive leaf node, append the key to the list
+		if leafNode != nil && err == nil {
+			fmt.Println("O: there is a leaf node at key", hash.Hex())
+			AccountsToInactivate = append(AccountsToInactivate, leafNode)
+			KeysToInactivate = append(KeysToInactivate, hash)
+		} else {
+			fmt.Println("X: there is no leaf node at key", hash.Hex())
+		}
+	}
+	// move inactive leaf nodes to left
+	for index, key := range KeysToInactivate {
+		// delete inactive leaf node
+		fmt.Println("delete previous leaf node -> key:", key.Hex())
+		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+		}
+
+		// insert inactive leaf node to left
+		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))
+		fmt.Println("insert -> key:", keyToInsert.Hex())
+		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
+		}
+	}
+	//
+	//
+	// TODO: apply this result to (ex. common.AddrToKey, AddrToKey_Dirty)
+	// (leaf node will contain addrHash, so we can adjust common.AddrToKey/AddrToKey_Dirty)
+	//
+	//
+
+	// print result
+	fmt.Println("inactivate", len(KeysToInactivate), "accounts")
+	fmt.Println("trie root after inactivate leaf nodes:", s.trie.Hash().Hex())
+
+	// return # of inactivated accounts
+	return int64(len(KeysToInactivate))
+}

@@ -241,7 +241,7 @@ func NewEmptySecure() *SecureTrie {
 }
 
 // get trie of secure trie (jmlee)
-func (t *SecureTrie) Trie() *Trie {
+func (t *SecureTrie) GetTrie() *Trie {
 	return &t.trie
 }
 

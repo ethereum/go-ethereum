@@ -104,6 +104,8 @@ type Trie interface {
 
 	GetLastKey() *big.Int
 
+	GetTrie() *trie.Trie
+
 	TryUpdate_SetKey(key, value []byte) error
 
 	TryGet_SetKey(key []byte) ([]byte, error)

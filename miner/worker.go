@@ -914,6 +914,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Could potentially happen if starting to mine in an odd state.
 	err := w.makeCurrent(parent, header) // load parent block's state before apply pending transactions (jmlee)
+	common.CheckpointKeys[header.Number.Int64()] = w.current.state.NextKey // save this block's initial NextKey
 	if err != nil {
 		log.Error("Failed to create mining context", "err", err)
 		return
@@ -995,6 +996,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
 		keysToDelete := append(common.KeysToDelete, w.current.state.KeysToDeleteDirty...)
 		w.current.state.DeletePreviousLeafNodes(keysToDelete)
+		// reset common.KeysToDelete
+		common.KeysToDelete = make([]common.Hash, 0)
+	}
+
+	// inactivate inactive accounts (jmlee)
+	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+		lastKeyToCheck := common.CheckpointKeys[header.Number.Int64()-common.InactivateCriterion+1]
+		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
+		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
 
 	w.commit(uncles, w.fullTaskHook, true, tstart)

@@ -108,6 +108,11 @@ func (t *odrTrie) GetLastKey() (*big.Int) {
 }
 
 // temp function for correct build, this will not be called in Ethane (jmlee)
+func (t *odrTrie) GetTrie() (*trie.Trie) {
+	return nil
+}
+
+// temp function for correct build, this will not be called in Ethane (jmlee)
 func (t *odrTrie) TryUpdate_SetKey(key, value []byte) error {
 	return nil
 }

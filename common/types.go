@@ -51,12 +51,18 @@ var (
 	// temp map for verifying compactTrie idea (address: real address of the account / hash: specific key for the account in the state trie) (jmlee)
 	AddrToKey = make(map[Address]Hash)
 	AddrToKeyMapMutex = sync.RWMutex{} // to avoid fatal error: "concurrent map read and map write"
-	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/)
+	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/) (const)
+
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
-	DeleteLeafNodeEpoch = int64(1) // block epoch to delete previous leaf nodes
+	DeleteLeafNodeEpoch = int64(1) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
 	DoDeleteLeafNode bool // flag to determine whether to delete leaf nodes or not
-	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever
-	ZeroAddress = HexToAddress("0x0")
+
+	InactiveBoundaryKey = int64(0) // inactive accounts have keys smaller than this key
+	InactivateCriterion = int64(1) // inactive accounts were touched more before than this block timestamp (min: 1) (const)
+	CheckpointKeys = make(map[int64]int64) // initial NextKeys of blocks (CheckpointKeys[blockNumber] = initialNextKeyOfTheBlock)
+
+	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever (const)
+	ZeroAddress = HexToAddress("0x0") // (const)
 )
 
 // Marshal is a function that marshals the object into an io.Reader.

@@ -643,6 +643,11 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) *big.Int {
 	}
 }
 
+// get trie of trie (actually, this is for SecureTrie) (jmlee)
+func (t *Trie) GetTrie() *Trie {
+	return t
+}
+
 // Trie size inspection from nakamoto.snu.ac.kr(jhkim)
 
 // trie inspecting results (jhkim)

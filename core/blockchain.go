@@ -1600,6 +1600,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// print database inspect result (jmlee)
 	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
+	fmt.Println("InactiveBoundaryKey:", common.InactiveBoundaryKey)
+	fmt.Println("common.CheckpointKeys:", common.CheckpointKeys)
 	if block.Header().Number.Int64() % 1 == 0 {
 		// inspect database
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
