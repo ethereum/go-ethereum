@@ -121,8 +121,8 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 }
 
 // EncodeRLP implements rlp.Encoder.
-func (s *stateObject) EncodeRLP(io.Writer) error {
-	panic("deprecated code, should not be called")
+func (s *stateObject) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &s.data)
 }
 
 // setError remembers the first non-nil error it is called with.
