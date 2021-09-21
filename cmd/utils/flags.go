@@ -156,7 +156,7 @@ var (
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
 	MumbaiFlag = cli.BoolFlag{
-		Name:  "mumbai",
+		Name:  "bor-mumbai",
 		Usage: "Mumbai network: pre-configured proof-of-stake test network",
 	}
 	BorMainnetFlag = cli.BoolFlag{
@@ -805,7 +805,7 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
-		if ctx.GlobalBool(MumbaiFlag.Name) {
+		if ctx.GlobalBool(MumbaiFlag.Name) || ctx.GlobalBool(BorMainnetFlag.Name) {
 			homeDir, _ := os.UserHomeDir()
 			return filepath.Join(homeDir, "/.bor/data")
 		}

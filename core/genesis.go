@@ -423,16 +423,13 @@ func DefaultMumbaiGenesisBlock() *Genesis {
 func DefaultBorMainnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.BorMainnetChainConfig,
-		Nonce:      0x0,
-		Timestamp:  0x5ED20F84,
-		GasLimit:   0x989680,
+		Nonce:      0,
+		Timestamp:  1590824836,
+		GasLimit:   10000000,
 		Difficulty: big.NewInt(1),
 		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
 		Alloc:      readPrealloc("allocs/bor_mainnet.json"),
-		Number:     0x0,
-		GasUsed:    0x0,
-		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 }
 
