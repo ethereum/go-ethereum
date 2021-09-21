@@ -23,7 +23,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -72,7 +72,7 @@ type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 
 	// TryUpdateAccount abstract an account write in the trie.
-	TryUpdateAccount(key []byte, acc *accounts.Account) error
+	TryUpdateAccount(key []byte, acc *types.Account) error
 
 	// TryUpdate associates key with value in the trie. If value has length zero, any
 	// existing value is deleted from the trie. The value bytes must not be modified

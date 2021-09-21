@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -113,7 +112,7 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryUpdateAccount(key []byte, acc *accounts.Account) error {
+func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.Account) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {

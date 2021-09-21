@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -105,7 +105,7 @@ func (it *NodeIterator) step() error {
 		return nil
 	}
 	// Otherwise we've reached an account node, initiate data iteration
-	var account accounts.Account
+	var account types.Account
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}

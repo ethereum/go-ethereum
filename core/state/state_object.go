@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	accounts "github.com/ethereum/go-ethereum/core/state/accounts"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -66,7 +66,7 @@ func (s Storage) Copy() Storage {
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
-	data     accounts.Account
+	data     types.Account
 	db       *StateDB
 
 	// DB error.
@@ -99,7 +99,7 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data accounts.Account) *stateObject {
+func newObject(db *StateDB, address common.Address, data types.Account) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
