@@ -670,7 +670,7 @@ type TrieInspectResult struct {
 }
 
 func (tir *TrieInspectResult) PrintTrieInspectResult(blockNumber uint64, elapsedTime int) {
-	f1, err := os.Create("/home/jhkim/go/src/github.com/ethereum/result_" + strconv.FormatUint(blockNumber, 10) + ".txt")
+	f1, err := os.Create("./trieInspectResult_" + strconv.FormatUint(blockNumber, 10) + ".txt")
 	if err != nil {
 		fmt.Printf("Cannot create result file.\n")
 		os.Exit(1)
@@ -766,7 +766,7 @@ func (t *Trie) InspectStorageTrie() TrieInspectResult {
 
 var cnt = 0
 var rwMutex = new(sync.RWMutex)
-var maxGoroutine = 10000
+var maxGoroutine = 1
 
 func (t *Trie) inspectTrieNodes(n node, tir *TrieInspectResult, wg *sync.WaitGroup, depth int, trie string) {
 

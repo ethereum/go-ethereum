@@ -1,1 +1,1 @@
-./geth --datadir "/root/dockerVolume/db_full" --keystore "./keystore" --gcmode archive --networkid 12345 --rpc --rpcport "8081" --rpccorsdomain "*" --port 30303 --nodiscover --rpcapi="admin,eth,debug,miner,net,txpool,personal,web3" --allow-insecure-unlock --snapshot=true console
+./geth --datadir "/root/dockerVolume/db_full" --keystore "./keystore" --gcmode archive --networkid 12345 --rpc --rpcport "8081" --rpccorsdomain "*" --port 30303 --nodiscover --rpcapi="admin,eth,debug,miner,net,txpool,personal,web3" --allow-insecure-unlock --snapshot=false console

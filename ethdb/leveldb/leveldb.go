@@ -197,7 +197,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 // Put inserts the given value into the key-value store.
 func (db *Database) Put(key []byte, value []byte) error {
 	// maybe here where put key-value into leveldb (jmlee)
-	fmt.Println("key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
+	// fmt.Println("key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
 	return db.db.Put(key, value, nil)
 }
 
@@ -457,7 +457,7 @@ type batch struct {
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	// maybe here where put key-value into leveldb (jmlee)
-	fmt.Println("key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
+	// fmt.Println("key:", common.BytesToHash(key), "/ value:", common.BytesToHash(value))
 	b.b.Put(key, value)
 	b.size += len(value)
 	return nil

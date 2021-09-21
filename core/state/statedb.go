@@ -479,7 +479,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	fmt.Println("updateStateObject() executed -> address:", obj.Address().Hex(), "/ nonce:", obj.Nonce(), "/ balance:", obj.Balance(), "/ addrHash:", obj.addrHash.Hex())
+	// fmt.Println("updateStateObject() executed -> address:", obj.Address().Hex(), "/ nonce:", obj.Nonce(), "/ balance:", obj.Balance(), "/ addrHash:", obj.addrHash.Hex())
 
 	// Track the amount of time wasted on updating the account from the trie
 	if metrics.EnabledExpensive {
@@ -612,7 +612,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		if !doExist {
 			key = common.NoExistKey
 		}
-		fmt.Println("Try to find account at the snapshot -> addr:", addr.Hex(), "/ key:", key.Hex())
+		// fmt.Println("Try to find account at the snapshot -> addr:", addr.Hex(), "/ key:", key.Hex())
 		if acc, err = s.snap.Account(key); err == nil {
 		// if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
 			if acc == nil {
@@ -898,7 +898,7 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	fmt.Println("state.Finalise() executed")
+	// fmt.Println("state.Finalise() executed")
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
@@ -945,7 +945,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	fmt.Println("state.IntermediateRoot() executed")
+	// fmt.Println("state.IntermediateRoot() executed")
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -1022,7 +1022,7 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
-	fmt.Println("state.Commit() executed")
+	// fmt.Println("state.Commit() executed")
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
