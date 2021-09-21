@@ -5,6 +5,8 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	lru "github.com/hashicorp/golang-lru"
+
 )
 
 var (
