@@ -30,6 +30,7 @@ import (
 	"sync"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
@@ -152,6 +153,17 @@ func LoadAddrToKey(blockHash string) error {
 	// 	fmt.Println("common.AddrToKey -> k:", k, " / v:", v)
 	// }
 	return err
+}
+
+// Int64ToHash converts int64 to hex key (ex. 10 -> 0x0...0a) (jmlee)
+func Int64ToHash(i int64) Hash {
+	return HexToHash(strconv.FormatInt(i, 16))
+}
+
+// HashToInt64 converts hash to int64 (ex. 0x0...0a -> 10) (jmlee)
+func HashToInt64(h Hash) int64 {
+	i, _ := strconv.ParseInt(h.Hex()[2:], 16, 64)
+	return i
 }
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
