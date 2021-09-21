@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"gopkg.in/fatih/set.v0"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	mapset "github.com/deckarep/golang-set"
 )
 
 // API describes the set of methods offered over the RPC interface
@@ -73,7 +73,7 @@ type Server struct {
 
 	run      int32
 	codecsMu sync.Mutex
-	codecs   *set.Set
+	codecs   mapset.Set
 }
 
 // rpcRequest represents a raw incoming RPC request

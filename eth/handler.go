@@ -20,26 +20,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/fetcher"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 const (
@@ -70,6 +71,8 @@ type ProtocolManager struct {
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
 	txpool      txPool
+	orderpool   orderPool
+	lendingpool lendingPool
 	blockchain  *core.BlockChain
 	chainconfig *params.ChainConfig
 	maxPeers    int
@@ -82,7 +85,11 @@ type ProtocolManager struct {
 
 	eventMux      *event.TypeMux
 	txCh          chan core.TxPreEvent
+	orderTxCh     chan core.OrderTxPreEvent
+	lendingTxCh   chan core.LendingTxPreEvent
 	txSub         event.Subscription
+	orderTxSub    event.Subscription
+	lendingTxSub  event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
 	// channels for fetcher, syncer, txsyncLoop
@@ -93,27 +100,48 @@ type ProtocolManager struct {
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
-	wg       sync.WaitGroup
-	knownTxs *lru.Cache
+	wg             sync.WaitGroup
+	knownTxs       *lru.Cache
+	knowOrderTxs   *lru.Cache
+	knowLendingTxs *lru.Cache
+}
+
+// NewProtocolManagerEx add order pool to protocol
+func NewProtocolManagerEx(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, orderpool orderPool, lendingpool lendingPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+	protocol, err := NewProtocolManager(config, mode, networkID, mux, txpool, engine, blockchain, chaindb)
+	if err != nil {
+		return nil, err
+	}
+	protocol.addOrderPoolProtocol(orderpool)
+	protocol.addLendingPoolProtocol(lendingpool)
+	return protocol, nil
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
 	knownTxs, _ := lru.New(maxKnownTxs)
+	knowOrderTxs, _ := lru.New(maxKnownOrderTxs)
+	knowLendingTxs, _ := lru.New(maxKnownLendingTxs)
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:   networkId,
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		chainconfig: config,
-		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
-		knownTxs:    knownTxs,
+		networkId:      networkID,
+		eventMux:       mux,
+		txpool:         txpool,
+		blockchain:     blockchain,
+		chainconfig:    config,
+		peers:          newPeerSet(),
+		newPeerCh:      make(chan *peer),
+		noMorePeers:    make(chan struct{}),
+		txsyncCh:       make(chan *txsync),
+		quitSync:       make(chan struct{}),
+		knownTxs:       knownTxs,
+		knowOrderTxs:   knowOrderTxs,
+		knowLendingTxs: knowLendingTxs,
+		orderpool:      nil,
+		lendingpool:    nil,
+		orderTxSub:     nil,
+		lendingTxSub:   nil,
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -194,6 +222,12 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	return manager, nil
 }
 
+func (pm *ProtocolManager) addOrderPoolProtocol(orderpool orderPool) {
+	pm.orderpool = orderpool
+}
+func (pm *ProtocolManager) addLendingPoolProtocol(lendingpool lendingPool) {
+	pm.lendingpool = lendingpool
+}
 func (pm *ProtocolManager) removePeer(id string) {
 	// Short circuit if the peer was already removed
 	peer := pm.peers.Peer(id)
@@ -219,8 +253,18 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	// broadcast transactions
 	pm.txCh = make(chan core.TxPreEvent, txChanSize)
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
-	go pm.txBroadcastLoop()
 
+	pm.orderTxCh = make(chan core.OrderTxPreEvent, txChanSize)
+	if pm.orderpool != nil {
+		pm.orderTxSub = pm.orderpool.SubscribeTxPreEvent(pm.orderTxCh)
+	}
+	pm.lendingTxCh = make(chan core.LendingTxPreEvent, txChanSize)
+	if pm.lendingpool != nil {
+		pm.lendingTxSub = pm.lendingpool.SubscribeTxPreEvent(pm.lendingTxCh)
+	}
+	go pm.txBroadcastLoop()
+	go pm.orderTxBroadcastLoop()
+	go pm.lendingTxBroadcastLoop()
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
@@ -233,7 +277,13 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 func (pm *ProtocolManager) Stop() {
 	log.Info("Stopping Ethereum protocol")
 
-	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
+	pm.txSub.Unsubscribe() // quits txBroadcastLoop
+	if pm.orderTxSub != nil {
+		pm.orderTxSub.Unsubscribe()
+	}
+	if pm.lendingTxSub != nil {
+		pm.lendingTxSub.Unsubscribe()
+	}
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	// Quit the sync loop.
@@ -680,6 +730,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		var unkownTxs []*types.Transaction
+
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
 			if tx == nil {
@@ -692,8 +743,71 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			} else {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce(), "to", tx.To())
 			}
+
 		}
 		pm.txpool.AddRemotes(txs)
+
+	case msg.Code == OrderTxMsg:
+		// Transactions arrived, make sure we have a valid and fresh chain to handle them
+		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+			break
+		}
+		// Transactions can be processed, parse all of them and deliver to the pool
+		var txs []*types.OrderTransaction
+		if err := msg.Decode(&txs); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		var unkownOrderTxs []*types.OrderTransaction
+
+		for i, tx := range txs {
+			// Validate and mark the remote transaction
+			if tx == nil {
+				return errResp(ErrDecode, "transaction %d is nil", i)
+			}
+			p.MarkOrderTransaction(tx.Hash())
+			exist, _ := pm.knowOrderTxs.ContainsOrAdd(tx.Hash(), true)
+			if !exist {
+				unkownOrderTxs = append(unkownOrderTxs, tx)
+			} else {
+				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
+			}
+
+		}
+
+		if pm.orderpool != nil {
+			pm.orderpool.AddRemotes(txs)
+		}
+
+	case msg.Code == LendingTxMsg:
+		// Transactions arrived, make sure we have a valid and fresh chain to handle them
+		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+			break
+		}
+		// Transactions can be processed, parse all of them and deliver to the pool
+		var txs []*types.LendingTransaction
+		if err := msg.Decode(&txs); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		var unkownLendingTxs []*types.LendingTransaction
+
+		for i, tx := range txs {
+			// Validate and mark the remote transaction
+			if tx == nil {
+				return errResp(ErrDecode, "transaction %d is nil", i)
+			}
+			p.MarkLendingTransaction(tx.Hash())
+			exist, _ := pm.knowLendingTxs.ContainsOrAdd(tx.Hash(), true)
+			if !exist {
+				unkownLendingTxs = append(unkownLendingTxs, tx)
+			} else {
+				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
+			}
+
+		}
+
+		if pm.lendingpool != nil {
+			pm.lendingpool.AddRemotes(txs)
+		}
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -745,7 +859,31 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
-// Mined broadcast loop
+// OrderBroadcastTx will propagate a transaction to all peers which are not known to
+// already have the given transaction.
+func (pm *ProtocolManager) OrderBroadcastTx(hash common.Hash, tx *types.OrderTransaction) {
+	// Broadcast transaction to a batch of peers not knowing about it
+	peers := pm.peers.OrderPeersWithoutTx(hash)
+	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	for _, peer := range peers {
+		peer.SendOrderTransactions(types.OrderTransactions{tx})
+	}
+	log.Trace("Broadcast order transaction", "hash", hash, "recipients", len(peers))
+}
+
+// LendingBroadcastTx will propagate a transaction to all peers which are not known to
+// already have the given transaction.
+func (pm *ProtocolManager) LendingBroadcastTx(hash common.Hash, tx *types.LendingTransaction) {
+	// Broadcast transaction to a batch of peers not knowing about it
+	peers := pm.peers.LendingPeersWithoutTx(hash)
+	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	for _, peer := range peers {
+		peer.SendLendingTransactions(types.LendingTransactions{tx})
+	}
+	log.Trace("Broadcast lending transaction", "hash", hash, "recipients", len(peers))
+}
+
+// minedBroadcastLoop broadcast loop
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.minedBlockSub.Chan() {
@@ -765,6 +903,40 @@ func (self *ProtocolManager) txBroadcastLoop() {
 
 			// Err() channel will be closed when unsubscribing.
 		case <-self.txSub.Err():
+			return
+		}
+	}
+}
+
+// orderTxBroadcastLoop broadcast order
+func (self *ProtocolManager) orderTxBroadcastLoop() {
+	if self.orderTxSub == nil {
+		return
+	}
+	for {
+		select {
+		case event := <-self.orderTxCh:
+			self.OrderBroadcastTx(event.Tx.Hash(), event.Tx)
+
+			// Err() channel will be closed when unsubscribing.
+		case <-self.orderTxSub.Err():
+			return
+		}
+	}
+}
+
+// lendingTxBroadcastLoop broadcast order
+func (self *ProtocolManager) lendingTxBroadcastLoop() {
+	if self.lendingTxSub == nil {
+		return
+	}
+	for {
+		select {
+		case event := <-self.lendingTxCh:
+			self.LendingBroadcastTx(event.Tx.Hash(), event.Tx)
+
+			// Err() channel will be closed when unsubscribing.
+		case <-self.lendingTxSub.Err():
 			return
 		}
 	}

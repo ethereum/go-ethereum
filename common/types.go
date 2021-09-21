@@ -23,23 +23,31 @@ import (
 	"math/rand"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 )
 
 const (
-	HashLength          = 32
-	AddressLength       = 20
-	BlockSigners        = "xdc0000000000000000000000000000000000000089"
-	MasternodeVotingSMC = "xdc0000000000000000000000000000000000000088"
-	RandomizeSMC        = "xdc0000000000000000000000000000000000000090"
-	FoudationAddr       = "xdc746249C61f5832C5eEd53172776b460491bDcd5C"
-	TeamAddr            = "xdc0000000000000000000000000000000000000099"
-	VoteMethod          = "0x6dd7d8ea"
-	UnvoteMethod        = "0x02aa9be2"
-	ProposeMethod       = "0x01267951"
-	ResignMethod        = "0xae6e43f5"
-	SignMethod          = "0xe341eaa4"
+	HashLength                       = 32
+	AddressLength                    = 20
+	BlockSigners                     = "xdc0000000000000000000000000000000000000089"
+	MasternodeVotingSMC              = "xdc0000000000000000000000000000000000000088"
+	RandomizeSMC                     = "xdc0000000000000000000000000000000000000090"
+	FoudationAddr                    = "xdc0000000000000000000000000000000000000068"
+	TeamAddr                         = "xdc0000000000000000000000000000000000000099"
+	XDCXAddr                         = "xdc0000000000000000000000000000000000000091"
+	TradingStateAddr                 = "xdc0000000000000000000000000000000000000092"
+	XDCXLendingAddress               = "xdc0000000000000000000000000000000000000093"
+	XDCXLendingFinalizedTradeAddress = "xdc0000000000000000000000000000000000000094"
+	XDCNativeAddress                 = "xdc0000000000000000000000000000000000000001"
+	LendingLockAddress               = "xdc0000000000000000000000000000000000000011"
+	VoteMethod                       = "0x6dd7d8ea"
+	UnvoteMethod                     = "0x02aa9be2"
+	ProposeMethod                    = "0x01267951"
+	ResignMethod                     = "0xae6e43f5"
+	SignMethod                       = "0xe341eaa4"
+	XDCXApplyMethod                  = "0xc6b32f34"
+	XDCZApplyMethod                  = "0xc6b32f34"
 )
 
 var (
@@ -62,6 +70,7 @@ func BytesToHash(b []byte) Hash {
 }
 func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
 func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
+func Uint64ToHash(b uint64) Hash { return BytesToHash(new(big.Int).SetUint64(b).Bytes()) }
 func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
 // Get the string representation of the underlying hash
@@ -233,7 +242,7 @@ func (a *Address) Set(other Address) {
 
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(a[:]).MarshalXDCText()
+	return hexutil.Bytes(a[:]).MarshalText()
 }
 
 // UnmarshalText parses a hash in hex syntax.

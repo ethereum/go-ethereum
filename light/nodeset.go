@@ -20,10 +20,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // NodeSet stores a set of trie nodes. It implements trie.Database and can also
@@ -57,6 +57,35 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	db.order = append(db.order, keystr)
 	db.dataSize += len(value)
 
+	return nil
+}
+
+func (db *NodeSet) Delete(key []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	value, ok := db.nodes[string(key)]
+	if !ok {
+		return nil
+	}
+	keystr := string(key)
+	delete(db.nodes, keystr)
+	index := -1
+	for i, key := range db.order {
+		if key == keystr {
+			index = i
+			break
+		}
+	}
+	length := len(db.order)
+	if index == 0 {
+		db.order = db.order[index+1 : length]
+	} else if index == length-1 {
+		db.order = db.order[0 : length-1]
+	} else {
+		db.order = append(db.order[0:index], db.order[index+1:length]...)
+	}
+	db.dataSize -= len(value)
 	return nil
 }
 
@@ -106,7 +135,7 @@ func (db *NodeSet) NodeList() NodeList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *NodeSet) Store(target ethdb.Putter) {
+func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -118,8 +147,12 @@ func (db *NodeSet) Store(target ethdb.Putter) {
 // NodeList stores an ordered list of trie nodes. It implements ethdb.Putter.
 type NodeList []rlp.RawValue
 
+func (n NodeList) Delete(key []byte) error {
+	return nil
+}
+
 // Store writes the contents of the list to the given database
-func (n NodeList) Store(db ethdb.Putter) {
+func (n NodeList) Store(db ethdb.KeyValueWriter) {
 	for _, node := range n {
 		db.Put(crypto.Keccak256(node), node)
 	}

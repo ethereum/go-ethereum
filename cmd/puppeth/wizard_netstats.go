@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -155,14 +155,6 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		}
 	} else {
 		stat.services["faucet"] = infos.Report()
-	}
-	logger.Debug("Checking for dashboard availability")
-	if infos, err := checkDashboard(client, w.network); err != nil {
-		if err != ErrServiceUnknown {
-			stat.services["dashboard"] = map[string]string{"offline": err.Error()}
-		}
-	} else {
-		stat.services["dashboard"] = infos.Report()
 	}
 	// Feed and newly discovered information into the wizard
 	w.lock.Lock()

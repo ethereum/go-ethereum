@@ -2,9 +2,9 @@ package state
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/hashicorp/golang-lru"
 	"math/big"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 var (
@@ -107,6 +107,7 @@ func ValidateTRC21Tx(statedb *StateDB, from common.Address, token common.Address
 	slotBalanceTrc21 := SlotTRC21Token["balances"]
 	balanceKey := GetLocMappingAtKey(from.Hash(), slotBalanceTrc21)
 	balanceHash := statedb.GetState(token, common.BigToHash(balanceKey))
+
 	if !common.EmptyHash(balanceHash) {
 		balance := balanceHash.Big()
 		minFeeTokenKey := GetLocSimpleVariable(SlotTRC21Token["minFee"])
@@ -127,7 +128,14 @@ func ValidateTRC21Tx(statedb *StateDB, from common.Address, token common.Address
 		} else {
 			return true
 		}
+	} else {
+		// we both accept tx with balance = 0 and fee = 0
+		minFeeTokenKey := GetLocSimpleVariable(SlotTRC21Token["minFee"])
+		if !common.EmptyHash(minFeeTokenKey) {
+			return true
+		}
 	}
+
 	return false
 }
 

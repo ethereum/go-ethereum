@@ -19,27 +19,32 @@ package les
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/light"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 type LesApiBackend struct {
@@ -100,14 +105,20 @@ func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
+func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
 	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vmCfg), state.Error, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, vmCfg), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.Add(ctx, signedTx)
+}
+func (b *LesApiBackend) SendOrderTx(ctx context.Context, signedTx *types.OrderTransaction) error {
+	return nil
+}
+func (b *LesApiBackend) SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error {
+	return nil
 }
 
 func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
@@ -132,6 +143,13 @@ func (b *LesApiBackend) Stats() (pending int, queued int) {
 
 func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.txPool.Content()
+}
+
+func (b *LesApiBackend) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
+	return make(map[common.Address]types.OrderTransactions), make(map[common.Address]types.OrderTransactions)
+}
+func (b *LesApiBackend) OrderStats() (pending int, queued int) {
+	return 0, 0
 }
 
 func (b *LesApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
@@ -203,12 +221,12 @@ func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
 func (b *LesApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
 }
-func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
+func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {
 	header := s.eth.blockchain.GetHeaderByHash(hash)
 	if header != nil {
 		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
 		if err == nil {
-			rewards := make(map[string]interface{})
+			rewards := make(map[string]map[string]map[string]*big.Int)
 			err = json.Unmarshal(data, &rewards)
 			if err == nil {
 				return rewards
@@ -216,7 +234,7 @@ func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 		} else {
 			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
 			if err == nil {
-				rewards := make(map[string]interface{})
+				rewards := make(map[string]map[string]map[string]*big.Int)
 				err = json.Unmarshal(data, &rewards)
 				if err == nil {
 					return rewards
@@ -224,7 +242,7 @@ func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 			}
 		}
 	}
-	return make(map[string]interface{})
+	return make(map[string]map[string]map[string]*big.Int)
 }
 
 // GetVotersRewards return a map of voters of snapshot at given block hash
@@ -252,4 +270,17 @@ func (b *LesApiBackend) GetBlocksHashCache(blockNr uint64) []common.Hash {
 
 func (b *LesApiBackend) AreTwoBlockSamePath(bh1 common.Hash, bh2 common.Hash) bool {
 	return true
+}
+
+// GetOrderNonce get order nonce
+func (b *LesApiBackend) GetOrderNonce(address common.Hash) (uint64, error) {
+	return 0, errors.New("cannot find XDCx service")
+}
+
+func (b *LesApiBackend) XDCxService() *XDCx.XDCX {
+	return nil
+}
+
+func (b *LesApiBackend) LendingService() *XDCxlending.Lending {
+	return nil
 }

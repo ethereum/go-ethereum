@@ -26,25 +26,29 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -437,7 +441,7 @@ func signHash(data []byte) []byte {
 //
 // The key used to calculate the signature is decrypted with the given password.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
+// https://github.com/XinFinOrg/XDPoSChain/wiki/Management-APIs#personal_sign
 func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
@@ -464,7 +468,7 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // Note, the signature must conform to the secp256k1 curve R, S and V values, where
 // the V value must be be 27 or 28 for legacy reasons.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
+// https://github.com/XinFinOrg/XDPoSChain/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
@@ -507,7 +511,7 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 }
 
 // BlockNumber returns the block number of the chain head.
-func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]interface{} {
+func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {
 	return s.b.GetRewardByHash(hash)
 }
 
@@ -876,7 +880,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		candidatesAddresses := state.GetCandidates(statedb)
 		for _, address := range candidatesAddresses {
 			v := state.GetCandidateCap(statedb, address)
-			if address.String() != "xdc0000000000000000000000000000000000000000" {
+			if address.String() != "0x0000000000000000000000000000000000000000" {
 				candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
 			}
 		}
@@ -1069,8 +1073,20 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
+	block, err := s.b.BlockByNumber(ctx, blockNr)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, 0, false, err
+	}
+	XDCxState, err := s.b.XDCxService().GetTradingState(block, author)
+	if err != nil {
+		return nil, 0, false, err
+	}
 	// Get a new instance of the EVM.
-	evm, vmError, err := s.b.GetEVM(ctx, msg, statedb, header, vmCfg)
+	evm, vmError, err := s.b.GetEVM(ctx, msg, statedb, XDCxState, header, vmCfg)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -1506,9 +1522,20 @@ type PublicTransactionPoolAPI struct {
 	nonceLock *AddrLocker
 }
 
+// PublicTransactionPoolAPI exposes methods for the RPC interface
+type PublicXDCXTransactionPoolAPI struct {
+	b         Backend
+	nonceLock *AddrLocker
+}
+
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
 	return &PublicTransactionPoolAPI{b, nonceLock}
+}
+
+// NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
+func NewPublicXDCXTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicXDCXTransactionPoolAPI {
+	return &PublicXDCXTransactionPoolAPI{b, nonceLock}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
@@ -1758,6 +1785,24 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	return tx.Hash(), nil
 }
 
+// submitTransaction is a helper function that submits tx to txPool and logs a message.
+func submitOrderTransaction(ctx context.Context, b Backend, tx *types.OrderTransaction) (common.Hash, error) {
+
+	if err := b.SendOrderTx(ctx, tx); err != nil {
+		return common.Hash{}, err
+	}
+	return tx.Hash(), nil
+}
+
+// submitLendingTransaction is a helper function that submits tx to txPool and logs a message.
+func submitLendingTransaction(ctx context.Context, b Backend, tx *types.LendingTransaction) (common.Hash, error) {
+
+	if err := b.SendLendingTx(ctx, tx); err != nil {
+		return common.Hash{}, err
+	}
+	return tx.Hash(), nil
+}
+
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
 func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error) {
@@ -1803,6 +1848,845 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 		return common.Hash{}, err
 	}
 	return submitTransaction(ctx, s.b, tx)
+}
+
+// SendOrderRawTransaction will add the signed transaction to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce.
+func (s *PublicXDCXTransactionPoolAPI) SendOrderRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (common.Hash, error) {
+	tx := new(types.OrderTransaction)
+	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+		return common.Hash{}, err
+	}
+	return submitOrderTransaction(ctx, s.b, tx)
+}
+
+// SendLendingRawTransaction will add the signed transaction to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce.
+func (s *PublicXDCXTransactionPoolAPI) SendLendingRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (common.Hash, error) {
+	tx := new(types.LendingTransaction)
+	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+		return common.Hash{}, err
+	}
+	return submitLendingTransaction(ctx, s.b, tx)
+}
+
+// GetOrderTxMatchByHash returns the bytes of the transaction for the given hash.
+func (s *PublicXDCXTransactionPoolAPI) GetOrderTxMatchByHash(ctx context.Context, hash common.Hash) ([]*tradingstate.OrderItem, error) {
+	var tx *types.Transaction
+	orders := []*tradingstate.OrderItem{}
+	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			return []*tradingstate.OrderItem{}, nil
+		}
+	}
+
+	batch, err := tradingstate.DecodeTxMatchesBatch(tx.Data())
+	if err != nil {
+		return []*tradingstate.OrderItem{}, err
+	}
+	for _, txMatch := range batch.Data {
+		order, err := txMatch.DecodeOrder()
+		if err != nil {
+			return []*tradingstate.OrderItem{}, err
+		}
+		orders = append(orders, order)
+	}
+	return orders, nil
+
+}
+
+// GetOrderPoolContent return pending, queued content
+func (s *PublicXDCXTransactionPoolAPI) GetOrderPoolContent(ctx context.Context) interface{} {
+	pendingOrders := []*tradingstate.OrderItem{}
+	queuedOrders := []*tradingstate.OrderItem{}
+	pending, queued := s.b.OrderTxPoolContent()
+
+	for _, txs := range pending {
+		for _, tx := range txs {
+			V, R, S := tx.Signature()
+			order := &tradingstate.OrderItem{
+				Nonce:           big.NewInt(int64(tx.Nonce())),
+				Quantity:        tx.Quantity(),
+				Price:           tx.Price(),
+				ExchangeAddress: tx.ExchangeAddress(),
+				UserAddress:     tx.UserAddress(),
+				BaseToken:       tx.BaseToken(),
+				QuoteToken:      tx.QuoteToken(),
+				Status:          tx.Status(),
+				Side:            tx.Side(),
+				Type:            tx.Type(),
+				Hash:            tx.OrderHash(),
+				OrderID:         tx.OrderID(),
+				Signature: &tradingstate.Signature{
+					V: byte(V.Uint64()),
+					R: common.BigToHash(R),
+					S: common.BigToHash(S),
+				},
+			}
+			pendingOrders = append(pendingOrders, order)
+		}
+	}
+
+	for _, txs := range queued {
+		for _, tx := range txs {
+			V, R, S := tx.Signature()
+			order := &tradingstate.OrderItem{
+				Nonce:           big.NewInt(int64(tx.Nonce())),
+				Quantity:        tx.Quantity(),
+				Price:           tx.Price(),
+				ExchangeAddress: tx.ExchangeAddress(),
+				UserAddress:     tx.UserAddress(),
+				BaseToken:       tx.BaseToken(),
+				QuoteToken:      tx.QuoteToken(),
+				Status:          tx.Status(),
+				Side:            tx.Side(),
+				Type:            tx.Type(),
+				Hash:            tx.OrderHash(),
+				OrderID:         tx.OrderID(),
+				Signature: &tradingstate.Signature{
+					V: byte(V.Uint64()),
+					R: common.BigToHash(R),
+					S: common.BigToHash(S),
+				},
+			}
+			queuedOrders = append(pendingOrders, order)
+		}
+	}
+
+	return map[string]interface{}{
+		"pending": pendingOrders,
+		"queued":  queuedOrders,
+	}
+}
+
+// GetOrderStats return pending, queued length
+func (s *PublicXDCXTransactionPoolAPI) GetOrderStats(ctx context.Context) interface{} {
+	pending, queued := s.b.OrderStats()
+	return map[string]interface{}{
+		"pending": pending,
+		"queued":  queued,
+	}
+}
+
+// OrderMsg struct
+type OrderMsg struct {
+	AccountNonce    hexutil.Uint64 `json:"nonce"    gencodec:"required"`
+	Quantity        hexutil.Big    `json:"quantity,omitempty"`
+	Price           hexutil.Big    `json:"price,omitempty"`
+	ExchangeAddress common.Address `json:"exchangeAddress,omitempty"`
+	UserAddress     common.Address `json:"userAddress,omitempty"`
+	BaseToken       common.Address `json:"baseToken,omitempty"`
+	QuoteToken      common.Address `json:"quoteToken,omitempty"`
+	Status          string         `json:"status,omitempty"`
+	Side            string         `json:"side,omitempty"`
+	Type            string         `json:"type,omitempty"`
+	OrderID         hexutil.Uint64 `json:"orderid,omitempty"`
+	// Signature values
+	V hexutil.Big `json:"v" gencodec:"required"`
+	R hexutil.Big `json:"r" gencodec:"required"`
+	S hexutil.Big `json:"s" gencodec:"required"`
+
+	// This is only used when marshaling to JSON.
+	Hash common.Hash `json:"hash" rlp:"-"`
+}
+
+// LendingMsg api message for lending
+type LendingMsg struct {
+	AccountNonce    hexutil.Uint64 `json:"nonce"    gencodec:"required"`
+	Quantity        hexutil.Big    `json:"quantity,omitempty"`
+	RelayerAddress  common.Address `json:"relayerAddress,omitempty"`
+	UserAddress     common.Address `json:"userAddress,omitempty"`
+	CollateralToken common.Address `json:"collateralToken,omitempty"`
+	AutoTopUp       bool           `json:"autoTopUp,omitempty"`
+	LendingToken    common.Address `json:"lendingToken,omitempty"`
+	Term            hexutil.Uint64 `json:"term,omitempty"`
+	Interest        hexutil.Uint64 `json:"interest,omitempty"`
+	Status          string         `json:"status,omitempty"`
+	Side            string         `json:"side,omitempty"`
+	Type            string         `json:"type,omitempty"`
+	LendingId       hexutil.Uint64 `json:"lendingId,omitempty"`
+	LendingTradeId  hexutil.Uint64 `json:"tradeId,omitempty"`
+	ExtraData       string         `json:"extraData,omitempty"`
+
+	// Signature values
+	V hexutil.Big `json:"v" gencodec:"required"`
+	R hexutil.Big `json:"r" gencodec:"required"`
+	S hexutil.Big `json:"s" gencodec:"required"`
+
+	// This is only used when marshaling to JSON.
+	Hash common.Hash `json:"hash" rlp:"-"`
+}
+
+type PriceVolume struct {
+	Price  *big.Int `json:"price,omitempty"`
+	Volume *big.Int `json:"volume,omitempty"`
+}
+
+type InterestVolume struct {
+	Interest *big.Int `json:"interest,omitempty"`
+	Volume   *big.Int `json:"volume,omitempty"`
+}
+
+// SendOrder will add the signed transaction to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce.
+func (s *PublicXDCXTransactionPoolAPI) SendOrder(ctx context.Context, msg OrderMsg) (common.Hash, error) {
+	tx := types.NewOrderTransaction(uint64(msg.AccountNonce), msg.Quantity.ToInt(), msg.Price.ToInt(), msg.ExchangeAddress, msg.UserAddress, msg.BaseToken, msg.QuoteToken, msg.Status, msg.Side, msg.Type, msg.Hash, uint64(msg.OrderID))
+	tx = tx.ImportSignature(msg.V.ToInt(), msg.R.ToInt(), msg.S.ToInt())
+	return submitOrderTransaction(ctx, s.b, tx)
+}
+
+// SendLending will add the signed transaction to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce.
+func (s *PublicXDCXTransactionPoolAPI) SendLending(ctx context.Context, msg LendingMsg) (common.Hash, error) {
+	tx := types.NewLendingTransaction(uint64(msg.AccountNonce), msg.Quantity.ToInt(), uint64(msg.Interest), uint64(msg.Term), msg.RelayerAddress, msg.UserAddress, msg.LendingToken, msg.CollateralToken, msg.AutoTopUp, msg.Status, msg.Side, msg.Type, msg.Hash, uint64(msg.LendingId), uint64(msg.LendingTradeId), msg.ExtraData)
+	tx = tx.ImportSignature(msg.V.ToInt(), msg.R.ToInt(), msg.S.ToInt())
+	return submitLendingTransaction(ctx, s.b, tx)
+}
+
+// GetOrderCount returns the number of transactions the given address has sent for the given block number
+func (s *PublicXDCXTransactionPoolAPI) GetOrderCount(ctx context.Context, addr common.Address) (*hexutil.Uint64, error) {
+
+	nonce, err := s.b.GetOrderNonce(addr.Hash())
+	if err != nil {
+		return (*hexutil.Uint64)(&nonce), err
+	}
+	return (*hexutil.Uint64)(&nonce), err
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken, quoteToken common.Address) (PriceVolume, error) {
+
+	result := PriceVolume{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return result, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return result, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return result, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return result, err
+	}
+	result.Price, result.Volume = XDCxState.GetBestBidPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if result.Price.Sign() == 0 {
+		return result, errors.New("Bid tree not found")
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken, quoteToken common.Address) (PriceVolume, error) {
+	result := PriceVolume{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return result, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return result, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return result, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return result, err
+	}
+	result.Price, result.Volume = XDCxState.GetBestAskPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if result.Price.Sign() == 0 {
+		return result, errors.New("Ask tree not found")
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.DumpBidTrie(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	price := XDCxState.GetLastPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if price == nil || price.Sign() == 0 {
+		return common.Big0, errors.New("Order book's price not found")
+	}
+	return price, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	price := XDCxState.GetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if price == nil || price.Sign() == 0 {
+		return common.Big0, errors.New("Order book's price not found")
+	}
+	return price, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	price, _ := XDCxState.GetMediumPriceAndTotalAmount(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if price == nil || price.Sign() == 0 {
+		return common.Big0, errors.New("Order book's price not found")
+	}
+	return price, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.DumpAskTrie(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseToken, quoteToken common.Address, orderId uint64) (interface{}, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
+	orderitem := XDCxState.GetOrder(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken), orderIdHash)
+	if orderitem.Quantity == nil || orderitem.Quantity.Sign() == 0 {
+		return nil, errors.New("Order not found")
+	}
+	return orderitem, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Context, baseToken, quoteToken common.Address) (*tradingstate.DumpOrderBookInfo, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.DumpOrderBookInfo(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpLendingBook, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.DumpLiquidationPriceTrie(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpInvestingTrie(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpBorrowingTrie(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Context, lendingToken common.Address, term uint64) (*lendingstate.DumpOrderBookInfo, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpOrderBookInfo(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingItem, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpLendingOrderTrie(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingTrade, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpLendingTradeTrie(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.DumpLiquidationTimeTrie(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderCount(ctx context.Context, addr common.Address) (*hexutil.Uint64, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	nonce := lendingState.GetNonce(addr.Hash())
+	return (*hexutil.Uint64)(&nonce), err
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBestInvesting(ctx context.Context, lendingToken common.Address, term uint64) (InterestVolume, error) {
+	result := InterestVolume{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return result, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return result, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return result, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return result, err
+	}
+	result.Interest, result.Volume = lendingState.GetBestInvestingRate(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, lendingToken common.Address, term uint64) (InterestVolume, error) {
+	result := InterestVolume{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return result, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return result, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return result, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return result, err
+	}
+	result.Interest, result.Volume = lendingState.GetBestBorrowRate(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.GetBids(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	XDCxService := s.b.XDCxService()
+	if XDCxService == nil {
+		return nil, errors.New("XDCX service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	XDCxState, err := XDCxService.GetTradingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := XDCxState.GetAsks(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.GetInvestings(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetBorrows(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return nil, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return nil, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return nil, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return nil, err
+	}
+	result, err := lendingState.GetBorrowings(lendingstate.GetLendingOrderBookHash(lendingToken, term))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetLendingTxMatchByHash returns lendingItems which have been processed at tx of the given txhash
+func (s *PublicXDCXTransactionPoolAPI) GetLendingTxMatchByHash(ctx context.Context, hash common.Hash) ([]*lendingstate.LendingItem, error) {
+	var tx *types.Transaction
+	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			return []*lendingstate.LendingItem{}, nil
+		}
+	}
+
+	batch, err := lendingstate.DecodeTxLendingBatch(tx.Data())
+	if err != nil {
+		return []*lendingstate.LendingItem{}, err
+	}
+	return batch.Data, nil
+}
+
+// GetLiquidatedTradesByTxHash returns trades which closed by XDCX protocol at the tx of the give hash
+func (s *PublicXDCXTransactionPoolAPI) GetLiquidatedTradesByTxHash(ctx context.Context, hash common.Hash) (lendingstate.FinalizedResult, error) {
+	var tx *types.Transaction
+	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			return lendingstate.FinalizedResult{}, nil
+		}
+	}
+
+	finalizedResult, err := lendingstate.DecodeFinalizedResult(tx.Data())
+	if err != nil {
+		return lendingstate.FinalizedResult{}, err
+	}
+	finalizedResult.TxHash = hash
+	return finalizedResult, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, lendingToken common.Address, term uint64, orderId uint64) (lendingstate.LendingItem, error) {
+	lendingItem := lendingstate.LendingItem{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return lendingItem, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return lendingItem, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return lendingItem, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return lendingItem, err
+	}
+	lendingOrderBook := lendingstate.GetLendingOrderBookHash(lendingToken, term)
+	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
+	lendingItem = lendingState.GetLendingOrder(lendingOrderBook, orderIdHash)
+	if lendingItem.LendingId != orderId {
+		return lendingItem, errors.New("Lending Item not found")
+	}
+	return lendingItem, nil
+}
+
+func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, lendingToken common.Address, term uint64, tradeId uint64) (lendingstate.LendingTrade, error) {
+	lendingItem := lendingstate.LendingTrade{}
+	block := s.b.CurrentBlock()
+	if block == nil {
+		return lendingItem, errors.New("Current block not found")
+	}
+	lendingService := s.b.LendingService()
+	if lendingService == nil {
+		return lendingItem, errors.New("XDCX Lending service not found")
+	}
+	author, err := s.b.GetEngine().Author(block.Header())
+	if err != nil {
+		return lendingItem, err
+	}
+	lendingState, err := lendingService.GetLendingState(block, author)
+	if err != nil {
+		return lendingItem, err
+	}
+	lendingOrderBook := lendingstate.GetLendingOrderBookHash(lendingToken, term)
+	tradeIdHash := common.BigToHash(new(big.Int).SetUint64(tradeId))
+	lendingItem = lendingState.GetLendingTrade(lendingOrderBook, tradeIdHash)
+	if lendingItem.TradeId != tradeId {
+		return lendingItem, errors.New("Lending Item not found")
+	}
+	return lendingItem, nil
 }
 
 // Sign calculates an ECDSA signature for:
@@ -2055,8 +2939,9 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 	for _, node := range masternodes {
 		mapMN[node] = true
 	}
+	signer := types.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(blockNumber))
 	if engine, ok := b.GetEngine().(*XDPoS.XDPoS); ok {
-		limitNumber := blockNumber - blockNumber%b.ChainConfig().XDPoS.Epoch + 2*b.ChainConfig().XDPoS.Epoch - 1
+		limitNumber := blockNumber + common.LimitTimeFinality
 		currentNumber := b.CurrentBlock().NumberU64()
 		if limitNumber > currentNumber {
 			limitNumber = currentNumber
@@ -2066,25 +2951,11 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 			if err != nil {
 				return addrs, err
 			}
-			signData, ok := engine.BlockSigners.Get(header.Hash())
-			var signTxs []*types.Transaction = nil
-			if !ok {
-				blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
-				if err != nil {
-					return addrs, err
-				}
-				signTxs = []*types.Transaction{}
-				for _, tx := range blockData.Transactions() {
-					if tx.IsSigningTransaction() {
-						signTxs = append(signTxs, tx)
-					}
-				}
-			} else {
-				signTxs = signData.([]*types.Transaction)
-			}
+			blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
+			signTxs := engine.CacheSigner(header.Hash(), blockData.Transactions())
 			for _, signtx := range signTxs {
 				blkHash := common.BytesToHash(signtx.Data()[len(signtx.Data())-32:])
-				from := *signtx.From()
+				from, _ := types.Sender(signer, signtx)
 				if blkHash == blockHash && mapMN[from] {
 					addrs = append(addrs, from)
 					delete(mapMN, from)

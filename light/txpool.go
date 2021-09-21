@@ -22,15 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 const (
@@ -351,6 +351,21 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// check if receiver is in black list
 	if tx.To() != nil && common.Blacklist[*tx.To()] {
 		return fmt.Errorf("Reject transaction with receiver in black-list: %v", tx.To().Hex())
+	}
+
+	// validate minFee slot for XDCZ
+	if tx.IsXDCZApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXDCZApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
+	}
+	// validate balance slot, token decimal for XDCX
+	if tx.IsXDCXApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXDCXApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
 	}
 
 	// Validate the transaction sender and it's sig. Throw

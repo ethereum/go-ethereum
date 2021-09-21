@@ -25,13 +25,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -127,8 +129,19 @@ type blockChain interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
-
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+
+	// Engine retrieves the chain's consensus engine.
+	Engine() consensus.Engine
+
+	// GetHeader returns the hash corresponding to their hash.
+	GetHeader(common.Hash, uint64) *types.Header
+
+	// CurrentHeader retrieves the current header from the local chain.
+	CurrentHeader() *types.Header
+
+	// Config retrieves the blockchain's chain configuration.
+	Config() *params.ChainConfig
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -620,9 +633,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	balance := pool.currentState.GetBalance(from)
 	cost := tx.Cost()
 	minGasPrice := common.MinGasPrice
+	feeCapacity := big.NewInt(0)
+
 	if tx.To() != nil {
 		if value, ok := pool.trc21FeeCapacity[*tx.To()]; ok {
-			balance = value
+			feeCapacity = value
 			if !state.ValidateTRC21Tx(pool.pendingState.StateDB, from, *tx.To(), tx.Data()) {
 				return ErrInsufficientFunds
 			}
@@ -630,7 +645,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			minGasPrice = common.TRC21GasPrice
 		}
 	}
-	if balance.Cmp(cost) < 0 {
+	if new(big.Int).Add(balance, feeCapacity).Cmp(cost) < 0 {
 		return ErrInsufficientFunds
 	}
 
@@ -655,11 +670,24 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 	}
 
-	minGasDeploySMC := new(big.Int).Mul(new(big.Int).SetUint64(10), new(big.Int).SetUint64(params.Ether))
-	if tx.To() == nil && (tx.Cost().Cmp(minGasDeploySMC) < 0 || tx.GasPrice().Cmp(new(big.Int).SetUint64(10000*params.Shannon)) < 0) {
-		return ErrMinDeploySMC
+	/*
+		minGasDeploySMC := new(big.Int).Mul(new(big.Int).SetUint64(10), new(big.Int).SetUint64(params.Ether))
+		if tx.To() == nil && (tx.Cost().Cmp(minGasDeploySMC) < 0 || tx.GasPrice().Cmp(new(big.Int).SetUint64(10000*params.Shannon)) < 0) {
+			return ErrMinDeploySMC
+		}
+	*/
+
+	// validate minFee slot for XDCZ
+	if tx.IsXDCZApplyTransaction() {
+		copyState := pool.currentState.Copy()
+		return ValidateXDCZApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:]))
 	}
 
+	// validate balance slot, token decimal for XDCX
+	if tx.IsXDCXApplyTransaction() {
+		copyState := pool.currentState.Copy()
+		return ValidateXDCXApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:]))
+	}
 	return nil
 }
 

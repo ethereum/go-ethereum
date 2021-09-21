@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 var (
@@ -30,7 +30,7 @@ var (
 )
 
 var (
-	// XDCChain mainnet config
+	// XDPoSChain mainnet config
 	XDCMainnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(88),
 		HomesteadBlock: big.NewInt(1),
@@ -109,7 +109,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
+	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 	TestChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules                = TestChainConfig.Rules(new(big.Int))
@@ -233,6 +233,18 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+// IsPetersburg returns whether num is either
+// - equal to or greater than the PetersburgBlock fork block,
+// - OR is nil, and Constantinople is active
+func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
+	return isForked(common.TIPXDCXCancellationFee, num)
+}
+
+// IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
+func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
+	return isForked(common.TIPXDCXCancellationFee, num)
+}
+
 func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
 	return isForked(common.TIP2019Block, num)
 }
@@ -246,9 +258,29 @@ func (c *ChainConfig) IsTIPRandomize(num *big.Int) bool {
 }
 
 // IsTIPIncreaseMasternodes using for increase masternodes from 18 to 40
+
 // Time update: 23-07-2019
 func (c *ChainConfig) IsTIPIncreaseMasternodes(num *big.Int) bool {
 	return isForked(common.TIPIncreaseMasternodes, num)
+}
+
+func (c *ChainConfig) IsTIPNoHalvingMNReward(num *big.Int) bool {
+	return isForked(common.TIPNoHalvingMNReward, num)
+}
+func (c *ChainConfig) IsTIPXDCX(num *big.Int) bool {
+	if common.IsTestnet {
+		return isForked(common.TIPXDCXTestnet, num)
+	} else {
+		return isForked(common.TIPXDCX, num)
+	}
+}
+
+func (c *ChainConfig) IsTIPXDCXLending(num *big.Int) bool {
+	return isForked(common.TIPXDCXLending, num)
+}
+
+func (c *ChainConfig) IsTIPXDCXCancellationFee(num *big.Int) bool {
+	return isForked(common.TIPXDCXCancellationFee, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
@@ -378,9 +410,9 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainId                                   *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium                               bool
+	ChainId                                                 *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -388,5 +420,15 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	return Rules{
+		ChainId:          new(big.Int).Set(chainId),
+		IsHomestead:      c.IsHomestead(num),
+		IsEIP150:         c.IsEIP150(num),
+		IsEIP155:         c.IsEIP155(num),
+		IsEIP158:         c.IsEIP158(num),
+		IsByzantium:      c.IsByzantium(num),
+		IsConstantinople: c.IsConstantinople(num),
+		IsPetersburg:     c.IsPetersburg(num),
+		IsIstanbul:       c.IsIstanbul(num),
+	}
 }

@@ -27,38 +27,41 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/eth/filters"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 
 	"bytes"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/contracts"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/contracts"
+	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 
-	//"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	//"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/miner"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 type LesServer interface {
@@ -74,11 +77,12 @@ type Ethereum struct {
 	chainConfig *params.ChainConfig
 
 	// Channel for shutting down the service
-	shutdownChan  chan bool    // Channel for shutting down the ethereum
-	stopDbUpgrade func() error // stop chain db sequential key upgrade
+	shutdownChan chan bool // Channel for shutting down the ethereum
 
 	// Handlers
 	txPool          *core.TxPool
+	orderPool       *core.OrderPool
+	lendingPool     *core.LendingPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 	lesServer       LesServer
@@ -102,7 +106,9 @@ type Ethereum struct {
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 
-	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+	lock    sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+	XDCX    *XDCx.XDCX
+	Lending *XDCxlending.Lending
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -112,7 +118,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingServ *XDCxlending.Lending) (*Ethereum, error) {
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -123,11 +129,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
@@ -138,14 +144,19 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		accountManager: ctx.AccountManager,
 		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
-		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
 		gasPrice:       config.GasPrice,
 		etherbase:      config.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
-
+	// Inject XDCX Service into main Eth Service.
+	if XDCXServ != nil {
+		eth.XDCX = XDCXServ
+	}
+	if lendingServ != nil {
+		eth.Lending = lendingServ
+	}
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -159,7 +170,16 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+	if eth.chainConfig.XDPoS != nil {
+		c := eth.engine.(*XDPoS.XDPoS)
+		c.GetXDCXService = func() XDPoS.TradingService {
+			return eth.XDCX
+		}
+		c.GetLendingService = func() XDPoS.LendingService {
+			return eth.Lending
+		}
+	}
+	eth.blockchain, err = core.NewBlockChainEx(chainDb, XDCXServ.GetLevelDB(), cacheConfig, eth.chainConfig, eth.engine, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +195,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
-
+	eth.orderPool = core.NewOrderPool(eth.chainConfig, eth.blockchain)
+	eth.lendingPool = core.NewLendingPool(eth.chainConfig, eth.blockchain)
 	if common.RollbackHash != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
 		curBlock := eth.blockchain.CurrentBlock()
 		prevBlock := eth.blockchain.GetBlockByHash(common.RollbackHash)
@@ -195,7 +216,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 	}
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManagerEx(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.orderPool, eth.lendingPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, ctx.GetConfig().AnnounceTxs)
@@ -483,18 +504,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook calculates reward for masternodes
-		c.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, header *types.Header) (error, map[string]interface{}) {
-			parentHeader := eth.blockchain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-			canonicalState, err := eth.blockchain.StateAt(parentHeader.Root)
-			if canonicalState == nil || err != nil {
-				log.Crit("Can't get state at head of canonical chain", "head number", header.Number.Uint64(), "err", err)
-			}
+		c.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{}) {
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 			foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
 			if foundationWalletAddr == (common.Address{}) {
 				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
-				return err, nil
+				return errors.New("Foundation Wallet Address is empty"), nil
 			}
 			rewards := make(map[string]interface{})
 			if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
@@ -502,7 +518,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				// Get signers in blockSigner smartcontract.
 				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
-				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
+				chainReward = rewardInflation(chain, chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(c, chain, header, rCheckpoint, totalSigner)
@@ -520,7 +536,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, canonicalState, signer, calcReward, number)
+						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
 						if err != nil {
 							log.Crit("Fail to calculate reward for holders.", "error", err)
 						}
@@ -575,6 +591,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return false
 		}
+
 	}
 	return eth, nil
 }
@@ -601,9 +618,6 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err
-	}
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/chaindata/")
 	}
 	return db, nil
 }
@@ -766,9 +780,9 @@ func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
 		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
 	}
 	masternodes := []common.Address{
-		common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
-		common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
-		common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+		common.HexToAddress("0x3Ea0A3555f9B1dE983572BfF6444aeb1899eC58C"),
+		common.HexToAddress("0x4F7900282F3d371d585ab1361205B0940aB1789C"),
+		common.HexToAddress("0x942a5885A8844Ee5587C8AC5e371Fc39FFE61896"),
 	}
 	for _, m := range masternodes {
 		if m == eb {
@@ -853,13 +867,13 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 	return nil
 }
+func (s *Ethereum) SaveData() {
+	s.blockchain.SaveData()
+}
 
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	if s.stopDbUpgrade != nil {
-		s.stopDbUpgrade()
-	}
 	s.bloomIndexer.Close()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
@@ -910,11 +924,15 @@ func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, e
 	return nil, core.ErrNotFoundM1
 }
 
-func rewardInflation(chainReward *big.Int, number uint64, blockPerYear uint64) *big.Int {
-	if blockPerYear*2 <= number && number < blockPerYear*6 {
+func rewardInflation(chain consensus.ChainReader, chainReward *big.Int, number uint64, blockPerYear uint64) *big.Int {
+	if chain != nil && chain.Config().IsTIPNoHalvingMNReward(new(big.Int).SetUint64(number)) {
+		return chainReward
+	}
+
+	if blockPerYear*2 <= number && number < blockPerYear*5 {
 		chainReward.Div(chainReward, new(big.Int).SetUint64(2))
 	}
-	if blockPerYear*6 <= number {
+	if blockPerYear*5 <= number {
 		chainReward.Div(chainReward, new(big.Int).SetUint64(4))
 	}
 
@@ -923,4 +941,21 @@ func rewardInflation(chainReward *big.Int, number uint64, blockPerYear uint64) *
 
 func (s *Ethereum) GetPeer() int {
 	return len(s.protocolManager.peers.peers)
+}
+
+func (s *Ethereum) GetXDCX() *XDCx.XDCX {
+	return s.XDCX
+}
+
+func (s *Ethereum) OrderPool() *core.OrderPool {
+	return s.orderPool
+}
+
+func (s *Ethereum) GetXDCXLending() *XDCxlending.Lending {
+	return s.Lending
+}
+
+// LendingPool geth eth lending pool
+func (s *Ethereum) LendingPool() *core.LendingPool {
+	return s.lendingPool
 }

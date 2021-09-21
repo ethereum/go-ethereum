@@ -3,15 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/contracts/trc21issuer"
+	"github.com/XinFinOrg/XDPoSChain/contracts/trc21issuer/simulation"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"log"
 	"math/big"
 	"time"
-
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/trc21issuer"
-	"github.com/ethereum/go-ethereum/contracts/trc21issuer/simulation"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 func main() {

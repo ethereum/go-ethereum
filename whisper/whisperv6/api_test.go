@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	set "gopkg.in/fatih/set.v0"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	mapset "github.com/deckarep/golang-set"
 )
 
 func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
@@ -31,7 +31,7 @@ func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
 		privateKeys:   make(map[string]*ecdsa.PrivateKey),
 		symKeys:       make(map[string][]byte),
 		envelopes:     make(map[common.Hash]*Envelope),
-		expirations:   make(map[uint32]*set.SetNonTS),
+		expirations:   make(map[uint32]mapset.Set),
 		peers:         make(map[*Peer]struct{}),
 		messageQueue:  make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),

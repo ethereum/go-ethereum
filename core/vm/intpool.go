@@ -16,7 +16,10 @@
 
 package vm
 
-import "math/big"
+import (
+	"math/big"
+	"sync"
+)
 
 var checkVal = big.NewInt(-42)
 
@@ -50,6 +53,17 @@ func (p *intPool) getZero() *big.Int {
 	return new(big.Int)
 }
 
+// putOne returns an allocated big int to the pool to be later reused by get calls.
+// Note, the values as saved as is; neither put nor get zeroes the ints out!
+// As opposed to 'put' with variadic args, this method becomes inlined by the
+// go compiler
+func (p *intPool) putOne(i *big.Int) {
+	if len(p.pool.data) > poolLimit {
+		return
+	}
+	p.pool.push(i)
+}
+
 // put returns an allocated big int to the pool to be later reused by get calls.
 // Note, the values as saved as is; neither put nor get zeroes the ints out!
 func (p *intPool) put(is ...*big.Int) {
@@ -63,5 +77,41 @@ func (p *intPool) put(is ...*big.Int) {
 			i.Set(checkVal)
 		}
 		p.pool.push(i)
+	}
+}
+
+// The intPool pool's default capacity
+const poolDefaultCap = 25
+
+// intPoolPool manages a pool of intPools.
+type intPoolPool struct {
+	pools []*intPool
+	lock  sync.Mutex
+}
+
+var poolOfIntPools = &intPoolPool{
+	pools: make([]*intPool, 0, poolDefaultCap),
+}
+
+// get is looking for an available pool to return.
+func (ipp *intPoolPool) get() *intPool {
+	ipp.lock.Lock()
+	defer ipp.lock.Unlock()
+
+	if len(poolOfIntPools.pools) > 0 {
+		ip := ipp.pools[len(ipp.pools)-1]
+		ipp.pools = ipp.pools[:len(ipp.pools)-1]
+		return ip
+	}
+	return newIntPool()
+}
+
+// put a pool that has been allocated with get.
+func (ipp *intPoolPool) put(ip *intPool) {
+	ipp.lock.Lock()
+	defer ipp.lock.Unlock()
+
+	if len(ipp.pools) < cap(ipp.pools) {
+		ipp.pools = append(ipp.pools, ip)
 	}
 }

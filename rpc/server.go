@@ -25,8 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/fatih/set.v0"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	mapset "github.com/deckarep/golang-set"
 )
 
 const MetadataApi = "rpc"
@@ -46,7 +46,7 @@ const (
 func NewServer() *Server {
 	server := &Server{
 		services: make(serviceRegistry),
-		codecs:   set.New(),
+		codecs:   mapset.NewSet(),
 		run:      1,
 	}
 
@@ -189,18 +189,8 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 		// If a single shot request is executing, run and return immediately
 		if singleShot {
 			if batch {
-				for _, req := range reqs {
-					if req.callb != nil && req.callb.method.Name == "EnabledSendTransaction" {
-						codec.Write(codec.CreateErrorResponse(&req.id, &invalidRequestError{message: "Only support send transaction with ipc"}))
-						return nil
-					}
-				}
 				s.execBatch(ctx, codec, reqs)
 			} else {
-				if reqs[0].callb != nil && reqs[0].callb.method.Name == "EnabledSendTransaction" {
-					codec.Write(codec.CreateErrorResponse(&reqs[0].id, &invalidRequestError{message: "Only support send transaction with ipc"}))
-					return nil
-				}
 				s.exec(ctx, codec, reqs[0])
 			}
 			return nil
