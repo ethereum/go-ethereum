@@ -17,8 +17,6 @@
 package terminal
 
 import (
-	"os"
-
 	"golang.org/x/sys/windows"
 )
 
@@ -26,7 +24,7 @@ type State struct {
 	mode uint32
 }
 
-// IsTerminal returns whether the given file descriptor is a terminal.
+// IsTerminal returns true if the given file descriptor is a terminal.
 func IsTerminal(fd int) bool {
 	var st uint32
 	err := windows.GetConsoleMode(windows.Handle(fd), &st)
@@ -73,6 +71,13 @@ func GetSize(fd int) (width, height int, err error) {
 	return int(info.Size.X), int(info.Size.Y), nil
 }
 
+// passwordReader is an io.Reader that reads from a specific Windows HANDLE.
+type passwordReader int
+
+func (r passwordReader) Read(buf []byte) (int, error) {
+	return windows.Read(windows.Handle(r), buf)
+}
+
 // ReadPassword reads a line of input from a terminal without local echo.  This
 // is commonly used for inputting passwords and other sensitive data. The slice
 // returned does not include the \n.
@@ -89,15 +94,9 @@ func ReadPassword(fd int) ([]byte, error) {
 		return nil, err
 	}
 
-	defer windows.SetConsoleMode(windows.Handle(fd), old)
+	defer func() {
+		windows.SetConsoleMode(windows.Handle(fd), old)
+	}()
 
-	var h windows.Handle
-	p, _ := windows.GetCurrentProcess()
-	if err := windows.DuplicateHandle(p, windows.Handle(fd), p, &h, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
-		return nil, err
-	}
-
-	f := os.NewFile(uintptr(h), "stdin")
-	defer f.Close()
-	return readPasswordLine(f)
+	return readPasswordLine(passwordReader(fd))
 }

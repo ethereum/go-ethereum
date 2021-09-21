@@ -46,7 +46,6 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
-	RPCGasCap() *big.Int // global gas cap for eth_call over rpc: DoS protection
 
 	// BlockChain API
 	SetHead(number uint64)
@@ -56,7 +55,7 @@ type Backend interface {
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int
-	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
@@ -68,13 +67,20 @@ type Backend interface {
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	GetIPCClient() (*ethclient.Client, error)
 	GetEngine() consensus.Engine
 	GetRewardByHash(hash common.Hash) map[string]interface{}
+
+	GetVotersRewards(common.Address) map[common.Address]*big.Int
+	GetVotersCap(checkpoint *big.Int, masterAddr common.Address, voters []common.Address) map[common.Address]*big.Int
+	GetEpochDuration() *big.Int
+	GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int
+	GetBlocksHashCache(blockNr uint64) []common.Hash
+	AreTwoBlockSamePath(newBlock common.Hash, oldBlock common.Hash) bool
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

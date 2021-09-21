@@ -16,21 +16,14 @@
 
 package api
 
-//go:generate mimegen --types=./../../cmd/swarm/mimegen/mime.types --package=api --out=gen_mime.go
-//go:generate gofmt -s -w gen_mime.go
-
 import (
-	"archive/tar"
-	"context"
-	"crypto/ecdsa"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 
 	"bytes"
 	"mime"
@@ -38,57 +31,34 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
-
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
+var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
+
+//setup metrics
 var (
-	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
-	apiResolveFail         = metrics.NewRegisteredCounter("api.resolve.fail", nil)
-	apiPutCount            = metrics.NewRegisteredCounter("api.put.count", nil)
-	apiPutFail             = metrics.NewRegisteredCounter("api.put.fail", nil)
-	apiGetCount            = metrics.NewRegisteredCounter("api.get.count", nil)
-	apiGetNotFound         = metrics.NewRegisteredCounter("api.get.notfound", nil)
-	apiGetHTTP300          = metrics.NewRegisteredCounter("api.get.http.300", nil)
-	apiManifestUpdateCount = metrics.NewRegisteredCounter("api.manifestupdate.count", nil)
-	apiManifestUpdateFail  = metrics.NewRegisteredCounter("api.manifestupdate.fail", nil)
-	apiManifestListCount   = metrics.NewRegisteredCounter("api.manifestlist.count", nil)
-	apiManifestListFail    = metrics.NewRegisteredCounter("api.manifestlist.fail", nil)
-	apiDeleteCount         = metrics.NewRegisteredCounter("api.delete.count", nil)
-	apiDeleteFail          = metrics.NewRegisteredCounter("api.delete.fail", nil)
-	apiGetTarCount         = metrics.NewRegisteredCounter("api.gettar.count", nil)
-	apiGetTarFail          = metrics.NewRegisteredCounter("api.gettar.fail", nil)
-	apiUploadTarCount      = metrics.NewRegisteredCounter("api.uploadtar.count", nil)
-	apiUploadTarFail       = metrics.NewRegisteredCounter("api.uploadtar.fail", nil)
-	apiModifyCount         = metrics.NewRegisteredCounter("api.modify.count", nil)
-	apiModifyFail          = metrics.NewRegisteredCounter("api.modify.fail", nil)
-	apiAddFileCount        = metrics.NewRegisteredCounter("api.addfile.count", nil)
-	apiAddFileFail         = metrics.NewRegisteredCounter("api.addfile.fail", nil)
-	apiRmFileCount         = metrics.NewRegisteredCounter("api.removefile.count", nil)
-	apiRmFileFail          = metrics.NewRegisteredCounter("api.removefile.fail", nil)
-	apiAppendFileCount     = metrics.NewRegisteredCounter("api.appendfile.count", nil)
-	apiAppendFileFail      = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
-	apiGetInvalid          = metrics.NewRegisteredCounter("api.get.invalid", nil)
+	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
+	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
+	apiPutCount        = metrics.NewRegisteredCounter("api.put.count", nil)
+	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
+	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
+	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
+	apiGetHttp300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
+	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
+	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
+	apiAddFileFail     = metrics.NewRegisteredCounter("api.addfile.fail", nil)
+	apiRmFileCount     = metrics.NewRegisteredCounter("api.removefile.count", nil)
+	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
+	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
+	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
 )
 
-// Resolver interface resolve a domain name to a hash using ENS
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
-}
-
-// ResolveValidator is used to validate the contained Resolver
-type ResolveValidator interface {
-	Resolver
-	Owner(node [32]byte) (common.Address, error)
-	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
 
 // NoResolverError is returned by MultiResolver.Resolve if no resolver
@@ -97,12 +67,10 @@ type NoResolverError struct {
 	TLD string
 }
 
-// NewNoResolverError creates a NoResolverError for the given top level domain
 func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
 
-// Error NoResolverError implements error
 func (e *NoResolverError) Error() string {
 	if e.TLD == "" {
 		return "no ENS resolver"
@@ -111,11 +79,10 @@ func (e *NoResolverError) Error() string {
 }
 
 // MultiResolver is used to resolve URL addresses based on their TLDs.
-// Each TLD can have multiple resolvers, and the resolution from the
+// Each TLD can have multiple resolvers, and the resoluton from the
 // first one in the sequence will be returned.
 type MultiResolver struct {
-	resolvers map[string][]ResolveValidator
-	nameHash  func(string) common.Hash
+	resolvers map[string][]Resolver
 }
 
 // MultiResolverOption sets options for MultiResolver and is used as
@@ -126,7 +93,7 @@ type MultiResolverOption func(*MultiResolver)
 // for a specific TLD. If TLD is an empty string, the resolver will be added
 // to the list of default resolver, the ones that will be used for resolution
 // of addresses which do not have their TLD resolver specified.
-func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolverOption {
+func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.resolvers[tld] = append(m.resolvers[tld], r)
 	}
@@ -135,8 +102,7 @@ func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolv
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
-		resolvers: make(map[string][]ResolveValidator),
-		nameHash:  ens.EnsNode,
+		resolvers: make(map[string][]Resolver),
 	}
 	for _, o := range opts {
 		o(m)
@@ -146,12 +112,20 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 
 // Resolve resolves address by choosing a Resolver by TLD.
 // If there are more default Resolvers, or for a specific TLD,
-// the Hash from the first one which does not return error
+// the Hash from the the first one which does not return error
 // will be returned.
-func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
-	rs, err := m.getResolveValidator(addr)
-	if err != nil {
-		return h, err
+func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
+	rs := m.resolvers[""]
+	tld := path.Ext(addr)
+	if tld != "" {
+		tld = tld[1:]
+		rstld, ok := m.resolvers[tld]
+		if ok {
+			rs = rstld
+		}
+	}
+	if rs == nil {
+		return h, NewNoResolverError(tld)
 	}
 	for _, r := range rs {
 		h, err = r.Resolve(addr)
@@ -162,456 +136,139 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
-// getResolveValidator uses the hostname to retrieve the resolver associated with the top level domain
-func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
-	rs := m.resolvers[""]
-	tld := path.Ext(name)
-	if tld != "" {
-		tld = tld[1:]
-		rstld, ok := m.resolvers[tld]
-		if ok {
-			return rstld, nil
-		}
-	}
-	if len(rs) == 0 {
-		return rs, NewNoResolverError(tld)
-	}
-	return rs, nil
-}
-
 /*
-API implements webserver/file system related content storage and retrieval
-on top of the FileStore
-it is the public interface of the FileStore which is included in the ethereum stack
+Api implements webserver/file system related content storage and retrieval
+on top of the dpa
+it is the public interface of the dpa which is included in the ethereum stack
 */
-type API struct {
-	feed      *feed.Handler
-	fileStore *storage.FileStore
-	dns       Resolver
-	Decryptor func(context.Context, string) DecryptFunc
+type Api struct {
+	dpa *storage.DPA
+	dns Resolver
 }
 
-// NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey) (self *API) {
-	self = &API{
-		fileStore: fileStore,
-		dns:       dns,
-		feed:      feedHandler,
-		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
-			return self.doDecrypt(ctx, credentials, pk)
-		},
+//the api constructor initialises
+func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
+	self = &Api{
+		dpa: dpa,
+		dns: dns,
 	}
 	return
 }
 
-// Retrieve FileStore reader API
-func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
-	return a.fileStore.Retrieve(ctx, addr)
+// to be used only in TEST
+func (self *Api) Upload(uploadDir, index string) (hash string, err error) {
+	fs := NewFileSystem(self)
+	hash, err = fs.Upload(uploadDir, index)
+	return hash, err
 }
 
-// Store wraps the Store API call of the embedded FileStore
-func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(ctx context.Context) error, err error) {
-	log.Debug("api.store", "size", size)
-	return a.fileStore.Store(ctx, data, size, toEncrypt)
+// DPA reader API
+func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
+	return self.dpa.Retrieve(key)
 }
 
-// Resolve a name into a content-addressed hash
-// where address could be an ENS name, or a content addressed hash
-func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
-	// if DNS is not configured, return an error
-	if a.dns == nil {
-		if hashMatcher.MatchString(address) {
-			return common.Hex2Bytes(address), nil
-		}
-		apiResolveFail.Inc(1)
-		return nil, fmt.Errorf("no DNS to resolve name: %q", address)
-	}
-	// try and resolve the address
-	resolved, err := a.dns.Resolve(address)
-	if err != nil {
-		if hashMatcher.MatchString(address) {
-			return common.Hex2Bytes(address), nil
-		}
-		return nil, err
-	}
-	return resolved[:], nil
+func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
+	return self.dpa.Store(data, size, wg, nil)
 }
 
-// Resolve resolves a URI to an Address using the MultiResolver.
-func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (storage.Address, error) {
+type ErrResolve error
+
+// DNS Resolver
+func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
-	log.Trace("resolving", "uri", uri.Addr)
+	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
 
-	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"api.resolve")
-	defer sp.Finish()
-
-	// if the URI is immutable, check if the address looks like a hash
-	if uri.Immutable() {
-		key := uri.Address()
-		if key == nil {
+	// if the URI is immutable, check if the address is a hash
+	isHash := hashMatcher.MatchString(uri.Addr)
+	if uri.Immutable() || uri.DeprecatedImmutable() {
+		if !isHash {
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
-		return key, nil
+		return common.Hex2Bytes(uri.Addr), nil
 	}
 
-	addr, err := a.Resolve(ctx, uri.Addr)
-	if err != nil {
-		return nil, err
+	// if DNS is not configured, check if the address is a hash
+	if self.dns == nil {
+		if !isHash {
+			apiResolveFail.Inc(1)
+			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
+		}
+		return common.Hex2Bytes(uri.Addr), nil
 	}
 
-	if uri.Path == "" {
-		return addr, nil
-	}
-	walker, err := a.NewManifestWalker(ctx, addr, a.Decryptor(ctx, credentials), nil)
-	if err != nil {
+	// try and resolve the address
+	resolved, err := self.dns.Resolve(uri.Addr)
+	if err == nil {
+		return resolved[:], nil
+	} else if !isHash {
+		apiResolveFail.Inc(1)
 		return nil, err
 	}
-	var entry *ManifestEntry
-	walker.Walk(func(e *ManifestEntry) error {
-		// if the entry matches the path, set entry and stop
-		// the walk
-		if e.Path == uri.Path {
-			entry = e
-			// return an error to cancel the walk
-			return errors.New("found")
-		}
-		// ignore non-manifest files
-		if e.ContentType != ManifestType {
-			return nil
-		}
-		// if the manifest's path is a prefix of the
-		// requested path, recurse into it by returning
-		// nil and continuing the walk
-		if strings.HasPrefix(uri.Path, e.Path) {
-			return nil
-		}
-		return ErrSkipManifest
-	})
-	if entry == nil {
-		return nil, errors.New("not found")
-	}
-	addr = storage.Address(common.Hex2Bytes(entry.Hash))
-	return addr, nil
+	return common.Hex2Bytes(uri.Addr), nil
 }
 
-// Put provides singleton manifest creation on top of FileStore store
-func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
+// Put provides singleton manifest creation on top of dpa store
+func (self *Api) Put(content, contentType string) (storage.Key, error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
+	wg := &sync.WaitGroup{}
+	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
 	if err != nil {
 		apiPutFail.Inc(1)
-		return nil, nil, err
+		return nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.fileStore.Store(ctx, r, int64(len(manifest)), toEncrypt)
+	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
 	if err != nil {
 		apiPutFail.Inc(1)
-		return nil, nil, err
+		return nil, err
 	}
-	return key, func(ctx context.Context) error {
-		err := waitContent(ctx)
-		if err != nil {
-			return err
-		}
-		return waitManifest(ctx)
-	}, nil
+	wg.Wait()
+	return key, nil
 }
 
 // Get uses iterative manifest retrieval and prefix matching
-// to resolve basePath to content using FileStore retrieve
-// it returns a section reader, mimeType, status, the key of the actual content and an error
-func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
-	log.Debug("api.get", "key", manifestAddr, "path", path)
+// to resolve basePath to content using dpa retrieve
+// it returns a section reader, mimeType, status and an error
+func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
+	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
-		return nil, "", http.StatusNotFound, nil, err
+		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
+		return
 	}
 
-	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
+	log.Trace(fmt.Sprintf("getEntry(%s)", path))
+
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
-		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
-
-		if entry.ContentType == ManifestType {
-			log.Debug("entry is manifest", "key", manifestAddr, "new key", entry.Hash)
-			adr, err := hex.DecodeString(entry.Hash)
-			if err != nil {
-				return nil, "", 0, nil, err
-			}
-			return a.Get(ctx, decrypt, adr, entry.Path)
-		}
-
-		// we need to do some extra work if this is a Swarm feed manifest
-		if entry.ContentType == FeedContentType {
-			if entry.Feed == nil {
-				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode Feed in manifest")
-			}
-			_, err := a.feed.Lookup(ctx, feed.NewQueryLatest(entry.Feed, lookup.NoClue))
-			if err != nil {
-				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
-				log.Debug(fmt.Sprintf("get feed update content error: %v", err))
-				return reader, mimeType, status, nil, err
-			}
-			// get the data of the update
-			_, contentAddr, err := a.feed.GetContent(entry.Feed)
-			if err != nil {
-				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
-				log.Warn(fmt.Sprintf("get feed update content error: %v", err))
-				return reader, mimeType, status, nil, err
-			}
-
-			// extract content hash
-			if len(contentAddr) != storage.AddressLength {
-				apiGetInvalid.Inc(1)
-				status = http.StatusUnprocessableEntity
-				errorMessage := fmt.Sprintf("invalid swarm hash in feed update. Expected %d bytes. Got %d", storage.AddressLength, len(contentAddr))
-				log.Warn(errorMessage)
-				return reader, mimeType, status, nil, errors.New(errorMessage)
-			}
-			manifestAddr = storage.Address(contentAddr)
-			log.Trace("feed update contains swarm hash", "key", manifestAddr)
-
-			// get the manifest the swarm hash points to
-			trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, NOOPDecrypt)
-			if err != nil {
-				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
-				log.Warn(fmt.Sprintf("loadManifestTrie (feed update) error: %v", err))
-				return reader, mimeType, status, nil, err
-			}
-
-			// finally, get the manifest entry
-			// it will always be the entry on path ""
-			entry, _ = trie.getEntry(path)
-			if entry == nil {
-				status = http.StatusNotFound
-				apiGetNotFound.Inc(1)
-				err = fmt.Errorf("manifest (feed update) entry for '%s' not found", path)
-				log.Trace("manifest (feed update) entry not found", "key", manifestAddr, "path", path)
-				return reader, mimeType, status, nil, err
-			}
-		}
-
-		// regardless of feed update manifests or normal manifests we will converge at this point
-		// get the key the manifest entry points to and serve it if it's unambiguous
-		contentAddr = common.Hex2Bytes(entry.Hash)
+		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
-			apiGetHTTP300.Inc(1)
-			return nil, entry.ContentType, status, contentAddr, err
+			apiGetHttp300.Inc(1)
+			return
+		} else {
+			mimeType = entry.ContentType
+			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
+			reader = self.dpa.Retrieve(key)
 		}
-		mimeType = entry.ContentType
-		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
-		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
-		err = fmt.Errorf("Not found: could not find resource '%s'", path)
-		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
+		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		log.Warn(fmt.Sprintf("%v", err))
 	}
 	return
 }
 
-func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
-	apiDeleteCount.Inc(1)
-	uri, err := Parse("bzz:/" + addr)
-	if err != nil {
-		apiDeleteFail.Inc(1)
-		return nil, err
-	}
-	key, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
-
-	if err != nil {
-		return nil, err
-	}
-	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
-		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
-		return mw.RemoveEntry(path)
-	})
-	if err != nil {
-		apiDeleteFail.Inc(1)
-		return nil, err
-	}
-
-	return newKey, nil
-}
-
-// GetDirectoryTar fetches a requested directory as a tarstream
-// it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
-func (a *API) GetDirectoryTar(ctx context.Context, decrypt DecryptFunc, uri *URI) (io.ReadCloser, error) {
-	apiGetTarCount.Inc(1)
-	addr, err := a.Resolve(ctx, uri.Addr)
-	if err != nil {
-		return nil, err
-	}
-	walker, err := a.NewManifestWalker(ctx, addr, decrypt, nil)
-	if err != nil {
-		apiGetTarFail.Inc(1)
-		return nil, err
-	}
-
-	piper, pipew := io.Pipe()
-
-	tw := tar.NewWriter(pipew)
-
-	go func() {
-		err := walker.Walk(func(entry *ManifestEntry) error {
-			// ignore manifests (walk will recurse into them)
-			if entry.ContentType == ManifestType {
-				return nil
-			}
-
-			// retrieve the entry's key and size
-			reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
-			size, err := reader.Size(ctx, nil)
-			if err != nil {
-				return err
-			}
-
-			// write a tar header for the entry
-			hdr := &tar.Header{
-				Name:    entry.Path,
-				Mode:    entry.Mode,
-				Size:    size,
-				ModTime: entry.ModTime,
-				Xattrs: map[string]string{
-					"user.swarm.content-type": entry.ContentType,
-				},
-			}
-
-			if err := tw.WriteHeader(hdr); err != nil {
-				return err
-			}
-
-			// copy the file into the tar stream
-			n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
-			if err != nil {
-				return err
-			} else if n != size {
-				return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
-			}
-
-			return nil
-		})
-		// close tar writer before closing pipew
-		// to flush remaining data to pipew
-		// regardless of error value
-		tw.Close()
-		if err != nil {
-			apiGetTarFail.Inc(1)
-			pipew.CloseWithError(err)
-		} else {
-			pipew.Close()
-		}
-	}()
-
-	return piper, nil
-}
-
-// GetManifestList lists the manifest entries for the specified address and prefix
-// and returns it as a ManifestList
-func (a *API) GetManifestList(ctx context.Context, decryptor DecryptFunc, addr storage.Address, prefix string) (list ManifestList, err error) {
-	apiManifestListCount.Inc(1)
-	walker, err := a.NewManifestWalker(ctx, addr, decryptor, nil)
-	if err != nil {
-		apiManifestListFail.Inc(1)
-		return ManifestList{}, err
-	}
-
-	err = walker.Walk(func(entry *ManifestEntry) error {
-		// handle non-manifest files
-		if entry.ContentType != ManifestType {
-			// ignore the file if it doesn't have the specified prefix
-			if !strings.HasPrefix(entry.Path, prefix) {
-				return nil
-			}
-
-			// if the path after the prefix contains a slash, add a
-			// common prefix to the list, otherwise add the entry
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return nil
-			}
-			if entry.Path == "" {
-				entry.Path = "/"
-			}
-			list.Entries = append(list.Entries, entry)
-			return nil
-		}
-
-		// if the manifest's path is a prefix of the specified prefix
-		// then just recurse into the manifest by returning nil and
-		// continuing the walk
-		if strings.HasPrefix(prefix, entry.Path) {
-			return nil
-		}
-
-		// if the manifest's path has the specified prefix, then if the
-		// path after the prefix contains a slash, add a common prefix
-		// to the list and skip the manifest, otherwise recurse into
-		// the manifest by returning nil and continuing the walk
-		if strings.HasPrefix(entry.Path, prefix) {
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return ErrSkipManifest
-			}
-			return nil
-		}
-
-		// the manifest neither has the prefix or needs recursing in to
-		// so just skip it
-		return ErrSkipManifest
-	})
-
-	if err != nil {
-		apiManifestListFail.Inc(1)
-		return ManifestList{}, err
-	}
-
-	return list, nil
-}
-
-func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
-	apiManifestUpdateCount.Inc(1)
-	mw, err := a.NewManifestWriter(ctx, addr, nil)
-	if err != nil {
-		apiManifestUpdateFail.Inc(1)
-		return nil, err
-	}
-
-	if err := update(mw); err != nil {
-		apiManifestUpdateFail.Inc(1)
-		return nil, err
-	}
-
-	addr, err = mw.Store()
-	if err != nil {
-		apiManifestUpdateFail.Inc(1)
-		return nil, err
-	}
-	log.Debug(fmt.Sprintf("generated manifest %s", addr))
-	return addr, nil
-}
-
-// Modify loads manifest and checks the content hash before recalculating and storing the manifest.
-func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
+func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
+	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -631,11 +288,10 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
-	return trie.ref, nil
+	return trie.hash, nil
 }
 
-// AddFile creates a new manifest entry, adds it to swarm, then adds a file to swarm.
-func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
+func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -643,7 +299,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := self.Resolve(uri)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -662,13 +318,13 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		ModTime:     time.Now(),
 	}
 
-	mw, err := a.NewManifestWriter(ctx, mkey, nil)
+	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
-	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry)
+	fkey, err := mw.AddEntry(bytes.NewReader(content), entry)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -682,77 +338,10 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	}
 
 	return fkey, newMkey.String(), nil
+
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
-	apiUploadTarCount.Inc(1)
-	var contentKey storage.Address
-	tr := tar.NewReader(bodyReader)
-	defer bodyReader.Close()
-	var defaultPathFound bool
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			apiUploadTarFail.Inc(1)
-			return nil, fmt.Errorf("error reading tar stream: %s", err)
-		}
-
-		// only store regular files
-		if !hdr.FileInfo().Mode().IsRegular() {
-			continue
-		}
-
-		// add the entry under the path from the request
-		manifestPath := path.Join(manifestPath, hdr.Name)
-		contentType := hdr.Xattrs["user.swarm.content-type"]
-		if contentType == "" {
-			contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
-		}
-		//DetectContentType("")
-		entry := &ManifestEntry{
-			Path:        manifestPath,
-			ContentType: contentType,
-			Mode:        hdr.Mode,
-			Size:        hdr.Size,
-			ModTime:     hdr.ModTime,
-		}
-		contentKey, err = mw.AddEntry(ctx, tr, entry)
-		if err != nil {
-			apiUploadTarFail.Inc(1)
-			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
-		}
-		if hdr.Name == defaultPath {
-			contentType := hdr.Xattrs["user.swarm.content-type"]
-			if contentType == "" {
-				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
-			}
-
-			entry := &ManifestEntry{
-				Hash:        contentKey.Hex(),
-				Path:        "", // default entry
-				ContentType: contentType,
-				Mode:        hdr.Mode,
-				Size:        hdr.Size,
-				ModTime:     hdr.ModTime,
-			}
-			contentKey, err = mw.AddEntry(ctx, nil, entry)
-			if err != nil {
-				apiUploadTarFail.Inc(1)
-				return nil, fmt.Errorf("error adding default manifest entry from tar stream: %s", err)
-			}
-			defaultPathFound = true
-		}
-	}
-	if defaultPath != "" && !defaultPathFound {
-		return contentKey, fmt.Errorf("default path %q not found", defaultPath)
-	}
-	return contentKey, nil
-}
-
-// RemoveFile removes a file entry in a manifest.
-func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname string, nameresolver bool) (string, error) {
+func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -760,7 +349,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 		apiRmFileFail.Inc(1)
 		return "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := self.Resolve(uri)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -771,7 +360,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 		path = path[1:]
 	}
 
-	mw, err := a.NewManifestWriter(ctx, mkey, nil)
+	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -793,8 +382,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 	return newMkey.String(), nil
 }
 
-// AppendFile removes old manifest, appends file entry to new manifest and adds it to Swarm.
-func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
+func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -804,7 +392,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	buf := make([]byte, buffSize)
 
-	oldReader, _ := a.Retrieve(ctx, oldAddr)
+	oldReader := self.Retrieve(oldKey)
 	io.ReadAtLeast(oldReader, buf, int(offset))
 
 	newReader := bytes.NewReader(content)
@@ -818,7 +406,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	totalSize := int64(len(buf))
 
 	// TODO(jmozah): to append using pyramid chunker when it is ready
-	//oldReader := a.Retrieve(oldKey)
+	//oldReader := self.Retrieve(oldKey)
 	//newReader := bytes.NewReader(content)
 	//combinedReader := io.MultiReader(oldReader, newReader)
 
@@ -827,7 +415,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := self.Resolve(uri)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -838,7 +426,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		path = path[1:]
 	}
 
-	mw, err := a.NewManifestWriter(ctx, mkey, nil)
+	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -858,7 +446,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		ModTime:     time.Now(),
 	}
 
-	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)
+	fkey, err := mw.AddEntry(io.Reader(combinedReader), entry)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -872,24 +460,24 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	}
 
 	return fkey, newMkey.String(), nil
+
 }
 
-// BuildDirectoryTree used by swarmfs_unix
-func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = a.Resolve(ctx, uri.Addr)
+	key, err = self.Resolve(uri)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
+	rootTrie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
-		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
+		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
 	}
 
 	manifestEntryMap = map[string]*manifestTrieEntry{}
@@ -898,120 +486,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	})
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", addr.String(), err)
+		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
-	return addr, manifestEntryMap, nil
-}
-
-// FeedsLookup finds Swarm feeds updates at specific points in time, or the latest update
-func (a *API) FeedsLookup(ctx context.Context, query *feed.Query) ([]byte, error) {
-	_, err := a.feed.Lookup(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	var data []byte
-	_, data, err = a.feed.GetContent(&query.Feed)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-// FeedsNewRequest creates a Request object to update a specific feed
-func (a *API) FeedsNewRequest(ctx context.Context, feed *feed.Feed) (*feed.Request, error) {
-	return a.feed.NewRequest(ctx, feed)
-}
-
-// FeedsUpdate publishes a new update on the given feed
-func (a *API) FeedsUpdate(ctx context.Context, request *feed.Request) (storage.Address, error) {
-	return a.feed.Update(ctx, request)
-}
-
-// ErrCannotLoadFeedManifest is returned when looking up a feeds manifest fails
-var ErrCannotLoadFeedManifest = errors.New("Cannot load feed manifest")
-
-// ErrNotAFeedManifest is returned when the address provided returned something other than a valid manifest
-var ErrNotAFeedManifest = errors.New("Not a feed manifest")
-
-// ResolveFeedManifest retrieves the Swarm feed manifest for the given address, and returns the referenced Feed.
-func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feed.Feed, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
-	if err != nil {
-		return nil, ErrCannotLoadFeedManifest
-	}
-
-	entry, _ := trie.getEntry("")
-	if entry.ContentType != FeedContentType {
-		return nil, ErrNotAFeedManifest
-	}
-
-	return entry.Feed, nil
-}
-
-// ErrCannotResolveFeedURI is returned when the ENS resolver is not able to translate a name to a Swarm feed
-var ErrCannotResolveFeedURI = errors.New("Cannot resolve Feed URI")
-
-// ErrCannotResolveFeed is returned when values provided are not enough or invalid to recreate a
-// feed out of them.
-var ErrCannotResolveFeed = errors.New("Cannot resolve Feed")
-
-// ResolveFeed attempts to extract feed information out of the manifest, if provided
-// If not, it attempts to extract the feed out of a set of key-value pairs
-func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*feed.Feed, error) {
-	var fd *feed.Feed
-	var err error
-	if uri.Addr != "" {
-		// resolve the content key.
-		manifestAddr := uri.Address()
-		if manifestAddr == nil {
-			manifestAddr, err = a.Resolve(ctx, uri.Addr)
-			if err != nil {
-				return nil, ErrCannotResolveFeedURI
-			}
-		}
-
-		// get the Swarm feed from the manifest
-		fd, err = a.ResolveFeedManifest(ctx, manifestAddr)
-		if err != nil {
-			return nil, err
-		}
-		log.Debug("handle.get.feed: resolved", "manifestkey", manifestAddr, "feed", fd.Hex())
-	} else {
-		var f feed.Feed
-		if err := f.FromValues(values); err != nil {
-			return nil, ErrCannotResolveFeed
-
-		}
-		fd = &f
-	}
-	return fd, nil
-}
-
-// MimeOctetStream default value of http Content-Type header
-const MimeOctetStream = "application/octet-stream"
-
-// DetectContentType by file file extension, or fallback to content sniff
-func DetectContentType(fileName string, f io.ReadSeeker) (string, error) {
-	ctype := mime.TypeByExtension(filepath.Ext(fileName))
-	if ctype != "" {
-		return ctype, nil
-	}
-
-	// save/rollback to get content probe from begin of file
-	currentPosition, err := f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
-	}
-
-	// read a chunk to decide between utf-8 text and binary
-	var buf [512]byte
-	n, _ := f.Read(buf[:])
-	ctype = http.DetectContentType(buf[:n])
-
-	_, err = f.Seek(currentPosition, io.SeekStart) // rewind to output whole file
-	if err != nil {
-		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
-	}
-
-	return ctype, nil
+	return key, manifestEntryMap, nil
 }

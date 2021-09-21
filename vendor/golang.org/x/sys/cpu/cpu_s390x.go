@@ -5,5 +5,3 @@
 package cpu
 
 const cacheLineSize = 256
-
-func doinit() {}

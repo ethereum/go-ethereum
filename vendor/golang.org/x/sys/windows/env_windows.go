@@ -23,7 +23,3 @@ func Clearenv() {
 func Environ() []string {
 	return syscall.Environ()
 }
-
-func Unsetenv(key string) error {
-	return syscall.Unsetenv(key)
-}

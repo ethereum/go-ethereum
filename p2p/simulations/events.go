@@ -58,9 +58,6 @@ type Event struct {
 
 	// Msg is set if the type is EventTypeMsg
 	Msg *Msg `json:"msg,omitempty"`
-
-	//Optionally provide data (currently for simulation frontends only)
-	Data interface{} `json:"data"`
 }
 
 // NewEvent creates a new event for the given object which should be either a
@@ -100,7 +97,7 @@ func ControlEvent(v interface{}) *Event {
 func (e *Event) String() string {
 	switch e.Type {
 	case EventTypeNode:
-		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().TerminalString(), e.Node.Up())
+		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().TerminalString(), e.Node.Up)
 	case EventTypeConn:
 		return fmt.Sprintf("<conn-event> nodes: %s->%s up: %t", e.Conn.One.TerminalString(), e.Conn.Other.TerminalString(), e.Conn.Up)
 	case EventTypeMsg:

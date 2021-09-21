@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Gas costs
 const (
 	GasQuickStep   uint64 = 2
 	GasFastestStep uint64 = 3

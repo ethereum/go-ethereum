@@ -46,7 +46,7 @@ var (
 )
 
 func TestValidator(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
 	validatorCap := new(big.Int)
@@ -86,7 +86,7 @@ func TestRewardBalance(t *testing.T) {
 		acc1Addr: {Balance: new(big.Int).SetUint64(10000000)},
 		acc2Addr: {Balance: new(big.Int).SetUint64(10000000)},
 		acc4Addr: {Balance: new(big.Int).SetUint64(10000000)},
-	}, 10000000)
+	})
 	acc1Opts := bind.NewKeyedTransactor(acc1Key)
 	acc2Opts := bind.NewKeyedTransactor(acc2Key)
 	accounts := []*bind.TransactOpts{acc1Opts, acc2Opts}
@@ -233,7 +233,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		log.Error("Fail to parse json holders", "error", err)
 		return nil, err
 	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
+	log.Info("Holders reward", "holders", string(jsonHolders), "masternode", masterAddr.String())
 
 	return balances, nil
 }

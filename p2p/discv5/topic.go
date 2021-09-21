@@ -271,15 +271,15 @@ func (t *topicTable) useTicket(node *Node, serialNo uint32, topics []Topic, idx 
 	return false
 }
 
-func (t *topicTable) getTicket(node *Node, topics []Topic) *ticket {
-	t.collectGarbage()
+func (topictab *topicTable) getTicket(node *Node, topics []Topic) *ticket {
+	topictab.collectGarbage()
 
 	now := mclock.Now()
-	n := t.getOrNewNode(node)
+	n := topictab.getOrNewNode(node)
 	n.lastIssuedTicket++
-	t.storeTicketCounters(node)
+	topictab.storeTicketCounters(node)
 
-	tic := &ticket{
+	t := &ticket{
 		issueTime: now,
 		topics:    topics,
 		serial:    n.lastIssuedTicket,
@@ -287,15 +287,15 @@ func (t *topicTable) getTicket(node *Node, topics []Topic) *ticket {
 	}
 	for i, topic := range topics {
 		var waitPeriod time.Duration
-		if topic := t.topics[topic]; topic != nil {
+		if topic := topictab.topics[topic]; topic != nil {
 			waitPeriod = topic.wcl.waitPeriod
 		} else {
 			waitPeriod = minWaitPeriod
 		}
 
-		tic.regTime[i] = now + mclock.AbsTime(waitPeriod)
+		t.regTime[i] = now + mclock.AbsTime(waitPeriod)
 	}
-	return tic
+	return t
 }
 
 const gcInterval = time.Minute

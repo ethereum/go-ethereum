@@ -116,7 +116,7 @@ func (c *sha256hash) Run(input []byte) ([]byte, error) {
 	return h[:], nil
 }
 
-// RIPEMD160 implemented as a native contract.
+// RIPMED160 implemented as a native contract.
 type ripemd160hash struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.

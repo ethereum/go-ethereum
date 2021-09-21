@@ -92,10 +92,7 @@ func TestMailServer(t *testing.T) {
 	shh = whisper.New(&whisper.DefaultConfig)
 	shh.RegisterServer(&server)
 
-	err = server.Init(shh, dir, password, powRequirement)
-	if err != nil {
-		t.Fatal(err)
-	}
+	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
 	keyID, err = shh.AddSymKeyFromPassword(password)

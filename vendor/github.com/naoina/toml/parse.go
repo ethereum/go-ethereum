@@ -97,7 +97,6 @@ type toml struct {
 	currentTable *ast.Table
 	s            string
 	key          string
-	tableKeys    []string
 	val          ast.Value
 	arr          *array
 	stack        []*stack
@@ -181,12 +180,12 @@ func (p *tomlParser) SetArray(begin, end int) {
 }
 
 func (p *toml) SetTable(buf []rune, begin, end int) {
-	rawName := string(buf[begin:end])
-	p.setTable(p.table, rawName, p.tableKeys)
-	p.tableKeys = nil
+	p.setTable(p.table, buf, begin, end)
 }
 
-func (p *toml) setTable(parent *ast.Table, name string, names []string) {
+func (p *toml) setTable(parent *ast.Table, buf []rune, begin, end int) {
+	name := string(buf[begin:end])
+	names := splitTableKey(name)
 	parent, err := p.lookupTable(parent, names[:len(names)-1])
 	if err != nil {
 		p.Error(err)
@@ -231,12 +230,12 @@ func (p *tomlParser) SetTableString(begin, end int) {
 }
 
 func (p *toml) SetArrayTable(buf []rune, begin, end int) {
-	rawName := string(buf[begin:end])
-	p.setArrayTable(p.table, rawName, p.tableKeys)
-	p.tableKeys = nil
+	p.setArrayTable(p.table, buf, begin, end)
 }
 
-func (p *toml) setArrayTable(parent *ast.Table, name string, names []string) {
+func (p *toml) setArrayTable(parent *ast.Table, buf []rune, begin, end int) {
+	name := string(buf[begin:end])
+	names := splitTableKey(name)
 	parent, err := p.lookupTable(parent, names[:len(names)-1])
 	if err != nil {
 		p.Error(err)
@@ -261,11 +260,11 @@ func (p *toml) setArrayTable(parent *ast.Table, name string, names []string) {
 func (p *toml) StartInlineTable() {
 	p.skip = false
 	p.stack = append(p.stack, &stack{p.key, p.currentTable})
-	names := []string{p.key}
+	buf := []rune(p.key)
 	if p.arr == nil {
-		p.setTable(p.currentTable, names[0], names)
+		p.setTable(p.currentTable, buf, 0, len(buf))
 	} else {
-		p.setArrayTable(p.currentTable, names[0], names)
+		p.setArrayTable(p.currentTable, buf, 0, len(buf))
 	}
 }
 
@@ -283,13 +282,6 @@ func (p *toml) AddLineCount(i int) {
 
 func (p *toml) SetKey(buf []rune, begin, end int) {
 	p.key = string(buf[begin:end])
-	if len(p.key) > 0 && p.key[0] == '"' {
-		p.key = p.unquote(p.key)
-	}
-}
-
-func (p *toml) AddTableKey() {
-	p.tableKeys = append(p.tableKeys, p.key)
 }
 
 func (p *toml) AddKeyValue() {
@@ -359,4 +351,26 @@ func (p *toml) lookupTable(t *ast.Table, keys []string) (*ast.Table, error) {
 		}
 	}
 	return t, nil
+}
+
+func splitTableKey(tk string) []string {
+	key := make([]byte, 0, 1)
+	keys := make([]string, 0, 1)
+	inQuote := false
+	for i := 0; i < len(tk); i++ {
+		k := tk[i]
+		switch {
+		case k == tableSeparator && !inQuote:
+			keys = append(keys, string(key))
+			key = key[:0] // reuse buffer.
+		case k == '"':
+			inQuote = !inQuote
+		case (k == ' ' || k == '\t') && !inQuote:
+			// skip.
+		default:
+			key = append(key, k)
+		}
+	}
+	keys = append(keys, string(key))
+	return keys
 }

@@ -18,7 +18,9 @@
 package les
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"errors"
 	"fmt"
 	"io"
@@ -26,9 +28,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -146,20 +147,22 @@ func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
 }
 
 // checkSignature verifies if the block announcement has a valid signature by the given pubKey
-func (a *announceData) checkSignature(id enode.ID) error {
+func (a *announceData) checkSignature(pubKey *ecdsa.PublicKey) error {
 	var sig []byte
 	if err := a.Update.decode().get("sign", &sig); err != nil {
 		return err
 	}
 	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
-	recPubkey, err := crypto.SigToPub(crypto.Keccak256(rlp), sig)
+	recPubkey, err := secp256k1.RecoverPubkey(crypto.Keccak256(rlp), sig)
 	if err != nil {
 		return err
 	}
-	if id == enode.PubkeyToIDV4(recPubkey) {
+	pbytes := elliptic.Marshal(pubKey.Curve, pubKey.X, pubKey.Y)
+	if bytes.Equal(pbytes, recPubkey) {
 		return nil
+	} else {
+		return errors.New("Wrong signature")
 	}
-	return errors.New("wrong signature")
 }
 
 type blockInfo struct {
@@ -221,6 +224,6 @@ type proofsData [][]rlp.RawValue
 
 type txStatus struct {
 	Status core.TxStatus
-	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
+	Lookup *core.TxLookupEntry `rlp:"nil"`
 	Error  string
 }

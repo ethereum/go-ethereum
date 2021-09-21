@@ -19,7 +19,6 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -33,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 )
 
@@ -60,19 +59,16 @@ const (
 	chequebookDeployDelay   = 1 * time.Second // delay between retries
 )
 
-// LocalProfile combines a PayProfile with *swap.Params
-type LocalProfile struct {
+type SwapParams struct {
 	*swap.Params
 	*PayProfile
 }
 
-// RemoteProfile combines a PayProfile with *swap.Profile
-type RemoteProfile struct {
+type SwapProfile struct {
 	*swap.Profile
 	*PayProfile
 }
 
-// PayProfile is a container for relevant chequebook and beneficiary options
 type PayProfile struct {
 	PublicKey   string         // check against signature of promise
 	Contract    common.Address // address of chequebook contract
@@ -84,9 +80,9 @@ type PayProfile struct {
 	lock        sync.RWMutex
 }
 
-// NewDefaultSwapParams create params with default values
-func NewDefaultSwapParams() *LocalProfile {
-	return &LocalProfile{
+//create params with default values
+func NewDefaultSwapParams() *SwapParams {
+	return &SwapParams{
 		PayProfile: &PayProfile{},
 		Params: &swap.Params{
 			Profile: &swap.Profile{
@@ -106,12 +102,12 @@ func NewDefaultSwapParams() *LocalProfile {
 	}
 }
 
-// Init this can only finally be set after all config options (file, cmd line, env vars)
-// have been evaluated
-func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *SwapParams) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
 	pubkey := &prvkey.PublicKey
 
-	lp.PayProfile = &PayProfile{
+	self.PayProfile = &PayProfile{
 		PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
 		Contract:    contract,
 		Beneficiary: crypto.PubkeyToAddress(*pubkey),
@@ -121,7 +117,7 @@ func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) 
 	}
 }
 
-// NewSwap constructor, parameters
+// swap constructor, parameters
 // * global chequebook, assume deployed service and
 // * the balance is at buffer.
 // swap.Add(n) called in netstore
@@ -129,7 +125,8 @@ func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) 
 //                 OR sending cheques.
 // n < 0  called when receiving chunks = receiving delivery responses
 //                 OR receiving cheques.
-func NewSwap(localProfile *LocalProfile, remoteProfile *RemoteProfile, backend chequebook.Backend, proto swap.Protocol) (swapInstance *swap.Swap, err error) {
+
+func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend, proto swap.Protocol) (self *swap.Swap, err error) {
 	var (
 		ctx = context.TODO()
 		ok  bool
@@ -137,31 +134,26 @@ func NewSwap(localProfile *LocalProfile, remoteProfile *RemoteProfile, backend c
 		out *chequebook.Outbox
 	)
 
-	remotekey, err := crypto.UnmarshalPubkey(common.FromHex(remoteProfile.PublicKey))
-	if err != nil {
-		return nil, errors.New("invalid remote public key")
-	}
-
-	// check if remoteProfile chequebook is valid
+	// check if remote chequebook is valid
 	// insolvent chequebooks suicide so will signal as invalid
 	// TODO: monitoring a chequebooks events
-	ok, err = chequebook.ValidateCode(ctx, backend, remoteProfile.Contract)
+	ok, err = chequebook.ValidateCode(ctx, backend, remote.Contract)
 	if !ok {
-		log.Info(fmt.Sprintf("invalid contract %v for peer %v: %v)", remoteProfile.Contract.Hex()[:8], proto, err))
+		log.Info(fmt.Sprintf("invalid contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 	} else {
-		// remoteProfile contract valid, create inbox
-		in, err = chequebook.NewInbox(localProfile.privateKey, remoteProfile.Contract, localProfile.Beneficiary, remotekey, backend)
+		// remote contract valid, create inbox
+		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), backend)
 		if err != nil {
-			log.Warn(fmt.Sprintf("unable to set up inbox for chequebook contract %v for peer %v: %v)", remoteProfile.Contract.Hex()[:8], proto, err))
+			log.Warn(fmt.Sprintf("unable to set up inbox for chequebook contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 		}
 	}
 
-	// check if localProfile chequebook contract is valid
-	ok, err = chequebook.ValidateCode(ctx, backend, localProfile.Contract)
+	// check if local chequebook contract is valid
+	ok, err = chequebook.ValidateCode(ctx, backend, local.Contract)
 	if !ok {
-		log.Warn(fmt.Sprintf("unable to set up outbox for peer %v:  chequebook contract (owner: %v): %v)", proto, localProfile.owner.Hex(), err))
+		log.Warn(fmt.Sprintf("unable to set up outbox for peer %v:  chequebook contract (owner: %v): %v)", proto, local.owner.Hex(), err))
 	} else {
-		out = chequebook.NewOutbox(localProfile.Chequebook(), remoteProfile.Beneficiary)
+		out = chequebook.NewOutbox(local.Chequebook(), remote.Beneficiary)
 	}
 
 	pm := swap.Payment{
@@ -170,20 +162,20 @@ func NewSwap(localProfile *LocalProfile, remoteProfile *RemoteProfile, backend c
 		Buys:  out != nil,
 		Sells: in != nil,
 	}
-	swapInstance, err = swap.New(localProfile.Params, pm, proto)
+	self, err = swap.New(local.Params, pm, proto)
 	if err != nil {
 		return
 	}
-	// remoteProfile profile given (first) in handshake
-	swapInstance.SetRemote(remoteProfile.Profile)
+	// remote profile given (first) in handshake
+	self.SetRemote(remote.Profile)
 	var buy, sell string
-	if swapInstance.Buys {
-		buy = "purchase from peer enabled at " + remoteProfile.SellAt.String() + " wei/chunk"
+	if self.Buys {
+		buy = "purchase from peer enabled at " + remote.SellAt.String() + " wei/chunk"
 	} else {
 		buy = "purchase from peer disabled"
 	}
-	if swapInstance.Sells {
-		sell = "selling to peer enabled at " + localProfile.SellAt.String() + " wei/chunk"
+	if self.Sells {
+		sell = "selling to peer enabled at " + local.SellAt.String() + " wei/chunk"
 	} else {
 		sell = "selling to peer disabled"
 	}
@@ -192,69 +184,66 @@ func NewSwap(localProfile *LocalProfile, remoteProfile *RemoteProfile, backend c
 	return
 }
 
-// Chequebook get's chequebook from the localProfile
-func (lp *LocalProfile) Chequebook() *chequebook.Chequebook {
-	defer lp.lock.Unlock()
-	lp.lock.Lock()
-	return lp.chbook
+func (self *SwapParams) Chequebook() *chequebook.Chequebook {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	return self.chbook
 }
 
-// PrivateKey accessor
-func (lp *LocalProfile) PrivateKey() *ecdsa.PrivateKey {
-	return lp.privateKey
+func (self *SwapParams) PrivateKey() *ecdsa.PrivateKey {
+	return self.privateKey
 }
 
-// func (self *LocalProfile) PublicKey() *ecdsa.PublicKey {
+// func (self *SwapParams) PublicKey() *ecdsa.PublicKey {
 // 	return self.publicKey
 // }
 
-// SetKey set's private and public key on localProfile
-func (lp *LocalProfile) SetKey(prvkey *ecdsa.PrivateKey) {
-	lp.privateKey = prvkey
-	lp.publicKey = &prvkey.PublicKey
+func (self *SwapParams) SetKey(prvkey *ecdsa.PrivateKey) {
+	self.privateKey = prvkey
+	self.publicKey = &prvkey.PublicKey
 }
 
-// SetChequebook wraps the chequebook initialiser and sets up autoDeposit to cover spending.
-func (lp *LocalProfile) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	lp.lock.Lock()
-	swapContract := lp.Contract
-	lp.lock.Unlock()
+// setChequebook(path, backend) wraps the
+// chequebook initialiser and sets up autoDeposit to cover spending.
+func (self *SwapParams) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	self.lock.Lock()
+	contract := self.Contract
+	self.lock.Unlock()
 
-	valid, err := chequebook.ValidateCode(ctx, backend, swapContract)
+	valid, err := chequebook.ValidateCode(ctx, backend, contract)
 	if err != nil {
 		return err
 	} else if valid {
-		return lp.newChequebookFromContract(path, backend)
+		return self.newChequebookFromContract(path, backend)
 	}
-	return lp.deployChequebook(ctx, backend, path)
+	return self.deployChequebook(ctx, backend, path)
 }
 
-// deployChequebook deploys the localProfile Chequebook
-func (lp *LocalProfile) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	opts := bind.NewKeyedTransactor(lp.privateKey)
-	opts.Value = lp.AutoDepositBuffer
+func (self *SwapParams) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	opts := bind.NewKeyedTransactor(self.privateKey)
+	opts.Value = self.AutoDepositBuffer
 	opts.Context = ctx
 
 	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
-	address, err := deployChequebookLoop(opts, backend)
+	contract, err := deployChequebookLoop(opts, backend)
 	if err != nil {
 		log.Error(fmt.Sprintf("unable to deploy new chequebook: %v", err))
 		return err
 	}
-	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
+	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", contract.Hex(), opts.From.Hex()))
 
 	// need to save config at this point
-	lp.lock.Lock()
-	lp.Contract = address
-	err = lp.newChequebookFromContract(path, backend)
-	lp.lock.Unlock()
+	self.lock.Lock()
+	self.Contract = contract
+	err = self.newChequebookFromContract(path, backend)
+	self.lock.Unlock()
 	if err != nil {
 		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
 	}
 	return err
 }
 
-// deployChequebookLoop repeatedly tries to deploy a chequebook.
+// repeatedly tries to deploy a chequebook.
 func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (addr common.Address, err error) {
 	var tx *types.Transaction
 	for try := 0; try < chequebookDeployRetries; try++ {
@@ -274,28 +263,28 @@ func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (
 	return addr, err
 }
 
-// newChequebookFromContract - initialise the chequebook from a persisted json file or create a new one
+// initialise the chequebook from a persisted json file or create a new one
 // caller holds the lock
-func (lp *LocalProfile) newChequebookFromContract(path string, backend chequebook.Backend) error {
-	hexkey := common.Bytes2Hex(lp.Contract.Bytes())
+func (self *SwapParams) newChequebookFromContract(path string, backend chequebook.Backend) error {
+	hexkey := common.Bytes2Hex(self.Contract.Bytes())
 	err := os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
 	}
 
 	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
-	lp.chbook, err = chequebook.LoadChequebook(chbookpath, lp.privateKey, backend, true)
+	self.chbook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend, true)
 
 	if err != nil {
-		lp.chbook, err = chequebook.NewChequebook(chbookpath, lp.Contract, lp.privateKey, backend)
+		self.chbook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)
 		if err != nil {
-			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err))
-			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err)
+			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err))
+			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err)
 		}
 	}
 
-	lp.chbook.AutoDeposit(lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer)
-	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(lp.publicKey)).Hex()[:8], lp.Contract.Hex()[:8], lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer))
+	self.chbook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(self.publicKey)).Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer))
 
 	return nil
 }

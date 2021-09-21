@@ -18,7 +18,6 @@ package filters
 
 import (
 	"context"
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,11 +33,10 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
-	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
@@ -51,19 +49,17 @@ type Backend interface {
 type Filter struct {
 	backend Backend
 
-	db        ethdb.Database
-	addresses []common.Address
-	topics    [][]common.Hash
-
-	block      common.Hash // Block hash if filtering a single block
-	begin, end int64       // Range interval if filtering multiple blocks
+	db         ethdb.Database
+	begin, end int64
+	addresses  []common.Address
+	topics     [][]common.Hash
 
 	matcher *bloombits.Matcher
 }
 
-// NewRangeFilter creates a new filter which uses a bloom filter on blocks to
-// figure out whether a particular block is interesting or not.
-func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+// New creates a new filter which uses a bloom filter on blocks to figure out whether
+// a particular block is interesting or not.
+func New(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -82,52 +78,23 @@ func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Addres
 		}
 		filters = append(filters, filter)
 	}
+	// Assemble and return the filter
 	size, _ := backend.BloomStatus()
 
-	// Create a generic filter and convert it into a range filter
-	filter := newFilter(backend, addresses, topics)
-
-	filter.matcher = bloombits.NewMatcher(size, filters)
-	filter.begin = begin
-	filter.end = end
-
-	return filter
-}
-
-// NewBlockFilter creates a new filter which directly inspects the contents of
-// a block to figure out whether it is interesting or not.
-func NewBlockFilter(backend Backend, block common.Hash, addresses []common.Address, topics [][]common.Hash) *Filter {
-	// Create a generic filter and convert it into a block filter
-	filter := newFilter(backend, addresses, topics)
-	filter.block = block
-	return filter
-}
-
-// newFilter creates a generic filter that can either filter based on a block hash,
-// or based on range queries. The search criteria needs to be explicitly set.
-func newFilter(backend Backend, addresses []common.Address, topics [][]common.Hash) *Filter {
 	return &Filter{
 		backend:   backend,
+		begin:     begin,
+		end:       end,
 		addresses: addresses,
 		topics:    topics,
 		db:        backend.ChainDb(),
+		matcher:   bloombits.NewMatcher(size, filters),
 	}
 }
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
-	// If we're doing singleton block filtering, execute and return
-	if f.block != (common.Hash{}) {
-		header, err := f.backend.HeaderByHash(ctx, f.block)
-		if err != nil {
-			return nil, err
-		}
-		if header == nil {
-			return nil, errors.New("unknown block")
-		}
-		return f.blockLogs(ctx, header)
-	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
@@ -220,23 +187,13 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 		if header == nil || err != nil {
 			return logs, err
 		}
-		found, err := f.blockLogs(ctx, header)
-		if err != nil {
-			return logs, err
+		if bloomFilter(header.Bloom, f.addresses, f.topics) {
+			found, err := f.checkMatches(ctx, header)
+			if err != nil {
+				return logs, err
+			}
+			logs = append(logs, found...)
 		}
-		logs = append(logs, found...)
-	}
-	return logs, nil
-}
-
-// blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
-	if bloomFilter(header.Bloom, f.addresses, f.topics) {
-		found, err := f.checkMatches(ctx, header)
-		if err != nil {
-			return logs, err
-		}
-		logs = append(logs, found...)
 	}
 	return logs, nil
 }
@@ -301,9 +258,9 @@ Logs:
 		if len(topics) > len(log.Topics) {
 			continue Logs
 		}
-		for i, sub := range topics {
-			match := len(sub) == 0 // empty rule set == wildcard
-			for _, topic := range sub {
+		for i, topics := range topics {
+			match := len(topics) == 0 // empty rule set == wildcard
+			for _, topic := range topics {
 				if log.Topics[i] == topic {
 					match = true
 					break

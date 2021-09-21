@@ -21,7 +21,7 @@ import (
 	"math/big"
 )
 
-// Stack is an object for basic stack operations. Items popped to the stack are
+// stack is an object for basic stack operations. Items popped to the stack are
 // expected to be changed and modified. stack does not take care of adding newly
 // initialised objects.
 type Stack struct {
@@ -32,7 +32,6 @@ func newstack() *Stack {
 	return &Stack{data: make([]*big.Int, 0, 1024)}
 }
 
-// Data returns the underlying big.Int array.
 func (st *Stack) Data() []*big.Int {
 	return st.data
 }
@@ -81,7 +80,6 @@ func (st *Stack) require(n int) error {
 	return nil
 }
 
-// Print dumps the content of the stack
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {

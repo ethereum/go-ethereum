@@ -14,24 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package mailserver provides a naive, example mailserver implementation
 package mailserver
 
 import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-// WMailServer represents the state data of the mailserver.
 type WMailServer struct {
 	db  *leveldb.DB
 	w   *whisper.Whisper
@@ -45,8 +43,6 @@ type DBKey struct {
 	raw       []byte
 }
 
-// NewDbKey is a helper function that creates a levelDB
-// key from a hash and an integer.
 func NewDbKey(t uint32, h common.Hash) *DBKey {
 	const sz = common.HashLength + 4
 	var k DBKey
@@ -58,20 +54,19 @@ func NewDbKey(t uint32, h common.Hash) *DBKey {
 	return &k
 }
 
-// Init initializes the mail server.
-func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) error {
+func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) {
 	var err error
 	if len(path) == 0 {
-		return fmt.Errorf("DB file is not specified")
+		utils.Fatalf("DB file is not specified")
 	}
 
 	if len(password) == 0 {
-		return fmt.Errorf("password is not specified")
+		utils.Fatalf("Password is not specified for MailServer")
 	}
 
-	s.db, err = leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: 32})
+	s.db, err = leveldb.OpenFile(path, nil)
 	if err != nil {
-		return fmt.Errorf("open DB file: %s", err)
+		utils.Fatalf("Failed to open DB file: %s", err)
 	}
 
 	s.w = shh
@@ -79,23 +74,20 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 
 	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
-		return fmt.Errorf("create symmetric key: %s", err)
+		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
 	}
 	s.key, err = s.w.GetSymKey(MailServerKeyID)
 	if err != nil {
-		return fmt.Errorf("save symmetric key: %s", err)
+		utils.Fatalf("Failed to save symmetric key for MailServer")
 	}
-	return nil
 }
 
-// Close cleans up before shutdown.
 func (s *WMailServer) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
 }
 
-// Archive stores the
 func (s *WMailServer) Archive(env *whisper.Envelope) {
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
@@ -109,8 +101,6 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	}
 }
 
-// DeliverMail responds with saved messages upon request by the
-// messages' owner.
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
 		log.Error("Whisper peer is nil")
@@ -128,7 +118,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bl
 	var err error
 	var zero common.Hash
 	kl := NewDbKey(lower, zero)
-	ku := NewDbKey(upper+1, zero) // LevelDB is exclusive, while the Whisper API is inclusive
+	ku := NewDbKey(upper, zero)
 	i := s.db.NewIterator(&util.Range{Start: kl.raw, Limit: ku.raw}, nil)
 	defer i.Release()
 

@@ -156,7 +156,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	// Track the number of retrieval requests made
 	var requested uint32
 
-	// Start the matching session for the filter and the retriever goroutines
+	// Start the matching session for the filter and the retriver goroutines
 	quit := make(chan struct{})
 	matches := make(chan uint64, 16)
 

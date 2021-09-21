@@ -39,8 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	stateDatabase "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -77,7 +77,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		// Create and send tx to smart contract for sign validate block.
 		nonce := pool.State().GetNonce(account.Address)
 		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 		if err != nil {
 			log.Error("Fail to create tx sign", "error", err)
 			return err
@@ -106,7 +106,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
 			}
-			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx secret", "error", err)
 				return err
@@ -135,7 +135,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
 			}
-			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx opening", "error", err)
 				return err
@@ -199,8 +199,8 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(state *state.StateDB, block *types.Block) ([]common.Address, error) {
-	return GetSigners(state, block), nil
+func GetSignersFromContract(state *stateDatabase.StateDB, block *types.Block) ([]common.Address, error) {
+	return stateDatabase.GetSigners(state, block), nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -327,7 +327,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
-				receipts := rawdb.ReadReceipts(c.GetDb(), header.Hash(), i)
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
 				signData = c.CacheData(header, txs, receipts)
 			} else {
 				signData = c.CacheSigner(header.Hash(), txs)
@@ -405,7 +405,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 // Get candidate owner by address.
 func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address) common.Address {
-	owner := GetCandidateOwner(state, signerAddr)
+	owner := stateDatabase.GetCandidateOwner(state, signerAddr)
 	return owner
 }
 
@@ -424,7 +424,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
-	voters := GetVoters(state, masterAddr)
+	voters := stateDatabase.GetVoters(state, masterAddr)
 
 	if len(voters) > 0 {
 		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
@@ -436,7 +436,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
 				continue
 			}
-			voterCap := GetVoterCap(state, masterAddr, voteAddr)
+			voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}

@@ -320,6 +320,9 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 
 // CreateResponse will create a JSON-RPC success response with the given id and reply as result.
 func (c *jsonCodec) CreateResponse(id interface{}, reply interface{}) interface{} {
+	if isHexNum(reflect.TypeOf(reply)) {
+		return &jsonSuccessResponse{Version: jsonrpcVersion, Id: id, Result: fmt.Sprintf(`%#x`, reply)}
+	}
 	return &jsonSuccessResponse{Version: jsonrpcVersion, Id: id, Result: reply}
 }
 
@@ -337,6 +340,11 @@ func (c *jsonCodec) CreateErrorResponseWithInfo(id interface{}, err Error, info 
 
 // CreateNotification will create a JSON-RPC notification with the given subscription id and event as params.
 func (c *jsonCodec) CreateNotification(subid, namespace string, event interface{}) interface{} {
+	if isHexNum(reflect.TypeOf(event)) {
+		return &jsonNotification{Version: jsonrpcVersion, Method: namespace + notificationMethodSuffix,
+			Params: jsonSubscription{Subscription: subid, Result: fmt.Sprintf(`%#x`, event)}}
+	}
+
 	return &jsonNotification{Version: jsonrpcVersion, Method: namespace + notificationMethodSuffix,
 		Params: jsonSubscription{Subscription: subid, Result: event}}
 }

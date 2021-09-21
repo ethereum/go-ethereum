@@ -56,7 +56,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
-      params="$params --XDC-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
+      params="$params --XDC-testnet --gcmode archive --rpcapi db,eth,net,web3,debug"
       ;;
     90 )
       genesisPath="devnet.json"
@@ -66,6 +66,11 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
   esac
   params="$params --networkid $NETWORK_ID"
+fi
+
+# custom genesis path
+if [[ ! -z $GENESIS_PATH ]]; then
+  genesisPath="$GENESIS_PATH"
 fi
 
 # data dir
@@ -153,7 +158,7 @@ fi
 
 # debug mode
 if [[ ! -z $DEBUG_MODE ]]; then
-  params="$params --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
+  params="$params --gcmode archive --rpcapi db,eth,net,web3,debug"
 fi
 
 # maxpeers

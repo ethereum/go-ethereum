@@ -406,7 +406,7 @@ func (s *Session) Wait() error {
 		s.stdinPipeWriter.Close()
 	}
 	var copyError error
-	for range s.copyFuncs {
+	for _ = range s.copyFuncs {
 		if err := <-s.errors; err != nil && copyError == nil {
 			copyError = err
 		}

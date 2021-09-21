@@ -304,8 +304,8 @@ func (s ticketRefByWaitTime) Len() int {
 	return len(s)
 }
 
-func (ref ticketRef) waitTime() mclock.AbsTime {
-	return ref.t.regTime[ref.idx] - ref.t.issueTime
+func (r ticketRef) waitTime() mclock.AbsTime {
+	return r.t.regTime[r.idx] - r.t.issueTime
 }
 
 // Less reports whether the element with

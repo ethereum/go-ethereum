@@ -1,0 +1,4 @@
+package: github.com/Azure/azure-sdk-for-go-storage
+import: []
+testImport:
+- package: gopkg.in/check.v1

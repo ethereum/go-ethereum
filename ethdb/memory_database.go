@@ -31,16 +31,16 @@ type MemDatabase struct {
 	lock sync.RWMutex
 }
 
-func NewMemDatabase() *MemDatabase {
+func NewMemDatabase() (*MemDatabase, error) {
 	return &MemDatabase{
 		db: make(map[string][]byte),
-	}
+	}, nil
 }
 
-func NewMemDatabaseWithCap(size int) *MemDatabase {
+func NewMemDatabaseWithCap(size int) (*MemDatabase, error) {
 	return &MemDatabase{
 		db: make(map[string][]byte, size),
-	}
+	}, nil
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {
@@ -96,10 +96,7 @@ func (db *MemDatabase) NewBatch() Batch {
 
 func (db *MemDatabase) Len() int { return len(db.db) }
 
-type kv struct {
-	k, v []byte
-	del  bool
-}
+type kv struct{ k, v []byte }
 
 type memBatch struct {
 	db     *MemDatabase
@@ -108,14 +105,8 @@ type memBatch struct {
 }
 
 func (b *memBatch) Put(key, value []byte) error {
-	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
 	b.size += len(value)
-	return nil
-}
-
-func (b *memBatch) Delete(key []byte) error {
-	b.writes = append(b.writes, kv{common.CopyBytes(key), nil, true})
-	b.size += 1
 	return nil
 }
 
@@ -124,10 +115,6 @@ func (b *memBatch) Write() error {
 	defer b.db.lock.Unlock()
 
 	for _, kv := range b.writes {
-		if kv.del {
-			delete(b.db.db, string(kv.k))
-			continue
-		}
 		b.db.db[string(kv.k)] = kv.v
 	}
 	return nil

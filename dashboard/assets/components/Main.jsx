@@ -21,7 +21,6 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 
 import {MENU} from '../common';
-import Logs from './Logs';
 import Footer from './Footer';
 import type {Content} from '../types/content';
 
@@ -33,7 +32,7 @@ const styles = {
 		width:         '100%',
 	},
 	content: {
-		flex:      1,
+		flex:     1,
 		overflow: 'auto',
 	},
 };
@@ -47,40 +46,14 @@ const themeStyles = theme => ({
 });
 
 export type Props = {
-	classes:      Object,
-	active:       string,
-	content:      Content,
+	classes: Object,
+	active: string,
+	content: Content,
 	shouldUpdate: Object,
-	send:         string => void,
 };
 
 // Main renders the chosen content.
 class Main extends Component<Props> {
-	constructor(props) {
-		super(props);
-		this.container = React.createRef();
-		this.content = React.createRef();
-	}
-
-	getSnapshotBeforeUpdate() {
-		if (this.content && typeof this.content.beforeUpdate === 'function') {
-			return this.content.beforeUpdate();
-		}
-		return null;
-	}
-
-	componentDidUpdate(prevProps, prevState, snapshot) {
-		if (this.content && typeof this.content.didUpdate === 'function') {
-			this.content.didUpdate(prevProps, prevState, snapshot);
-		}
-	}
-
-	onScroll = () => {
-		if (this.content && typeof this.content.onScroll === 'function') {
-			this.content.onScroll();
-		}
-	};
-
 	render() {
 		const {
 			classes, active, content, shouldUpdate,
@@ -96,27 +69,12 @@ class Main extends Component<Props> {
 			children = <div>Work in progress.</div>;
 			break;
 		case MENU.get('logs').id:
-			children = (
-				<Logs
-					ref={(ref) => { this.content = ref; }}
-					container={this.container}
-					send={this.props.send}
-					content={this.props.content}
-					shouldUpdate={shouldUpdate}
-				/>
-			);
+			children = <div>{content.logs.log.map((log, index) => <div key={index}>{log}</div>)}</div>;
 		}
 
 		return (
 			<div style={styles.wrapper}>
-				<div
-					className={classes.content}
-					style={styles.content}
-					ref={(ref) => { this.container = ref; }}
-					onScroll={this.onScroll}
-				>
-					{children}
-				</div>
+				<div className={classes.content} style={styles.content}>{children}</div>
 				<Footer
 					general={content.general}
 					system={content.system}

@@ -67,7 +67,6 @@ func (msg *CallMsg) SetData(data []byte)       { msg.msg.Data = common.CopyBytes
 func (msg *CallMsg) SetTo(address *Address) {
 	if address == nil {
 		msg.msg.To = nil
-		return
 	}
 	msg.msg.To = &address.address
 }
@@ -126,12 +125,12 @@ func (t *Topics) Append(topics *Hashes) {
 	t.topics = append(t.topics, topics.hashes)
 }
 
-// FilterQuery contains options for contract log filtering.
+// FilterQuery contains options for contact log filtering.
 type FilterQuery struct {
 	query ethereum.FilterQuery
 }
 
-// NewFilterQuery creates an empty filter query for contract log filtering.
+// NewFilterQuery creates an empty filter query for contact log filtering.
 func NewFilterQuery() *FilterQuery {
 	return new(FilterQuery)
 }

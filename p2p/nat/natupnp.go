@@ -81,8 +81,11 @@ func (n *upnp) internalAddress() (net.IP, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if x, ok := addr.(*net.IPNet); ok && x.Contains(devaddr.IP) {
-				return x.IP, nil
+			switch x := addr.(type) {
+			case *net.IPNet:
+				if x.Contains(devaddr.IP) {
+					return x.IP, nil
+				}
 			}
 		}
 	}

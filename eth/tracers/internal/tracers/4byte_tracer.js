@@ -60,7 +60,7 @@
 			return;
 		}
 		// Skip any pre-compile invocations, those are just fancy opcodes
-		if (isPrecompiled(toAddress(log.stack.peek(1).toString(16)))) {
+		if (isPrecompiled(toAddress(log.stack.peek(1)))) {
 			return;
 		}
 		// Gather internal call details
@@ -78,7 +78,7 @@
 	// the final result of the tracing.
 	result: function(ctx) {
 		// Save the outer calldata also
-		if (ctx.input.length >= 4) {
+		if (ctx.input.length > 4) {
 			this.store(slice(ctx.input, 0, 4), ctx.input.length-4)
 		}
 		return this.ids;

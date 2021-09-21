@@ -55,14 +55,6 @@ type ErrCorrupted struct {
 	Err error
 }
 
-func isCorrupted(err error) bool {
-	switch err.(type) {
-	case *ErrCorrupted:
-		return true
-	}
-	return false
-}
-
 func (e *ErrCorrupted) Error() string {
 	if !e.Fd.Zero() {
 		return fmt.Sprintf("%v [file=%v]", e.Err, e.Fd)

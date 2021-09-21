@@ -40,7 +40,10 @@
 		var idx = toHex(key);
 
 		if (this.prestate[acc].storage[idx] === undefined) {
-			this.prestate[acc].storage[idx] = toHex(db.getState(addr, key));
+			var val = toHex(db.getState(addr, key));
+			if (val != "0x0000000000000000000000000000000000000000000000000000000000000000") {
+				this.prestate[acc].storage[idx] = toHex(db.getState(addr, key));
+			}
 		}
 	},
 
@@ -85,14 +88,6 @@
 			case "CREATE":
 				var from = log.contract.getAddress();
 				this.lookupAccount(toContract(from, db.getNonce(from)), db);
-				break;
-			case "CREATE2":
-				var from = log.contract.getAddress();
-				// stack: salt, size, offset, endowment
-				var offset = log.stack.peek(1).valueOf()
-				var size = log.stack.peek(2).valueOf()
-				var end = offset + size
-				this.lookupAccount(toContract2(from, log.stack.peek(3).toString(16), log.memory.slice(offset, end)), db);
 				break;
 			case "CALL": case "CALLCODE": case "DELEGATECALL": case "STATICCALL":
 				this.lookupAccount(toAddress(log.stack.peek(1).toString(16)), db);

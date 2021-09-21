@@ -220,7 +220,7 @@ func matchSingleTopic(topic TopicType, bt []byte) bool {
 		bt = bt[:TopicLength]
 	}
 
-	if len(bt) == 0 {
+	if len(bt) < TopicLength {
 		return false
 	}
 

@@ -41,7 +41,6 @@ package hid
 #endif
 */
 import "C"
-
 import (
 	"errors"
 	"runtime"
@@ -57,6 +56,11 @@ import (
 //   https://developer.apple.com/documentation/iokit/1438371-iohidmanagersetdevicematching
 //   > "subsequent calls will cause the hid manager to release previously enumerated devices"
 var enumerateLock sync.Mutex
+
+func init() {
+	// Initialize the HIDAPI library
+	C.hid_init()
+}
 
 // Supported returns whether this platform is supported by the HID library or not.
 // The goal of this method is to allow programatically handling platforms that do
@@ -109,9 +113,6 @@ func Enumerate(vendorID uint16, productID uint16) []DeviceInfo {
 
 // Open connects to an HID device by its path name.
 func (info DeviceInfo) Open() (*Device, error) {
-	enumerateLock.Lock()
-	defer enumerateLock.Unlock()
-
 	path := C.CString(info.Path)
 	defer C.free(unsafe.Pointer(path))
 
@@ -134,7 +135,7 @@ type Device struct {
 }
 
 // Close releases the HID USB device handle.
-func (dev *Device) Close() error {
+func (dev *Device) Close() {
 	dev.lock.Lock()
 	defer dev.lock.Unlock()
 
@@ -142,7 +143,6 @@ func (dev *Device) Close() error {
 		C.hid_close(dev.device)
 		dev.device = nil
 	}
-	return nil
 }
 
 // Write sends an output report to a HID device.

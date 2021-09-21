@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -65,11 +64,11 @@ type SimulatedBackend struct {
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	database := ethdb.NewMemDatabase()
-	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
+func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
+	database, _ := ethdb.NewMemDatabase()
+	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, Alloc: alloc, GasLimit: 42000000}
 	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{})
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -173,7 +172,7 @@ func (b *SimulatedBackend) ForEachStorageAt(ctx context.Context, contract common
 
 // TransactionReceipt returns the receipt of a transaction.
 func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	receipt, _, _, _ := rawdb.ReadReceipt(b.database, txHash)
+	receipt, _, _, _ := core.GetReceipt(b.database, txHash)
 	return receipt, nil
 }
 
@@ -221,7 +220,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
-// chain doesn't have miners, we just return a gas price of 1 for any call.
+// chain doens't have miners, we just return a gas price of 1 for any call.
 func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(1), nil
 }
@@ -294,14 +293,19 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	from.SetBalance(math.MaxBig256)
 	// Execute the call.
 	msg := callmsg{call}
-
+	feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+	if msg.To() != nil {
+		if value, ok := feeCapacity[*msg.To()]; ok {
+			msg.CallMsg.BalanceTokenFee = value
+		}
+	}
 	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
-
-	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
+	owner := common.Address{}
+	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 }
 
 // SendTransaction updates the pending block to include the given transaction.
@@ -337,24 +341,18 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 //
 // TODO(karalabe): Deprecate when the subscription one can return past data too.
 func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
-	var filter *filters.Filter
-	if query.BlockHash != nil {
-		// Block filter requested, construct a single-shot filter
-		filter = filters.NewBlockFilter(&filterBackend{b.database, b.blockchain}, *query.BlockHash, query.Addresses, query.Topics)
-	} else {
-		// Initialize unset filter boundaried to run from genesis to chain head
-		from := int64(0)
-		if query.FromBlock != nil {
-			from = query.FromBlock.Int64()
-		}
-		to := int64(-1)
-		if query.ToBlock != nil {
-			to = query.ToBlock.Int64()
-		}
-		// Construct the range filter
-		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain}, from, to, query.Addresses, query.Topics)
+	// Initialize unset filter boundaried to run from genesis to chain head
+	from := int64(0)
+	if query.FromBlock != nil {
+		from = query.FromBlock.Int64()
 	}
-	// Run the filter and return all the logs
+	to := int64(-1)
+	if query.ToBlock != nil {
+		to = query.ToBlock.Int64()
+	}
+	// Construct and execute the filter
+	filter := filters.New(&filterBackend{b.database, b.blockchain}, from, to, query.Addresses, query.Topics)
+
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
@@ -423,14 +421,15 @@ type callmsg struct {
 	ethereum.CallMsg
 }
 
-func (m callmsg) From() common.Address { return m.CallMsg.From }
-func (m callmsg) Nonce() uint64        { return 0 }
-func (m callmsg) CheckNonce() bool     { return false }
-func (m callmsg) To() *common.Address  { return m.CallMsg.To }
-func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
-func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
-func (m callmsg) Data() []byte         { return m.CallMsg.Data }
+func (m callmsg) From() common.Address      { return m.CallMsg.From }
+func (m callmsg) Nonce() uint64             { return 0 }
+func (m callmsg) CheckNonce() bool          { return false }
+func (m callmsg) To() *common.Address       { return m.CallMsg.To }
+func (m callmsg) GasPrice() *big.Int        { return m.CallMsg.GasPrice }
+func (m callmsg) Gas() uint64               { return m.CallMsg.Gas }
+func (m callmsg) Value() *big.Int           { return m.CallMsg.Value }
+func (m callmsg) Data() []byte              { return m.CallMsg.Data }
+func (m callmsg) BalanceTokenFee() *big.Int { return m.CallMsg.BalanceTokenFee }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.
@@ -449,24 +448,12 @@ func (fb *filterBackend) HeaderByNumber(ctx context.Context, block rpc.BlockNumb
 	return fb.bc.GetHeaderByNumber(uint64(block.Int64())), nil
 }
 
-func (fb *filterBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return fb.bc.GetHeaderByHash(hash), nil
-}
-
 func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	number := rawdb.ReadHeaderNumber(fb.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-	return rawdb.ReadReceipts(fb.db, hash, *number), nil
+	return core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash)), nil
 }
 
 func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	number := rawdb.ReadHeaderNumber(fb.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-	receipts := rawdb.ReadReceipts(fb.db, hash, *number)
+	receipts := core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash))
 	if receipts == nil {
 		return nil, nil
 	}
@@ -477,7 +464,7 @@ func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 	return logs, nil
 }
 
-func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+func (fb *filterBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil

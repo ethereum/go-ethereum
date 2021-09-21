@@ -85,7 +85,7 @@ export type Props = {
 class CustomTooltip extends Component<Props> {
 	render() {
 		const {active, payload, tooltip} = this.props;
-		if (!active || typeof tooltip !== 'function' || !Array.isArray(payload) || payload.length < 1) {
+		if (!active || typeof tooltip !== 'function') {
 			return null;
 		}
 		return tooltip(payload[0].value);

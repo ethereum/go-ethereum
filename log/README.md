@@ -45,7 +45,7 @@ srvlog.SetHandler(log.MultiHandler(
     log.StreamHandler(os.Stderr, log.LogfmtFormat()),
     log.LvlFilterHandler(
         log.LvlError,
-        log.Must.FileHandler("errors.json", log.JSONFormat()))))
+        log.Must.FileHandler("errors.json", log.JsonFormat()))))
 ```
 
 Will result in output that looks like this:

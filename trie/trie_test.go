@@ -43,7 +43,8 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	trie, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
+	diskdb, _ := ethdb.NewMemDatabase()
+	trie, _ := New(common.Hash{}, NewDatabase(diskdb))
 	return trie
 }
 
@@ -67,7 +68,8 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(ethdb.NewMemDatabase()))
+	diskdb, _ := ethdb.NewMemDatabase()
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(diskdb))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -80,7 +82,7 @@ func TestMissingNodeDisk(t *testing.T)    { testMissingNode(t, false) }
 func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
 func testMissingNode(t *testing.T, memonly bool) {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb, _ := ethdb.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
 	trie, _ := New(common.Hash{}, triedb)
@@ -119,7 +121,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 
 	hash := common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
 	if memonly {
-		delete(triedb.dirties, hash)
+		delete(triedb.nodes, hash)
 	} else {
 		diskdb.Delete(hash[:])
 	}
@@ -342,16 +344,15 @@ func TestCacheUnload(t *testing.T) {
 	// Commit the trie repeatedly and access key1.
 	// The branch containing it is loaded from DB exactly two times:
 	// in the 0th and 6th iteration.
-	diskdb := &countingDB{Database: trie.db.diskdb, gets: make(map[string]int)}
-	triedb := NewDatabase(diskdb)
-	trie, _ = New(root, triedb)
+	db := &countingDB{Database: trie.db.diskdb, gets: make(map[string]int)}
+	trie, _ = New(root, NewDatabase(db))
 	trie.SetCacheLimit(5)
 	for i := 0; i < 12; i++ {
 		getString(trie, key1)
 		trie.Commit(nil)
 	}
 	// Check that it got loaded two times.
-	for dbkey, count := range diskdb.gets {
+	for dbkey, count := range db.gets {
 		if count != 2 {
 			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
 		}
@@ -412,7 +413,8 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	triedb := NewDatabase(ethdb.NewMemDatabase())
+	diskdb, _ := ethdb.NewMemDatabase()
+	triedb := NewDatabase(diskdb)
 
 	tr, _ := New(common.Hash{}, triedb)
 	values := make(map[string]string) // tracks content of the trie
@@ -613,17 +615,4 @@ func updateString(trie *Trie, k, v string) {
 
 func deleteString(trie *Trie, k string) {
 	trie.Delete([]byte(k))
-}
-
-func TestDecodeNode(t *testing.T) {
-	t.Parallel()
-	var (
-		hash  = make([]byte, 20)
-		elems = make([]byte, 20)
-	)
-	for i := 0; i < 5000000; i++ {
-		rand.Read(hash)
-		rand.Read(elems)
-		decodeNode(hash, elems, 1)
-	}
 }

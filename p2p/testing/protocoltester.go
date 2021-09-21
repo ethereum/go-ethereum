@@ -30,11 +30,12 @@ import (
 	"io/ioutil"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -51,7 +52,7 @@ type ProtocolTester struct {
 // NewProtocolTester constructs a new ProtocolTester
 // it takes as argument the pivot node id, the number of dummy peers and the
 // protocol run function called on a peer connection by the p2p server
-func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
+func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
 		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return &testNode{run}, nil
@@ -75,17 +76,17 @@ func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter
 
 	node := net.GetNode(id).Node.(*adapters.SimNode)
 	peers := make([]*adapters.NodeConfig, n)
-	nodes := make([]*enode.Node, n)
+	peerIDs := make([]discover.NodeID, n)
 	for i := 0; i < n; i++ {
 		peers[i] = adapters.RandomNodeConfig()
 		peers[i].Services = []string{"mock"}
-		nodes[i] = peers[i].Node()
+		peerIDs[i] = peers[i].ID
 	}
 	events := make(chan *p2p.PeerEvent, 1000)
 	node.SubscribeEvents(events)
 	ps := &ProtocolSession{
 		Server:  node.Server(),
-		Nodes:   nodes,
+		IDs:     peerIDs,
 		adapter: adapter,
 		events:  events,
 	}
@@ -100,24 +101,24 @@ func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter
 }
 
 // Stop stops the p2p server
-func (t *ProtocolTester) Stop() error {
-	t.Server.Stop()
+func (self *ProtocolTester) Stop() error {
+	self.Server.Stop()
 	return nil
 }
 
 // Connect brings up the remote peer node and connects it using the
 // p2p/simulations network connection with the in memory network adapter
-func (t *ProtocolTester) Connect(selfID enode.ID, peers ...*adapters.NodeConfig) {
+func (self *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.ID))
-		if _, err := t.network.NewNodeWithConfig(peer); err != nil {
+		if _, err := self.network.NewNodeWithConfig(peer); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
-		if err := t.network.Start(peer.ID); err != nil {
+		if err := self.network.Start(peer.ID); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
 		log.Trace(fmt.Sprintf("connect to %v", peer.ID))
-		if err := t.network.Connect(selfID, peer.ID); err != nil {
+		if err := self.network.Connect(selfID, peer.ID); err != nil {
 			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.ID, err))
 		}
 	}
@@ -179,8 +180,7 @@ func (m *mockNode) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	for {
 		select {
 		case trig := <-m.trigger:
-			wmsg := Wrap(trig.Msg)
-			m.err <- p2p.Send(rw, trig.Code, wmsg)
+			m.err <- p2p.Send(rw, trig.Code, trig.Msg)
 		case exps := <-m.expect:
 			m.err <- expectMsgs(rw, exps)
 		case <-m.stop:
@@ -220,7 +220,7 @@ func expectMsgs(rw p2p.MsgReadWriter, exps []Expect) error {
 		}
 		var found bool
 		for i, exp := range exps {
-			if exp.Code == msg.Code && bytes.Equal(actualContent, mustEncodeMsg(Wrap(exp.Msg))) {
+			if exp.Code == msg.Code && bytes.Equal(actualContent, mustEncodeMsg(exp.Msg)) {
 				if matched[i] {
 					return fmt.Errorf("message #%d received two times", i)
 				}
@@ -235,7 +235,7 @@ func expectMsgs(rw p2p.MsgReadWriter, exps []Expect) error {
 				if matched[i] {
 					continue
 				}
-				expected = append(expected, fmt.Sprintf("code %d payload %x", exp.Code, mustEncodeMsg(Wrap(exp.Msg))))
+				expected = append(expected, fmt.Sprintf("code %d payload %x", exp.Code, mustEncodeMsg(exp.Msg)))
 			}
 			return fmt.Errorf("unexpected message code %d payload %x, expected %s", msg.Code, actualContent, strings.Join(expected, " or "))
 		}
@@ -266,18 +266,4 @@ func mustEncodeMsg(msg interface{}) []byte {
 		panic("content encode error: " + err.Error())
 	}
 	return contentEnc
-}
-
-type WrappedMsg struct {
-	Context []byte
-	Size    uint32
-	Payload []byte
-}
-
-func Wrap(msg interface{}) interface{} {
-	data, _ := rlp.EncodeToBytes(msg)
-	return &WrappedMsg{
-		Size:    uint32(len(data)),
-		Payload: data,
-	}
 }

@@ -487,34 +487,27 @@ func TestExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
+
 	params.TTL = 1
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
 
-	messagesCount := 5
-
-	// Send a few messages one after another. Due to low PoW and expiration buckets
-	// with one second resolution, it covers a case when there are multiple items
-	// in a single expiration bucket.
-	for i := 0; i < messagesCount; i++ {
-		msg, err := NewSentMessage(params)
-		if err != nil {
-			t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
-		}
-		env, err := msg.Wrap(params)
-		if err != nil {
-			t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
-		}
-
-		err = w.Send(env)
-		if err != nil {
-			t.Fatalf("failed to send envelope with seed %d: %s.", seed, err)
-		}
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("failed to send envelope with seed %d: %s.", seed, err)
 	}
 
 	// wait till received or timeout
 	var received, expired bool
 	for j := 0; j < 20; j++ {
 		time.Sleep(100 * time.Millisecond)
-		if len(w.Envelopes()) == messagesCount {
+		if len(w.Envelopes()) > 0 {
 			received = true
 			break
 		}

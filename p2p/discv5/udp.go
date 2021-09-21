@@ -36,17 +36,25 @@ const Version = 4
 
 // Errors
 var (
-	errPacketTooSmall = errors.New("too small")
-	errBadPrefix      = errors.New("bad prefix")
-	errTimeout        = errors.New("RPC timeout")
+	errPacketTooSmall   = errors.New("too small")
+	errBadPrefix        = errors.New("bad prefix")
+	errExpired          = errors.New("expired")
+	errUnsolicitedReply = errors.New("unsolicited reply")
+	errUnknownNode      = errors.New("unknown node")
+	errTimeout          = errors.New("RPC timeout")
+	errClockWarp        = errors.New("reply deadline too far in the future")
+	errClosed           = errors.New("socket closed")
 )
 
 // Timeouts
 const (
 	respTimeout = 500 * time.Millisecond
+	queryDelay  = 1000 * time.Millisecond
 	expiration  = 20 * time.Second
 
-	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
+	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
+	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
+	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC request structures
@@ -230,8 +238,7 @@ type udp struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, conn conn, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
 	transport, err := listenUDP(priv, conn, realaddr)
 	if err != nil {
 		return nil, err
@@ -335,10 +342,8 @@ func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req inter
 		return hash, err
 	}
 	log.Trace(fmt.Sprintf(">>> %v to %x@%v", nodeEvent(ptype), toid[:8], toaddr))
-	if nbytes, err := t.conn.WriteToUDP(packet, toaddr); err != nil {
+	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
 		log.Trace(fmt.Sprint("UDP send failed:", err))
-	} else {
-		egressTrafficMeter.Mark(int64(nbytes))
 	}
 	//fmt.Println(err)
 	return hash, err
@@ -377,7 +382,6 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		ingressTrafficMeter.Mark(int64(nbytes))
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
 			log.Debug(fmt.Sprintf("Temporary read error: %v", err))

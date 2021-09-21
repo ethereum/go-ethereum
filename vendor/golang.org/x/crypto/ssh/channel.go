@@ -205,32 +205,32 @@ type channel struct {
 
 // writePacket sends a packet. If the packet is a channel close, it updates
 // sentClose. This method takes the lock c.writeMu.
-func (ch *channel) writePacket(packet []byte) error {
-	ch.writeMu.Lock()
-	if ch.sentClose {
-		ch.writeMu.Unlock()
+func (c *channel) writePacket(packet []byte) error {
+	c.writeMu.Lock()
+	if c.sentClose {
+		c.writeMu.Unlock()
 		return io.EOF
 	}
-	ch.sentClose = (packet[0] == msgChannelClose)
-	err := ch.mux.conn.writePacket(packet)
-	ch.writeMu.Unlock()
+	c.sentClose = (packet[0] == msgChannelClose)
+	err := c.mux.conn.writePacket(packet)
+	c.writeMu.Unlock()
 	return err
 }
 
-func (ch *channel) sendMessage(msg interface{}) error {
+func (c *channel) sendMessage(msg interface{}) error {
 	if debugMux {
-		log.Printf("send(%d): %#v", ch.mux.chanList.offset, msg)
+		log.Printf("send(%d): %#v", c.mux.chanList.offset, msg)
 	}
 
 	p := Marshal(msg)
-	binary.BigEndian.PutUint32(p[1:], ch.remoteId)
-	return ch.writePacket(p)
+	binary.BigEndian.PutUint32(p[1:], c.remoteId)
+	return c.writePacket(p)
 }
 
 // WriteExtended writes data to a specific extended stream. These streams are
 // used, for example, for stderr.
-func (ch *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err error) {
-	if ch.sentEOF {
+func (c *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err error) {
+	if c.sentEOF {
 		return 0, io.EOF
 	}
 	// 1 byte message type, 4 bytes remoteId, 4 bytes data length
@@ -241,16 +241,16 @@ func (ch *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err e
 		opCode = msgChannelExtendedData
 	}
 
-	ch.writeMu.Lock()
-	packet := ch.packetPool[extendedCode]
+	c.writeMu.Lock()
+	packet := c.packetPool[extendedCode]
 	// We don't remove the buffer from packetPool, so
 	// WriteExtended calls from different goroutines will be
 	// flagged as errors by the race detector.
-	ch.writeMu.Unlock()
+	c.writeMu.Unlock()
 
 	for len(data) > 0 {
-		space := min(ch.maxRemotePayload, len(data))
-		if space, err = ch.remoteWin.reserve(space); err != nil {
+		space := min(c.maxRemotePayload, len(data))
+		if space, err = c.remoteWin.reserve(space); err != nil {
 			return n, err
 		}
 		if want := headerLength + space; uint32(cap(packet)) < want {
@@ -262,13 +262,13 @@ func (ch *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err e
 		todo := data[:space]
 
 		packet[0] = opCode
-		binary.BigEndian.PutUint32(packet[1:], ch.remoteId)
+		binary.BigEndian.PutUint32(packet[1:], c.remoteId)
 		if extendedCode > 0 {
 			binary.BigEndian.PutUint32(packet[5:], uint32(extendedCode))
 		}
 		binary.BigEndian.PutUint32(packet[headerLength-4:], uint32(len(todo)))
 		copy(packet[headerLength:], todo)
-		if err = ch.writePacket(packet); err != nil {
+		if err = c.writePacket(packet); err != nil {
 			return n, err
 		}
 
@@ -276,14 +276,14 @@ func (ch *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err e
 		data = data[len(todo):]
 	}
 
-	ch.writeMu.Lock()
-	ch.packetPool[extendedCode] = packet
-	ch.writeMu.Unlock()
+	c.writeMu.Lock()
+	c.packetPool[extendedCode] = packet
+	c.writeMu.Unlock()
 
 	return n, err
 }
 
-func (ch *channel) handleData(packet []byte) error {
+func (c *channel) handleData(packet []byte) error {
 	headerLen := 9
 	isExtendedData := packet[0] == msgChannelExtendedData
 	if isExtendedData {
@@ -303,7 +303,7 @@ func (ch *channel) handleData(packet []byte) error {
 	if length == 0 {
 		return nil
 	}
-	if length > ch.maxIncomingPayload {
+	if length > c.maxIncomingPayload {
 		// TODO(hanwen): should send Disconnect?
 		return errors.New("ssh: incoming packet exceeds maximum payload size")
 	}
@@ -313,21 +313,21 @@ func (ch *channel) handleData(packet []byte) error {
 		return errors.New("ssh: wrong packet length")
 	}
 
-	ch.windowMu.Lock()
-	if ch.myWindow < length {
-		ch.windowMu.Unlock()
+	c.windowMu.Lock()
+	if c.myWindow < length {
+		c.windowMu.Unlock()
 		// TODO(hanwen): should send Disconnect with reason?
 		return errors.New("ssh: remote side wrote too much")
 	}
-	ch.myWindow -= length
-	ch.windowMu.Unlock()
+	c.myWindow -= length
+	c.windowMu.Unlock()
 
 	if extended == 1 {
-		ch.extPending.write(data)
+		c.extPending.write(data)
 	} else if extended > 0 {
 		// discard other extended data.
 	} else {
-		ch.pending.write(data)
+		c.pending.write(data)
 	}
 	return nil
 }
@@ -384,31 +384,31 @@ func (c *channel) close() {
 // responseMessageReceived is called when a success or failure message is
 // received on a channel to check that such a message is reasonable for the
 // given channel.
-func (ch *channel) responseMessageReceived() error {
-	if ch.direction == channelInbound {
+func (c *channel) responseMessageReceived() error {
+	if c.direction == channelInbound {
 		return errors.New("ssh: channel response message received on inbound channel")
 	}
-	if ch.decided {
+	if c.decided {
 		return errors.New("ssh: duplicate response received for channel")
 	}
-	ch.decided = true
+	c.decided = true
 	return nil
 }
 
-func (ch *channel) handlePacket(packet []byte) error {
+func (c *channel) handlePacket(packet []byte) error {
 	switch packet[0] {
 	case msgChannelData, msgChannelExtendedData:
-		return ch.handleData(packet)
+		return c.handleData(packet)
 	case msgChannelClose:
-		ch.sendMessage(channelCloseMsg{PeersID: ch.remoteId})
-		ch.mux.chanList.remove(ch.localId)
-		ch.close()
+		c.sendMessage(channelCloseMsg{PeersId: c.remoteId})
+		c.mux.chanList.remove(c.localId)
+		c.close()
 		return nil
 	case msgChannelEOF:
 		// RFC 4254 is mute on how EOF affects dataExt messages but
 		// it is logical to signal EOF at the same time.
-		ch.extPending.eof()
-		ch.pending.eof()
+		c.extPending.eof()
+		c.pending.eof()
 		return nil
 	}
 
@@ -419,24 +419,24 @@ func (ch *channel) handlePacket(packet []byte) error {
 
 	switch msg := decoded.(type) {
 	case *channelOpenFailureMsg:
-		if err := ch.responseMessageReceived(); err != nil {
+		if err := c.responseMessageReceived(); err != nil {
 			return err
 		}
-		ch.mux.chanList.remove(msg.PeersID)
-		ch.msg <- msg
+		c.mux.chanList.remove(msg.PeersId)
+		c.msg <- msg
 	case *channelOpenConfirmMsg:
-		if err := ch.responseMessageReceived(); err != nil {
+		if err := c.responseMessageReceived(); err != nil {
 			return err
 		}
 		if msg.MaxPacketSize < minPacketLength || msg.MaxPacketSize > 1<<31 {
 			return fmt.Errorf("ssh: invalid MaxPacketSize %d from peer", msg.MaxPacketSize)
 		}
-		ch.remoteId = msg.MyID
-		ch.maxRemotePayload = msg.MaxPacketSize
-		ch.remoteWin.add(msg.MyWindow)
-		ch.msg <- msg
+		c.remoteId = msg.MyId
+		c.maxRemotePayload = msg.MaxPacketSize
+		c.remoteWin.add(msg.MyWindow)
+		c.msg <- msg
 	case *windowAdjustMsg:
-		if !ch.remoteWin.add(msg.AdditionalBytes) {
+		if !c.remoteWin.add(msg.AdditionalBytes) {
 			return fmt.Errorf("ssh: invalid window update for %d bytes", msg.AdditionalBytes)
 		}
 	case *channelRequestMsg:
@@ -444,12 +444,12 @@ func (ch *channel) handlePacket(packet []byte) error {
 			Type:      msg.Request,
 			WantReply: msg.WantReply,
 			Payload:   msg.RequestSpecificData,
-			ch:        ch,
+			ch:        c,
 		}
 
-		ch.incomingRequests <- &req
+		c.incomingRequests <- &req
 	default:
-		ch.msg <- msg
+		c.msg <- msg
 	}
 	return nil
 }
@@ -488,23 +488,23 @@ func (e *extChannel) Read(data []byte) (n int, err error) {
 	return e.ch.ReadExtended(data, e.code)
 }
 
-func (ch *channel) Accept() (Channel, <-chan *Request, error) {
-	if ch.decided {
+func (c *channel) Accept() (Channel, <-chan *Request, error) {
+	if c.decided {
 		return nil, nil, errDecidedAlready
 	}
-	ch.maxIncomingPayload = channelMaxPacket
+	c.maxIncomingPayload = channelMaxPacket
 	confirm := channelOpenConfirmMsg{
-		PeersID:       ch.remoteId,
-		MyID:          ch.localId,
-		MyWindow:      ch.myWindow,
-		MaxPacketSize: ch.maxIncomingPayload,
+		PeersId:       c.remoteId,
+		MyId:          c.localId,
+		MyWindow:      c.myWindow,
+		MaxPacketSize: c.maxIncomingPayload,
 	}
-	ch.decided = true
-	if err := ch.sendMessage(confirm); err != nil {
+	c.decided = true
+	if err := c.sendMessage(confirm); err != nil {
 		return nil, nil, err
 	}
 
-	return ch, ch.incomingRequests, nil
+	return c, c.incomingRequests, nil
 }
 
 func (ch *channel) Reject(reason RejectionReason, message string) error {
@@ -512,7 +512,7 @@ func (ch *channel) Reject(reason RejectionReason, message string) error {
 		return errDecidedAlready
 	}
 	reject := channelOpenFailureMsg{
-		PeersID:  ch.remoteId,
+		PeersId:  ch.remoteId,
 		Reason:   reason,
 		Message:  message,
 		Language: "en",
@@ -541,7 +541,7 @@ func (ch *channel) CloseWrite() error {
 	}
 	ch.sentEOF = true
 	return ch.sendMessage(channelEOFMsg{
-		PeersID: ch.remoteId})
+		PeersId: ch.remoteId})
 }
 
 func (ch *channel) Close() error {
@@ -550,7 +550,7 @@ func (ch *channel) Close() error {
 	}
 
 	return ch.sendMessage(channelCloseMsg{
-		PeersID: ch.remoteId})
+		PeersId: ch.remoteId})
 }
 
 // Extended returns an io.ReadWriter that sends and receives data on the given,
@@ -577,7 +577,7 @@ func (ch *channel) SendRequest(name string, wantReply bool, payload []byte) (boo
 	}
 
 	msg := channelRequestMsg{
-		PeersID:             ch.remoteId,
+		PeersId:             ch.remoteId,
 		Request:             name,
 		WantReply:           wantReply,
 		RequestSpecificData: payload,
@@ -614,11 +614,11 @@ func (ch *channel) ackRequest(ok bool) error {
 	var msg interface{}
 	if !ok {
 		msg = channelRequestFailureMsg{
-			PeersID: ch.remoteId,
+			PeersId: ch.remoteId,
 		}
 	} else {
 		msg = channelRequestSuccessMsg{
-			PeersID: ch.remoteId,
+			PeersId: ch.remoteId,
 		}
 	}
 	return ch.sendMessage(msg)

@@ -1,6 +1,18 @@
-// Copyright 2015 Jeffrey Wilcke, Felix Lange, Gustav Simonsson. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be found in
-// the LICENSE file.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package secp256k1
 
@@ -10,8 +22,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
-	"io"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 const TestCount = 1000
@@ -22,24 +36,11 @@ func generateKeyPair() (pubkey, privkey []byte) {
 		panic(err)
 	}
 	pubkey = elliptic.Marshal(S256(), key.X, key.Y)
-
-	privkey = make([]byte, 32)
-	blob := key.D.Bytes()
-	copy(privkey[32-len(blob):], blob)
-
-	return pubkey, privkey
-}
-
-func csprngEntropy(n int) []byte {
-	buf := make([]byte, n)
-	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
-	}
-	return buf
+	return pubkey, math.PaddedBigBytes(key.D, 32)
 }
 
 func randSig() []byte {
-	sig := csprngEntropy(65)
+	sig := randentropy.GetEntropyCSPRNG(65)
 	sig[32] &= 0x70
 	sig[64] %= 4
 	return sig
@@ -48,7 +49,7 @@ func randSig() []byte {
 // tests for malleability
 // highest bit of signature ECDSA s value must be 0, in the 33th byte
 func compactSigCheck(t *testing.T, sig []byte) {
-	var b = int(sig[32])
+	var b int = int(sig[32])
 	if b < 0 {
 		t.Errorf("highest bit is negative: %d", b)
 	}
@@ -62,7 +63,7 @@ func compactSigCheck(t *testing.T, sig []byte) {
 
 func TestSignatureValidity(t *testing.T) {
 	pubkey, seckey := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	sig, err := Sign(msg, seckey)
 	if err != nil {
 		t.Errorf("signature error: %s", err)
@@ -85,7 +86,7 @@ func TestSignatureValidity(t *testing.T) {
 
 func TestInvalidRecoveryID(t *testing.T) {
 	_, seckey := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	sig, _ := Sign(msg, seckey)
 	sig[64] = 99
 	_, err := RecoverPubkey(msg, sig)
@@ -96,7 +97,7 @@ func TestInvalidRecoveryID(t *testing.T) {
 
 func TestSignAndRecover(t *testing.T) {
 	pubkey1, seckey := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	sig, err := Sign(msg, seckey)
 	if err != nil {
 		t.Errorf("signature error: %s", err)
@@ -147,7 +148,7 @@ func TestRandomMessagesWithRandomKeys(t *testing.T) {
 func signAndRecoverWithRandomMessages(t *testing.T, keys func() ([]byte, []byte)) {
 	for i := 0; i < TestCount; i++ {
 		pubkey1, seckey := keys()
-		msg := csprngEntropy(32)
+		msg := randentropy.GetEntropyCSPRNG(32)
 		sig, err := Sign(msg, seckey)
 		if err != nil {
 			t.Fatalf("signature error: %s", err)
@@ -175,7 +176,7 @@ func signAndRecoverWithRandomMessages(t *testing.T, keys func() ([]byte, []byte)
 
 func TestRecoveryOfRandomSignature(t *testing.T) {
 	pubkey1, _ := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 
 	for i := 0; i < TestCount; i++ {
 		// recovery can sometimes work, but if so should always give wrong pubkey
@@ -188,11 +189,11 @@ func TestRecoveryOfRandomSignature(t *testing.T) {
 
 func TestRandomMessagesAgainstValidSig(t *testing.T) {
 	pubkey1, seckey := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	sig, _ := Sign(msg, seckey)
 
 	for i := 0; i < TestCount; i++ {
-		msg = csprngEntropy(32)
+		msg = randentropy.GetEntropyCSPRNG(32)
 		pubkey2, _ := RecoverPubkey(msg, sig)
 		// recovery can sometimes work, but if so should always give wrong pubkey
 		if bytes.Equal(pubkey1, pubkey2) {
@@ -218,7 +219,7 @@ func TestRecoverSanity(t *testing.T) {
 
 func BenchmarkSign(b *testing.B) {
 	_, seckey := generateKeyPair()
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -227,7 +228,7 @@ func BenchmarkSign(b *testing.B) {
 }
 
 func BenchmarkRecover(b *testing.B) {
-	msg := csprngEntropy(32)
+	msg := randentropy.GetEntropyCSPRNG(32)
 	_, seckey := generateKeyPair()
 	sig, _ := Sign(msg, seckey)
 	b.ResetTimer()

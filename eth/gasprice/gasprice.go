@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var maxPrice = big.NewInt(500 * params.GWei)
+var maxPrice = big.NewInt(500 * params.Shannon)
 
 type Config struct {
 	Blocks     int
@@ -141,7 +141,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	}
 
 	// Check gas price min.
-	minGasPrice := big.NewInt(common.MinGasPrice)
+	minGasPrice := common.MinGasPrice
 	if price.Cmp(minGasPrice) < 0 {
 		price = new(big.Int).Set(minGasPrice)
 	}
