@@ -118,7 +118,7 @@ type clientConn struct {
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
 	// Http connections have already set the scheme
-	if !c.isHTTP() {
+	if !c.isHTTP() && c.scheme != "" {
 		ctx = context.WithValue(ctx, "scheme", c.scheme)
 	}
 	handler := newHandler(ctx, conn, c.idgen, c.services)
@@ -207,16 +207,13 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	c, err := initClient(conn, randomIDGenerator(), new(serviceRegistry))
-	if err != nil {
-		return nil, err
-	}
+	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
 	c.reconnectFunc = connect
 	return c, nil
 }
 
-func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) (*Client, error) {
-	var scheme string
+func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+	scheme := ""
 	switch conn.(type) {
 	case *httpConn:
 		scheme = httpScheme
@@ -224,8 +221,6 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) (*
 		scheme = wsScheme
 	case *jsonCodec:
 		scheme = ipcScheme
-	default:
-		return nil, errors.New("Unknown connection scheme")
 	}
 	c := &Client{
 		idgen:       idgen,
@@ -245,7 +240,7 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) (*
 	if !c.isHTTP() {
 		go c.dispatch(conn)
 	}
-	return c, nil
+	return c
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
