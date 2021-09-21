@@ -60,17 +60,26 @@ type rewardLog struct {
 var TxSignMu sync.RWMutex
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
 	if chainConfig.XDPoS != nil {
 		// Find active account.
 		account := accounts.Account{}
 		var wallet accounts.Wallet
+		etherbaseAccount := accounts.Account{
+			Address: eb,
+			URL:     accounts.URL{},
+		}
 		if wallets := manager.Wallets(); len(wallets) > 0 {
-			wallet = wallets[0]
-			if accts := wallets[0].Accounts(); len(accts) > 0 {
-				account = accts[0]
+			if w, err := manager.Find(etherbaseAccount); err == nil && w != nil {
+				wallet = w
+				account = etherbaseAccount
+			} else {
+				wallet = wallets[0]
+				if accts := wallets[0].Accounts(); len(accts) > 0 {
+					account = accts[0]
+				}
 			}
 		}
 

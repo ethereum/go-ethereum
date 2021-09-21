@@ -23,6 +23,7 @@ const (
 	MergeSignRange             = 15
 	RangeReturnSigner          = 150
 	MinimunMinerBlockPerEpoch  = 1
+	IgnoreSignerCheckBlock     = uint64(27307800)
 )
 
 var TIP2019Block = big.NewInt(1)
