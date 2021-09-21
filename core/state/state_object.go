@@ -66,7 +66,7 @@ func (s Storage) Copy() Storage {
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
-	data     types.Account
+	data     types.StateAccount
 	db       *StateDB
 
 	// DB error.
@@ -99,7 +99,7 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data types.Account) *stateObject {
+func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}

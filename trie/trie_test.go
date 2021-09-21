@@ -562,7 +562,7 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 	b.Run("no-onleaf", func(b *testing.B) {
 		benchmarkCommitAfterHash(b, nil)
 	})
-	var a types.Account
+	var a types.StateAccount
 	onleaf := func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error {
 		rlp.DecodeBytes(leaf, &a)
 		return nil
@@ -658,7 +658,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(big.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&types.Account{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
+		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
 		accounts[i] = data
 	}
 	return addresses, accounts

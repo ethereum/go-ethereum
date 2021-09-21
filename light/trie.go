@@ -112,7 +112,7 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.Account) error {
+func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {

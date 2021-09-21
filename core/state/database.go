@@ -72,7 +72,7 @@ type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 
 	// TryUpdateAccount abstract an account write in the trie.
-	TryUpdateAccount(key []byte, acc *types.Account) error
+	TryUpdateAccount(key []byte, acc *types.StateAccount) error
 
 	// TryUpdate associates key with value in the trie. If value has length zero, any
 	// existing value is deleted from the trie. The value bytes must not be modified

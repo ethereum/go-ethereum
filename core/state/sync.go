@@ -44,7 +44,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, bloom *trie.S
 				return err
 			}
 		}
-		var obj types.Account
+		var obj types.StateAccount
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
 			return err
 		}

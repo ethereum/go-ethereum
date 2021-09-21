@@ -89,7 +89,7 @@ func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 
 // TryUpdate account will abstract the write of an account to the
 // secure trie.
-func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.Account) error {
+func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	hk := t.hashKey(key)
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {

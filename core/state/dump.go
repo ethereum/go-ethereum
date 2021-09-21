@@ -141,7 +141,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 	it := trie.NewIterator(s.trie.NodeIterator(conf.Start))
 	for it.Next() {
-		var data types.Account
+		var data types.StateAccount
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
