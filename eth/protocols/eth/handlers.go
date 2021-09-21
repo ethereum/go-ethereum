@@ -180,6 +180,10 @@ func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer
 			continue
 		}
 		entry, err := backend.Chain().TrieNode(hash)
+		if len(entry) == 0 || err != nil {
+			// Read the contract code with prefix only to save unnecessary lookups.
+			entry, err = backend.Chain().ContractCode(hash)
+		}
 		if err == nil && len(entry) > 0 {
 			nodes = append(nodes, entry)
 			bytes += len(entry)
