@@ -35,12 +35,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/websocket"
 )
 
@@ -465,6 +465,8 @@ func (s *snapshotService) Start(*p2p.Server) error {
 	return nil
 }
 
+func (s *snapshotService) SaveData() {
+}
 func (s *snapshotService) Stop() error {
 	return nil
 }

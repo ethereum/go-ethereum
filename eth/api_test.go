@@ -17,13 +17,13 @@
 package eth
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"reflect"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -31,7 +31,7 @@ var dumper = spew.ConfigState{Indent: "    "}
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		db, _    = ethdb.NewMemDatabase()
+		db       = rawdb.NewMemoryDatabase()
 		state, _ = state.New(common.Hash{}, state.NewDatabase(db))
 		addr     = common.Address{0x01}
 		keys     = []common.Hash{ // hashes of Keys of storage

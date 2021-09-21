@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 )
 
 /*

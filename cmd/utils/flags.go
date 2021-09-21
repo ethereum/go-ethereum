@@ -28,34 +28,31 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/dashboard"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/fdlimit"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discv5"
+	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
+	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -142,7 +139,7 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 89=XDCchain)",
+		Usage: "Network identifier (integer, 89=XDPoSChain)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
@@ -150,8 +147,8 @@ var (
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
 	XDCTestnetFlag = cli.BoolFlag{
-		Name:  "XDC-testnet",
-		Usage: "XDC test network",
+		Name:  "apothem",
+		Usage: "XDC Apothem Network",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -207,25 +204,10 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	// Dashboard settings
-	DashboardEnabledFlag = cli.BoolFlag{
-		Name:  "dashboard",
-		Usage: "Enable the dashboard",
-	}
-	DashboardAddrFlag = cli.StringFlag{
-		Name:  "dashboard.addr",
-		Usage: "Dashboard listening interface",
-		Value: dashboard.DefaultConfig.Host,
-	}
-	DashboardPortFlag = cli.IntFlag{
-		Name:  "dashboard.host",
-		Usage: "Dashboard listening port",
-		Value: dashboard.DefaultConfig.Port,
-	}
-	DashboardRefreshFlag = cli.DurationFlag{
-		Name:  "dashboard.refresh",
-		Usage: "Dashboard metrics collection refresh rate",
-		Value: dashboard.DefaultConfig.Refresh,
+	// XDCX settings
+	XDCXEnabledFlag = cli.BoolFlag{
+		Name:  "XDCx",
+		Usage: "Enable the XDCX protocol",
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -323,11 +305,6 @@ var (
 		Usage: "Percentage of cache memory allowance to use for trie pruning",
 		Value: 25,
 	}
-	TrieCacheGenFlag = cli.IntFlag{
-		Name:  "trie-cache-gens",
-		Usage: "Number of trie node generations to keep in memory",
-		Value: int(state.MaxTrieCacheGen),
-	}
 	// Miner settings
 	StakingEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -399,6 +376,11 @@ var (
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
+	}
+	RewoundFlag = cli.IntFlag{
+		Name:  "rewound",
+		Usage: "Rewound blocks",
+		Value: 0,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
@@ -549,6 +531,34 @@ var (
 		Name:  "shh.pow",
 		Usage: "Minimum POW accepted",
 		Value: whisper.DefaultMinimumPoW,
+	}
+	XDCXDataDirFlag = DirectoryFlag{
+		Name:  "XDCx.datadir",
+		Usage: "Data directory for the XDCX databases",
+		Value: DirectoryString{filepath.Join(DataDirFlag.Value.String(), "XDCx")},
+	}
+	XDCXDBEngineFlag = cli.StringFlag{
+		Name:  "XDCx.dbengine",
+		Usage: "Database engine for XDCX (leveldb, mongodb)",
+		Value: "leveldb",
+	}
+	XDCXDBNameFlag = cli.StringFlag{
+		Name:  "XDCx.dbName",
+		Usage: "Database name for XDCX",
+		Value: "XDCdex",
+	}
+	XDCXDBConnectionUrlFlag = cli.StringFlag{
+		Name:  "XDCx.dbConnectionUrl",
+		Usage: "ConnectionUrl to database if dbEngine is mongodb. Host:port. If there are multiple instances, separated by comma. Eg: localhost:27017,localhost:27018",
+		Value: "localhost:27017",
+	}
+	XDCXDBReplicaSetNameFlag = cli.StringFlag{
+		Name:  "XDCx.dbReplicaSetName",
+		Usage: "ReplicaSetName if Master-Slave is setup",
+	}
+	XDCSlaveModeFlag = cli.BoolFlag{
+		Name:  "slave",
+		Usage: "Enable slave mode",
 	}
 )
 
@@ -1034,6 +1044,42 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
+func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
+	if ctx.GlobalIsSet(XDCXDataDirFlag.Name) {
+		cfg.DataDir = ctx.GlobalString(XDCXDataDirFlag.Name)
+	} else {
+		// default XDCx datadir: DATADIR/XDCx
+		defaultXDCXDataDir := filepath.Join(XDCDataDir, "XDCx")
+
+		filesInXDCXDefaultDir, _ := WalkMatch(defaultXDCXDataDir, "*.ldb")
+		filesInNodeDefaultDir, _ := WalkMatch(node.DefaultDataDir(), "*.ldb")
+		if len(filesInXDCXDefaultDir) == 0 && len(filesInNodeDefaultDir) > 0 {
+			cfg.DataDir = node.DefaultDataDir()
+		} else {
+			cfg.DataDir = defaultXDCXDataDir
+		}
+	}
+	log.Info("XDCX datadir", "path", cfg.DataDir)
+	if ctx.GlobalIsSet(XDCXDBEngineFlag.Name) {
+		cfg.DBEngine = ctx.GlobalString(XDCXDBEngineFlag.Name)
+	} else {
+		cfg.DBEngine = XDCXDBEngineFlag.Value
+	}
+	if ctx.GlobalIsSet(XDCXDBNameFlag.Name) {
+		cfg.DBName = ctx.GlobalString(XDCXDBNameFlag.Name)
+	} else {
+		cfg.DBName = XDCXDBNameFlag.Value
+	}
+	if ctx.GlobalIsSet(XDCXDBConnectionUrlFlag.Name) {
+		cfg.ConnectionUrl = ctx.GlobalString(XDCXDBConnectionUrlFlag.Name)
+	} else {
+		cfg.ConnectionUrl = XDCXDBConnectionUrlFlag.Value
+	}
+	if ctx.GlobalIsSet(XDCXDBReplicaSetNameFlag.Name) {
+		cfg.ReplicaSetName = ctx.GlobalString(XDCXDBReplicaSetNameFlag.Name)
+	}
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
@@ -1138,71 +1184,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 	}
 	// TODO(fjl): move trie cache generations into config
-	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
-		state.MaxTrieCacheGen = uint16(gen)
-	}
-}
-
-// SetDashboardConfig applies dashboard related command line flags to the config.
-func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
-	cfg.Host = ctx.GlobalString(DashboardAddrFlag.Name)
-	cfg.Port = ctx.GlobalInt(DashboardPortFlag.Name)
-	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
-}
-
-// RegisterEthService adds an Ethereum client to the stack.
-func RegisterEthService(stack *node.Node, cfg *eth.Config) {
-	var err error
-	if cfg.SyncMode == downloader.LightSync {
-		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, cfg)
-		})
-	} else {
-		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg)
-			if fullNode != nil && cfg.LightServ > 0 {
-				ls, _ := les.NewLesServer(fullNode, cfg)
-				fullNode.AddLesServer(ls)
-			}
-			return fullNode, err
-		})
-	}
-	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
-	}
-}
-
-// RegisterDashboardService adds a dashboard to the stack.
-func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
-	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg, commit)
-	})
-}
-
-// RegisterShhService configures Whisper and adds it to the given node.
-func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
-	if err := stack.Register(func(n *node.ServiceContext) (node.Service, error) {
-		return whisper.New(cfg), nil
-	}); err != nil {
-		Fatalf("Failed to register the Whisper service: %v", err)
-	}
-}
-
-// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
-// th egiven node.
-func RegisterEthStatsService(stack *node.Node, url string) {
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		// Retrieve both eth and les services
-		var ethServ *eth.Ethereum
-		ctx.Service(&ethServ)
-
-		var lesServ *les.LightEthereum
-		ctx.Service(&lesServ)
-
-		return ethstats.New(url, ethServ, lesServ)
-	}); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
-	}
 }
 
 // SetupNetwork configures the system for either the main net or some test network.
@@ -1221,7 +1202,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	if ctx.GlobalBool(LightModeFlag.Name) {
 		name = "lightchaindata"
 	}
-	chainDb, err := stack.OpenDatabase(name, cache, handles)
+	chainDb, err := stack.OpenDatabase(name, cache, handles, "")
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
@@ -1325,4 +1306,27 @@ func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error 
 		}
 		return action(ctx)
 	}
+}
+
+// find all filenames match the given pattern in the given root directory
+func WalkMatch(root, pattern string) ([]string, error) {
+	matches := []string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if matched, err := filepath.Match(pattern, filepath.Base(path)); err != nil {
+			return err
+		} else if matched {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return matches, nil
 }

@@ -17,16 +17,17 @@
 package core
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"reflect"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
@@ -140,7 +141,7 @@ func TestSetupGenesis(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		db, _ := ethdb.NewMemDatabase()
+		db := rawdb.NewMemoryDatabase()
 		config, hash, err := test.fn(db)
 		// Check the return values.
 		if !reflect.DeepEqual(err, test.wantErr) {

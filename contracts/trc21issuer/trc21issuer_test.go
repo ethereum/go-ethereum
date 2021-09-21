@@ -1,14 +1,13 @@
 package trc21issuer
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (

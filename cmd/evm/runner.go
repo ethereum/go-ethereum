@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"io/ioutil"
 	"os"
 	"runtime/pprof"
@@ -27,16 +28,15 @@ import (
 
 	goruntime "runtime"
 
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/cmd/evm/internal/compiler"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/core/vm/runtime"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -96,12 +96,12 @@ func runCmd(ctx *cli.Context) error {
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
-		db, _ := ethdb.NewMemDatabase()
+		db := rawdb.NewMemoryDatabase()
 		genesis := gen.ToBlock(db)
 		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
-		db, _ := ethdb.NewMemDatabase()
+		db := rawdb.NewMemoryDatabase()
 		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {

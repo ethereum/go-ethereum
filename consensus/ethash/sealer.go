@@ -24,10 +24,10 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies

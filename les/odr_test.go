@@ -19,21 +19,22 @@ package les
 import (
 	"bytes"
 	"context"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/light"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
@@ -135,7 +136,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 
 				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+				vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -154,7 +155,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			}
 			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			owner := common.Address{}
 			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
@@ -171,8 +172,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	peers := newPeerSet()
 	dist := newRequestDistributor(peers, make(chan struct{}))
 	rm := newRetrieveManager(peers, dist, nil)
-	db, _ := ethdb.NewMemDatabase()
-	ldb, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
+	ldb := rawdb.NewMemoryDatabase()
 	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)

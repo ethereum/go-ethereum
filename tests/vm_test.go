@@ -17,12 +17,15 @@
 package tests
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
 )
 
 func TestVM(t *testing.T) {
+	common.TIPXDCXCancellationFee = big.NewInt(100000000)
 	t.Parallel()
 	vmt := new(testMatcher)
 	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")

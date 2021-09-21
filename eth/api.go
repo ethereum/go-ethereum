@@ -25,17 +25,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/miner"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
@@ -462,11 +462,11 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), trie.NewDatabase(api.eth.chainDb), 0)
+	oldTrie, err := trie.NewSecure(startBlock.Root(), trie.NewDatabase(api.eth.chainDb))
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), trie.NewDatabase(api.eth.chainDb), 0)
+	newTrie, err := trie.NewSecure(endBlock.Root(), trie.NewDatabase(api.eth.chainDb))
 	if err != nil {
 		return nil, err
 	}
@@ -483,4 +483,21 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
 	return dirty, nil
+}
+
+func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
+	chainID := new(big.Int)
+	if config := api.e.chainConfig; config.IsEIP155(api.e.blockchain.CurrentBlock().Number()) {
+		chainID = config.ChainId
+	}
+	return (hexutil.Uint64)(chainID.Uint64())
+}
+
+// GetOwner return masternode owner of the given coinbase address
+func (api *PublicEthereumAPI) GetOwnerByCoinbase(ctx context.Context, coinbase common.Address, blockNr rpc.BlockNumber) (common.Address, error) {
+	statedb, _, err := api.e.ApiBackend.StateAndHeaderByNumber(ctx, blockNr)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return statedb.GetOwner(coinbase), nil
 }

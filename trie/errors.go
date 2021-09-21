@@ -19,17 +19,17 @@ package trie
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 // MissingNodeError is returned by the trie functions (TryGet, TryUpdate, TryDelete)
-// in the case where a trie node is not present in the local database. It contains
-// information necessary for retrieving the missing node.
+// in the case where a trie Node is not present in the local database. It contains
+// information necessary for retrieving the missing Node.
 type MissingNodeError struct {
-	NodeHash common.Hash // hash of the missing node
-	Path     []byte      // hex-encoded path to the missing node
+	NodeHash common.Hash // hash of the missing Node
+	Path     []byte      // hex-encoded path to the missing Node
 }
 
 func (err *MissingNodeError) Error() string {
-	return fmt.Sprintf("missing trie node %x (path %x)", err.NodeHash, err.Path)
+	return fmt.Sprintf("missing trie Node %x (path %x)", err.NodeHash, err.Path)
 }

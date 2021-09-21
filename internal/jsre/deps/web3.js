@@ -3942,6 +3942,9 @@ var outputPostFormatter = function(post){
 };
 
 var inputAddressFormatter = function (address) {
+    if (address.substring(0,3) === "xdc") {
+        address = "0x" + address.substring(3);
+    }
     var iban = new Iban(address);
     if (iban.isValid() && iban.isDirect()) {
         return '0x' + iban.address();
@@ -5420,7 +5423,7 @@ var methods = function () {
         inputFormatter: [null, formatters.inputDefaultBlockNumberFormatter],
         outputFormatter: utils.toDecimal
     });
-
+    
     var sendRawTransaction = new Method({
         name: 'sendRawTransaction',
         call: 'eth_sendRawTransaction',
@@ -5942,7 +5945,7 @@ module.exports = Shh;
  * @author Alex Beregszaszi <alex@rtfs.hu>
  * @date 2016
  *
- * Reference: https://github.com/ethereum/go-ethereum/blob/swarm/internal/web3ext/web3ext.go#L33
+ * Reference: https://github.com/XinFinOrg/XDPoSChain/blob/swarm/internal/web3ext/web3ext.go#L33
  */
 
 "use strict";
@@ -6172,7 +6175,7 @@ var shh = function () {
 
 module.exports = {
     eth: eth,
-    shh: shh
+    shh: shh,
 };
 
 

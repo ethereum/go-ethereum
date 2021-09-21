@@ -26,15 +26,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
 )
 
 type Statistics struct {
@@ -63,7 +63,7 @@ type Whisper struct {
 
 	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
-	expirations map[uint32]*set.SetNonTS  // Message expiration pool
+	expirations map[uint32]mapset.Set     // Message expiration pool
 
 	peerMu sync.RWMutex       // Mutex to sync the active peer set
 	peers  map[*Peer]struct{} // Set of currently active peers
@@ -90,7 +90,7 @@ func New(cfg *Config) *Whisper {
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
 		envelopes:    make(map[common.Hash]*Envelope),
-		expirations:  make(map[uint32]*set.SetNonTS),
+		expirations:  make(map[uint32]mapset.Set),
 		peers:        make(map[*Peer]struct{}),
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
@@ -610,9 +610,9 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	if !alreadyCached {
 		wh.envelopes[hash] = envelope
 		if wh.expirations[envelope.Expiry] == nil {
-			wh.expirations[envelope.Expiry] = set.NewNonTS()
+			wh.expirations[envelope.Expiry] = mapset.NewThreadUnsafeSet()
 		}
-		if !wh.expirations[envelope.Expiry].Has(hash) {
+		if !wh.expirations[envelope.Expiry].Contains(hash) {
 			wh.expirations[envelope.Expiry].Add(hash)
 		}
 	}

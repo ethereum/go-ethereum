@@ -24,10 +24,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/console"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -43,7 +43,7 @@ var (
 		Description: `
 The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
+See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Console.`,
 	}
 
 	attachCommand = cli.Command{
@@ -56,7 +56,7 @@ See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
 		Description: `
 The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.
+See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Console.
 This command allows to open a console on a running XDC node.`,
 	}
 
@@ -69,7 +69,7 @@ This command allows to open a console on a running XDC node.`,
 		Category:  "CONSOLE COMMANDS",
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console`,
+JavaScript API. See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Console`,
 	}
 )
 

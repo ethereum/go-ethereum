@@ -21,11 +21,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/contracts/chequebook"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
-	"github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/XinFinOrg/XDPoSChain/contracts/chequebook"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/swarm/network/kademlia"
+	"github.com/XinFinOrg/XDPoSChain/swarm/services/swap"
+	"github.com/XinFinOrg/XDPoSChain/swarm/storage"
 )
 
 /*

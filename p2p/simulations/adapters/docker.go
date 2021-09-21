@@ -27,10 +27,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // DockerAdapter is a NodeAdapter which runs simulation nodes inside Docker

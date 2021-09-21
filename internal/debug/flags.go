@@ -24,10 +24,10 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/log/term"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/log/term"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
 	colorable "github.com/mattn/go-colorable"
 	"gopkg.in/urfave/cli.v1"
 )

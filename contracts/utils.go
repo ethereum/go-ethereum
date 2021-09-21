@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -30,21 +30,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
-	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	stateDatabase "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner/contract"
+	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 const (

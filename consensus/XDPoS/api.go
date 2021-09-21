@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -16,10 +16,11 @@
 package XDPoS
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
+	"math/big"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -27,6 +28,14 @@ import (
 type API struct {
 	chain consensus.ChainReader
 	XDPoS *XDPoS
+}
+type NetworkInformation struct {
+	NetworkId                  *big.Int
+	XDCValidatorAddress        common.Address
+	RelayerRegistrationAddress common.Address
+	XDCXListingAddress         common.Address
+	XDCZAddress                common.Address
+	LendingAddress             common.Address
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
@@ -87,14 +96,22 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	return snap.GetSigners(), nil
 }
 
-// Proposals returns the current proposals the node tries to uphold and vote on.
-func (api *API) Proposals() map[common.Address]bool {
+func (api *API) NetworkInformation() NetworkInformation {
 	api.XDPoS.lock.RLock()
 	defer api.XDPoS.lock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.XDPoS.proposals {
-		proposals[address] = auth
+	info := NetworkInformation{}
+	info.NetworkId = api.chain.Config().ChainId
+	info.XDCValidatorAddress = common.HexToAddress(common.MasternodeVotingSMC)
+	if common.IsTestnet {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMCTestnet)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMCTestnet)
+		info.XDCXListingAddress = common.XDCXListingSMCTestNet
+		info.XDCZAddress = common.TRC21IssuerSMCTestNet
+	} else {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMC)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMC)
+		info.XDCXListingAddress = common.XDCXListingSMC
+		info.XDCZAddress = common.TRC21IssuerSMC
 	}
-	return proposals
+	return info
 }

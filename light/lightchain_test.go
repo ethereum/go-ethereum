@@ -18,15 +18,16 @@ package light
 
 import (
 	"context"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 // So we can deterministically seed different blockchains
@@ -51,7 +52,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int) (ethdb.Database, *LightChain, error) {
-	db, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
 	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFaker())
@@ -68,7 +69,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 
 // newTestLightChain creates a LightChain that doesn't validate anything.
 func newTestLightChain() *LightChain {
-	db, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
 		Difficulty: big.NewInt(1),
 		Config:     params.TestChainConfig,

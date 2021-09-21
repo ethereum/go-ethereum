@@ -17,24 +17,24 @@
 package eth
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 // Tests that protocol versions and modes of operations are matched up properly.
@@ -343,7 +343,9 @@ func testGetNodeData(t *testing.T, protocol int) {
 
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
-	for _, key := range db.Keys() {
+	it := db.NewIterator(nil, nil)
+	for it.Next() {
+		key := it.Key()
 		if len(key) == len(common.Hash{}) {
 			hashes = append(hashes, common.BytesToHash(key))
 		}
@@ -366,7 +368,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 			t.Errorf("data hash mismatch: have %x, want %x", hash, want)
 		}
 	}
-	statedb, _ := ethdb.NewMemDatabase()
+	statedb := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
 		statedb.Put(hashes[i].Bytes(), data[i])
 	}
@@ -468,7 +470,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	var (
 		evmux         = new(event.TypeMux)
 		pow           = ethash.NewFaker()
-		db, _         = ethdb.NewMemDatabase()
+		db            = rawdb.NewMemoryDatabase()
 		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
 		gspec         = &core.Genesis{Config: config}
 		genesis       = gspec.MustCommit(db)

@@ -18,23 +18,23 @@ package fetcher
 
 import (
 	"errors"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var (
-	testdb, _    = ethdb.NewMemDatabase()
+	testdb       = rawdb.NewMemoryDatabase()
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))

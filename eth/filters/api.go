@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "github.com/XinFinOrg/XDPoSChain"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 var (
@@ -536,11 +536,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
-
 func hasXDCPrefix(str string) bool {
 	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
 }
-
 func decodeAddress(s string) (common.Address, error) {
 	if hasXDCPrefix(s) {
 		s = "0x" + s[3:]

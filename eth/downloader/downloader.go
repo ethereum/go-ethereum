@@ -25,15 +25,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var (
@@ -241,7 +241,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 // In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
-func (d *Downloader) Progress() ethereum.SyncProgress {
+func (d *Downloader) Progress() XDPoSChain.SyncProgress {
 	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
 	defer d.syncStatsLock.RUnlock()
@@ -255,7 +255,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case LightSync:
 		current = d.lightchain.CurrentHeader().Number.Uint64()
 	}
-	return ethereum.SyncProgress{
+	return XDPoSChain.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,
@@ -625,6 +625,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 	for finished := false; !finished; {
 		select {
 		case <-d.cancelCh:
+
 			return 0, errCancelHeaderFetch
 
 		case packet := <-d.headerCh:

@@ -32,14 +32,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/simulations"
+	"github.com/XinFinOrg/XDPoSChain/p2p/simulations/adapters"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 // ProtocolTester is the tester environment used for unit testing protocol
@@ -146,6 +146,9 @@ func (t *testNode) Start(server *p2p.Server) error {
 	return nil
 }
 
+func (t *testNode) SaveData() {
+}
+
 func (t *testNode) Stop() error {
 	return nil
 }
@@ -197,6 +200,9 @@ func (m *mockNode) Trigger(trig *Trigger) error {
 func (m *mockNode) Expect(exp ...Expect) error {
 	m.expect <- exp
 	return <-m.err
+}
+
+func (m *mockNode) SaveData() {
 }
 
 func (m *mockNode) Stop() error {

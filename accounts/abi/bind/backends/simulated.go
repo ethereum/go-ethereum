@@ -20,25 +20,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth/filters"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
@@ -65,7 +67,7 @@ type SimulatedBackend struct {
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
-	database, _ := ethdb.NewMemDatabase()
+	database := rawdb.NewMemoryDatabase()
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, Alloc: alloc, GasLimit: 42000000}
 	genesis.MustCommit(database)
 	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{})
@@ -185,7 +187,7 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 }
 
 // CallContract executes a contract call.
-func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (b *SimulatedBackend) CallContract(ctx context.Context, call XDPoSChain.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -200,8 +202,41 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	return rval, err
 }
 
+//FIXME: please use copyState for this function
+// CallContractWithState executes a contract call at the given state.
+func (b *SimulatedBackend) CallContractWithState(call XDPoSChain.CallMsg, chain consensus.ChainContext, statedb *state.StateDB) ([]byte, error) {
+	// Ensure message is initialized properly.
+	call.GasPrice = big.NewInt(0)
+
+	if call.Gas == 0 {
+		call.Gas = 1000000
+	}
+	if call.Value == nil {
+		call.Value = new(big.Int)
+	}
+	// Execute the call.
+	msg := callmsg{call}
+	feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+	if msg.To() != nil {
+		if value, ok := feeCapacity[*msg.To()]; ok {
+			msg.CallMsg.BalanceTokenFee = value
+		}
+	}
+	evmContext := core.NewEVMContext(msg, chain.CurrentHeader(), chain, nil)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmenv := vm.NewEVM(evmContext, statedb, nil, chain.Config(), vm.Config{})
+	gaspool := new(core.GasPool).AddGas(1000000)
+	owner := common.Address{}
+	rval, _, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	if err != nil {
+		return nil, err
+	}
+	return rval, err
+}
+
 // PendingCallContract executes a contract call on the pending state.
-func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call XDPoSChain.CallMsg) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
@@ -227,7 +262,7 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
-func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call XDPoSChain.CallMsg) (uint64, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -250,6 +285,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 		snapshot := b.pendingState.Snapshot()
 		_, _, failed, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+		fmt.Println("EstimateGas", err, failed)
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil || failed {
@@ -277,7 +313,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, uint64, bool, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, uint64, bool, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
@@ -302,7 +338,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})
+	vmenv := vm.NewEVM(evmContext, statedb, nil, b.config, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
 	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
@@ -340,7 +376,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 // returning all the results in one batch.
 //
 // TODO(karalabe): Deprecate when the subscription one can return past data too.
-func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
+func (b *SimulatedBackend) FilterLogs(ctx context.Context, query XDPoSChain.FilterQuery) ([]types.Log, error) {
 	// Initialize unset filter boundaried to run from genesis to chain head
 	from := int64(0)
 	if query.FromBlock != nil {
@@ -366,7 +402,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.Filter
 
 // SubscribeFilterLogs creates a background log filtering operation, returning a
 // subscription immediately, which can be used to stream the found events.
-func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query XDPoSChain.FilterQuery, ch chan<- types.Log) (XDPoSChain.Subscription, error) {
 	// Subscribe to contract events
 	sink := make(chan []*types.Log)
 
@@ -418,7 +454,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.
 type callmsg struct {
-	ethereum.CallMsg
+	XDPoSChain.CallMsg
 }
 
 func (m callmsg) From() common.Address      { return m.CallMsg.From }

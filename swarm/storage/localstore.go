@@ -19,7 +19,7 @@ package storage
 import (
 	"encoding/binary"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 )
 
 //metrics variables

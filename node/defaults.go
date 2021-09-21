@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 )
 
 const (
@@ -55,9 +55,9 @@ func DefaultDataDir() string {
 	home := homeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "XDCchain")
+			return filepath.Join(home, "Library", "XDPoSChain")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "XDCchain")
+			return filepath.Join(home, "AppData", "Roaming", "XDPoSChain")
 		} else {
 			return filepath.Join(home, ".XDC")
 		}

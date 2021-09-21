@@ -28,24 +28,28 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/mclock"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	lru "github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
@@ -79,11 +83,13 @@ type CacheConfig struct {
 	TrieTimeLimit time.Duration // Time limit after which to flush the current in-memory trie to disk
 }
 type ResultProcessBlock struct {
-	logs     []*types.Log
-	receipts []*types.Receipt
-	state    *state.StateDB
-	proctime time.Duration
-	usedGas  uint64
+	logs         []*types.Log
+	receipts     []*types.Receipt
+	state        *state.StateDB
+	tradingState *tradingstate.TradingStateDB
+	lendingState *lendingstate.LendingStateDB
+	proctime     time.Duration
+	usedGas      uint64
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -105,8 +111,9 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
-	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	XDCxDb ethdb.XDCxDatabase
+	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -125,16 +132,17 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache       state.Database // State database to reuse between imports (contains state cache)
-	bodyCache        *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	blockCache       *lru.Cache     // Cache for the most recent entire blocks
-	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
-	resultProcess    *lru.Cache     // Cache for processed blocks
-	calculatingBlock *lru.Cache     // Cache for processing blocks
-	downloadingBlock *lru.Cache     // Cache for downloading blocks (avoid duplication from fetcher)
-	quit             chan struct{}  // blockchain quit channel
-	running          int32          // running must be called atomically
+	stateCache state.Database // State database to reuse between imports (contains state cache)
+
+	bodyCache        *lru.Cache    // Cache for the most recent block bodies
+	bodyRLPCache     *lru.Cache    // Cache for the most recent block bodies in RLP encoded format
+	blockCache       *lru.Cache    // Cache for the most recent entire blocks
+	futureBlocks     *lru.Cache    // future blocks are blocks added for later processing
+	resultProcess    *lru.Cache    // Cache for processed blocks
+	calculatingBlock *lru.Cache    // Cache for processing blocks
+	downloadingBlock *lru.Cache    // Cache for downloading blocks (avoid duplication from fetcher)
+	quit             chan struct{} // blockchain quit channel
+	running          int32         // running must be called atomically
 	// procInterrupt must be atomically called
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -151,6 +159,12 @@ type BlockChain struct {
 	// Blocks hash array by block number
 	// cache field for tracking finality purpose, can't use for tracking block vs block relationship
 	blocksHashCache *lru.Cache
+
+	resultTrade         *lru.Cache // trades result: key - takerOrderHash, value: trades corresponding to takerOrder
+	rejectedOrders      *lru.Cache // rejected orders: key - takerOrderHash, value: rejected orders corresponding to takerOrder
+	resultLendingTrade  *lru.Cache
+	rejectedLendingItem *lru.Cache
+	finalizedTrade      *lru.Cache // include both trades which force update to closed/liquidated by the protocol
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -172,24 +186,38 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	resultProcess, _ := lru.New(blockCacheLimit)
 	preparingBlock, _ := lru.New(blockCacheLimit)
 	downloadingBlock, _ := lru.New(blockCacheLimit)
+
+	// for XDCx
+	resultTrade, _ := lru.New(tradingstate.OrderCacheLimit)
+	rejectedOrders, _ := lru.New(tradingstate.OrderCacheLimit)
+
+	// XDCxlending
+	resultLendingTrade, _ := lru.New(tradingstate.OrderCacheLimit)
+	rejectedLendingItem, _ := lru.New(tradingstate.OrderCacheLimit)
+	finalizedTrade, _ := lru.New(tradingstate.OrderCacheLimit)
 	bc := &BlockChain{
-		chainConfig:      chainConfig,
-		cacheConfig:      cacheConfig,
-		db:               db,
-		triegc:           prque.New(),
-		stateCache:       state.NewDatabase(db),
-		quit:             make(chan struct{}),
-		bodyCache:        bodyCache,
-		bodyRLPCache:     bodyRLPCache,
-		blockCache:       blockCache,
-		futureBlocks:     futureBlocks,
-		resultProcess:    resultProcess,
-		calculatingBlock: preparingBlock,
-		downloadingBlock: downloadingBlock,
-		engine:           engine,
-		vmConfig:         vmConfig,
-		badBlocks:        badBlocks,
-		blocksHashCache:  blocksHashCache,
+		chainConfig:         chainConfig,
+		cacheConfig:         cacheConfig,
+		db:                  db,
+		triegc:              prque.New(),
+		stateCache:          state.NewDatabase(db),
+		quit:                make(chan struct{}),
+		bodyCache:           bodyCache,
+		bodyRLPCache:        bodyRLPCache,
+		blockCache:          blockCache,
+		futureBlocks:        futureBlocks,
+		resultProcess:       resultProcess,
+		calculatingBlock:    preparingBlock,
+		downloadingBlock:    downloadingBlock,
+		engine:              engine,
+		vmConfig:            vmConfig,
+		badBlocks:           badBlocks,
+		blocksHashCache:     blocksHashCache,
+		resultTrade:         resultTrade,
+		rejectedOrders:      rejectedOrders,
+		resultLendingTrade:  resultLendingTrade,
+		rejectedLendingItem: rejectedLendingItem,
+		finalizedTrade:      finalizedTrade,
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
@@ -224,8 +252,24 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
+// NewBlockChainEx extend old blockchain, add order state db
+func NewBlockChainEx(db ethdb.Database, XDCxDb ethdb.XDCxDatabase, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+	blockchain, err := NewBlockChain(db, cacheConfig, chainConfig, engine, vmConfig)
+	if err != nil {
+		return nil, err
+	}
+	if blockchain != nil {
+		blockchain.addXDCxDb(XDCxDb)
+	}
+	return blockchain, nil
+}
+
 func (bc *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
+}
+
+func (bc *BlockChain) addXDCxDb(XDCxDb ethdb.XDCxDatabase) {
+	bc.XDCxDb = XDCxDb
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -245,8 +289,50 @@ func (bc *BlockChain) loadLastState() error {
 		log.Warn("Head block missing, resetting chain", "hash", head)
 		return bc.Reset()
 	}
+	repair := false
+	if common.Rewound != uint64(0) {
+		repair = true
+	}
 	// Make sure the state associated with the block is available
-	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+	_, err := state.New(currentBlock.Root(), bc.stateCache)
+	if err != nil {
+		repair = true
+	} else {
+		engine, ok := bc.Engine().(*XDPoS.XDPoS)
+		author, _ := bc.Engine().Author(currentBlock.Header())
+		if ok {
+			tradingService := engine.GetXDCXService()
+			lendingService := engine.GetLendingService()
+			if bc.Config().IsTIPXDCX(currentBlock.Number()) && bc.chainConfig.XDPoS != nil && currentBlock.NumberU64() > bc.chainConfig.XDPoS.Epoch && tradingService != nil && lendingService != nil {
+				tradingRoot, err := tradingService.GetTradingStateRoot(currentBlock, author)
+				if err != nil {
+					repair = true
+				} else {
+					if tradingService.GetStateCache() != nil {
+						_, err = tradingstate.New(tradingRoot, tradingService.GetStateCache())
+						if err != nil {
+							repair = true
+						}
+					}
+				}
+
+				if !repair {
+					lendingRoot, err := lendingService.GetLendingStateRoot(currentBlock, author)
+					if err != nil {
+						repair = true
+					} else {
+						if lendingService.GetStateCache() != nil {
+							_, err = lendingstate.New(lendingRoot, lendingService.GetStateCache())
+							if err != nil {
+								repair = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if repair {
 		// Dangling block without a state associated, init from scratch
 		log.Warn("Head state missing, repairing chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
 		if err := bc.repair(&currentBlock); err != nil {
@@ -351,7 +437,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB(), 0); err != nil {
+	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB()); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -418,6 +504,45 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache)
 }
 
+// OrderStateAt returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) OrderStateAt(block *types.Block) (*tradingstate.TradingStateDB, error) {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if ok {
+		XDCXService := engine.GetXDCXService()
+		if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch && XDCXService != nil {
+			author, _ := bc.Engine().Author(block.Header())
+			log.Debug("OrderStateAt", "blocknumber", block.Header().Number)
+			XDCxState, err := XDCXService.GetTradingState(block, author)
+			if err == nil {
+				return XDCxState, nil
+			} else {
+				return nil, err
+			}
+		}
+	}
+	return nil, errors.New("Get XDCx state fail")
+
+}
+
+// LendingStateAt returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) LendingStateAt(block *types.Block) (*lendingstate.LendingStateDB, error) {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if ok {
+		lendingService := engine.GetLendingService()
+		if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch && lendingService != nil {
+			author, _ := bc.Engine().Author(block.Header())
+			log.Debug("LendingStateAt", "blocknumber", block.Header().Number)
+			lendingState, err := lendingService.GetLendingState(block, author)
+			if err == nil {
+				return lendingState, nil
+			}
+			return nil, err
+		}
+	}
+	return nil, errors.New("Get XDCx state fail")
+
+}
+
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
 	return bc.ResetWithGenesisBlock(bc.genesisBlock)
@@ -459,9 +584,37 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 func (bc *BlockChain) repair(head **types.Block) error {
 	for {
 		// Abort if we've rewound to a head block that does have associated state
-		if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
+		if (common.Rewound == uint64(0)) || ((*head).Number().Uint64() < common.Rewound) {
+			if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
+				log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
+				engine, ok := bc.Engine().(*XDPoS.XDPoS)
+				if ok {
+					tradingService := engine.GetXDCXService()
+					lendingService := engine.GetLendingService()
+					if bc.Config().IsTIPXDCX((*head).Number()) && bc.chainConfig.XDPoS != nil && (*head).NumberU64() > bc.chainConfig.XDPoS.Epoch && tradingService != nil && lendingService != nil {
+						author, _ := bc.Engine().Author((*head).Header())
+						tradingRoot, err := tradingService.GetTradingStateRoot(*head, author)
+						if err == nil {
+							_, err = tradingstate.New(tradingRoot, tradingService.GetStateCache())
+						}
+						if err == nil {
+							lendingRoot, err := lendingService.GetLendingStateRoot(*head, author)
+							if err == nil {
+								_, err = lendingstate.New(lendingRoot, lendingService.GetStateCache())
+								if err == nil {
+									return nil
+								}
+							}
+						}
+					} else {
+						return nil
+					}
+				} else {
+					return nil
+				}
+			}
+		} else {
 			log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
-			return nil
 		}
 		// Otherwise rewind one block and recheck state availability there
 		(*head) = bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
@@ -518,8 +671,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 	// save cache BlockSigners
 	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
-		engine := bc.Engine().(*XDPoS.XDPoS)
-		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+		engine, ok := bc.Engine().(*XDPoS.XDPoS)
+		if ok {
+			engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+		}
 	}
 
 	// If the block is better than our head or is on a different chain, force update heads
@@ -580,21 +735,36 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	return ok
 }
 
-// HasState checks if state trie is fully present in the database or not.
-func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.stateCache.OpenTrie(hash)
-	return err == nil
+// HasFullState checks if state trie is fully present in the database or not.
+func (bc *BlockChain) HasFullState(block *types.Block) bool {
+	_, err := bc.stateCache.OpenTrie(block.Root())
+	if err != nil {
+		return false
+	}
+	engine, _ := bc.Engine().(*XDPoS.XDPoS)
+	if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+		tradingService := engine.GetXDCXService()
+		lendingService := engine.GetLendingService()
+		author, _ := bc.Engine().Author(block.Header())
+		if tradingService != nil && !tradingService.HasTradingState(block, author) {
+			return false
+		}
+		if lendingService != nil && !lendingService.HasLendingState(block, author) {
+			return false
+		}
+	}
+	return true
 }
 
-// HasBlockAndState checks if a block and associated state trie is fully present
+// HasBlockAndFullState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
-func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
+func (bc *BlockChain) HasBlockAndFullState(hash common.Hash, number uint64) bool {
 	// Check first that the block itself is known
 	block := bc.GetBlock(hash, number)
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root())
+	return bc.HasFullState(block)
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -691,6 +861,84 @@ func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.TrieDB().Node(hash)
 }
 
+func (bc *BlockChain) SaveData() {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+	// Make sure no inconsistent state is leaked during insertion
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+	// Ensure the state of a recent block is also stored to disk before exiting.
+	// We're writing three different states to catch different restart scenarios:
+	//  - HEAD:     So we don't need to reprocess any blocks in the general case
+	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
+	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
+	if !bc.cacheConfig.Disabled {
+		var tradingTriedb *trie.Database
+		var lendingTriedb *trie.Database
+		engine, _ := bc.Engine().(*XDPoS.XDPoS)
+		triedb := bc.stateCache.TrieDB()
+		var tradingService XDPoS.TradingService
+		var lendingService XDPoS.LendingService
+		if bc.Config().IsTIPXDCX(bc.CurrentBlock().Number()) && bc.chainConfig.XDPoS != nil && bc.CurrentBlock().NumberU64() > bc.chainConfig.XDPoS.Epoch && engine != nil {
+			tradingService = engine.GetXDCXService()
+			if tradingService != nil && tradingService.GetStateCache() != nil {
+				tradingTriedb = tradingService.GetStateCache().TrieDB()
+			}
+			lendingService = engine.GetLendingService()
+			if lendingService != nil && lendingService.GetStateCache() != nil {
+				lendingTriedb = lendingService.GetStateCache().TrieDB()
+			}
+		}
+		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
+			if number := bc.CurrentBlock().NumberU64(); number > offset {
+				recent := bc.GetBlockByNumber(number - offset)
+
+				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+				if err := triedb.Commit(recent.Root(), true); err != nil {
+					log.Error("Failed to commit recent state trie", "err", err)
+				}
+				if bc.Config().IsTIPXDCX(recent.Number()) && bc.chainConfig.XDPoS != nil && recent.NumberU64() > bc.chainConfig.XDPoS.Epoch && engine != nil {
+					author, _ := bc.Engine().Author(recent.Header())
+					if tradingService != nil {
+						tradingRoot, _ := tradingService.GetTradingStateRoot(recent, author)
+						if !common.EmptyHash(tradingRoot) && tradingTriedb != nil {
+							if err := tradingTriedb.Commit(tradingRoot, true); err != nil {
+								log.Error("Failed to commit trading state recent state trie", "err", err)
+							}
+						}
+					}
+					if lendingService != nil {
+						lendingRoot, _ := lendingService.GetLendingStateRoot(recent, author)
+						if !common.EmptyHash(lendingRoot) && lendingTriedb != nil {
+							if err := lendingTriedb.Commit(lendingRoot, true); err != nil {
+								log.Error("Failed to commit lending state recent state trie", "err", err)
+							}
+						}
+					}
+				}
+			}
+		}
+		for !bc.triegc.Empty() {
+			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+		}
+		if tradingTriedb != nil && lendingTriedb != nil {
+			if tradingService.GetTriegc() != nil {
+				for !tradingService.GetTriegc().Empty() {
+					tradingTriedb.Dereference(tradingService.GetTriegc().PopItem().(common.Hash))
+				}
+			}
+			if lendingService.GetTriegc() != nil {
+				for !lendingService.GetTriegc().Empty() {
+					lendingTriedb.Dereference(lendingService.GetTriegc().PopItem().(common.Hash))
+				}
+			}
+		}
+		if size, _ := triedb.Size(); size != 0 {
+			log.Error("Dangling trie nodes after full cleanup")
+		}
+	}
+}
+
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
@@ -701,33 +949,8 @@ func (bc *BlockChain) Stop() {
 	bc.scope.Close()
 	close(bc.quit)
 	atomic.StoreInt32(&bc.procInterrupt, 1)
-
 	bc.wg.Wait()
-
-	// Ensure the state of a recent block is also stored to disk before exiting.
-	// We're writing three different states to catch different restart scenarios:
-	//  - HEAD:     So we don't need to reprocess any blocks in the general case
-	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
-	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.Disabled {
-		triedb := bc.stateCache.TrieDB()
-		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
-			if number := bc.CurrentBlock().NumberU64(); number > offset {
-				recent := bc.GetBlockByNumber(number - offset)
-
-				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-				if err := triedb.Commit(recent.Root(), true); err != nil {
-					log.Error("Failed to commit recent state trie", "err", err)
-				}
-			}
-		}
-		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
-		}
-		if size := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
-		}
-	}
+	bc.SaveData()
 	log.Info("Blockchain manager stopped")
 }
 
@@ -932,7 +1155,7 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB, tradingState *tradingstate.TradingStateDB, lendingState *lendingstate.LendingStateDB) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -962,45 +1185,112 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return NonStatTy, err
 	}
+	tradingRoot := common.Hash{}
+	if tradingState != nil {
+		tradingRoot, err = tradingState.Commit()
+		if err != nil {
+			return NonStatTy, err
+		}
+	}
+	lendingRoot := common.Hash{}
+	if lendingState != nil {
+		lendingRoot, err = lendingState.Commit()
+		if err != nil {
+			return NonStatTy, err
+		}
+	}
+	engine, _ := bc.Engine().(*XDPoS.XDPoS)
+	var tradingTrieDb *trie.Database
+	var tradingService XDPoS.TradingService
+	var lendingTrieDb *trie.Database
+	var lendingService XDPoS.LendingService
+	if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch && engine != nil {
+		tradingService = engine.GetXDCXService()
+		if tradingService != nil {
+			tradingTrieDb = tradingService.GetStateCache().TrieDB()
+		}
+		lendingService = engine.GetLendingService()
+		if lendingService != nil {
+			lendingTrieDb = lendingService.GetStateCache().TrieDB()
+		}
+	}
 	triedb := bc.stateCache.TrieDB()
-
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.Disabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
+		if tradingTrieDb != nil {
+			if err := tradingTrieDb.Commit(tradingRoot, false); err != nil {
+				return NonStatTy, err
+			}
+		}
+		if lendingTrieDb != nil {
+			if err := lendingTrieDb.Commit(lendingRoot, false); err != nil {
+				return NonStatTy, err
+			}
+		}
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		bc.triegc.Push(root, -float32(block.NumberU64()))
-
+		if tradingTrieDb != nil {
+			tradingTrieDb.Reference(tradingRoot, common.Hash{})
+		}
+		if tradingService != nil {
+			tradingService.GetTriegc().Push(tradingRoot, -float32(block.NumberU64()))
+		}
+		if lendingTrieDb != nil {
+			lendingTrieDb.Reference(lendingRoot, common.Hash{})
+		}
+		if lendingService != nil {
+			lendingService.GetTriegc().Push(lendingRoot, -float32(block.NumberU64()))
+		}
 		if current := block.NumberU64(); current > triesInMemory {
 			// Find the next state trie we need to commit
-			header := bc.GetHeaderByNumber(current - triesInMemory)
-			chosen := header.Number.Uint64()
-
+			chosen := current - triesInMemory
+			oldTradingRoot := common.Hash{}
+			oldLendingRoot := common.Hash{}
 			// Only write to disk if we exceeded our memory allowance *and* also have at
 			// least a given number of tries gapped.
+			//
+			//if tradingTrieDb != nil {
+			//	size = size + tradingTrieDb.Size()
+			//}
+			//if lendingTrieDb != nil {
+			//	size = size + lendingTrieDb.Size()
+			//}
 			var (
-				size  = triedb.Size()
-				limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
+				nodes, imgs = triedb.Size()
+				limit       = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
 			)
-			if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
-				// If we're exceeding limits but haven't reached a large enough memory gap,
-				// warn the user that the system is becoming unstable.
-				if chosen < lastWrite+triesInMemory {
-					switch {
-					case size >= 2*limit:
-						log.Warn("State memory usage too high, committing", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-					case bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit:
+			if nodes > limit || imgs > 4*1024*1024 {
+				triedb.Cap(limit - ethdb.IdealBatchSize)
+			}
+			if bc.gcproc > bc.cacheConfig.TrieTimeLimit || chosen > lastWrite+triesInMemory {
+				// If the header is missing (canonical chain behind), we're reorging a low
+				// diff sidechain. Suspend committing until this operation is completed.
+				header := bc.GetHeaderByNumber(chosen)
+				if header == nil {
+					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
+				} else {
+					// If we're exceeding limits but haven't reached a large enough memory gap,
+					// warn the user that the system is becoming unstable.
+					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 					}
-				}
-				// If optimum or critical limits reached, write to disk
-				if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
+					if tradingTrieDb != nil && lendingTrieDb != nil {
+						b := bc.GetBlock(header.Hash(), current-triesInMemory)
+						author, _ := bc.Engine().Author(b.Header())
+						oldTradingRoot, _ = tradingService.GetTradingStateRoot(b, author)
+						oldLendingRoot, _ = lendingService.GetLendingStateRoot(b, author)
+						tradingTrieDb.Commit(oldTradingRoot, true)
+						lendingTrieDb.Commit(oldLendingRoot, true)
+					}
 				}
 			}
 			// Garbage collect anything below our required write retention
@@ -1010,7 +1300,27 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-				triedb.Dereference(root.(common.Hash), common.Hash{})
+				triedb.Dereference(root.(common.Hash))
+			}
+			if tradingService != nil {
+				for !tradingService.GetTriegc().Empty() {
+					tradingRoot, number := tradingService.GetTriegc().Pop()
+					if uint64(-number) > chosen {
+						tradingService.GetTriegc().Push(tradingRoot, number)
+						break
+					}
+					tradingTrieDb.Dereference(tradingRoot.(common.Hash))
+				}
+			}
+			if lendingService != nil {
+				for !lendingService.GetTriegc().Empty() {
+					lendingRoot, number := lendingService.GetTriegc().Pop()
+					if uint64(-number) > chosen {
+						lendingService.GetTriegc().Push(lendingRoot, number)
+						break
+					}
+					lendingTrieDb.Dereference(lendingRoot.(common.Hash))
+				}
 			}
 		}
 	}
@@ -1055,8 +1365,10 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 	// save cache BlockSigners
 	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
-		engine := bc.Engine().(*XDPoS.XDPoS)
-		engine.CacheSigner(block.Header().Hash(), block.Transactions())
+		engine, ok := bc.Engine().(*XDPoS.XDPoS)
+		if ok {
+			engine.CacheSigner(block.Header().Hash(), block.Transactions())
+		}
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
@@ -1078,6 +1390,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // only reason this method exists as a separate one is to make locking cleaner
 // with deferred statements.
 func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+	engine, _ := bc.Engine().(*XDPoS.XDPoS)
+
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
@@ -1177,7 +1491,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			var winner []*types.Block
 
 			parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-			for !bc.HasState(parent.Root()) {
+			for !bc.HasFullState(parent) {
 				winner = append(winner, parent)
 				parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
 			}
@@ -1211,9 +1525,109 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
+		author, err := bc.Engine().Author(block.Header()) // Ignore error, we're past header validation
+		if err != nil {
+			bc.reportBlock(block, nil, err)
+			return i, events, coalescedLogs, err
+		}
+		parentAuthor, _ := bc.Engine().Author(parent.Header())
+		// clear the previous dry-run cache
+		var tradingState *tradingstate.TradingStateDB
+		var lendingState *lendingstate.LendingStateDB
+		var tradingService XDPoS.TradingService
+		var lendingService XDPoS.LendingService
+		isSDKNode := false
+		if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+			tradingService = engine.GetXDCXService()
+			lendingService = engine.GetLendingService()
+			if tradingService != nil && lendingService != nil {
+				isSDKNode = tradingService.IsSDKNode()
+				txMatchBatchData, err := ExtractTradingTransactions(block.Transactions())
+				if err != nil {
+					bc.reportBlock(block, nil, err)
+					return i, events, coalescedLogs, err
+				}
+				tradingState, err = tradingService.GetTradingState(parent, parentAuthor)
+				if err != nil {
+					bc.reportBlock(block, nil, err)
+					return i, events, coalescedLogs, err
+				}
+				lendingState, err = lendingService.GetLendingState(parent, parentAuthor)
+				if err != nil {
+					bc.reportBlock(block, nil, err)
+					return i, events, coalescedLogs, err
+				}
+				if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+					if err := tradingService.UpdateMediumPriceBeforeEpoch(block.NumberU64()/bc.chainConfig.XDPoS.Epoch, tradingState, statedb); err != nil {
+						return i, events, coalescedLogs, err
+					}
+				} else {
+					for _, txMatchBatch := range txMatchBatchData {
+						log.Debug("Verify matching transaction", "txHash", txMatchBatch.TxHash.Hex())
+						err := bc.Validator().ValidateTradingOrder(statedb, tradingState, txMatchBatch, author, block.Header())
+						if err != nil {
+							bc.reportBlock(block, nil, err)
+							return i, events, coalescedLogs, err
+						}
+					}
+					//
+					batches, err := ExtractLendingTransactions(block.Transactions())
+					if err != nil {
+						bc.reportBlock(block, nil, err)
+						return i, events, coalescedLogs, err
+					}
+					for _, batch := range batches {
+						log.Debug("Verify matching transaction", "txHash", batch.TxHash.Hex())
+						err := bc.Validator().ValidateLendingOrder(statedb, lendingState, tradingState, batch, author, block.Header())
+						if err != nil {
+							bc.reportBlock(block, nil, err)
+							return i, events, coalescedLogs, err
+						}
+					}
+					// liquidate / finalize open lendingTrades
+					if block.Number().Uint64()%bc.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
+						finalizedTrades := map[common.Hash]*lendingstate.LendingTrade{}
+						finalizedTrades, _, _, _, _, err = lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
+						if err != nil {
+							return i, events, coalescedLogs, fmt.Errorf("failed to ProcessLiquidationData. Err: %v ", err)
+						}
+						if isSDKNode {
+							finalizedTx := lendingstate.FinalizedResult{}
+							if finalizedTx, err = ExtractLendingFinalizedTradeTransactions(block.Transactions()); err != nil {
+								return i, events, coalescedLogs, err
+							}
+							bc.AddFinalizedTrades(finalizedTx.TxHash, finalizedTrades)
+						}
+					}
+				}
+				//check
+				if tradingState != nil && tradingService != nil {
+					gotRoot := tradingState.IntermediateRoot()
+					expectRoot, _ := tradingService.GetTradingStateRoot(block, author)
+					parentRoot, _ := tradingService.GetTradingStateRoot(parent, parentAuthor)
+					if gotRoot != expectRoot {
+						err = fmt.Errorf("invalid XDCx trading state merke trie got : %s , expect : %s ,parent : %s", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+						bc.reportBlock(block, nil, err)
+						return i, events, coalescedLogs, err
+					}
+					log.Debug("XDCX Trading State Root", "number", block.NumberU64(), "parent", parentRoot.Hex(), "nextRoot", expectRoot.Hex())
+				}
+				if lendingState != nil && tradingState != nil {
+					gotRoot := lendingState.IntermediateRoot()
+					expectRoot, _ := lendingService.GetLendingStateRoot(block, author)
+					parentRoot, _ := lendingService.GetLendingStateRoot(parent, parentAuthor)
+					if gotRoot != expectRoot {
+						err = fmt.Errorf("invalid lending state merke trie got : %s , expect : %s , parent :%s ", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+						bc.reportBlock(block, nil, err)
+						return i, events, coalescedLogs, err
+					}
+					log.Debug("XDCX Lending State Root", "number", block.NumberU64(), "parent", parentRoot.Hex(), "nextRoot", expectRoot.Hex())
+				}
+			}
+		}
 		feeCapacity := state.GetTRC21FeeCapacityFromStateWithCache(parent.Root(), statedb)
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, feeCapacity)
+		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, tradingState, bc.vmConfig, feeCapacity)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
@@ -1225,9 +1639,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 		proctime := time.Since(bstart)
-
 		// Write the block to the chain and get the status.
-		status, err := bc.WriteBlockWithState(block, receipts, statedb)
+		status, err := bc.WriteBlockWithState(block, receipts, statedb, tradingState, lendingState)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
@@ -1260,6 +1673,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
 			bc.UpdateBlocksHashCache(block)
+			if bc.chainConfig.IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+				bc.logExchangeData(block)
+				bc.logLendingData(block)
+			}
 		case SideStatTy:
 			log.Debug("Inserted forked block from downloader", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
 				common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
@@ -1270,11 +1687,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		stats.processed++
 		stats.usedGas += usedGas
-		stats.report(chain, i, bc.stateCache.TrieDB().Size())
+		dirty, _ := bc.stateCache.TrieDB().Size()
+		stats.report(chain, i, dirty)
 		if bc.chainConfig.XDPoS != nil {
 			// epoch block
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 				CheckpointCh <- 1
+
 			}
 			// prepare set of masternodes for the next epoch
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
@@ -1374,7 +1793,7 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 		var winner []*types.Block
 
 		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-		for !bc.HasState(parent.Root()) {
+		for !bc.HasFullState(parent) {
 			winner = append(winner, parent)
 			parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
 		}
@@ -1398,9 +1817,108 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 	if err != nil {
 		return nil, err
 	}
+	engine, _ := bc.Engine().(*XDPoS.XDPoS)
+	author, err := bc.Engine().Author(block.Header()) // Ignore error, we're past header validation
+	if err != nil {
+		bc.reportBlock(block, nil, err)
+		return nil, err
+	}
+	parentAuthor, _ := bc.Engine().Author(parent.Header())
+
+	var tradingState *tradingstate.TradingStateDB
+	var lendingState *lendingstate.LendingStateDB
+	var tradingService XDPoS.TradingService
+	var lendingService XDPoS.LendingService
+	isSDKNode := false
+	if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+		tradingService = engine.GetXDCXService()
+		lendingService = engine.GetLendingService()
+		if tradingService != nil && lendingService != nil {
+			isSDKNode = tradingService.IsSDKNode()
+			tradingState, err = tradingService.GetTradingState(parent, parentAuthor)
+			if err != nil {
+				bc.reportBlock(block, nil, err)
+				return nil, err
+			}
+			lendingState, err = lendingService.GetLendingState(parent, parentAuthor)
+			if err != nil {
+				bc.reportBlock(block, nil, err)
+				return nil, err
+			}
+			if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+				if err := tradingService.UpdateMediumPriceBeforeEpoch(block.NumberU64()/bc.chainConfig.XDPoS.Epoch, tradingState, statedb); err != nil {
+					return nil, err
+				}
+			} else {
+				txMatchBatchData, err := ExtractTradingTransactions(block.Transactions())
+				if err != nil {
+					bc.reportBlock(block, nil, err)
+					return nil, err
+				}
+				for _, txMatchBatch := range txMatchBatchData {
+					log.Debug("Verify matching transaction", "txHash", txMatchBatch.TxHash.Hex())
+					err := bc.Validator().ValidateTradingOrder(statedb, tradingState, txMatchBatch, author, block.Header())
+					if err != nil {
+						bc.reportBlock(block, nil, err)
+						return nil, err
+					}
+				}
+				batches, err := ExtractLendingTransactions(block.Transactions())
+				if err != nil {
+					bc.reportBlock(block, nil, err)
+					return nil, err
+				}
+				for _, batch := range batches {
+					log.Debug("Lending Verify matching transaction", "txHash", batch.TxHash.Hex())
+					err := bc.Validator().ValidateLendingOrder(statedb, lendingState, tradingState, batch, author, block.Header())
+					if err != nil {
+						bc.reportBlock(block, nil, err)
+						return nil, err
+					}
+				}
+				// liquidate / finalize open lendingTrades
+				if block.Number().Uint64()%bc.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
+					finalizedTrades := map[common.Hash]*lendingstate.LendingTrade{}
+					finalizedTrades, _, _, _, _, err = lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
+					if err != nil {
+						return nil, fmt.Errorf("failed to ProcessLiquidationData. Err: %v ", err)
+					}
+					if isSDKNode {
+						finalizedTx := lendingstate.FinalizedResult{}
+						if finalizedTx, err = ExtractLendingFinalizedTradeTransactions(block.Transactions()); err != nil {
+							return nil, err
+						}
+						bc.AddFinalizedTrades(finalizedTx.TxHash, finalizedTrades)
+					}
+				}
+			}
+			if tradingState != nil && tradingService != nil {
+				gotRoot := tradingState.IntermediateRoot()
+				expectRoot, _ := tradingService.GetTradingStateRoot(block, author)
+				parentRoot, _ := tradingService.GetTradingStateRoot(parent, parentAuthor)
+				if gotRoot != expectRoot {
+					err = fmt.Errorf("invalid XDCx trading state merke trie got : %s , expect : %s ,parent : %s", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+					bc.reportBlock(block, nil, err)
+					return nil, err
+				}
+				log.Debug("XDCX Trading State Root", "number", block.NumberU64(), "parent", parentRoot.Hex(), "nextRoot", expectRoot.Hex())
+			}
+			if lendingState != nil && tradingState != nil {
+				gotRoot := lendingState.IntermediateRoot()
+				expectRoot, _ := lendingService.GetLendingStateRoot(block, author)
+				parentRoot, _ := lendingService.GetLendingStateRoot(parent, parentAuthor)
+				if gotRoot != expectRoot {
+					err = fmt.Errorf("invalid lending state merke trie got : %s , expect : %s , parent : %s ", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+					bc.reportBlock(block, nil, err)
+					return nil, err
+				}
+				log.Debug("XDCX Lending State Root", "number", block.NumberU64(), "parent", parentRoot.Hex(), "nextRoot", expectRoot.Hex())
+			}
+		}
+	}
 	feeCapacity := state.GetTRC21FeeCapacityFromStateWithCache(parent.Root(), statedb)
 	// Process block using the parent state as reference point.
-	receipts, logs, usedGas, err := bc.processor.ProcessBlockNoValidator(calculatedBlock, statedb, bc.vmConfig, feeCapacity)
+	receipts, logs, usedGas, err := bc.processor.ProcessBlockNoValidator(calculatedBlock, statedb, tradingState, bc.vmConfig, feeCapacity)
 	process := time.Since(bstart)
 	if err != nil {
 		if err != ErrStopPreparingBlock {
@@ -1417,7 +1935,7 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 	proctime := time.Since(bstart)
 	log.Debug("Calculate new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
 		"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)), "process", process)
-	return &ResultProcessBlock{receipts: receipts, logs: logs, state: statedb, proctime: proctime, usedGas: usedGas}, nil
+	return &ResultProcessBlock{receipts: receipts, logs: logs, state: statedb, tradingState: tradingState, lendingState: lendingState, proctime: proctime, usedGas: usedGas}, nil
 }
 
 // UpdateBlocksHashCache update BlocksHashCache by block number
@@ -1464,10 +1982,10 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	// Write the block to the chain and get the status.
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
-	if bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+	if bc.HasBlockAndFullState(block.Hash(), block.NumberU64()) {
 		return events, coalescedLogs, nil
 	}
-	status, err := bc.WriteBlockWithState(block, result.receipts, result.state)
+	status, err := bc.WriteBlockWithState(block, result.receipts, result.state, result.tradingState, result.lendingState)
 
 	if err != nil {
 		return events, coalescedLogs, err
@@ -1492,14 +2010,16 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	case CanonStatTy:
 		log.Debug("Inserted new block from fetcher", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(block.ReceivedAt)))
-
 		coalescedLogs = append(coalescedLogs, result.logs...)
 		events = append(events, ChainEvent{block, block.Hash(), result.logs})
 
 		// Only count canonical blocks for GC processing time
 		bc.gcproc += result.proctime
-
 		bc.UpdateBlocksHashCache(block)
+		if bc.chainConfig.IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+			bc.logExchangeData(block)
+			bc.logLendingData(block)
+		}
 	case SideStatTy:
 		log.Debug("Inserted forked block from fetcher", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
 			common.PrettyDuration(time.Since(block.ReceivedAt)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
@@ -1511,11 +2031,13 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	}
 	stats.processed++
 	stats.usedGas += result.usedGas
-	stats.report(types.Blocks{block}, 0, bc.stateCache.TrieDB().Size())
-	if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+	dirty, _ := bc.stateCache.TrieDB().Size()
+	stats.report(types.Blocks{block}, 0, dirty)
+	if bc.chainConfig.XDPoS != nil {
 		// epoch block
 		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 			CheckpointCh <- 1
+
 		}
 		// prepare set of masternodes for the next epoch
 		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
@@ -1689,7 +2211,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 		}()
 	}
-
+	if bc.chainConfig.IsTIPXDCX(commonBlock.Number()) && bc.chainConfig.XDPoS != nil && commonBlock.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+		bc.reorgTxMatches(deletedTxs, newChain)
+	}
 	return nil
 }
 
@@ -1919,10 +2443,10 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 }
 
 func (bc *BlockChain) UpdateM1() error {
-	if bc.Config().XDPoS == nil {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if bc.Config().XDPoS == nil || !ok {
 		return ErrNotXDPoS
 	}
-	engine := bc.Engine().(*XDPoS.XDPoS)
 	log.Info("It's time to update new set of masternodes for the next epoch...")
 	// get masternodes information from smart contract
 	client, err := bc.GetClient()
@@ -1936,18 +2460,26 @@ func (bc *BlockChain) UpdateM1() error {
 	}
 	opts := new(bind.CallOpts)
 
-	var candidates []common.Address
+	// var candidates []common.Address
+	// // get candidates from slot of stateDB
+	// // if can't get anything, request from contracts
+	// stateDB, err := bc.State()
+	// if err != nil {
 
-	// get candidates from slot of stateDB
-	// if can't get anything, request from contracts
-	stateDB, err := bc.State()
+	// 	candidates, err = validator.GetCandidates(opts)
+	// 	if err != nil {
+
+	// 		return err
+	// 	}
+	// } else {
+
+	// 	candidates = state.GetCandidates(stateDB)
+
+	// }
+
+	candidates, err := validator.GetCandidates(opts)
 	if err != nil {
-		candidates, err = validator.GetCandidates(opts)
-		if err != nil {
-			return err
-		}
-	} else {
-		candidates = state.GetCandidates(stateDB)
+		return err
 	}
 
 	var ms []XDPoS.Masternode
@@ -1957,7 +2489,7 @@ func (bc *BlockChain) UpdateM1() error {
 			return err
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
-		if candidate.String() != "0x0000000000000000000000000000000000000000" {
+		if candidate.String() != "xdc0000000000000000000000000000000000000000" {
 			ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v})
 		}
 	}
@@ -1973,8 +2505,20 @@ func (bc *BlockChain) UpdateM1() error {
 			log.Info("", "address", m.Address.String(), "stake", m.Stake)
 		}
 		// update masternodes
+
 		log.Info("Updating new set of masternodes")
-		if len(ms) > common.MaxMasternodes {
+		// get block header
+		header := bc.CurrentHeader()
+		var maxMasternodes int
+		// check if block number is increase ms checkpoint
+		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) {
+			// using new masterndoes
+			maxMasternodes = common.MaxMasternodesV2
+		} else {
+			// using old masterndoes
+			maxMasternodes = common.MaxMasternodes
+		}
+		if len(ms) > maxMasternodes {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:common.MaxMasternodes])
 		} else {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
@@ -1985,4 +2529,198 @@ func (bc *BlockChain) UpdateM1() error {
 		log.Info("Masternodes are ready for the next epoch")
 	}
 	return nil
+}
+
+func (bc *BlockChain) logExchangeData(block *types.Block) {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if !ok || engine == nil {
+		return
+	}
+	XDCXService := engine.GetXDCXService()
+	if XDCXService == nil || !XDCXService.IsSDKNode() {
+		return
+	}
+	txMatchBatchData, err := ExtractTradingTransactions(block.Transactions())
+	if err != nil {
+		log.Crit("failed to extract matching transaction", "err", err)
+		return
+	}
+	if len(txMatchBatchData) == 0 {
+		return
+	}
+	currentState, err := bc.State()
+	if err != nil {
+		log.Crit("logExchangeData: failed to get current state", "err", err)
+		return
+	}
+	start := time.Now()
+	defer func() {
+		//The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns
+		// That's why we should put this log statement in an anonymous function
+		log.Debug("logExchangeData takes", "time", common.PrettyDuration(time.Since(start)), "blockNumber", block.NumberU64())
+	}()
+
+	for _, txMatchBatch := range txMatchBatchData {
+		dirtyOrderCount := uint64(0)
+		for _, txMatch := range txMatchBatch.Data {
+			var (
+				takerOrderInTx *tradingstate.OrderItem
+				trades         []map[string]string
+				rejectedOrders []*tradingstate.OrderItem
+			)
+
+			if takerOrderInTx, err = txMatch.DecodeOrder(); err != nil {
+				log.Crit("SDK node decode takerOrderInTx failed", "txDataMatch", txMatch)
+				return
+			}
+			cacheKey := crypto.Keccak256Hash(txMatchBatch.TxHash.Bytes(), tradingstate.GetMatchingResultCacheKey(takerOrderInTx).Bytes())
+			// getTrades from cache
+			resultTrades, ok := bc.resultTrade.Get(cacheKey)
+			if ok && resultTrades != nil {
+				trades = resultTrades.([]map[string]string)
+			}
+
+			// getRejectedOrder from cache
+			rejected, ok := bc.rejectedOrders.Get(cacheKey)
+			if ok && rejected != nil {
+				rejectedOrders = rejected.([]*tradingstate.OrderItem)
+			}
+
+			txMatchTime := time.Unix(block.Header().Time.Int64(), 0).UTC()
+			if err := XDCXService.SyncDataToSDKNode(takerOrderInTx, txMatchBatch.TxHash, txMatchTime, currentState, trades, rejectedOrders, &dirtyOrderCount); err != nil {
+				log.Crit("failed to SyncDataToSDKNode ", "blockNumber", block.Number(), "err", err)
+				return
+			}
+		}
+	}
+}
+
+func (bc *BlockChain) reorgTxMatches(deletedTxs types.Transactions, newChain types.Blocks) {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if !ok || engine == nil {
+		return
+	}
+	XDCXService := engine.GetXDCXService()
+	lendingService := engine.GetLendingService()
+	if XDCXService == nil || !XDCXService.IsSDKNode() {
+		return
+	}
+	start := time.Now()
+	defer func() {
+		//The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns
+		// That's why we should put this log statement in an anonymous function
+		log.Debug("reorgTxMatches takes", "time", common.PrettyDuration(time.Since(start)))
+	}()
+	for _, deletedTx := range deletedTxs {
+		if deletedTx.IsTradingTransaction() {
+			log.Debug("Rollback reorg txMatch", "txhash", deletedTx.Hash())
+			if err := XDCXService.RollbackReorgTxMatch(deletedTx.Hash()); err != nil {
+				log.Crit("Reorg trading failed", "err", err, "hash", deletedTx.Hash())
+			}
+		}
+		if lendingService != nil && (deletedTx.IsLendingTransaction() || deletedTx.IsLendingFinalizedTradeTransaction()) {
+			log.Debug("Rollback reorg lendingItem", "txhash", deletedTx.Hash())
+			if err := lendingService.RollbackLendingData(deletedTx.Hash()); err != nil {
+				log.Crit("Reorg lending failed", "err", err, "hash", deletedTx.Hash())
+			}
+		}
+	}
+
+	// apply new chain
+	for i := len(newChain) - 1; i >= 0; i-- {
+		bc.logExchangeData(newChain[i])
+		bc.logLendingData(newChain[i])
+	}
+}
+
+func (bc *BlockChain) logLendingData(block *types.Block) {
+	engine, ok := bc.Engine().(*XDPoS.XDPoS)
+	if !ok || engine == nil {
+		return
+	}
+	XDCXService := engine.GetXDCXService()
+	if XDCXService == nil || !XDCXService.IsSDKNode() {
+		return
+	}
+	lendingService := engine.GetLendingService()
+	if lendingService == nil {
+		return
+	}
+	batches, err := ExtractLendingTransactions(block.Transactions())
+	if err != nil {
+		log.Crit("failed to extract lending transaction", "err", err)
+	}
+	start := time.Now()
+	defer func() {
+		//The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns
+		// That's why we should put this log statement in an anonymous function
+		log.Debug("logLendingData takes", "time", common.PrettyDuration(time.Since(start)), "blockNumber", block.NumberU64())
+	}()
+
+	for _, batch := range batches {
+
+		dirtyOrderCount := uint64(0)
+		for _, item := range batch.Data {
+			var (
+				trades         []*lendingstate.LendingTrade
+				rejectedOrders []*lendingstate.LendingItem
+			)
+			// getTrades from cache
+			resultLendingTrades, ok := bc.resultLendingTrade.Get(crypto.Keccak256Hash(batch.TxHash.Bytes(), lendingstate.GetLendingCacheKey(item).Bytes()))
+
+			if ok && resultLendingTrades != nil {
+				trades = resultLendingTrades.([]*lendingstate.LendingTrade)
+			}
+
+			// getRejectedOrder from cache
+			rejected, ok := bc.rejectedLendingItem.Get(crypto.Keccak256Hash(batch.TxHash.Bytes(), lendingstate.GetLendingCacheKey(item).Bytes()))
+			if ok && rejected != nil {
+				rejectedOrders = rejected.([]*lendingstate.LendingItem)
+			}
+
+			txMatchTime := time.Unix(block.Header().Time.Int64(), 0).UTC()
+			statedb, _ := bc.State()
+
+			if err := lendingService.SyncDataToSDKNode(bc, statedb.Copy(), block, item, batch.TxHash, txMatchTime, trades, rejectedOrders, &dirtyOrderCount); err != nil {
+				log.Crit("lending: failed to SyncDataToSDKNode ", "blockNumber", block.Number(), "err", err)
+			}
+		}
+	}
+
+	// update finalizedTrades
+	if block.Number().Uint64()%bc.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
+		finalizedTx, err := ExtractLendingFinalizedTradeTransactions(block.Transactions())
+		if err != nil {
+			log.Crit("failed to extract finalizedTrades transaction", "err", err)
+		}
+		finalizedTrades := map[common.Hash]*lendingstate.LendingTrade{}
+		finalizedData, ok := bc.finalizedTrade.Get(finalizedTx.TxHash)
+		if ok && finalizedData != nil {
+			finalizedTrades = finalizedData.(map[common.Hash]*lendingstate.LendingTrade)
+		}
+		if len(finalizedTrades) > 0 {
+			if err := lendingService.UpdateLiquidatedTrade(block.Time().Uint64(), finalizedTx, finalizedTrades); err != nil {
+				log.Crit("lending: failed to UpdateLiquidatedTrade ", "blockNumber", block.Number(), "err", err)
+			}
+		}
+	}
+}
+
+func (bc *BlockChain) AddMatchingResult(txHash common.Hash, matchingResults map[common.Hash]tradingstate.MatchingResult) {
+	for hash, result := range matchingResults {
+		cacheKey := crypto.Keccak256Hash(txHash.Bytes(), hash.Bytes())
+		bc.resultTrade.Add(cacheKey, result.Trades)
+		bc.rejectedOrders.Add(cacheKey, result.Rejects)
+	}
+}
+
+func (bc *BlockChain) AddLendingResult(txHash common.Hash, lendingResults map[common.Hash]lendingstate.MatchingResult) {
+	for hash, result := range lendingResults {
+		bc.resultLendingTrade.Add(crypto.Keccak256Hash(txHash.Bytes(), hash.Bytes()), result.Trades)
+		bc.rejectedLendingItem.Add(crypto.Keccak256Hash(txHash.Bytes(), hash.Bytes()), result.Rejects)
+	}
+}
+
+func (bc *BlockChain) AddFinalizedTrades(txHash common.Hash, trades map[common.Hash]*lendingstate.LendingTrade) {
+	bc.finalizedTrade.Add(txHash, trades)
 }

@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"container/heap"
 	"errors"
 	"fmt"
@@ -24,17 +25,23 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
-	errNoSigner   = errors.New("missing signing methods")
+	ErrInvalidSig               = errors.New("invalid transaction v, r, s values")
+	errNoSigner                 = errors.New("missing signing methods")
+	skipNonceDestinationAddress = map[string]bool{
+		common.XDCXAddr:                         true,
+		common.TradingStateAddr:                 true,
+		common.XDCXLendingAddress:               true,
+		common.XDCXLendingFinalizedTradeAddress: true,
+	}
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
@@ -298,7 +305,54 @@ func (tx *Transaction) IsSpecialTransaction() bool {
 	if tx.To() == nil {
 		return false
 	}
-	return tx.To().String() == common.RandomizeSMC || tx.To().String() == common.BlockSigners
+	toBytes := tx.To().Bytes()
+	randomizeSMCBytes := common.HexToAddress(common.RandomizeSMC).Bytes()
+	blockSignersBytes := common.HexToAddress(common.BlockSigners).Bytes()
+	return bytes.Equal(toBytes, randomizeSMCBytes) || bytes.Equal(toBytes, blockSignersBytes)
+}
+
+func (tx *Transaction) IsTradingTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	if tx.To().String() != common.XDCXAddr {
+		return false
+	}
+
+	return true
+}
+
+func (tx *Transaction) IsLendingTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	if tx.To().String() != common.XDCXLendingAddress {
+		return false
+	}
+	return true
+}
+
+func (tx *Transaction) IsLendingFinalizedTradeTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	if tx.To().String() != common.XDCXLendingFinalizedTradeAddress {
+		return false
+	}
+	return true
+}
+
+func (tx *Transaction) IsSkipNonceTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+	if skip := skipNonceDestinationAddress[tx.To().String()]; skip {
+		return true
+	}
+	return false
 }
 
 func (tx *Transaction) IsSigningTransaction() bool {
@@ -359,6 +413,60 @@ func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
 	}
 
 	return b, nil
+}
+
+func (tx *Transaction) IsXDCXApplyTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	addr := common.XDCXListingSMC
+	if common.IsTestnet {
+		addr = common.XDCXListingSMCTestNet
+	}
+	if tx.To().String() != addr.String() {
+		return false
+	}
+
+	method := common.ToHex(tx.Data()[0:4])
+
+	if method != common.XDCXApplyMethod {
+		return false
+	}
+
+	// 4 bytes for function name
+	// 32 bytes for 1 parameter
+	if len(tx.Data()) != (32 + 4) {
+		return false
+	}
+	return true
+}
+
+func (tx *Transaction) IsXDCZApplyTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	addr := common.TRC21IssuerSMC
+	if common.IsTestnet {
+		addr = common.TRC21IssuerSMCTestNet
+	}
+	if tx.To().String() != addr.String() {
+		return false
+	}
+
+	method := common.ToHex(tx.Data()[0:4])
+	if method != common.XDCZApplyMethod {
+		return false
+	}
+
+	// 4 bytes for function name
+	// 32 bytes for 1 parameter
+	if len(tx.Data()) != (32 + 4) {
+		return false
+	}
+
+	return true
 }
 
 func (tx *Transaction) String() string {

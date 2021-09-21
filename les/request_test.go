@@ -18,15 +18,16 @@ package les
 
 import (
 	"context"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/light"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -80,8 +81,8 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	peers := newPeerSet()
 	dist := newRequestDistributor(peers, make(chan struct{}))
 	rm := newRetrieveManager(peers, dist, nil)
-	db, _ := ethdb.NewMemDatabase()
-	ldb, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
+	ldb := rawdb.NewMemoryDatabase()
 	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
 
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)

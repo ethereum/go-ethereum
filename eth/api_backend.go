@@ -19,31 +19,38 @@ package eth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/contracts"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
-	stateDatabase "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/contracts"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 // EthApiBackend implements ethapi.Backend for full nodes
@@ -130,12 +137,12 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
+func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
 	state.SetBalance(msg.From(), math.MaxBig256)
 	vmError := func() error { return nil }
 
 	context := core.NewEVMContext(msg, header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vmCfg), vmError, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, vmCfg), vmError, nil
 }
 
 func (b *EthApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
@@ -160,6 +167,16 @@ func (b *EthApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.AddLocal(signedTx)
+}
+
+// SendOrderTx send order via backend
+func (b *EthApiBackend) SendOrderTx(ctx context.Context, signedTx *types.OrderTransaction) error {
+	return b.eth.orderPool.AddLocal(signedTx)
+}
+
+// SendLendingTx send order via backend
+func (b *EthApiBackend) SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error {
+	return b.eth.lendingPool.AddLocal(signedTx)
 }
 
 func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
@@ -188,6 +205,13 @@ func (b *EthApiBackend) Stats() (pending int, queued int) {
 
 func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.TxPool().Content()
+}
+
+func (b *EthApiBackend) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
+	return b.eth.OrderPool().Content()
+}
+func (b *EthApiBackend) OrderStats() (pending int, queued int) {
+	return b.eth.txPool.Stats()
 }
 
 func (b *EthApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
@@ -242,12 +266,12 @@ func (b *EthApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
 }
 
-func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
+func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {
 	header := s.eth.blockchain.GetHeaderByHash(hash)
 	if header != nil {
 		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
 		if err == nil {
-			rewards := make(map[string]interface{})
+			rewards := make(map[string]map[string]map[string]*big.Int)
 			err = json.Unmarshal(data, &rewards)
 			if err == nil {
 				return rewards
@@ -255,7 +279,7 @@ func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 		} else {
 			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
 			if err == nil {
-				rewards := make(map[string]interface{})
+				rewards := make(map[string]map[string]map[string]*big.Int)
 				err = json.Unmarshal(data, &rewards)
 				if err == nil {
 					return rewards
@@ -263,7 +287,7 @@ func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 			}
 		}
 	}
-	return make(map[string]interface{})
+	return make(map[string]map[string]map[string]*big.Int)
 }
 
 // GetVotersRewards return a map of voters of snapshot at given block hash
@@ -302,8 +326,7 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	// Get signers in blockSigner smartcontract.
 	// Get reward inflation.
 	chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
-	chainReward = rewardInflation(chainReward, lastCheckpointNumber, common.BlocksPerYear)
-
+	chainReward = rewardInflation(chain, chainReward, number, common.BlocksPerYear)
 	totalSigner := new(uint64)
 	signers, err := contracts.GetRewardForCheckpoint(engine, chain, lastCheckpointBlock.Header(), rCheckpoint, totalSigner)
 
@@ -399,4 +422,29 @@ func (b *EthApiBackend) GetBlocksHashCache(blockNr uint64) []common.Hash {
 
 func (b *EthApiBackend) AreTwoBlockSamePath(bh1 common.Hash, bh2 common.Hash) bool {
 	return b.eth.blockchain.AreTwoBlockSamePath(bh1, bh2)
+}
+
+// GetOrderNonce get order nonce
+func (b *EthApiBackend) GetOrderNonce(address common.Hash) (uint64, error) {
+	XDCxService := b.eth.GetXDCX()
+	if XDCxService != nil {
+		author, err := b.GetEngine().Author(b.CurrentBlock().Header())
+		if err != nil {
+			return 0, err
+		}
+		XDCxState, err := XDCxService.GetTradingState(b.CurrentBlock(), author)
+		if err != nil {
+			return 0, err
+		}
+		return XDCxState.GetNonce(address), nil
+	}
+	return 0, errors.New("cannot find XDCx service")
+}
+
+func (b *EthApiBackend) XDCxService() *XDCx.XDCX {
+	return b.eth.XDCX
+}
+
+func (b *EthApiBackend) LendingService() *XDCxlending.Lending {
+	return b.eth.Lending
 }

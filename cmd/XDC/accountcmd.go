@@ -20,19 +20,19 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/console"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
 	walletCommand = cli.Command{
 		Name:      "wallet",
-		Usage:     "Manage XDCchain presale wallets",
+		Usage:     "Manage XDPoSChain presale wallets",
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
@@ -45,7 +45,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 			{
 
 				Name:      "import",
-				Usage:     "Import XDCchain presale wallet",
+				Usage:     "Import XDPoSChain presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",

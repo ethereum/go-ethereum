@@ -19,18 +19,19 @@ package light
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/bitutil"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 )
 
 const (
@@ -135,10 +136,10 @@ func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 		sectionSize = CHTFrequencyServer
 		confirmReq = HelperTrieProcessConfirmations
 	}
-	idb := ethdb.NewTable(db, "chtIndex-")
+	idb := rawdb.NewTable(db, "chtIndex-")
 	backend := &ChtIndexerBackend{
 		diskdb:      db,
-		triedb:      trie.NewDatabase(ethdb.NewTable(db, ChtTablePrefix)),
+		triedb:      trie.NewDatabase(rawdb.NewTable(db, ChtTablePrefix)),
 		sectionSize: sectionSize,
 	}
 	return core.NewChainIndexer(db, idb, backend, sectionSize, confirmReq, time.Millisecond*100, "cht")
@@ -225,9 +226,9 @@ type BloomTrieIndexerBackend struct {
 func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 	backend := &BloomTrieIndexerBackend{
 		diskdb: db,
-		triedb: trie.NewDatabase(ethdb.NewTable(db, BloomTrieTablePrefix)),
+		triedb: trie.NewDatabase(rawdb.NewTable(db, BloomTrieTablePrefix)),
 	}
-	idb := ethdb.NewTable(db, "bltIndex-")
+	idb := rawdb.NewTable(db, "bltIndex-")
 
 	var confirmReq uint64
 	if clientMode {

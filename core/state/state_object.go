@@ -22,9 +22,9 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -168,7 +168,24 @@ func (c *stateObject) getTrie(db Database) Trie {
 	return c.trie
 }
 
-// GetState returns a value in account storage.
+func (self *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
+	value := common.Hash{}
+	// Load from DB in case it is missing.
+	enc, err := self.getTrie(db).TryGet(key[:])
+	if err != nil {
+		self.setError(err)
+		return common.Hash{}
+	}
+	if len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			self.setError(err)
+		}
+		value.SetBytes(content)
+	}
+	return value
+}
+
 func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	value, exists := self.cachedStorage[key]
 	if exists {
