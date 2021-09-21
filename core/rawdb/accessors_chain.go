@@ -279,7 +279,7 @@ func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
-// ReadHeadersRLP returns the rlp-encoded headers, starting at 'number', and going
+// ReadHeaderRange returns the rlp-encoded headers, starting at 'number', and going
 // backwards towards genesis. This method assumes that the caller already has
 // placed a cap on count, to prevent DoS issues.
 // Since this method operates in head-towards-genesis mode, it will return an empty
@@ -288,7 +288,7 @@ func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 //
 // N.B: Since the input is a number, as opposed to a hash, it's implicit that
 // this method only operates on canon headers.
-func ReadHeadersRLP(db ethdb.Reader, number uint64, count uint64) []rlp.RawValue {
+func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValue {
 	var rlpHeaders []rlp.RawValue
 	if count == 0 {
 		return rlpHeaders
@@ -318,8 +318,8 @@ func ReadHeadersRLP(db ethdb.Reader, number uint64, count uint64) []rlp.RawValue
 		return rlpHeaders
 	}
 	// read remaining from ancients
-	max := uint64(count * 1024)
-	data, err := db.ReadAncients(freezerHeaderTable, uint64(i+1-count), count, max)
+	max := uint64(count * 700)
+	data, err := db.AncientRange(freezerHeaderTable, uint64(i+1-count), count, max)
 	if err == nil && uint64(len(data)) == count {
 		// the data is on the order [h, h+1, .., n] -- reordering needed
 		for i := range data {

@@ -912,17 +912,16 @@ func TestHeadersRLPStorage(t *testing.T) {
 		chain = append(chain, block)
 		pHash = block.Hash()
 	}
+	var receipts []types.Receipts = make([]types.Receipts, 100)
 	// Write first half to ancients
-	for i := 0; i < 50; i++ {
-		WriteAncientBlock(db, chain[i], nil, big.NewInt(100))
-	}
+	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
 		WriteBlock(db, chain[i])
 	}
 	checkSequence := func(from, amount int) {
-		headersRlp := ReadHeadersRLP(db, uint64(from), uint64(amount))
+		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))
 		if have, want := len(headersRlp), amount; have != want {
 			t.Fatalf("have %d headers, want %d", have, want)
 		}

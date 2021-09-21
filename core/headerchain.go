@@ -534,7 +534,7 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	}
 	// Read remaining from db
 	if count > 0 {
-		headers = append(headers, rawdb.ReadHeadersRLP(hc.chainDb, number, count)...)
+		headers = append(headers, rawdb.ReadHeaderRange(hc.chainDb, number, count)...)
 	}
 	return headers
 }
