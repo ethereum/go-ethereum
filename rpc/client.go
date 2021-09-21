@@ -60,9 +60,9 @@ const (
 )
 
 const (
-	HTTPConn = "http"
-	WSConn   = "ws"
-	IPCConn  = "ipc"
+	httpScheme = "http"
+	wsScheme   = "ws"
+	ipcScheme  = "ipc"
 )
 
 // BatchElem is an element in a batch request.
@@ -118,7 +118,7 @@ type clientConn struct {
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
 	// Http connections have already set the scheme
-	if c.scheme != HTTPConn {
+	if !c.isHTTP() {
 		ctx = context.WithValue(ctx, "scheme", c.scheme)
 	}
 	handler := newHandler(ctx, conn, c.idgen, c.services)
@@ -146,7 +146,7 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 	select {
 	case <-ctx.Done():
 		// Send the timeout to dispatch so it can remove the request IDs.
-		if c.scheme != HTTPConn {
+		if c.isHTTP() {
 			select {
 			case c.reqTimeout <- op:
 			case <-c.closing:
@@ -219,11 +219,11 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) (*
 	var scheme string
 	switch conn.(type) {
 	case *httpConn:
-		scheme = HTTPConn
+		scheme = httpScheme
 	case *websocketCodec:
-		scheme = WSConn
+		scheme = wsScheme
 	case *jsonCodec:
-		scheme = IPCConn
+		scheme = ipcScheme
 	default:
 		return nil, errors.New("Unknown connection scheme")
 	}
@@ -242,7 +242,7 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) (*
 		reqSent:     make(chan error, 1),
 		reqTimeout:  make(chan *requestOp),
 	}
-	if scheme != HTTPConn {
+	if !c.isHTTP() {
 		go c.dispatch(conn)
 	}
 	return c, nil
@@ -273,7 +273,7 @@ func (c *Client) SupportedModules() (map[string]string, error) {
 
 // Close closes the client, aborting any in-flight requests.
 func (c *Client) Close() {
-	if c.scheme == HTTPConn {
+	if c.isHTTP() {
 		return
 	}
 	select {
@@ -287,7 +287,7 @@ func (c *Client) Close() {
 // This method only works for clients using HTTP, it doesn't have
 // any effect for clients using another transport.
 func (c *Client) SetHeader(key, value string) {
-	if c.scheme != HTTPConn {
+	if !c.isHTTP() {
 		return
 	}
 	conn := c.writeConn.(*httpConn)
@@ -321,7 +321,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
 
-	if c.scheme == HTTPConn {
+	if c.isHTTP() {
 		err = c.sendHTTP(ctx, op, msg)
 	} else {
 		err = c.send(ctx, op, msg)
@@ -380,7 +380,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	}
 
 	var err error
-	if c.scheme == HTTPConn {
+	if c.isHTTP() {
 		err = c.sendBatchHTTP(ctx, op, msgs)
 	} else {
 		err = c.send(ctx, op, msgs)
@@ -425,7 +425,7 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 	}
 	msg.ID = nil
 
-	if c.scheme == HTTPConn {
+	if c.isHTTP() {
 		return c.sendHTTP(ctx, op, msg)
 	}
 	return c.send(ctx, op, msg)
@@ -463,7 +463,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	if chanVal.IsNil() {
 		panic("channel given to Subscribe must not be nil")
 	}
-	if c.scheme == HTTPConn {
+	if c.isHTTP() {
 		return nil, ErrNotificationsUnsupported
 	}
 
@@ -664,4 +664,8 @@ func (c *Client) read(codec ServerCodec) {
 		}
 		c.readOp <- readOp{msgs, batch}
 	}
+}
+
+func (c *Client) isHTTP() bool {
+	return c.scheme == httpScheme
 }
