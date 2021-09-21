@@ -83,7 +83,10 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	s.codecs.Add(codec)
 	defer s.codecs.Remove(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
+	c, err := initClient(codec, s.idgen, &s.services)
+	if err != nil {
+		panic("failed to serve codec")
+	}
 	<-codec.closed()
 	c.Close()
 }
