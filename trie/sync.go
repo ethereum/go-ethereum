@@ -202,7 +202,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 		// sync is expected to run with a fresh new node. Even there
 		// exists the code with legacy format, fetch and store with
 		// new scheme anyway.
-		if blob := rawdb.ReadCodeWithPrefix(s.database, hash); len(blob) > 0 {
+		if blob := rawdb.ReadCode(s.database, hash); len(blob) > 0 {
 			return
 		}
 		// False positive, bump fault meter

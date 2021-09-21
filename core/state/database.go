@@ -169,22 +169,6 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 	return nil, errors.New("not found")
 }
 
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error) {
-	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
-		return code, nil
-	}
-	code := rawdb.ReadCodeWithPrefix(db.db.DiskDB(), codeHash)
-	if len(code) > 0 {
-		db.codeCache.Set(codeHash.Bytes(), code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
 // ContractCodeSize retrieves a particular contracts code's size.
 func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
