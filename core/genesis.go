@@ -141,6 +141,15 @@ func (e *GenesisMismatchError) Error() string {
 	return fmt.Sprintf("database contains incompatible genesis (have %x, new %x)", e.Stored, e.New)
 }
 
+func (e *GenesisMismatchError) Is(target error) bool {
+	gme, ok := target.(*GenesisMismatchError)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(e.Stored[:], gme.Stored[:]) &&
+		bytes.Equal(e.New[:], gme.New[:])
+}
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
