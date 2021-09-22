@@ -248,12 +248,12 @@ func (t *Trie) Update(key, value []byte) {
 	}
 }
 
-func (t *Trie) TryUpdateAccount(addr []byte, account types.StateAccount) error {
-	data, err := rlp.EncodeToBytes(account)
+func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {
-		return fmt.Errorf("can't encode object at %x: %w", addr[:], err)
+		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
 	}
-	return t.TryUpdate(addr, data)
+	return t.TryUpdate(key, data)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to
