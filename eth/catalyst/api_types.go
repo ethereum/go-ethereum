@@ -58,12 +58,13 @@ type ExecutableData struct {
 
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number       hexutil.Uint64
-	GasLimit     hexutil.Uint64
-	GasUsed      hexutil.Uint64
-	Timestamp    hexutil.Uint64
-	LogsBloom    hexutil.Bytes
-	Transactions []hexutil.Bytes
+	Number        hexutil.Uint64
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Timestamp     hexutil.Uint64
+	BaseFeePerGas hexutil.Uint64
+	LogsBloom     hexutil.Bytes
+	Transactions  []hexutil.Bytes
 }
 
 type NewBlockResponse struct {
@@ -74,8 +75,15 @@ type GenericResponse struct {
 	Success bool `json:"success"`
 }
 
+//go:generate go run github.com/fjl/gencodec -type PayloadResponse -field-override payloadResponseMarshaling -out gen_payload.go
+
 type PayloadResponse struct {
 	PayloadID uint64 `json:"payloadId"`
+}
+
+// JSON type overrides for payloadResponse.
+type payloadResponseMarshaling struct {
+	PayloadID hexutil.Uint64
 }
 
 type GenericStringResponse struct {
