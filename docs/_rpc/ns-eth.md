@@ -8,6 +8,28 @@ Geth provides several extensions to the standard "eth" JSON-RPC namespace.
 * TOC
 {:toc}
 
+### eth_createAccessList
+
+This method creates an access list based on a given transaction on the current pending state of the blockchain.
+
+The method returns `address` and `storageKeys` and the `gasUsed`.
+
+Example:
+```json
+{
+  "accessList": [
+    {
+      "address": "0xb0ee076d7779a6ce152283f009f4c32b5f88756c",
+      "storageKeys": [
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      ]
+    }
+  ],
+  "gasUsed": "0x8496"
+}
+```
+
 ### eth_subscribe, eth_unsubscribe
 
 These methods are used for real-time events through subscriptions. See the [subscription
