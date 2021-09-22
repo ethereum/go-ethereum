@@ -192,6 +192,9 @@ type Config struct {
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64
 
+	// RPCPlugins are the paths to the custom RPC plugins.
+	RPCPlugins []string
+
 	// Checkpoint is a hardcoded checkpoint which can be nil.
 	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
 

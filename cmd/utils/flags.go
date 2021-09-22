@@ -498,6 +498,11 @@ var (
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
+	RPCPluginsFlag = cli.StringFlag{
+		Name:  "rpc.plugins",
+		Usage: "List of rpc endpoint plugins to add",
+		Value: "",
+	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
@@ -1565,6 +1570,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCPluginsFlag.Name) {
+		cfg.RPCPlugins = strings.Split(ctx.String(RPCPluginsFlag.Name), ",")
 	}
 	if ctx.GlobalIsSet(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
