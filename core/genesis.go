@@ -186,7 +186,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			genesis = DefaultGenesisBlock()
 		}
 		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock(nil, nil).Hash()
+		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -198,7 +198,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		hash := genesis.ToBlock(nil, nil).Hash()
+		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -258,7 +258,11 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
-func (g *Genesis) ToBlock(db ethdb.Database, snaps *snapshot.Tree) *types.Block {
+func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+	return g.ToBlockWithSnaps(db, nil)
+}
+
+func (g *Genesis) ToBlockWithSnaps(db ethdb.Database, snaps *snapshot.Tree) *types.Block {
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
@@ -322,7 +326,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 }
 
 func (g *Genesis) CommitWithSnaps(db ethdb.Database, snaps *snapshot.Tree) (*types.Block, error) {
-	block := g.ToBlock(db, snaps)
+	block := g.ToBlockWithSnaps(db, snaps)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}

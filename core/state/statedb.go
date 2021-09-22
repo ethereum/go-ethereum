@@ -813,7 +813,6 @@ func (s *StateDB) Copy() *StateDB {
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
-		stateless:           make(map[common.Hash]common.Hash, len(s.stateless)),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -864,8 +863,11 @@ func (s *StateDB) Copy() *StateDB {
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
 
-	for addr, value := range s.stateless {
-		state.stateless[addr] = value
+	if s.stateless != nil {
+		state.stateless = make(map[common.Hash]common.Hash, len(s.stateless))
+		for addr, value := range s.stateless {
+			state.stateless[addr] = value
+		}
 	}
 
 	// If there's a prefetcher running, make an inactive copy of it that can
