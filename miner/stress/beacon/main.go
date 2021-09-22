@@ -154,11 +154,10 @@ func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
-	response, err := n.api.NewBlock(eb)
+	newResp, err := n.api.ExecutePayload(eb)
 	if err != nil {
 		return err
-	}
-	if !response.Valid {
+	} else if newResp.Status != "VALID" {
 		return errors.New("failed to insert block")
 	}
 	return nil
@@ -181,12 +180,8 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	if err != nil {
 		return err
 	}
-	response, err := n.api.SetHead(block.Hash())
-	if err != nil {
+	if err := n.api.ForkChoiceUpdated(catalyst.ForkChoiceParams{HeadBlockHash: block.Hash(), FinalizedBlockHash: block.Hash()}); err != nil {
 		return err
-	}
-	if !response.Success {
-		return errors.New("failed to set head")
 	}
 	return nil
 }

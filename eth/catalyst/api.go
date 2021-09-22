@@ -39,12 +39,18 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+var (
+	VALID   = GenericStringResponse{"VALID"}
+	INVALID = GenericStringResponse{"INVALID"}
+	SYNCING = GenericStringResponse{"SYNCING"}
+)
+
 // Register adds catalyst APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "consensus",
+			Namespace: "engine",
 			Version:   "1.0",
 			Service:   NewConsensusAPI(backend, nil),
 			Public:    true,
@@ -92,11 +98,12 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 		}
 	}
 	return &ConsensusAPI{
-		light:  eth == nil,
-		eth:    eth,
-		les:    les,
-		engine: engine,
-		syncer: newSyncer(),
+		light:          eth == nil,
+		eth:            eth,
+		les:            les,
+		engine:         engine,
+		syncer:         newSyncer(),
+		preparedBlocks: make(map[int]*ExecutableData),
 	}
 }
 
@@ -177,19 +184,56 @@ func (api *ConsensusAPI) GetPayload(PayloadID uint64) (*ExecutableData, error) {
 // ConsensusValidated is called to mark a block as valid, so
 // that data that is no longer needed can be removed.
 func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) error {
-	if params.Status == "VALID" {
+	switch params.Status {
+	case "VALID":
 		// Finalize the transition if it's the first `FinalisedBlock` event.
 		merger := api.merger()
 		if !merger.EnteredPoS() {
 			merger.EnterPoS()
 		}
+		return api.SetHead(params.BlockHash)
+	case "INVALID":
+		return nil
+	default:
+		return errors.New("invalid params.status")
 	}
-	return nil
 }
 
 func (api *ConsensusAPI) ForkChoiceUpdated(params ForkChoiceParams) error {
-	_, err := api.SetHead(params.FinalizedBlockHash)
-	return err
+	return api.SetHead(params.FinalizedBlockHash)
+}
+
+// ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringResponse, error) {
+	if api.light {
+		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
+		if parent == nil {
+			return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
+		}
+		block, err := InsertBlockParamsToBlock(api.les.BlockChain().Config(), parent, params)
+		if err != nil {
+			return INVALID, err
+		}
+		if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
+			return INVALID, err
+		}
+		return VALID, nil
+	}
+	if !api.eth.Synced() {
+		return SYNCING, errors.New("node is not synced yet")
+	}
+	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	if parent == nil {
+		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
+	}
+	block, err := InsertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
+	if err != nil {
+		return INVALID, err
+	}
+	if err := api.eth.BlockChain().InsertBlock(block); err != nil {
+		return INVALID, err
+	}
+	return VALID, nil
 }
 
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
@@ -364,34 +408,6 @@ func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	return block, nil
 }
 
-// NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
-// or false + an error. This is a bit redundant for go, but simplifies things on the
-// eth2 side.
-func (api *ConsensusAPI) NewBlock(params ExecutableData) (*NewBlockResponse, error) {
-	if api.light {
-		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
-		if parent == nil {
-			return &NewBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
-		}
-		block, err := InsertBlockParamsToBlock(api.les.BlockChain().Config(), parent, params)
-		if err != nil {
-			return nil, err
-		}
-		err = api.les.BlockChain().InsertHeader(block.Header())
-		return &NewBlockResponse{err == nil}, err
-	}
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
-	if parent == nil {
-		return &NewBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
-	}
-	block, err := InsertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
-	if err != nil {
-		return nil, err
-	}
-	err = api.eth.BlockChain().InsertBlock(block)
-	return &NewBlockResponse{err == nil}, err
-}
-
 // Used in tests to add a the list of transactions from a block to the tx pool.
 func (api *ConsensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
@@ -412,7 +428,7 @@ func (api *ConsensusAPI) FinalizeBlock(blockHash common.Hash) (*GenericResponse,
 }
 
 // SetHead is called to perform a force choice.
-func (api *ConsensusAPI) SetHead(newHead common.Hash) (*GenericResponse, error) {
+func (api *ConsensusAPI) SetHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
 	if !merger.LeftPoW() {
@@ -421,30 +437,30 @@ func (api *ConsensusAPI) SetHead(newHead common.Hash) (*GenericResponse, error) 
 	if api.light {
 		headHeader := api.les.BlockChain().CurrentHeader()
 		if headHeader.Hash() == newHead {
-			return &GenericResponse{true}, nil
+			return nil
 		}
 		newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 		if newHeadHeader == nil {
-			return &GenericResponse{false}, nil
+			return errors.New("head not found")
 		}
 		if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
-			return &GenericResponse{false}, nil
+			return err
 		}
-		return &GenericResponse{true}, nil
+		return nil
 	}
 	headBlock := api.eth.BlockChain().CurrentBlock()
 	if headBlock.Hash() == newHead {
-		return &GenericResponse{true}, nil
+		return nil
 	}
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
 	if newHeadBlock == nil {
-		return &GenericResponse{false}, nil
+		return errors.New("head not found")
 	}
 	if err := api.eth.BlockChain().SetChainHead(newHeadBlock); err != nil {
-		return &GenericResponse{false}, nil
+		return err
 	}
 	api.eth.SetSynced()
-	return &GenericResponse{true}, nil
+	return nil
 }
 
 // Helper function, return the merger instance.

@@ -78,6 +78,10 @@ type PayloadResponse struct {
 	PayloadID uint64 `json:"payloadId"`
 }
 
+type GenericStringResponse struct {
+	Status string `json:"status"`
+}
+
 type ConsensusValidatedParams struct {
 	BlockHash common.Hash `json:"blockHash"`
 	Status    string      `json:"status"`
