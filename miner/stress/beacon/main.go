@@ -122,6 +122,7 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	enode := stack.Server().Self()
 
 	// Inject the signer key and start sealing with it
+	stack.AccountManager().AddBackend(keystore.NewPlaintextKeyStore("beacon-stress"))
 	store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	if _, err := store.NewAccount(""); err != nil {
 		panic(err)
@@ -180,7 +181,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	if err != nil {
 		return err
 	}
-	if err := n.api.ForkChoiceUpdated(catalyst.ForkChoiceParams{HeadBlockHash: block.Hash(), FinalizedBlockHash: block.Hash()}); err != nil {
+	if err := n.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: block.Hash(), Status: "VALID"}); err != nil {
 		return err
 	}
 	return nil
