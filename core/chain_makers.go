@@ -320,8 +320,8 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 					}
 				}
 				vtr.Hash()
-				p, err := vtr.ProveAndSerialize(keys, b.witness.KeyVals())
-				block.SetVerkleProof(p)
+				_, err := vtr.ProveAndSerialize(keys, b.witness.KeyVals())
+				//block.SetVerkleProof(p)
 				if err != nil {
 					panic(err)
 				}

@@ -1031,7 +1031,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if tr := s.GetTrie(); tr.IsVerkle() {
 		vtr := tr.(*trie.VerkleTrie)
 		// Generate the proof if we are using a verkle tree
-		p, err := vtr.ProveAndSerialize(w.current.witness.Keys())
+		p, err := vtr.ProveAndSerialize(w.current.witness.Keys(), w.current.witness.KeyVals())
 		w.current.header.VerkleProof = p
 		if err != nil {
 			return err
