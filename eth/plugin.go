@@ -21,7 +21,7 @@ func loadRPCPlugins(plugins []string, eth *Ethereum) ([]rpc.API, error) {
 	for _, path := range plugins {
 		p, err := plugin.Open(path)
 		if err != nil {
-			return nil, fmt.Errorf("could not open plugin: %s", path)
+			return nil, fmt.Errorf("could not open plugin: %s, err: %s", path, err)
 		}
 
 		v, err := p.Lookup("Register")
