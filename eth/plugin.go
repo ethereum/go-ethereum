@@ -26,7 +26,7 @@ func loadRPCPlugins(plugins []string, eth *Ethereum) ([]rpc.API, error) {
 
 		v, err := p.Lookup("Register")
 		if err != nil {
-			return nil, fmt.Errorf("invalid plugin: %s", path)
+			return nil, fmt.Errorf("symbol `Register` not found in plugin: %s", path)
 		}
 
 		api, ok := v.(Plugin)
