@@ -150,7 +150,7 @@ func TestResubscribeWithErrorHandler(t *testing.T) {
 	}
 
 	expectedSubErrs := []string{"", "err-1", "err-2", "err-3", "err-4", "err-5"}
-	if !reflect.DeepEqual(subErrs, expectedSubErrs) {
+	if !errors.Is(subErrs, expectedSubErrs) {
 		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }

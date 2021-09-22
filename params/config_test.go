@@ -17,8 +17,8 @@
 package params
 
 import (
+	"errors"
 	"math/big"
-	"reflect"
 	"testing"
 )
 
@@ -91,7 +91,7 @@ func TestCheckCompatible(t *testing.T) {
 
 	for _, test := range tests {
 		err := test.stored.CheckCompatible(test.new, test.head)
-		if !reflect.DeepEqual(err, test.wantErr) {
+		if !errors.Is(err, test.wantErr) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nhead: %v\nerr: %v\nwant: %v", test.stored, test.new, test.head, err, test.wantErr)
 		}
 	}
