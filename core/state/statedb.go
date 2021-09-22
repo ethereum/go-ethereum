@@ -492,6 +492,10 @@ func (s *StateDB) updateStatelessStateObject(obj *stateObject) {
 					copy(b[:], obj.data.Balance.Bytes())
 					binary.BigEndian.PutUint64(cs[:], uint64(len(obj.code)))
 
+					// TODO(@gballet) stateless tree update
+					// i.e. perform a "delta" update on all
+					// commitments. go-verkle currently has
+					// no support for these.
 				}
 			}
 		}

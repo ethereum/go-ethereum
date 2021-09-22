@@ -34,6 +34,10 @@ type VerkleTrie struct {
 	db   *Database
 }
 
+func (vt *VerkleTrie) ToDot() string {
+	return verkle.ToDot(vt.root)
+}
+
 func NewVerkleTrie(root verkle.VerkleNode, db *Database) *VerkleTrie {
 	return &VerkleTrie{
 		root: root,
@@ -148,22 +152,19 @@ type verkleproof struct {
 	Leaves []KeyValuePair
 }
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) ([]byte, error) {
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]byte) ([]byte, error) {
 	d, y, σ := verkle.MakeVerkleMultiProof(trie.root, keys)
 	vp := verkleproof{
 		D: d,
 		Y: y,
 		Σ: σ,
 	}
-	for _, key := range keys {
-		payload, err := trie.TryGet(key)
-		if err != nil {
-			return nil, err
-		}
-
+	for key, val := range kv {
+		var k [32]byte
+		copy(k[:], key[:])
 		vp.Leaves = append(vp.Leaves, KeyValuePair{
-			Key:   key,
-			Value: payload,
+			Key:   k[:],
+			Value: val,
 		})
 	}
 	return rlp.EncodeToBytes(vp)

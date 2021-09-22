@@ -16,39 +16,47 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/common"
-import "github.com/ethereum/go-ethereum/params"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+)
 
 // AccessWitness lists the locations of the state that are being accessed
 // during the production of a block.
-// TODO(@gballet) this doesn't support deletions
+// TODO(@gballet) this doesn't fully support deletions
 type AccessWitness struct {
-	Witness map[common.Hash]map[byte]struct{}
+	// Branches flags if a given branch has been loaded
+	Branches map[[31]byte]struct{}
+
+	// Chunks contains the initial value of each address
+	Chunks map[common.Hash][]byte
 }
 
 func NewAccessWitness() *AccessWitness {
-	return &AccessWitness{Witness: make(map[common.Hash]map[byte]struct{})}
+	return &AccessWitness{
+		Branches: make(map[[31]byte]struct{}),
+		Chunks:   make(map[common.Hash][]byte),
+	}
 }
 
 // TouchAddress adds any missing addr to the witness and returns respectively
 // true if the stem or the stub weren't arleady present.
-func (aw *AccessWitness) TouchAddress(addr []byte) (bool, bool) {
+func (aw *AccessWitness) TouchAddress(addr, value []byte) (bool, bool) {
 	var (
-		stem        common.Hash
+		stem        [31]byte
 		newStem     bool
 		newSelector bool
-		selector    = addr[31]
 	)
 	copy(stem[:], addr[:31])
 
 	// Check for the presence of the stem
-	if _, newStem := aw.Witness[stem]; !newStem {
-		aw.Witness[stem] = make(map[byte]struct{})
+	if _, newStem := aw.Branches[stem]; !newStem {
+		aw.Branches[stem] = struct{}{}
 	}
 
 	// Check for the presence of the selector
-	if _, newSelector := aw.Witness[stem][selector]; !newSelector {
-		aw.Witness[stem][selector] = struct{}{}
+	if _, newSelector := aw.Chunks[common.BytesToHash(addr)]; !newSelector {
+		aw.Chunks[common.BytesToHash(addr)] = value
 	}
 
 	return newStem, newSelector
@@ -58,10 +66,10 @@ func (aw *AccessWitness) TouchAddress(addr []byte) (bool, bool) {
 // the current witness, and charge extra gas if that isn't the case. This is
 // meant to only be called on a tx-context access witness (i.e. before it is
 // merged), not a block-context witness: witness costs are charged per tx.
-func (aw *AccessWitness) TouchAddressAndChargeGas(addr []byte) uint64 {
+func (aw *AccessWitness) TouchAddressAndChargeGas(addr, value []byte) uint64 {
 	var gas uint64
 
-	nstem, nsel := aw.TouchAddress(addr)
+	nstem, nsel := aw.TouchAddress(addr, value)
 	if nstem {
 		gas += params.WitnessBranchCost
 	}
@@ -75,19 +83,15 @@ func (aw *AccessWitness) TouchAddressAndChargeGas(addr []byte) uint64 {
 // of a tx, with the accumulation of witnesses that were generated during the
 // execution of all the txs preceding this one in a given block.
 func (aw *AccessWitness) Merge(other *AccessWitness) {
-	for k, mo := range other.Witness {
-		// LeafNode-level merge
-		if ma, ok := aw.Witness[k]; ok {
-			for b, y := range mo {
-				// If a particular location isn't already
-				// present, then flag it. The block witness
-				// require only the initial value be present.
-				if _, ok := ma[b]; !ok {
-					ma[b] = y
-				}
-			}
-		} else {
-			aw.Witness[k] = mo
+	for k := range other.Branches {
+		if _, ok := aw.Branches[k]; !ok {
+			aw.Branches[k] = struct{}{}
+		}
+	}
+
+	for k, chunk := range other.Chunks {
+		if _, ok := aw.Chunks[k]; !ok {
+			aw.Chunks[k] = chunk
 		}
 	}
 }
@@ -95,14 +99,15 @@ func (aw *AccessWitness) Merge(other *AccessWitness) {
 // Key returns, predictably, the list of keys that were touched during the
 // buildup of the access witness.
 func (aw *AccessWitness) Keys() [][]byte {
-	keys := make([][]byte, 0, len(aw.Witness))
-	for stem, branches := range aw.Witness {
-		for selector := range branches {
-			var key [32]byte
-			copy(key[:31], stem[:31])
-			key[31] = selector
-			keys = append(keys, key[:])
-		}
+	keys := make([][]byte, 0, len(aw.Chunks))
+	for key := range aw.Chunks {
+		var k [32]byte
+		copy(k[:], key[:])
+		keys = append(keys, k[:])
 	}
 	return keys
+}
+
+func (aw *AccessWitness) KeyVals() map[common.Hash][]byte {
+	return aw.Chunks
 }

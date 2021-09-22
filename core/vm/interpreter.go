@@ -200,7 +200,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		var codePage common.Hash
 		if in.evm.ChainConfig().UseVerkle {
 			index := trieUtils.GetTreeKeyCodeChunk(contract.Address(), uint256.NewInt(pc/31))
-			contract.Gas -= in.evm.TxContext.Accesses.TouchAddressAndChargeGas(index)
+			// FIXME(@gballet) this is only valid when not executing in stateless mode
+			contract.Gas -= in.evm.TxContext.Accesses.TouchAddressAndChargeGas(index, contract.Code[pc&0x1F:pc&0x1F+31])
 
 			if in.evm.accesses != nil {
 				codePage, inWitness = in.evm.accesses[common.BytesToHash(index)]

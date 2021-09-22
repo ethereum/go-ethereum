@@ -172,7 +172,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		block, err := genesis.Commit(db, nil)
+		block, err := genesis.Commit(db)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -190,7 +190,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
-		block, err := genesis.Commit(db, nil)
+		block, err := genesis.Commit(db)
 		if err != nil {
 			return genesis.Config, hash, err
 		}
@@ -317,7 +317,11 @@ func (g *Genesis) ToBlock(db ethdb.Database, snaps *snapshot.Tree) *types.Block 
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, snaps *snapshot.Tree) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+	return g.CommitWithSnaps(db, nil)
+}
+
+func (g *Genesis) CommitWithSnaps(db ethdb.Database, snaps *snapshot.Tree) (*types.Block, error) {
 	block := g.ToBlock(db, snaps)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
@@ -343,7 +347,7 @@ func (g *Genesis) Commit(db ethdb.Database, snaps *snapshot.Tree) (*types.Block,
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
 func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db, nil)
+	block, err := g.Commit(db)
 	if err != nil {
 		panic(err)
 	}
