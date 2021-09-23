@@ -19,6 +19,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"math/big"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -27,10 +32,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"math/big"
-	"math/rand"
-	"testing"
-	"time"
 )
 
 var (
@@ -46,7 +47,7 @@ var (
 
 func getCommonBackend() *backends.SimulatedBackend {
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewSimulatedBackend(genesis)
+	backend := backends.NewXDCSimulatedBackend(genesis, 10000000)
 	backend.Commit()
 
 	return backend

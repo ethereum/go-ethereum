@@ -19,9 +19,11 @@ package ethapi
 
 import (
 	"context"
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
-	"math/big"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 
@@ -33,7 +35,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
-	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -83,7 +84,7 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
-	GetIPCClient() (*ethclient.Client, error)
+	GetIPCClient() (bind.ContractBackend, error)
 	GetEngine() consensus.Engine
 	GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int
 
