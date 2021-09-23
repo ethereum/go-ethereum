@@ -2018,11 +2018,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-// InsertBlock accepts a single block and the given consensus engine as the
-// parameters. It will firstly execute the block, run the necessary verification
+// InsertBlock executes the block, runs the necessary verification
 // upon it and then persist the block and the associate state into the database.
 // The key difference between the InsertChain is it won't do the canonical chain
-// updating. It relays on the additional SetChainHead call to finalize the entire
+// updating. It relies on the additional SetChainHead call to finalize the entire
 // procedure.
 func (bc *BlockChain) InsertBlock(block *types.Block) error {
 	bc.wg.Add(1)
