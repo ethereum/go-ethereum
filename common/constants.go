@@ -72,7 +72,7 @@ var RateTopUp = big.NewInt(90) // 90%
 var BaseTopUp = big.NewInt(100)
 var BaseRecall = big.NewInt(100)
 var TIPTRC21Fee = big.NewInt(40000000)
-var TIPTRC21FeeTestnet = big.NewInt(23777777)
+var TIPTRC21FeeTestnet = big.NewInt(23779191)
 var LimitTimeFinality = uint64(30) // limit in 30 block
 var Blacklist = map[Address]bool{
 	HexToAddress("0x5248bfb72fd4f234e062d3e9bb76f08643004fcd"): true,
