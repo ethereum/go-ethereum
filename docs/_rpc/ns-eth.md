@@ -8,28 +8,6 @@ Geth provides several extensions to the standard "eth" JSON-RPC namespace.
 * TOC
 {:toc}
 
-### eth_createAccessList
-
-This method creates an access list based on a given transaction on the current pending state of the blockchain.
-
-The method returns `address` and `storageKeys` and the `gasUsed`.
-
-Example:
-```json
-{
-  "accessList": [
-    {
-      "address": "0xb0ee076d7779a6ce152283f009f4c32b5f88756c",
-      "storageKeys": [
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
-      ]
-    }
-  ],
-  "gasUsed": "0x8496"
-}
-```
-
 ### eth_subscribe, eth_unsubscribe
 
 These methods are used for real-time events through subscriptions. See the [subscription
@@ -206,3 +184,60 @@ And the result is the Ethereum ABI encoded threshold number:
 ```
 
 Just for the sake of completeness, decoded the response is: `2`.
+
+### eth_createAccessList
+
+This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`.
+
+If your `transaction` has code executed, then you can generate `transaction` `accessList` with `eth_createAccessList`. 
+If you send it with your `Transaction` then it will lower your gas cost on Ethereum
+
+#### Parameters
+
+| Field              | Type       | Description          |
+|:-------------------|:-----------|:---------------------|
+| `transactionCall`  | `Object`   | `Transaction` object |
+| `blockParameter`   | `Object`   | Optional             |
+| `optimize`         | `Boolean`  | Optional             |
+
+#### Usage
+
+```
+curl --data '{"method":"eth_createAccessList","params":[transactionCall, blockParameter, optimize],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
+```
+
+#### Response
+
+The response gives you a list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
+
+That is, it gives you the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. (And  like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined.) But, again, this doesn’t mean that this gas will be lower than the gas used if you just send the same transaction without an access list!
+
+Example:
+```json
+{
+  "accessList": [
+    {
+      "address": "0xb0ee076d7779a6ce152283f009f4c32b5f88756c",
+      "storageKeys": [
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      ]
+    }
+  ],
+  "gasUsed": "0x8496"
+}
+```
+#### Example pseudo code
+
+```javascript
+let gasEstimation = estimateGas(tx)
+
+let { accessList, gasUsed } = createAccessList(tx)
+
+if (gasUsed > gasEstimation) {
+  delete accessList[tx.to]
+}
+
+tx.accessList = accessList;
+sendTransaction(tx)
+```
