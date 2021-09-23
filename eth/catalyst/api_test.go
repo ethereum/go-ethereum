@@ -67,6 +67,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
+/*
 func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, []*types.Block) {
 	if fork >= n {
 		fork = n - 1
@@ -109,6 +110,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)
 	return genesis, blocks, forkedBlocks
 }
+*/
 
 func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generatePreMergeChain(10)
@@ -143,7 +145,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	api := NewConsensusAPI(ethservice, nil)
 
 	// Put the 10th block's tx in the pool and produce a new block
-	api.addBlockTxs(blocks[9])
+	api.insertTransactions(blocks[9].Transactions())
 	blockParams := AssembleBlockParams{
 		ParentHash: blocks[8].Hash(),
 		Timestamp:  blocks[8].Time() + 5,
@@ -165,7 +167,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	api := NewConsensusAPI(ethservice, nil)
 
 	// Put the 10th block's tx in the pool and produce a new block
-	api.addBlockTxs(blocks[9])
+	api.insertTransactions(blocks[9].Transactions())
 	blockParams := AssembleBlockParams{
 		ParentHash: blocks[8].Hash(),
 		Timestamp:  blocks[8].Time() + 5,

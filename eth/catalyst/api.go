@@ -185,14 +185,14 @@ func (api *ConsensusAPI) GetPayload(PayloadID uint64) (*ExecutableData, error) {
 // that data that is no longer needed can be removed.
 func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) error {
 	switch params.Status {
-	case "VALID":
+	case VALID.Status:
 		// Finalize the transition if it's the first `FinalisedBlock` event.
 		merger := api.merger()
 		if !merger.EnteredPoS() {
 			merger.EnterPoS()
 		}
-		return api.SetHead(params.BlockHash)
-	case "INVALID":
+		return api.setHead(params.BlockHash)
+	case INVALID.Status:
 		return nil
 	default:
 		return errors.New("invalid params.status")
@@ -200,7 +200,7 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 }
 
 func (api *ConsensusAPI) ForkChoiceUpdated(params ForkChoiceParams) error {
-	return api.SetHead(params.FinalizedBlockHash)
+	return api.setHead(params.FinalizedBlockHash)
 }
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -220,6 +220,8 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		return VALID, nil
 	}
 	if !api.eth.Synced() {
+		// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
+		// we should trigger the reverse header sync here.
 		return SYNCING, errors.New("node is not synced yet")
 	}
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
@@ -409,26 +411,15 @@ func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
-func (api *ConsensusAPI) addBlockTxs(block *types.Block) error {
-	for _, tx := range block.Transactions() {
+func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
+	for _, tx := range txs {
 		api.eth.TxPool().AddLocal(tx)
 	}
 	return nil
 }
 
-// FinalizeBlock is called to mark a block as synchronized, so
-// that data that is no longer needed can be removed.
-func (api *ConsensusAPI) FinalizeBlock(blockHash common.Hash) (*GenericResponse, error) {
-	// Finalize the transition if it's the first `FinalisedBlock` event.
-	merger := api.merger()
-	if !merger.EnteredPoS() {
-		merger.EnterPoS()
-	}
-	return &GenericResponse{true}, nil
-}
-
-// SetHead is called to perform a force choice.
-func (api *ConsensusAPI) SetHead(newHead common.Hash) error {
+// setHead is called to perform a force choice.
+func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
 	if !merger.LeftPoW() {
