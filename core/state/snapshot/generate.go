@@ -560,6 +560,15 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		default:
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
+			// currentLocation may lost its `storageHash` part, when currentLocation
+			// and dl.genMarker has the same `accountHash` part and abort generation
+			// before this function is firstly called in onAccount function,
+			//  which will result in ignoring updating the storage snapshot of
+			// that `accountHash`, thus the value in the cache of diskLayer will be an old one.
+			if bytes.Compare(currentLocation, dl.genMarker) < 0 {
+				currentLocation = dl.genMarker
+			}
+
 			// Flush out the batch anyway no matter it's empty or not.
 			// It's possible that all the states are recovered and the
 			// generation indeed makes progress.
