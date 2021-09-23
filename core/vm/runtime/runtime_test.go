@@ -992,3 +992,60 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	benchmarkNonModifyingCode(10000000, code, "tracer-step-10M", stepTracer, b)
 	benchmarkNonModifyingCode(10000000, code, "tracer-call-frame-10M", callFrameTracer, b)
 }
+
+func BenchmarkTracerReuse(b *testing.B) {
+	jsTracer := `
+    {enters: 0, exits: 0, steps: 0,
+	step: function() { this.steps++ },
+	fault: function() {},
+	result: function() { return [this.enters, this.exits, this.steps].join(",") },
+	enter: function(frame) { this.enters++ },
+	exit: function(res) { this.exits++ }}`
+	// Simply pushes and pops some values in a loop
+	code := []byte{
+		byte(vm.JUMPDEST),
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.POP),
+		byte(vm.POP),
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+	main := common.HexToAddress("0xaa")
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb.SetCode(main, code)
+	gas := uint64(10000)
+	runs := 500
+
+	b.Run("baseline", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for j := 0; j < runs; j++ {
+				tracer, _ := tracers.New(jsTracer, new(tracers.Context))
+				Call(main, nil, &Config{
+					State:    statedb,
+					GasLimit: gas,
+					EVMConfig: vm.Config{
+						Debug:  true,
+						Tracer: tracer,
+					}})
+			}
+		}
+	})
+
+	b.Run("reuse", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tracer, _ := tracers.New(jsTracer, new(tracers.Context))
+			for j := 0; j < runs; j++ {
+				Call(main, nil, &Config{
+					State:    statedb,
+					GasLimit: gas,
+					EVMConfig: vm.Config{
+						Debug:  true,
+						Tracer: tracer,
+					}})
+			}
+		}
+	})
+}
