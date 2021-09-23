@@ -468,7 +468,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	case *diffLayer:
 		// Hold the write lock until the flattened parent is linked correctly.
 		// Otherwise, the stale layer may be accessed by external reads in the
-		// meam time.
+		// meantime.
 		diff.lock.Lock()
 		defer diff.lock.Unlock()
 
