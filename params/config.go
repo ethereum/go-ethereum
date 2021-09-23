@@ -610,14 +610,12 @@ func (err *ConfigCompatError) Error() string {
 }
 
 func (err *ConfigCompatError) Is(target error) bool {
-	cce, ok := target.(*ConfigCompatError)
-	if !ok {
-		return false
-	}
-
-	return (cce.What == err.What && cce.RewindTo == err.RewindTo &&
-		err.StoredConfig.Cmp(cce.StoredConfig) == 0 &&
-		err.NewConfig.Cmp(cce.NewConfig) == 0)
+	e, ok := target.(*ConfigCompatError)
+	return ok &&
+		e.What == err.What &&
+		e.RewindTo == err.RewindTo &&
+		e.StoredConfig.Cmp(err.StoredConfig) == 0 &&
+		e.NewConfig.Cmp(err.NewConfig) == 0
 }
 
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
