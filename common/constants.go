@@ -36,11 +36,11 @@ var TIPSigning = big.NewInt(3000000)
 var TIPRandomize = big.NewInt(3464000)
 
 var TIPIncreaseMasternodes = big.NewInt(5000000) // Upgrade MN Count at Block.
-var TIPNoHalvingMNReward = big.NewInt(40000000)  // hardfork no halving masternodes reward
-var BlackListHFNumber = uint64(40000000)
-var TIPXDCX = big.NewInt(40000000)
-var TIPXDCXLending = big.NewInt(40000000)
-var TIPXDCXCancellationFee = big.NewInt(40000000)
+var TIPNoHalvingMNReward = big.NewInt(23779191)  // hardfork no halving masternodes reward
+var BlackListHFNumber = uint64(23779191)
+var TIPXDCX = big.NewInt(23779191)
+var TIPXDCXLending = big.NewInt(23779191)
+var TIPXDCXCancellationFee = big.NewInt(23779191)
 var TIPXDCXCancellationFeeTestnet = big.NewInt(23779191)
 
 var TIPXDCXTestnet = big.NewInt(23779191)
@@ -71,7 +71,7 @@ var TRC21GasPrice = big.NewInt(250000000)
 var RateTopUp = big.NewInt(90) // 90%
 var BaseTopUp = big.NewInt(100)
 var BaseRecall = big.NewInt(100)
-var TIPTRC21Fee = big.NewInt(40000000)
+var TIPTRC21Fee = big.NewInt(23779191)
 var TIPTRC21FeeTestnet = big.NewInt(23779191)
 var LimitTimeFinality = uint64(30) // limit in 30 block
 var Blacklist = map[Address]bool{
