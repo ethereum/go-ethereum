@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	chainParams "github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -210,7 +212,7 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		if parent == nil {
 			return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 		}
-		block, err := InsertBlockParamsToBlock(api.les.BlockChain().Config(), parent, params)
+		block, err := ExecutableDataToBlock(api.les.BlockChain().Config(), parent, params)
 		if err != nil {
 			return INVALID, err
 		}
@@ -228,7 +230,7 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 	if parent == nil {
 		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
-	block, err := InsertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
+	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {
 		return INVALID, err
 	}
@@ -344,19 +346,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 	if err != nil {
 		return nil, err
 	}
-	return &ExecutableData{
-		BlockHash:    block.Hash(),
-		ParentHash:   block.ParentHash(),
-		Coinbase:     block.Coinbase(),
-		StateRoot:    block.Root(),
-		Number:       block.NumberU64(),
-		GasLimit:     block.GasLimit(),
-		GasUsed:      block.GasUsed(),
-		Timestamp:    block.Time(),
-		ReceiptRoot:  block.ReceiptHash(),
-		LogsBloom:    block.Bloom().Bytes(),
-		Transactions: encodeTransactions(block.Transactions()),
-	}, nil
+	return BlockToExecutableData(block), nil
 }
 
 func encodeTransactions(txs []*types.Transaction) [][]byte {
@@ -379,7 +369,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Header, params ExecutableData) (*types.Block, error) {
+func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header, params ExecutableData) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -408,6 +398,22 @@ func InsertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
 	return block, nil
+}
+
+func BlockToExecutableData(block *types.Block) *ExecutableData {
+	return &ExecutableData{
+		BlockHash:    block.Hash(),
+		ParentHash:   block.ParentHash(),
+		Coinbase:     block.Coinbase(),
+		StateRoot:    block.Root(),
+		Number:       block.NumberU64(),
+		GasLimit:     block.GasLimit(),
+		GasUsed:      block.GasUsed(),
+		Timestamp:    block.Time(),
+		ReceiptRoot:  block.ReceiptHash(),
+		LogsBloom:    block.Bloom().Bytes(),
+		Transactions: encodeTransactions(block.Transactions()),
+	}
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
@@ -460,4 +466,60 @@ func (api *ConsensusAPI) merger() *core.Merger {
 		return api.les.Merger()
 	}
 	return api.eth.Merger()
+}
+
+// Helper API for the merge f2f
+
+func (api *ConsensusAPI) ExportChain(path string) error {
+	if api.light {
+		return errors.New("cannot export chain in light mode")
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	return api.eth.BlockChain().Export(f)
+}
+
+func (api *ConsensusAPI) ImportChain(path string) error {
+	if api.light {
+		return errors.New("cannot import chain in light mode")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	for {
+		var block types.Block
+		if err := block.DecodeRLP(rlp.NewStream(f, 0)); err != nil {
+			break
+		}
+		if err := api.eth.BlockChain().InsertBlock(&block); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (api *ConsensusAPI) ExportExecutableData(path string) error {
+	if api.light {
+		return errors.New("cannot export chain in light mode")
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	for i := uint64(0); i < api.eth.BlockChain().CurrentBlock().NumberU64(); i++ {
+		block := api.eth.BlockChain().GetBlockByNumber(i)
+		exec := BlockToExecutableData(block)
+		b, err := exec.MarshalJSON()
+		if err != nil {
+			return err
+		}
+		if _, err := f.Write(b); err != nil {
+			return err
+		}
+		f.Write([]byte("\n"))
+	}
+	return nil
 }

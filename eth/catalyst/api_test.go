@@ -234,7 +234,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := InsertBlockParamsToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+		block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -271,7 +271,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := InsertBlockParamsToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+		block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -314,7 +314,7 @@ func TestEth2DeepReorg(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := InsertBlockParamsToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+		block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}

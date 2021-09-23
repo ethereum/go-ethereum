@@ -177,7 +177,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	} else {
 		config = n.ethBackend.BlockChain().Config()
 	}
-	block, err := catalyst.InsertBlockParamsToBlock(config, parent, ed)
+	block, err := catalyst.ExecutableDataToBlock(config, parent, ed)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := catalyst.InsertBlockParamsToBlock(chain.Config(), parentBlock.Header(), *ed)
+			block, _ := catalyst.ExecutableDataToBlock(chain.Config(), parentBlock.Header(), *ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
