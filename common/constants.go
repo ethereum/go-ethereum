@@ -41,9 +41,9 @@ var BlackListHFNumber = uint64(40000000)
 var TIPXDCX = big.NewInt(40000000)
 var TIPXDCXLending = big.NewInt(40000000)
 var TIPXDCXCancellationFee = big.NewInt(40000000)
-var TIPXDCXCancellationFeeTestnet = big.NewInt(23777777)
+var TIPXDCXCancellationFeeTestnet = big.NewInt(23779191)
 
-var TIPXDCXTestnet = big.NewInt(23777777)
+var TIPXDCXTestnet = big.NewInt(23779191)
 var IsTestnet bool = false
 var StoreRewardFolder string
 var RollbackHash Hash
