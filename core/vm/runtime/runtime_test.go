@@ -908,6 +908,61 @@ func TestJSTracerCreateTx(t *testing.T) {
 	}
 }
 
+func TestJSTracerReuse(t *testing.T) {
+	jsTracer := `
+    {enters: 0, exits: 0, steps: 0,
+	step: function() { this.steps++ },
+	fault: function() {},
+	result: function() { return [this.enters, this.exits, this.steps].join(",") },
+	enter: function(frame) { this.enters++ },
+	exit: function(res) { this.exits++ }}`
+	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
+	main := common.HexToAddress("0xaa")
+
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb.SetCode(main, code)
+	tracer, err := tracers.New(jsTracer, new(tracers.Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = Call(main, nil, &Config{
+		State: statedb,
+		EVMConfig: vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(res), `"0,0,3"`; have != want {
+		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
+	}
+
+	// Again
+	_, _, err = Call(main, nil, &Config{
+		State: statedb,
+		EVMConfig: vm.Config{
+			Debug:  true,
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+	res, err = tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(res), `"0,0,3"`; have != want {
+		t.Errorf("wrong result, have \n%v\nwant\n%v\n", have, want)
+	}
+
+}
+
 func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	// Simply pushes and pops some values in a loop
 	code := []byte{
