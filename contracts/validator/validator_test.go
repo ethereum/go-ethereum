@@ -46,7 +46,7 @@ var (
 )
 
 func TestValidator(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(key)
 
 	validatorCap := new(big.Int)
@@ -82,7 +82,7 @@ func TestValidator(t *testing.T) {
 }
 
 func TestRewardBalance(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
+	contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
 		acc1Addr: {Balance: new(big.Int).SetUint64(10000000)},
 		acc2Addr: {Balance: new(big.Int).SetUint64(10000000)},
 		acc4Addr: {Balance: new(big.Int).SetUint64(10000000)},
