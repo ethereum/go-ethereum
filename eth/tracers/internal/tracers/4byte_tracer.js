@@ -37,17 +37,18 @@
 		this.ids[key] = this.ids[key] + 1 || 1;
 	},
 
-  enter: function(frame) {
+	enter: function(frame) {
 		// Skip any pre-compile invocations, those are just fancy opcodes
 		if (isPrecompiled(frame.getTo())) {
-      return;
-    }
-    var input = frame.getInput()
-    if (input.length >= 4) {
-      this.store(slice(input, 0, 4), input.length - 4);
-    }
-  },
-  exit: function(frameResult) {},
+			return;
+		}
+		var input = frame.getInput()
+		if (input.length >= 4) {
+			this.store(slice(input, 0, 4), input.length - 4);
+		}
+	},
+
+	exit: function(frameResult) {},
 
 	// fault is invoked when the actual execution of an opcode fails.
 	fault: function(log, db) {},
