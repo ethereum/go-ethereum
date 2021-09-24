@@ -125,6 +125,8 @@ var (
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNoVerifyFlag,
+		utils.MinerCollatorPluginPath,
+		utils.MinerCollatorPluginConfigPath,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,

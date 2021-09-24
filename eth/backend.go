@@ -111,6 +111,24 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
+
+	var minerCollator miner.Collator
+	var minerCollatorAPI miner.CollatorAPI
+
+	if config.Miner.CollatorPath != "" {
+		log.Info("using custom mining collator")
+		var err error
+		minerCollator, minerCollatorAPI, err = miner.LoadCollator(config.Miner.CollatorPath, config.Miner.CollatorConfigPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		//panic("TODO fix config setting here: miner gets instantiated later but we create the DefaultCollator here.  but it should be created after the recommit is potentially sanitized in the miner")
+		defaultCollator := &miner.DefaultCollator{}
+		defaultCollator.SetRecommit(config.Miner.Recommit)
+		minerCollator = defaultCollator
+	}
+
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -225,7 +243,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, minerCollator, minerCollatorAPI)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
@@ -296,6 +314,15 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	if s.config.Miner.CollatorPath != "" && s.miner.CollatorAPI != nil {
+		apis = append(apis, rpc.API{
+			Namespace: "minercollator",
+			Version:   s.miner.CollatorAPI.Version(),
+			Service:   s.miner.CollatorAPI.Service(),
+			Public:    true,
+		})
+	}
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

@@ -464,6 +464,14 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+	MinerCollatorPluginPath = cli.StringFlag{
+		Name:  "miner.collator",
+		Usage: "Path to collator plugin compiled as shared library",
+	}
+	MinerCollatorPluginConfigPath = cli.StringFlag{
+		Name:  "miner.collatorconfig",
+		Usage: "Path to custom collator config toml",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1376,6 +1384,12 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerifyFlag.Name) {
 		cfg.Noverify = ctx.GlobalBool(MinerNoVerifyFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerCollatorPluginPath.Name) {
+		cfg.CollatorPath = ctx.GlobalString(MinerCollatorPluginPath.Name)
+	}
+	if ctx.GlobalIsSet(MinerCollatorPluginConfigPath.Name) {
+		cfg.CollatorConfigPath = ctx.GlobalString(MinerCollatorPluginConfigPath.Name)
 	}
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")

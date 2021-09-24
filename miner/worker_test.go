@@ -197,7 +197,7 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+	w := newWorker(testConfig, chainConfig, &DefaultCollator{recommit: testConfig.Recommit, minRecommit: testConfig.Recommit}, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
 }
@@ -454,7 +454,8 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		index    = 0
 		start    uint32
 	)
-	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
+	collator, _ := w.collator.(*DefaultCollator)
+	collator.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
 		// Short circuit if interval checking hasn't started.
 		if atomic.LoadUint32(&start) == 0 {
 			return
@@ -500,14 +501,14 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		t.Error("interval reset timeout")
 	}
 
-	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
+	collator.adjustRecommit(0.8, true)
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("interval reset timeout")
 	}
 
-	w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	collator.adjustRecommit(0.0, false)
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
