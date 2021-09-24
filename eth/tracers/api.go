@@ -298,7 +298,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			number  uint64
 			traced  uint64
 			failed  error
-			parent  common.Hash
+			current common.Hash
 			statedb *state.StateDB
 		)
 		// Ensure everything is properly cleaned up on any exit path
@@ -342,17 +342,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				failed = err
 				break
 			}
+			// Hold the reference for tracer, will be released at the final stage
 			if statedb.Database().TrieDB() != nil {
-				// Hold the reference for tracer, will be released at the final stage
 				statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
-
-				// Release the parent state because it's already held by the tracer
-				if parent != (common.Hash{}) {
-					statedb.Database().TrieDB().Dereference(parent)
-				}
+				current = block.Root()
 			}
-			parent = block.Root()
-
 			next, err := api.blockByNumber(localctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
@@ -366,6 +360,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				return
 			}
 			traced += uint64(len(txs))
+		}
+		// Dereference the last live state which was used to construct
+		// tracing state.
+		if statedb != nil && statedb.Database().TrieDB() != nil {
+			statedb.Database().TrieDB().Dereference(current)
 		}
 	}()
 
