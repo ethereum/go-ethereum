@@ -84,20 +84,22 @@ func (c *DefaultCollator) adjustRecommit(ratio float64, inc bool) {
 	}
 }
 
-func submitTransactions(ctx context.Context, bs BlockState, txs *types.TransactionsByPriceAndNonce, timer *time.Timer) bool {
+func submitTransactions(ctx context.Context, bs BlockState, txs *types.TransactionsByPriceAndNonce, timer *time.Timer) uint {
 	header := bs.Header()
 	availableGas := header.GasLimit
+	var numTxsAdded uint = 0
+
 	for {
 		select {
 		case <-ctx.Done():
-			return true
+			return numTxsAdded
 		default:
 		}
 
 		if timer != nil {
 			select {
 			case <-timer.C:
-				return false
+				return numTxsAdded
 			default:
 			}
 		}
@@ -133,6 +135,8 @@ func submitTransactions(ctx context.Context, bs BlockState, txs *types.Transacti
 
 		case errors.Is(err, nil):
 			availableGas = header.GasLimit - receipts[0].CumulativeGasUsed
+
+			numTxsAdded++
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			txs.Shift()
 
@@ -148,18 +152,18 @@ func submitTransactions(ctx context.Context, bs BlockState, txs *types.Transacti
 		}
 	}
 
-	return false
+	return numTxsAdded
 }
 
-func (c *DefaultCollator) fillTransactions(ctx context.Context, bs BlockState, timer *time.Timer) {
+func (c *DefaultCollator) fillTransactions(ctx context.Context, bs BlockState, timer *time.Timer) uint {
 	header := bs.Header()
 	txs, err := c.pool.Pending(true)
 	if err != nil {
 		log.Error("could not get pending transactions from the pool", "err", err)
-		return
+		return 0
 	}
 	if len(txs) == 0 {
-		return
+		return 0
 	}
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), txs
@@ -169,16 +173,15 @@ func (c *DefaultCollator) fillTransactions(ctx context.Context, bs BlockState, t
 			localTxs[account] = accountTxs
 		}
 	}
+	var txCount uint = 0
 	if len(localTxs) > 0 {
-		if submitTransactions(ctx, bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, header.BaseFee), timer) {
-			return
-		}
+		txCount += submitTransactions(ctx, bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), localTxs, header.BaseFee), timer)
 	}
 	if len(remoteTxs) > 0 {
-		if submitTransactions(ctx, bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, header.BaseFee), timer) {
-			return
-		}
+		txCount += submitTransactions(ctx, bs, types.NewTransactionsByPriceAndNonce(bs.Signer(), remoteTxs, header.BaseFee), timer)
 	}
+
+	return txCount
 }
 
 func (c *DefaultCollator) workCycle(work BlockCollatorWork) {
