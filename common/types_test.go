@@ -63,6 +63,27 @@ func TestIsHexAddress(t *testing.T) {
 	}
 }
 
+func TestIsHexHash(t *testing.T) {
+	tests := []struct {
+		str string
+		exp bool
+	}{
+		{"0xbee1609c2a6ac747d53f5da8c5eac9c6e6a6749ea40e7f463f035f265b584923", true},
+		{"bee1609c2a6ac747d53f5da8c5eac9c6e6a6749ea40e7f463f035f265b584923", true},
+		{"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
+		{"0XAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
+		{"0xbee1609c2a6ac747d53f5da8c5ea", false},
+		{"0xxbee1609c2a6ac747d53f5da8c5eac9c6e6a6749ea40e7f463f035f265b584923", false},
+	}
+
+	for _, test := range tests {
+		if result := IsHexHash(test.str); result != test.exp {
+			t.Errorf("IsHexHash(%s) == %v; expected %v",
+				test.str, result, test.exp)
+		}
+	}
+}
+
 func TestHashJsonValidation(t *testing.T) {
 	var tests = []struct {
 		Prefix string
@@ -207,27 +228,13 @@ func TestHash_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "working scan",
-			args: args{src: []byte{
-				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
-				0x10, 0x00,
-			}},
+			name:    "working string scan",
+			args:    args{src: "0xb26f2b342aab24bcf63ea218c6a9274d30ab9a15a218c6a9274d30ab9a151000"},
 			wantErr: false,
 		},
 		{
-			name:    "non working scan",
-			args:    args{src: int64(1234567890)},
-			wantErr: true,
-		},
-		{
-			name: "invalid length scan",
-			args: args{src: []byte{
-				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
-			}},
+			name:    "invalid length string scan",
+			args:    args{src: "0xB26f2b342AA"},
 			wantErr: true,
 		},
 	}
@@ -240,11 +247,21 @@ func TestHash_Scan(t *testing.T) {
 
 			if !tt.wantErr {
 				for i := range h {
-					if h[i] != tt.args.src.([]byte)[i] {
-						t.Errorf(
-							"Hash.Scan() didn't scan the %d src correctly (have %X, want %X)",
-							i, h[i], tt.args.src.([]byte)[i],
-						)
+					switch src := tt.args.src.(type) {
+					case []byte:
+						if h[i] != src[i] {
+							t.Errorf(
+								"Hash.Scan() didn't scan the %d src correctly (have %X, want %X)",
+								i, h[i], tt.args.src.([]byte)[i],
+							)
+						}
+					case string:
+						if h.String() != src {
+							t.Errorf(
+								"Hash.Scan() didn't scan the %d src correctly (have %X, want %X)",
+								i, h.String(), src,
+							)
+						}
 					}
 				}
 			}
@@ -270,7 +287,7 @@ func TestHash_Value(t *testing.T) {
 		{
 			name:    "Working value",
 			h:       usedH,
-			want:    b,
+			want:    usedH.String(),
 			wantErr: false,
 		},
 	}
@@ -298,24 +315,13 @@ func TestAddress_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "working scan",
-			args: args{src: []byte{
-				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
-			}},
+			name:    "working string scan",
+			args:    args{src: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15"},
 			wantErr: false,
 		},
 		{
-			name:    "non working scan",
-			args:    args{src: int64(1234567890)},
-			wantErr: true,
-		},
-		{
-			name: "invalid length scan",
-			args: args{src: []byte{
-				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
-				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a,
-			}},
+			name:    "invalid length string scan",
+			args:    args{src: "0xB26f2b342AA"},
 			wantErr: true,
 		},
 	}
@@ -328,11 +334,21 @@ func TestAddress_Scan(t *testing.T) {
 
 			if !tt.wantErr {
 				for i := range a {
-					if a[i] != tt.args.src.([]byte)[i] {
-						t.Errorf(
-							"Address.Scan() didn't scan the %d src correctly (have %X, want %X)",
-							i, a[i], tt.args.src.([]byte)[i],
-						)
+					switch src := tt.args.src.(type) {
+					case []byte:
+						if a[i] != src[i] {
+							t.Errorf(
+								"Address.Scan() didn't scan the %d src correctly (have %X, want %X)",
+								i, a[i], tt.args.src.([]byte)[i],
+							)
+						}
+					case string:
+						if a.String() != src {
+							t.Errorf(
+								"Hash.Scan() didn't scan the %d src correctly (have %X, want %X)",
+								i, a.String(), src,
+							)
+						}
 					}
 				}
 			}
@@ -356,7 +372,7 @@ func TestAddress_Value(t *testing.T) {
 		{
 			name:    "Working value",
 			a:       usedA,
-			want:    b,
+			want:    usedA.String(),
 			wantErr: false,
 		},
 	}
