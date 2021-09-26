@@ -155,19 +155,14 @@ func submitTransactions(ctx context.Context, bs BlockState, txs *types.Transacti
 	return numTxsAdded
 }
 
-func (c *DefaultCollator) fillTransactions(ctx context.Context, bs BlockState, timer *time.Timer) uint {
+func FillTransactions(ctx context.Context, bs BlockState, timer *time.Timer, pendingTxs map[common.Address]types.Transactions, locals []common.Address) uint {
 	header := bs.Header()
-	txs, err := c.pool.Pending(true)
-	if err != nil {
-		log.Error("could not get pending transactions from the pool", "err", err)
-		return 0
-	}
-	if len(txs) == 0 {
+	if len(pendingTxs) == 0 {
 		return 0
 	}
 	// Split the pending transactions into locals and remotes
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), txs
-	for _, account := range c.pool.Locals() {
+	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pendingTxs
+	for _, account := range locals {
 		if accountTxs := remoteTxs[account]; len(accountTxs) > 0 {
 			delete(remoteTxs, account)
 			localTxs[account] = accountTxs
@@ -195,7 +190,9 @@ func (c *DefaultCollator) workCycle(work BlockCollatorWork) {
 		timer := time.NewTimer(curRecommit)
 
 		bs := emptyBs.Copy()
-		c.fillTransactions(ctx, bs, timer)
+		pendingTxs, _ := c.pool.Pending(true)
+		locals := c.pool.Locals()
+		FillTransactions(ctx, bs, timer, pendingTxs, locals)
 		bs.Commit()
 		shouldContinue := false
 
@@ -276,7 +273,9 @@ func (c *DefaultCollator) CollateBlocks(miner MinerState, pool Pool, blockCh <-c
 
 func (c *DefaultCollator) CollateBlock(bs BlockState, pool Pool) {
 	c.pool = pool // TODO weird to set this here
-	c.fillTransactions(context.Background(), bs, nil)
+	pendingTxs, _ := pool.Pending(true)
+	locals := pool.Locals()
+	FillTransactions(context.Background(), bs, nil, pendingTxs, locals)
 	bs.Commit()
 }
 

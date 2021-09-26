@@ -181,6 +181,8 @@ func (bs *collatorBlockState) Commit() bool {
 	}
 
 	bs.env.current = bs
+	// TODO apply FinalizeAndAssemble with our state, then copy and send it to sealer?
+	// that way the post-block-processing state could be inspected from a BlockState
 	bs.env.worker.commit(bs.env.copy(), nil, true, time.Now())
 
 	return true
@@ -291,7 +293,7 @@ func (bs *collatorBlockState) AddTransactions(txs types.Transactions) (error, ty
 		bs.snapshots = append(bs.snapshots, snapshot)
 
 		bs.state.Prepare(tx.Hash(), bs.tcount+tcount)
-		txLogs, err := bs.commitTransaction(tx)
+		receipt, err := core.ApplyTransaction(bs.env.worker.chainConfig, bs.env.worker.chain, &bs.env.coinbase, bs.gasPool, bs.state, bs.header, tx, &bs.header.GasUsed, *bs.env.worker.chain.GetVMConfig())
 		if err != nil {
 			switch {
 			case errors.Is(err, core.ErrGasLimitReached):
@@ -311,7 +313,9 @@ func (bs *collatorBlockState) AddTransactions(txs types.Transactions) (error, ty
 
 			break
 		} else {
-			bs.logs = append(bs.logs, txLogs...)
+			bs.logs = append(bs.logs, receipt.Logs...)
+			bs.txs = append(bs.txs, tx)
+			bs.receipts = append(bs.receipts, receipt)
 			tcount++
 		}
 	}
@@ -320,13 +324,11 @@ func (bs *collatorBlockState) AddTransactions(txs types.Transactions) (error, ty
 
 	if retErr != nil {
 		bs.logs = bs.logs[:len(bs.logs)-tcount]
-		if tcount != 0 {
-			// first transaction in the sequence failed so the state will already be reverted
-			// to what it was before the sequence was applied
-			bs.state.RevertToSnapshot(bs.snapshots[len(bs.snapshots)-(tcount+1)])
-		}
+		bs.state.RevertToSnapshot(bs.snapshots[len(bs.snapshots)-(tcount+1)])
 
 		bs.snapshots = bs.snapshots[:len(bs.snapshots)-(tcount+1)]
+		bs.txs = bs.txs[:len(bs.txs)-(tcount+1)]
+		bs.receipts = bs.receipts[:len(bs.receipts)-(tcount+1)]
 
 		return retErr, nil
 	} else {
