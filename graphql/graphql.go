@@ -21,6 +21,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"strconv"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -30,8 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
-	"math/big"
-	"strconv"
 )
 
 var (
