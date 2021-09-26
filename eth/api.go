@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -544,4 +545,64 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
 	return dirty, nil
+}
+
+// GetAccessibleState returns the list  of roots where the node has state accessible on disk.
+// The (from, to) parameters are the sequence of blocks to search, and the order of the
+// searchresults follows the order of (from, to).
+func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) ([]uint64, error) {
+	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
+		// We don't have state for pending (-2), so treat it as latest
+		if num.Int64() < 0 {
+			block := api.eth.blockchain.CurrentBlock()
+			if block == nil {
+				return 0, fmt.Errorf("current block missing")
+			}
+			return block.NumberU64(), nil
+		}
+		return uint64(num.Int64()), nil
+	}
+	var (
+		start   uint64
+		end     uint64
+		delta   = int64(1)
+		lastLog time.Time
+		results []uint64
+		err     error
+	)
+	if start, err = resolveNum(from); err != nil {
+		return nil, err
+	}
+	if end, err = resolveNum(to); err != nil {
+		return nil, err
+	}
+	if start == end {
+		return nil, fmt.Errorf("from and to needs to be different")
+	}
+	if start > end {
+		delta = -1
+	}
+	for i := int64(start); i != int64(end); i += delta {
+		if time.Since(lastLog) > 8*time.Second {
+			logCtx := []interface{}{"from", start, "to", end, "at", i, "found", len(results)}
+			if l := len(results); l > 0 {
+				logCtx = append(logCtx, "latest", results[l-1])
+			}
+			log.Info("Finding roots", logCtx...)
+			lastLog = time.Now()
+		}
+		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
+		if h == nil {
+			return nil, fmt.Errorf("missing header %d", i)
+		}
+		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
+			results = append(results, uint64(i))
+			// If it's an archive mode, don't return 13M numbers, bail after 10K
+			if len(results) > 10_000 {
+				log.Warn("AccessibleRoots operation aborting early, too many roots found")
+				break
+			}
+		}
+	}
+	return results, nil
 }
