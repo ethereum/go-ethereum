@@ -493,6 +493,11 @@ var (
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
 		Value: ethconfig.Defaults.RPCGasCap,
 	}
+	RPCGlobalCallTimeoutFlag = cli.DurationFlag{
+		Name:  "rpc.calltimeout",
+		Usage: "Sets a timeout used for eth_call (0=infinite)",
+		Value: ethconfig.Defaults.RPCCallTimeout,
+	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
@@ -1562,6 +1567,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
 	} else {
 		log.Info("Global gas cap disabled")
+	}
+	if ctx.GlobalIsSet(RPCGlobalCallTimeoutFlag.Name) {
+		cfg.RPCCallTimeout = ctx.GlobalDuration(RPCGlobalCallTimeoutFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)

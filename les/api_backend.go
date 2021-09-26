@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -291,6 +292,10 @@ func (b *LesApiBackend) UnprotectedAllowed() bool {
 
 func (b *LesApiBackend) RPCGasCap() uint64 {
 	return b.eth.config.RPCGasCap
+}
+
+func (b *LesApiBackend) RPCCallTimeout() time.Duration {
+	return b.eth.config.RPCCallTimeout
 }
 
 func (b *LesApiBackend) RPCTxFeeCap() float64 {
