@@ -69,7 +69,7 @@ jobs:
     env:
       - GO111MODULE=auto
     name: O-R tests
-  - script: travis_retry go run build/ci.go test -v -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/s.*")
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/s.*")
     os: linux
     dist: bionic
     go: 1.14.x
@@ -86,7 +86,7 @@ jobs:
   - stage: Github release
     go: '1.14.x'
     script:
-      - GOARCH=amd64 GOOS=linux go build -o ./build/bin/XDC-linux-amd64 -v ./cmd/XDC
+      - GOARCH=amd64 GOOS=linux go build -o ./build/bin/XDC-linux-amd64 ./cmd/XDC
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
