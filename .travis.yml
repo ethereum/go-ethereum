@@ -19,19 +19,6 @@ jobs:
       script:
         - go run build/ci.go lint
 
-  - stage: Build
-    go: '1.14.x'
-    script:
-    - sudo modprobe fuse
-    - sudo chmod 666 /dev/fuse
-    - sudo chown root:$USER /etc/fuse.conf
-    - go run build/ci.go install
-    - while sleep 540; do echo "[ still running ]"; done &
-    - go run build/ci.go test -coverage
-    - kill %1
-    after_success:
-    - bash <(curl -s https://codecov.io/bash)
-
   - stage: Tests
     os: linux
     dist: bionic
