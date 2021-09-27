@@ -2055,6 +2055,7 @@ func getLongAndShortChains() (bc *BlockChain, longChain []*types.Block, heavyCha
 // 1. Have a chain [0 ... N .. X]
 // 2. Reorg to shorter but heavier chain [0 ... N ... Y]
 // 3. Then there should be no canon mapping for the block at height X
+// 4. The forked block should still be retrievable by hash
 func TestReorgToShorterRemovesCanonMapping(t *testing.T) {
 	chain, canonblocks, sideblocks, err := getLongAndShortChains()
 	if err != nil {
@@ -2064,6 +2065,7 @@ func TestReorgToShorterRemovesCanonMapping(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 	canonNum := chain.CurrentBlock().NumberU64()
+	canonHash := chain.CurrentBlock().Hash()
 	_, err = chain.InsertChain(sideblocks)
 	if err != nil {
 		t.Errorf("Got error, %v", err)
@@ -2078,6 +2080,12 @@ func TestReorgToShorterRemovesCanonMapping(t *testing.T) {
 	}
 	if headerByNum := chain.GetHeaderByNumber(canonNum); headerByNum != nil {
 		t.Errorf("expected header to be gone: %v", headerByNum.Number.Uint64())
+	}
+	if blockByHash := chain.GetBlockByHash(canonHash); blockByHash == nil {
+		t.Errorf("expected block to be present: %x", blockByHash.Hash())
+	}
+	if headerByHash := chain.GetHeaderByHash(canonHash); headerByHash == nil {
+		t.Errorf("expected header to be present: %x", headerByHash.Hash())
 	}
 }
 
@@ -2098,6 +2106,7 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 		t.Fatalf("header %d: failed to insert into chain: %v", n, err)
 	}
 	canonNum := chain.CurrentHeader().Number.Uint64()
+	canonHash := chain.CurrentBlock().Hash()
 	sideHeaders := make([]*types.Header, len(sideblocks))
 	for i, block := range sideblocks {
 		sideHeaders[i] = block.Header()
@@ -2115,6 +2124,12 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 	}
 	if headerByNum := chain.GetHeaderByNumber(canonNum); headerByNum != nil {
 		t.Errorf("expected header to be gone: %v", headerByNum.Number.Uint64())
+	}
+	if blockByHash := chain.GetBlockByHash(canonHash); blockByHash == nil {
+		t.Errorf("expected block to be present: %x", blockByHash.Hash())
+	}
+	if headerByHash := chain.GetHeaderByHash(canonHash); headerByHash == nil {
+		t.Errorf("expected header to be present: %x", headerByHash.Hash())
 	}
 }
 
