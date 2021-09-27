@@ -191,8 +191,8 @@ Passphrase: {{.InputLine "foobar"}}
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0x7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
-		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
+		"=xdc7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
+		"=xdc289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(XDC.StderrText(), m) {
@@ -211,8 +211,8 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0x7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
-		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
+		"=xdc7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
+		"=xdc289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(XDC.StderrText(), m) {
