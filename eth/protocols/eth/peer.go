@@ -75,12 +75,12 @@ type Peer struct {
 	head common.Hash // Latest advertised head block hash
 	td   *big.Int    // Latest advertised head block total difficulty
 
-	knownBlocks     *set                   // Set of block hashes known to be known by this peer
+	knownBlocks     *leakySet              // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
 	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
 
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
-	knownTxs    *set               // Set of transaction hashes known to be known by this peer
+	knownTxs    *leakySet          // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
@@ -96,8 +96,8 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		Peer:            p,
 		rw:              rw,
 		version:         version,
-		knownTxs:        newSet(maxKnownTxs),
-		knownBlocks:     newSet(maxKnownBlocks),
+		knownTxs:        newLeakySet(maxKnownTxs),
+		knownBlocks:     newLeakySet(maxKnownBlocks),
 		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
 		txBroadcast:     make(chan []common.Hash),
@@ -425,19 +425,20 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
-type set struct {
+type leakySet struct {
 	impl mapset.Set
 	max  int
 }
 
-func newSet(max int) *set {
-	return &set{
+func newLeakySet(max int) *leakySet {
+	return &leakySet{
 		max:  max,
 		impl: mapset.NewSet(),
 	}
 }
 
-func (s *set) Add(hashes ...common.Hash) {
+// Adds a list of elements to the set
+func (s *leakySet) Add(hashes ...common.Hash) {
 	for s.impl.Cardinality() > max(0, s.max-len(hashes)) {
 		s.impl.Pop()
 	}
@@ -446,10 +447,12 @@ func (s *set) Add(hashes ...common.Hash) {
 	}
 }
 
-func (s *set) Contains(hash common.Hash) bool {
+// Contains returns whether the given item is on the set
+func (s *leakySet) Contains(hash common.Hash) bool {
 	return s.impl.Contains(hash)
 }
 
-func (s *set) Cardinality() int {
+// Returns the number of elements in the set.
+func (s *leakySet) Cardinality() int {
 	return s.impl.Cardinality()
 }
