@@ -469,7 +469,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				// Storage slots requested, open the storage trie and retrieve from there
 				account, err := snap.Account(common.BytesToHash(pathset[0]))
 				loads++ // always account database reads, even for failures
-				if err != nil {
+				if err != nil || account == nil {
 					break
 				}
 				stTrie, err := trie.NewSecure(common.BytesToHash(account.Root), triedb)
