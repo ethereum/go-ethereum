@@ -3,7 +3,6 @@ package miner
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -183,14 +182,6 @@ func FillTransactions(ctx context.Context, bs BlockState, timer *time.Timer, pen
 func (c *DefaultCollator) workCycle(work BlockCollatorWork) {
 	ctx := work.Ctx
 	emptyBs := work.Block
-
-	then := time.Now()
-	for i := 0; i < 10; i++ {
-		work.Block.Copy()
-	}
-	now := time.Now()
-	fmt.Println("10 copies took:")
-	fmt.Println(now.Sub(then))
 
 	for {
 		c.recommitMu.Lock()
