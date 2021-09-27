@@ -437,7 +437,7 @@ func newLeakySet(max int) *leakySet {
 	}
 }
 
-// Adds a list of elements to the set
+// Add adds a list of elements to the set.
 func (s *leakySet) Add(hashes ...common.Hash) {
 	for s.impl.Cardinality() > max(0, s.max-len(hashes)) {
 		s.impl.Pop()
@@ -447,12 +447,12 @@ func (s *leakySet) Add(hashes ...common.Hash) {
 	}
 }
 
-// Contains returns whether the given item is on the set
+// Contains returns whether the given item is in the set.
 func (s *leakySet) Contains(hash common.Hash) bool {
 	return s.impl.Contains(hash)
 }
 
-// Returns the number of elements in the set.
+// Cardinality returns the number of elements in the set.
 func (s *leakySet) Cardinality() int {
 	return s.impl.Cardinality()
 }
