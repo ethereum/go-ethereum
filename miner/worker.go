@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner/collator"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -205,11 +206,11 @@ type worker struct {
 	newTaskHook     func(*task)      // Method to call upon receiving a new sealing task.
 	skipSealHook    func(*task) bool // Method to decide whether skipping the sealing.
 	fullTaskHook    func()           // Method to call before pushing the full sealing task.
-	collator        Collator
-	collatorBlockCh chan BlockCollatorWork
+	collator        collator.Collator
+	collatorBlockCh chan collator.BlockCollatorWork
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, collator Collator, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, c collator.Collator, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -231,12 +232,12 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, collator Collato
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
-		collatorBlockCh:    make(chan BlockCollatorWork),
-		collator:           collator,
+		collatorBlockCh:    make(chan collator.BlockCollatorWork),
+		collator:           c,
 		curEnvMu:           sync.Mutex{},
 	}
 
-	if _, ok := collator.(*DefaultCollator); ok {
+	if _, ok := c.(*DefaultCollator); ok {
 		worker.isDefaultCollator = true
 	}
 
@@ -807,7 +808,7 @@ func (w *worker) commitWork(noempty bool, timestamp int64) {
 	w.current = work
 	w.curEnvMu.Unlock()
 
-	w.collatorBlockCh <- BlockCollatorWork{Block: blockState, Ctx: work.cycleCtx}
+	w.collatorBlockCh <- collator.BlockCollatorWork{Block: blockState, Ctx: work.cycleCtx}
 }
 
 // commit runs any post-transaction state modifications, assembles the final block

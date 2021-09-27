@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner/collator"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -65,10 +66,10 @@ type Miner struct {
 	exitCh      chan struct{}
 	startCh     chan common.Address
 	stopCh      chan struct{}
-	CollatorAPI CollatorAPI
+	CollatorAPI collator.CollatorAPI
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool, collator Collator, collatorAPI CollatorAPI) *Miner {
+func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool, collator collator.Collator, collatorAPI collator.CollatorAPI) *Miner {
 	miner := &Miner{
 		eth:         eth,
 		mux:         mux,

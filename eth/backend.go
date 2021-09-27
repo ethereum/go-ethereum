@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/miner/collator"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
@@ -112,8 +113,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
 
-	var minerCollator miner.Collator
-	var minerCollatorAPI miner.CollatorAPI
+	var minerCollator collator.Collator
+	var minerCollatorAPI collator.CollatorAPI
 
 	if config.Miner.CollatorPath != "" {
 		log.Info("using custom mining collator")

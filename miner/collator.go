@@ -4,7 +4,6 @@ import (
 	"errors"
 	//	"math"
 	//"math/big"
-	"context"
 	"os"
 	"plugin"
 	"time"
@@ -14,22 +13,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/miner/collator"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
 
-type CollatorAPI interface {
-	Version() string
-	Service() interface{}
-}
-
-// Pool is an interface to the transaction pool
-type Pool interface {
-	Pending(bool) (map[common.Address]types.Transactions, error)
-	Locals() []common.Address
-}
-
-func LoadCollator(filepath string, configPath string) (Collator, CollatorAPI, error) {
+func LoadCollator(filepath string, configPath string) (collator.Collator, collator.CollatorAPI, error) {
 	p, err := plugin.Open(filepath)
 	if err != nil {
 		return nil, nil, err
@@ -40,7 +29,7 @@ func LoadCollator(filepath string, configPath string) (Collator, CollatorAPI, er
 		return nil, nil, errors.New("symbol 'APIExport' not found")
 	}
 
-	pluginConstructor, ok := v.(func(config *map[string]interface{}) (Collator, CollatorAPI, error))
+	pluginConstructor, ok := v.(func(config *map[string]interface{}) (collator.Collator, collator.CollatorAPI, error))
 	if !ok {
 		return nil, nil, errors.New("expected symbol 'API' to be of type 'CollatorAPI")
 	}
@@ -64,44 +53,6 @@ func LoadCollator(filepath string, configPath string) (Collator, CollatorAPI, er
 	return collator, collatorAPI, nil
 }
 
-/*
-	BlockState represents an under-construction block.  An instance of
-	BlockState is passed to CollateBlock where it can be filled with transactions
-	via BlockState.AddTransaction() and submitted for sealing via
-	BlockState.Commit().
-	Operations on a single BlockState instance are not threadsafe.  However,
-	instances can be copied with BlockState.Copy().
-*/
-type BlockState interface {
-	/*
-		adds a single transaction to the blockState.  Returned errors include ..,..,..
-		which signify that the transaction was invalid for the current EVM/chain state.
-		ErrRecommit signals that the recommit timer has elapsed.
-		ErrNewHead signals that the client has received a new canonical chain head.
-		All subsequent calls to AddTransaction fail if either newHead or the recommit timer
-		have occured.
-		If the recommit interval has elapsed, the BlockState can still be committed to the sealer.
-	*/
-	AddTransaction(tx *types.Transaction) (*types.Receipt, error)
-
-	/*
-		returns true if the Block has been made the current sealing block.
-		returns false if the newHead interrupt has been triggered.
-		can also return false if the BlockState is no longer valid (the call to CollateBlock
-		which the original instance was passed has returned).
-	*/
-	Commit() bool
-	Copy() BlockState
-	State() vm.StateReader
-	Signer() types.Signer
-	Header() *types.Header
-	/*
-		the account which will receive the block reward.
-	*/
-	Etherbase() common.Address
-	GasPool() core.GasPool
-}
-
 type collatorBlockState struct {
 	state     *state.StateDB
 	txs       []*types.Transaction
@@ -112,11 +63,6 @@ type collatorBlockState struct {
 	gasPool   *core.GasPool // available gas used to pack transactions
 	logs      []*types.Log
 	header    *types.Header
-}
-
-type MinerState interface {
-	IsRunning() bool
-	ChainConfig() *params.ChainConfig
 }
 
 type minerState struct {
@@ -132,33 +78,6 @@ func (m *minerState) ChainConfig() *params.ChainConfig {
 func (m *minerState) IsRunning() bool {
 	return m.worker.isRunning()
 }
-
-type BlockCollatorWork struct {
-	Ctx   context.Context
-	Block BlockState
-}
-
-type Collator interface {
-	CollateBlocks(miner MinerState, pool Pool, blockCh <-chan BlockCollatorWork, exitCh <-chan struct{})
-	CollateBlock(bs BlockState, pool Pool)
-}
-
-var (
-	ErrAlreadyCommitted = errors.New("can't mutate BlockState after calling Commit()")
-
-	// errors which indicate that a given transaction cannot be
-	// added at a given block or chain configuration.
-	ErrGasLimitReached    = errors.New("gas limit reached")
-	ErrNonceTooLow        = errors.New("tx nonce too low")
-	ErrNonceTooHigh       = errors.New("tx nonce too high")
-	ErrTxTypeNotSupported = errors.New("tx type not supported")
-	ErrGasFeeCapTooLow    = errors.New("gas fee cap too low")
-	ErrZeroTxs            = errors.New("zero transactions")
-	ErrTooManyTxs         = errors.New("applying txs to block would go over the block gas limit")
-	// error which encompasses all other reasons a given transaction
-	// could not be added to the block.
-	ErrStrange = errors.New("strange error")
-)
 
 func (bs *collatorBlockState) Commit() bool {
 	bs.env.worker.curEnvMu.Lock()
@@ -213,7 +132,7 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	return result
 }
 
-func (bs *collatorBlockState) Copy() BlockState {
+func (bs *collatorBlockState) Copy() collator.BlockState {
 	return bs.copy()
 }
 
@@ -253,19 +172,19 @@ func (bs *collatorBlockState) commitTransaction(tx *types.Transaction) ([]*types
 
 func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Receipt, error) {
 	if bs.gasPool.Gas() < params.TxGas {
-		return nil, ErrGasLimitReached
+		return nil, collator.ErrGasLimitReached
 	}
 
 	// Check whether the tx is replay protected. If we're not in the EIP155 hf
 	// phase, start ignoring the sender until we do.
 	if tx.Protected() && !bs.env.worker.chainConfig.IsEIP155(bs.header.Number) {
-		return nil, ErrTxTypeNotSupported
+		return nil, collator.ErrTxTypeNotSupported
 	}
 
 	// TODO can this error also be returned by commitTransaction below?
 	_, err := tx.EffectiveGasTip(bs.header.BaseFee)
 	if err != nil {
-		return nil, ErrGasFeeCapTooLow
+		return nil, collator.ErrGasFeeCapTooLow
 	}
 
 	snapshot := bs.state.Snapshot()
@@ -277,16 +196,16 @@ func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Rece
 		case errors.Is(err, core.ErrGasLimitReached):
 			// this should never be reached.
 			// should be caught above
-			return nil, ErrGasLimitReached
+			return nil, collator.ErrGasLimitReached
 		case errors.Is(err, core.ErrNonceTooLow):
-			return nil, ErrNonceTooLow
+			return nil, collator.ErrNonceTooLow
 		case errors.Is(err, core.ErrNonceTooHigh):
-			return nil, ErrNonceTooHigh
+			return nil, collator.ErrNonceTooHigh
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// TODO check that this unspported tx type is the same as the one caught above
-			return nil, ErrTxTypeNotSupported
+			return nil, collator.ErrTxTypeNotSupported
 		default:
-			return nil, ErrStrange
+			return nil, collator.ErrStrange
 		}
 	}
 
