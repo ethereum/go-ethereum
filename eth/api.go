@@ -547,10 +547,17 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	return dirty, nil
 }
 
-// GetAccessibleState returns the list  of roots where the node has state accessible on disk.
-// The (from, to) parameters are the sequence of blocks to search, and the order of the
-// searchresults follows the order of (from, to).
-func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) ([]uint64, error) {
+// GetAccessibleState returns the first number where the node has state an accessible
+// state on disk.
+// The (from, to) parameters are the sequence of blocks to search, which can go
+// either forwards or backwards
+func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
+	db := api.eth.ChainDb()
+	var pivot uint64
+	if p := rawdb.ReadLastPivotNumber(db); p != nil {
+		pivot = *p
+		log.Info("Found fast-sync pivot marker", "number", pivot)
+	}
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
@@ -567,42 +574,35 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) ([]uint
 		end     uint64
 		delta   = int64(1)
 		lastLog time.Time
-		results []uint64
 		err     error
 	)
 	if start, err = resolveNum(from); err != nil {
-		return nil, err
+		return 0, err
 	}
 	if end, err = resolveNum(to); err != nil {
-		return nil, err
+		return 0, err
 	}
 	if start == end {
-		return nil, fmt.Errorf("from and to needs to be different")
+		return 0, fmt.Errorf("from and to needs to be different")
 	}
 	if start > end {
 		delta = -1
 	}
 	for i := int64(start); i != int64(end); i += delta {
 		if time.Since(lastLog) > 8*time.Second {
-			logCtx := []interface{}{"from", start, "to", end, "at", i, "found", len(results)}
-			if l := len(results); l > 0 {
-				logCtx = append(logCtx, "latest", results[l-1])
-			}
-			log.Info("Finding roots", logCtx...)
+			log.Info("Finding roots", "from", start, "to", end, "at", i)
 			lastLog = time.Now()
+		}
+		if i < int64(pivot) {
+			continue
 		}
 		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
 		if h == nil {
-			return nil, fmt.Errorf("missing header %d", i)
+			return 0, fmt.Errorf("missing header %d", i)
 		}
 		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
-			results = append(results, uint64(i))
-			// If it's an archive mode, don't return 13M numbers, bail after 10K
-			if len(results) > 10_000 {
-				log.Warn("AccessibleRoots operation aborting early, too many roots found")
-				break
-			}
+			return uint64(i), nil
 		}
 	}
-	return results, nil
+	return 0, fmt.Errorf("No state found")
 }
