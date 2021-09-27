@@ -75,7 +75,7 @@ Your new account is locked with a password. Please give a password. Do not forge
 Passphrase: {{.InputLine "foobar"}}
 Repeat passphrase: {{.InputLine "foobar"}}
 `)
-	XDC.ExpectRegexp(`Address: \{[0-9a-f]{40}\}\n`)
+	XDC.ExpectRegexp(`Address: (xdc[0-9a-fA-F]{40})\n`)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
