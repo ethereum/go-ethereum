@@ -14,8 +14,6 @@ import (
 )
 
 var (
-	ErrAlreadyCommitted = errors.New("can't mutate BlockState after calling Commit()")
-
 	// errors which indicate that a given transaction cannot be
 	// added at a given block or chain configuration.
 	ErrGasLimitReached    = errors.New("gas limit reached")
@@ -45,36 +43,42 @@ type MinerState interface {
 */
 type BlockState interface {
 	/*
-		adds a single transaction to the blockState.  Returned errors include ..,..,..
-		which signify that the transaction was invalid for the current EVM/chain state.
-		ErrRecommit signals that the recommit timer has elapsed.
-		ErrNewHead signals that the client has received a new canonical chain head.
-		All subsequent calls to AddTransaction fail if either newHead or the recommit timer
-		have occured.
-		If the recommit interval has elapsed, the BlockState can still be committed to the sealer.
+		adds a single transaction to the block state
 	*/
 	AddTransaction(tx *types.Transaction) (*types.Receipt, error)
 
 	/*
-		returns true if the Block has been made the current sealing block.
-		returns false if the newHead interrupt has been triggered.
-		can also return false if the BlockState is no longer valid (the call to CollateBlock
-		which the original instance was passed has returned).
+		Commits the block to the sealer, return true if the block was successfully committed
+		and false if not (block became stale due to arrival of new canon chain head)
 	*/
 	Commit() bool
+	/*
+		deep-copy a BlockState
+	*/
 	Copy() BlockState
+	/*
+		read-only view of the Ethereum state
+	*/
 	State() vm.StateReader
 	Signer() types.Signer
+	/*
+		returns a copy of the block header
+	*/
 	Header() *types.Header
 	/*
 		the account which will receive the block reward.
 	*/
 	Etherbase() common.Address
+	/*
+		Remaining gas in a block
+	*/
 	GasPool() core.GasPool
 }
 
 type CollatorAPI interface {
+	// a user-readable version string
 	Version() string
+	// an object whose methods are the RPC API for the Collator
 	Service() interface{}
 }
 
@@ -90,10 +94,19 @@ type BlockCollatorWork struct {
 }
 
 type Collator interface {
+	// long-running function executed in it's own go-routine which handles eth1-style block collation.
+	// an empty pending block is read from blockCh for each work-cycle and filled with transactions
+	// from the pool or elswhere.  exitCh signals client exit.
 	CollateBlocks(miner MinerState, pool Pool, blockCh <-chan BlockCollatorWork, exitCh <-chan struct{})
+	// post-merge block collation which expects the implementation to finish after choosing a single block.
+	// the block chosen for proposal is the final blockState that was committed.
 	CollateBlock(bs BlockState, pool Pool)
 }
 
+// fill a block with as many transactions as possible from the pool
+// preferencing locally-originating txs and prioritizing the highest-paying
+// txs.
+// will stop adding transactions to the block if the context is cancelled, or the timer elapses.
 func FillTransactions(ctx context.Context, bs BlockState, timer *time.Timer, pendingTxs map[common.Address]types.Transactions, locals []common.Address) uint {
 	header := bs.Header()
 	if len(pendingTxs) == 0 {
