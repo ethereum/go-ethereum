@@ -32,16 +32,6 @@ jobs:
     after_success:
     - bash <(curl -s https://codecov.io/bash)
 
-  - go: '1.11.x'
-    script:
-    - sudo modprobe fuse
-    - sudo chmod 666 /dev/fuse
-    - sudo chown root:$USER /etc/fuse.conf
-    - go run build/ci.go install
-    - while sleep 540; do echo "[ still running ]"; done &
-    - go run build/ci.go test -coverage
-    - kill %1
-
   - stage: Github release
     go: '1.14.x'
     script:
