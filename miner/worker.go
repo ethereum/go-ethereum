@@ -605,11 +605,10 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	state.StartPrefetcher("miner")
 
 	bs := &collatorBlockState{
-		header:    header,
-		state:     state,
-		gasPool:   new(core.GasPool).AddGas(header.GasLimit),
-		tcount:    0,
-		snapshots: []int{},
+		header:  header,
+		state:   state,
+		gasPool: new(core.GasPool).AddGas(header.GasLimit),
+		tcount:  0,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -116,7 +117,7 @@ func submitTransactions(ctx context.Context, bs BlockState, txs *types.Transacti
 		}
 		from, _ := types.Sender(bs.Signer(), tx)
 
-		err, receipts := bs.AddTransactions(types.Transactions{tx})
+		receipt, err := bs.AddTransaction(tx)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -134,7 +135,7 @@ func submitTransactions(ctx context.Context, bs BlockState, txs *types.Transacti
 			txs.Pop()
 
 		case errors.Is(err, nil):
-			availableGas = header.GasLimit - receipts[0].CumulativeGasUsed
+			availableGas = header.GasLimit - receipt.CumulativeGasUsed
 
 			numTxsAdded++
 			// Everything ok, collect the logs and shift in the next transaction from the same account
@@ -182,6 +183,14 @@ func FillTransactions(ctx context.Context, bs BlockState, timer *time.Timer, pen
 func (c *DefaultCollator) workCycle(work BlockCollatorWork) {
 	ctx := work.Ctx
 	emptyBs := work.Block
+
+	then := time.Now()
+	for i := 0; i < 10; i++ {
+		work.Block.Copy()
+	}
+	now := time.Now()
+	fmt.Println("10 copies took:")
+	fmt.Println(now.Sub(then))
 
 	for {
 		c.recommitMu.Lock()

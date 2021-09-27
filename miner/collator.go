@@ -82,14 +82,7 @@ type BlockState interface {
 		have occured.
 		If the recommit interval has elapsed, the BlockState can still be committed to the sealer.
 	*/
-	AddTransactions(tx types.Transactions) (error, types.Receipts)
-
-	/*
-		removes a number of transactions from the block resetting the state to what
-		it was before the transactions were added.  If count is greater than the number
-		of transactions in the block,  returns
-	*/
-	RevertTransactions(count uint) error
+	AddTransaction(tx *types.Transaction) (*types.Receipt, error)
 
 	/*
 		returns true if the Block has been made the current sealing block.
@@ -118,7 +111,6 @@ type collatorBlockState struct {
 	tcount    int           // tx count in cycle
 	gasPool   *core.GasPool // available gas used to pack transactions
 	logs      []*types.Log
-	snapshots []int
 	header    *types.Header
 }
 
@@ -241,8 +233,6 @@ func (bs *collatorBlockState) copy() *collatorBlockState {
 	}
 	cpy.txs = make([]*types.Transaction, len(bs.txs))
 	copy(cpy.txs, bs.txs)
-	cpy.snapshots = make([]int, len(bs.snapshots))
-	copy(cpy.snapshots, bs.snapshots)
 
 	return &cpy
 }
@@ -261,92 +251,52 @@ func (bs *collatorBlockState) commitTransaction(tx *types.Transaction) ([]*types
 	return receipt.Logs, nil
 }
 
-func (bs *collatorBlockState) AddTransactions(txs types.Transactions) (error, types.Receipts) {
-	tcount := 0
-	var retErr error = nil
-
-	if len(txs) == 0 {
-		return ErrZeroTxs, nil
+func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Receipt, error) {
+	if bs.gasPool.Gas() < params.TxGas {
+		return nil, ErrGasLimitReached
 	}
 
-	for _, tx := range txs {
-		if bs.gasPool.Gas() < params.TxGas {
-			retErr = ErrGasLimitReached
-			break
-		}
+	// Check whether the tx is replay protected. If we're not in the EIP155 hf
+	// phase, start ignoring the sender until we do.
+	if tx.Protected() && !bs.env.worker.chainConfig.IsEIP155(bs.header.Number) {
+		return nil, ErrTxTypeNotSupported
+	}
 
-		// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !bs.env.worker.chainConfig.IsEIP155(bs.header.Number) {
-			retErr = ErrTxTypeNotSupported
-			break
-		}
+	// TODO can this error also be returned by commitTransaction below?
+	_, err := tx.EffectiveGasTip(bs.header.BaseFee)
+	if err != nil {
+		return nil, ErrGasFeeCapTooLow
+	}
 
-		// TODO can this error also be returned by commitTransaction below?
-		_, err := tx.EffectiveGasTip(bs.header.BaseFee)
-		if err != nil {
-			retErr = ErrGasFeeCapTooLow
-			break
-		}
-
-		snapshot := bs.state.Snapshot()
-		bs.snapshots = append(bs.snapshots, snapshot)
-
-		bs.state.Prepare(tx.Hash(), bs.tcount+tcount)
-		receipt, err := core.ApplyTransaction(bs.env.worker.chainConfig, bs.env.worker.chain, &bs.env.coinbase, bs.gasPool, bs.state, bs.header, tx, &bs.header.GasUsed, *bs.env.worker.chain.GetVMConfig())
-		if err != nil {
-			switch {
-			case errors.Is(err, core.ErrGasLimitReached):
-				// this should never be reached.
-				// should be caught above
-				retErr = ErrGasLimitReached
-			case errors.Is(err, core.ErrNonceTooLow):
-				retErr = ErrNonceTooLow
-			case errors.Is(err, core.ErrNonceTooHigh):
-				retErr = ErrNonceTooHigh
-			case errors.Is(err, core.ErrTxTypeNotSupported):
-				// TODO check that this unspported tx type is the same as the one caught above
-				retErr = ErrTxTypeNotSupported
-			default:
-				retErr = ErrStrange
-			}
-
-			break
-		} else {
-			bs.logs = append(bs.logs, receipt.Logs...)
-			bs.txs = append(bs.txs, tx)
-			bs.receipts = append(bs.receipts, receipt)
-			tcount++
+	snapshot := bs.state.Snapshot()
+	bs.state.Prepare(tx.Hash(), bs.tcount)
+	receipt, err := core.ApplyTransaction(bs.env.worker.chainConfig, bs.env.worker.chain, &bs.env.coinbase, bs.gasPool, bs.state, bs.header, tx, &bs.header.GasUsed, *bs.env.worker.chain.GetVMConfig())
+	if err != nil {
+		bs.state.RevertToSnapshot(snapshot)
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
+			// this should never be reached.
+			// should be caught above
+			return nil, ErrGasLimitReached
+		case errors.Is(err, core.ErrNonceTooLow):
+			return nil, ErrNonceTooLow
+		case errors.Is(err, core.ErrNonceTooHigh):
+			return nil, ErrNonceTooHigh
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			// TODO check that this unspported tx type is the same as the one caught above
+			return nil, ErrTxTypeNotSupported
+		default:
+			return nil, ErrStrange
 		}
 	}
 
-	var retReceipts []*types.Receipt
+	bs.logs = append(bs.logs, receipt.Logs...)
+	bs.txs = append(bs.txs, tx)
+	bs.receipts = append(bs.receipts, receipt)
+	bs.tcount++
 
-	if retErr != nil {
-		bs.logs = bs.logs[:len(bs.logs)-tcount]
-		bs.state.RevertToSnapshot(bs.snapshots[len(bs.snapshots)-(tcount+1)])
-
-		bs.snapshots = bs.snapshots[:len(bs.snapshots)-(tcount+1)]
-		bs.txs = bs.txs[:len(bs.txs)-(tcount+1)]
-		bs.receipts = bs.receipts[:len(bs.receipts)-(tcount+1)]
-
-		return retErr, nil
-	} else {
-		retReceipts = bs.receipts[bs.tcount:]
-		bs.tcount += tcount
-	}
-	return nil, retReceipts
-}
-
-func (bs *collatorBlockState) RevertTransactions(count uint) error {
-	if int(count) > len(bs.snapshots) {
-		return ErrTooManyTxs
-	} else if count == 0 {
-		return ErrZeroTxs
-	}
-	bs.state.RevertToSnapshot(bs.snapshots[len(bs.snapshots)-int(count)])
-	bs.snapshots = bs.snapshots[:len(bs.snapshots)-int(count)]
-	return nil
+	receiptCpy := *receipt
+	return &receiptCpy, nil
 }
 
 func (bs *collatorBlockState) State() vm.StateReader {
