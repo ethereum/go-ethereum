@@ -75,7 +75,7 @@ Your new account is locked with a password. Please give a password. Do not forge
 Passphrase: {{.InputLine "foobar"}}
 Repeat passphrase: {{.InputLine "foobar"}}
 `)
-	XDC.ExpectRegexp(`Address: (xdc[0-9a-fA-F]{40})\n`)
+	XDC.ExpectRegexp(`Address: \{xdc[0-9a-f]{40}\}\n`)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
@@ -112,7 +112,7 @@ func TestWalletImport(t *testing.T) {
 	XDC.Expect(`
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foo"}}
-Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
+Address: {xdcd4584b5f6229b7be90727b0fc8c6b91bb427821f}
 `)
 
 	files, err := ioutil.ReadDir(filepath.Join(XDC.Datadir, "keystore"))
@@ -146,7 +146,7 @@ Passphrase: {{.InputLine "foobar"}}
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
+		"=xdcf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(XDC.StderrText(), m) {
@@ -261,7 +261,7 @@ In order to avoid this warning, you need to remove the following duplicate key f
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
+		"=xdcf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(XDC.StderrText(), m) {
