@@ -547,8 +547,9 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	return dirty, nil
 }
 
-// GetAccessibleState returns the first number where the node has state an accessible
-// state on disk.
+// GetAccessibleState returns the first number where the node has accessible
+// state on disk. Note this being the post-state of that block and the pre-state
+// of the next block.
 // The (from, to) parameters are the sequence of blocks to search, which can go
 // either forwards or backwards
 func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
