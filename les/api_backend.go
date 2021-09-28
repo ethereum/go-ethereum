@@ -294,8 +294,8 @@ func (b *LesApiBackend) RPCGasCap() uint64 {
 	return b.eth.config.RPCGasCap
 }
 
-func (b *LesApiBackend) RPCCallTimeout() time.Duration {
-	return b.eth.config.RPCCallTimeout
+func (b *LesApiBackend) RPCEVMTimeout() time.Duration {
+	return b.eth.config.RPCEVMTimeout
 }
 
 func (b *LesApiBackend) RPCTxFeeCap() float64 {
