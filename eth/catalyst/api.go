@@ -222,14 +222,18 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		}
 		return VALID, nil
 	}
-	if !api.eth.Synced() {
-		// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
-		// we should trigger the reverse header sync here.
-		return SYNCING, errors.New("node is not synced yet")
-	}
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
+	}
+	if !api.eth.Synced() {
+		if api.eth.BlockChain().GetTdByHash(parent.Hash()).Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) > 0 {
+			api.eth.SetSynced()
+		} else {
+			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
+			// we should trigger the reverse header sync here.
+			return SYNCING, errors.New("node is not synced yet")
+		}
 	}
 	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {

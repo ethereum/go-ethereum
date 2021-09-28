@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -148,7 +149,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if err != nil {
 		return nil, err
 	}
-	return n.api.GetPayload(payload.PayloadID)
+	return n.api.GetPayload(hexutil.Uint64(payload.PayloadID))
 }
 
 func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
