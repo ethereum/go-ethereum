@@ -43,9 +43,11 @@ import (
 )
 
 var (
-	VALID   = GenericStringResponse{"VALID"}
-	INVALID = GenericStringResponse{"INVALID"}
-	SYNCING = GenericStringResponse{"SYNCING"}
+	VALID          = GenericStringResponse{"VALID"}
+	INVALID        = GenericStringResponse{"INVALID"}
+	SYNCING        = GenericStringResponse{"SYNCING"}
+	UnknownHeader  = rpc.CustomError{Code: 4, Message: "unknown header"}
+	UnknownPayload = rpc.CustomError{Code: 5, Message: "unknown payload"}
 )
 
 // Register adds catalyst APIs to the full node.
@@ -179,7 +181,7 @@ func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadRes
 func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, error) {
 	data, ok := api.preparedBlocks[int(PayloadID)]
 	if !ok {
-		return nil, errors.New("payload not found")
+		return nil, &UnknownPayload
 	}
 	return data, nil
 }
@@ -444,7 +446,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		}
 		newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 		if newHeadHeader == nil {
-			return errors.New("head not found")
+			return &UnknownHeader
 		}
 		if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
 			return err
@@ -457,7 +459,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	}
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
 	if newHeadBlock == nil {
-		return errors.New("head not found")
+		return &UnknownHeader
 	}
 	if err := api.eth.BlockChain().SetChainHead(newHeadBlock); err != nil {
 		return err
