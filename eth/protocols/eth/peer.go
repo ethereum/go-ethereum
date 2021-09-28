@@ -75,12 +75,12 @@ type Peer struct {
 	head common.Hash // Latest advertised head block hash
 	td   *big.Int    // Latest advertised head block total difficulty
 
-	knownBlocks     *leakySet              // Set of block hashes known to be known by this peer
+	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
 	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
 
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
-	knownTxs    *leakySet          // Set of transaction hashes known to be known by this peer
+	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
@@ -96,8 +96,8 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		Peer:            p,
 		rw:              rw,
 		version:         version,
-		knownTxs:        newLeakySet(maxKnownTxs),
-		knownBlocks:     newLeakySet(maxKnownBlocks),
+		knownTxs:        newKnownCache(maxKnownTxs),
+		knownBlocks:     newKnownCache(maxKnownBlocks),
 		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
 		txBroadcast:     make(chan []common.Hash),
@@ -425,34 +425,36 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
-type leakySet struct {
-	impl mapset.Set
-	max  int
+// knownCache is a cache for known hashes.
+type knownCache struct {
+	hashes mapset.Set
+	max    int
 }
 
-func newLeakySet(max int) *leakySet {
-	return &leakySet{
-		max:  max,
-		impl: mapset.NewSet(),
+// newKnownCache creates a new knownCache with a max capacity.
+func newKnownCache(max int) *knownCache {
+	return &knownCache{
+		max:    max,
+		hashes: mapset.NewSet(),
 	}
 }
 
 // Add adds a list of elements to the set.
-func (s *leakySet) Add(hashes ...common.Hash) {
-	for s.impl.Cardinality() > max(0, s.max-len(hashes)) {
-		s.impl.Pop()
+func (k *knownCache) Add(hashes ...common.Hash) {
+	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
+		k.hashes.Pop()
 	}
 	for _, hash := range hashes {
-		s.impl.Add(hash)
+		k.hashes.Add(hash)
 	}
 }
 
 // Contains returns whether the given item is in the set.
-func (s *leakySet) Contains(hash common.Hash) bool {
-	return s.impl.Contains(hash)
+func (k *knownCache) Contains(hash common.Hash) bool {
+	return k.hashes.Contains(hash)
 }
 
 // Cardinality returns the number of elements in the set.
-func (s *leakySet) Cardinality() int {
-	return s.impl.Cardinality()
+func (k *knownCache) Cardinality() int {
+	return k.hashes.Cardinality()
 }

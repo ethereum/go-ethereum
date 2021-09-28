@@ -64,7 +64,7 @@ func (p *testPeer) close() {
 
 func TestPeerSet(t *testing.T) {
 	size := 5
-	s := newLeakySet(size)
+	s := newKnownCache(size)
 
 	// add 10 items
 	for i := 0; i < size*2; i++ {
