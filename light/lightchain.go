@@ -375,7 +375,7 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 }
 
 func (lc *LightChain) InsertHeader(header *types.Header) error {
-	// Verify the header first before obtaing the lock
+	// Verify the header first before obtaining the lock
 	headers := []*types.Header{header}
 	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
 		return err
@@ -393,11 +393,11 @@ func (lc *LightChain) InsertHeader(header *types.Header) error {
 }
 
 func (lc *LightChain) SetChainHead(header *types.Header) error {
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
+
+	lc.wg.Add(1)
+	defer lc.wg.Done()
 
 	if err := lc.hc.Reorg([]*types.Header{header}); err != nil {
 		return err

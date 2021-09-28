@@ -51,7 +51,7 @@ type ExecutableData struct {
 	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
-	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
+	ExtraData     []byte         `json:"extraData"     gencodec:"optional"`
 	BaseFeePerGas uint64         `json:"baseFeePerGas" gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }

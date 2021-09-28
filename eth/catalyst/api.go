@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -175,7 +176,7 @@ func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadRes
 	return &PayloadResponse{PayloadID: uint64(id)}, nil
 }
 
-func (api *ConsensusAPI) GetPayload(PayloadID uint64) (*ExecutableData, error) {
+func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, error) {
 	data, ok := api.preparedBlocks[int(PayloadID)]
 	if !ok {
 		return nil, errors.New("payload not found")
@@ -389,6 +390,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
+		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
 	if config.IsLondon(number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent)

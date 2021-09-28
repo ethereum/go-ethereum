@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -176,7 +177,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	execData, err := api.GetPayload(respID.PayloadID)
+	execData, err := api.GetPayload(hexutil.Uint64(respID.PayloadID))
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -360,4 +361,57 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	ethservice.SetSynced()
 
 	return n, ethservice
+}
+
+func TestFullAPI(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	defer n.Close()
+	var (
+		api    = NewConsensusAPI(ethservice, nil)
+		parent = ethservice.BlockChain().CurrentBlock()
+		// This EVM code generates a log when the contract is created.
+		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	for i := 0; i < 10; i++ {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		nonce := statedb.GetNonce(testAddr)
+		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		ethservice.TxPool().AddLocal(tx)
+
+		params := AssembleBlockParams{
+			ParentHash:   parent.Hash(),
+			Timestamp:    parent.Time() + 1,
+			Random:       crypto.Keccak256Hash([]byte{byte(i)}),
+			FeeRecipient: parent.Coinbase(),
+		}
+		resp, err := api.PreparePayload(params)
+		if err != nil {
+			t.Fatalf("can't prepare payload: %v", err)
+		}
+		payload, err := api.GetPayload(hexutil.Uint64(resp.PayloadID))
+		if err != nil {
+			t.Fatalf("can't get payload: %v", err)
+		}
+		execResp, err := api.ExecutePayload(*payload)
+		if err != nil {
+			t.Fatalf("can't execute payload: %v", err)
+		}
+		if execResp.Status != VALID.Status {
+			t.Fatalf("invalid status: %v", execResp.Status)
+		}
+
+		if err := api.ConsensusValidated(ConsensusValidatedParams{BlockHash: payload.BlockHash, Status: VALID.Status}); err != nil {
+			t.Fatalf("failed to validate consensus: %v", err)
+		}
+
+		if err := api.ForkChoiceUpdated(ForkChoiceParams{HeadBlockHash: payload.BlockHash, FinalizedBlockHash: payload.BlockHash}); err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
+			t.Fatalf("Chain head should be updated")
+		}
+		parent = ethservice.BlockChain().CurrentBlock()
+
+	}
 }
