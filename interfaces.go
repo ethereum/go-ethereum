@@ -52,6 +52,8 @@ type Subscription interface {
 //
 // The returned error is NotFound if the requested item does not exist.
 type ChainReader interface {
+	ChainID(ctx context.Context) (*big.Int, error)
+	BlockNumber(ctx context.Context) (uint64, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error)
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
