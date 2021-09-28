@@ -93,6 +93,7 @@ type AncientReader interface {
 // AncientBatchReader is the interface for 'batched' or 'atomic' reading.
 type AncientBatchReader interface {
 	AncientReader
+
 	// ReadAncients runs the given read operation while ensuring that no writes take place
 	// on the underlying freezer.
 	ReadAncients(fn func(AncientReader) error) (err error)
