@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -661,6 +662,86 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block receipts", "err", err)
 	}
+}
+
+// storedReceiptRLP is the storage encoding of a receipt.
+// Re-definition in core/types/receipt.go.
+type storedReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Logs              []*types.LogForStorage
+}
+
+// ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
+// the list of logs. When decoding a stored receipt into this object we
+// avoid creating the bloom filter.
+type receiptLogs struct {
+	Logs []*types.Log
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
+	var stored storedReceiptRLP
+	if err := s.Decode(&stored); err != nil {
+		return err
+	}
+	r.Logs = make([]*types.Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*types.Log)(log)
+	}
+	return nil
+}
+
+// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
+func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
+	logIndex := uint(0)
+	if len(txs) != len(receipts) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	for i := 0; i < len(receipts); i++ {
+		txHash := txs[i].Hash()
+		// The derived log fields can simply be set from the block and transaction
+		for j := 0; j < len(receipts[i].Logs); j++ {
+			receipts[i].Logs[j].BlockNumber = number
+			receipts[i].Logs[j].BlockHash = hash
+			receipts[i].Logs[j].TxHash = txHash
+			receipts[i].Logs[j].TxIndex = uint(i)
+			receipts[i].Logs[j].Index = logIndex
+			logIndex++
+		}
+	}
+	return nil
+}
+
+// ReadLogs retrieves the logs for all transactions in a block. The log fields
+// are populated with metadata. In case the receipts or the block body
+// are not found, a nil is returned.
+func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
+	// Retrieve the flattened receipt slice
+	data := ReadReceiptsRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	receipts := []*receiptLogs{}
+	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
+		return nil
+	}
+
+	body := ReadBody(db, hash, number)
+	if body == nil {
+		log.Error("Missing body but have receipt", "hash", hash, "number", number)
+		return nil
+	}
+	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
+		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
+		return nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs
 }
 
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
