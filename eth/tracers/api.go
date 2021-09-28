@@ -290,7 +290,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 		}()
 	}
 	// Start a goroutine to feed all the blocks into the tracers
-	begin := time.Now()
+	var (
+		begin     = time.Now()
+		derefTodo []common.Hash // list of hashes to dereference from the db
+		derefsMu  sync.Mutex    // mutex for the derefs
+	)
 
 	go func() {
 		var (
@@ -324,6 +328,14 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				return
 			default:
 			}
+			// clean out any derefs
+			derefsMu.Lock()
+			for _, h := range derefTodo {
+				statedb.Database().TrieDB().Dereference(h)
+			}
+			derefTodo = derefTodo[:0]
+			derefsMu.Unlock()
+
 			// Print progress logs if long enough time elapsed
 			if time.Since(logged) > 8*time.Second {
 				logged = time.Now()
@@ -382,12 +394,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				Hash:   res.block.Hash(),
 				Traces: res.results,
 			}
+			// Schedule any parent tries held in memory by this task for dereferencing
 			done[uint64(result.Block)] = result
-
-			// Dereference any parent tries held in memory by this task
-			if res.statedb.Database().TrieDB() != nil {
-				res.statedb.Database().TrieDB().Dereference(res.rootref)
-			}
+			derefsMu.Lock()
+			derefTodo = append(derefTodo, res.rootref)
+			derefsMu.Unlock()
 			// Stream completed traces to the user, aborting on the first error
 			for result, ok := done[next]; ok; result, ok = done[next] {
 				if len(result.Traces) > 0 || next == end.NumberU64() {
