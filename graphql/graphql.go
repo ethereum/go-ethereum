@@ -158,14 +158,14 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 // AccessTuple represents EIP-2930
 type AccessTuple struct {
 	address     common.Address
-	storageKeys *[]common.Hash
+	storageKeys []common.Hash
 }
 
 func (at *AccessTuple) Address(ctx context.Context) common.Address {
 	return at.address
 }
 
-func (at *AccessTuple) StorageKeys(ctx context.Context) *[]common.Hash {
+func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
 	return at.storageKeys
 }
 
@@ -440,13 +440,9 @@ func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
 	accessList := tx.AccessList()
 	ret := make([]*AccessTuple, 0, len(accessList))
 	for _, al := range accessList {
-		var sKeys []common.Hash
-		for _, h := range al.StorageKeys {
-			sKeys = append(sKeys, h)
-		}
 		ret = append(ret, &AccessTuple{
 			address:     al.Address,
-			storageKeys: &sKeys,
+			storageKeys: al.StorageKeys,
 		})
 	}
 	return &ret, nil
