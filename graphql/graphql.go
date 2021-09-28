@@ -440,9 +440,13 @@ func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
 	accessList := tx.AccessList()
 	ret := make([]*AccessTuple, 0, len(accessList))
 	for _, al := range accessList {
+		var sKeys []common.Hash
+		for _, h := range al.StorageKeys {
+			sKeys = append(sKeys, h)
+		}
 		ret = append(ret, &AccessTuple{
 			address:     al.Address,
-			storageKeys: &al.StorageKeys,
+			storageKeys: &sKeys,
 		})
 	}
 	return &ret, nil
