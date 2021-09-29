@@ -44,10 +44,10 @@ type ExecutableData struct {
 	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
 	Coinbase      common.Address `json:"coinbase"      gencodec:"required"`
 	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
-	ReceiptRoot   common.Hash    `json:"receiptsRoot"  gencodec:"required"`
+	ReceiptRoot   common.Hash    `json:"receiptRoot"  gencodec:"required"`
 	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
 	Random        common.Hash    `json:"random"        gencodec:"required"`
-	Number        uint64         `json:"number"        gencodec:"required"`
+	Number        uint64         `json:"blockNumber"   gencodec:"required"`
 	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`

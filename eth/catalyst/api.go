@@ -90,12 +90,18 @@ type ConsensusAPI struct {
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 	var engine consensus.Engine
 	if eth == nil {
+		if les.BlockChain().Config().TerminalTotalDifficulty == nil {
+			panic("Catalyst started without valid total difficulty")
+		}
 		if b, ok := les.Engine().(*beacon.Beacon); ok {
 			engine = beacon.New(b.InnerEngine(), true)
 		} else {
 			engine = beacon.New(les.Engine(), true)
 		}
 	} else {
+		if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
+			panic("Catalyst started without valid total difficulty")
+		}
 		if b, ok := eth.Engine().(*beacon.Beacon); ok {
 			engine = beacon.New(b.InnerEngine(), true)
 		} else {
@@ -196,8 +202,9 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 		if !merger.EnteredPoS() {
 			merger.EnterPoS()
 		}
-		return api.setHead(params.BlockHash)
+		return nil //api.setHead(params.BlockHash)
 	case INVALID.Status:
+		// TODO (MariusVanDerWijden) delete the block from the bc
 		return nil
 	default:
 		return errors.New("invalid params.status")
@@ -229,7 +236,8 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
 	if !api.eth.Synced() {
-		if api.eth.BlockChain().GetTdByHash(parent.Hash()).Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) > 0 {
+		td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+		if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) > 0 {
 			api.eth.SetSynced()
 		} else {
 			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
@@ -274,10 +282,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 	if err != nil {
 		return nil, err
 	}
-	coinbase, err := api.eth.Etherbase()
-	if err != nil {
-		return nil, err
-	}
+	coinbase := params.FeeRecipient
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
