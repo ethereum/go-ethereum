@@ -744,30 +744,26 @@ func TestReadLogs(t *testing.T) {
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
 
-	logs := ReadLogs(db, hash, 0)
+	logs := ReadLogs(db, hash, 0, func(logs []*types.Log) []*types.Log { return logs })
 	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
-	if have, want := len(logs), 2; have != want {
+	if have, want := len(logs), 4; have != want {
 		t.Fatalf("unexpected number of logs returned, have %d want %d", have, want)
-	}
-	if have, want := len(logs[0]), 2; have != want {
-		t.Fatalf("unexpected number of logs[0] returned, have %d want %d", have, want)
-	}
-	if have, want := len(logs[1]), 2; have != want {
-		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
 	}
 
 	// Fill in log fields so we can compare their rlp encoding
 	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
 		t.Fatal(err)
 	}
+	idx := 0
 	for i, pr := range receipts {
-		for j, pl := range pr.Logs {
-			rlpHave, err := rlp.EncodeToBytes(newFullLogRLP(logs[i][j]))
+		for _, pl := range pr.Logs {
+			rlpHave, err := rlp.EncodeToBytes(newFullLogRLP(logs[idx]))
 			if err != nil {
 				t.Fatal(err)
 			}
+			idx++
 			rlpWant, err := rlp.EncodeToBytes(newFullLogRLP(pl))
 			if err != nil {
 				t.Fatal(err)
