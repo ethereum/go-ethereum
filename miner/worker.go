@@ -169,6 +169,7 @@ type worker struct {
 	startCh            chan struct{}
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
+	coinbaseCh         chan struct{}
 
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
@@ -231,6 +232,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, c collator.Colla
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
+		coinbaseCh:         make(chan struct{}),
 		resubmitIntervalCh: make(chan time.Duration),
 		collatorBlockCh:    make(chan collator.BlockCollatorWork),
 		collator:           c,
@@ -274,8 +276,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, c collator.Colla
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
 func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.coinbase = addr
+	w.mu.Unlock()
+
+	if w.isRunning() {
+		// trigger a new work cycle if the worker was running to replace any blocks
+		// that were being sealed with the previous etherbase.
+		w.coinbaseCh <- struct{}{}
+	}
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -393,7 +401,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			clearPending(w.chain.CurrentBlock().NumberU64())
 			timestamp = time.Now().Unix()
 			commit(false)
-
+		case <-w.coinbaseCh:
+			clearPending(w.chain.CurrentBlock().NumberU64())
+			timestamp = time.Now().Unix()
+			commit(false)
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()

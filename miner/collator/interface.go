@@ -49,7 +49,7 @@ type BlockState interface {
 
 	/*
 		Commits the block to the sealer, return true if the block was successfully committed
-		and false if not (block became stale due to arrival of new canon chain head)
+		and false if not (block became stale)
 	*/
 	Commit() bool
 	/*
@@ -97,6 +97,8 @@ type Collator interface {
 	// long-running function executed in it's own go-routine which handles eth1-style block collation.
 	// an empty pending block is read from blockCh for each work-cycle and filled with transactions
 	// from the pool or elswhere.  exitCh signals client exit.
+	// a work-cycle can be interrupted by the arrival of a new canonical chain head block or the client
+	// changing the miner's etherbase.
 	CollateBlocks(miner MinerState, pool Pool, blockCh <-chan BlockCollatorWork, exitCh <-chan struct{})
 	// post-merge block collation which expects the implementation to finish after choosing a single block.
 	// the block chosen for proposal is the final blockState that was committed.

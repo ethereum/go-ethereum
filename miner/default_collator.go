@@ -85,6 +85,7 @@ func (c *DefaultCollator) adjustRecommit(ratio float64, inc bool) {
 func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 	ctx := work.Ctx
 	emptyBs := work.Block
+	chainConfig := c.miner.ChainConfig()
 
 	for {
 		c.recommitMu.Lock()
@@ -101,6 +102,8 @@ func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 
 		select {
 		case <-timer.C:
+			// timer (likely) elapsed while the block was being filled in FillTransactions
+			// if sealing, adjust thre recommit interval upwards.
 			select {
 			case <-ctx.Done():
 				return
@@ -109,13 +112,18 @@ func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 			default:
 			}
 
-			header := bs.Header()
-			gasLimit := header.GasLimit
-			gasPool := bs.GasPool()
-			ratio := float64(gasLimit-gasPool.Gas()) / float64(gasLimit)
-
-			c.adjustRecommit(ratio, true)
-			shouldContinue = true
+			// If mining is running resubmit a new work cycle periodically to pull in
+			// higher priced transactions. Disable this overhead for pending blocks.
+			if c.miner.IsRunning() && (chainConfig.Clique == nil || chainConfig.Clique.Period > 0) {
+				header := bs.Header()
+				gasLimit := header.GasLimit
+				gasPool := bs.GasPool()
+				ratio := float64(gasLimit-gasPool.Gas()) / float64(gasLimit)
+				c.adjustRecommit(ratio, true)
+				shouldContinue = true
+			} else {
+				return
+			}
 		default:
 		}
 
@@ -127,6 +135,9 @@ func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+			// waited after filling the block which means recommit interval is too long.
+			// if sealing, adjust it down (unless it would go below minRecommit).
+
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			chainConfig := c.miner.ChainConfig()
