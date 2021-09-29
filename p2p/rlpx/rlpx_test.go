@@ -386,16 +386,8 @@ func BenchmarkThroughput256(b *testing.B) {
 	benchmarkThroughput(b, 256)
 }
 
-func BenchmarkThroughput512(b *testing.B) {
-	benchmarkThroughput(b, 512)
-}
-
 func BenchmarkThroughput1024(b *testing.B) {
 	benchmarkThroughput(b, 1024)
-}
-
-func BenchmarkThroughput2048(b *testing.B) {
-	benchmarkThroughput(b, 2048)
 }
 
 func BenchmarkThroughput4096(b *testing.B) {
@@ -406,11 +398,18 @@ func BenchmarkThroughput1MB(b *testing.B) {
 	benchmarkThroughput(b, 1024*1024)
 }
 
-func BenchmarkThroughput2MB(b *testing.B) {
-	benchmarkThroughput(b, 1024*1024*2)
+func BenchmarkThroughput6MB(b *testing.B) {
+	benchmarkThroughput(b, 6*1024*1024)
 }
 
-func benchmarkThroughput(b *testing.B, sendSize uint32) {
+func BenchmarkThroughputMax(b *testing.B) {
+	// the max size over the wire is max uint24 (16777215) but we need
+	// to remove 773 which is the size of the extra header for the snappy
+	// compression
+	benchmarkThroughput(b, maxUint24-773)
+}
+
+func benchmarkThroughput(b *testing.B, sendSize int) {
 	pipe1, pipe2, err := pipes.TCPPipe()
 	if err != nil {
 		b.Fatal(err)
