@@ -851,7 +851,7 @@ func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 }
 
 func (fb *filterBackend) GetLogsFiltered(ctx context.Context, hash common.Hash, _ func([]*types.Log) []*types.Log) ([]*types.Log, error) {
-	panic("hi")
+	panic("unimplemented")
 }
 
 func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {

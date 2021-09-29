@@ -175,7 +175,7 @@ func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 }
 
 func (b *LesApiBackend) GetLogsFiltered(ctx context.Context, hash common.Hash, _ func([]*types.Log) []*types.Log) ([]*types.Log, error) {
-	panic("hi")
+	panic("unimplemented")
 }
 
 func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
