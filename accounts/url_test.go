@@ -94,3 +94,71 @@ func TestURLComparison(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalStringTransformation(t *testing.T) {
+	testCases := []struct {
+		name                string
+		url                 string
+		expectedTerminalUrl string
+	}{
+		{
+			"long-url",
+			"https://ethereum.org/test/account",
+			"https://ethereum.org/test/accou..",
+		},
+		{
+			"short-url",
+			"https://ethereum.org/",
+			"https://ethereum.org/",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+
+		t.Run(testCase.name, func(t *testing.T) {
+			url, err := parseURL(testCase.url)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			terminalString := url.TerminalString()
+			if terminalString != testCase.expectedTerminalUrl {
+				t.Errorf("expected: %v, got: %v", testCase.expectedTerminalUrl, terminalString)
+			}
+		})
+	}
+}
+
+func TestUnmarshalBrokenJson(t *testing.T) {
+
+	testCases := []struct {
+		name            string
+		brokenData      string
+		expectedMessage string
+	}{
+		{
+			"broken json",
+			"{\"test ",
+			"unexpected end of JSON input",
+		},
+		{
+			"broken url",
+			"\"tomato\"",
+			"protocol scheme missing",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			url := &URL{}
+			err := url.UnmarshalJSON([]byte(testCase.brokenData))
+			if err == nil {
+				t.Errorf("expected error in unmarshaling %v", testCase.brokenData)
+			}
+			if err.Error() != testCase.expectedMessage {
+				t.Errorf("unexpected error: %v in unmarshaling json: %v", testCase.brokenData, err.Error())
+			}
+		})
+	}
+}
