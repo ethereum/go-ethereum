@@ -753,14 +753,6 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, fn func([]*types
 			log.BlockHash = hash
 			log.TxHash = body.Transactions[log.TxIndex].Hash()
 		}
-		/*if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		      log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
-		      return nil
-		  }
-		  logs := make([][]*types.Log, len(receipts))
-		  for i, receipt := range receipts {
-		      logs[i] = receipt.Logs
-		  }*/
 		return filtered
 	} else {
 		return []*types.Log{}

@@ -253,24 +253,19 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 	if err != nil {
 		return nil, err
 	}
-	/*var unfiltered []*types.Log
-	for _, logs := range logsList {
-		unfiltered = append(unfiltered, logs...)
-	}
-	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)*/
 	if len(logs) > 0 {
 		// We have matching logs, check if we need to resolve full logs via the light client
-		/*if logs[0].TxHash == (common.Hash{}) {
+		if logs[0].TxHash == (common.Hash{}) {
 			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
 			if err != nil {
 				return nil, err
 			}
-			unfiltered = unfiltered[:0]
+			var unfiltered []*types.Log
 			for _, receipt := range receipts {
 				unfiltered = append(unfiltered, receipt.Logs...)
 			}
 			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
-		}*/
+		}
 		return logs, nil
 	}
 	return nil, nil
