@@ -174,14 +174,14 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
-func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadResponse, error) {
+func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (hexutil.Uint64, error) {
 	data, err := api.assembleBlock(params)
 	if err != nil {
-		return nil, err
+		return hexutil.Uint64(0), err
 	}
 	id := len(api.preparedBlocks)
 	api.preparedBlocks[id] = data
-	return &PayloadResponse{PayloadID: uint64(id)}, nil
+	return hexutil.Uint64(id), nil
 }
 
 func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, error) {
@@ -358,7 +358,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 	if err != nil {
 		return nil, err
 	}
-	return BlockToExecutableData(block), nil
+	return BlockToExecutableData(block, params.Random), nil
 }
 
 func encodeTransactions(txs []*types.Transaction) [][]byte {
@@ -413,7 +413,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 	return block, nil
 }
 
-func BlockToExecutableData(block *types.Block) *ExecutableData {
+func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableData {
 	return &ExecutableData{
 		BlockHash:    block.Hash(),
 		ParentHash:   block.ParentHash(),
@@ -426,6 +426,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableData {
 		ReceiptRoot:  block.ReceiptHash(),
 		LogsBloom:    block.Bloom().Bytes(),
 		Transactions: encodeTransactions(block.Transactions()),
+		Random:       random,
 	}
 }
 
@@ -524,7 +525,7 @@ func (api *ConsensusAPI) ExportExecutableData(path string) error {
 	}
 	for i := uint64(0); i < api.eth.BlockChain().CurrentBlock().NumberU64(); i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
-		exec := BlockToExecutableData(block)
+		exec := BlockToExecutableData(block, common.Hash{})
 		b, err := exec.MarshalJSON()
 		if err != nil {
 			return err

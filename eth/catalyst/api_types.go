@@ -44,7 +44,7 @@ type ExecutableData struct {
 	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
 	Coinbase      common.Address `json:"coinbase"      gencodec:"required"`
 	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
-	ReceiptRoot   common.Hash    `json:"receiptRoot"  gencodec:"required"`
+	ReceiptRoot   common.Hash    `json:"receiptRoot"   gencodec:"required"`
 	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
 	Random        common.Hash    `json:"random"        gencodec:"required"`
 	Number        uint64         `json:"blockNumber"   gencodec:"required"`
@@ -74,17 +74,6 @@ type NewBlockResponse struct {
 
 type GenericResponse struct {
 	Success bool `json:"success"`
-}
-
-//go:generate go run github.com/fjl/gencodec -type PayloadResponse -field-override payloadResponseMarshaling -out gen_payload.go
-
-type PayloadResponse struct {
-	PayloadID uint64 `json:"payloadId"`
-}
-
-// JSON type overrides for payloadResponse.
-type payloadResponseMarshaling struct {
-	PayloadID hexutil.Uint64
 }
 
 type GenericStringResponse struct {
