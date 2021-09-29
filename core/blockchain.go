@@ -1692,8 +1692,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
+	// Left-trim all the known blocks that don't need to build snapshot
+	if err == ErrKnownBlock && !bc.requireSnapshot(block) {
 		// First block (and state) is known
 		//   1. We did a roll-back, and should now do a re-import
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
@@ -1722,7 +1722,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		for block != nil && err == ErrKnownBlock {
+		for block != nil && err == ErrKnownBlock && !bc.requireSnapshot(block) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
@@ -1755,7 +1755,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		return it.index, err
 
 	// Some other error occurred, abort
-	case err != nil:
+	case err != nil && err != ErrKnownBlock:
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
@@ -1789,7 +1789,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// older block might complete the state of the subsequent one. In this case,
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database).
-		if err == ErrKnownBlock {
+		// Besides, the known block must not need to build snapshot
+		if err == ErrKnownBlock && !bc.requireSnapshot(block) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
 				logger = log.Warn
@@ -2264,6 +2265,14 @@ func (bc *BlockChain) futureBlocksLoop() {
 			return
 		}
 	}
+}
+
+// requireSnapshot checks whether executing the block is needed
+// in order to build the diffLayer of snapshot.
+func (bc *BlockChain) requireSnapshot(block *types.Block) bool {
+	// Only if the block doesn't have a snapshot whereas its parent has
+	return block != nil && bc.snaps != nil && bc.snaps.Snapshot(block.Hash()) == nil &&
+	bc.snaps.Snapshot(block.ParentHash()) != nil
 }
 
 // maintainTxIndex is responsible for the construction and deletion of the
