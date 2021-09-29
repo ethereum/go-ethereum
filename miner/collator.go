@@ -92,6 +92,23 @@ func (bs *collatorBlockState) Commit() bool {
 	}
 
 	bs.env.current = bs
+
+	if !bs.env.worker.isRunning() && len(bs.logs) > 0 {
+		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		logsCpy := make([]*types.Log, len(bs.logs))
+		for i, l := range bs.logs {
+			logCpy := *l
+			logsCpy[i] = &logCpy
+		}
+		bs.env.worker.pendingLogsFeed.Send(logsCpy)
+	}
+
 	// TODO apply FinalizeAndAssemble with our state, then copy and send it to sealer?
 	// that way the post-block-processing state could be inspected from a BlockState
 	bs.env.worker.commit(bs.env.copy(), nil, true, time.Now())
