@@ -382,7 +382,35 @@ func BenchmarkHandshakeRead(b *testing.B) {
 	}
 }
 
-func BenchmarkThroughput(b *testing.B) {
+func BenchmarkThroughput256(b *testing.B) {
+	benchmarkThroughput(b, 256)
+}
+
+func BenchmarkThroughput512(b *testing.B) {
+	benchmarkThroughput(b, 512)
+}
+
+func BenchmarkThroughput1024(b *testing.B) {
+	benchmarkThroughput(b, 1024)
+}
+
+func BenchmarkThroughput2048(b *testing.B) {
+	benchmarkThroughput(b, 2048)
+}
+
+func BenchmarkThroughput4096(b *testing.B) {
+	benchmarkThroughput(b, 4096)
+}
+
+func BenchmarkThroughput1MB(b *testing.B) {
+	benchmarkThroughput(b, 1024*1024)
+}
+
+func BenchmarkThroughput2MB(b *testing.B) {
+	benchmarkThroughput(b, 1024*1024*2)
+}
+
+func benchmarkThroughput(b *testing.B, sendSize uint32) {
 	pipe1, pipe2, err := pipes.TCPPipe()
 	if err != nil {
 		b.Fatal(err)
@@ -391,7 +419,7 @@ func BenchmarkThroughput(b *testing.B) {
 	var (
 		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
 		handshakeDone = make(chan error, 1)
-		msgdata       = make([]byte, 1024)
+		msgdata       = make([]byte, sendSize)
 		rand          = rand.New(rand.NewSource(1337))
 	)
 	rand.Read(msgdata)
@@ -407,7 +435,7 @@ func BenchmarkThroughput(b *testing.B) {
 		}
 		conn1.SetSnappy(true)
 		// Keep sending messages until connection closed.
-		for {
+		for i := 0; i < b.N; i++ {
 			if _, err := conn1.Write(0, msgdata); err != nil {
 				return
 			}
@@ -425,8 +453,10 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	// Read N messages.
-	b.SetBytes(int64(len(msgdata)))
+	b.SetBytes(int64(sendSize))
 	b.ReportAllocs()
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		_, _, _, err := conn2.Read()
 		if err != nil {
