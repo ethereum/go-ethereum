@@ -102,12 +102,12 @@ func TestTerminalStringTransformation(t *testing.T) {
 		expectedTerminalUrl string
 	}{
 		{
-			"long-url",
+			"long url",
 			"https://ethereum.org/test/account",
 			"https://ethereum.org/test/accou..",
 		},
 		{
-			"short-url",
+			"short url",
 			"https://ethereum.org/",
 			"https://ethereum.org/",
 		},
