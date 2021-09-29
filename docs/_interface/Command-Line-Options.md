@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.8-stable-26675454
+   1.10.9-stable-eae3b194
 
 COMMANDS:
    account                            Manage accounts
@@ -168,7 +168,7 @@ MINER OPTIONS:
   --miner.extradata value             Block extra data set by the miner (default = client version)
   --miner.recommit value              Time interval to recreate the block being mined (default: 3s)
   --miner.noverify                    Disable remote sealing verification
-  
+
 GAS PRICE ORACLE OPTIONS:
   --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
@@ -212,13 +212,6 @@ METRICS AND STATS OPTIONS:
 
 ALIASED (deprecated) OPTIONS:
   --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
-  --rpc                               Enable the HTTP-RPC server (deprecated and will be removed June 2021, use --http)
-  --rpcaddr value                     HTTP-RPC server listening interface (deprecated and will be removed June 2021, use --http.addr) (default: "localhost")
-  --rpcport value                     HTTP-RPC server listening port (deprecated and will be removed June 2021, use --http.port) (default: 8545)
-  --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)
-  --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts) (default: "localhost")
-  --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)
-  --miner.gastarget value             Target gas floor for mined blocks (deprecated) (default: 0)
 
 MISC OPTIONS:
   --snapshot                          Enables snapshot-database mode (default = enable)
