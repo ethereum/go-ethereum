@@ -795,9 +795,6 @@ func (jst *Tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if !jst.traceCallFrames {
 		return
 	}
-	if jst.err != nil {
-		return
-	}
 	// If tracing was interrupted, set the error and stop
 	if atomic.LoadUint32(&jst.interrupt) > 0 {
 		jst.err = jst.reason

@@ -19,16 +19,7 @@
 // about internal messages of a transaction.
 {
     callstack: [{}],
-    fault: function(log, db) {
-        var len = this.callstack.length
-        if (len > 1) {
-            var call = this.callstack.pop()
-            if (this.callstack[len-1].calls === undefined) {
-                this.callstack[len-1].calls = []
-            }
-            this.callstack[len-1].calls.push(call)
-        }
-    },
+    fault: function(log, db) {},
     result: function(ctx, db) {
         // Prepare outer message info
         var result = {
