@@ -211,7 +211,7 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 	}
 }
 
-func (api *ConsensusAPI) ForkChoiceUpdated(params ForkChoiceParams) error {
+func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
 	return api.setHead(params.FinalizedBlockHash)
 }
 
