@@ -250,42 +250,45 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	} else {
 		nonce = opts.Nonce.Uint64()
 	}
+
 	// Figure out reasonable gas price values
-	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
+	gasPrice := opts.GasPrice
+	gasTipCap := opts.GasTipCap
+	gasFeeCap := opts.GasFeeCap
+	if gasPrice != nil && (gasFeeCap != nil || gasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	head, err := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil)
 	if err != nil {
 		return nil, err
 	}
-	if head.BaseFee != nil && opts.GasPrice == nil {
-		if opts.GasTipCap == nil {
+	if head.BaseFee != nil && gasPrice == nil {
+		if gasTipCap == nil {
 			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
 			}
-			opts.GasTipCap = tip
+			gasTipCap = tip
 		}
-		if opts.GasFeeCap == nil {
-			gasFeeCap := new(big.Int).Add(
-				opts.GasTipCap,
+		if gasFeeCap == nil {
+			gasFeeCap = new(big.Int).Add(
+				gasTipCap,
 				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 			)
-			opts.GasFeeCap = gasFeeCap
 		}
-		if opts.GasFeeCap.Cmp(opts.GasTipCap) < 0 {
-			return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", opts.GasFeeCap, opts.GasTipCap)
+		if gasFeeCap.Cmp(gasTipCap) < 0 {
+			return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", gasFeeCap, gasTipCap)
 		}
 	} else {
-		if opts.GasFeeCap != nil || opts.GasTipCap != nil {
+		if gasFeeCap != nil || gasTipCap != nil {
 			return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 		}
-		if opts.GasPrice == nil {
+		if gasPrice == nil {
 			price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
 			}
-			opts.GasPrice = price
+			gasPrice = price
 		}
 	}
 	gasLimit := opts.GasLimit
@@ -299,7 +302,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, GasPrice: opts.GasPrice, GasTipCap: opts.GasTipCap, GasFeeCap: opts.GasFeeCap, Value: value, Data: input}
+		msg := ethereum.CallMsg{From: opts.From, To: contract, GasPrice: gasPrice, GasTipCap: gasTipCap, GasFeeCap: gasFeeCap, Value: value, Data: input}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
@@ -307,10 +310,10 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	// Create the transaction, sign it and schedule it for execution
 	var rawTx *types.Transaction
-	if opts.GasFeeCap == nil {
+	if gasFeeCap == nil {
 		baseTx := &types.LegacyTx{
 			Nonce:    nonce,
-			GasPrice: opts.GasPrice,
+			GasPrice: gasPrice,
 			Gas:      gasLimit,
 			Value:    value,
 			Data:     input,
@@ -322,8 +325,8 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	} else {
 		baseTx := &types.DynamicFeeTx{
 			Nonce:     nonce,
-			GasFeeCap: opts.GasFeeCap,
-			GasTipCap: opts.GasTipCap,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
 			Gas:       gasLimit,
 			Value:     value,
 			Data:      input,
