@@ -259,6 +259,10 @@ func buildFlags(env build.Environment) (flags []string) {
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
+	// Increase the thread stack size when running on alpine linux.
+	// TODO(gballet) figure out a way to detect we are running on alpine
+	// linux, as this line won't build on all platforms.
+	ld = append(ld, "-extldflags='-Wl,-z,-stack-size=0x200000'")
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
