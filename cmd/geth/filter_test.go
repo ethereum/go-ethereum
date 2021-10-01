@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"os"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,36 +23,81 @@ import (
 )
 
 func TestGethFilters(t *testing.T) {
+	cliArgs := []string{"", "--dev", "-http", "--http.port=0", "--ws", "--ws.port=0"}
+
+	// app created in init()
 	app.Action = func(ctx *cli.Context) error {
+		var ipcEndpoint string
+		var httpEndpoint *net.TCPAddr
+		var wsEndpoint string
+
+		lookingC := make(chan struct{})
+		stillLooking := true
+		log.Root().SetHandler(log.FuncHandler(func(r *log.Record) error {
+			if v := scanFor(r, "HTTP server started", "endpoint"); v != nil {
+				httpEndpoint = v.(*net.TCPAddr)
+				t.Log("http", httpEndpoint)
+			}
+			if v := scanFor(r, "IPC endpoint opened", "url"); v != nil {
+				ipcEndpoint = v.(string)
+				t.Log("ipc", ipcEndpoint)
+			}
+			if v := scanFor(r, "WebSocket enabled", "url"); v != nil {
+				wsEndpoint = v.(string)
+				t.Log("ws", wsEndpoint)
+
+			}
+			if stillLooking && ipcEndpoint != "" && httpEndpoint != nil && wsEndpoint != "" {
+				// only want the chan send to happen once
+				stillLooking = false
+				lookingC <- struct{}{}
+			}
+			return nil
+		}))
+
 		prepare(ctx)
 		stack, backend := makeFullNode(ctx)
-		startNode(ctx, stack, backend)
-		go func() {
-			e := newFilterEnv(t, stack, backend)
-			e.deployContract(t)
-			// call contract methods to emit events
-			e.embedLogs(t)
-			// run filter tests
-			e.checkFilters(t)
-			e.stack.Close()
-		}()
+		go startNode(ctx, stack, backend)
+
+		t.Log("waiting")
+		<-lookingC
+
+		e := newFilterEnv(t, stack, backend)
+
+		t.Log("deploy contract")
+		e.deployContract(t)
+
+		// call contract methods to emit events
+		t.Log("call contract")
+		e.embedLogs(t)
+
+		// run filter tests
+		t.Log("run filters")
+		e.checkFilters(t)
+
+		e.stack.Close()
 		stack.Wait()
 
 		return nil
 	}
 	app.Before = nil
 	app.After = nil
-	// verbosity=0 on command line doesn't seem to do anything
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(0), nil))
-	dir, err := os.MkdirTemp(os.TempDir(), "ethdev")
+	err := app.Run(cliArgs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
-	err = app.Run([]string{"", "--dev", "--datadir", dir, "--verbosity=0"})
-	if err != nil {
-		t.Fatal(err)
+}
+
+func scanFor(r *log.Record, msg string, key string) interface{} {
+	if r.Msg == msg {
+		for i, v := range r.Ctx {
+			if v == key {
+				fmt.Println(r.Ctx[i+1])
+				return r.Ctx[i+1]
+			}
+		}
 	}
+	return nil
 }
 
 func (e *filterEnv) checkFilters(t *testing.T) {
@@ -110,7 +155,7 @@ func (e *filterEnv) checkFilters(t *testing.T) {
 	for _, v := range tests {
 		res := e.query(t, v.filter)
 		if len(res) != len(v.expected) {
-			t.Fatal("number of results does not match expected")
+			t.Fatal("number of results does not match expected", len(res), len(v.expected))
 		}
 		for i, r := range res {
 			err := checkResult(v.expected[i], r)
