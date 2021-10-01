@@ -68,6 +68,17 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
+//go:generate go run github.com/fjl/gencodec -type PayloadResponse -field-override payloadResponseMarshaling -out gen_payload.go
+
+type PayloadResponse struct {
+	PayloadID uint64 `json:"payloadId"`
+}
+
+// JSON type overrides for payloadResponse.
+type payloadResponseMarshaling struct {
+	PayloadID hexutil.Uint64
+}
+
 type NewBlockResponse struct {
 	Valid bool `json:"valid"`
 }

@@ -19,7 +19,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		ParentHash    common.Hash     `json:"parentHash"    gencodec:"required"`
 		Coinbase      common.Address  `json:"coinbase"      gencodec:"required"`
 		StateRoot     common.Hash     `json:"stateRoot"     gencodec:"required"`
-		ReceiptRoot   common.Hash     `json:"receiptRoot"  gencodec:"required"`
+		ReceiptRoot   common.Hash     `json:"receiptRoot"   gencodec:"required"`
 		LogsBloom     hexutil.Bytes   `json:"logsBloom"     gencodec:"required"`
 		Random        common.Hash     `json:"random"        gencodec:"required"`
 		Number        hexutil.Uint64  `json:"blockNumber"   gencodec:"required"`
@@ -60,7 +60,7 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		ParentHash    *common.Hash    `json:"parentHash"    gencodec:"required"`
 		Coinbase      *common.Address `json:"coinbase"      gencodec:"required"`
 		StateRoot     *common.Hash    `json:"stateRoot"     gencodec:"required"`
-		ReceiptRoot   *common.Hash    `json:"receiptRoot"  gencodec:"required"`
+		ReceiptRoot   *common.Hash    `json:"receiptRoot"   gencodec:"required"`
 		LogsBloom     *hexutil.Bytes  `json:"logsBloom"     gencodec:"required"`
 		Random        *common.Hash    `json:"random"        gencodec:"required"`
 		Number        *hexutil.Uint64 `json:"blockNumber"   gencodec:"required"`

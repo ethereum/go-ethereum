@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -174,14 +175,14 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
-func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (hexutil.Uint64, error) {
+func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadResponse, error) {
 	data, err := api.assembleBlock(params)
 	if err != nil {
-		return hexutil.Uint64(0), err
+		return nil, err
 	}
 	id := len(api.preparedBlocks)
 	api.preparedBlocks[id] = data
-	return hexutil.Uint64(id), nil
+	return &PayloadResponse{PayloadID: uint64(id)}, nil
 }
 
 func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, error) {
@@ -212,7 +213,11 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
-	return api.setHead(params.FinalizedBlockHash)
+	var emptyHash = common.Hash{}
+	if !bytes.Equal(params.FinalizedBlockHash[:], emptyHash[:]) {
+		return api.setHead(params.FinalizedBlockHash)
+	}
+	return nil
 }
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -401,6 +406,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
+		BaseFee:     parent.BaseFee,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
 	if config.IsLondon(number) {
@@ -415,18 +421,19 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 
 func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableData {
 	return &ExecutableData{
-		BlockHash:    block.Hash(),
-		ParentHash:   block.ParentHash(),
-		Coinbase:     block.Coinbase(),
-		StateRoot:    block.Root(),
-		Number:       block.NumberU64(),
-		GasLimit:     block.GasLimit(),
-		GasUsed:      block.GasUsed(),
-		Timestamp:    block.Time(),
-		ReceiptRoot:  block.ReceiptHash(),
-		LogsBloom:    block.Bloom().Bytes(),
-		Transactions: encodeTransactions(block.Transactions()),
-		Random:       random,
+		BlockHash:     block.Hash(),
+		ParentHash:    block.ParentHash(),
+		Coinbase:      block.Coinbase(),
+		StateRoot:     block.Root(),
+		Number:        block.NumberU64(),
+		GasLimit:      block.GasLimit(),
+		GasUsed:       block.GasUsed(),
+		BaseFeePerGas: block.BaseFee().Uint64(),
+		Timestamp:     block.Time(),
+		ReceiptRoot:   block.ReceiptHash(),
+		LogsBloom:     block.Bloom().Bytes(),
+		Transactions:  encodeTransactions(block.Transactions()),
+		Random:        random,
 	}
 }
 
