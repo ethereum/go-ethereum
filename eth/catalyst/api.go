@@ -294,7 +294,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 		Number:     num.Add(num, common.Big1),
 		Coinbase:   coinbase,
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
+		Extra:      []byte{},          // TODO (MariusVanDerWijden) properly set extra data
 		Time:       params.Timestamp,
 	}
 	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
@@ -407,6 +407,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
 		BaseFee:     parent.BaseFee,
+		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
 	if config.IsLondon(number) {
@@ -434,6 +435,7 @@ func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableDa
 		LogsBloom:     block.Bloom().Bytes(),
 		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        random,
+		ExtraData:     block.Extra(),
 	}
 }
 
