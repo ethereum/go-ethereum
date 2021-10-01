@@ -139,6 +139,7 @@ func (miner *Miner) update() {
 			miner.worker.stop()
 		case <-miner.exitCh:
 			miner.worker.close()
+			miner.exitCh <- struct{}{}
 			return
 		}
 	}
@@ -153,7 +154,8 @@ func (miner *Miner) Stop() {
 }
 
 func (miner *Miner) Close() {
-	close(miner.exitCh)
+	miner.exitCh <- struct{}{}
+	<-miner.exitCh
 }
 
 func (miner *Miner) Mining() bool {

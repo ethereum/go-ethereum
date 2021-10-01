@@ -147,6 +147,7 @@ type worker struct {
 	resultCh           chan *types.Block
 	startCh            chan struct{}
 	exitCh             chan struct{}
+	wg                 sync.WaitGroup
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
 
@@ -225,10 +226,23 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		recommit = minRecommitInterval
 	}
 
-	go worker.mainLoop()
-	go worker.newWorkLoop(recommit)
-	go worker.resultLoop()
-	go worker.taskLoop()
+	worker.wg.Add(4)
+	go func() {
+		defer worker.wg.Done()
+		worker.mainLoop()
+	}()
+	go func() {
+		defer worker.wg.Done()
+		worker.newWorkLoop(recommit)
+	}()
+	go func() {
+		defer worker.wg.Done()
+		worker.resultLoop()
+	}()
+	go func() {
+		defer worker.wg.Done()
+		worker.taskLoop()
+	}()
 
 	// Submit first work to initialize pending state.
 	if init {
@@ -323,6 +337,7 @@ func (w *worker) close() {
 	}
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
+	w.wg.Wait()
 }
 
 // recalcRecommit recalculates the resubmitting interval upon feedback.
