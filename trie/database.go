@@ -755,10 +755,15 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
 	// If the node does not exist, it's a previously committed node
+
+	db.lock.RLock()
 	node, ok := db.dirties[hash]
 	if !ok {
+		db.lock.RUnlock()
 		return nil
 	}
+	db.lock.RUnlock()
+
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
