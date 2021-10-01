@@ -406,7 +406,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
-		BaseFee:     parent.BaseFee,
+		BaseFee:     big.NewInt(int64(params.BaseFeePerGas)),
 		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
