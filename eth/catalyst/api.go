@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -174,14 +175,14 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
-func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (hexutil.Uint64, error) {
+func (api *ConsensusAPI) PreparePayload(params AssembleBlockParams) (*PayloadResponse, error) {
 	data, err := api.assembleBlock(params)
 	if err != nil {
-		return hexutil.Uint64(0), err
+		return nil, err
 	}
 	id := len(api.preparedBlocks)
 	api.preparedBlocks[id] = data
-	return hexutil.Uint64(id), nil
+	return &PayloadResponse{PayloadID: uint64(id)}, nil
 }
 
 func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, error) {
@@ -200,6 +201,9 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 		// Finalize the transition if it's the first `FinalisedBlock` event.
 		merger := api.merger()
 		if !merger.EnteredPoS() {
+			if err := api.checkTerminalTotalDifficulty(params.BlockHash); err != nil {
+				return err
+			}
 			merger.EnterPoS()
 		}
 		return nil //api.setHead(params.BlockHash)
@@ -212,7 +216,14 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
-	return api.setHead(params.FinalizedBlockHash)
+	var emptyHash = common.Hash{}
+	if !bytes.Equal(params.FinalizedBlockHash[:], emptyHash[:]) {
+		if err := api.checkTerminalTotalDifficulty(params.FinalizedBlockHash); err != nil {
+			return err
+		}
+		return api.setHead(params.FinalizedBlockHash)
+	}
+	return nil
 }
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -235,15 +246,20 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 	if parent == nil {
 		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
+
+	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if !api.eth.Synced() {
-		td := api.eth.BlockChain().GetTdByHash(parent.Hash())
-		if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) > 0 {
+		if td.Cmp(ttd) > 0 {
+			// first pos block
 			api.eth.SetSynced()
 		} else {
 			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
 			// we should trigger the reverse header sync here.
 			return SYNCING, errors.New("node is not synced yet")
 		}
+	} else if td.Cmp(ttd) < 0 {
+		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
 	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {
@@ -286,7 +302,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 		Number:     num.Add(num, common.Big1),
 		Coinbase:   coinbase,
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
+		Extra:      []byte{},          // TODO (MariusVanDerWijden) properly set extra data
 		Time:       params.Timestamp,
 	}
 	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
@@ -382,6 +398,9 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 	if err != nil {
 		return nil, err
 	}
+	if len(params.ExtraData) > 32 {
+		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	}
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
 	header := &types.Header{
@@ -397,6 +416,8 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
+		BaseFee:     params.BaseFeePerGas,
+		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
 	if config.IsLondon(number) {
@@ -411,18 +432,20 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 
 func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableData {
 	return &ExecutableData{
-		BlockHash:    block.Hash(),
-		ParentHash:   block.ParentHash(),
-		Coinbase:     block.Coinbase(),
-		StateRoot:    block.Root(),
-		Number:       block.NumberU64(),
-		GasLimit:     block.GasLimit(),
-		GasUsed:      block.GasUsed(),
-		Timestamp:    block.Time(),
-		ReceiptRoot:  block.ReceiptHash(),
-		LogsBloom:    block.Bloom().Bytes(),
-		Transactions: encodeTransactions(block.Transactions()),
-		Random:       random,
+		BlockHash:     block.Hash(),
+		ParentHash:    block.ParentHash(),
+		Coinbase:      block.Coinbase(),
+		StateRoot:     block.Root(),
+		Number:        block.NumberU64(),
+		GasLimit:      block.GasLimit(),
+		GasUsed:       block.GasUsed(),
+		BaseFeePerGas: block.BaseFee(),
+		Timestamp:     block.Time(),
+		ReceiptRoot:   block.ReceiptHash(),
+		LogsBloom:     block.Bloom().Bytes(),
+		Transactions:  encodeTransactions(block.Transactions()),
+		Random:        random,
+		ExtraData:     block.Extra(),
 	}
 }
 
@@ -434,6 +457,27 @@ func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
 	return nil
 }
 
+func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
+	// shortcut if we entered PoS already
+	if api.merger().EnteredPoS() {
+		return nil
+	}
+	// make sure the parent has enough terminal total difficulty
+	newHeadBlock := api.eth.BlockChain().GetBlockByHash(head)
+	if newHeadBlock == nil {
+		return &UnknownHeader
+	}
+	parent := api.eth.BlockChain().GetBlockByHash(newHeadBlock.ParentHash())
+	if parent == nil {
+		return fmt.Errorf("parent unavailable: %v", newHeadBlock.ParentHash())
+	}
+	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
+		return errors.New("total difficulty not reached yet")
+	}
+	return nil
+}
+
 // setHead is called to perform a force choice.
 func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
@@ -441,6 +485,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	if !merger.LeftPoW() {
 		merger.LeavePoW()
 	}
+	log.Info("Setting head", "head", newHead)
 	if api.light {
 		headHeader := api.les.BlockChain().CurrentHeader()
 		if headHeader.Hash() == newHead {

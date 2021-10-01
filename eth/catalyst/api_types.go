@@ -17,6 +17,8 @@
 package catalyst
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -52,7 +54,7 @@ type ExecutableData struct {
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
 	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas uint64         `json:"baseFeePerGas" gencodec:"required"`
+	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }
 
@@ -62,10 +64,21 @@ type executableDataMarshaling struct {
 	GasLimit      hexutil.Uint64
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
-	BaseFeePerGas hexutil.Uint64
+	BaseFeePerGas *hexutil.Big
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
+}
+
+//go:generate go run github.com/fjl/gencodec -type PayloadResponse -field-override payloadResponseMarshaling -out gen_payload.go
+
+type PayloadResponse struct {
+	PayloadID uint64 `json:"payloadId"`
+}
+
+// JSON type overrides for payloadResponse.
+type payloadResponseMarshaling struct {
+	PayloadID hexutil.Uint64
 }
 
 type NewBlockResponse struct {

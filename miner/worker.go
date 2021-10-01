@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -1036,6 +1037,18 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+
+	// TODO (MariusVanDerWijden) remove this after eth2 interop
+	// ---
+	parent := w.chain.GetBlockByHash(block.ParentHash())
+	if parent == nil {
+		return fmt.Errorf("parent unavailable: %v", block.ParentHash())
+	}
+	td := w.chain.GetTdByHash(parent.Hash())
+	if td != nil && td.Cmp(w.chain.Config().TerminalTotalDifficulty) > 0 {
+		log.Warn("Total terminal difficulty reached, keeping on mining to test eth2 clients")
+	}
+	// ---
 	if w.isRunning() && !w.merger.LeftPoW() {
 		if interval != nil {
 			interval()

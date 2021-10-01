@@ -240,6 +240,10 @@ var (
 		Name:  "override.arrowglacier",
 		Usage: "Manually specify Arrow Glacier fork-block, overriding the bundled setting",
 	}
+	OverrideTotalTerminalDifficulty = cli.Uint64Flag{
+		Name:  "override.totalterminaldifficulty",
+		Usage: "Manually specify TotalTerminalDifficulty, overriding the bundled setting",
+	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
 		Name:  "light.serve",
