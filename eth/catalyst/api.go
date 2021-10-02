@@ -406,7 +406,7 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		GasLimit:    params.GasLimit,
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
-		BaseFee:     big.NewInt(int64(params.BaseFeePerGas)),
+		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
@@ -429,7 +429,7 @@ func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableDa
 		Number:        block.NumberU64(),
 		GasLimit:      block.GasLimit(),
 		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee().Uint64(),
+		BaseFeePerGas: block.BaseFee(),
 		Timestamp:     block.Time(),
 		ReceiptRoot:   block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
