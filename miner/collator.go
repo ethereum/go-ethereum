@@ -173,9 +173,9 @@ func (bs *collatorBlockState) copy() *collatorBlockState {
 	return &cpy
 }
 
-func (bs *collatorBlockState) commitTransaction(tx *types.Transaction) ([]*types.Log, error) {
+func (bs *collatorBlockState) commitTransaction(tx *types.Transaction) (*types.Receipt, error) {
 	snap := bs.state.Snapshot()
-
+	bs.state.Prepare(tx.Hash(), bs.tcount)
 	receipt, err := core.ApplyTransaction(bs.env.worker.chainConfig, bs.env.worker.chain, &bs.env.coinbase, bs.gasPool, bs.state, bs.header, tx, &bs.header.GasUsed, *bs.env.worker.chain.GetVMConfig())
 	if err != nil {
 		bs.state.RevertToSnapshot(snap)
@@ -183,8 +183,10 @@ func (bs *collatorBlockState) commitTransaction(tx *types.Transaction) ([]*types
 	}
 	bs.txs = append(bs.txs, tx)
 	bs.receipts = append(bs.receipts, receipt)
+	bs.logs = append(bs.logs, receipt.Logs...)
+	bs.tcount++
 
-	return receipt.Logs, nil
+	return receipt, nil
 }
 
 func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Receipt, error) {
@@ -204,11 +206,8 @@ func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Rece
 		return nil, collator.ErrGasFeeCapTooLow
 	}
 
-	snapshot := bs.state.Snapshot()
-	bs.state.Prepare(tx.Hash(), bs.tcount)
-	receipt, err := core.ApplyTransaction(bs.env.worker.chainConfig, bs.env.worker.chain, &bs.env.coinbase, bs.gasPool, bs.state, bs.header, tx, &bs.header.GasUsed, *bs.env.worker.chain.GetVMConfig())
+	receipt, err := bs.commitTransaction(tx)
 	if err != nil {
-		bs.state.RevertToSnapshot(snapshot)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// this should never be reached.
@@ -225,11 +224,6 @@ func (bs *collatorBlockState) AddTransaction(tx *types.Transaction) (*types.Rece
 			return nil, collator.ErrStrange
 		}
 	}
-
-	bs.logs = append(bs.logs, receipt.Logs...)
-	bs.txs = append(bs.txs, tx)
-	bs.receipts = append(bs.receipts, receipt)
-	bs.tcount++
 
 	receiptCpy := *receipt
 	return &receiptCpy, nil
