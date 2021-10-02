@@ -183,6 +183,14 @@ func (c *XDPoSConfig) String() string {
 	return "XDPoS"
 }
 
+/**
+ConsensusVersion will return the consensus version to use for the provided block number. The returned int represent its version
+TODO: It's a dummy value for now until the 2.0 consensus engine is fully implemented.
+*/
+func BlockConsensusVersion(num *big.Int) int {
+	return 1
+}
+
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	var engine interface{}

@@ -34,6 +34,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -396,12 +397,9 @@ func (self *worker) wait() {
 
 			if self.config.XDPoS != nil {
 				c := self.engine.(*XDPoS.XDPoS)
-				snap, err := c.GetSnapshot(self.chain, block.Header())
-				if err != nil {
-					log.Error("Fail to get snapshot for sign tx signer.")
-					return
-				}
-				if _, authorized := snap.Signers[self.coinbase]; !authorized {
+
+				authorized := c.IsAuthorisedAddress(block.Header(), self.chain, self.coinbase)
+				if !authorized {
 					valid := false
 					masternodes := c.GetMasternodes(self.chain, block.Header())
 					for _, m := range masternodes {
@@ -542,7 +540,7 @@ func (self *worker) commitNewWork() {
 					// you're not allowed to create this block
 					return
 				}
-				h := XDPoS.Hop(len, preIndex, curIndex)
+				h := utils.Hop(len, preIndex, curIndex)
 				gap := waitPeriod * int64(h)
 				// Check nearest checkpoint block in hop range.
 				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)

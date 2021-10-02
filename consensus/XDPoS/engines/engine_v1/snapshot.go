@@ -1,25 +1,11 @@
-// Copyright (c) 2018 XDPoSChain
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-package XDPoS
+package engine_v1
 
 import (
 	"bytes"
 	"encoding/json"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -44,7 +30,7 @@ import (
 //}
 
 // Snapshot is the state of the authorization voting at a given point in time.
-type Snapshot struct {
+type SnapshotV1 struct {
 	config   *params.XDPoSConfig // Consensus engine parameters to fine tune behavior
 	sigcache *lru.ARCCache       // Cache of recent block signatures to speed up ecrecover
 
@@ -59,8 +45,8 @@ type Snapshot struct {
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
-func newSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *Snapshot {
-	snap := &Snapshot{
+func newSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *SnapshotV1 {
+	snap := &SnapshotV1{
 		config:   config,
 		sigcache: sigcache,
 		Number:   number,
@@ -76,12 +62,12 @@ func newSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, number uint
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
+func loadSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*SnapshotV1, error) {
 	blob, err := db.Get(append([]byte("XDPoS-"), hash[:]...))
 	if err != nil {
 		return nil, err
 	}
-	snap := new(Snapshot)
+	snap := new(SnapshotV1)
 	if err := json.Unmarshal(blob, snap); err != nil {
 		return nil, err
 	}
@@ -91,8 +77,8 @@ func loadSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, db ethdb.D
 	return snap, nil
 }
 
-// store inserts the snapshot into the database.
-func (s *Snapshot) store(db ethdb.Database) error {
+// store inserts the SnapshotV1 into the database.
+func (s *SnapshotV1) store(db ethdb.Database) error {
 	blob, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -100,9 +86,9 @@ func (s *Snapshot) store(db ethdb.Database) error {
 	return db.Put(append([]byte("XDPoS-"), s.Hash[:]...), blob)
 }
 
-// copy creates a deep copy of the snapshot, though not the individual votes.
-func (s *Snapshot) copy() *Snapshot {
-	cpy := &Snapshot{
+// copy creates a deep copy of the SnapshotV1, though not the individual votes.
+func (s *SnapshotV1) copy() *SnapshotV1 {
+	cpy := &SnapshotV1{
 		config:   s.config,
 		sigcache: s.sigcache,
 		Number:   s.Number,
@@ -128,13 +114,13 @@ func (s *Snapshot) copy() *Snapshot {
 
 // validVote returns whether it makes sense to cast the specified vote in the
 // given snapshot context (e.g. don't try to add an already authorized signer).
-func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
+func (s *SnapshotV1) validVote(address common.Address, authorize bool) bool {
 	_, signer := s.Signers[address]
 	return (signer && !authorize) || (!signer && authorize)
 }
 
 // cast adds a new vote into the tally.
-func (s *Snapshot) cast(address common.Address, authorize bool) bool {
+func (s *SnapshotV1) cast(address common.Address, authorize bool) bool {
 	// Ensure the vote is meaningful
 	if !s.validVote(address, authorize) {
 		return false
@@ -150,7 +136,7 @@ func (s *Snapshot) cast(address common.Address, authorize bool) bool {
 }
 
 // uncast removes a previously cast vote from the tally.
-func (s *Snapshot) uncast(address common.Address, authorize bool) bool {
+func (s *SnapshotV1) uncast(address common.Address, authorize bool) bool {
 	// If there's no tally, it's a dangling vote, just drop
 	tally, ok := s.Tally[address]
 	if !ok {
@@ -170,9 +156,9 @@ func (s *Snapshot) uncast(address common.Address, authorize bool) bool {
 	return true
 }
 
-// apply creates a new authorization snapshot by applying the given headers to
+// apply creates a new authorization SnapshotV1 by applying the given headers to
 // the original one.
-func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
+func (s *SnapshotV1) apply(headers []*types.Header) (*SnapshotV1, error) {
 	// Allow passing in no headers for cleaner code
 	if len(headers) == 0 {
 		return s, nil
@@ -180,13 +166,13 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	// Sanity check that the headers can be applied
 	for i := 0; i < len(headers)-1; i++ {
 		if headers[i+1].Number.Uint64() != headers[i].Number.Uint64()+1 {
-			return nil, errInvalidVotingChain
+			return nil, utils.ErrInvalidVotingChain
 		}
 	}
 	if headers[0].Number.Uint64() != s.Number+1 {
-		return nil, errInvalidVotingChain
+		return nil, utils.ErrInvalidVotingChain
 	}
-	// Iterate through the headers and create a new snapshot
+	// Iterate through the headers and create a new SnapshotV1
 	snap := s.copy()
 
 	for _, header := range headers {
@@ -230,12 +216,12 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		// Tally up the new vote from the signer
 		var authorize bool
 		switch {
-		case bytes.Equal(header.Nonce[:], nonceAuthVote):
+		case bytes.Equal(header.Nonce[:], utils.NonceAuthVote):
 			authorize = true
-		case bytes.Equal(header.Nonce[:], nonceDropVote):
+		case bytes.Equal(header.Nonce[:], utils.NonceDropVote):
 			authorize = false
 		default:
-			return nil, errInvalidVote
+			return nil, utils.ErrInvalidVote
 		}
 		if snap.cast(header.Coinbase, authorize) {
 			snap.Votes = append(snap.Votes, &clique.Vote{
@@ -286,7 +272,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 }
 
 // signers retrieves the list of authorized signers in ascending order.
-func (s *Snapshot) GetSigners() []common.Address {
+func (s *SnapshotV1) GetSigners() []common.Address {
 	signers := make([]common.Address, 0, len(s.Signers))
 	for signer := range s.Signers {
 		signers = append(signers, signer)
@@ -299,13 +285,4 @@ func (s *Snapshot) GetSigners() []common.Address {
 		}
 	}
 	return signers
-}
-
-// inturn returns if a signer at a given block height is in-turn or not.
-func (s *Snapshot) inturn(number uint64, signer common.Address) bool {
-	signers, offset := s.GetSigners(), 0
-	for offset < len(signers) && signers[offset] != signer {
-		offset++
-	}
-	return (number % uint64(len(signers))) == uint64(offset)
 }

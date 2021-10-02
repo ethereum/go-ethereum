@@ -16,11 +16,13 @@
 package XDPoS
 
 import (
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"math/big"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -39,7 +41,7 @@ type NetworkInformation struct {
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
+func (api *API) GetSnapshot(number *rpc.BlockNumber) (*utils.PublicApiSnapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
@@ -49,18 +51,18 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	}
 	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XDPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
+func (api *API) GetSnapshotAtHash(hash common.Hash) (*utils.PublicApiSnapshot, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XDPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -74,31 +76,22 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	}
 	// Ensure we have an actually valid block and return the signers from its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+
+	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
 // GetSignersAtHash retrieves the state snapshot at a given block.
 func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
 func (api *API) NetworkInformation() NetworkInformation {
-	api.XDPoS.lock.RLock()
-	defer api.XDPoS.lock.RUnlock()
 	info := NetworkInformation{}
 	info.NetworkId = api.chain.Config().ChainId
 	info.XDCValidatorAddress = common.HexToAddress(common.MasternodeVotingSMC)

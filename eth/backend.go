@@ -41,6 +41,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
@@ -172,10 +173,10 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 	)
 	if eth.chainConfig.XDPoS != nil {
 		c := eth.engine.(*XDPoS.XDPoS)
-		c.GetXDCXService = func() XDPoS.TradingService {
+		c.GetXDCXService = func() utils.TradingService {
 			return eth.XDCX
 		}
-		c.GetLendingService = func() XDPoS.LendingService {
+		c.GetLendingService = func() utils.LendingService {
 			return eth.Lending
 		}
 	}
@@ -471,7 +472,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 			opts := new(bind.CallOpts)
 			var (
 				candidateAddresses []common.Address
-				candidates         []XDPoS.Masternode
+				candidates         []utils.Masternode
 			)
 
 			stateDB, err := eth.blockchain.StateAt(eth.blockchain.GetBlockByHash(block).Root())
@@ -486,7 +487,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 					return nil, err
 				}
 				if address.String() != "0x0000000000000000000000000000000000000000" {
-					candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
+					candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
 				}
 			}
 			// sort candidates by stake descending
@@ -565,7 +566,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 					return err
 				}
 				if !bytes.Equal(header.Validators, validators) {
-					return XDPoS.ErrInvalidCheckpointValidators
+					return utils.ErrInvalidCheckpointValidators
 				}
 			}
 			return nil
@@ -581,15 +582,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 				// not genesis block
 				header = parentHeader
 			}
-			snap, err := c.GetSnapshot(eth.blockchain, header)
-			if err != nil {
-				log.Error("Can't get snapshot with at ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
-				return false
-			}
-			if _, ok := snap.Signers[address]; ok {
-				return true
-			}
-			return false
+			return c.IsAuthorisedAddress(header, eth.blockchain, address)
 		}
 
 	}
@@ -756,11 +749,9 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	if s.chainConfig.XDPoS != nil {
 		//check if miner's wallet is in set of validators
 		c := s.engine.(*XDPoS.XDPoS)
-		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
-		if err != nil {
-			return false, fmt.Errorf("Can't verify masternode permission: %v", err)
-		}
-		if _, authorized := snap.Signers[eb]; !authorized {
+
+		authorized := c.IsAuthorisedAddress(s.blockchain.CurrentHeader(), s.blockchain, eb)
+		if !authorized {
 			//This miner doesn't belong to set of validators
 			return false, nil
 		}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
@@ -34,7 +35,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 		currentHeader := &types.Header{
 			Number: big.NewInt(currentNumber),
 		}
-		m1m2, moveM2, err := getM1M2(masternodes, validators, currentHeader, config)
+		m1m2, moveM2, err := utils.GetM1M2(masternodes, validators, currentHeader, config)
 		if err != nil {
 			t.Error("can't get m1m2", "err", err)
 		}
@@ -66,19 +67,19 @@ func TestCompareSignersLists(t *testing.T) {
 		common.StringToAddress("dddddddddddddddddddddddddddddddddddddddd"),
 		common.StringToAddress("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
 	}
-	if !compareSignersLists(list1, list2) {
+	if !utils.CompareSignersLists(list1, list2) {
 		t.Error("list1 should be equal to list2", "list1", list1, "list2", list2)
 	}
-	if compareSignersLists(list1, list3) {
+	if utils.CompareSignersLists(list1, list3) {
 		t.Error("list1 and list3 should not be same", "list1", list1, "list3", list3)
 	}
-	if !compareSignersLists([]common.Address{}, []common.Address{}) {
+	if !utils.CompareSignersLists([]common.Address{}, []common.Address{}) {
 		t.Error("Failed with empty list")
 	}
-	if !compareSignersLists([]common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+	if !utils.CompareSignersLists([]common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
 		t.Error("Failed with list has only one signer")
 	}
-	if compareSignersLists([]common.Address{common.StringToAddress("aaaaaaaaaaaaaaaa")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+	if utils.CompareSignersLists([]common.Address{common.StringToAddress("aaaaaaaaaaaaaaaa")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
 		t.Error("Failed with list has only one signer")
 	}
 }

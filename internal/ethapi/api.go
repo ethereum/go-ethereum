@@ -37,6 +37,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -713,7 +714,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		checkpointNumber         rpc.BlockNumber
 		epochNumber              rpc.EpochNumber // if epoch == "latest", print the latest epoch number to epochNumber
 		masternodes, penaltyList []common.Address
-		candidates               []XDPoS.Masternode
+		candidates               []utils.Masternode
 		penalties                []byte
 		err                      error
 	)
@@ -755,7 +756,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		for _, address := range candidatesAddresses {
 			v := state.GetCandidateCap(statedb, address)
 			if address.String() != "0x0000000000000000000000000000000000000000" {
-				candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
+				candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
 			}
 		}
 	}
@@ -843,7 +844,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		epochNumber      rpc.EpochNumber
 		masternodes      []common.Address
 		penaltyList      []common.Address
-		candidates       []XDPoS.Masternode
+		candidates       []utils.Masternode
 		penalties        []byte
 		err              error
 	)
@@ -881,7 +882,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		for _, address := range candidatesAddresses {
 			v := state.GetCandidateCap(statedb, address)
 			if address.String() != "0x0000000000000000000000000000000000000000" {
-				candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
+				candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
 			}
 		}
 	}
@@ -939,7 +940,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	}
 	penaltyList = common.ExtractAddressFromBytes(penalties)
 
-	var topCandidates []XDPoS.Masternode
+	var topCandidates []utils.Masternode
 	if len(candidates) > common.MaxMasternodes {
 		topCandidates = candidates[:common.MaxMasternodes]
 	} else {
@@ -984,33 +985,33 @@ func (s *PublicBlockChainAPI) GetPreviousCheckpointFromEpoch(ctx context.Context
 }
 
 // getCandidatesFromSmartContract returns all candidates with their capacities at the current time
-func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]XDPoS.Masternode, error) {
+func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masternode, error) {
 	client, err := s.b.GetIPCClient()
 	if err != nil {
-		return []XDPoS.Masternode{}, err
+		return []utils.Masternode{}, err
 	}
 
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
 	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
-		return []XDPoS.Masternode{}, err
+		return []utils.Masternode{}, err
 	}
 
 	opts := new(bind.CallOpts)
 	candidates, err := validator.GetCandidates(opts)
 	if err != nil {
-		return []XDPoS.Masternode{}, err
+		return []utils.Masternode{}, err
 	}
 
-	var candidatesWithStakeInfo []XDPoS.Masternode
+	var candidatesWithStakeInfo []utils.Masternode
 
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
 		if err != nil {
-			return []XDPoS.Masternode{}, err
+			return []utils.Masternode{}, err
 		}
 		if candidate.String() != "0x0000000000000000000000000000000000000000" {
-			candidatesWithStakeInfo = append(candidatesWithStakeInfo, XDPoS.Masternode{Address: candidate, Stake: v})
+			candidatesWithStakeInfo = append(candidatesWithStakeInfo, utils.Masternode{Address: candidate, Stake: v})
 		}
 
 		if len(candidatesWithStakeInfo) > 0 {

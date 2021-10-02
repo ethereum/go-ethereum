@@ -37,6 +37,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -877,8 +878,8 @@ func (bc *BlockChain) SaveData() {
 		var lendingTriedb *trie.Database
 		engine, _ := bc.Engine().(*XDPoS.XDPoS)
 		triedb := bc.stateCache.TrieDB()
-		var tradingService XDPoS.TradingService
-		var lendingService XDPoS.LendingService
+		var tradingService utils.TradingService
+		var lendingService utils.LendingService
 		if bc.Config().IsTIPXDCX(bc.CurrentBlock().Number()) && bc.chainConfig.XDPoS != nil && bc.CurrentBlock().NumberU64() > bc.chainConfig.XDPoS.Epoch && engine != nil {
 			tradingService = engine.GetXDCXService()
 			if tradingService != nil && tradingService.GetStateCache() != nil {
@@ -1201,9 +1202,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 	engine, _ := bc.Engine().(*XDPoS.XDPoS)
 	var tradingTrieDb *trie.Database
-	var tradingService XDPoS.TradingService
+	var tradingService utils.TradingService
 	var lendingTrieDb *trie.Database
-	var lendingService XDPoS.LendingService
+	var lendingService utils.LendingService
 	if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch && engine != nil {
 		tradingService = engine.GetXDCXService()
 		if tradingService != nil {
@@ -1541,8 +1542,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		// clear the previous dry-run cache
 		var tradingState *tradingstate.TradingStateDB
 		var lendingState *lendingstate.LendingStateDB
-		var tradingService XDPoS.TradingService
-		var lendingService XDPoS.LendingService
+		var tradingService utils.TradingService
+		var lendingService utils.LendingService
 		isSDKNode := false
 		if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
 			tradingService = engine.GetXDCXService()
@@ -1827,8 +1828,8 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 
 	var tradingState *tradingstate.TradingStateDB
 	var lendingState *lendingstate.LendingStateDB
-	var tradingService XDPoS.TradingService
-	var lendingService XDPoS.LendingService
+	var tradingService utils.TradingService
+	var lendingService utils.LendingService
 	isSDKNode := false
 	if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
 		tradingService = engine.GetXDCXService()
@@ -2481,7 +2482,7 @@ func (bc *BlockChain) UpdateM1() error {
 		return err
 	}
 
-	var ms []XDPoS.Masternode
+	var ms []utils.Masternode
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
 		if err != nil {
@@ -2489,7 +2490,7 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
 		if candidate.String() != "xdc0000000000000000000000000000000000000000" {
-			ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v})
+			ms = append(ms, utils.Masternode{Address: candidate, Stake: v})
 		}
 	}
 	if len(ms) == 0 {
