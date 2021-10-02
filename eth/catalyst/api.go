@@ -391,6 +391,9 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 	if err != nil {
 		return nil, err
 	}
+	if len(params.ExtraData) > 32 {
+		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	}
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
 	header := &types.Header{
