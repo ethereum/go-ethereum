@@ -47,7 +47,7 @@ var (
 func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
-	config.TerminalTotalDifficulty = big.NewInt(100000000000000)
+	config.TerminalTotalDifficulty = big.NewInt(int64(n + 1))
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},

@@ -455,6 +455,20 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
 	if !merger.LeftPoW() {
+		// make sure the parent has enough terminal total difficulty
+		newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+		if newHeadBlock == nil {
+			return &UnknownHeader
+		}
+		parentNo := newHeadBlock.NumberU64() - 1
+		if parentNo < 0 {
+			return errors.New("can't set head on genesis")
+		}
+		parent := api.eth.BlockChain().GetBlockByNumber(parentNo)
+		td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+		if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
+			return errors.New("total difficulty not reached yet")
+		}
 		merger.LeavePoW()
 	}
 	if api.light {
