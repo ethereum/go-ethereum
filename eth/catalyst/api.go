@@ -462,18 +462,18 @@ func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
 }
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
+	// shortcut if we entered PoS already
+	if api.merger().EnteredPoS() {
+		return nil
+	}
 	// make sure the parent has enough terminal total difficulty
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(head)
 	if newHeadBlock == nil {
 		return &UnknownHeader
 	}
-	parentNo := newHeadBlock.NumberU64() - 1
-	if parentNo < 0 {
-		return errors.New("can't set head on genesis")
-	}
-	parent := api.eth.BlockChain().GetBlockByNumber(parentNo)
+	parent := api.eth.BlockChain().GetBlockByHash(newHeadBlock.ParentHash())
 	if parent == nil {
-		return &UnknownHeader
+		return fmt.Errorf("parent unavailable: %v", newHeadBlock.ParentHash())
 	}
 	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
 	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
