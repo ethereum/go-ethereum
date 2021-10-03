@@ -246,15 +246,20 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 	if parent == nil {
 		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
+
+	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if !api.eth.Synced() {
-		td := api.eth.BlockChain().GetTdByHash(parent.Hash())
-		if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) > 0 {
+		if td.Cmp(ttd) > 0 {
+			// first pos block
 			api.eth.SetSynced()
 		} else {
 			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
 			// we should trigger the reverse header sync here.
 			return SYNCING, errors.New("node is not synced yet")
 		}
+	} else if td.Cmp(ttd) < 0 {
+		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
 	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {
