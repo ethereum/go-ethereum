@@ -47,7 +47,6 @@ var (
 func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
-	config.TerminalTotalDifficulty = big.NewInt(int64(n + 1))
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
@@ -66,6 +65,11 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	gblock := genesis.ToBlock(db)
 	engine := ethash.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
+	totalDifficulty := big.NewInt(0)
+	for _, b := range blocks {
+		totalDifficulty.Add(totalDifficulty, b.Difficulty())
+	}
+	config.TerminalTotalDifficulty = totalDifficulty
 	return genesis, blocks
 }
 
@@ -158,6 +162,21 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	}
 	if len(execData.Transactions) != blocks[9].Transactions().Len() {
 		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	}
+}
+
+func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
+	genesis, blocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice, nil)
+	if err := api.ConsensusValidated(ConsensusValidatedParams{BlockHash: blocks[5].Hash(), Status: VALID.Status}); err == nil {
+		t.Errorf("consensus validated before total terminal difficulty should fail")
+	}
+
+	if err := api.ForkchoiceUpdated(ForkChoiceParams{FinalizedBlockHash: blocks[5].Hash()}); err == nil {
+		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
 
@@ -330,8 +349,8 @@ func TestEth2DeepReorg(t *testing.T) {
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
 			t.Fatalf("Chain head shouldn't be updated")
 		}
-		if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: block.Hash(), FinalizedBlockHash: block.Hash()}); err != nil {
-			t.Fatalf("Failed to insert block: %v", err)
+		if err := api.setHead(block.Hash()); err != nil {
+			t.Fatalf("Failed to set head: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
 			t.Fatalf("Chain head should be updated")

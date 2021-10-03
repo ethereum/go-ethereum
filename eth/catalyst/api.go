@@ -201,6 +201,9 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 		// Finalize the transition if it's the first `FinalisedBlock` event.
 		merger := api.merger()
 		if !merger.EnteredPoS() {
+			if err := api.checkTerminalTotalDifficulty(params.BlockHash); err != nil {
+				return err
+			}
 			merger.EnterPoS()
 		}
 		return nil //api.setHead(params.BlockHash)
@@ -215,6 +218,9 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
 	var emptyHash = common.Hash{}
 	if !bytes.Equal(params.FinalizedBlockHash[:], emptyHash[:]) {
+		if err := api.checkTerminalTotalDifficulty(params.FinalizedBlockHash); err != nil {
+			return err
+		}
 		return api.setHead(params.FinalizedBlockHash)
 	}
 	return nil
@@ -450,25 +456,29 @@ func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
 	return nil
 }
 
+func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
+	// make sure the parent has enough terminal total difficulty
+	newHeadBlock := api.eth.BlockChain().GetBlockByHash(head)
+	if newHeadBlock == nil {
+		return &UnknownHeader
+	}
+	parentNo := newHeadBlock.NumberU64() - 1
+	if parentNo < 0 {
+		return errors.New("can't set head on genesis")
+	}
+	parent := api.eth.BlockChain().GetBlockByNumber(parentNo)
+	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
+		return errors.New("total difficulty not reached yet")
+	}
+	return nil
+}
+
 // setHead is called to perform a force choice.
 func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
 	if !merger.LeftPoW() {
-		// make sure the parent has enough terminal total difficulty
-		newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
-		if newHeadBlock == nil {
-			return &UnknownHeader
-		}
-		parentNo := newHeadBlock.NumberU64() - 1
-		if parentNo < 0 {
-			return errors.New("can't set head on genesis")
-		}
-		parent := api.eth.BlockChain().GetBlockByNumber(parentNo)
-		td := api.eth.BlockChain().GetTdByHash(parent.Hash())
-		if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
-			return errors.New("total difficulty not reached yet")
-		}
 		merger.LeavePoW()
 	}
 	if api.light {
