@@ -472,6 +472,9 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 		return errors.New("can't set head on genesis")
 	}
 	parent := api.eth.BlockChain().GetBlockByNumber(parentNo)
+	if parent == nil {
+		return &UnknownHeader
+	}
 	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
 	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
 		return errors.New("total difficulty not reached yet")
