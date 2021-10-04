@@ -231,7 +231,7 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		if parent == nil {
 			return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 		}
-		block, err := ExecutableDataToBlock(api.les.BlockChain().Config(), parent, params)
+		block, err := ExecutableDataToBlock(params)
 		if err != nil {
 			return INVALID, err
 		}
@@ -240,17 +240,7 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		}
 		return VALID, nil
 	}
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
-	if parent == nil {
-		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
-	}
-
-	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
-	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if td.Cmp(ttd) < 0 {
-		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
-	}
-	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
+	block, err := ExecutableDataToBlock(params)
 	if err != nil {
 		return INVALID, err
 	}
@@ -259,6 +249,12 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 			return SYNCING, err
 		}
 		return SYNCING, nil
+	}
+	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
+	if td.Cmp(ttd) < 0 {
+		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
 	if err := api.eth.BlockChain().InsertBlock(block); err != nil {
 		return INVALID, err
@@ -392,7 +388,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header, params ExecutableData) (*types.Block, error) {
+func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -418,9 +414,6 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
-	}
-	if config.IsLondon(number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent)
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {

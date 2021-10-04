@@ -172,13 +172,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
-	var config *params.ChainConfig
-	if n.typ == eth2LightClient {
-		config = n.lesBackend.BlockChain().Config()
-	} else {
-		config = n.ethBackend.BlockChain().Config()
-	}
-	block, err := catalyst.ExecutableDataToBlock(config, parent, ed)
+	block, err := catalyst.ExecutableDataToBlock(ed)
 	if err != nil {
 		return err
 	}
@@ -319,7 +313,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := catalyst.ExecutableDataToBlock(chain.Config(), parentBlock.Header(), *ed)
+			block, _ := catalyst.ExecutableDataToBlock(*ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)

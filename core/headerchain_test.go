@@ -84,7 +84,7 @@ func TestHeaderInsertion(t *testing.T) {
 	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
 	log.Root().SetHandler(log.StdoutHandler)
 
-	forker := NewForkChoice(hc, false, nil)
+	forker := NewForkChoice(hc, nil)
 	// Inserting 64 headers on an empty chain, expecting
 	// 1 callbacks, 1 canon-status, 0 sidestatus,
 	testInsert(t, hc, chainA[:64], CanonStatTy, nil, forker)
