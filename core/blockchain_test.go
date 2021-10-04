@@ -230,9 +230,6 @@ func testInsertAfterMerge(t *testing.T, blockchain *BlockChain, i, n int, full b
 		t.Errorf("chain content mismatch at %d: have hash %v, want hash %v", i, hash2, hash1)
 	}
 
-	// Trigger the transition explicitly
-	blockchain2.forker.MarkTransitioned()
-
 	// Extend the newly created chain
 	if full {
 		blockChainB := makeBlockChain(blockchain2.CurrentBlock(), n, ethash.NewFaker(), db, forkSeed)
@@ -1963,7 +1960,6 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	if mergePoint == 0 {
 		genEngine.MarkTransitioned()
 		runEngine.MarkTransitioned()
-		chain.forker.MarkTransitioned()
 	}
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, genEngine, db, 2*TriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
@@ -1994,7 +1990,6 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	if mergePoint == 1 {
 		genEngine.MarkTransitioned()
 		runEngine.MarkTransitioned()
-		chain.forker.MarkTransitioned()
 	}
 
 	// Generate the sidechain
@@ -2217,9 +2212,6 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	applyMerge := func(engine *beacon.Beacon, forker *ForkChoice) {
 		if engine != nil {
 			engine.MarkTransitioned()
-		}
-		if forker != nil {
-			forker.MarkTransitioned()
 		}
 	}
 

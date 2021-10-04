@@ -27,12 +27,16 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ChainReader defines a small collection of methods needed to access the local
 // blockchain during header verification. It's implemented by both blockchain
 // and lightchain.
 type ChainReader interface {
+	// Config retrieves the header chain's chain configuration.
+	Config() *params.ChainConfig
+
 	// GetTd returns the total difficulty of a local block.
 	GetTd(common.Hash, uint64) *big.Int
 }
@@ -45,12 +49,7 @@ type ChainReader interface {
 type ForkChoice struct {
 	chain ChainReader
 	rand  *mrand.Rand
-
-	// transitioned is the flag whether the chain has started(or finished)
-	// the transition. It's triggered by receiving the first "NewHead" message
-	// from the external consensus engine.
-	transitioned bool
-	lock         sync.RWMutex
+	lock  sync.RWMutex
 
 	// preserve is a helper function used in td fork choice.
 	// Miners will prefer to choose the local mined block if the
@@ -59,17 +58,16 @@ type ForkChoice struct {
 	preserve func(header *types.Header) bool
 }
 
-func NewForkChoice(chainReader ChainReader, transitioned bool, preserve func(header *types.Header) bool) *ForkChoice {
+func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool) *ForkChoice {
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
 		log.Crit("Failed to initialize random seed", "err", err)
 	}
 	return &ForkChoice{
-		chain:        chainReader,
-		rand:         mrand.New(mrand.NewSource(seed.Int64())),
-		transitioned: transitioned,
-		preserve:     preserve,
+		chain:    chainReader,
+		rand:     mrand.New(mrand.NewSource(seed.Int64())),
+		preserve: preserve,
 	}
 }
 
@@ -82,18 +80,18 @@ func (f *ForkChoice) Reorg(current *types.Header, header *types.Header) (bool, e
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	// Accept the new header as the chain head if the transition
-	// is already triggered. We assume all the headers after the
-	// transition come from the trusted consensus layer.
-	if f.transitioned {
-		return true, nil
-	}
 	var (
 		localTD  = f.chain.GetTd(current.Hash(), current.Number.Uint64())
 		externTd = f.chain.GetTd(header.Hash(), header.Number.Uint64())
 	)
 	if localTD == nil || externTd == nil {
 		return false, errors.New("missing td")
+	}
+	// Accept the new header as the chain head if the transition
+	// is already triggered. We assume all the headers after the
+	// transition come from the trusted consensus layer.
+	if ttd := f.chain.Config().TerminalTotalDifficulty; ttd != nil && ttd.Cmp(externTd) <= 0 {
+		return true, nil
 	}
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
@@ -112,12 +110,4 @@ func (f *ForkChoice) Reorg(current *types.Header, header *types.Header) (bool, e
 		}
 	}
 	return reorg, nil
-}
-
-// MarkTransitioned marks the transition has started.
-func (f *ForkChoice) MarkTransitioned() {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	f.transitioned = true
 }
