@@ -245,7 +245,8 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil, core.NewMerger(rawdb.NewMemoryDatabase()))
+	merger := core.NewMerger(rawdb.NewMemoryDatabase())
+	bc, err := core.NewBlockChainWithMerger(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil, merger)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
@@ -257,5 +258,5 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create event Mux
 	mux := new(event.TypeMux)
 	// Create Miner
-	return New(backend, &config, chainConfig, mux, engine, nil, core.NewMerger(rawdb.NewMemoryDatabase())), mux
+	return New(backend, &config, chainConfig, mux, engine, nil, merger), mux
 }

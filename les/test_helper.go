@@ -202,7 +202,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		oracle *checkpointoracle.CheckpointOracle
 	)
 	genesis := gspec.MustCommit(db)
-	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil, core.NewMerger(rawdb.NewMemoryDatabase()))
+	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil)
 	if indexers != nil {
 		checkpointConfig := &params.CheckpointOracleConfig{
 			Address:   crypto.CreateAddress(bankAddr, 0),

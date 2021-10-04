@@ -78,7 +78,14 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint, merger *core.Merger) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
+	return NewLightChainWithMerger(odr, config, engine, checkpoint, core.NewMerger(rawdb.NewMemoryDatabase()))
+}
+
+// NewLightChain returns a fully initialised light chain using information
+// available in the database. It initialises the default Ethereum header
+// validator.
+func NewLightChainWithMerger(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint, merger *core.Merger) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -93,10 +100,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
-	bc.forker = core.NewForkChoice(bc, merger.LeftPoW(), nil)
-	merger.SubscribeLeavePoW(func() {
-		bc.forker.MarkTransitioned()
-	})
+	bc.forker = core.NewForkChoice(bc, nil)
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {

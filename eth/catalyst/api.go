@@ -84,7 +84,6 @@ type ConsensusAPI struct {
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
 	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	syncer         *syncer          // syncer is responsible for triggering chain sync
 	preparedBlocks map[int]*ExecutableData
 }
 
@@ -114,7 +113,6 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 		eth:            eth,
 		les:            les,
 		engine:         engine,
-		syncer:         newSyncer(),
 		preparedBlocks: make(map[int]*ExecutableData),
 	}
 }
@@ -217,53 +215,45 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 
 func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
 	var emptyHash = common.Hash{}
-	if !bytes.Equal(params.FinalizedBlockHash[:], emptyHash[:]) {
-		if err := api.checkTerminalTotalDifficulty(params.FinalizedBlockHash); err != nil {
+	if !bytes.Equal(params.HeadBlockHash[:], emptyHash[:]) {
+		if err := api.checkTerminalTotalDifficulty(params.HeadBlockHash); err != nil {
 			return err
 		}
-		return api.setHead(params.FinalizedBlockHash)
+		return api.setHead(params.HeadBlockHash)
 	}
 	return nil
 }
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringResponse, error) {
+	block, err := ExecutableDataToBlock(params)
+	if err != nil {
+		return INVALID, err
+	}
 	if api.light {
 		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 		if parent == nil {
 			return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
-		}
-		block, err := ExecutableDataToBlock(api.les.BlockChain().Config(), parent, params)
-		if err != nil {
-			return INVALID, err
 		}
 		if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 			return INVALID, err
 		}
 		return VALID, nil
 	}
+	if !api.eth.BlockChain().HasBlock(block.ParentHash(), block.NumberU64()-1) {
+		/*
+			TODO (MariusVanDerWijden) reenable once sync is merged
+			if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
+				return SYNCING, err
+			}
+		*/
+		return SYNCING, nil
+	}
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
-	if parent == nil {
-		return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
-	}
-
-	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	td := api.eth.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if !api.eth.Synced() {
-		if td.Cmp(ttd) > 0 {
-			// first pos block
-			api.eth.SetSynced()
-		} else {
-			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
-			// we should trigger the reverse header sync here.
-			return SYNCING, errors.New("node is not synced yet")
-		}
-	} else if td.Cmp(ttd) < 0 {
+	if td.Cmp(ttd) < 0 {
 		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
-	}
-	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
-	if err != nil {
-		return INVALID, err
 	}
 	if err := api.eth.BlockChain().InsertBlock(block); err != nil {
 		return INVALID, err
@@ -286,13 +276,12 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
 	}
 
-	if parent.Time() >= params.Timestamp {
+	if params.Timestamp < parent.Time() {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
-		wait := time.Duration(params.Timestamp-now) * time.Second
-		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
+		diff := time.Duration(params.Timestamp-now) * time.Second
+		log.Warn("Producing block too far in the future", "diff", common.PrettyDuration(diff))
 	}
 	pending := api.eth.TxPool().Pending(true)
 	coinbase := params.FeeRecipient
@@ -393,7 +382,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header, params ExecutableData) (*types.Block, error) {
+func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -419,9 +408,6 @@ func ExecutableDataToBlock(config *chainParams.ChainConfig, parent *types.Header
 		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
 		// TODO (MariusVanDerWijden) add params.Random to header once required
-	}
-	if config.IsLondon(number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent)
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
@@ -471,7 +457,7 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	if parent == nil {
 		return fmt.Errorf("parent unavailable: %v", newHeadBlock.ParentHash())
 	}
-	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
+	td := api.eth.BlockChain().GetTd(parent.Hash(), parent.NumberU64())
 	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
 		return errors.New("total difficulty not reached yet")
 	}
@@ -577,4 +563,8 @@ func (api *ConsensusAPI) ExportExecutableData(path string) error {
 		f.Write([]byte("\n"))
 	}
 	return nil
+}
+
+func (api *ConsensusAPI) GetHead() (common.Hash, error) {
+	return api.eth.BlockChain().CurrentBlock().Hash(), nil
 }

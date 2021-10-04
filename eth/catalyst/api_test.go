@@ -176,7 +176,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		t.Errorf("consensus validated before total terminal difficulty should fail")
 	}
 
-	if err := api.ForkchoiceUpdated(ForkChoiceParams{FinalizedBlockHash: blocks[5].Hash()}); err == nil {
+	if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: blocks[5].Hash()}); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
@@ -256,7 +256,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+		block, err := ExecutableDataToBlock(*execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -293,7 +293,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+		block, err := ExecutableDataToBlock(*execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}

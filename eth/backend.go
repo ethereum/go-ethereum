@@ -133,7 +133,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -192,7 +192,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, merger)
+	eth.blockchain, err = core.NewBlockChainWithMerger(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -529,6 +529,10 @@ func (s *Ethereum) SetSynced()                         { atomic.StoreUint32(&s.h
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 func (s *Ethereum) Merger() *core.Merger               { return s.merger }
+func (s *Ethereum) SyncMode() downloader.SyncMode {
+	mode, _ := s.handler.chainSync.modeAndLocalHead()
+	return mode
+}
 
 // Protocols returns all the currently configured
 // network protocols to start.

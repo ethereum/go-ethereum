@@ -89,7 +89,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
@@ -141,7 +141,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint, merger); err != nil {
+	if leth.blockchain, err = light.NewLightChainWithMerger(leth.odr, leth.chainConfig, leth.engine, checkpoint, merger); err != nil {
 		return nil, err
 	}
 	leth.chainReader = leth.blockchain

@@ -240,9 +240,9 @@ var (
 		Name:  "override.arrowglacier",
 		Usage: "Manually specify Arrow Glacier fork-block, overriding the bundled setting",
 	}
-	OverrideTotalTerminalDifficulty = cli.Uint64Flag{
-		Name:  "override.totalterminaldifficulty",
-		Usage: "Manually specify TotalTerminalDifficulty, overriding the bundled setting",
+	OverrideTerminalTotalDifficulty = cli.Uint64Flag{
+		Name:  "override.terminaltotaldifficulty",
+		Usage: "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
 	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
@@ -1906,7 +1906,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil, core.NewMerger(chainDb))
+	chain, err = core.NewBlockChainWithMerger(chainDb, cache, config, engine, vmcfg, nil, nil, core.NewMerger(chainDb))
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

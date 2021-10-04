@@ -209,15 +209,19 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
-
-	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
-	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, merger *Merger) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+	return NewBlockChainWithMerger(db, cacheConfig, chainConfig, engine, vmConfig, shouldPreserve, txLookupLimit, NewMerger(rawdb.NewMemoryDatabase()))
+}
+
+// NewBlockChainWithMerger returns a fully initialised block chain using information
+// available in the database. It initialises the default Ethereum Validator
+// and Processor.
+func NewBlockChainWithMerger(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, merger *Merger) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -249,10 +253,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
-	bc.forker = NewForkChoice(bc, merger.LeftPoW(), shouldPreserve)
-	merger.SubscribeLeavePoW(func() {
-		bc.forker.MarkTransitioned()
-	})
+	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
@@ -742,32 +743,24 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
-	// If the block is on a side chain or an unknown one, force other heads onto it too
-	updateHeads := rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
-
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
-	// If the block is better than our head or is on a different chain, force update heads
-	// TODO(rjl493456442) What if the (header head/fast block head) is lower than the chain
-	// head? Is it possible in practise?
-	if updateHeads {
-		rawdb.WriteHeadHeaderHash(batch, block.Hash())
-		rawdb.WriteHeadFastBlockHash(batch, block.Hash())
-	}
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
 	}
 	// Update all in-memory chain markers in the last step
-	if updateHeads {
-		bc.hc.SetCurrentHeader(block.Header())
-		bc.currentFastBlock.Store(block)
-		headFastBlockGauge.Update(int64(block.NumberU64()))
-	}
+	bc.hc.SetCurrentHeader(block.Header())
+
+	bc.currentFastBlock.Store(block)
+	headFastBlockGauge.Update(int64(block.NumberU64()))
+
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
 }

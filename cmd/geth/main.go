@@ -67,7 +67,7 @@ var (
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideArrowGlacierFlag,
-		utils.OverrideTotalTerminalDifficulty,
+		utils.OverrideTerminalTotalDifficulty,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
