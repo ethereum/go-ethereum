@@ -1081,15 +1081,15 @@ func NewFaker(db ethdb.Database) *XDPoS_v1 {
 	conf := params.TestXDPoSMockChainConfig.XDPoS
 
 	// Allocate the snapshot caches and create the engine
-	BlockSigners, _ := lru.New(utils.BlockSignersCacheLimit)
+	// BlockSigners, _ := lru.New(utils.BlockSignersCacheLimit)
 	recents, _ := lru.NewARC(utils.InmemorySnapshots)
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	fakeEngine = &XDPoS_v1{
-		config:              conf,
-		db:                  db,
-		BlockSigners:        BlockSigners,
+		config: conf,
+		db:     db,
+		// BlockSigners:        BlockSigners,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,

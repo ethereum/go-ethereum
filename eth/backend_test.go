@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/eth/util"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
@@ -11,7 +12,7 @@ func TestRewardInflation(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		// the first 2 years
 		chainReward := new(big.Int).Mul(new(big.Int).SetUint64(250), new(big.Int).SetUint64(params.Ether))
-		chainReward = rewardInflation(nil, chainReward, uint64(i), 10)
+		chainReward = util.RewardInflation(nil, chainReward, uint64(i), 10)
 
 		// 3rd year, 4th year, 5th year
 		halfReward := new(big.Int).Mul(new(big.Int).SetUint64(125), new(big.Int).SetUint64(params.Ether))
