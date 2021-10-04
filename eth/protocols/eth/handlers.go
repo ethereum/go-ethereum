@@ -277,9 +277,11 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.BlockHeadersPacket)
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: BlockHeadersMsg,
+		Res:  &res.BlockHeadersPacket,
+	})
 }
 
 func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
@@ -288,9 +290,11 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	requestTracker.Fulfil(peer.id, peer.version, BlockBodiesMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.BlockBodiesPacket)
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: BlockBodiesMsg,
+		Res:  &res.BlockBodiesPacket,
+	})
 }
 
 func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
@@ -299,9 +303,11 @@ func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	requestTracker.Fulfil(peer.id, peer.version, NodeDataMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.NodeDataPacket)
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: NodeDataMsg,
+		Res:  &res.NodeDataPacket,
+	})
 }
 
 func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
@@ -310,9 +316,11 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	requestTracker.Fulfil(peer.id, peer.version, ReceiptsMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.ReceiptsPacket)
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: ReceiptsMsg,
+		Res:  &res.ReceiptsPacket,
+	})
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
