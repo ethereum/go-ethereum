@@ -489,6 +489,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	if !merger.LeftPoW() {
 		merger.LeavePoW()
 	}
+	log.Info("Setting head", "head", newHead)
 	if api.light {
 		headHeader := api.les.BlockChain().CurrentHeader()
 		if headHeader.Hash() == newHead {

@@ -158,6 +158,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
 		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
+	if ctx.GlobalIsSet(utils.OverrideTotalTerminalDifficulty.Name) {
+		cfg.Eth.Genesis.Config.TerminalTotalDifficulty = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideTotalTerminalDifficulty.Name))
+	}
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth, ctx.GlobalBool(utils.CatalystFlag.Name))
 
 	// Configure GraphQL if requested
