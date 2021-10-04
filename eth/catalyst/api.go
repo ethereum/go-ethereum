@@ -226,23 +226,19 @@ func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringResponse, error) {
+	block, err := ExecutableDataToBlock(params)
+	if err != nil {
+		return INVALID, err
+	}
 	if api.light {
 		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 		if parent == nil {
 			return INVALID, fmt.Errorf("could not find parent %x", params.ParentHash)
 		}
-		block, err := ExecutableDataToBlock(params)
-		if err != nil {
-			return INVALID, err
-		}
 		if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 			return INVALID, err
 		}
 		return VALID, nil
-	}
-	block, err := ExecutableDataToBlock(params)
-	if err != nil {
-		return INVALID, err
 	}
 	if !api.eth.BlockChain().HasBlock(block.ParentHash(), block.NumberU64()-1) {
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
@@ -277,13 +273,12 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
 	}
 
-	if parent.Time() >= params.Timestamp {
+	if params.Timestamp < parent.Time() {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
-		wait := time.Duration(params.Timestamp-now) * time.Second
-		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
+		diff := time.Duration(params.Timestamp-now) * time.Second
+		log.Warn("Producing block too far in the future", "diff", common.PrettyDuration(diff))
 	}
 	pending, err := api.eth.TxPool().Pending(true)
 	if err != nil {

@@ -175,7 +175,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		t.Errorf("consensus validated before total terminal difficulty should fail")
 	}
 
-	if err := api.ForkchoiceUpdated(ForkChoiceParams{FinalizedBlockHash: blocks[5].Hash()}); err == nil {
+	if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: blocks[5].Hash()}); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
