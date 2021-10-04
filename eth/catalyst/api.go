@@ -84,7 +84,6 @@ type ConsensusAPI struct {
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
 	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	syncer         *syncer          // syncer is responsible for triggering chain sync
 	preparedBlocks map[int]*ExecutableData
 }
 
@@ -114,7 +113,6 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 		eth:            eth,
 		les:            les,
 		engine:         engine,
-		syncer:         newSyncer(),
 		preparedBlocks: make(map[int]*ExecutableData),
 	}
 }
@@ -217,11 +215,11 @@ func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) err
 
 func (api *ConsensusAPI) ForkchoiceUpdated(params ForkChoiceParams) error {
 	var emptyHash = common.Hash{}
-	if !bytes.Equal(params.FinalizedBlockHash[:], emptyHash[:]) {
-		if err := api.checkTerminalTotalDifficulty(params.FinalizedBlockHash); err != nil {
+	if !bytes.Equal(params.HeadBlockHash[:], emptyHash[:]) {
+		if err := api.checkTerminalTotalDifficulty(params.HeadBlockHash); err != nil {
 			return err
 		}
-		return api.setHead(params.FinalizedBlockHash)
+		return api.setHead(params.HeadBlockHash)
 	}
 	return nil
 }
@@ -249,21 +247,18 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 
 	td := api.eth.BlockChain().GetTdByHash(parent.Hash())
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if !api.eth.Synced() {
-		if td.Cmp(ttd) > 0 {
-			// first pos block
-			api.eth.SetSynced()
-		} else {
-			// TODO (MariusVanDerWijden) if the node is not synced and we received a finalized block
-			// we should trigger the reverse header sync here.
-			return SYNCING, errors.New("node is not synced yet")
-		}
-	} else if td.Cmp(ttd) < 0 {
+	if td.Cmp(ttd) < 0 {
 		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
 	block, err := ExecutableDataToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {
 		return INVALID, err
+	}
+	if !api.eth.BlockChain().HasBlock(block.ParentHash(), block.NumberU64()-1) {
+		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
+			return SYNCING, err
+		}
+		return SYNCING, nil
 	}
 	if err := api.eth.BlockChain().InsertBlock(block); err != nil {
 		return INVALID, err
