@@ -33,12 +33,15 @@ type Command struct {
 
 // Help implements the cli.Command interface
 func (c *Command) Help() string {
-	return ""
+	return `Usage: bor [options]
+  
+	Run the Bor server.
+  ` + c.Flags().Help()
 }
 
 // Synopsis implements the cli.Command interface
 func (c *Command) Synopsis() string {
-	return ""
+	return "Run the Bor server"
 }
 
 // Run implements the cli.Command interface

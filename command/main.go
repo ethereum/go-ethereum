@@ -41,5 +41,10 @@ func commands() map[string]cli.CommandFactory {
 				UI: ui,
 			}, nil
 		},
+		"version": func() (cli.Command, error) {
+			return &VersionCommand{
+				UI: ui,
+			}, nil
+		},
 	}
 }

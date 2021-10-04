@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Flagset struct {
@@ -92,4 +93,40 @@ func (f *Flagset) IntFlag(i *IntFlag) {
 		Usage: i.Usage,
 	})
 	f.set.IntVar(i.Value, i.Name, i.Default, i.Usage)
+}
+
+type SliceStringFlag struct {
+	Name  string
+	Usage string
+	Value []string
+}
+
+func (i *SliceStringFlag) String() string {
+	return ""
+}
+
+func (i *SliceStringFlag) Set(value string) error {
+	i.Value = append(i.Value, value)
+	return nil
+}
+
+func (f *Flagset) SliceStringFlag(s *SliceStringFlag) {
+	f.addFlag(&FlagVar{
+		Name:  s.Name,
+		Usage: s.Usage,
+	})
+	f.set.Var(s, s.Name, s.Usage)
+}
+
+type DurationFlag struct {
+	Name  string
+	Usage string
+	Value *time.Duration
+}
+
+func (f *Flagset) DurationFlag(d *DurationFlag) {
+	f.addFlag(&FlagVar{
+		Name:  d.Name,
+		Usage: d.Usage,
+	})
 }
