@@ -112,14 +112,12 @@ type XDPoS_v1 struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	BlockSigners          *lru.Cache
 	HookReward            func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs         func(header *types.Header, signers []common.Address) error
-	// GetXDCXService             func() utils.TradingService
-	// GetLendingService          func() utils.LendingService
+
 	HookGetSignersFromContract func(blockHash common.Hash) ([]common.Address, error)
 }
 
@@ -131,16 +129,15 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
 	if conf.Epoch == 0 {
 		conf.Epoch = utils.EpochLength
 	}
-	// Allocate the snapshot caches and create the engine
-	BlockSigners, _ := lru.New(utils.BlockSignersCacheLimit)
+
 	recents, _ := lru.NewARC(utils.InmemorySnapshots)
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	return &XDPoS_v1{
-		config:              &conf,
-		db:                  db,
-		BlockSigners:        BlockSigners,
+		config: &conf,
+		db:     db,
+
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
@@ -987,48 +984,6 @@ func (c *XDPoS_v1) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types
 	}
 
 	return masternodes
-}
-
-func (c *XDPoS_v1) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) []*types.Transaction {
-	signTxs := []*types.Transaction{}
-	for _, tx := range txs {
-		if tx.IsSigningTransaction() {
-			var b uint
-			for _, r := range receipts {
-				if r.TxHash == tx.Hash() {
-					if len(r.PostState) > 0 {
-						b = types.ReceiptStatusSuccessful
-					} else {
-						b = r.Status
-					}
-					break
-				}
-			}
-
-			if b == types.ReceiptStatusFailed {
-				continue
-			}
-
-			signTxs = append(signTxs, tx)
-		}
-	}
-
-	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
-	c.BlockSigners.Add(header.Hash(), signTxs)
-
-	return signTxs
-}
-
-func (c *XDPoS_v1) CacheSigner(hash common.Hash, txs []*types.Transaction) []*types.Transaction {
-	signTxs := []*types.Transaction{}
-	for _, tx := range txs {
-		if tx.IsSigningTransaction() {
-			signTxs = append(signTxs, tx)
-		}
-	}
-	log.Debug("Save tx signers to cache", "hash", hash.String(), "len(txs)", len(signTxs))
-	c.BlockSigners.Add(hash, signTxs)
-	return signTxs
 }
 
 func (c *XDPoS_v1) GetDb() ethdb.Database {

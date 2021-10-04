@@ -674,7 +674,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
 		engine, ok := bc.Engine().(*XDPoS.XDPoS)
 		if ok {
-			engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+			engine.CacheNoneTIPSigningTxs(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
 		}
 	}
 
@@ -1375,7 +1375,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
 		engine, ok := bc.Engine().(*XDPoS.XDPoS)
 		if ok {
-			engine.CacheSigner(block.Header().Hash(), block.Transactions())
+			engine.CacheSigningTxs(block.Header().Hash(), block.Transactions())
 		}
 	}
 	bc.futureBlocks.Remove(block.Hash())

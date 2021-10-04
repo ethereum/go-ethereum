@@ -48,7 +48,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 
-	//"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
@@ -288,20 +287,112 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 		eth.protocolManager.fetcher.SetSignHook(signHook)
 		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
-		// Hook prepares validators M2 for the current epoch at checkpoint block
-		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
-			start := time.Now()
-			validators, err := GetValidators(eth.blockchain, signers)
-			if err != nil {
-				return []byte{}, err
+		/*
+			XDPoS1.0 Specific hooks
+		*/
+
+		// Hook calculates reward for masternodes
+		c.EngineV1.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{}) {
+			number := header.Number.Uint64()
+			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
+			foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+			if foundationWalletAddr == (common.Address{}) {
+				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
+				return errors.New("Foundation Wallet Address is empty"), nil
 			}
-			header.Validators = validators
-			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-			return validators, nil
+			rewards := make(map[string]interface{})
+			if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
+				start := time.Now()
+				// Get signers in blockSigner smartcontract.
+				// Get reward inflation.
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward = rewardInflation(chain, chainReward, number, common.BlocksPerYear)
+
+				totalSigner := new(uint64)
+				signers, err := contracts.GetRewardForCheckpoint(c, chain, header, rCheckpoint, totalSigner)
+
+				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				if err != nil {
+					log.Crit("Fail to get signers for reward checkpoint", "error", err)
+				}
+				rewards["signers"] = signers
+				rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
+				if err != nil {
+					log.Crit("Fail to calculate reward for signers", "error", err)
+				}
+				// Add reward for coin holders.
+				voterResults := make(map[common.Address]interface{})
+				if len(signers) > 0 {
+					for signer, calcReward := range rewardSigners {
+						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+						if err != nil {
+							log.Crit("Fail to calculate reward for holders.", "error", err)
+						}
+						if len(rewards) > 0 {
+							for holder, reward := range rewards {
+								stateBlock.AddBalance(holder, reward)
+							}
+						}
+						voterResults[signer] = rewards
+					}
+				}
+				rewards["rewards"] = voterResults
+				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+			}
+			return nil, rewards
+		}
+
+		/*
+		   HookGetSignersFromContract return list masternode for current state (block)
+		   This is a solution for work around issue return wrong list signers from snapshot
+		*/
+		c.EngineV1.HookGetSignersFromContract = func(block common.Hash) ([]common.Address, error) {
+			client, err := eth.blockchain.GetClient()
+			if err != nil {
+				return nil, err
+			}
+			addr := common.HexToAddress(common.MasternodeVotingSMC)
+			validator, err := contractValidator.NewXDCValidator(addr, client)
+			if err != nil {
+				return nil, err
+			}
+			opts := new(bind.CallOpts)
+			var (
+				candidateAddresses []common.Address
+				candidates         []utils.Masternode
+			)
+
+			stateDB, err := eth.blockchain.StateAt(eth.blockchain.GetBlockByHash(block).Root())
+			candidateAddresses = state.GetCandidates(stateDB)
+
+			if err != nil {
+				return nil, err
+			}
+			for _, address := range candidateAddresses {
+				v, err := validator.GetCandidateCap(opts, address)
+				if err != nil {
+					return nil, err
+				}
+				if address.String() != "0x0000000000000000000000000000000000000000" {
+					candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
+				}
+			}
+			// sort candidates by stake descending
+			sort.Slice(candidates, func(i, j int) bool {
+				return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
+			})
+			if len(candidates) > 150 {
+				candidates = candidates[:150]
+			}
+			result := []common.Address{}
+			for _, candidate := range candidates {
+				result = append(result, candidate.Address)
+			}
+			return result, nil
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them
-		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+		c.EngineV1.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
 			canonicalState, err := eth.blockchain.State()
 			if canonicalState == nil || err != nil {
 				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
@@ -347,7 +438,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them
-		c.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
+		c.EngineV1.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
 			prevEpoc := header.Number.Uint64() - chain.Config().XDPoS.Epoch
 			combackEpoch := uint64(0)
 			comebackLength := (common.LimitPenaltyEpoch + 1) * chain.Config().XDPoS.Epoch
@@ -419,11 +510,11 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 						if blockNumber%common.MergeSignRange == 0 {
 							mapBlockHash[bhash] = true
 						}
-						signData, ok := c.BlockSigners.Get(bhash)
+						signData, ok := c.GetCachedSignerData(bhash)
 						if !ok {
 							block := chain.GetBlock(bhash, blockNumber)
 							txs := block.Transactions()
-							signData = c.CacheSigner(bhash, txs)
+							signData = c.CacheSigningTxs(bhash, txs)
 						}
 						txs := signData.([]*types.Transaction)
 						// Check signer signed?
@@ -454,113 +545,24 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 			}
 			return []common.Address{}, nil
 		}
-
-		/*
-		   HookGetSignersFromContract return list masternode for current state (block)
-		   This is a solution for work around issue return wrong list signers from snapshot
-		*/
-		c.HookGetSignersFromContract = func(block common.Hash) ([]common.Address, error) {
-			client, err := eth.blockchain.GetClient()
+		// Hook prepares validators M2 for the current epoch at checkpoint block
+		c.EngineV1.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
+			start := time.Now()
+			validators, err := getValidators(eth.blockchain, signers)
 			if err != nil {
-				return nil, err
+				return []byte{}, err
 			}
-			addr := common.HexToAddress(common.MasternodeVotingSMC)
-			validator, err := contractValidator.NewXDCValidator(addr, client)
-			if err != nil {
-				return nil, err
-			}
-			opts := new(bind.CallOpts)
-			var (
-				candidateAddresses []common.Address
-				candidates         []utils.Masternode
-			)
-
-			stateDB, err := eth.blockchain.StateAt(eth.blockchain.GetBlockByHash(block).Root())
-			candidateAddresses = state.GetCandidates(stateDB)
-
-			if err != nil {
-				return nil, err
-			}
-			for _, address := range candidateAddresses {
-				v, err := validator.GetCandidateCap(opts, address)
-				if err != nil {
-					return nil, err
-				}
-				if address.String() != "0x0000000000000000000000000000000000000000" {
-					candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
-				}
-			}
-			// sort candidates by stake descending
-			sort.Slice(candidates, func(i, j int) bool {
-				return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
-			})
-			if len(candidates) > 150 {
-				candidates = candidates[:150]
-			}
-			result := []common.Address{}
-			for _, candidate := range candidates {
-				result = append(result, candidate.Address)
-			}
-			return result, nil
-		}
-
-		// Hook calculates reward for masternodes
-		c.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{}) {
-			number := header.Number.Uint64()
-			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
-			foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
-			if foundationWalletAddr == (common.Address{}) {
-				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
-				return errors.New("Foundation Wallet Address is empty"), nil
-			}
-			rewards := make(map[string]interface{})
-			if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
-				start := time.Now()
-				// Get signers in blockSigner smartcontract.
-				// Get reward inflation.
-				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
-				chainReward = rewardInflation(chain, chainReward, number, common.BlocksPerYear)
-
-				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(c, chain, header, rCheckpoint, totalSigner)
-
-				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-				if err != nil {
-					log.Crit("Fail to get signers for reward checkpoint", "error", err)
-				}
-				rewards["signers"] = signers
-				rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
-				if err != nil {
-					log.Crit("Fail to calculate reward for signers", "error", err)
-				}
-				// Add reward for coin holders.
-				voterResults := make(map[common.Address]interface{})
-				if len(signers) > 0 {
-					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
-						if err != nil {
-							log.Crit("Fail to calculate reward for holders.", "error", err)
-						}
-						if len(rewards) > 0 {
-							for holder, reward := range rewards {
-								stateBlock.AddBalance(holder, reward)
-							}
-						}
-						voterResults[signer] = rewards
-					}
-				}
-				rewards["rewards"] = voterResults
-				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-			}
-			return nil, rewards
+			header.Validators = validators
+			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+			return validators, nil
 		}
 
 		// Hook verifies masternodes set
-		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
+		c.EngineV1.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				start := time.Now()
-				validators, err := GetValidators(eth.blockchain, signers)
+				validators, err := getValidators(eth.blockchain, signers)
 				log.Debug("Time Calculated HookVerifyMNs ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					return err
@@ -881,7 +883,7 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
+func getValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
 	if bc.Config().XDPoS == nil {
 		return nil, core.ErrNotXDPoS
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	lru "github.com/hashicorp/golang-lru"
@@ -46,16 +47,14 @@ type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
-	BlockSigners               *lru.Cache
-	HookReward                 func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
-	HookPenalty                func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookPenaltyTIPSigning      func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
-	HookValidator              func(header *types.Header, signers []common.Address) ([]byte, error)
-	HookVerifyMNs              func(header *types.Header, signers []common.Address) error
-	GetXDCXService             func() utils.TradingService
-	GetLendingService          func() utils.LendingService
-	HookGetSignersFromContract func(blockHash common.Hash) ([]common.Address, error)
+	// Transaction cache, only make sense for adaptor level
+	signingTxsCache *lru.Cache
 
+	// Trading and lending service
+	GetXDCXService    func() utils.TradingService
+	GetLendingService func() utils.LendingService
+
+	// The exact consensus engine with different versions
 	EngineV1 engine_v1.XDPoS_v1
 }
 
@@ -69,13 +68,13 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	}
 
 	// Allocate the snapshot caches and create the engine
-	BlockSigners, _ := lru.New(utils.BlockSignersCacheLimit)
+	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
 
 	return &XDPoS{
 		config: &conf,
 
-		BlockSigners: BlockSigners,
-		EngineV1:     *engine_v1.New(&conf, db),
+		signingTxsCache: signingTxsCache,
+		EngineV1:        *engine_v1.New(&conf, db),
 	}
 }
 
@@ -248,13 +247,6 @@ func (c *XDPoS) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.He
 	}
 }
 
-func (c *XDPoS) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) []*types.Transaction {
-	switch params.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
-		return c.EngineV1.CacheData(header, txs, receipts)
-	}
-}
-
 // Same DB across all consensus engines
 func (c *XDPoS) GetDb() ethdb.Database {
 	return c.db
@@ -283,17 +275,64 @@ func (c *XDPoS) GetAuthorisedSignersFromSnapshot(chain consensus.ChainReader, he
 	}
 }
 
+/**
+Caching
+*/
+
+// Cache signing transaction data into BlockSingers cache object
+func (c *XDPoS) CacheNoneTIPSigningTxs(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) []*types.Transaction {
+	signTxs := []*types.Transaction{}
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			var b uint
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					if len(r.PostState) > 0 {
+						b = types.ReceiptStatusSuccessful
+					} else {
+						b = r.Status
+					}
+					break
+				}
+			}
+
+			if b == types.ReceiptStatusFailed {
+				continue
+			}
+
+			signTxs = append(signTxs, tx)
+		}
+	}
+
+	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
+	c.signingTxsCache.Add(header.Hash(), signTxs)
+
+	return signTxs
+}
+
+// Cache
+func (c *XDPoS) CacheSigningTxs(hash common.Hash, txs []*types.Transaction) []*types.Transaction {
+	signTxs := []*types.Transaction{}
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			signTxs = append(signTxs, tx)
+		}
+	}
+	log.Debug("Save tx signers to cache", "hash", hash.String(), "len(txs)", len(signTxs))
+	c.signingTxsCache.Add(hash, signTxs)
+	return signTxs
+}
+
+func (c *XDPoS) GetCachedSignerData(hash common.Hash) (interface{}, bool) {
+	return c.signingTxsCache.Get(hash)
+}
+
 // TODO: (Hashlab) Can be further refactored
 func (c *XDPoS) CheckMNTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) bool {
 	switch params.BlockConsensusVersion(parent.Number) {
 	default: // Default "1.0"
 		return c.EngineV1.CheckMNTurn(chain, parent, signer)
 	}
-}
-
-// TODO: (Hashlab) Need further work on refactor this method
-func (c *XDPoS) CacheSigner(hash common.Hash, txs []*types.Transaction) []*types.Transaction {
-	return c.EngineV1.CacheSigner(hash, txs)
 }
 
 // TODO: (Hashlab)Get signer coinbase
