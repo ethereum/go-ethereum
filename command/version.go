@@ -12,9 +12,9 @@ type VersionCommand struct {
 
 // Help implements the cli.Command interface
 func (c *VersionCommand) Help() string {
-	return `Usage: ensemble version
+	return `Usage: bor version
 
-  Display the Ensemble version`
+  Display the Bor version`
 }
 
 // Synopsis implements the cli.Command interface
