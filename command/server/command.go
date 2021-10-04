@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -66,7 +67,12 @@ func (c *Command) Run(args []string) int {
 	// start the logger
 	setupLogger(*config.LogLevel)
 
-	// create the node
+	// load the chain genesis
+	if err := config.loadChain(); err != nil {
+		panic(err)
+	}
+
+	// create the node/stack
 	nodeCfg, err := config.buildNode()
 	if err != nil {
 		panic(err)
@@ -77,6 +83,14 @@ func (c *Command) Run(args []string) int {
 	}
 	c.node = stack
 
+	// TODO: MakeChain?
+	// TODO: Metrics
+	// TODO: Node key, pre generate one
+	// TODO: apis
+	// TODO: account management
+	// TODO: Graphql
+	// TODO: embed
+
 	// register the ethereum backend
 	ethCfg, err := config.buildEth()
 	if err != nil {
@@ -86,13 +100,32 @@ func (c *Command) Run(args []string) int {
 	if err != nil {
 		panic(err)
 	}
-	c.node.RegisterAPIs(tracers.APIs(backend.APIBackend))
+
+	// This is the tracers api, not sure if this should be here, i do not think so.
+	// c.node.RegisterAPIs(tracers.APIs(backend.APIBackend))
+
+	// register ethash service
+	if config.EthStats != nil {
+		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), *config.EthStats); err != nil {
+			panic(err)
+		}
+	}
 
 	// start the node
 	if err := c.node.Start(); err != nil {
 		panic(err)
 	}
 	return c.handleSignals()
+}
+
+func (c *Command) setupMetrics() {
+	if !metrics.Enabled {
+		// metrics are globally disabled
+		return
+	}
+
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 func (c *Command) handleSignals() int {

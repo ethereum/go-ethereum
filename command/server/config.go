@@ -5,11 +5,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/command/server/chains"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/imdario/mergo"
 )
 
@@ -30,6 +32,8 @@ func durPtr(d time.Duration) *time.Duration {
 }
 
 type Config struct {
+	chain *chains.Chain
+
 	Chain    *string
 	Debug    *bool
 	LogLevel *string
@@ -42,14 +46,21 @@ type Config struct {
 }
 
 type P2PConfig struct {
-	MaxPeers    *uint64
-	Bind        *string
-	Port        *uint64
-	NoDiscover  *bool
-	V5Disc      *bool
-	Bootnodes   []string
-	BootnodesV4 []string
-	BootnodesV5 []string
+	MaxPeers   *uint64
+	Bind       *string
+	Port       *uint64
+	NoDiscover *bool
+	V5Disc     *bool
+	Discovery  *P2PDiscovery
+}
+
+type P2PDiscovery struct {
+	Bootnodes    []string
+	BootnodesV4  []string
+	BootnodesV5  []string
+	StaticNodes  []string
+	TrustedNodes []string
+	DNS          []string
 }
 
 type TxPoolConfig struct {
@@ -79,14 +90,19 @@ func DefaultConfig() *Config {
 		LogLevel: stringPtr("INFO"),
 		DataDir:  stringPtr(""),
 		P2P: &P2PConfig{
-			MaxPeers:    uint64Ptr(30),
-			Bind:        stringPtr("0.0.0.0"),
-			Port:        uint64Ptr(30303),
-			NoDiscover:  boolPtr(false),
-			V5Disc:      boolPtr(false),
-			Bootnodes:   []string{},
-			BootnodesV4: []string{},
-			BootnodesV5: []string{},
+			MaxPeers:   uint64Ptr(30),
+			Bind:       stringPtr("0.0.0.0"),
+			Port:       uint64Ptr(30303),
+			NoDiscover: boolPtr(false),
+			V5Disc:     boolPtr(false),
+			Discovery: &P2PDiscovery{
+				Bootnodes:    []string{},
+				BootnodesV4:  []string{},
+				BootnodesV5:  []string{},
+				StaticNodes:  []string{},
+				TrustedNodes: []string{},
+				DNS:          []string{},
+			},
 		},
 		SyncMode: stringPtr("fast"),
 		EthStats: stringPtr(""),
@@ -113,14 +129,31 @@ func readConfigFile(path string) (*Config, error) {
 	return nil, nil
 }
 
+func (c *Config) loadChain() error {
+	chain, ok := chains.GetChain(*c.Chain)
+	if !ok {
+		return fmt.Errorf("chain '%s' not found", *c.Chain)
+	}
+	c.chain = chain
+
+	// preload some default values that are on the chain file
+	if c.P2P.Discovery.Bootnodes == nil {
+		c.P2P.Discovery.Bootnodes = c.chain.Bootnodes
+	}
+	if c.P2P.Discovery.DNS == nil {
+		c.P2P.Discovery.DNS = c.chain.DNS
+	}
+	return nil
+}
+
 func (c *Config) buildEth() (*ethconfig.Config, error) {
 	dbHandles, err := makeDatabaseHandles()
 	if err != nil {
 		return nil, err
 	}
 	n := ethconfig.Defaults
-	//n.NetworkId = c.genesis.NetworkId
-	//n.Genesis = c.genesis.Genesis
+	n.NetworkId = c.chain.NetworkId
+	n.Genesis = c.chain.Genesis
 
 	// txpool options
 	{
@@ -143,6 +176,12 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 		fmt.Println(cfg)
 	}
 
+	// discovery (this params should be in node.Config)
+	{
+		n.EthDiscoveryURLs = c.P2P.Discovery.DNS
+		n.SnapDiscoveryURLs = c.P2P.Discovery.DNS
+	}
+
 	var syncMode downloader.SyncMode
 	switch *c.SyncMode {
 	case "fast":
@@ -152,22 +191,12 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	}
 	n.SyncMode = syncMode
 	n.DatabaseHandles = dbHandles
+
 	return &n, nil
 }
 
 func (c *Config) buildNode() (*node.Config, error) {
-	/*
-		bootstrap, err := parseBootnodes(c.genesis.Bootstrap)
-		if err != nil {
-			return nil, err
-		}
-		static, err := parseBootnodes(c.genesis.Static)
-		if err != nil {
-			return nil, err
-		}
-	*/
-
-	n := &node.Config{
+	cfg := &node.Config{
 		Name:    "reader",
 		DataDir: *c.DataDir,
 		P2P: p2p.Config{
@@ -182,16 +211,28 @@ func (c *Config) buildNode() (*node.Config, error) {
 			WSPort:           int(*c.Ports.Websocket),
 		*/
 	}
-	/*
-		if *c.NoDiscovery {
-			// avoid incoming connections
-			n.P2P.MaxPeers = 0
-			// avoid outgoing connections
-			n.P2P.NoDiscovery = true
-		}
-	*/
 
-	return n, nil
+	// Discovery
+	var err error
+	if cfg.P2P.BootstrapNodes, err = parseBootnodes(c.P2P.Discovery.Bootnodes); err != nil {
+		return nil, err
+	}
+	if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
+		return nil, err
+	}
+	if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
+		return nil, err
+	}
+	if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
+		return nil, err
+	}
+
+	if *c.P2P.NoDiscover {
+		// Disable networking, for now, we will not even allow incomming connections
+		cfg.P2P.MaxPeers = 0
+		cfg.P2P.NoDiscovery = true
+	}
+	return cfg, nil
 }
 
 func (c *Config) Merge(cc ...*Config) error {
@@ -213,4 +254,18 @@ func makeDatabaseHandles() (int, error) {
 		return -1, err
 	}
 	return int(raised / 2), nil
+}
+
+func parseBootnodes(urls []string) ([]*enode.Node, error) {
+	dst := []*enode.Node{}
+	for _, url := range urls {
+		if url != "" {
+			node, err := enode.Parse(enode.ValidSchemes, url)
+			if err != nil {
+				return nil, fmt.Errorf("invalid bootstrap url '%s': %v", url, err)
+			}
+			dst = append(dst, node)
+		}
+	}
+	return dst, nil
 }
