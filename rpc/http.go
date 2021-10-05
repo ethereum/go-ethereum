@@ -127,8 +127,15 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 }
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
-func DialHTTP(endpoint string) (*Client, error) {
-	return DialHTTPWithClient(endpoint, new(http.Client))
+func DialHTTP(endpoint string, opts ...Options) (*Client, error) {
+	client := &http.Client{}
+	for _, opt := range opts {
+		if option := opt.HTTPRoundTripper(); option != nil {
+			client.Transport = option
+			break
+		}
+	}
+	return DialHTTPWithClient(endpoint, client)
 }
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
