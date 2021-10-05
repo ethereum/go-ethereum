@@ -1296,11 +1296,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	} else {
 		// First reply protection (EIP155) was a part of Spurious Dragon.
 		// Need to distinguish the two HFs because Homestead rejects a subset of S values.
-		if config.IsHomestead(big.NewInt(0).SetUint64(blockNumber)) {
-			signer = types.HomesteadSigner{}
-		} else {
-			signer = types.FrontierSigner{}
-		}
+		signer = types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	}
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
