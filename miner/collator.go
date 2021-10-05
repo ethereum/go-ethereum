@@ -6,7 +6,6 @@ import (
 	//"math/big"
 	"os"
 	"plugin"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -53,6 +52,10 @@ func LoadCollator(filepath string, configPath string) (collator.Collator, collat
 	return collator, collatorAPI, nil
 }
 
+// collatorBlockState contains an under-construction pending block for sealing.
+// a work-cycle (a round of pending block construction/sealing on top of a given canon chain head)
+// is composed of an environment and one or more collatorBlockStates as a collator may choose
+// to construct and seal many blocks during a given work cycle.
 type collatorBlockState struct {
 	state     *state.StateDB
 	txs       []*types.Transaction
@@ -65,6 +68,7 @@ type collatorBlockState struct {
 	header    *types.Header
 }
 
+// minerState allows a collator implementation to read the current chain config and whether the miner is currently sealing.
 type minerState struct {
 	// keep a copy of ChainConfig here, if collator chooses (erroneously) to modify chainConfig, the chainConfig used by the miner doesn't get changed
 	chainConfig *params.ChainConfig
@@ -80,40 +84,7 @@ func (m *minerState) IsRunning() bool {
 }
 
 func (bs *collatorBlockState) Commit() bool {
-	bs.env.worker.curEnvMu.Lock()
-	defer bs.env.worker.curEnvMu.Unlock()
-
-	if bs.env.cycleCtx != nil {
-		select {
-		case <-bs.env.cycleCtx.Done():
-			return false
-		default:
-		}
-	}
-
-	bs.env.current = bs
-
-	if !bs.env.worker.isRunning() && len(bs.logs) > 0 {
-		// We don't push the pendingLogsEvent while we are sealing. The reason is that
-		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		logsCpy := make([]*types.Log, len(bs.logs))
-		for i, l := range bs.logs {
-			logCpy := *l
-			logsCpy[i] = &logCpy
-		}
-		bs.env.worker.pendingLogsFeed.Send(logsCpy)
-	}
-
-	// TODO apply FinalizeAndAssemble with our state, then copy and send it to sealer?
-	// that way the post-block-processing state could be inspected from a BlockState
-	bs.env.worker.commit(bs.env.copy(), nil, true, time.Now())
-
-	return true
+	return bs.env.worker.commitBlockState(bs)
 }
 
 func copyLogs(logs []*types.Log) []*types.Log {

@@ -429,7 +429,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			w.commitWork(req.noempty, req.timestamp)
+			w.startWorkCycle(req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
@@ -782,6 +782,43 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, *collator
 	return env, bs, nil
 }
 
+// commitBlockState commits a block (constructed from an environment and a blockState) to the sealer.
+// it returns true if the block was committed to the sealer and false if the block was stale
+// (not an immediate child of the current canon chain head).
+func (w *worker) commitBlockState(bs *collatorBlockState) bool {
+	bs.env.worker.curEnvMu.Lock()
+	defer bs.env.worker.curEnvMu.Unlock()
+
+	if bs.env.cycleCtx != nil {
+		select {
+		case <-bs.env.cycleCtx.Done():
+			// if the work-cycle context is cancelled, the env+blockState is stale and it shouldn't be sealed
+			return false
+		default:
+		}
+	}
+
+	bs.env.current = bs
+
+	if !bs.env.worker.isRunning() && len(bs.logs) > 0 {
+		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		logsCpy := make([]*types.Log, len(bs.logs))
+		for i, l := range bs.logs {
+			logCpy := *l
+			logsCpy[i] = &logCpy
+		}
+		bs.env.worker.pendingLogsFeed.Send(logsCpy)
+	}
+	bs.env.worker.commit(bs.env.copy(), nil, true, time.Now())
+	return true
+}
+
 // generateWork generates a sealing block based on the given parameters.
 func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	work, bs, err := w.prepareWork(params)
@@ -794,9 +831,9 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	return w.engine.FinalizeAndAssemble(w.chain, work.current.header, work.current.state, work.current.txs, work.unclelist(), work.current.receipts)
 }
 
-// commitWork generates several new sealing tasks based on the parent block
-// and submit them to the sealer.
-func (w *worker) commitWork(noempty bool, timestamp int64) {
+// startWorkCycle begins the block construction/sealing for a pending block built on the current canonical chain.
+// It discards the environment for the previous cycle to prevent async collator implementations from Committing stale blocks for sealing.
+func (w *worker) startWorkCycle(noempty bool, timestamp int64) {
 	w.curEnvMu.Lock()
 	if w.current != nil {
 		// Swap out the old work with the new one, terminating any leftover
