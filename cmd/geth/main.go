@@ -135,6 +135,7 @@ var (
 		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
+		utils.DeveloperGasLimitFlag,
 		utils.RopstenFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
