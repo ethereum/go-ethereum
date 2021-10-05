@@ -465,6 +465,12 @@ web3._extend({
 			call: 'debug_freezeClient',
 			params: 1,
 		}),
+		new web3._extend.Method({
+			name: 'getAccessibleState',
+			call: 'debug_getAccessibleState',
+			params: 2,
+			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
+		}),
 	],
 	properties: []
 });
