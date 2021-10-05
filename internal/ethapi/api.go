@@ -1286,18 +1286,7 @@ type RPCTransaction struct {
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
-	// Determine the signer. For replay-protected transactions, use the most permissive
-	// signer, because we assume that signers are backwards-compatible with old
-	// transactions. For non-protected transactions, the homestead signer signer is used
-	// because the return value of ChainId is zero for those transactions.
-	var signer types.Signer
-	if tx.Protected() {
-		signer = types.LatestSignerForChainID(tx.ChainId())
-	} else {
-		// First reply protection (EIP155) was a part of Spurious Dragon.
-		// Need to distinguish the two HFs because Homestead rejects a subset of S values.
-		signer = types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
-	}
+	signer := types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
