@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core"
 	"math/big"
 	"os"
 	"strings"
@@ -127,6 +128,13 @@ func Transaction(ctx *cli.Context) error {
 		if err != nil {
 			results = append(results, result{Error: err})
 			continue
+		}
+
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
+			results = append(results, result{Error: err})
+		} else if tx.Gas() < gas {
+			results = append(results, result{Error: fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)})
 		}
 		results = append(results, result{Address: sender, Hash: tx.Hash()})
 	}
