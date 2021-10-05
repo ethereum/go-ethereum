@@ -48,7 +48,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	// sealer options
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "mine",
-		Value: c.cliConfig.Sealer.Seal,
+		Value: c.cliConfig.Sealer.Enabled,
 		Usage: "",
 	})
 	f.StringFlag(&flagset.StringFlag{

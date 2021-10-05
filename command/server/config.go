@@ -1,17 +1,24 @@
 package server
 
 import (
+	"crypto/ecdsa"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/command/server/chains"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/imdario/mergo"
 )
 
@@ -78,9 +85,11 @@ type TxPoolConfig struct {
 }
 
 type SealerConfig struct {
-	Seal      *bool
+	Enabled   *bool
 	Etherbase *string
 	ExtraData *string
+	GasCeil   *uint64
+	GasPrice  *big.Int
 }
 
 func DefaultConfig() *Config {
@@ -120,7 +129,9 @@ func DefaultConfig() *Config {
 			LifeTime:     durPtr(3 * time.Hour),
 		},
 		Sealer: &SealerConfig{
-			Seal: boolPtr(false),
+			Enabled:  boolPtr(false),
+			GasCeil:  uint64Ptr(8000000),
+			GasPrice: big.NewInt(params.GWei),
 		},
 	}
 }
@@ -173,7 +184,9 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	// miner options
 	{
 		cfg := n.Miner
-		fmt.Println(cfg)
+		cfg.Etherbase = common.HexToAddress(*c.Sealer.Etherbase)
+		cfg.GasPrice = c.Sealer.GasPrice
+		cfg.GasCeil = *c.Sealer.GasCeil
 	}
 
 	// discovery (this params should be in node.Config)
@@ -195,10 +208,17 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	return &n, nil
 }
 
+var (
+	clientIdentifier = "bor"
+	gitCommit        = "" // Git SHA1 commit hash of the release (set via linker flags)
+	gitDate          = "" // Git commit date YYYYMMDD of the release (set via linker flags)
+)
+
 func (c *Config) buildNode() (*node.Config, error) {
 	cfg := &node.Config{
-		Name:    "reader",
+		Name:    clientIdentifier,
 		DataDir: *c.DataDir,
+		Version: params.VersionWithCommit(gitCommit, gitDate),
 		P2P: p2p.Config{
 			MaxPeers:   int(*c.P2P.MaxPeers),
 			ListenAddr: *c.P2P.Bind + ":" + strconv.Itoa(int(*c.P2P.Port)),
@@ -212,8 +232,14 @@ func (c *Config) buildNode() (*node.Config, error) {
 		*/
 	}
 
+	// setup private key for DevP2P if not found
+	devP2PPrivKey, err := readDevP2PKey(*c.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.P2P.PrivateKey = devP2PPrivKey
+
 	// Discovery
-	var err error
 	if cfg.P2P.BootstrapNodes, err = parseBootnodes(c.P2P.Discovery.Bootnodes); err != nil {
 		return nil, err
 	}
@@ -268,4 +294,32 @@ func parseBootnodes(urls []string) ([]*enode.Node, error) {
 		}
 	}
 	return dst, nil
+}
+
+const devP2PKeyPath = "devp2p.key"
+
+func readDevP2PKey(dataDir string) (*ecdsa.PrivateKey, error) {
+	path := filepath.Join(dataDir, devP2PKeyPath)
+	_, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to stat (%s): %v", path, err)
+	}
+
+	if os.IsNotExist(err) {
+		priv, err := crypto.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+		if err := crypto.SaveECDSA(path, priv); err != nil {
+			return nil, err
+		}
+		return priv, nil
+	}
+
+	// exists
+	priv, err := crypto.LoadECDSA(path)
+	if err != nil {
+		return nil, err
+	}
+	return priv, nil
 }

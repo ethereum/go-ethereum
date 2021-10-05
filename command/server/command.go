@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/log"
@@ -85,9 +86,7 @@ func (c *Command) Run(args []string) int {
 
 	// TODO: MakeChain?
 	// TODO: Metrics
-	// TODO: Node key, pre generate one
 	// TODO: apis
-	// TODO: account management
 	// TODO: Graphql
 	// TODO: embed
 
@@ -111,6 +110,24 @@ func (c *Command) Run(args []string) int {
 		}
 	}
 
+	// setup account manager (only keystore)
+	{
+		keydir := stack.KeyStoreDir()
+		scryptN := keystore.StandardScryptN
+		scryptP := keystore.StandardScryptP
+
+		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, scryptN, scryptP))
+	}
+
+	// sealing (if enabled)
+	if *config.Sealer.Enabled {
+		if err := backend.StartMining(1); err != nil {
+			panic(err)
+		}
+	}
+
+	c.setupMetrics()
+
 	// start the node
 	if err := c.node.Start(); err != nil {
 		panic(err)
@@ -118,14 +135,15 @@ func (c *Command) Run(args []string) int {
 	return c.handleSignals()
 }
 
-func (c *Command) setupMetrics() {
+func (c *Command) setupMetrics() error {
 	if !metrics.Enabled {
 		// metrics are globally disabled
-		return
+		return nil
 	}
 
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
+	return nil
 }
 
 func (c *Command) handleSignals() int {
