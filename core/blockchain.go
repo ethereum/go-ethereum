@@ -754,7 +754,7 @@ func (bc *BlockChain) Export(w io.Writer) error {
 // ExportN writes a subset of the active chain to the given writer.
 func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	if !bc.chainmu.Lock() {
-		return fmt.Errorf("chain is stopped")
+		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
