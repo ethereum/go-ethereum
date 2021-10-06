@@ -184,7 +184,7 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 
 				block, err := api.backend.BlockByHash(ctx, hash)
 				if err != nil { continue }
-				marshalBlock, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.Engine())
+				marshalBlock, err := ethapi.RPCMarshalBlock(block, true, true)
 				if err != nil { continue }
 
 				marshalReceipts := make(map[common.Hash]map[string]interface{})
