@@ -633,5 +633,5 @@ func copyAddressPtr(a *common.Address) *common.Address {
 		return nil
 	}
 	cpy := *a
-	return &coy
+	return &cpy
 }
