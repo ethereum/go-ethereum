@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -80,6 +81,7 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+	errChainStopped         = errors.New("blockchain is stopped")
 )
 
 const (
@@ -183,7 +185,7 @@ type BlockChain struct {
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
-	chainmu sync.RWMutex // blockchain insertion lock
+	chainmu *syncx.ClosableMutex // blockchain insertion lock
 
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
@@ -235,6 +237,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Preimages: cacheConfig.Preimages,
 		}),
 		quit:           make(chan struct{}),
+		chainmu:        syncx.NewClosableMutex(),
 		shouldPreserve: shouldPreserve,
 		bodyCache:      bodyCache,
 		bodyRLPCache:   bodyRLPCache,
@@ -496,7 +499,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
-	bc.chainmu.Lock()
+	if !bc.chainmu.Lock() {
+		return 0, errChainStopped
+	}
 	defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
@@ -641,8 +646,11 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB()); err != nil {
 		return err
 	}
-	// If all checks out, manually set the head block
-	bc.chainmu.Lock()
+
+	// If all checks out, manually set the head block.
+	if !bc.chainmu.Lock() {
+		return errChainStopped
+	}
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
 	bc.chainmu.Unlock()
@@ -745,8 +753,10 @@ func (bc *BlockChain) Export(w io.Writer) error {
 
 // ExportN writes a subset of the active chain to the given writer.
 func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
-	bc.chainmu.RLock()
-	defer bc.chainmu.RUnlock()
+	if !bc.chainmu.Lock() {
+		return fmt.Errorf("chain is stopped")
+	}
+	defer bc.chainmu.Unlock()
 
 	if first > last {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
@@ -999,12 +1009,16 @@ func (bc *BlockChain) Stop() {
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}
-	// Unsubscribe all subscriptions registered from blockchain
+
+	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
+
+	// Signal shutdown to all goroutines.
 	close(bc.quit)
 	bc.StopInsert()
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+
+	// Grab the lock and wait for all goroutines to come down.
+	bc.chainmu.Close()
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
@@ -1015,6 +1029,7 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -1138,7 +1153,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// updateHead updates the head fast sync block if the inserted blocks are better
 	// and returns an indicator whether the inserted blocks are canonical.
 	updateHead := func(head *types.Block) bool {
-		bc.chainmu.Lock()
+		if !bc.chainmu.Lock() {
+			return false
+		}
 		defer bc.chainmu.Unlock()
 
 		// Rewind may have occurred, skip in that case.
@@ -1410,9 +1427,10 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	bc.chainmu.Lock()
+	if !bc.chainmu.Lock() {
+		return NonStatTy, errInsertionInterrupted
+	}
 	defer bc.chainmu.Unlock()
-
 	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
 }
 
@@ -1585,29 +1603,28 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
-	// Remove already known canon-blocks
-	var (
-		block, prev *types.Block
-	)
-	// Do a sanity check that the provided chain is actually ordered and linked
+	// Do a sanity check that the provided chain is actually ordered and linked.
 	for i := 1; i < len(chain); i++ {
-		block = chain[i]
-		prev = chain[i-1]
+		block, prev := chain[i], chain[i-1]
 		if block.NumberU64() != prev.NumberU64()+1 || block.ParentHash() != prev.Hash() {
-			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", block.Number(), "hash", block.Hash(),
-				"parent", block.ParentHash(), "prevnumber", prev.Number(), "prevhash", prev.Hash())
-
+			log.Error("Non contiguous block insert",
+				"number", block.Number(),
+				"hash", block.Hash(),
+				"parent", block.ParentHash(),
+				"prevnumber", prev.Number(),
+				"prevhash", prev.Hash(),
+			)
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, prev.NumberU64(),
 				prev.Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
-	// Pre-checks passed, start the full block imports
-	bc.chainmu.Lock()
-	n, err := bc.insertChain(chain, true)
-	bc.chainmu.Unlock()
 
-	return n, err
+	// Pre-check passed, start the full block imports.
+	if !bc.chainmu.Lock() {
+		return 0, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+	return bc.insertChain(chain, true)
 }
 
 // InsertChainWithoutSealVerification works exactly the same
@@ -1616,12 +1633,11 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
-	// Pre-checks passed, start the full block imports
-	bc.chainmu.Lock()
-	n, err := bc.insertChain(types.Blocks([]*types.Block{block}), false)
-	bc.chainmu.Unlock()
-
-	return n, err
+	if !bc.chainmu.Lock() {
+		return 0, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1633,10 +1649,11 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
-	// If the chain is terminating, don't even bother starting up
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+	// If the chain is terminating, don't even bother starting up.
+	if bc.insertStopped() {
 		return 0, nil
 	}
+
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number()), chain)
 
@@ -1671,8 +1688,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// First block (and state) is known
 		//   1. We did a roll-back, and should now do a re-import
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		// 	    from the canonical chain, which has not been verified.
-		// Skip all known blocks that are behind us
+		//      from the canonical chain, which has not been verified.
+		// Skip all known blocks that are behind us.
 		var (
 			current  = bc.CurrentBlock()
 			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
@@ -2365,10 +2382,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return i, err
 	}
 
-	// Make sure only one thread manipulates the chain at once
-	bc.chainmu.Lock()
+	if !bc.chainmu.Lock() {
+		return 0, errChainStopped
+	}
 	defer bc.chainmu.Unlock()
-
 	_, err := bc.hc.InsertHeaderChain(chain, start)
 	return 0, err
 }
