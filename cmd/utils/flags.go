@@ -155,6 +155,14 @@ var (
 		Name:  "ropsten",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
+	MumbaiFlag = cli.BoolFlag{
+		Name:  "bor-mumbai",
+		Usage: "Mumbai network: pre-configured proof-of-stake test network",
+	}
+	BorMainnetFlag = cli.BoolFlag{
+		Name:  "bor-mainnet",
+		Usage: "Bor mainnet",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -797,6 +805,10 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
+		if ctx.GlobalBool(MumbaiFlag.Name) || ctx.GlobalBool(BorMainnetFlag.Name) {
+			homeDir, _ := os.UserHomeDir()
+			return filepath.Join(homeDir, "/.bor/data")
+		}
 		return path
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
@@ -849,6 +861,10 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
+	case ctx.GlobalBool(MumbaiFlag.Name):
+		urls = params.MumbaiBootnodes
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		urls = params.BorMainnetBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1292,6 +1308,12 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
+	case ctx.GlobalBool(MumbaiFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		homeDir, _ := os.UserHomeDir()
+		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
+	case ctx.GlobalBool(BorMainnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		homeDir, _ := os.UserHomeDir()
+		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
 	}
 }
 
@@ -1477,7 +1499,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, MumbaiFlag, BorMainnetFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1503,7 +1525,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.BorLogs = ctx.GlobalBool(BorLogsFlag.Name)
 	}
 
-  // Cap the cache allowance and tune the garbage collector
+	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
 		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
@@ -1634,6 +1656,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
+	case ctx.GlobalBool(MumbaiFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 80001
+		}
+		cfg.Genesis = core.DefaultMumbaiGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.MumbaiGenesisHash)
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		if !ctx.GlobalIsSet(BorMainnetFlag.Name) {
+			cfg.NetworkId = 137
+		}
+		cfg.Genesis = core.DefaultBorMainnetGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.BorMainnetGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1854,6 +1888,10 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
+	case ctx.GlobalBool(MumbaiFlag.Name):
+		genesis = core.DefaultMumbaiGenesisBlock()
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		genesis = core.DefaultBorMainnetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
