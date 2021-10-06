@@ -1017,7 +1017,12 @@ func (bc *BlockChain) Stop() {
 	close(bc.quit)
 	bc.StopInsert()
 
-	// Grab the lock and wait for all goroutines to come down.
+	// Now wait for all chain modifications to end and persistent goroutines to exit.
+	//
+	// Note: Close waits for the mutex to become available, i.e. any running chain
+	// modification will have exited when Close returns. Since we also called StopInsert,
+	// the mutex should become available quickly. It cannot be taken again after Close has
+	// returned.
 	bc.chainmu.Close()
 	bc.wg.Wait()
 
