@@ -151,8 +151,8 @@ func (h *Header) EmptyReceipts() bool {
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
-	Transactions []*Transaction
-	Uncles       []*Header
+	Transactions []*Transaction		`json:"transactions"`
+	Uncles       []*Header			`json:"uncles"`
 }
 
 // Block represents an entire block in the Ethereum blockchain.
@@ -174,6 +174,21 @@ type Block struct {
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
 }
+
+type ImportBlock struct {
+	BlockHeader *Header		`json:"block_header"`
+	BlockBody 	*Body		`json:"block_body"`
+}
+
+func MakeImportBlock(block *Block) *ImportBlock {
+	ans := new(ImportBlock)
+
+	ans.BlockHeader = block.Header()
+	ans.BlockBody = block.Body()
+
+	return ans
+}
+
 
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
