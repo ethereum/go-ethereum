@@ -203,21 +203,25 @@ func TestPrestateTracerCreate2(t *testing.T) {
 
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
-func TestCallTracer(t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+func TestCallTracerLegacy(t *testing.T) {
+	testCallTracer("callTracerLegacy", "call_tracer_legacy", t)
+}
+
+func testCallTracer(tracer string, dirPath string, t *testing.T) {
+	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
 	for _, file := range files {
-		if !strings.HasPrefix(file.Name(), "call_tracer_") {
+		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
 		file := file // capture range variable
-		t.Run(camel(strings.TrimSuffix(strings.TrimPrefix(file.Name(), "call_tracer_"), ".json")), func(t *testing.T) {
+		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
 			// Call tracer test found, read if from disk
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+			blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, file.Name()))
 			if err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			}
@@ -248,7 +252,7 @@ func TestCallTracer(t *testing.T) {
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
 			// Create the tracer, the EVM environment and run it
-			tracer, err := New("callTracer", new(Context))
+			tracer, err := New(tracer, new(Context))
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -281,6 +285,10 @@ func TestCallTracer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCallTracer(t *testing.T) {
+	testCallTracer("callTracer", "call_tracer", t)
 }
 
 // jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
@@ -353,8 +361,8 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	tracer := vm.NewStructLogger(&vm.LogConfig{
 		Debug: false,
 		//DisableStorage: true,
-		//DisableMemory: true,
-		//DisableReturnData: true,
+		//EnableMemory: false,
+		//EnableReturnData: false,
 	})
 	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Debug: true, Tracer: tracer})
 	msg, err := tx.AsMessage(signer, nil)
@@ -376,5 +384,75 @@ func BenchmarkTransactionTrace(b *testing.B) {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}
 		tracer.Reset()
+	}
+}
+
+func BenchmarkTracers(b *testing.B) {
+	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer"))
+	if err != nil {
+		b.Fatalf("failed to retrieve tracer test suite: %v", err)
+	}
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+		file := file // capture range variable
+		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
+			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
+			if err != nil {
+				b.Fatalf("failed to read testcase: %v", err)
+			}
+			test := new(callTracerTest)
+			if err := json.Unmarshal(blob, test); err != nil {
+				b.Fatalf("failed to parse testcase: %v", err)
+			}
+			benchTracer("callTracer", test, b)
+		})
+	}
+}
+
+func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
+	// Configure a blockchain with the given prestate
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
+		b.Fatalf("failed to parse testcase input: %v", err)
+	}
+	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
+	msg, err := tx.AsMessage(signer, nil)
+	if err != nil {
+		b.Fatalf("failed to prepare transaction for tracing: %v", err)
+	}
+	origin, _ := signer.Sender(tx)
+	txContext := vm.TxContext{
+		Origin:   origin,
+		GasPrice: tx.GasPrice(),
+	}
+	context := vm.BlockContext{
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
+		Coinbase:    test.Context.Miner,
+		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
+		Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+		Difficulty:  (*big.Int)(test.Context.Difficulty),
+		GasLimit:    uint64(test.Context.GasLimit),
+	}
+	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
+
+	// Create the tracer, the EVM environment and run it
+	tracer, err := New(tracerName, new(Context))
+	if err != nil {
+		b.Fatalf("failed to create call tracer: %v", err)
+	}
+	evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		snap := statedb.Snapshot()
+		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		if _, err = st.TransitionDb(); err != nil {
+			b.Fatalf("failed to execute transaction: %v", err)
+		}
+		statedb.RevertToSnapshot(snap)
 	}
 }

@@ -65,9 +65,14 @@ func (n *NumberedError) Error() string {
 	return fmt.Sprintf("ERROR(%d): %v", n.errorCode, n.err.Error())
 }
 
-func (n *NumberedError) Code() int {
+func (n *NumberedError) ExitCode() int {
 	return n.errorCode
 }
+
+// compile-time conformance test
+var (
+	_ cli.ExitCoder = (*NumberedError)(nil)
+)
 
 type input struct {
 	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
@@ -76,7 +81,7 @@ type input struct {
 	TxRlp string            `json:"txsRlp,omitempty"`
 }
 
-func Main(ctx *cli.Context) error {
+func Transition(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
@@ -102,10 +107,10 @@ func Main(ctx *cli.Context) error {
 	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
 		logConfig := &vm.LogConfig{
-			DisableStack:      ctx.Bool(TraceDisableStackFlag.Name),
-			DisableMemory:     ctx.Bool(TraceDisableMemoryFlag.Name),
-			DisableReturnData: ctx.Bool(TraceDisableReturnDataFlag.Name),
-			Debug:             true,
+			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+			EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
+			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
+			Debug:            true,
 		}
 		var prevFile *os.File
 		// This one closes the last file
@@ -252,6 +257,20 @@ func Main(ctx *cli.Context) error {
 			return NewError(ErrorVMConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
+	if env := prestate.Env; env.Difficulty == nil {
+		// If difficulty was not provided by caller, we need to calculate it.
+		switch {
+		case env.ParentDifficulty == nil:
+			return NewError(ErrorVMConfig, errors.New("currentDifficulty was not provided, and cannot be calculated due to missing parentDifficulty"))
+		case env.Number == 0:
+			return NewError(ErrorVMConfig, errors.New("currentDifficulty needs to be provided for block number 0"))
+		case env.Timestamp <= env.ParentTimestamp:
+			return NewError(ErrorVMConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
+				env.Timestamp, env.ParentTimestamp))
+		}
+		prestate.Env.Difficulty = calcDifficulty(chainConfig, env.Number, env.Timestamp,
+			env.ParentTimestamp, env.ParentDifficulty, env.ParentUncleHash)
+	}
 	// Run the test and aggregate the result
 	s, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
@@ -395,7 +414,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		return err
 	}
 	if len(stdOutObject) > 0 {
-		b, err := json.MarshalIndent(stdOutObject, "", " ")
+		b, err := json.MarshalIndent(stdOutObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
@@ -403,7 +422,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stdout.Write([]byte("\n"))
 	}
 	if len(stdErrObject) > 0 {
-		b, err := json.MarshalIndent(stdErrObject, "", " ")
+		b, err := json.MarshalIndent(stdErrObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}

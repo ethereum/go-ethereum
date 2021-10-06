@@ -129,19 +129,13 @@ var (
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	// Note: wily is unsupported because it was officially deprecated on Launchpad.
-	// Note: yakkety is unsupported because it was officially deprecated on Launchpad.
-	// Note: zesty is unsupported because it was officially deprecated on Launchpad.
-	// Note: artful is unsupported because it was officially deprecated on Launchpad.
-	// Note: cosmic is unsupported because it was officially deprecated on Launchpad.
-	// Note: disco is unsupported because it was officially deprecated on Launchpad.
-	// Note: eoan is unsupported because it was officially deprecated on Launchpad.
+	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
+	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy
 	debDistroGoBoots = map[string]string{
 		"trusty":  "golang-1.11",
 		"xenial":  "golang-go",
 		"bionic":  "golang-go",
 		"focal":   "golang-go",
-		"groovy":  "golang-go",
 		"hirsute": "golang-go",
 	}
 
@@ -153,7 +147,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.16.4"
+	dlgoVersion = "1.17"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -330,7 +324,7 @@ func doLint(cmdline []string) {
 
 // downloadLinter downloads and unpacks golangci-lint.
 func downloadLinter(cachedir string) string {
-	const version = "1.39.0"
+	const version = "1.42.0"
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, runtime.GOARCH)
