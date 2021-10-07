@@ -294,6 +294,7 @@ func (s *skeleton) Terminate() error {
 // This method does not block, rather it just waits until the syncer receives the
 // fed header. What the syncer does with it is the syncer's problem.
 func (s *skeleton) Sync(head *types.Header) error {
+	log.Trace("New skeleton head announced", "number", head.Number, "hash", head.Hash())
 	select {
 	case s.headEvents <- head:
 		return nil
@@ -392,6 +393,12 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// a limited depth without an error.
 			if reorged := s.processNewHead(head); reorged {
 				return head, errSyncReorged
+			}
+			// New head was integrated into the skeleton chain. If the backfiller
+			// is still running, it will pick it up. If it already terminated,
+			// a new cycle needs to be spun up.
+			if s.scratchHead == 0 {
+				s.filler.resume()
 			}
 
 		case req := <-requestFails:

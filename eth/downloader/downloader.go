@@ -1296,8 +1296,6 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int, beaconMode bool)
 					}
 					d.pivotLock.RUnlock()
 
-					fmt.Println(pivot)
-
 					frequency := fsHeaderCheckFrequency
 					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1

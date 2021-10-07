@@ -54,6 +54,12 @@ func (b *beaconBackfiller) suspend() {
 // resume starts the downloader threads for backfilling state and chain data.
 func (b *beaconBackfiller) resume() {
 	b.lock.Lock()
+	if b.filling {
+		// If a previous filling cycle is still running, just ignore this start
+		// request. // TODO(karalabe): We should make this channel driven
+		b.lock.Unlock()
+		return
+	}
 	b.filling = true
 	mode := b.syncMode
 	b.lock.Unlock()
