@@ -20,13 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core"
 	"math/big"
 	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -124,19 +124,22 @@ func Transaction(ctx *cli.Context) error {
 			results = append(results, result{Error: err})
 			continue
 		}
-		sender, err := types.Sender(signer, &tx)
-		if err != nil {
-			results = append(results, result{Error: err})
+		r := result{Hash: tx.Hash()}
+		if sender, err := types.Sender(signer, &tx); err != nil {
+			r.Error = err
+			results = append(results, r)
 			continue
+		} else {
+			r.Address = sender
 		}
 
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
 			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
-			results = append(results, result{Error: err})
+			r.Error = err
 		} else if tx.Gas() < gas {
-			results = append(results, result{Error: fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)})
+			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
 		}
-		results = append(results, result{Address: sender, Hash: tx.Hash()})
+		results = append(results, r)
 	}
 	out, err := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))

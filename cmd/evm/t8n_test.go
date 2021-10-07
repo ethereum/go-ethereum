@@ -233,7 +233,7 @@ func TestT9n(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
-		{ // London txs on homestead
+		{ // London txs on London
 			base: "./testdata/15",
 			input: t9nInput{
 				inTxs:  "signed_txs.rlp",
