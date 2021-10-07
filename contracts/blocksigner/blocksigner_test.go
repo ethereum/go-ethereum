@@ -21,12 +21,13 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"math/rand"
 )
 
 var (
@@ -35,7 +36,7 @@ var (
 )
 
 func TestBlockSigner(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(key)
 
 	blockSignerAddress, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend, big.NewInt(99))

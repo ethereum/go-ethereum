@@ -31,14 +31,14 @@ import (
 )
 
 const (
-	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 XDPoS:1.0 rpc:1.0 XDCx:1.0 XDCxlending:1.0 txpool:1.0 web3:1.0"
+	ipcAPIs  = "XDCx:1.0 XDCxlending:1.0 XDPoS:1.0 admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
 // Tests that a node embedded within a console can be started up properly and
 // then terminated by closing the input stream.
 func TestConsoleWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xdc8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
 	// Start a XDC console, make sure it's cleaned up and terminate the console
 	XDC := runXDC(t,
@@ -73,7 +73,7 @@ at block: 0 ({{niltime}})
 // Tests that a console can be attached to a running node via various means.
 func TestIPCAttachWelcome(t *testing.T) {
 	// Configure the instance for IPC attachement
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xdc8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\XDC` + strconv.Itoa(trulyRandInt(100000, 999999))
@@ -95,7 +95,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xdc8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 	XDC := runXDC(t,
 		"--XDCx.datadir", tmpdir(t)+"XDCx/"+time.Now().String(),
@@ -110,7 +110,7 @@ func TestHTTPAttachWelcome(t *testing.T) {
 }
 
 func TestWSAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xdc8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
 	XDC := runXDC(t,

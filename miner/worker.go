@@ -25,7 +25,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 
 	"math/big"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -383,14 +382,6 @@ func (self *worker) wait() {
 				// epoch block
 				if (block.NumberU64() % work.config.XDPoS.Epoch) == 0 {
 					core.CheckpointCh <- 1
-				}
-				// prepare set of masternodes for the next epoch
-				if (block.NumberU64() % work.config.XDPoS.Epoch) == (work.config.XDPoS.Epoch - work.config.XDPoS.Gap) {
-					err := self.chain.UpdateM1()
-					if err != nil {
-						log.Error("Error when update masternodes set. Stopping node", "err", err)
-						os.Exit(1)
-					}
 				}
 			}
 			self.chain.UpdateBlocksHashCache(block)

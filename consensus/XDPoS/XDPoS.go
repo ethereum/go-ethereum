@@ -297,6 +297,32 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	}
 }
 
+// NewFullFaker creates an ethash consensus engine with a full fake scheme that
+// accepts all blocks as valid, without checking any consensus rules whatsoever.
+func NewFaker(db ethdb.Database) *XDPoS {
+	var fakeEngine *XDPoS
+	// Set any missing consensus parameters to their defaults
+	conf := params.TestXDPoSMockChainConfig.XDPoS
+
+	// Allocate the snapshot caches and create the engine
+	BlockSigners, _ := lru.New(blockSignersCacheLimit)
+	recents, _ := lru.NewARC(inmemorySnapshots)
+	signatures, _ := lru.NewARC(inmemorySnapshots)
+	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
+	verifiedHeaders, _ := lru.NewARC(inmemorySnapshots)
+	fakeEngine = &XDPoS{
+		config:              conf,
+		db:                  db,
+		BlockSigners:        BlockSigners,
+		recents:             recents,
+		signatures:          signatures,
+		verifiedHeaders:     verifiedHeaders,
+		validatorSignatures: validatorSignatures,
+		proposals:           make(map[common.Address]bool),
+	}
+	return fakeEngine
+}
+
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (c *XDPoS) Author(header *types.Header) (common.Address, error) {
@@ -349,6 +375,10 @@ func (c *XDPoS) verifyHeaderWithCache(chain consensus.ChainReader, header *types
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *XDPoS) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+	// If we're running a engine faking, accept any block as valid
+	if c.config.SkipValidation {
+		return nil
+	}
 	if common.IsTestnet {
 		fullVerify = false
 	}
@@ -1084,6 +1114,10 @@ func (c *XDPoS) CalcDifficulty(chain consensus.ChainReader, time uint64, parent 
 }
 
 func (c *XDPoS) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
+	// If we're running a engine faking, skip calculation
+	if c.config.SkipValidation {
+		return big.NewInt(1)
+	}
 	len, preIndex, curIndex, _, err := c.YourTurn(chain, parent, signer)
 	if err != nil {
 		return big.NewInt(int64(len + curIndex - preIndex))

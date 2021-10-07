@@ -20,16 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/consensus"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
@@ -62,6 +64,31 @@ type SimulatedBackend struct {
 	events *filters.EventSystem // Event system for filtering log events live
 
 	config *params.ChainConfig
+}
+
+// XDC simulated backend for testing purpose.
+func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	// database := ethdb.NewMemDatabase()
+	database := rawdb.NewMemoryDatabase()
+
+	genesis := core.Genesis{
+		GasLimit:  gasLimit, // need this big, support initial smart contract
+		Config:    params.TestXDPoSMockChainConfig,
+		Alloc:     alloc,
+		ExtraData: append(make([]byte, 32), make([]byte, 65)...),
+	}
+	genesis.MustCommit(database)
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, XDPoS.NewFaker(database), vm.Config{})
+
+	backend := &SimulatedBackend{
+		database:   database,
+		blockchain: blockchain,
+		config:     genesis.Config,
+		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
+	}
+	blockchain.Client = backend
+	backend.rollback()
+	return backend
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
@@ -103,7 +130,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback() {
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(int, *core.BlockGen) {})
 	statedb, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
@@ -359,7 +386,8 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
+		// blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -438,7 +466,8 @@ func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, query XDPoSC
 func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
+		// blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
 		}
@@ -450,6 +479,10 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
 
 	return nil
+}
+
+func (b *SimulatedBackend) GetBlockChain() *core.BlockChain {
+	return b.blockchain
 }
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.

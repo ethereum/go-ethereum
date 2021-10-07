@@ -13,39 +13,80 @@ jobs:
 
   - stage: Lint
     sudo: false
-    go: '1.12.x'
+    go: '1.14.x'
     git:
       submodules: false
       script:
         - go run build/ci.go lint
 
-  - stage: Build and test
-    go: '1.12.x'
-    script:
-    - sudo modprobe fuse
-    - sudo chmod 666 /dev/fuse
-    - sudo chown root:$USER /etc/fuse.conf
-    - go run build/ci.go install
-    - while sleep 540; do echo "[ still running ]"; done &
-    - go run build/ci.go test -coverage
-    - kill %1
-    after_success:
-    - bash <(curl -s https://codecov.io/bash)
-
-  - go: '1.11.x'
-    script:
-    - sudo modprobe fuse
-    - sudo chmod 666 /dev/fuse
-    - sudo chown root:$USER /etc/fuse.conf
-    - go run build/ci.go install
-    - while sleep 540; do echo "[ still running ]"; done &
-    - go run build/ci.go test -coverage
-    - kill %1
-
+  - stage: Tests
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: A-B tests
+    script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[a-b].*")
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[a-m].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: C-[a-m] tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[n-o].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: C-[n-o] tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[p-z].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: C-[p-z] tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[d-i].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: D-I tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[j-n].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: J-N tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[o-r].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: O-R tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/s.*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: S tests
+  - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[t-z].*")
+    os: linux
+    dist: bionic
+    go: 1.14.x
+    env:
+      - GO111MODULE=auto
+    name: T-Z tests
   - stage: Github release
-    go: '1.12.x'
+    go: '1.14.x'
     script:
-      - GOARCH=amd64 GOOS=linux go build -o ./build/bin/XDC-linux-amd64 -v ./cmd/XDC
+      - GOARCH=amd64 GOOS=linux go build -o ./build/bin/XDC-linux-amd64 ./cmd/XDC
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
@@ -61,46 +102,46 @@ jobs:
       - docker
     install: skip
     before_script:
-      - docker build -t XDPoSChain/XDPoSChain .
-      - docker build -t XDPoSChain/node -f Dockerfile.node .
+      - docker build -t XinFinOrg/XDPoSChain .
+      - docker build -t XinFinOrg/node -f Dockerfile.node .
     script:
       - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-      - docker tag XDPoSChain/XDPoSChain XDPoSChain/XDPoSChain:latest
-      - docker push XDPoSChain/XDPoSChain:latest
-      - docker tag XDPoSChain/XDPoSChain XDPoSChain/XDPoSChain:$TRAVIS_BUILD_ID
-      - docker push XDPoSChain/XDPoSChain:$TRAVIS_BUILD_ID
-      - docker tag XDPoSChain/node XDPoSChain/node:latest
-      - docker push XDPoSChain/node:latest
-      - docker tag XDPoSChain/node XDPoSChain/node:$TRAVIS_BUILD_ID
-      - docker push XDPoSChain/node:$TRAVIS_BUILD_ID
+      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:latest
+      - docker push XinFinOrg/XDPoSChain:latest
+      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:$TRAVIS_BUILD_ID
+      - docker push XinFinOrg/XDPoSChain:$TRAVIS_BUILD_ID
+      - docker tag XinFinOrg/node XinFinOrg/node:latest
+      - docker push XinFinOrg/node:latest
+      - docker tag XinFinOrg/node XinFinOrg/node:$TRAVIS_BUILD_ID
+      - docker push XinFinOrg/node:$TRAVIS_BUILD_ID
 
   - stage: Build and push image (tagged)
     services:
       - docker
     install: skip
     before_script:
-      - docker build -t XDPoSChain/XDPoSChain .
-      - docker build -t XDPoSChain/XDPoSChain -f Dockerfile.node .
+      - docker build -t XinFinOrg/XDPoSChain .
+      - docker build -t XinFinOrg/XDPoSChain -f Dockerfile.node .
     script:
       - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-      - docker tag XDPoSChain/XDPoSChain XDPoSChain/XDPoSChain:latest
-      - docker push XDPoSChain/XDPoSChain:latest
-      - docker tag XDPoSChain/XDPoSChain XDPoSChain/XDPoSChain:$TRAVIS_TAG
-      - docker push XDPoSChain/XDPoSChain:$TRAVIS_TAG
-      - docker tag XDPoSChain/XDPoSChain XDPoSChain/node:latest
-      - docker push XDPoSChain/node:latest
-      - docker tag XDPoSChain/node XDPoSChain/node:$TRAVIS_TAG
-      - docker push XDPoSChain/node:$TRAVIS_TAG
+      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:latest
+      - docker push XinFinOrg/XDPoSChain:latest
+      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:$TRAVIS_TAG
+      - docker push XinFinOrg/XDPoSChain:$TRAVIS_TAG
+      - docker tag XinFinOrg/XDPoSChain XinFinOrg/node:latest
+      - docker push XinFinOrg/node:latest
+      - docker tag XinFinOrg/node XinFinOrg/node:$TRAVIS_TAG
+      - docker push XinFinOrg/node:$TRAVIS_TAG
 
 stages:
   - name: Lint
   - name: Build and test
   - name: Github release
-    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XDPoSChain/XDPoSChain
+    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XinFinOrg/XDPoSChain
   - name: Build and push image
-    if: type != pull_request AND branch = master AND tag IS blank AND repo = XDPoSChain/XDPoSChain
+    if: type != pull_request AND branch = master AND tag IS blank AND repo = XinFinOrg/XDPoSChain
   - name: Build and push image (tagged)
-    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XDPoSChain/XDPoSChain
+    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XinFinOrg/XDPoSChain
 
 notifications:
   slack:

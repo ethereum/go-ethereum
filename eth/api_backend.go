@@ -27,6 +27,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 
@@ -45,7 +46,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
-	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -253,7 +253,8 @@ func (b *EthApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *EthApiBackend) GetIPCClient() (*ethclient.Client, error) {
+func (b *EthApiBackend) GetIPCClient() (bind.ContractBackend, error) {
+	// func (b *EthApiBackend) GetIPCClient() (*ethclient.Client, error) {
 	client, err := b.eth.blockchain.GetClient()
 	if err != nil {
 		return nil, err

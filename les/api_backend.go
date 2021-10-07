@@ -20,11 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
-	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 
@@ -39,7 +41,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
-	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/light"
@@ -214,7 +215,9 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
+// func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
+func (b *LesApiBackend) GetIPCClient() (bind.ContractBackend, error) {
+	// func (b *LesApiBackend) GetIPCClient() (bind.ContractBackend, error) {
 	return nil, nil
 }
 
