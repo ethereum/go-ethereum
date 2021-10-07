@@ -163,7 +163,8 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			blockchain.reportBlock(block, receipts, err)
 			return err
 		}
-		blockchain.chainmu.Lock()
+
+		blockchain.chainmu.MustLock()
 		rawdb.WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
 		rawdb.WriteBlock(blockchain.db, block)
 		statedb.Commit(false)
@@ -181,7 +182,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
-		blockchain.chainmu.Lock()
+		blockchain.chainmu.MustLock()
 		rawdb.WriteTd(blockchain.db, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, blockchain.GetTdByHash(header.ParentHash)))
 		rawdb.WriteHeader(blockchain.db, header)
 		blockchain.chainmu.Unlock()
