@@ -127,6 +127,12 @@ var (
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
+
+	pricedUrgentGauge   = metrics.NewRegisteredGauge("txpool/priced/urgent", nil)
+	pricedFloatingGauge = metrics.NewRegisteredGauge("txpool/priced/floating", nil)
+	pricedStalesGauge   = metrics.NewRegisteredGauge("txpool/priced/stale", nil)
+	pendingGaugeTotal   = metrics.NewRegisteredGauge("txpool/pending/total", nil)
+	queuedGaugeTotal    = metrics.NewRegisteredGauge("txpool/queued/total", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -370,6 +376,13 @@ func (pool *TxPool) loop() {
 		case <-report.C:
 			pool.mu.RLock()
 			pending, queued := pool.stats()
+
+			pricedUrgentGauge.Update(int64(len(pool.priced.urgent.list)))
+			pricedFloatingGauge.Update(int64(len(pool.priced.floating.list)))
+			pricedStalesGauge.Update(int64(pool.priced.stales))
+			pendingGaugeTotal.Update(int64(pending))
+			queuedGaugeTotal.Update(int64(queued))
+
 			pool.mu.RUnlock()
 			stales := int(atomic.LoadInt64(&pool.priced.stales))
 
