@@ -499,7 +499,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
@@ -648,7 +648,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	}
 
 	// If all checks out, manually set the head block.
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	bc.currentBlock.Store(block)
@@ -723,7 +723,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	if err := bc.SetHead(0); err != nil {
 		return err
 	}
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
@@ -755,7 +755,7 @@ func (bc *BlockChain) Export(w io.Writer) error {
 
 // ExportN writes a subset of the active chain to the given writer.
 func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
@@ -1160,7 +1160,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// updateHead updates the head fast sync block if the inserted blocks are better
 	// and returns an indicator whether the inserted blocks are canonical.
 	updateHead := func(head *types.Block) bool {
-		if !bc.chainmu.Lock() {
+		if !bc.chainmu.TryLock() {
 			return false
 		}
 		defer bc.chainmu.Unlock()
@@ -1434,7 +1434,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
@@ -1627,7 +1627,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 
 	// Pre-check passed, start the full block imports.
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
@@ -1640,7 +1640,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
@@ -2389,7 +2389,7 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return i, err
 	}
 
-	if !bc.chainmu.Lock() {
+	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
