@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package syncx contains specialized synchronization primitives.
+// Package syncx contains exotic synchronization primitives.
 package syncx
 
+// ClosableMutex is a mutex that can also be closed.
+// Once closed, it can never be taken again.
 type ClosableMutex struct {
 	ch chan struct{}
 }
@@ -27,12 +29,20 @@ func NewClosableMutex() *ClosableMutex {
 	return &ClosableMutex{ch}
 }
 
-// Lock attempts to lock cm.
-//
-// If the mutex is closed, Lock returns false.
-func (cm *ClosableMutex) Lock() bool {
+// TryLock attempts to lock cm.
+// If the mutex is closed, TryLock returns false.
+func (cm *ClosableMutex) TryLock() bool {
 	_, ok := <-cm.ch
 	return ok
+}
+
+// MustLock locks cm.
+// If the mutex is closed, MustLock panics.
+func (cm *ClosableMutex) MustLock() {
+	_, ok := <-cm.ch
+	if !ok {
+		panic("mutex closed")
+	}
 }
 
 // Unlock unlocks cm.
@@ -45,7 +55,6 @@ func (cm *ClosableMutex) Unlock() {
 }
 
 // Close locks the mutex, then closes it.
-// When Close has returned, the mutex cannot be taken again.
 func (cm *ClosableMutex) Close() {
 	_, ok := <-cm.ch
 	if !ok {
