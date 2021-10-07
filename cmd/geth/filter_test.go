@@ -23,6 +23,7 @@ import (
 )
 
 func TestGethFilters(t *testing.T) {
+	// will capture the port assigned from scanning the log output.
 	cliArgs := []string{"", "--dev", "-http", "--http.port=0", "--ws", "--ws.port=0"}
 
 	// app created in init()
