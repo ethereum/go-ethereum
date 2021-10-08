@@ -113,9 +113,9 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 
 	for {
-		//if op := cs.nextSyncOp(); op != nil {
-		//	cs.startSync(op)
-		//}
+		if op := cs.nextSyncOp(); op != nil {
+			cs.startSync(op)
+		}
 		select {
 		case <-cs.peerEventCh:
 			// Peer information changed, recheck.
@@ -160,7 +160,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil
 	}
 	// We have enough peers, check TD
-	peer := cs.handler.peers.peerWithHighestTD()
+	peer := cs.handler.peers.peerWithHighestTD(cs.handler.chain.Config().TerminalTotalDifficulty)
 	if peer == nil {
 		return nil
 	}
