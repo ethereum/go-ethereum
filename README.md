@@ -1,5 +1,5 @@
 # Bor Overview
-The Bor or the Block Producer implementation is basically the sidechain operator. The sidechain VM is EVM-compatible. It is an official Golang implementation of the Matic protocol (fork of [Go Ethereum](https://github.com/ethereum/go-ethereum))
+Bor is the Official Golang implementation of the Matic protocol. It is a fork of Go Ethereum - https://github.com/ethereum/go-ethereum and EVM compabile.
 
 ![Forks](https://img.shields.io/github/forks/maticnetwork/bor?style=social)
 ![Stars](https://img.shields.io/github/stars/maticnetwork/bor?style=social)
