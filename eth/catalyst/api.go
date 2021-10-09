@@ -565,3 +565,7 @@ func (api *ConsensusAPI) ExportExecutableData(path string) error {
 	}
 	return nil
 }
+
+func (api *ConsensusAPI) GetHead() (common.Hash, error) {
+	return api.eth.BlockChain().CurrentBlock().Hash(), nil
+}
