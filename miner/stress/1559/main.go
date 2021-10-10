@@ -23,10 +23,9 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -58,12 +57,17 @@ func main() {
 		faucets[i], _ = crypto.GenerateKey()
 	}
 	// Pre-generate the ethash mining DAG so we don't race
-	ethash.MakeDataset(1, filepath.Join(os.Getenv("HOME"), ".ethash"))
+	ethash.MakeDataset(1, ethconfig.Defaults.Ethash.DatasetDir)
 
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets)
 
+	// Handle interrupts.
+	interruptCh := make(chan os.Signal, 5)
+	signal.Notify(interruptCh, os.Interrupt)
+
 	var (
+		stacks []*node.Node
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
@@ -85,12 +89,6 @@ func main() {
 		// Start tracking the node and its enode
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
-
-		// Inject the signer key and start sealing with it
-		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		if _, err := store.NewAccount(""); err != nil {
-			panic(err)
-		}
 	}
 
 	// Iterate over all the nodes and start mining
@@ -111,6 +109,16 @@ func main() {
 		signer = types.LatestSignerForChainID(genesis.Config.ChainID)
 	)
 	for {
+		// Stop when interrupted.
+		select {
+		case <-interruptCh:
+			for _, node := range stacks {
+				node.Close()
+			}
+			return
+		default:
+		}
+
 		// Pick a random mining node
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
@@ -242,10 +250,10 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
-			GasFloor: genesis.GasLimit * 9 / 10,
-			GasCeil:  genesis.GasLimit * 11 / 10,
-			GasPrice: big.NewInt(1),
-			Recommit: time.Second,
+			Etherbase: common.Address{1},
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
 		},
 	})
 	if err != nil {

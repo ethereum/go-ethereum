@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -95,6 +96,22 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	}
 	*bn = BlockNumber(blckNum)
 	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler. It marshals:
+// - "latest", "earliest" or "pending" as strings
+// - other numbers as hex
+func (bn BlockNumber) MarshalText() ([]byte, error) {
+	switch bn {
+	case EarliestBlockNumber:
+		return []byte("earliest"), nil
+	case LatestBlockNumber:
+		return []byte("latest"), nil
+	case PendingBlockNumber:
+		return []byte("pending"), nil
+	default:
+		return hexutil.Uint64(bn).MarshalText()
+	}
 }
 
 func (bn BlockNumber) Int64() int64 {
@@ -190,4 +207,25 @@ func BlockNumberOrHashWithHash(hash common.Hash, canonical bool) BlockNumberOrHa
 		BlockHash:        &hash,
 		RequireCanonical: canonical,
 	}
+}
+
+// DecimalOrHex unmarshals a non-negative decimal or hex parameter into a uint64.
+type DecimalOrHex uint64
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (dh *DecimalOrHex) UnmarshalJSON(data []byte) error {
+	input := strings.TrimSpace(string(data))
+	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
+		input = input[1 : len(input)-1]
+	}
+
+	value, err := strconv.ParseUint(input, 10, 64)
+	if err != nil {
+		value, err = hexutil.DecodeUint64(input)
+	}
+	if err != nil {
+		return err
+	}
+	*dh = DecimalOrHex(value)
+	return nil
 }

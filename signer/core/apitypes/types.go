@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package apitypes
 
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type ValidationInfo struct {
@@ -52,7 +52,7 @@ func (vs *ValidationMessages) Info(msg string) {
 }
 
 /// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
-func (v *ValidationMessages) getWarnings() error {
+func (v *ValidationMessages) GetWarnings() error {
 	var messages []string
 	for _, msg := range v.Messages {
 		if msg.Typ == WARN || msg.Typ == CRIT {
@@ -97,23 +97,60 @@ func (args SendTxArgs) String() string {
 	return err.Error()
 }
 
-func (args *SendTxArgs) toTransaction() *types.Transaction {
-	txArgs := ethapi.TransactionArgs{
-		Gas:                  &args.Gas,
-		GasPrice:             args.GasPrice,
-		MaxFeePerGas:         args.MaxFeePerGas,
-		MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-		Value:                &args.Value,
-		Nonce:                &args.Nonce,
-		Data:                 args.Data,
-		Input:                args.Input,
-		AccessList:           args.AccessList,
-		ChainID:              args.ChainID,
-	}
+// ToTransaction converts the arguments to a transaction.
+func (args *SendTxArgs) ToTransaction() *types.Transaction {
 	// Add the To-field, if specified
+	var to *common.Address
 	if args.To != nil {
-		to := args.To.Address()
-		txArgs.To = &to
+		dstAddr := args.To.Address()
+		to = &dstAddr
 	}
-	return txArgs.ToTransaction()
+
+	var input []byte
+	if args.Input != nil {
+		input = *args.Input
+	} else if args.Data != nil {
+		input = *args.Data
+	}
+
+	var data types.TxData
+	switch {
+	case args.MaxFeePerGas != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:         to,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(&args.Value),
+			Data:       input,
+			AccessList: al,
+		}
+	case args.AccessList != nil:
+		data = &types.AccessListTx{
+			To:         to,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasPrice:   (*big.Int)(args.GasPrice),
+			Value:      (*big.Int)(&args.Value),
+			Data:       input,
+			AccessList: *args.AccessList,
+		}
+	default:
+		data = &types.LegacyTx{
+			To:       to,
+			Nonce:    uint64(args.Nonce),
+			Gas:      uint64(args.Gas),
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(&args.Value),
+			Data:     input,
+		}
+	}
+	return types.NewTx(data)
 }

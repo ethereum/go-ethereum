@@ -39,6 +39,22 @@ func TestDefaultGenesisBlock(t *testing.T) {
 	if block.Hash() != params.RopstenGenesisHash {
 		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
 	}
+	block = DefaultRinkebyGenesisBlock().ToBlock(nil)
+	if block.Hash() != params.RinkebyGenesisHash {
+		t.Errorf("wrong rinkeby genesis hash, got %v, want %v", block.Hash(), params.RinkebyGenesisHash)
+	}
+	block = DefaultGoerliGenesisBlock().ToBlock(nil)
+	if block.Hash() != params.GoerliGenesisHash {
+		t.Errorf("wrong goerli genesis hash, got %v, want %v", block.Hash(), params.GoerliGenesisHash)
+	}
+}
+
+func TestInvalidCliqueConfig(t *testing.T) {
+	block := DefaultGoerliGenesisBlock()
+	block.ExtraData = []byte{}
+	if _, err := block.Commit(nil); err == nil {
+		t.Fatal("Expected error on invalid clique config")
+	}
 }
 
 func TestSetupGenesis(t *testing.T) {
@@ -184,10 +200,6 @@ func TestGenesisHashes(t *testing.T) {
 		{
 			genesis: DefaultRinkebyGenesisBlock(),
 			hash:    params.RinkebyGenesisHash,
-		},
-		{
-			genesis: DefaultCalaverasGenesisBlock(),
-			hash:    params.CalaverasGenesisHash,
 		},
 	}
 	for i, c := range cases {

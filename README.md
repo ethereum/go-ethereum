@@ -64,7 +64,7 @@ $ geth console
 ```
 
 This command will:
- * Start `geth` in fast sync mode (default, can be changed with the `--syncmode` flag),
+ * Start `geth` in snap sync mode (default, can be changed with the `--syncmode` flag),
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
  * Start up `geth`'s built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
@@ -231,7 +231,8 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
     "constantinopleBlock": 0,
     "petersburgBlock": 0,
     "istanbulBlock": 0,
-    "berlinBlock": 0
+    "berlinBlock": 0,
+    "londonBlock": 0
   },
   "alloc": {},
   "coinbase": "0x0000000000000000000000000000000000000000",

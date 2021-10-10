@@ -42,6 +42,7 @@ func TestState(t *testing.T) {
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+	st.skipLoad(`.*vmPerformance/loop.*`)
 
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
@@ -68,6 +69,10 @@ func TestState(t *testing.T) {
 				t.Run(key+"/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						_, _, err := test.Run(subtest, vmconfig, false)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
 						return st.checkFailure(t, err)
 					})
 				})
@@ -78,6 +83,10 @@ func TestState(t *testing.T) {
 							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
 								return err
 							}
+						}
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
 						}
 						return st.checkFailure(t, err)
 					})
@@ -106,7 +115,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
+	tracer := vm.NewJSONLogger(&vm.LogConfig{}, w)
 	config.Debug, config.Tracer = true, tracer
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {

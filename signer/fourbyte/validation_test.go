@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
@@ -36,7 +36,7 @@ func toHexUint(h string) hexutil.Uint64 {
 	b := big.NewInt(0).SetBytes(common.FromHex(h))
 	return hexutil.Uint64(b.Uint64())
 }
-func dummyTxArgs(t txtestcase) *core.SendTxArgs {
+func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
 	to, _ := mixAddr(t.to)
 	from, _ := mixAddr(t.from)
 	n := toHexUint(t.n)
@@ -55,7 +55,7 @@ func dummyTxArgs(t txtestcase) *core.SendTxArgs {
 		input = &a
 
 	}
-	return &core.SendTxArgs{
+	return &apitypes.SendTxArgs{
 		From:     *from,
 		To:       to,
 		Value:    value,
