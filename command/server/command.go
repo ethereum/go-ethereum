@@ -88,7 +88,6 @@ func (c *Command) Run(args []string) int {
 	// TODO: Metrics
 	// TODO: apis
 	// TODO: Graphql
-	// TODO: embed
 
 	// register the ethereum backend
 	ethCfg, err := config.buildEth()
@@ -143,6 +142,7 @@ func (c *Command) setupMetrics() error {
 
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
+
 	return nil
 }
 

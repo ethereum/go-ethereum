@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ type Config struct {
 	EthStats *string
 	TxPool   *TxPoolConfig
 	Sealer   *SealerConfig
+	JsonRPC  *JsonRPCConfig
 }
 
 type P2PConfig struct {
@@ -90,6 +92,9 @@ type SealerConfig struct {
 	ExtraData *string
 	GasCeil   *uint64
 	GasPrice  *big.Int
+}
+
+type JsonRPCConfig struct {
 }
 
 func DefaultConfig() *Config {
@@ -137,7 +142,18 @@ func DefaultConfig() *Config {
 }
 
 func readConfigFile(path string) (*Config, error) {
-	return nil, nil
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Use hcl as config format
+	ext := filepath.Ext(path)
+	switch ext {
+	case ".toml":
+		return readLegacyConfig(data)
+	default:
+		return nil, fmt.Errorf("file path extension '%s' not found", ext)
+	}
 }
 
 func (c *Config) loadChain() error {
@@ -219,6 +235,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		Name:    clientIdentifier,
 		DataDir: *c.DataDir,
 		Version: params.VersionWithCommit(gitCommit, gitDate),
+		IPCPath: clientIdentifier + ".ipc",
 		P2P: p2p.Config{
 			MaxPeers:   int(*c.P2P.MaxPeers),
 			ListenAddr: *c.P2P.Bind + ":" + strconv.Itoa(int(*c.P2P.Port)),
