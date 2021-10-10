@@ -1652,22 +1652,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
-		if bc.chainConfig.XDPoS != nil {
-			c := bc.engine.(*XDPoS.XDPoS)
-			coinbase := c.Signer()
-			// ignore synching block
-			if coinbase != common.HexToAddress("0x0000000000000000000000000000000000000000") {
-				// block signer
-				blockSigner, _ := c.RecoverSigner(block.Header())
-				header := block.Header()
-				validator, _ := c.RecoverValidator(block.Header())
-				ok := c.CheckMNTurn(bc, header, coinbase)
-				// if created block was your turn
-				if blockSigner != coinbase && ok {
-					log.Warn("Missed create block height", "number", block.Number(), "hash", block.Hash(), "m1", blockSigner.Hex(), "m2", validator.Hex())
-				}
-			}
-		}
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block from downloader", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
@@ -1990,22 +1974,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 
 	if err != nil {
 		return events, coalescedLogs, err
-	}
-	if bc.chainConfig.XDPoS != nil {
-		c := bc.engine.(*XDPoS.XDPoS)
-		coinbase := c.Signer()
-		// ignore synching block
-		if coinbase != common.HexToAddress("0x0000000000000000000000000000000000000000") {
-			header := block.Header()
-			// block signer
-			blockSigner, _ := c.RecoverSigner(block.Header())
-			validator, _ := c.RecoverValidator(block.Header())
-			ok := c.CheckMNTurn(bc, header, coinbase)
-			// if created block was your turn
-			if blockSigner != coinbase && ok {
-				log.Warn("Missed create block height", "number", block.Number(), "hash", block.Hash(), "m1", blockSigner.Hex(), "m2", validator.Hex())
-			}
-		}
 	}
 	switch status {
 	case CanonStatTy:

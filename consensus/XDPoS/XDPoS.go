@@ -323,19 +323,6 @@ func (c *XDPoS) CacheSigningTxs(hash common.Hash, txs []*types.Transaction) []*t
 	return signTxs
 }
 
-func (c *XDPoS) GetCachedSignerData(hash common.Hash) (interface{}, bool) {
+func (c *XDPoS) GetCachedSigningTxs(hash common.Hash) (interface{}, bool) {
 	return c.signingTxsCache.Get(hash)
-}
-
-// TODO: (Hashlab) Can be further refactored
-func (c *XDPoS) CheckMNTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) bool {
-	switch params.BlockConsensusVersion(parent.Number) {
-	default: // Default "1.0"
-		return c.EngineV1.CheckMNTurn(chain, parent, signer)
-	}
-}
-
-// TODO: (Hashlab)Get signer coinbase
-func (c *XDPoS) Signer() common.Address {
-	return c.EngineV1.Signer()
 }

@@ -142,7 +142,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 					if blockNumber%common.MergeSignRange == 0 {
 						mapBlockHash[bhash] = true
 					}
-					signData, ok := adaptor.GetCachedSignerData(bhash)
+					signData, ok := adaptor.GetCachedSigningTxs(bhash)
 					if !ok {
 						block := chain.GetBlock(bhash, blockNumber)
 						txs := block.Transactions()

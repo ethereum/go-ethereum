@@ -153,7 +153,7 @@ func (c *XDPoS_v1) Author(header *types.Header) (common.Address, error) {
 }
 
 // Get signer coinbase
-func (c *XDPoS_v1) Signer() common.Address { return c.signer }
+// func (c *XDPoS_v1) Signer() common.Address { return c.signer }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *XDPoS_v1) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
@@ -1027,39 +1027,6 @@ func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *
 		return map[common.Address]common.Address{}, err
 	}
 	return m1m2, nil
-}
-
-func (c *XDPoS_v1) CheckMNTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) bool {
-	masternodes := c.GetMasternodes(chain, parent)
-
-	if common.IsTestnet {
-		// Only three mns hard code for XDC testnet.
-		masternodes = []common.Address{
-			common.HexToAddress("0x3Ea0A3555f9B1dE983572BfF6444aeb1899eC58C"),
-			common.HexToAddress("0x4F7900282F3d371d585ab1361205B0940aB1789C"),
-			common.HexToAddress("0x942a5885A8844Ee5587C8AC5e371Fc39FFE61896"),
-		}
-	}
-
-	snap, err := c.GetSnapshot(chain, parent)
-	if err != nil {
-		log.Warn("Failed when trying to commit new work", "err", err)
-		return false
-	}
-	if len(masternodes) == 0 {
-		return false
-	}
-	// masternode[0] has chance to create block 1
-	preIndex := -1
-	if parent.Number.Uint64() != 0 {
-		pre, err := whoIsCreator(snap, parent)
-		if err != nil {
-			return false
-		}
-		preIndex = position(masternodes, pre)
-	}
-	curIndex := position(masternodes, signer)
-	return ((preIndex)%len(masternodes) == curIndex)
 }
 
 func (c *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpointHeader *types.Header) ([]common.Address, error) {
