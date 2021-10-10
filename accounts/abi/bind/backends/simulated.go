@@ -24,7 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain"
@@ -32,6 +33,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
@@ -78,7 +81,23 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *Simulated
 		ExtraData: append(make([]byte, 32), make([]byte, 65)...),
 	}
 	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, XDPoS.NewFaker(database), vm.Config{})
+	consensus := XDPoS.NewFaker(database)
+
+	// Attach mock trading and lending service
+	var DefaultConfig = XDCx.Config{
+		DataDir: "",
+	}
+	XDCXServ := XDCx.New(&DefaultConfig)
+	lendingServ := XDCxlending.New(XDCXServ)
+
+	consensus.GetXDCXService = func() utils.TradingService {
+		return XDCXServ
+	}
+	consensus.GetLendingService = func() utils.LendingService {
+		return lendingServ
+	}
+
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, consensus, vm.Config{})
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -229,39 +248,6 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call XDPoSChain.Cal
 	return rval, err
 }
 
-//FIXME: please use copyState for this function
-// CallContractWithState executes a contract call at the given state.
-func (b *SimulatedBackend) CallContractWithState(call XDPoSChain.CallMsg, chain consensus.ChainContext, statedb *state.StateDB) ([]byte, error) {
-	// Ensure message is initialized properly.
-	call.GasPrice = big.NewInt(0)
-
-	if call.Gas == 0 {
-		call.Gas = 1000000
-	}
-	if call.Value == nil {
-		call.Value = new(big.Int)
-	}
-	// Execute the call.
-	msg := callmsg{call}
-	feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
-	if msg.To() != nil {
-		if value, ok := feeCapacity[*msg.To()]; ok {
-			msg.CallMsg.BalanceTokenFee = value
-		}
-	}
-	evmContext := core.NewEVMContext(msg, chain.CurrentHeader(), chain, nil)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, nil, chain.Config(), vm.Config{})
-	gaspool := new(core.GasPool).AddGas(1000000)
-	owner := common.Address{}
-	rval, _, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
-	if err != nil {
-		return nil, err
-	}
-	return rval, err
-}
-
 // PendingCallContract executes a contract call on the pending state.
 func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call XDPoSChain.CallMsg) ([]byte, error) {
 	b.mu.Lock()
@@ -312,7 +298,6 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call XDPoSChain.Call
 
 		snapshot := b.pendingState.Snapshot()
 		_, _, failed, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
-		fmt.Println("EstimateGas", err, failed)
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil || failed {
@@ -387,7 +372,6 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	}
 
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
-		// blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}

@@ -300,11 +300,11 @@ func (bc *BlockChain) loadLastState() error {
 		repair = true
 	} else {
 		engine, ok := bc.Engine().(*XDPoS.XDPoS)
-		author, _ := bc.Engine().Author(currentBlock.Header())
 		if ok {
 			tradingService := engine.GetXDCXService()
 			lendingService := engine.GetLendingService()
 			if bc.Config().IsTIPXDCX(currentBlock.Number()) && bc.chainConfig.XDPoS != nil && currentBlock.NumberU64() > bc.chainConfig.XDPoS.Epoch && tradingService != nil && lendingService != nil {
+				author, _ := bc.Engine().Author(currentBlock.Header())
 				tradingRoot, err := tradingService.GetTradingStateRoot(currentBlock, author)
 				if err != nil {
 					repair = true
@@ -1533,12 +1533,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
-		author, err := bc.Engine().Author(block.Header()) // Ignore error, we're past header validation
-		if err != nil {
-			bc.reportBlock(block, nil, err)
-			return i, events, coalescedLogs, err
-		}
-		parentAuthor, _ := bc.Engine().Author(parent.Header())
 		// clear the previous dry-run cache
 		var tradingState *tradingstate.TradingStateDB
 		var lendingState *lendingstate.LendingStateDB
@@ -1546,6 +1540,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		var lendingService utils.LendingService
 		isSDKNode := false
 		if bc.Config().IsTIPXDCX(block.Number()) && bc.chainConfig.XDPoS != nil && engine != nil && block.NumberU64() > bc.chainConfig.XDPoS.Epoch {
+			author, err := bc.Engine().Author(block.Header()) // Ignore error, we're past header validation
+			if err != nil {
+				bc.reportBlock(block, nil, err)
+				return i, events, coalescedLogs, err
+			}
+			parentAuthor, _ := bc.Engine().Author(parent.Header())
 			tradingService = engine.GetXDCXService()
 			lendingService = engine.GetLendingService()
 			if tradingService != nil && lendingService != nil {

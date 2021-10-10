@@ -1,14 +1,15 @@
 package XDCx
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/contracts/XDCx/contract"
-	"github.com/XinFinOrg/XDPoSChain/log"
 	"math/big"
 	"strings"
 
+	"github.com/XinFinOrg/XDPoSChain/contracts/XDCx/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/log"
+
 	"github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -29,10 +30,9 @@ func RunContract(chain consensus.ChainContext, statedb *state.StateDB, contractA
 	if err != nil {
 		return nil, err
 	}
-	backend := (*backends.SimulatedBackend)(nil)
 	fakeCaller := common.HexToAddress("0x0000000000000000000000000000000000000001")
 	msg := XDPoSChain.CallMsg{To: &contractAddr, Data: input, From: fakeCaller}
-	result, err := backend.CallContractWithState(msg, chain, statedb)
+	result, err := core.CallContractWithState(msg, chain, statedb)
 	if err != nil {
 		return nil, err
 	}

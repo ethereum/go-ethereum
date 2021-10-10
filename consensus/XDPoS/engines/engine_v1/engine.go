@@ -152,9 +152,6 @@ func (c *XDPoS_v1) Author(header *types.Header) (common.Address, error) {
 	return ecrecover(header, c.signatures)
 }
 
-// Get signer coinbase
-// func (c *XDPoS_v1) Signer() common.Address { return c.signer }
-
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *XDPoS_v1) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
 	return c.verifyHeaderWithCache(chain, header, nil, fullVerify)
@@ -198,6 +195,10 @@ func (c *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+	// If we're running a engine faking, accept any block as valid
+	if c.config.SkipValidation {
+		return nil
+	}
 	if common.IsTestnet {
 		fullVerify = false
 	}
@@ -938,6 +939,10 @@ func (c *XDPoS_v1) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 }
 
 func (c *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
+	// If we're running a engine faking, skip calculation
+	if c.config.SkipValidation {
+		return big.NewInt(1)
+	}
 	len, preIndex, curIndex, _, err := c.YourTurn(chain, parent, signer)
 	if err != nil {
 		return big.NewInt(int64(len + curIndex - preIndex))
@@ -1048,15 +1053,13 @@ func NewFaker(db ethdb.Database) *XDPoS_v1 {
 	conf := params.TestXDPoSMockChainConfig.XDPoS
 
 	// Allocate the snapshot caches and create the engine
-	// BlockSigners, _ := lru.New(utils.BlockSignersCacheLimit)
 	recents, _ := lru.NewARC(utils.InmemorySnapshots)
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	fakeEngine = &XDPoS_v1{
-		config: conf,
-		db:     db,
-		// BlockSigners:        BlockSigners,
+		config:              conf,
+		db:                  db,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,

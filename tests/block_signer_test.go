@@ -324,7 +324,7 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 		Difficulty:  big.NewInt(int64(1)),
 		Number:      big.NewInt(int64(number)),
 		GasLimit:    1200000000,
-		Time:        uint64(number * 10),
+		Time:        big.NewInt(int64(number * 10)),
 		Extra:       extraByte,
 	}
 
@@ -345,7 +345,7 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 		var receipts types.Receipts
 		for i, tx := range txs {
 			statedb.Prepare(tx.Hash(), header.Hash(), i)
-			receipt, _, err := ApplyTransaction(bc.Config(), bc, &header.Coinbase, gp, statedb, &header, tx, gasUsed, vm.Config{})
+			receipt, _, err, _ := ApplyTransaction(bc.Config(), nil, bc, &header.Coinbase, gp, statedb, nil, &header, tx, gasUsed, vm.Config{})
 			if err != nil {
 				return nil, fmt.Errorf("%v when applying transaction", err)
 			}

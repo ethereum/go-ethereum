@@ -1,9 +1,7 @@
 package XDPoS
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/params"
-)
+func TestNewAdaptorShallContainMultipleConsensusEngine(t *testing.T) {
+
 }
