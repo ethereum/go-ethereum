@@ -233,7 +233,7 @@ func TestT9n(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
-		{ // London txs on homestead
+		{ // London txs on London
 			base: "./testdata/15",
 			input: t9nInput{
 				inTxs:  "signed_txs.rlp",
@@ -248,6 +248,14 @@ func TestT9n(t *testing.T) {
 				stFork: "London",
 			},
 			expOut: "exp3.json",
+		},
+		{ // Transactions with too low gas
+			base: "./testdata/16",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "London",
+			},
+			expOut: "exp.json",
 		},
 	} {
 
