@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/golang/snappy"
@@ -37,10 +38,6 @@ var (
 	// errClosed is returned if an operation attempts to read from or write to the
 	// freezer table after it has already been closed.
 	errClosed = errors.New("closed")
-
-	// errOutOfBounds is returned if the item requested is not contained within the
-	// freezer table.
-	errOutOfBounds = errors.New("out of bounds")
 
 	// errNotSupported is returned if the database doesn't support the required operation.
 	errNotSupported = errors.New("this operation is not supported")
@@ -735,7 +732,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	// Ensure the start is written, not deleted from the tail, and that the
 	// caller actually wants something
 	if items <= start || hidden > start || count == 0 {
-		return nil, nil, errOutOfBounds
+		return nil, nil, ethdb.ErrAncientOutOfBounds
 	}
 	if start+count > items {
 		count = items - start

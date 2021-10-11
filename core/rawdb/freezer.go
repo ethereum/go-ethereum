@@ -39,14 +39,6 @@ var (
 	// mutations are disallowed.
 	errReadOnly = errors.New("read only")
 
-	// errUnknownTable is returned if the user attempts to read from a table that is
-	// not tracked by the freezer.
-	errUnknownTable = errors.New("unknown table")
-
-	// errOutOrderInsertion is returned if the user attempts to inject out-of-order
-	// binary blobs into the freezer.
-	errOutOrderInsertion = errors.New("the append operation is out-order")
-
 	// errSymlinkDatadir is returned if the ancient directory specified by user
 	// is a symbolic link.
 	errSymlinkDatadir = errors.New("symbolic link datadir is not supported")
@@ -199,7 +191,7 @@ func (f *freezer) HasAncient(kind string, number uint64) (bool, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.has(number), nil
 	}
-	return false, nil
+	return false, ethdb.ErrAncientUnknownKind
 }
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
@@ -207,7 +199,7 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.Retrieve(number)
 	}
-	return nil, errUnknownTable
+	return nil, ethdb.ErrAncientUnknownKind
 }
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
@@ -219,7 +211,7 @@ func (f *freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
 	}
-	return nil, errUnknownTable
+	return nil, ethdb.ErrAncientUnknownKind
 }
 
 // Ancients returns the length of the frozen items.
@@ -242,7 +234,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.size()
 	}
-	return 0, errUnknownTable
+	return 0, ethdb.ErrAncientUnknownKind
 }
 
 // ReadAncients runs the given read operation while ensuring that no writes take place

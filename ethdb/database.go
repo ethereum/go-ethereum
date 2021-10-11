@@ -17,7 +17,10 @@
 // Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import "io"
+import (
+	"errors"
+	"io"
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
@@ -68,13 +71,29 @@ type KeyValueStore interface {
 	io.Closer
 }
 
+var (
+	// ErrAncientUnknownKind is returned if the user attempts to read a kind that is
+	// not tracked by the AncientStore.
+	ErrAncientUnknownKind = errors.New("unknown kind")
+
+	// ErrAncientOutOrderInsertion is returned if the user attempts to inject out-of-order
+	// binary blobs into the AncientStore.
+	ErrAncientOutOrderInsertion = errors.New("the append operation is out-order")
+
+	// ErrAncientOutOfBounds is returned if the item requested is not contained within the
+	// AncientStore.
+	ErrAncientOutOfBounds = errors.New("out of bounds")
+)
+
 // AncientReader contains the methods required to read from immutable ancient data.
 type AncientReader interface {
 	// HasAncient returns an indicator whether the specified data exists in the
 	// ancient store.
+	// Returns ErrAncientUnknownKind if the kind is unknown.
 	HasAncient(kind string, number uint64) (bool, error)
 
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
+	// Returns ErrAncientUnknownKind if the kind is unknown.
 	Ancient(kind string, number uint64) ([]byte, error)
 
 	// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
@@ -82,6 +101,8 @@ type AncientReader interface {
 	//  - at most 'count' items,
 	//  - at least 1 item (even if exceeding the maxBytes), but will otherwise
 	//   return as many items as fit into maxBytes.
+	// Returns ErrAncientUnknownKind if the kind is unknown.
+	// Returns ErrAncientOutOfBounds if the start item is not contained within the AncientStore.
 	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 
 	// Ancients returns the ancient item numbers in the ancient store.
@@ -92,6 +113,7 @@ type AncientReader interface {
 	Tail() (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
+	// Returns ErrAncientUnknownKind if the kind is unknown.
 	AncientSize(kind string) (uint64, error)
 }
 
@@ -129,9 +151,11 @@ type AncientWriter interface {
 // AncientWriteOp is given to the function argument of ModifyAncients.
 type AncientWriteOp interface {
 	// Append adds an RLP-encoded item.
+	// Returns ErrAncientOutOrderInsertion if attempting to insert items out of order.
 	Append(kind string, number uint64, item interface{}) error
 
 	// AppendRaw adds an item without RLP-encoding it.
+	// Returns ErrAncientOutOrderInsertion if attempting to insert items out of order.
 	AppendRaw(kind string, number uint64, item []byte) error
 }
 
