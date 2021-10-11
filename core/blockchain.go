@@ -1753,7 +1753,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// If there are any still remaining, mark as ignored
 		return it.index, err
 
-	// Some other error occurred, abort
+	// Some other error(except ErrKnownBlock) occurred, abort.
+	// ErrKnownBlock is allowed here since some known blocks
+	// still need re-execution to generate snapshots that are missing
 	case err != nil && err != ErrKnownBlock:
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
@@ -1787,8 +1789,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
 		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		// Besides, the known block must not need to build snapshot
+		// its header and body was already in the database). But if the corresponding
+		// snapshot layer is missing, forcibly rerun the execution to build it.
 		if err == ErrKnownBlock && !bc.requireSnapshot(it) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
