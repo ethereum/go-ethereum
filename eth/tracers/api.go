@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -858,19 +859,23 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txctx); err != nil {
-			return nil, err
-		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+		// Native tracers take precedence
+		var ok bool
+		if tracer, ok = native.New(*config.Tracer); !ok {
+			if tracer, err = New(*config.Tracer, txctx); err != nil {
+				return nil, err
 			}
-		}()
-		defer cancel()
+			// TODO(s1na): do we need timeout for native tracers?
+			// Handle timeouts and RPC cancellations
+			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				if deadlineCtx.Err() == context.DeadlineExceeded {
+					tracer.(*Tracer).Stop(errors.New("execution timeout"))
+				}
+			}()
+			defer cancel()
+		}
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)
@@ -904,7 +909,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
-	case *Tracer:
+	case native.Tracer:
 		return tracer.GetResult()
 
 	default:
