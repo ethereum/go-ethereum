@@ -424,7 +424,9 @@ specifies the options for this specific call. The possible options are:
 
 #### JavaScript-based tracing
 
-Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object with (at least) three methods, named `step`, `result`, and `fault`.
+Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 3 additional methods, namely: `step`, `enter` and `exit`. You must provide either `step`, or `enter` AND `exit` (i.e. these two must be exposed together). You may expose all three if you choose to do so.
+
+##### Step
 
 `step`is a function that takes two arguments, log and db, and is called for each step of the EVM, or when an error occurs, as the specified transaction is traced.
 
@@ -491,7 +493,9 @@ But this step function will:
 
 If the step function throws an exception or executes an illegal operation at any point, it will not be called on any further VM steps, and the error will be returned to the caller.
 
-The second function, `result`, takes two arguments `ctx` and `db`, and is expected to return a JSON-serializable value to return to the RPC caller.
+##### Result
+
+`result` is a function that takes two arguments `ctx` and `db`, and is expected to return a JSON-serializable value to return to the RPC caller.
 
 `ctx` is the context in which the transaction is executing and has the following fields:
 
@@ -506,7 +510,30 @@ The second function, `result`, takes two arguments `ctx` and `db`, and is expect
 - `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
 - `time` - String, execution runtime
 
-The third function, `fault`, takes two arguments, `log` and `db`, just like `step` and is invoked when an error happens during the execution of an opcode which wasn't reported in `step`. The method `log.getError()` has information about the error.
+##### Fault
+
+`fault` is a function that takes two arguments, `log` and `db`, just like `step` and is invoked when an error happens during the execution of an opcode which wasn't reported in `step`. The method `log.getError()` has information about the error.
+
+##### Enter & Exit
+
+`enter` and `exit` are respectively invoked on stepping in and out of an internal call. More specifically they are invoked on the `CALL` variants, `CREATE` variants and also for the transfer implied by a `SELFDESTRUCT`.
+
+`enter` takes a `callFrame` object as argument which has the following methods:
+
+- `getType()` - returns a string which has the type of the call frame
+- `getFrom()` - returns the address of the call frame sender
+- `getTo()` - returns the address of the call frame target
+- `getInput()` - returns the input as a buffer
+- `getGas()` - returns a Number which has the amount of gas provided for the frame
+- `getValue()` - returns a `big.Int` with the amount to be transferred only if available, otherwise `undefined`
+
+`exit` takes in a `frameResult` object which has the following methods:
+
+- `getGasUsed()` - returns amount of gas used throughout the frame as a Number
+- `getOutput()` - returns the output as a buffer
+` -getError()` - returns an error if one occured during execution and `undefined` otherwise 
+
+##### Usage
 
 Note that several values are Golang big.Int objects, not JavaScript numbers or JS bigints. As such, they have the same interface as described in the godocs. Their default serialization to JSON is as a Javascript number; to serialize large numbers accurately call `.String()` on them. For convenience, `big.NewInt(x)` is provided, and will convert a uint to a Go BigInt.
 
