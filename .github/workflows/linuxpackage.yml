@@ -13,7 +13,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v1
         with:
-          go-version: 1.15.5
+          go-version: 1.17
 
       - name: Set up Ruby 2.6
         uses: actions/setup-ruby@v1
