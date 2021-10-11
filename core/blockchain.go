@@ -2278,6 +2278,13 @@ func (bc *BlockChain) requireSnapshot(it *insertIterator) bool {
 	if block == nil {
 		return false // Theoretically it's impossible
 	}
+	// If snapshot is not enabled, or the corresponding snapshot
+	// already exists, return here.
+	if bc.snaps == nil || bc.snaps.Snapshot(block.Root()) != nil {
+		return false
+	}
+	// Resolve parent block, rebuild the snapshot only if the block
+	// doesn't have a snapshot whereas its parent has.
 	if parent := it.previous(); parent != nil {
 		parentRoot = parent.Root
 	} else {
@@ -2289,8 +2296,7 @@ func (bc *BlockChain) requireSnapshot(it *insertIterator) bool {
 	if parentRoot == (common.Hash{}) {
 		return false // Theoretically it's impossible
 	}
-	// Only if the block doesn't have a snapshot whereas its parent has
-	return bc.snaps != nil && bc.snaps.Snapshot(block.Root()) == nil && bc.snaps.Snapshot(parentRoot) != nil
+	return bc.snaps.Snapshot(parentRoot) != nil
 }
 
 // maintainTxIndex is responsible for the construction and deletion of the
