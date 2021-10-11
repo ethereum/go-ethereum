@@ -62,6 +62,8 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
+// TODO (MariusVanDerWijden) reenable once engine api is updated to the latest spec
+/*
 func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, []*types.Block) {
 	if fork >= n {
 		fork = n - 1
@@ -105,6 +107,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)
 	return genesis, blocks, forkedBlocks
 }
+*/
 
 func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generateTestChain()
