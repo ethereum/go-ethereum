@@ -195,10 +195,10 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Description: "This command displays information about the freezer index.",
 	}
 	dbImportCmd = cli.Command{
-		Action:    utils.MigrateFlags(importChaindata),
+		Action:    utils.MigrateFlags(importLDBdata),
 		Name:      "import",
-		Usage:     "import the specified chain data from the RLP stream",
-		ArgsUsage: "<type> <dumpfile>",
+		Usage:     "Imports leveldb-data from an exported RLP dump.",
+		ArgsUsage: "<dumpfile> <start (optional)",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.SyncModeFlag,
@@ -212,7 +212,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 	dbExportCmd = cli.Command{
 		Action:    utils.MigrateFlags(exportChaindata),
 		Name:      "export",
-		Usage:     "Export the specified chain data into an RLP stream",
+		Usage:     "Exports the chain data into an RLP dump. If the <dumpfile> has .gz suffix, gzip compression will be used.",
 		ArgsUsage: "<type> <dumpfile>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
@@ -222,7 +222,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
-		Description: "The export command exports the specified chain data to an RLP encoded stream.",
+		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
 	}
 )
 
@@ -547,50 +547,38 @@ func parseHexOrString(str string) ([]byte, error) {
 	return b, err
 }
 
-// importFuncs defines all supported chain data import functions.
-var importFuncs = map[string]func(key []byte) bool{
-	"preimage": preimageChecker,
-	"snapshot": snapshotChecker,
-}
-
-func importChaindata(ctx *cli.Context) error {
-	if ctx.NArg() < 2 {
+func importLDBdata(ctx *cli.Context) error {
+	start := 0
+	switch ctx.NArg() {
+	case 1:
+		break
+	case 2:
+		s, err := strconv.Atoi(ctx.Args().Get(1))
+		if err != nil {
+			return fmt.Errorf("second arg must be an integer: %v", err)
+		}
+		start = s
+	default:
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	// Parse the required chain data type, make sure it's supported.
-	kind := ctx.Args().Get(0)
-	kind = strings.ToLower(strings.Trim(kind, " "))
-	fn, ok := importFuncs[kind]
-	if !ok {
-		var kinds []string
-		for key := range importFuncs {
-			kinds = append(kinds, key)
-		}
-		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
-	}
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
 	var (
-		interrupted bool
-		interrupt   = make(chan struct{})
+		fName     = ctx.Args().Get(0)
+		stack, _  = makeConfigNode(ctx)
+		interrupt = make(chan os.Signal, 1)
+		stop      = make(chan struct{})
 	)
+	defer stack.Close()
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
 	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
-		defer signal.Stop(sigc)
-
-		for {
-			<-sigc
-			if interrupted {
-				interrupted = true
-				close(interrupt)
-			}
-			log.Info("Got interrupt, shutting down...")
+		if _, ok := <-interrupt; ok {
+			log.Info("Interrupted during ldb import, stopping at next batch")
 		}
+		close(stop)
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, false)
-	return utils.ImportChainData(db, ctx.Args().Get(1), kind, fn, interrupt)
+	return utils.ImportLDBData(db, fName, int64(start), stop)
 }
 
 // exporter defines all the necessary information for chain data export.
@@ -631,29 +619,23 @@ func exportChaindata(ctx *cli.Context) error {
 		}
 		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
 	}
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
 	var (
-		interrupted bool
-		interrupt   = make(chan struct{})
+		stack, _  = makeConfigNode(ctx)
+		interrupt = make(chan os.Signal, 1)
+		stop      = make(chan struct{})
 	)
+	defer stack.Close()
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
 	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
-		defer signal.Stop(sigc)
-
-		for {
-			<-sigc
-			if interrupted {
-				interrupted = true
-				close(interrupt)
-			}
-			log.Info("Got interrupt, shutting down...")
+		if _, ok := <-interrupt; ok {
+			log.Info("Interrupted during db export, stopping at next batch")
 		}
+		close(stop)
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.checker, exporter.prefixes, interrupt)
+	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.checker, exporter.prefixes, stop)
 }
 
 // preimageChecker returns the indicator whether the chain data pointed by

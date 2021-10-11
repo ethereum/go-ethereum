@@ -347,19 +347,19 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
-// ImportSnapshot imports a batch of snapshot data into the database
-func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key []byte) bool, interrupt chan struct{}) error {
-	log.Info("Importing chain data", "file", fn, "kind", kind)
+// ImportLDBData imports a batch of snapshot data into the database
+func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
+	log.Info("Importing leveldb data", "file", f)
 
 	// Open the file handle and potentially unwrap the gzip stream
-	fh, err := os.Open(fn)
+	fh, err := os.Open(f)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
 
 	var reader io.Reader = fh
-	if strings.HasSuffix(fn, ".gz") {
+	if strings.HasSuffix(f, ".gz") {
 		if reader, err = gzip.NewReader(reader); err != nil {
 			return err
 		}
@@ -368,11 +368,10 @@ func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key
 
 	// Import the snapshot in batches to prevent disk trashing
 	var (
-		count    int64
-		filtered int64
-		start    = time.Now()
-		logged   = time.Now()
-		batch    = db.NewBatch()
+		count  int64
+		start  = time.Now()
+		logged = time.Now()
+		batch  = db.NewBatch()
 	)
 	for {
 		// Read the next entry and ensure it's not junk
@@ -389,8 +388,8 @@ func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key
 			}
 			return err
 		}
-		if !checker(key) {
-			filtered += 1
+		if count < startIndex {
+			count++
 			continue
 		}
 		batch.Put(key, val)
@@ -407,13 +406,13 @@ func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key
 				if err := batch.Write(); err != nil {
 					return err
 				}
-				log.Info("Snapshot data importing interruptted", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info("External data import interrupted", "file", f, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 				return nil
 			default:
 			}
 		}
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Importing chain data", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Importing external data", "file", f, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 		count += 1
@@ -424,12 +423,13 @@ func ImportChainData(db ethdb.Database, fn string, kind string, checker func(key
 			return err
 		}
 	}
-	log.Info("Imported chain data", "file", fn, "kind", kind, "count", count, "filtered", filtered, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Imported chain data", "file", f, "count", count,
+		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
-// ExportChaindata exports all known chain data into the given file,
-// truncating any data already present in the file.
+// ExportChaindata the given data type (truncating any data already present) in
+// the file. If the suffix is 'gz', gzip compression is used.
 func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key []byte) bool, prefixes [][]byte, interrupt chan struct{}) error {
 	log.Info("Exporting chain data", "file", fn, "kind", kind)
 
@@ -463,24 +463,27 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 			if err := rlp.Encode(writer, it.Value()); err != nil {
 				return err
 			}
-			// Check interruption emitted by ctrl+c
 			if count%1000 == 0 {
+				// Check interruption emitted by ctrl+c
 				select {
 				case <-interrupt:
 					it.Release()
-					log.Info("Chain data exporting interruptted", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+					log.Info("Chain data exporting interrupted", "file", fn,
+						"kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 					return nil
 				default:
 				}
+				if time.Since(logged) > 8*time.Second {
+					log.Info("Exporting chain data", "file", fn, "kind", kind,
+						"count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+					logged = time.Now()
+				}
 			}
-			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-				log.Info("Exporting chain data", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
-				logged = time.Now()
-			}
-			count += 1
+			count++
 		}
 		it.Release()
 	}
-	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count,
+		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
