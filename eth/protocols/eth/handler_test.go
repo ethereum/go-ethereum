@@ -466,7 +466,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 			if (bw != nil && bh == nil) || (bw == nil && bh != nil) {
 				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
-			if bw != nil && bh != nil && bw.Cmp(bw) != 0 {
+			if bw != nil && bh != nil && bw.Cmp(bh) != 0 {
 				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
 		}

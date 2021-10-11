@@ -124,7 +124,7 @@ func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
 	for i := 0; i < src.Len(); i++ {
 		if src.Index(i).Kind() == reflect.Struct {
-			if err := set(slice.Index(i), src.Index(i)); err != nil {
+			if err := setStruct(slice.Index(i), src.Index(i)); err != nil {
 				return err
 			}
 		} else {
