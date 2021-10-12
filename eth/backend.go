@@ -114,12 +114,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	var minerCollator collator.Collator
-	var minerCollatorAPI collator.CollatorAPI
 
 	if config.Miner.CollatorPath != "" {
 		log.Info("using custom mining collator")
 		var err error
-		minerCollator, minerCollatorAPI, err = miner.LoadCollator(config.Miner.CollatorPath, config.Miner.CollatorConfigPath)
+		minerCollator, err = miner.LoadCollator(stack, config.Miner.CollatorPath, config.Miner.CollatorPath)
 		if err != nil {
 			return nil, err
 		}
@@ -244,7 +243,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, minerCollator, minerCollatorAPI)
+	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, minerCollator)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
@@ -315,15 +314,6 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
-
-	if s.config.Miner.CollatorPath != "" && s.miner.CollatorAPI != nil {
-		apis = append(apis, rpc.API{
-			Namespace: "minercollator",
-			Version:   s.miner.CollatorAPI.Version(),
-			Service:   s.miner.CollatorAPI.Service(),
-			Public:    true,
-		})
-	}
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

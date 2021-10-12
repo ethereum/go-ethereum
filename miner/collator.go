@@ -13,43 +13,44 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/miner/collator"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
 
-func LoadCollator(filepath string, configPath string) (collator.Collator, collator.CollatorAPI, error) {
+func LoadCollator(stack *node.Node, filepath string, configPath string) (collator.Collator, error) {
 	p, err := plugin.Open(filepath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	v, err := p.Lookup("PluginConstructor")
 	if err != nil {
-		return nil, nil, errors.New("symbol 'APIExport' not found")
+		return nil, errors.New("symbol 'APIExport' not found")
 	}
 
-	pluginConstructor, ok := v.(func(config *map[string]interface{}) (collator.Collator, collator.CollatorAPI, error))
+	pluginConstructor, ok := v.(func(config *map[string]interface{}, stack *node.Node) (collator.Collator, error))
 	if !ok {
-		return nil, nil, errors.New("expected symbol 'API' to be of type 'CollatorAPI")
+		return nil, errors.New("invalid type signature for collator plugin constructor: expected 'func(config *map[string]interface{}, stack *node.Node) (collator.Collator, error)'")
 	}
 
 	f, err := os.Open(configPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer f.Close()
 
 	config := make(map[string]interface{})
 	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	collator, collatorAPI, err := pluginConstructor(&config)
+	collator, err := pluginConstructor(&config, stack)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return collator, collatorAPI, nil
+	return collator, nil
 }
 
 // collatorBlockState contains an under-construction pending block for sealing.

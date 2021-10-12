@@ -75,13 +75,6 @@ type BlockState interface {
 	GasPool() core.GasPool
 }
 
-type CollatorAPI interface {
-	// a user-readable version string
-	Version() string
-	// an object whose methods are the RPC API for the Collator
-	Service() interface{}
-}
-
 // Pool is an interface to the transaction pool
 type Pool interface {
 	Pending(bool) (map[common.Address]types.Transactions, error)
