@@ -1774,7 +1774,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -2268,34 +2268,45 @@ func (bc *BlockChain) futureBlocksLoop() {
 	}
 }
 
-// skipBlock checks whether the block iterated can be skipped for execution.
+// skipBlock returns 'true', if the block being imported can be skipped over, meaning
+// that the block does not need to be processed but can be considered already fully 'done'.
 func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
+	// We can only ever bypass processing if the only error returned by the validator
+	// is ErrKnownBlock, which means all checks passed, but we already have the block
+	// and state.
+	if !errors.Is(err, ErrKnownBlock) {
+		return false
+	}
+	// If we're not using snapshots, we can skip this, since we have both block
+	// and (trie-) state
+	if bc.snaps == nil {
+		return true
+	}
 	var (
 		header     = it.current() // header can't be nil
 		parentRoot common.Hash
 	)
-	// Either the block or the relevant state is missing, execution is mandatory.
-	if !errors.Is(err, ErrKnownBlock) {
-		return false
-	}
-	// Both the block and relevant state is existent, then check if the snapshot
-	// is missing or not. If the snapshot mechanism is enabled and the snapshot
-	// layer corresponding to this block does not exist but can be recovered, then
-	// execution is mandatory.
-	if bc.snaps == nil || bc.snaps.Snapshot(header.Root) != nil {
+	// If we also have the snapshot-state, we can skip the processing.
+	if bc.snaps.Snapshot(header.Root) != nil {
 		return true
 	}
-	// Resolve parent block, rebuild the snapshot only if the block
-	// doesn't have a snapshot whereas its parent has.
+	// In this case, we have the trie-state but not snapshot-state. If the parent
+	// snapshot-state exists, we need to process this in order to not get a gap
+	// in the snapshot layers.
+	// Resolve parent block
 	if parent := it.previous(); parent != nil {
 		parentRoot = parent.Root
 	} else if parent = bc.GetHeaderByHash(header.ParentHash); parent != nil {
 		parentRoot = parent.Root
 	}
 	if parentRoot == (common.Hash{}) {
-		return true // Theoretically it's impossible
+		return false // Theoretically impossible case
 	}
-	return bc.snaps.Snapshot(parentRoot) == nil
+	// Parent is also missing snapshot: we can skip this. Otherwise process.
+	if bc.snaps.Snapshot(parentRoot) == nil {
+		return true
+	}
+	return false
 }
 
 // maintainTxIndex is responsible for the construction and deletion of the
