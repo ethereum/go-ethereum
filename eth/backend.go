@@ -118,7 +118,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.Miner.CollatorPath != "" {
 		log.Info("using custom mining collator")
 		var err error
-		minerCollator, err = miner.LoadCollator(stack, config.Miner.CollatorPath, config.Miner.CollatorPath)
+		minerCollator, err = miner.LoadCollator(stack, config.Miner.CollatorPath, config.Miner.CollatorConfigPath)
 		if err != nil {
 			return nil, err
 		}
