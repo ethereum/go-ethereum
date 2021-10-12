@@ -3,9 +3,12 @@ package utils
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TestExport does basic sanity checks on the export/import functionality
@@ -39,7 +42,10 @@ func testExport(t *testing.T, f string) {
 		t.Fatal(err)
 	}
 	db2 := rawdb.NewMemoryDatabase()
-	ImportLDBData(db2, f, 5, make(chan struct{}))
+	err = ImportLDBData(db2, f, 5, make(chan struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// verify
 	for i := 0; i < 1000; i++ {
 		v, err := db2.Get([]byte(fmt.Sprintf("key-%04d", i)))
@@ -54,5 +60,33 @@ func testExport(t *testing.T, f string) {
 				t.Fatalf("have %v, want %v", have, want)
 			}
 		}
+	}
+}
+
+// TestImportFutureFormat tests that we reject unsupported future versions.
+func TestImportFutureFormat(t *testing.T) {
+	f := fmt.Sprintf("%v/tempdump-future", os.TempDir())
+	defer func() {
+		os.Remove(f)
+	}()
+	fh, err := os.OpenFile(f, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+	if err := rlp.Encode(fh, &exportHeader{
+		Version:  500,
+		Kind:     "testdata",
+		UnixTime: uint64(time.Now().Unix()),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	db2 := rawdb.NewMemoryDatabase()
+	err = ImportLDBData(db2, f, 0, make(chan struct{}))
+	if err == nil {
+		t.Fatal("Expected error, got none")
+	}
+	if !strings.HasPrefix(err.Error(), "incompatible version") {
+		t.Fatalf("wrong error: %v", err)
 	}
 }

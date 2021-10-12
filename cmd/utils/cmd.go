@@ -348,6 +348,17 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+// exportHeader is used in the export/import flow. When we do an export,
+// the first element we output is the exportHeader.
+// Whenever a backwards-incompatible change is made, the Version header
+// should be bumped.
+// If the importer sees a higher version, it should reject the import.
+type exportHeader struct {
+	Version  uint64
+	Kind     string
+	UnixTime uint64
+}
+
 // ImportLDBData imports a batch of snapshot data into the database
 func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
 	log.Info("Importing leveldb data", "file", f)
@@ -366,6 +377,18 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		}
 	}
 	stream := rlp.NewStream(reader, 0)
+
+	// Read the header
+	var header exportHeader
+	if err := stream.Decode(&header); err != nil {
+		return fmt.Errorf("could not decode header: %v", err)
+	}
+	if header.Version != 0 {
+		return fmt.Errorf("incompatible version %d, (support only 0)", header.Version)
+	}
+	tStamp := time.Unix(int64(header.UnixTime), 0)
+	log.Info("Importing data", "file", f, "type", header.Kind, "data age",
+		common.PrettyDuration(time.Since(tStamp)))
 
 	// Import the snapshot in batches to prevent disk thrashing
 	var (
@@ -445,6 +468,14 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 	if strings.HasSuffix(fn, ".gz") {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
+	}
+	// Write the header
+	if err := rlp.Encode(writer, &exportHeader{
+		Version:  0,
+		Kind:     kind,
+		UnixTime: uint64(time.Now().Unix()),
+	}); err != nil {
+		return err
 	}
 	var (
 		count  int64
