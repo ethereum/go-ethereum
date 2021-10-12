@@ -20,6 +20,7 @@ package utils
 import (
 	"bufio"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -354,10 +355,13 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 // should be bumped.
 // If the importer sees a higher version, it should reject the import.
 type exportHeader struct {
+	Magic    string // Always set to 'gethdbdump' for disambiguation
 	Version  uint64
 	Kind     string
 	UnixTime uint64
 }
+
+const exportMagic = "gethdbdump"
 
 // ImportLDBData imports a batch of snapshot data into the database
 func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
@@ -382,6 +386,9 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	var header exportHeader
 	if err := stream.Decode(&header); err != nil {
 		return fmt.Errorf("could not decode header: %v", err)
+	}
+	if header.Magic != exportMagic {
+		return errors.New("incompatible data, wrong magic")
 	}
 	if header.Version != 0 {
 		return fmt.Errorf("incompatible version %d, (support only 0)", header.Version)
@@ -471,6 +478,7 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 	}
 	// Write the header
 	if err := rlp.Encode(writer, &exportHeader{
+		Magic:    exportMagic,
 		Version:  0,
 		Kind:     kind,
 		UnixTime: uint64(time.Now().Unix()),

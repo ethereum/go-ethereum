@@ -75,6 +75,7 @@ func TestImportFutureFormat(t *testing.T) {
 	}
 	defer fh.Close()
 	if err := rlp.Encode(fh, &exportHeader{
+		Magic:    exportMagic,
 		Version:  500,
 		Kind:     "testdata",
 		UnixTime: uint64(time.Now().Unix()),
