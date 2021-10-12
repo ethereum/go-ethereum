@@ -360,16 +360,23 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	head, err := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil)
-	if err != nil {
-		return nil, err
-	}
 	// Create the transaction
-	var rawTx *types.Transaction
-	if head.BaseFee != nil && opts.GasPrice == nil {
-		rawTx, err = c.createDynamicTx(opts, contract, input, head)
-	} else {
+	var (
+		rawTx *types.Transaction
+		err   error
+	)
+	if opts.GasPrice != nil {
 		rawTx, err = c.createLegacyTx(opts, contract, input)
+	} else {
+		// Only query for basefee if gasPrice not specified
+		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); err != nil {
+			return nil, errHead
+		} else if head.BaseFee != nil {
+			rawTx, err = c.createDynamicTx(opts, contract, input, head)
+		} else {
+			// Chain is not London ready -> use legacy transaction
+			rawTx, err = c.createLegacyTx(opts, contract, input)
+		}
 	}
 	if err != nil {
 		return nil, err
