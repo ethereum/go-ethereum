@@ -24,7 +24,7 @@ type CallFrame struct {
 	Gas     string      `json:"gas"`
 	GasUsed string      `json:"gasUsed"`
 	Input   string      `json:"input"`
-	Output  string      `json:"output"`
+	Output  string      `json:"output,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Calls   []CallFrame `json:"calls,omitempty"`
 }
@@ -117,6 +117,9 @@ func bytesToHex(s []byte) string {
 }
 
 func bigToHex(n *big.Int) string {
+	if n == nil {
+		return ""
+	}
 	return "0x" + n.Text(16)
 }
 
