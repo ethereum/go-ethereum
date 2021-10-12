@@ -375,7 +375,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		batch  = db.NewBatch()
 	)
 	for {
-		// Read the next entry and ensure it's not junk
+		// Read the next entry
 		var key, val []byte
 		if err := stream.Decode(&key); err != nil {
 			if err == io.EOF {
