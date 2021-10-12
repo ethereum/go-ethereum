@@ -2,6 +2,7 @@ package native
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strconv"
 	"strings"
@@ -101,7 +102,10 @@ func (t *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (t *CallTracer) GetResult() (json.RawMessage, error) {
-	res, err := json.Marshal(t.callstack)
+	if len(t.callstack) != 1 {
+		return nil, errors.New("incorrect number of top-level calls")
+	}
+	res, err := json.Marshal(t.callstack[0])
 	if err != nil {
 		return nil, err
 	}
