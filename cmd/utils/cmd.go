@@ -18,6 +18,7 @@
 package utils
 
 import (
+	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -281,7 +282,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	}
 	defer fh.Close()
 
-	var reader io.Reader = fh
+	var reader io.Reader = bufio.NewReader(fh)
 	if strings.HasSuffix(fn, ".gz") {
 		if reader, err = gzip.NewReader(reader); err != nil {
 			return err
@@ -289,7 +290,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	}
 	stream := rlp.NewStream(reader, 0)
 
-	// Import the preimages in batches to prevent disk trashing
+	// Import the preimages in batches to prevent disk thrashing
 	preimages := make(map[common.Hash][]byte)
 
 	for {
@@ -358,7 +359,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	}
 	defer fh.Close()
 
-	var reader io.Reader = fh
+	var reader io.Reader = bufio.NewReader(fh)
 	if strings.HasSuffix(f, ".gz") {
 		if reader, err = gzip.NewReader(reader); err != nil {
 			return err
@@ -366,7 +367,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	}
 	stream := rlp.NewStream(reader, 0)
 
-	// Import the snapshot in batches to prevent disk trashing
+	// Import the snapshot in batches to prevent disk thrashing
 	var (
 		count  int64
 		start  = time.Now()
