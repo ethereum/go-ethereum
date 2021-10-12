@@ -188,56 +188,41 @@ Just for the sake of completeness, decoded the response is: `2`.
 ### eth_createAccessList
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`.
-
-If your `transaction` has code executed, then you can generate `transaction` `accessList` with `eth_createAccessList`. 
-If you send it with your `Transaction` then it will lower your gas cost on Ethereum
+The `accessList` contains all storage slots and addresses read and written by the transaction, expect for the sender account and the precompiles.
+This method uses the same `transaction` call object and `blockNumberOrTag` object as `eth_call`.
+An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
 #### Parameters
 
 | Field              | Type       | Description          |
 |:-------------------|:-----------|:---------------------|
-| `transactionCall`  | `Object`   | `Transaction` object |
-| `blockParameter`   | `Object`   | Optional             |
-| `optimize`         | `Boolean`  | Optional             |
+| `transaction`      | `Object`   | `TransactionCall` object |
+| `blockNumberOrTag` | `Object`   | Optional, blocknumber or `latest` or `pending` |
 
 #### Usage
 
 ```
-curl --data '{"method":"eth_createAccessList","params":[transactionCall, blockParameter, optimize],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
+curl --data '{"method":"eth_createAccessList","params":[{"from": "0x8cd02c6cbd8375b39b06577f8d50c51d86e8d5cd", "data": "0x608060806080608155"}, "pending"],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
 ```
 
 #### Response
 
-The response gives you a list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
+The method `eth_createAccessList` returns list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
 
-That is, it gives you the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. (And  like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined.) But, again, this doesn’t mean that this gas will be lower than the gas used if you just send the same transaction without an access list!
+That is, it gives you the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. Like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined.
+Adding an `accessList` to your transaction does not necessary result in lower gas usage compared to a transaction without an access list.
 
 Example:
 ```json
 {
   "accessList": [
     {
-      "address": "0xb0ee076d7779a6ce152283f009f4c32b5f88756c",
+      "address": "0xa02457e5dfd32bda5fc7e1f1b008aa5979568150",
       "storageKeys": [
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+        "0x0000000000000000000000000000000000000000000000000000000000000081",
       ]
     }
   ],
-  "gasUsed": "0x8496"
+  "gasUsed": "0x125f8"
 }
-```
-#### Example pseudo code
-
-```javascript
-let gasEstimation = estimateGas(tx)
-
-let { accessList, gasUsed } = createAccessList(tx)
-
-if (gasUsed > gasEstimation) {
-  delete accessList[tx.to]
-}
-
-tx.accessList = accessList;
-sendTransaction(tx)
 ```
