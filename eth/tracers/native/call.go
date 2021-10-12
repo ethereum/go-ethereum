@@ -20,10 +20,10 @@ type CallFrame struct {
 	Type    string      `json:"type"`
 	From    string      `json:"from"`
 	To      string      `json:"to"`
-	Input   string      `json:"input"`
-	Gas     string      `json:"gas"`
 	Value   string      `json:"value,omitempty"`
+	Gas     string      `json:"gas"`
 	GasUsed string      `json:"gasUsed"`
+	Input   string      `json:"input"`
 	Output  string      `json:"output"`
 	Error   string      `json:"error,omitempty"`
 	Calls   []CallFrame `json:"calls,omitempty"`
