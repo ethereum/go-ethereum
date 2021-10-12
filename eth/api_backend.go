@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -317,6 +318,10 @@ func (b *EthAPIBackend) UnprotectedAllowed() bool {
 
 func (b *EthAPIBackend) RPCGasCap() uint64 {
 	return b.eth.config.RPCGasCap
+}
+
+func (b *EthAPIBackend) RPCEVMTimeout() time.Duration {
+	return b.eth.config.RPCEVMTimeout
 }
 
 func (b *EthAPIBackend) RPCTxFeeCap() float64 {
