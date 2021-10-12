@@ -266,12 +266,11 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 			return nil, err
 		}
 	}
-	// getNonce
+	// create the transaction
 	nonce, err := c.getNonce(opts)
 	if err != nil {
 		return nil, err
 	}
-	// create the transaction
 	baseTx := &types.DynamicFeeTx{
 		Nonce:     nonce,
 		GasFeeCap: gasFeeCap,
@@ -313,12 +312,11 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 			return nil, err
 		}
 	}
-	// getNonce
+	// create the transaction
 	nonce, err := c.getNonce(opts)
 	if err != nil {
 		return nil, err
 	}
-	// create the transaction
 	baseTx := &types.LegacyTx{
 		Nonce:    nonce,
 		GasPrice: gasPrice,
