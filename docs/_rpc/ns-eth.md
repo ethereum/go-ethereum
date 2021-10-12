@@ -188,7 +188,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 ### eth_createAccessList
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`.
-The `accessList` contains all storage slots and addresses read and written by the transaction, expect for the sender account and the precompiles.
+The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles.
 This method uses the same `transaction` call object and `blockNumberOrTag` object as `eth_call`.
 An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
@@ -222,7 +222,7 @@ Example:
         "0x0000000000000000000000000000000000000000000000000000000000000081",
       ]
     }
-  ],
+  ]
   "gasUsed": "0x125f8"
 }
 ```
