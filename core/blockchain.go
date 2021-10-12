@@ -1692,7 +1692,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	block, err := it.next()
 
 	// Left-trim all the known blocks that don't need to build snapshot
-	if bc.skipKnownBlock(it) {
+	if bc.skipBlock(err, it) {
 		// First block (and state) is known
 		//   1. We did a roll-back, and should now do a re-import
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
@@ -1703,7 +1703,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
-		for block != nil && bc.skipKnownBlock(it) {
+		for block != nil && bc.skipBlock(err, it) {
 			externTd = new(big.Int).Add(externTd, block.Difficulty())
 			if localTd.Cmp(externTd) < 0 {
 				break
@@ -1721,7 +1721,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		for block != nil && bc.skipKnownBlock(it) {
+		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
@@ -1756,7 +1756,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	// Some other error(except ErrKnownBlock) occurred, abort.
 	// ErrKnownBlock is allowed here since some known blocks
 	// still need re-execution to generate snapshots that are missing
-	case err != nil && err != ErrKnownBlock:
+	case err != nil && !errors.Is(err, ErrKnownBlock):
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
@@ -1791,7 +1791,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database). But if the corresponding
 		// snapshot layer is missing, forcibly rerun the execution to build it.
-		if bc.skipKnownBlock(it) {
+		if bc.skipBlock(err, it) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
 				logger = log.Warn
@@ -2268,27 +2268,28 @@ func (bc *BlockChain) futureBlocksLoop() {
 	}
 }
 
-// skipKnownBlock checks whether the known block needs to be executed
-// in order to build the diffLayer of snapshot.
-func (bc *BlockChain) skipKnownBlock(it *insertIterator) bool {
+// skipBlock checks whether the block iterated can be skipped for execution.
+func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	var (
-		block, err = it.peek()
+		header     = it.current() // header can't be nil
 		parentRoot common.Hash
 	)
-	// Check if block and state are both existing
-	if err != ErrKnownBlock {
+	// Either the block or the relevant state is missing, execution is mandatory.
+	if !errors.Is(err, ErrKnownBlock) {
 		return false
 	}
-	// If snapshot is not enabled, or the corresponding snapshot
-	// already exists, return here.
-	if bc.snaps == nil || block == nil || bc.snaps.Snapshot(block.Root()) != nil {
+	// Both the block and relevant state is existent, then check if the snapshot
+	// is missing or not. If the snapshot mechanism is enabled and the snapshot
+	// layer corresponding to this block does not exist but can be recovered, then
+	// execution is mandatory.
+	if bc.snaps == nil || bc.snaps.Snapshot(header.Root) != nil {
 		return true
 	}
 	// Resolve parent block, rebuild the snapshot only if the block
 	// doesn't have a snapshot whereas its parent has.
 	if parent := it.previous(); parent != nil {
 		parentRoot = parent.Root
-	} else if parent = bc.GetHeaderByHash(block.ParentHash()); parent != nil {
+	} else if parent = bc.GetHeaderByHash(header.ParentHash); parent != nil {
 		parentRoot = parent.Root
 	}
 	if parentRoot == (common.Hash{}) {
