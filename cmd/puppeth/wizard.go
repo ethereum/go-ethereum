@@ -77,8 +77,7 @@ type wizard struct {
 	servers  map[string]*sshClient // SSH connections to servers to administer
 	services map[string][]string   // Ethereum services known to be running on servers
 
-	in   *bufio.Reader // Wrapper around stdin to allow reading user input (only used to read json... TODO remove this in favor of geth's builtin prompt)
-	lock sync.Mutex    // Lock to protect configs during concurrent service discovery
+	lock sync.Mutex // Lock to protect configs during concurrent service discovery
 }
 
 // read reads a single line from stdin, trimming if from spaces.
@@ -301,8 +300,12 @@ func (w *wizard) readJSON() string {
 	var blob json.RawMessage
 
 	for {
-		fmt.Printf("> ")
-		if err := json.NewDecoder(w.in).Decode(&blob); err != nil {
+		text, err := prompt.Stdin.PromptInput("> ")
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		reader := strings.NewReader(text)
+		if err := json.NewDecoder(reader).Decode(&blob); err != nil {
 			log.Error("Invalid JSON, please try again", "err", err)
 			continue
 		}
