@@ -272,15 +272,13 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		return nil, err
 	}
 	baseTx := &types.DynamicFeeTx{
+		To:        contract,
 		Nonce:     nonce,
 		GasFeeCap: gasFeeCap,
 		GasTipCap: gasTipCap,
 		Gas:       gasLimit,
 		Value:     value,
 		Data:      input,
-	}
-	if contract != nil {
-		baseTx.To = &c.address
 	}
 	return types.NewTx(baseTx), nil
 }
@@ -318,29 +316,34 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		return nil, err
 	}
 	baseTx := &types.LegacyTx{
+		To:       contract,
 		Nonce:    nonce,
 		GasPrice: gasPrice,
 		Gas:      gasLimit,
 		Value:    value,
 		Data:     input,
 	}
-	if contract != nil {
-		baseTx.To = &c.address
-	}
-	return types.NewTx(baseTx), err
+	return types.NewTx(baseTx), nil
 }
 
 func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *big.Int) (uint64, error) {
-	// Gas estimation cannot succeed without code for method invocations
 	if contract != nil {
+		// Gas estimation cannot succeed without code for method invocations.
 		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
 			return 0, err
 		} else if len(code) == 0 {
 			return 0, ErrNoCode
 		}
 	}
-	// If the contract surely has code (or code is not needed), estimate the transaction
-	msg := ethereum.CallMsg{From: opts.From, To: contract, GasPrice: gasPrice, GasTipCap: gasTipCap, GasFeeCap: gasFeeCap, Value: value, Data: input}
+	msg := ethereum.CallMsg{
+		From:      opts.From,
+		To:        contract,
+		GasPrice:  gasPrice,
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+		Value:     value,
+		Data:      input,
+	}
 	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 }
 
