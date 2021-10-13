@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/peterh/liner"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -81,21 +82,25 @@ type wizard struct {
 
 // read reads a single line from stdin, trimming if from spaces.
 func (w *wizard) read() string {
+	text := promptInput("> ")
+	return strings.TrimSpace(text)
+}
+
+// prompts the user for input with the given prompt string.  If ctrl-c is pressed, returns empty string.
+// if Ctrl-d is pressed, the wizard is interrupted and exits
+func promptInput(p string) string {
 	text, err := prompt.Stdin.PromptInput("> ")
-	if err != nil {
+	if err != nil && err != liner.ErrPromptAborted {
 		log.Crit("Failed to read user input", "err", err)
 	}
-	return strings.TrimSpace(text)
+	return text
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
 // non-emptyness.
 func (w *wizard) readString() string {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text != "" {
 			return text
 		}
@@ -105,10 +110,7 @@ func (w *wizard) readString() string {
 // readDefaultString reads a single line from stdin, trimming if from spaces. If
 // an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultString(def string) string {
-	text, err := prompt.Stdin.PromptInput("> ")
-	if err != nil {
-		log.Crit("Failed to read user input", "err", err)
-	}
+	text := promptInput("> ")
 	if text = strings.TrimSpace(text); text != "" {
 		return text
 	}
@@ -120,10 +122,7 @@ func (w *wizard) readDefaultString(def string) string {
 // value is returned.
 func (w *wizard) readDefaultYesNo(def bool) bool {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.ToLower(strings.TrimSpace(text)); text == "" {
 			return def
 		}
@@ -141,10 +140,7 @@ func (w *wizard) readDefaultYesNo(def bool) bool {
 // interpret it as a URL (http, https or file).
 func (w *wizard) readURL() *url.URL {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		uri, err := url.Parse(strings.TrimSpace(text))
 		if err != nil {
 			log.Error("Invalid input, expected URL", "err", err)
@@ -158,10 +154,7 @@ func (w *wizard) readURL() *url.URL {
 // to parse into an integer.
 func (w *wizard) readInt() int {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			continue
 		}
@@ -179,10 +172,7 @@ func (w *wizard) readInt() int {
 // returned.
 func (w *wizard) readDefaultInt(def int) int {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return def
 		}
@@ -200,10 +190,7 @@ func (w *wizard) readDefaultInt(def int) int {
 // default value is returned.
 func (w *wizard) readDefaultBigInt(def *big.Int) *big.Int {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return def
 		}
@@ -220,10 +207,7 @@ func (w *wizard) readDefaultBigInt(def *big.Int) *big.Int {
 // it to parse into a float. If an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultFloat(def float64) float64 {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return def
 		}
@@ -252,11 +236,7 @@ func (w *wizard) readPassword() string {
 // it to an Ethereum address.
 func (w *wizard) readAddress() *common.Address {
 	for {
-		// Read the address from the user
-		text, err := prompt.Stdin.PromptInput("> 0x")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return nil
 		}
@@ -277,10 +257,7 @@ func (w *wizard) readAddress() *common.Address {
 func (w *wizard) readDefaultAddress(def common.Address) common.Address {
 	for {
 		// Read the address from the user
-		text, err := prompt.Stdin.PromptInput("> 0x")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return def
 		}
@@ -299,10 +276,7 @@ func (w *wizard) readJSON() string {
 	var blob json.RawMessage
 
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		reader := strings.NewReader(text)
 		if err := json.NewDecoder(reader).Decode(&blob); err != nil {
 			log.Error("Invalid JSON, please try again", "err", err)
@@ -320,10 +294,7 @@ func (w *wizard) readIPAddress() string {
 	for {
 		// Read the IP address from the user
 		fmt.Printf("> ")
-		text, err := prompt.Stdin.PromptInput("> 0x")
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
+		text := promptInput("> ")
 		if text = strings.TrimSpace(text); text == "" {
 			return ""
 		}
