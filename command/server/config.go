@@ -4,11 +4,14 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	godebug "runtime/debug"
 
 	"github.com/ethereum/go-ethereum/command/server/chains"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,15 +19,27 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/imdario/mergo"
+	gopsutil "github.com/shirou/gopsutil/mem"
 )
+
+func mapStrPtr(m map[string]string) *map[string]string {
+	return &m
+}
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
 }
 
 func uint64Ptr(i uint64) *uint64 {
@@ -42,34 +57,50 @@ func durPtr(d time.Duration) *time.Duration {
 type Config struct {
 	chain *chains.Chain
 
-	Chain    *string
-	Debug    *bool
-	LogLevel *string
-	DataDir  *string
-	P2P      *P2PConfig
-	SyncMode *string
-	EthStats *string
-	TxPool   *TxPoolConfig
-	Sealer   *SealerConfig
-	JsonRPC  *JsonRPCConfig
+	Chain             *string
+	Debug             *bool
+	Whitelist         *map[string]string
+	UseLightweightKDF *bool
+	LogLevel          *string
+	DataDir           *string
+	P2P               *P2PConfig
+	SyncMode          *string
+	GcMode            *string
+	Snapshot          *bool
+	EthStats          *string
+	Heimdall          *HeimdallConfig
+	TxPool            *TxPoolConfig
+	Sealer            *SealerConfig
+	JsonRPC           *JsonRPCConfig
+	Gpo               *GpoConfig
+	Ethstats          *string
+	Metrics           *MetricsConfig
+	Cache             *CacheConfig
 }
 
 type P2PConfig struct {
-	MaxPeers   *uint64
-	Bind       *string
-	Port       *uint64
-	NoDiscover *bool
-	V5Disc     *bool
-	Discovery  *P2PDiscovery
+	MaxPeers     *uint64
+	MaxPendPeers *uint64
+	Bind         *string
+	Port         *uint64
+	NoDiscover   *bool
+	NAT          *string
+	Discovery    *P2PDiscovery
 }
 
 type P2PDiscovery struct {
+	V5Enabled    *bool
 	Bootnodes    []string
 	BootnodesV4  []string
 	BootnodesV5  []string
 	StaticNodes  []string
 	TrustedNodes []string
 	DNS          []string
+}
+
+type HeimdallConfig struct {
+	URL     *string
+	Without *bool
 }
 
 type TxPoolConfig struct {
@@ -95,21 +126,84 @@ type SealerConfig struct {
 }
 
 type JsonRPCConfig struct {
+	IPCDisable *bool
+	IPCPath    *string
+
+	Modules []string
+	VHost   []string
+	Cors    []string
+	Bind    *string
+
+	GasCap   *uint64
+	TxFeeCap *float64
+
+	Http    *APIConfig
+	Ws      *APIConfig
+	Graphql *APIConfig
+}
+
+type APIConfig struct {
+	Enabled *bool
+	Port    *uint64
+	Prefix  *string
+}
+
+type GpoConfig struct {
+	Blocks      *uint64
+	Percentile  *uint64
+	MaxPrice    *big.Int
+	IgnorePrice *big.Int
+}
+
+type MetricsConfig struct {
+	Enabled   *bool
+	Expensive *bool
+	InfluxDB  *InfluxDBConfig
+}
+
+type InfluxDBConfig struct {
+	V1Enabled    *bool
+	Endpoint     *string
+	Database     *string
+	Username     *string
+	Password     *string
+	Tags         *map[string]string
+	V2Enabled    *bool
+	Token        *string
+	Bucket       *string
+	Organization *string
+}
+
+type CacheConfig struct {
+	Cache         *uint64
+	PercGc        *uint64
+	PercSnapshot  *uint64
+	PercDatabase  *uint64
+	PercTrie      *uint64
+	Journal       *string
+	Rejournal     *time.Duration
+	NoPrefetch    *bool
+	Preimages     *bool
+	TxLookupLimit *uint64
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Chain:    stringPtr("mainnet"),
-		Debug:    boolPtr(false),
-		LogLevel: stringPtr("INFO"),
-		DataDir:  stringPtr(""),
+		Chain:             stringPtr("mainnet"),
+		Debug:             boolPtr(false),
+		UseLightweightKDF: boolPtr(false),
+		Whitelist:         mapStrPtr(map[string]string{}),
+		LogLevel:          stringPtr("INFO"),
+		DataDir:           stringPtr(node.DefaultDataDir()),
 		P2P: &P2PConfig{
-			MaxPeers:   uint64Ptr(30),
-			Bind:       stringPtr("0.0.0.0"),
-			Port:       uint64Ptr(30303),
-			NoDiscover: boolPtr(false),
-			V5Disc:     boolPtr(false),
+			MaxPeers:     uint64Ptr(30),
+			MaxPendPeers: uint64Ptr(50),
+			Bind:         stringPtr("0.0.0.0"),
+			Port:         uint64Ptr(30303),
+			NoDiscover:   boolPtr(false),
+			NAT:          stringPtr("any"),
 			Discovery: &P2PDiscovery{
+				V5Enabled:    boolPtr(false),
 				Bootnodes:    []string{},
 				BootnodesV4:  []string{},
 				BootnodesV5:  []string{},
@@ -118,7 +212,13 @@ func DefaultConfig() *Config {
 				DNS:          []string{},
 			},
 		},
+		Heimdall: &HeimdallConfig{
+			URL:     stringPtr("http://localhost:1317"),
+			Without: boolPtr(false),
+		},
 		SyncMode: stringPtr("fast"),
+		GcMode:   stringPtr("full"),
+		Snapshot: boolPtr(true),
 		EthStats: stringPtr(""),
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
@@ -134,9 +234,66 @@ func DefaultConfig() *Config {
 			LifeTime:     durPtr(3 * time.Hour),
 		},
 		Sealer: &SealerConfig{
-			Enabled:  boolPtr(false),
-			GasCeil:  uint64Ptr(8000000),
-			GasPrice: big.NewInt(params.GWei),
+			Enabled:   boolPtr(false),
+			GasCeil:   uint64Ptr(8000000),
+			GasPrice:  big.NewInt(params.GWei),
+			ExtraData: stringPtr(""),
+		},
+		Gpo: &GpoConfig{
+			Blocks:      uint64Ptr(20),
+			Percentile:  uint64Ptr(60),
+			MaxPrice:    gasprice.DefaultMaxPrice,
+			IgnorePrice: gasprice.DefaultIgnorePrice,
+		},
+		JsonRPC: &JsonRPCConfig{
+			IPCDisable: boolPtr(false),
+			Modules:    []string{"web3", "net"},
+			Cors:       []string{"*"},
+			VHost:      []string{"*"},
+			GasCap:     uint64Ptr(ethconfig.Defaults.RPCGasCap),
+			TxFeeCap:   float64Ptr(ethconfig.Defaults.RPCTxFeeCap),
+			Http: &APIConfig{
+				Enabled: boolPtr(false),
+				Port:    uint64Ptr(8545),
+				Prefix:  stringPtr(""),
+			},
+			Ws: &APIConfig{
+				Enabled: boolPtr(false),
+				Port:    uint64Ptr(8546),
+				Prefix:  stringPtr(""),
+			},
+			Graphql: &APIConfig{
+				Enabled: boolPtr(false),
+			},
+		},
+		Ethstats: stringPtr(""),
+		Metrics: &MetricsConfig{
+			Enabled:   boolPtr(false),
+			Expensive: boolPtr(false),
+			InfluxDB: &InfluxDBConfig{
+				V1Enabled:    boolPtr(false),
+				Endpoint:     stringPtr(""),
+				Database:     stringPtr(""),
+				Username:     stringPtr(""),
+				Password:     stringPtr(""),
+				Tags:         mapStrPtr(map[string]string{}),
+				V2Enabled:    boolPtr(false),
+				Token:        stringPtr(""),
+				Bucket:       stringPtr(""),
+				Organization: stringPtr(""),
+			},
+		},
+		Cache: &CacheConfig{
+			Cache:         uint64Ptr(1024),
+			PercDatabase:  uint64Ptr(50),
+			PercTrie:      uint64Ptr(15),
+			PercGc:        uint64Ptr(25),
+			PercSnapshot:  uint64Ptr(10),
+			Journal:       stringPtr("triecache"),
+			Rejournal:     durPtr(60 * time.Minute),
+			NoPrefetch:    boolPtr(false),
+			Preimages:     boolPtr(false),
+			TxLookupLimit: uint64Ptr(2350000),
 		},
 	}
 }
@@ -163,12 +320,21 @@ func (c *Config) loadChain() error {
 	}
 	c.chain = chain
 
-	// preload some default values that are on the chain file
+	// preload some default values that depend on the chain file
+
+	// the genesis files defines default bootnodes
 	if c.P2P.Discovery.Bootnodes == nil {
 		c.P2P.Discovery.Bootnodes = c.chain.Bootnodes
 	}
 	if c.P2P.Discovery.DNS == nil {
 		c.P2P.Discovery.DNS = c.chain.DNS
+	}
+
+	// depending on the chain we have different cache values
+	if *c.Chain != "mainnet" {
+		c.Cache.Cache = uint64Ptr(4096)
+	} else {
+		c.Cache.Cache = uint64Ptr(1024)
 	}
 	return nil
 }
@@ -184,25 +350,30 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 
 	// txpool options
 	{
-		cfg := n.TxPool
-		cfg.NoLocals = *c.TxPool.NoLocals
-		cfg.Journal = *c.TxPool.Journal
-		cfg.Rejournal = *c.TxPool.Rejournal
-		cfg.PriceLimit = *c.TxPool.PriceLimit
-		cfg.PriceBump = *c.TxPool.PriceBump
-		cfg.AccountSlots = *c.TxPool.AccountSlots
-		cfg.GlobalSlots = *c.TxPool.GlobalSlots
-		cfg.AccountQueue = *c.TxPool.AccountQueue
-		cfg.GlobalQueue = *c.TxPool.GlobalQueue
-		cfg.Lifetime = *c.TxPool.LifeTime
+		n.TxPool.NoLocals = *c.TxPool.NoLocals
+		n.TxPool.Journal = *c.TxPool.Journal
+		n.TxPool.Rejournal = *c.TxPool.Rejournal
+		n.TxPool.PriceLimit = *c.TxPool.PriceLimit
+		n.TxPool.PriceBump = *c.TxPool.PriceBump
+		n.TxPool.AccountSlots = *c.TxPool.AccountSlots
+		n.TxPool.GlobalSlots = *c.TxPool.GlobalSlots
+		n.TxPool.AccountQueue = *c.TxPool.AccountQueue
+		n.TxPool.GlobalQueue = *c.TxPool.GlobalQueue
+		n.TxPool.Lifetime = *c.TxPool.LifeTime
 	}
 
 	// miner options
 	{
-		cfg := n.Miner
-		cfg.Etherbase = common.HexToAddress(*c.Sealer.Etherbase)
-		cfg.GasPrice = c.Sealer.GasPrice
-		cfg.GasCeil = *c.Sealer.GasCeil
+		n.Miner.GasPrice = c.Sealer.GasPrice
+		n.Miner.GasCeil = *c.Sealer.GasCeil
+		n.Miner.ExtraData = []byte(*c.Sealer.ExtraData)
+
+		if etherbase := c.Sealer.Etherbase; etherbase != nil {
+			if !common.IsHexAddress(*etherbase) {
+				return nil, fmt.Errorf("etherbase is not an address: %s", *etherbase)
+			}
+			n.Miner.Etherbase = common.HexToAddress(*etherbase)
+		}
 	}
 
 	// discovery (this params should be in node.Config)
@@ -211,16 +382,106 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 		n.SnapDiscoveryURLs = c.P2P.Discovery.DNS
 	}
 
-	var syncMode downloader.SyncMode
+	// whitelist
+	{
+		n.Whitelist = map[uint64]common.Hash{}
+		for k, v := range *c.Whitelist {
+			number, err := strconv.ParseUint(k, 0, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid whitelist block number %s: %v", k, err)
+			}
+			var hash common.Hash
+			if err = hash.UnmarshalText([]byte(v)); err != nil {
+				return nil, fmt.Errorf("invalid whitelist hash %s: %v", v, err)
+			}
+			n.Whitelist[number] = hash
+		}
+	}
+
+	// cache
+	{
+		cache := *c.Cache.Cache
+		calcPerc := func(val *uint64) int {
+			return int(cache * (*val) / 100)
+		}
+
+		// Cap the cache allowance
+		mem, err := gopsutil.VirtualMemory()
+		if err == nil {
+			if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
+				log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
+				mem.Total = 2 * 1024 * 1024 * 1024
+			}
+			allowance := uint64(mem.Total / 1024 / 1024 / 3)
+			if cache > allowance {
+				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+				cache = allowance
+			}
+		}
+		// Tune the garbage collector
+		gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
+
+		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+		godebug.SetGCPercent(int(gogc))
+
+		n.TrieCleanCacheJournal = *c.Cache.Journal
+		n.TrieCleanCacheRejournal = *c.Cache.Rejournal
+		n.DatabaseCache = calcPerc(c.Cache.PercDatabase)
+		n.SnapshotCache = calcPerc(c.Cache.PercSnapshot)
+		n.TrieCleanCache = calcPerc(c.Cache.PercTrie)
+		n.TrieDirtyCache = calcPerc(c.Cache.PercGc)
+		n.NoPrefetch = *c.Cache.NoPrefetch
+		n.Preimages = *c.Cache.Preimages
+		n.TxLookupLimit = *c.Cache.TxLookupLimit
+	}
+
+	n.RPCGasCap = *c.JsonRPC.GasCap
+	if n.RPCGasCap != 0 {
+		log.Info("Set global gas cap", "cap", n.RPCGasCap)
+	} else {
+		log.Info("Global gas cap disabled")
+	}
+	n.RPCTxFeeCap = *c.JsonRPC.TxFeeCap
+
+	// sync mode. It can either be "fast", "full" or "snap". We disable
+	// for now the "light" mode.
 	switch *c.SyncMode {
 	case "fast":
-		syncMode = downloader.FastSync
+		n.SyncMode = downloader.FastSync
+	case "full":
+		n.SyncMode = downloader.FullSync
+	case "snap":
+		n.SyncMode = downloader.SnapSync
 	default:
-		return nil, fmt.Errorf("sync mode '%s' not found", syncMode)
+		return nil, fmt.Errorf("sync mode '%s' not found", *c.SyncMode)
 	}
-	n.SyncMode = syncMode
-	n.DatabaseHandles = dbHandles
 
+	// archive mode. It can either be "archive" or "full".
+	switch *c.GcMode {
+	case "full":
+		n.NoPruning = false
+	case "archive":
+		n.NoPruning = true
+		if !n.Preimages {
+			n.Preimages = true
+			log.Info("Enabling recording of key preimages since archive mode is used")
+		}
+	default:
+		return nil, fmt.Errorf("gcmode '%s' not found", *c.GcMode)
+	}
+
+	// snapshot disable check
+	if *c.Snapshot {
+		if n.SyncMode == downloader.SnapSync {
+			log.Info("Snap sync requested, enabling --snapshot")
+		} else {
+			// disable snapshot
+			n.TrieCleanCache += n.SnapshotCache
+			n.SnapshotCache = 0
+		}
+	}
+
+	n.DatabaseHandles = dbHandles
 	return &n, nil
 }
 
@@ -231,23 +492,54 @@ var (
 )
 
 func (c *Config) buildNode() (*node.Config, error) {
-	cfg := &node.Config{
-		Name:    clientIdentifier,
-		DataDir: *c.DataDir,
-		Version: params.VersionWithCommit(gitCommit, gitDate),
-		IPCPath: clientIdentifier + ".ipc",
-		P2P: p2p.Config{
-			MaxPeers:   int(*c.P2P.MaxPeers),
-			ListenAddr: *c.P2P.Bind + ":" + strconv.Itoa(int(*c.P2P.Port)),
-		},
-		/*
-			HTTPHost:         *c.BindAddr,
-			HTTPPort:         int(*c.Ports.HTTP),
-			HTTPVirtualHosts: []string{"*"},
-			WSHost:           *c.BindAddr,
-			WSPort:           int(*c.Ports.Websocket),
-		*/
+	ipcPath := ""
+	if !*c.JsonRPC.IPCDisable {
+		ipcPath = clientIdentifier + ".ipc"
+		if c.JsonRPC.IPCPath != nil {
+			ipcPath = *c.JsonRPC.IPCPath
+		}
 	}
+
+	cfg := &node.Config{
+		Name:              clientIdentifier,
+		DataDir:           *c.DataDir,
+		UseLightweightKDF: *c.UseLightweightKDF,
+		Version:           params.VersionWithCommit(gitCommit, gitDate),
+		IPCPath:           ipcPath,
+		P2P: p2p.Config{
+			MaxPeers:        int(*c.P2P.MaxPeers),
+			MaxPendingPeers: int(*c.P2P.MaxPendPeers),
+			ListenAddr:      *c.P2P.Bind + ":" + strconv.Itoa(int(*c.P2P.Port)),
+			DiscoveryV5:     *c.P2P.Discovery.V5Enabled,
+		},
+		HTTPModules:         c.JsonRPC.Modules,
+		HTTPCors:            c.JsonRPC.Cors,
+		HTTPVirtualHosts:    c.JsonRPC.VHost,
+		HTTPPathPrefix:      *c.JsonRPC.Http.Prefix,
+		WSModules:           c.JsonRPC.Modules,
+		WSOrigins:           c.JsonRPC.Cors,
+		WSPathPrefix:        *c.JsonRPC.Ws.Prefix,
+		GraphQLCors:         c.JsonRPC.Cors,
+		GraphQLVirtualHosts: c.JsonRPC.VHost,
+	}
+
+	// enable jsonrpc endpoints
+	{
+		if *c.JsonRPC.Http.Enabled {
+			cfg.HTTPHost = *c.JsonRPC.Bind
+			cfg.HTTPPort = int(*c.JsonRPC.Http.Port)
+		}
+		if *c.JsonRPC.Ws.Enabled {
+			cfg.WSHost = *c.JsonRPC.Bind
+			cfg.WSPort = int(*c.JsonRPC.Ws.Port)
+		}
+	}
+
+	natif, err := nat.Parse(*c.P2P.NAT)
+	if err != nil {
+		return nil, fmt.Errorf("wrong 'nat' flag: %v", err)
+	}
+	cfg.P2P.NAT = natif
 
 	// setup private key for DevP2P if not found
 	devP2PPrivKey, err := readDevP2PKey(*c.DataDir)
