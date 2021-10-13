@@ -205,10 +205,42 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracerLegacy(t *testing.T) {
-	testCallTracer("callTracerLegacy", "call_tracer_legacy", t)
+	newTracer := func() native.Tracer {
+		tracer, err := New("callTracerLegacy", new(Context))
+		if err != nil {
+			t.Fatalf("failed to create call tracer: %v", err)
+		}
+		return tracer
+	}
+
+	testCallTracer(newTracer, "call_tracer_legacy", t)
 }
 
-func testCallTracer(tracer string, dirPath string, t *testing.T) {
+func TestCallTracer(t *testing.T) {
+	newTracer := func() native.Tracer {
+		tracer, err := New("callTracer", new(Context))
+		if err != nil {
+			t.Fatalf("failed to create call tracer: %v", err)
+		}
+		return tracer
+	}
+
+	testCallTracer(newTracer, "call_tracer", t)
+}
+
+func TestCallTracerNative(t *testing.T) {
+	newTracer := func() native.Tracer {
+		tracer, ok := native.New("callTracerNative")
+		if !ok {
+			t.Fatal("failed to create native call tracer")
+		}
+		return tracer
+	}
+
+	testCallTracer(newTracer, "call_tracer", t)
+}
+
+func testCallTracer(newTracer func() native.Tracer, dirPath string, t *testing.T) {
 	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -252,11 +284,7 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 			}
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
-			// Create the tracer, the EVM environment and run it
-			tracer, err := New(tracer, new(Context))
-			if err != nil {
-				t.Fatalf("failed to create call tracer: %v", err)
-			}
+			tracer := newTracer()
 			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
 
 			msg, err := tx.AsMessage(signer, nil)
@@ -286,10 +314,6 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCallTracer(t *testing.T) {
-	testCallTracer("callTracer", "call_tracer", t)
 }
 
 // jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
