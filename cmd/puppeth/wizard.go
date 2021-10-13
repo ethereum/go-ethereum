@@ -84,7 +84,7 @@ type wizard struct {
 // Causes the wizard to exit if ctrl-d is pressed
 func promptInput(p string) string {
 	for {
-		text, err := prompt.Stdin.PromptInput("> ")
+		text, err := prompt.Stdin.PromptInput(p)
 		if err != nil {
 			if err != liner.ErrPromptAborted {
 				log.Crit("Failed to read user input", "err", err)
