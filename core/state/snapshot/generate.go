@@ -57,6 +57,11 @@ var (
 	// the the value is too small, the efficiency of the state recovery will decrease.
 	storageCheckRange = 1024
 
+	// thrashingTimeout is time threshold below which a generator abort is considered
+	// database thrashing and will temporarilly disable generation. Generation will
+	// resume the moment a run allowance takes longer than this limit.
+	thrashingTimeout = 450 * time.Millisecond
+
 	// errMissingTrie is returned if the target trie is missing while the generation
 	// is running. In this case the generation is aborted and wait the new signal.
 	errMissingTrie = errors.New("missing trie")
@@ -101,6 +106,19 @@ type generatorStats struct {
 	accounts uint64             // Number of accounts indexed(generated or recovered)
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
+
+	slowPeriod uint64    // Running average of time between abort and resume
+	lastAbort  time.Time // timestamp of most recent abort
+	lastLog    time.Time // timestamp of lost 'optional' log
+}
+
+// LogOptional calls Log with the given params if 8s has passed since the last
+// call
+func (gs *generatorStats) LogOptional(msg string, root common.Hash, marker []byte) {
+	if time.Since(gs.lastLog) > 8*time.Second {
+		gs.Log(msg, root, marker)
+		gs.lastLog = time.Now()
+	}
 }
 
 // Log creates an contextual log with the given message and the context pulled
@@ -126,6 +144,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"slots", gs.slots,
 		"storage", gs.storage,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
+		"period", common.PrettyDuration(uint64(gs.slowPeriod)),
 	}...)
 	// Calculate the estimated indexing time based on current stats
 	if len(marker) > 0 {
@@ -147,7 +166,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) *diskLayer {
 	// Create a new disk layer with an initialized state marker at zero
 	var (
-		stats     = &generatorStats{start: time.Now()}
+		stats     = &generatorStats{start: time.Now(), lastAbort: time.Now()}
 		batch     = diskdb.NewBatch()
 		genMarker = []byte{} // Initialized but empty!
 	)
@@ -552,8 +571,24 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		accOrigin = common.CopyBytes(accMarker)
 		abort     chan *generatorStats
 	)
-	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
+	// If the generator is thrashing, refuse starting up until the
+	// block stream gets a chance to subside.
+	// We check the time since we were aborted last, and add to a
+	// running average
+	stats.slowPeriod = (uint64(time.Since(stats.lastAbort)) + 9*stats.slowPeriod) / 10
+	if time.Duration(stats.slowPeriod) < thrashingTimeout {
+		stats.LogOptional("Generator thrashing, waiting...", dl.root, dl.genMarker)
 
+		// Wait until we're interrupted. This will either occur instantly if a
+		// batch of blocks is imported, or within the network block time.
+		abort = <-dl.genAbort
+		// Update the abort timestamp
+		stats.lastAbort = time.Now()
+
+		abort <- stats
+		return
+	}
+	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 	checkAndFlush := func(currentLocation []byte) error {
 		select {
 		case abort = <-dl.genAbort:
@@ -710,6 +745,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if err != nil {
 			if abort == nil { // aborted by internal error, wait the signal
 				abort = <-dl.genAbort
+			} else {
+				// Generator was forcefully aborted.
+				// Update the abort timestamp, to avoid thrashing.
+				stats.lastAbort = time.Now()
 			}
 			abort <- stats
 			return

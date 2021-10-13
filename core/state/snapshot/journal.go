@@ -187,6 +187,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		go base.generate(&generatorStats{
 			origin:   origin,
 			start:    time.Now(),
+			lastAbort: time.Now(),
 			accounts: generator.Accounts,
 			slots:    generator.Slots,
 			storage:  common.StorageSize(generator.Storage),
