@@ -19,7 +19,7 @@ func init() {
 type CallFrame struct {
 	Type    string      `json:"type"`
 	From    string      `json:"from"`
-	To      string      `json:"to"`
+	To      string      `json:"to,omitempty"`
 	Value   string      `json:"value,omitempty"`
 	Gas     string      `json:"gas"`
 	GasUsed string      `json:"gasUsed"`
@@ -82,23 +82,24 @@ func (t *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (t *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size := len(t.callstack)
-	if size > 1 {
-		// pop call
-		call := t.callstack[size-1]
-		t.callstack = t.callstack[:size-1]
-		size -= 1
-
-		call.GasUsed = uintToHex(gasUsed)
-		if err == nil {
-			call.Output = bytesToHex(output)
-		} else {
-			call.Error = err.Error()
-			if call.Type == "CREATE" || call.Type == "CREATE2" {
-				call.To = ""
-			}
-		}
-		t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
+	if size <= 1 {
+		return
 	}
+	// pop call
+	call := t.callstack[size-1]
+	t.callstack = t.callstack[:size-1]
+	size -= 1
+
+	call.GasUsed = uintToHex(gasUsed)
+	if err == nil {
+		call.Output = bytesToHex(output)
+	} else {
+		call.Error = err.Error()
+		if call.Type == "CREATE" || call.Type == "CREATE2" {
+			call.To = ""
+		}
+	}
+	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
 func (t *CallTracer) GetResult() (json.RawMessage, error) {
