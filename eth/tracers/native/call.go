@@ -46,7 +46,6 @@ func (t *CallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 		Input: bytesToHex(input),
 		Gas:   uintToHex(gas),
 		Value: bigToHex(value),
-		Calls: make([]CallFrame, 0),
 	}
 	if create {
 		t.callstack[0].Type = "CREATE"
