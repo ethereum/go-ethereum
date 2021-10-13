@@ -74,7 +74,6 @@ func (t *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 		Input: bytesToHex(input),
 		Gas:   uintToHex(gas),
 		Value: bigToHex(value),
-		Calls: make([]CallFrame, 0),
 	}
 	t.callstack = append(t.callstack, call)
 }
