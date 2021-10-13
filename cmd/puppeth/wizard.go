@@ -80,20 +80,25 @@ type wizard struct {
 	lock sync.Mutex // Lock to protect configs during concurrent service discovery
 }
 
+// prompts the user for input with the given prompt string.  Returns when a value is entered.
+// Causes the wizard to exit if ctrl-d is pressed
+func promptInput(p string) string {
+	for {
+		text, err := prompt.Stdin.PromptInput("> ")
+		if err != nil {
+			if err != liner.ErrPromptAborted {
+				log.Crit("Failed to read user input", "err", err)
+			}
+		} else {
+			return text
+		}
+	}
+}
+
 // read reads a single line from stdin, trimming if from spaces.
 func (w *wizard) read() string {
 	text := promptInput("> ")
 	return strings.TrimSpace(text)
-}
-
-// prompts the user for input with the given prompt string.  If ctrl-c is pressed, returns empty string.
-// if Ctrl-d is pressed, the wizard is interrupted and exits
-func promptInput(p string) string {
-	text, err := prompt.Stdin.PromptInput("> ")
-	if err != nil && err != liner.ErrPromptAborted {
-		log.Crit("Failed to read user input", "err", err)
-	}
-	return text
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
@@ -236,7 +241,7 @@ func (w *wizard) readPassword() string {
 // it to an Ethereum address.
 func (w *wizard) readAddress() *common.Address {
 	for {
-		text := promptInput("> ")
+		text := promptInput("> 0x")
 		if text = strings.TrimSpace(text); text == "" {
 			return nil
 		}
@@ -257,7 +262,7 @@ func (w *wizard) readAddress() *common.Address {
 func (w *wizard) readDefaultAddress(def common.Address) common.Address {
 	for {
 		// Read the address from the user
-		text := promptInput("> ")
+		text := promptInput("> 0x")
 		if text = strings.TrimSpace(text); text == "" {
 			return def
 		}
