@@ -87,9 +87,17 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// In this clause, user left some fields unspecified.
 		if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
-				tip, _, err := b.SuggestGasTipCap(ctx)
+				tip, maxprice, err := b.SuggestGasTipCap(ctx)
 				if err != nil {
 					return err
+				}
+				paid := new(big.Int).Add(tip, head.BaseFee)
+				if paid.Cmp(maxprice) > 0 {
+					if maxprice.Cmp(head.BaseFee) > 0 {
+						tip = new(big.Int).Sub(maxprice, head.BaseFee)
+					} else {
+						tip = big.NewInt(0)
+					}
 				}
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
