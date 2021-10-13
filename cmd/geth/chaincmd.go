@@ -66,6 +66,7 @@ It expects the genesis file as argument.`,
 		Flags: []cli.Flag{
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},

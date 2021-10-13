@@ -244,6 +244,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.MainnetChainConfig
 	case ghash == params.RopstenGenesisHash:
 		return params.RopstenChainConfig
+	case ghash == params.SepoliaGenesisHash:
+		return params.SepoliaChainConfig
 	case ghash == params.RinkebyGenesisHash:
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
@@ -397,6 +399,17 @@ func DefaultGoerliGenesisBlock() *Genesis {
 		GasLimit:   10485760,
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(goerliAllocData),
+	}
+}
+
+func DefaultSepoliaGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.SepoliaChainConfig,
+		Nonce:      0,
+		ExtraData:  []byte("Sepolia, Athens, Attica, Greece!"),
+		GasLimit:   0x1c9c380,
+		Difficulty: big.NewInt(0x2000),
+		Alloc:      decodePrealloc(sepoliaAllocData),
 	}
 }
 

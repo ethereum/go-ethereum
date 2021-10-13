@@ -41,6 +41,12 @@ var RopstenBootnodes = []string{
 	"enode://94c15d1b9e2fe7ce56e458b9a3b672ef11894ddedd0c6f247e0f1d3487f52b66208fb4aeb8179fce6e3a749ea93ed147c37976d67af557508d199d9594c35f09@192.81.208.223:30303", // @gpip
 }
 
+// SepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Sepolia test network.
+var SepoliaBootnodes = []string{
+	"enode://7c9740e4d64674801fe62b76798d46778a038c49caebb15843d8c0f2b2f80d7ceba2585b4be366e6161988f81ddcfcd6fca98b5da52ae9a6f22c1b2a84b24a04@18.130.169.73:3030",
+}
+
 // RinkebyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Rinkeby test network.
 var RinkebyBootnodes = []string{

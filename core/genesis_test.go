@@ -39,6 +39,10 @@ func TestDefaultGenesisBlock(t *testing.T) {
 	if block.Hash() != params.RopstenGenesisHash {
 		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
 	}
+	block = DefaultSepoliaGenesisBlock().ToBlock(nil)
+	if block.Hash() != params.SepoliaGenesisHash {
+		t.Errorf("wrong sepolia genesis hash, got %v, want %v", block.Hash(), params.SepoliaGenesisHash)
+	}
 	block = DefaultRinkebyGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.RinkebyGenesisHash {
 		t.Errorf("wrong rinkeby genesis hash, got %v, want %v", block.Hash(), params.RinkebyGenesisHash)
@@ -200,6 +204,10 @@ func TestGenesisHashes(t *testing.T) {
 		{
 			genesis: DefaultRinkebyGenesisBlock(),
 			hash:    params.RinkebyGenesisHash,
+		},
+		{
+			genesis: DefaultSepoliaGenesisBlock(),
+			hash:    params.SepoliaGenesisHash,
 		},
 	}
 	for i, c := range cases {
