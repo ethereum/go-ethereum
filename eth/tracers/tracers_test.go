@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
@@ -406,12 +407,19 @@ func BenchmarkTracers(b *testing.B) {
 			if err := json.Unmarshal(blob, test); err != nil {
 				b.Fatalf("failed to parse testcase: %v", err)
 			}
-			benchTracer("callTracer", test, b)
+			newTracer := func() native.Tracer {
+				tracer, err := New("callTracer", new(Context))
+				if err != nil {
+					b.Fatalf("failed to create call tracer: %v", err)
+				}
+				return tracer
+			}
+			benchTracer(newTracer, test, b)
 		})
 	}
 }
 
-func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
+func benchTracer(newTracer func() native.Tracer, test *callTracerTest, b *testing.B) {
 	// Configure a blockchain with the given prestate
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
@@ -438,21 +446,21 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
-	// Create the tracer, the EVM environment and run it
-	tracer, err := New(tracerName, new(Context))
-	if err != nil {
-		b.Fatalf("failed to create call tracer: %v", err)
-	}
-	evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
-
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		tracer := newTracer()
+		evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
 		snap := statedb.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if _, err = st.TransitionDb(); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
+		_, err := tracer.GetResult()
+		if err != nil {
+			b.Fatal(err)
+		}
+
 		statedb.RevertToSnapshot(snap)
 	}
 }
