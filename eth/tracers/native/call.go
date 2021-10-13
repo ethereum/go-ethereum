@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	Register("callTracerNative", NewCallTracer)
+	register("callTracerNative", NewCallTracer)
 }
 
 type callFrame struct {
@@ -33,7 +33,11 @@ type CallTracer struct {
 	callstack []callFrame
 }
 
+// NewCallTracer returns a native go tracer which tracks
+// call frames of a tx, and implements vm.Tracer.
 func NewCallTracer() Tracer {
+	// First callframe contains tx context info
+	// and is populated on start and end.
 	t := &CallTracer{callstack: make([]callFrame, 1)}
 	return t
 }
