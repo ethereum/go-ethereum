@@ -533,7 +533,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 // The enforceTips parameter can be used to do an extra filtering on the pending
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
-func (pool *TxPool) Pending(enforceTips bool) (map[common.Address]types.Transactions, error) {
+func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -554,7 +554,7 @@ func (pool *TxPool) Pending(enforceTips bool) (map[common.Address]types.Transact
 			pending[addr] = txs
 		}
 	}
-	return pending, nil
+	return pending
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
