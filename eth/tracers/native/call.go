@@ -16,7 +16,7 @@ func init() {
 	Register("callTracerNative", NewCallTracer)
 }
 
-type CallFrame struct {
+type callFrame struct {
 	Type    string      `json:"type"`
 	From    string      `json:"from"`
 	To      string      `json:"to,omitempty"`
@@ -26,20 +26,20 @@ type CallFrame struct {
 	Input   string      `json:"input"`
 	Output  string      `json:"output,omitempty"`
 	Error   string      `json:"error,omitempty"`
-	Calls   []CallFrame `json:"calls,omitempty"`
+	Calls   []callFrame `json:"calls,omitempty"`
 }
 
 type CallTracer struct {
-	callstack []CallFrame
+	callstack []callFrame
 }
 
 func NewCallTracer() Tracer {
-	t := &CallTracer{callstack: make([]CallFrame, 1)}
+	t := &CallTracer{callstack: make([]callFrame, 1)}
 	return t
 }
 
 func (t *CallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.callstack[0] = CallFrame{
+	t.callstack[0] = callFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
@@ -67,7 +67,7 @@ func (t *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 func (t *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	call := CallFrame{
+	call := callFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
 		To:    addrToHex(to),
