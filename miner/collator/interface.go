@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -27,11 +26,6 @@ var (
 	// could not be added to the block.
 	ErrStrange = errors.New("strange error")
 )
-
-type MinerState interface {
-	IsRunning() bool
-	ChainConfig() *params.ChainConfig
-}
 
 /*
 	BlockState represents an under-construction block.  An instance of
@@ -92,7 +86,7 @@ type Collator interface {
 	// from the pool or elswhere.  exitCh signals client exit.
 	// a work-cycle can be interrupted by the arrival of a new canonical chain head block or the client
 	// changing the miner's etherbase.
-	CollateBlocks(miner MinerState, pool Pool, blockCh <-chan BlockCollatorWork, exitCh <-chan struct{})
+	CollateBlocks(pool Pool, blockCh <-chan BlockCollatorWork, exitCh <-chan struct{})
 	// post-merge block collation which expects the implementation to finish after choosing a single block.
 	// the block chosen for proposal is the final blockState that was committed.
 	CollateBlock(bs BlockState, pool Pool)

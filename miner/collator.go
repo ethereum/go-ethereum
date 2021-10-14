@@ -69,21 +69,6 @@ type collatorBlockState struct {
 	header    *types.Header
 }
 
-// minerState allows a collator implementation to read the current chain config and whether the miner is currently sealing.
-type minerState struct {
-	// keep a copy of ChainConfig here, if collator chooses (erroneously) to modify chainConfig, the chainConfig used by the miner doesn't get changed
-	chainConfig *params.ChainConfig
-	worker      *worker
-}
-
-func (m *minerState) ChainConfig() *params.ChainConfig {
-	return m.chainConfig
-}
-
-func (m *minerState) IsRunning() bool {
-	return m.worker.isRunning()
-}
-
 func (bs *collatorBlockState) Commit() bool {
 	return bs.env.worker.commitBlockState(bs)
 }

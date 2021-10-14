@@ -260,11 +260,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, c collator.Colla
 	go worker.resultLoop()
 	go worker.taskLoop()
 
-	minerState := minerState{
-		worker:      worker,
-		chainConfig: params.CopyChainConfig(worker.chainConfig),
-	}
-	go worker.collator.CollateBlocks(&minerState, eth.TxPool(), worker.collatorBlockCh, worker.exitCh)
+	go worker.collator.CollateBlocks(eth.TxPool(), worker.collatorBlockCh, worker.exitCh)
 
 	// Submit first work to initialize pending state.
 	if init {

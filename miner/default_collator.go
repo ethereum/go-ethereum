@@ -31,7 +31,6 @@ type DefaultCollator struct {
 	recommitMu   sync.Mutex
 	recommit     time.Duration
 	minRecommit  time.Duration
-	miner        collator.MinerState
 	exitCh       <-chan struct{}
 	pool         collator.Pool
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
@@ -85,7 +84,6 @@ func (c *DefaultCollator) adjustRecommit(ratio float64, inc bool) {
 func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 	ctx := work.Ctx
 	emptyBs := work.Block
-	chainConfig := c.miner.ChainConfig()
 
 	for {
 		c.recommitMu.Lock()
@@ -112,18 +110,12 @@ func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 			default:
 			}
 
-			// If mining is running resubmit a new work cycle periodically to pull in
-			// higher priced transactions. Disable this overhead for pending blocks.
-			if c.miner.IsRunning() && (chainConfig.Clique == nil || chainConfig.Clique.Period > 0) {
-				header := bs.Header()
-				gasLimit := header.GasLimit
-				gasPool := bs.GasPool()
-				ratio := float64(gasLimit-gasPool.Gas()) / float64(gasLimit)
-				c.adjustRecommit(ratio, true)
-				shouldContinue = true
-			} else {
-				return
-			}
+			header := bs.Header()
+			gasLimit := header.GasLimit
+			gasPool := bs.GasPool()
+			ratio := float64(gasLimit-gasPool.Gas()) / float64(gasLimit)
+			c.adjustRecommit(ratio, true)
+			shouldContinue = true
 		default:
 		}
 
@@ -140,12 +132,7 @@ func (c *DefaultCollator) workCycle(work collator.BlockCollatorWork) {
 
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			chainConfig := c.miner.ChainConfig()
-			if c.miner.IsRunning() && (chainConfig.Clique == nil || chainConfig.Clique.Period > 0) {
-				c.adjustRecommit(0.0, false)
-			} else {
-				return
-			}
+			c.adjustRecommit(0.0, false)
 		case <-c.exitCh:
 			return
 		}
@@ -168,8 +155,7 @@ func (c *DefaultCollator) SetRecommit(interval time.Duration) {
 	}
 }
 
-func (c *DefaultCollator) CollateBlocks(miner collator.MinerState, pool collator.Pool, blockCh <-chan collator.BlockCollatorWork, exitCh <-chan struct{}) {
-	c.miner = miner
+func (c *DefaultCollator) CollateBlocks(pool collator.Pool, blockCh <-chan collator.BlockCollatorWork, exitCh <-chan struct{}) {
 	c.exitCh = exitCh
 	c.pool = pool
 	// TODO move this to constructor
