@@ -90,6 +90,7 @@ func TestHeaderVerificationForMergingEthash(t *testing.T) { testHeaderVerificati
 func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	var (
 		testdb      = rawdb.NewMemoryDatabase()
+		gendb       = rawdb.NewMemoryDatabase()
 		preBlocks   []*types.Block
 		postBlocks  []*types.Block
 		runEngine   consensus.Engine
@@ -100,7 +101,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		var (
 			key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 			addr   = crypto.PubkeyToAddress(key.PublicKey)
-			engine = clique.New(params.AllCliqueProtocolChanges.Clique, testdb)
+			engine = clique.New(params.AllCliqueProtocolChanges.Clique, gendb)
 		)
 		genspec := &Genesis{
 			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
@@ -110,10 +111,11 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		copy(genspec.ExtraData[32:], addr[:])
-		genesis := genspec.MustCommit(testdb)
+		genesis := genspec.MustCommit(gendb)
+		genspec.MustCommit(testdb)
 
 		genEngine := beacon.New(engine)
-		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, testdb, 8, nil)
+		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, gendb, 8, nil)
 		td := 0
 		for i, block := range preBlocks {
 			header := block.Header()
@@ -131,15 +133,17 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		config := *params.AllCliqueProtocolChanges
 		config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(&config, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
+		postBlocks, _ = GenerateChain(&config, preBlocks[len(preBlocks)-1], genEngine, gendb, 8, nil)
 		chainConfig = &config
+
 		runEngine = beacon.New(engine)
 	} else {
 		gspec := &Genesis{Config: params.TestChainConfig}
-		genesis := gspec.MustCommit(testdb)
+		genesis := gspec.MustCommit(gendb)
+		gspec.MustCommit(testdb)
 		genEngine := beacon.New(ethash.NewFaker())
 
-		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
+		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, gendb, 8, nil)
 		td := 0
 		for _, block := range preBlocks {
 			// calculate td
@@ -147,7 +151,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		config := *params.TestChainConfig
 		config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
+		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, gendb, 8, nil)
 
 		chainConfig = &config
 		runEngine = beacon.New(ethash.NewFaker())
@@ -215,6 +219,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		case <-time.After(25 * time.Millisecond):
 		}
 		chain.InsertBlockWithoutSetHead(postBlocks[i])
+		chain.SetChainHead(postBlocks[i])
 	}
 
 	// Verify the blocks with pre-merge blocks and post-merge blocks

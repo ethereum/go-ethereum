@@ -1345,7 +1345,7 @@ func getCodeByHash(hash common.Hash) []byte {
 
 // makeAccountTrieNoStorage spits out a trie, along with the leafs
 func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
-	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	db := trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	accTrie, _ := trie.New(common.Hash{}, db)
 	var entries entrySlice
 	for i := uint64(1); i <= uint64(n); i++ {
@@ -1373,7 +1373,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 		entries    entrySlice
 		boundaries []common.Hash
 
-		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db      = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		trie, _ = trie.New(common.Hash{}, db)
 	)
 	// Initialize boundaries
@@ -1425,7 +1425,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 // has a unique storage set.
 func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
-		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		accTrie, _     = trie.New(common.Hash{}, db)
 		entries        entrySlice
 		storageTries   = make(map[common.Hash]*trie.Trie)
@@ -1464,7 +1464,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
 func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
-		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		accTrie, _     = trie.New(common.Hash{}, db)
 		entries        entrySlice
 		storageTries   = make(map[common.Hash]*trie.Trie)
@@ -1584,7 +1584,7 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 
 func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
-	triedb := trie.NewDatabase(db)
+	triedb := trie.NewDatabase(rawdb.NewDatabase(db), nil)
 	accTrie, err := trie.New(root, triedb)
 	if err != nil {
 		t.Fatal(err)
@@ -1603,7 +1603,7 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 		}
 		accounts++
 		if acc.Root != emptyRoot {
-			storeTrie, err := trie.NewSecure(acc.Root, triedb)
+			storeTrie, err := trie.NewSecureWithOwner(root, common.BytesToHash(accIt.Key), acc.Root, triedb)
 			if err != nil {
 				t.Fatal(err)
 			}

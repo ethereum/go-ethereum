@@ -381,6 +381,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 func TestGetNodeData66(t *testing.T) { testGetNodeData(t, ETH66) }
 
 func testGetNodeData(t *testing.T, protocol uint) {
+	t.Skip("GetNodeData is not supported anymore")
 	t.Parallel()
 
 	// Define three accounts to simulate transactions with
@@ -463,16 +464,16 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	// Reconstruct state tree from the received data.
 	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
+		rawdb.WriteTrieNode(reconstructDB, hashes[i].Bytes(), data[i]) // TODO (it's wrong, should use key instead)
 	}
 
 	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
-		root := backend.chain.GetBlockByNumber(i).Root()
-		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
+		block := backend.chain.GetBlockByNumber(i)
+		reconstructed, _ := state.New(block.Root(), state.NewDatabase(reconstructDB), nil)
 		for j, acc := range accounts {
-			state, _ := backend.chain.StateAt(root)
+			state, _ := backend.chain.StateAt(block.Root())
 			bw := state.GetBalance(acc)
 			bh := reconstructed.GetBalance(acc)
 

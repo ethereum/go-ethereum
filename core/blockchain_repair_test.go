@@ -1805,20 +1805,22 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		if err := chain.stateCache.TrieDB().Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
+			t.Fatalf("Failed to flush trie state: %v", err)
+		}
 		if snapshots {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
 		}
 	}
-	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
-		t.Fatalf("Failed to import canonical chain tail: %v", err)
+	if index, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
+		t.Fatalf("Failed to import canonical chain tail: %v %d", err, index)
 	}
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64) error
-		Ancients() (uint64, error)
+		Ancients(typ string) (uint64, error)
 	}
 	db.(freezer).Freeze(tt.freezeThreshold)
 
@@ -1857,7 +1859,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}
-	if frozen, err := db.(freezer).Ancients(); err != nil {
+	if frozen, err := db.(freezer).Ancients(rawdb.ChainFreezer); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
 	} else if int(frozen) != tt.expFrozen {
 		t.Errorf("Frozen block count mismatch: have %d, want %d", frozen, tt.expFrozen)
@@ -1920,7 +1922,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.stateCache.TrieDB().Commit(blocks[0].Root(), true, nil)
+	chain.stateCache.TrieDB().Cap(blocks[0].Root(), 0)
 
 	// Insert block B2 and commit the snapshot into disk
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
@@ -1934,7 +1936,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.stateCache.TrieDB().Commit(blocks[2].Root(), true, nil)
+	chain.stateCache.TrieDB().Cap(blocks[2].Root(), 0)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
@@ -1963,12 +1965,12 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(1) {
+	if head := chain.CurrentBlock(); head.NumberU64() != uint64(2) {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(1))
 	}
 
-	// Reinsert B2-B4
-	if _, err := chain.InsertChain(blocks[1:]); err != nil {
+	// Reinsert B3-B4
+	if _, err := chain.InsertChain(blocks[2:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {

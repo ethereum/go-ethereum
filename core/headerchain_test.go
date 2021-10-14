@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -71,6 +70,7 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 func TestHeaderInsertion(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
+		gendb   = rawdb.NewMemoryDatabase()
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 	)
 
@@ -79,10 +79,16 @@ func TestHeaderInsertion(t *testing.T) {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
-	// chain B: G->A1->B1...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
-	log.Root().SetHandler(log.StdoutHandler)
+	copyDB(db, gendb)
+	blocks, dbs := genChainSegments(params.AllEthashProtocolChanges, 128, []int{0}, genesis, gendb, ethash.NewFaker(), nil)
+	chainA := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		chainA[i] = block.Header()
+	}
+
+	// chain B: G->A1->B2...B128
+	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), dbs[0], 10)
+	//log.Root().SetHandler(log.StdoutHandler)
 
 	forker := NewForkChoice(hc, nil)
 	// Inserting 64 headers on an empty chain, expecting

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"sync/atomic"
 	"time"
 
@@ -32,20 +33,170 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+var (
+	// errUndefinedType is returned if non-existent freezer is required
+	// to be accessed.
+	errUndefinedType = errors.New("freezer type is not defined")
+)
+
+const (
+	reverseDiffPrefix = "rdiffs" // The path of reverse diff freezer
+)
+
 // freezerdb is a database wrapper that enabled freezer data retrievals.
 type freezerdb struct {
 	ethdb.KeyValueStore
-	ethdb.AncientStore
+	chain *freezer
+	rdiff *freezer
+}
+
+// HasAncient returns an indicator whether the specified data exists in the
+// ancient store.
+func (frdb *freezerdb) HasAncient(typ string, kind string, id uint64) (bool, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.HasAncient(kind, id)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.HasAncient(kind, id)
+	default:
+		return false, errUndefinedType
+	}
+}
+
+// Ancient retrieves an ancient binary blob from the append-only immutable files.
+func (frdb *freezerdb) Ancient(typ string, kind string, id uint64) ([]byte, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.Ancient(kind, id)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.Ancient(kind, id)
+	default:
+		return nil, errUndefinedType
+	}
+}
+
+// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
+func (frdb *freezerdb) AncientRange(typ string, kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.AncientRange(kind, start, max, maxByteSize)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.AncientRange(kind, start, max, maxByteSize)
+	default:
+		return nil, errUndefinedType
+	}
+}
+
+// Ancients returns the ancient item numbers in the ancient store.
+func (frdb *freezerdb) Ancients(typ string) (uint64, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.Ancients()
+	case ReverseDiffFreezer:
+		return frdb.rdiff.Ancients()
+	default:
+		return 0, errUndefinedType
+	}
+}
+
+// Tail returns the number of first stored item in the freezer.
+func (frdb *freezerdb) Tail(typ string) (uint64, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.Tail()
+	case ReverseDiffFreezer:
+		return frdb.rdiff.Tail()
+	default:
+		return 0, errUndefinedType
+	}
+}
+
+// AncientSize returns the ancient size of the specified category.
+func (frdb *freezerdb) AncientSize(typ string, kind string) (uint64, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.AncientSize(kind)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.AncientSize(kind)
+	default:
+		return 0, errUndefinedType
+	}
+}
+
+// ModifyAncients runs a write operation on the ancient store.
+// If the function returns an error, any changes to the underlying store are reverted.
+// The integer return value is the total size of the written data.
+func (frdb *freezerdb) ModifyAncients(typ string, fn func(ethdb.AncientWriteOp) error) (int64, error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.ModifyAncients(fn)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.ModifyAncients(fn)
+	default:
+		return 0, errUndefinedType
+	}
+}
+
+// TruncateHead discards all but the first n ancient data from the ancient store.
+func (frdb *freezerdb) TruncateHead(typ string, items uint64) error {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.TruncateHead(items)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.TruncateHead(items)
+	default:
+		return errUndefinedType
+	}
+}
+
+// TruncateTail discards the first n ancient data from the ancient store.
+func (frdb *freezerdb) TruncateTail(typ string, tail uint64) error {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.TruncateTail(tail)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.TruncateTail(tail)
+	default:
+		return errUndefinedType
+	}
+}
+
+// Sync flushes all in-memory ancient store data to disk.
+func (frdb *freezerdb) Sync(typ string) error {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.Sync()
+	case ReverseDiffFreezer:
+		return frdb.rdiff.Sync()
+	default:
+		return errUndefinedType
+	}
+}
+
+// ReadAncients runs the given read operation while ensuring that no writes take place
+// on the underlying freezer.
+func (frdb *freezerdb) ReadAncients(typ string, fn func(reader ethdb.AncientReadOp) error) (err error) {
+	switch typ {
+	case ChainFreezer:
+		return frdb.chain.ReadAncients(fn)
+	case ReverseDiffFreezer:
+		return frdb.rdiff.ReadAncients(fn)
+	default:
+		return errUndefinedType
+	}
 }
 
 // Close implements io.Closer, closing both the fast key-value store as well as
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	var errs []error
-	if err := frdb.AncientStore.Close(); err != nil {
+	if err := frdb.KeyValueStore.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if err := frdb.KeyValueStore.Close(); err != nil {
+	if err := frdb.chain.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := frdb.rdiff.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if len(errs) != 0 {
@@ -58,18 +209,18 @@ func (frdb *freezerdb) Close() error {
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
 func (frdb *freezerdb) Freeze(threshold uint64) error {
-	if frdb.AncientStore.(*freezer).readonly {
+	if frdb.chain.readonly {
 		return errReadOnly
 	}
 	// Set the freezer threshold to a temporary value
 	defer func(old uint64) {
-		atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, old)
-	}(atomic.LoadUint64(&frdb.AncientStore.(*freezer).threshold))
-	atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, threshold)
+		atomic.StoreUint64(&frdb.chain.threshold, old)
+	}(atomic.LoadUint64(&frdb.chain.threshold))
+	atomic.StoreUint64(&frdb.chain.threshold, threshold)
 
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.AncientStore.(*freezer).trigger <- trigger
+	frdb.chain.trigger <- trigger
 	<-trigger
 	return nil
 }
@@ -80,46 +231,88 @@ type nofreezedb struct {
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
+func (db *nofreezedb) HasAncient(typ string, kind string, number uint64) (bool, error) {
 	return false, errNotSupported
 }
 
 // Ancient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
+func (db *nofreezedb) Ancient(typ string, kind string, number uint64) ([]byte, error) {
 	return nil, errNotSupported
 }
 
 // AncientRange returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+func (db *nofreezedb) AncientRange(typ string, kind string, start, max, maxByteSize uint64) ([][]byte, error) {
 	return nil, errNotSupported
 }
 
 // Ancients returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Ancients() (uint64, error) {
+func (db *nofreezedb) Ancients(typ string) (uint64, error) {
+	return 0, errNotSupported
+}
+
+// Tail returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) Tail(typ string) (uint64, error) {
 	return 0, errNotSupported
 }
 
 // AncientSize returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AncientSize(kind string) (uint64, error) {
+func (db *nofreezedb) AncientSize(typ string, kind string) (uint64, error) {
 	return 0, errNotSupported
 }
 
-// ModifyAncients is not supported.
-func (db *nofreezedb) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, error) {
+// ModifyAncients returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) ModifyAncients(typ string, fn func(ethdb.AncientWriteOp) error) (int64, error) {
 	return 0, errNotSupported
 }
 
-// TruncateAncients returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateAncients(items uint64) error {
+// TruncateHead returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) TruncateHead(typ string, items uint64) error {
+	return errNotSupported
+}
+
+// TruncateTail returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) TruncateTail(typ string, tail uint64) error {
 	return errNotSupported
 }
 
 // Sync returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Sync() error {
+func (db *nofreezedb) Sync(typ string) error {
 	return errNotSupported
 }
 
-func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+type nullAncientReadOp struct{}
+
+// HasAncient returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) HasAncient(kind string, number uint64) (bool, error) {
+	return false, errNotSupported
+}
+
+// Ancient returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) Ancient(kind string, number uint64) ([]byte, error) {
+	return nil, errNotSupported
+}
+
+// AncientRange returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	return nil, errNotSupported
+}
+
+// Ancients returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) Ancients() (uint64, error) {
+	return 0, errNotSupported
+}
+
+// Tail returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) Tail() (uint64, error) {
+	return 0, errNotSupported
+}
+
+// AncientSize returns an error as we don't have a backing chain freezer.
+func (db *nullAncientReadOp) AncientSize(kind string) (uint64, error) {
+	return 0, errNotSupported
+}
+
+func (db *nofreezedb) ReadAncients(typ string, fn func(reader ethdb.AncientReadOp) error) (err error) {
 	// Unlike other ancient-related methods, this method does not return
 	// errNotSupported when invoked.
 	// The reason for this is that the caller might want to do several things:
@@ -132,7 +325,7 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (e
 	// If we instead were to return errNotSupported here, then the caller would
 	// have to explicitly check for that, having an extra clause to do the
 	// non-ancient operations.
-	return fn(db)
+	return fn(&nullAncientReadOp{})
 }
 
 // NewDatabase creates a high level database on top of a given key-value data
@@ -145,8 +338,12 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // value data store with a freezer moving immutable chain segments into cold
 // storage.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
-	// Create the idle freezer instance
-	frdb, err := newFreezer(freezer, namespace, readonly, freezerTableSize, FreezerNoSnappy)
+	// Create the ancient chain freezer
+	ancientChain, err := newFreezer(freezer, namespace, readonly, freezerTableSize, ChainFreezerNoSnappy)
+	if err != nil {
+		return nil, err
+	}
+	rdiff, err := newFreezer(path.Join(freezer, reverseDiffPrefix), namespace, readonly, freezerTableSize, ReveseDiffFreezerNoSnappy)
 	if err != nil {
 		return nil, err
 	}
@@ -173,11 +370,11 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 	// validate in this method. If, however, the genesis hash is not nil, compare
 	// it to the freezer content.
 	if kvgenesis, _ := db.Get(headerHashKey(0)); len(kvgenesis) > 0 {
-		if frozen, _ := frdb.Ancients(); frozen > 0 {
+		if frozen, _ := ancientChain.Ancients(); frozen > 0 {
 			// If the freezer already contains something, ensure that the genesis blocks
 			// match, otherwise we might mix up freezers across chains and destroy both
 			// the freezer and the key-value store.
-			frgenesis, err := frdb.Ancient(freezerHashTable, 0)
+			frgenesis, err := ancientChain.Ancient(freezerHashTable, 0)
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
 			} else if !bytes.Equal(kvgenesis, frgenesis) {
@@ -211,20 +408,21 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 				// Block #1 is still in the database, we're allowed to init a new feezer
 			}
 			// Otherwise, the head header is still the genesis, we're allowed to init a new
-			// feezer.
+			// freezer.
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !frdb.readonly {
-		frdb.wg.Add(1)
+	if !ancientChain.readonly {
+		ancientChain.wg.Add(1)
 		go func() {
-			frdb.freeze(db)
-			frdb.wg.Done()
+			ancientChain.freeze(db)
+			ancientChain.wg.Done()
 		}()
 	}
 	return &freezerdb{
 		KeyValueStore: db,
-		AncientStore:  frdb,
+		chain:         ancientChain,
+		rdiff:         rdiff,
 	}, nil
 }
 
@@ -308,20 +506,22 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		tries           stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		tries              stat
+		archiveTries       stat
+		reverseDiffLookups stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		bloomBits          stat
+		cliqueSnaps        stat
 
 		// Ancient store statistics
 		ancientHeadersSize  common.StorageSize
@@ -329,6 +529,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		ancientReceiptsSize common.StorageSize
 		ancientTdsSize      common.StorageSize
 		ancientHashesSize   common.StorageSize
+
+		reverseDiffsSize      common.StorageSize
+		reverseDiffHashesSize common.StorageSize
 
 		// Les statistic
 		chtTrieNodes   stat
@@ -361,8 +564,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			numHashPairings.Add(size)
 		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 			hashNumPairings.Add(size)
-		case len(key) == common.HashLength:
+		case bytes.HasPrefix(key, TrieNodePrefix) && len(key) > len(TrieNodePrefix) && len(key) < len(TrieNodePrefix)+maxTrieNodeStorageKeyLen:
 			tries.Add(size)
+		case len(key) == common.HashLength:
+			archiveTries.Add(size)
+		case bytes.HasPrefix(key, ReverseDiffLookupPrefix) && len(key) == len(ReverseDiffLookupPrefix)+common.HashLength:
+			reverseDiffLookups.Add(size)
 		case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:
 			codes.Add(size)
 		case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
@@ -394,8 +601,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			for _, meta := range [][]byte{
 				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey,
+				snapshotGeneratorKey, snapshotRecoveryKey, snapshotSyncStatusKey, triesJournalKey,
+				txIndexTailKey, fastTxLookupLimitKey, uncleanShutdownKey, badBlockKey, ReverseDiffHeadKey,
+				transitionStatusKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -414,17 +622,27 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		}
 	}
 	// Inspect append-only file store then.
-	ancientSizes := []*common.StorageSize{&ancientHeadersSize, &ancientBodiesSize, &ancientReceiptsSize, &ancientHashesSize, &ancientTdsSize}
-	for i, category := range []string{freezerHeaderTable, freezerBodiesTable, freezerReceiptTable, freezerHashTable, freezerDifficultyTable} {
-		if size, err := db.AncientSize(category); err == nil {
+	var (
+		ancientSizes = []*common.StorageSize{&ancientHeadersSize, &ancientBodiesSize, &ancientReceiptsSize, &ancientHashesSize, &ancientTdsSize, &reverseDiffsSize, &reverseDiffHashesSize}
+		categories   = []string{freezerHeaderTable, freezerBodiesTable, freezerReceiptTable, freezerHashTable, freezerDifficultyTable, freezerReverseDiffTable, freezerReverseDiffHashTable}
+		freezers     = []string{ChainFreezer, ChainFreezer, ChainFreezer, ChainFreezer, ChainFreezer, ReverseDiffFreezer, ReverseDiffFreezer}
+	)
+	for i, category := range categories {
+		if size, err := db.AncientSize(freezers[i], category); err == nil {
 			*ancientSizes[i] += common.StorageSize(size)
 			total += common.StorageSize(size)
 		}
 	}
 	// Get number of ancient rows inside the freezer
-	ancients := counter(0)
-	if count, err := db.Ancients(); err == nil {
-		ancients = counter(count)
+	var (
+		chainAncients = counter(0)
+		rdiffAncients = counter(0)
+	)
+	if count, err := db.Ancients(ChainFreezer); err == nil {
+		chainAncients = counter(count)
+	}
+	if count, err := db.Ancients(ReverseDiffFreezer); err == nil {
+		rdiffAncients = counter(count)
 	}
 	// Display the database statistic.
 	stats := [][]string{
@@ -438,16 +656,20 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Trie nodes", tries.Size(), tries.Count()},
+		{"Key-Value store", "Archived trie nodes", archiveTries.Size(), archiveTries.Count()},
+		{"Key-Value store", "Reverse diff lookups", reverseDiffLookups.Size(), reverseDiffLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
-		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
-		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},
-		{"Ancient store", "Receipt lists", ancientReceiptsSize.String(), ancients.String()},
-		{"Ancient store", "Difficulties", ancientTdsSize.String(), ancients.String()},
-		{"Ancient store", "Block number->hash", ancientHashesSize.String(), ancients.String()},
+		{"Ancient store", "Headers", ancientHeadersSize.String(), chainAncients.String()},
+		{"Ancient store", "Bodies", ancientBodiesSize.String(), chainAncients.String()},
+		{"Ancient store", "Receipt lists", ancientReceiptsSize.String(), chainAncients.String()},
+		{"Ancient store", "Difficulties", ancientTdsSize.String(), chainAncients.String()},
+		{"Ancient store", "Block number->hash", ancientHashesSize.String(), chainAncients.String()},
+		{"Ancient store", "Reverse diffs", reverseDiffsSize.String(), rdiffAncients.String()},
+		{"Ancient store", "State root->reverse diff id", reverseDiffHashesSize.String(), rdiffAncients.String()},
 		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
 		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}

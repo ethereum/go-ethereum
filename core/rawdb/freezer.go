@@ -59,14 +59,14 @@ const (
 	freezerRecheckInterval = time.Minute
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
-	// before doing an fsync and deleting it from the key-value store.
+	// before doing a fsync and deleting it from the key-value store.
 	freezerBatchLimit = 30000
 
 	// freezerTableSize defines the maximum size of freezer data files.
 	freezerTableSize = 2 * 1000 * 1000 * 1000
 )
 
-// freezer is an memory mapped append-only database to store immutable chain data
+// freezer is a memory mapped append-only database to store immutable chain data
 // into flat files:
 //
 // - The append only nature ensures that disk writes are minimized.
@@ -78,6 +78,7 @@ type freezer struct {
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	frozen    uint64 // Number of blocks already frozen
+	tail      uint64 // Number of the first stored item in the freezer
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	// This lock synchronizes writers and the truncate operation, as well as
@@ -219,6 +220,11 @@ func (f *freezer) Ancients() (uint64, error) {
 	return atomic.LoadUint64(&f.frozen), nil
 }
 
+// Tail returns the number of first stored item in the freezer.
+func (f *freezer) Tail() (uint64, error) {
+	return atomic.LoadUint64(&f.tail), nil
+}
+
 // AncientSize returns the ancient size of the specified category.
 func (f *freezer) AncientSize(kind string) (uint64, error) {
 	// This needs the write lock to avoid data races on table fields.
@@ -234,7 +240,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 
 // ReadAncients runs the given read operation while ensuring that no writes take place
 // on the underlying freezer.
-func (f *freezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *freezer) ReadAncients(fn func(op ethdb.AncientReadOp) error) (err error) {
 	f.writeLock.RLock()
 	defer f.writeLock.RUnlock()
 	return fn(f)
@@ -254,7 +260,7 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
 			for name, table := range f.tables {
-				err := table.truncate(prevItem)
+				err := table.truncateHead(prevItem)
 				if err != nil {
 					log.Error("Freezer table roll-back failed", "table", name, "index", prevItem, "err", err)
 				}
@@ -274,8 +280,8 @@ func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	return writeSize, nil
 }
 
-// TruncateAncients discards any recent data above the provided threshold number.
-func (f *freezer) TruncateAncients(items uint64) error {
+// TruncateHead discards any recent data above the provided threshold number.
+func (f *freezer) TruncateHead(items uint64) error {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -285,12 +291,46 @@ func (f *freezer) TruncateAncients(items uint64) error {
 	if atomic.LoadUint64(&f.frozen) <= items {
 		return nil
 	}
+	var frozen uint64
 	for _, table := range f.tables {
-		if err := table.truncate(items); err != nil {
+		if err := table.truncateHead(items); err != nil {
 			return err
 		}
+		// Tables should be aligned, only check the first table.
+		if frozen == 0 {
+			frozen = atomic.LoadUint64(&table.items)
+		}
 	}
-	atomic.StoreUint64(&f.frozen, items)
+	atomic.StoreUint64(&f.frozen, frozen)
+	return nil
+}
+
+// TruncateTail discards any recent data below the provided threshold number.
+func (f *freezer) TruncateTail(tail uint64) error {
+	if f.readonly {
+		return errReadOnly
+	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
+	if atomic.LoadUint64(&f.tail) >= tail {
+		return nil
+	}
+	// Because the data size maintained by different tables are inconsistent,
+	// there will be some or all tables that do not actually perform the truncate
+	// action because tail deletion can only do in file level. These deletions
+	// will be delayed until the whole data file is deletable.
+	var truncated uint64
+	for _, table := range f.tables {
+		if err := table.truncateTail(tail); err != nil {
+			return err
+		}
+		if truncated == 0 {
+			itemOffset, hidden := atomic.LoadUint64(&table.itemOffset), atomic.LoadUint64(&table.itemHidden)
+			truncated = itemOffset + hidden
+		}
+	}
+	atomic.StoreUint64(&f.tail, truncated)
 	return nil
 }
 
@@ -308,21 +348,32 @@ func (f *freezer) Sync() error {
 	return nil
 }
 
-// repair truncates all data tables to the same length.
+// repair truncates all data tables to the same length, both tail and head.
 func (f *freezer) repair() error {
-	min := uint64(math.MaxUint64)
+	var (
+		head = uint64(math.MaxUint64)
+		tail = uint64(0)
+	)
 	for _, table := range f.tables {
 		items := atomic.LoadUint64(&table.items)
-		if min > items {
-			min = items
+		if head > items {
+			head = items
+		}
+		offset := atomic.LoadUint64(&table.itemOffset)
+		if offset > tail {
+			tail = offset
 		}
 	}
 	for _, table := range f.tables {
-		if err := table.truncate(min); err != nil {
+		if err := table.truncateHead(head); err != nil {
+			return err
+		}
+		if err := table.truncateTail(tail); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.frozen, min)
+	atomic.StoreUint64(&f.frozen, head)
+	atomic.StoreUint64(&f.tail, tail)
 	return nil
 }
 

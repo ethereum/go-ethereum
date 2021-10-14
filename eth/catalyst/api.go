@@ -156,11 +156,12 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	)
 	if api.eth.BlockChain().HasState(parent.Root()) {
 		state, err = api.eth.BlockChain().StateAt(parent.Root())
-	} else {
-		// The maximum acceptable reorg depth can be limited by the
-		// finalised block somehow. TODO(rjl493456442) fix the hard-
-		// coded number here later.
-		state, err = api.eth.StateAtBlock(parent, 1000, nil, false, false)
+	}
+	if err != nil {
+		// The assumption is held that all the events sent from the consensus
+		// layer are trusted. Otherwise, system can be attacked by rewinding
+		// the live state.
+		state, err = api.eth.StateAtBlock(parent, nil, false) // Operate on LIVE STATE!!
 	}
 	if err != nil {
 		return nil, err

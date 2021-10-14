@@ -274,10 +274,13 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	return bc.HasState(block.Root())
 }
 
-// TrieNode retrieves a blob of data associated with a trie node
-// either from ephemeral in-memory cache, or from persistent storage.
-func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
-	return bc.stateCache.TrieDB().Node(hash)
+// StateRecoverable checks if the current state db is able to revert to the
+// specific state point.
+func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
+	if _, err := bc.stateCache.OpenTrie(root); err == nil {
+		return true // state available
+	}
+	return bc.stateCache.TrieDB().StateRecoverable(root)
 }
 
 // ContractCode retrieves a blob of data associated with a contract hash
