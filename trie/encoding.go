@@ -94,6 +94,56 @@ func compactToHex(compact []byte) []byte {
 	return base[chop:]
 }
 
+// REVERSE-COMAPCT encoding is used for encoding trie node path in the trie node
+// storage key. The main difference with COMPACT encoding is that the key flag
+// is put in the end of the key.
+//
+// e.g.
+// - the key [] is encoded as [0x00]
+// - the key [0x1, 0x2, 0x3] is encoded as [0x12, 0x31]
+// - the key [0x1, 0x2, 0x3, 0x0] is encoded as [0x12, 0x30, 0x00]
+//
+// The main benefit of this format is the continuous paths can retain the shared
+// path prefix after encoding.
+
+func hexToReverseCompact(hex []byte) []byte {
+	terminator := byte(0)
+	if hasTerm(hex) {
+		terminator = 1
+		hex = hex[:len(hex)-1]
+	}
+	buf := make([]byte, len(hex)/2+1)
+	buf[len(buf)-1] = terminator << 1 // the flag byte
+	if len(hex)&1 == 1 {
+		buf[len(buf)-1] |= 1                    // odd flag
+		buf[len(buf)-1] |= hex[len(hex)-1] << 4 // last nibble is contained in the last byte
+		hex = hex[:len(hex)-1]
+	}
+	decodeNibbles(hex, buf[:len(buf)-1])
+	return buf
+}
+
+func reverseCompactToHex(compact []byte) []byte {
+	if len(compact) == 0 {
+		return compact
+	}
+	// delete terminator flag
+	base := keybytesToHex(compact)
+	base = base[:len(base)-1]
+
+	// apply odd flag
+	flag := base[len(base)-1]
+	chop := 2 - flag&1
+	base = base[:len(base)-int(chop)]
+
+	// apply terminator flag
+	if flag >= 2 {
+		base = append(base, 16)
+	}
+	return base
+}
+
+// keybytesToHex turns key bytes into hex nibbles.
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)

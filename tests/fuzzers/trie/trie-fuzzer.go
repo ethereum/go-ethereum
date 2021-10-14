@@ -141,8 +141,7 @@ func Fuzz(input []byte) int {
 }
 
 func runRandTest(rt randTest) error {
-
-	triedb := trie.NewDatabase(memorydb.New())
+	triedb := trie.NewDatabase(memorydb.New(), nil)
 
 	tr, _ := trie.New(common.Hash{}, triedb)
 	values := make(map[string]string) // tracks content of the trie
@@ -162,14 +161,15 @@ func runRandTest(rt randTest) error {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, _, rt[i].err = tr.Commit(nil)
+			_, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, _, err := tr.Commit(nil)
+			result, err := tr.Commit(nil)
 			if err != nil {
 				return err
 			}
+			hash := result.Root
 			newtr, err := trie.New(hash, triedb)
 			if err != nil {
 				return err

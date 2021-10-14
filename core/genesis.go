@@ -180,7 +180,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, &trie.Config{ReadOnly: true}), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -256,10 +256,11 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+	commit := db != nil
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, &trie.Config{Archive: true}), nil)
 	if err != nil {
 		panic(err)
 	}
@@ -300,8 +301,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true, nil)
-
+	if commit {
+		statedb.Database().TrieDB().Cap(root, 0)
+	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
 }
 

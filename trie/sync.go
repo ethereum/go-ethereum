@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a
@@ -39,76 +40,55 @@ var ErrAlreadyProcessed = errors.New("already processed")
 // memory if the node was configured with a significant number of peers.
 const maxFetchesPerDepth = 16384
 
-// request represents a scheduled or already in-flight state retrieval request.
-type request struct {
-	path []byte      // Merkle path leading to this node for prioritization
-	hash common.Hash // Hash of the node data content to retrieve
-	data []byte      // Data content of the node, cached until all subtrees complete
-	code bool        // Whether this is a code entry
+// nodeRequest represents a scheduled or already in-flight trie node retrieval request.
+type nodeRequest struct {
+	key  string // Key of the node data content to retrieve
+	path []byte // Merkle path leading to this node for prioritization
+	data []byte // Data content of the node, cached until all subtrees complete
 
-	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
-	deps    int        // Number of dependencies before allowed to commit this node
-
-	callback LeafCallback // Callback to invoke if a leaf node it reached on this branch
+	parents  []*nodeRequest // Parent state nodes referencing this entry (notify all upon completion)
+	deps     int            // Number of dependencies before allowed to commit this node
+	callback LeafCallback   // Callback to invoke if a leaf node it reached on this branch
 }
 
-// SyncPath is a path tuple identifying a particular trie node either in a single
-// trie (account) or a layered trie (account -> storage).
-//
-// Content wise the tuple either has 1 element if it addresses a node in a single
-// trie or 2 elements if it addresses a node in a stacked trie.
-//
-// To support aiming arbitrary trie nodes, the path needs to support odd nibble
-// lengths. To avoid transferring expanded hex form over the network, the last
-// part of the tuple (which needs to index into the middle of a trie) is compact
-// encoded. In case of a 2-tuple, the first item is always 32 bytes so that is
-// simple binary encoded.
-//
-// Examples:
-//   - Path 0x9  -> {0x19}
-//   - Path 0x99 -> {0x0099}
-//   - Path 0x01234567890123456789012345678901012345678901234567890123456789019  -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x19}
-//   - Path 0x012345678901234567890123456789010123456789012345678901234567890199 -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x0099}
-type SyncPath [][]byte
-
-// newSyncPath converts an expanded trie path from nibble form into a compact
-// version that can be sent over the network.
-func newSyncPath(path []byte) SyncPath {
-	// If the hash is from the account trie, append a single item, if it
-	// is from the a storage trie, append a tuple. Note, the length 64 is
-	// clashing between account leaf and storage root. It's fine though
-	// because having a trie node at 64 depth means a hash collision was
-	// found and we're long dead.
-	if len(path) < 64 {
-		return SyncPath{hexToCompact(path)}
-	}
-	return SyncPath{hexToKeybytes(path[:64]), hexToCompact(path[64:])}
+// codeRequest represents a scheduled or already in-flight bytecode retrieval request.
+type codeRequest struct {
+	hash    common.Hash    // Hash of the contract bytecode to retrieve
+	path    []byte         // Merkle path leading to this node for prioritization
+	data    []byte         // Data content of the node, cached until all subtrees complete
+	parents []*nodeRequest // Parent state nodes referencing this entry (notify all upon completion)
 }
 
-// SyncResult is a response with requested data along with it's hash.
-type SyncResult struct {
-	Hash common.Hash // Hash of the originally unknown trie node
-	Data []byte      // Data content of the retrieved node
+// NodeSyncResult is a response with requested trie node along with it's database key.
+type NodeSyncResult struct {
+	Key  string // String format key of the originally unknown trie node
+	Data []byte // Data content of the retrieved trie node
+}
+
+// CodeSyncResult is a response with requested bytecode along with it's hash
+type CodeSyncResult struct {
+	Hash common.Hash // Hash the originally unknown bytecode
+	Data []byte      // Data content of the retrieved bytecode
 }
 
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet
 // persisted data items.
 type syncMemBatch struct {
-	nodes map[common.Hash][]byte // In-memory membatch of recently completed nodes
+	nodes map[string][]byte      // In-memory membatch of recently completed nodes
 	codes map[common.Hash][]byte // In-memory membatch of recently completed codes
 }
 
 // newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
 func newSyncMemBatch() *syncMemBatch {
 	return &syncMemBatch{
-		nodes: make(map[common.Hash][]byte),
+		nodes: make(map[string][]byte),
 		codes: make(map[common.Hash][]byte),
 	}
 }
 
 // hasNode reports the trie node with specific hash is already cached.
-func (batch *syncMemBatch) hasNode(hash common.Hash) bool {
-	_, ok := batch.nodes[hash]
+func (batch *syncMemBatch) hasNode(key string) bool {
+	_, ok := batch.nodes[key]
 	return ok
 }
 
@@ -122,13 +102,13 @@ func (batch *syncMemBatch) hasCode(hash common.Hash) bool {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	database ethdb.KeyValueReader     // Persistent database to check for existing entries
-	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
-	nodeReqs map[common.Hash]*request // Pending requests pertaining to a trie node hash
-	codeReqs map[common.Hash]*request // Pending requests pertaining to a code hash
-	queue    *prque.Prque             // Priority queue with the pending requests
-	fetches  map[int]int              // Number of active fetches per trie node depth
-	bloom    *SyncBloom               // Bloom filter for fast state existence checks
+	database ethdb.KeyValueReader         // Persistent database to check for existing entries
+	membatch *syncMemBatch                // Memory buffer to avoid frequent database writes
+	nodeReqs map[string]*nodeRequest      // Pending requests pertaining to a trie node hash
+	codeReqs map[common.Hash]*codeRequest // Pending requests pertaining to a code hash
+	queue    *prque.Prque                 // Priority queue with the pending requests
+	fetches  map[int]int                  // Number of active fetches per trie node depth
+	bloom    *SyncBloom                   // Bloom filter for fast state existence checks
 }
 
 // NewSync creates a new trie data download scheduler.
@@ -136,58 +116,66 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 	ts := &Sync{
 		database: database,
 		membatch: newSyncMemBatch(),
-		nodeReqs: make(map[common.Hash]*request),
-		codeReqs: make(map[common.Hash]*request),
+		nodeReqs: make(map[string]*nodeRequest),
+		codeReqs: make(map[common.Hash]*codeRequest),
 		queue:    prque.New(nil),
 		fetches:  make(map[int]int),
 		bloom:    bloom,
 	}
-	ts.AddSubTrie(root, nil, common.Hash{}, callback)
+	ts.AddSubTrie(root, nil, common.Hash{}, nil, callback)
 	return ts
 }
 
-// AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
-func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, callback LeafCallback) {
+// AddSubTrie registers a new trie to the sync code, rooted at the designated
+// parent for completion tracking. The given path is in hexary format and should
+// contains all the parent path if it's layered trie node.
+func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
 	if root == emptyRoot {
 		return
 	}
-	if s.membatch.hasNode(root) {
+	var owner common.Hash
+	if len(path) == 2*common.HashLength {
+		owner = common.BytesToHash(hexToKeybytes(path))
+	}
+	var (
+		storageKey  = EncodeStorageKey(owner, nil)
+		internalKey = EncodeInternalKey(storageKey, root)
+	)
+	if s.membatch.hasNode(string(internalKey)) {
 		return
 	}
-	if s.bloom == nil || s.bloom.Contains(root[:]) {
+	if s.bloom == nil || s.bloom.ContainNode(internalKey) {
 		// Bloom filter says this might be a duplicate, double check.
-		// If database says yes, then at least the trie node is present
-		// and we hold the assumption that it's NOT legacy contract code.
-		blob := rawdb.ReadTrieNode(s.database, root)
-		if len(blob) > 0 {
+		blob, nodeHash := rawdb.ReadTrieNode(s.database, storageKey)
+		if len(blob) == 0 {
+			bloomFaultMeter.Mark(1)
+		} else if nodeHash == root {
 			return
 		}
-		// False positive, bump fault meter
-		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
-	req := &request{
+	req := &nodeRequest{
+		key:      string(internalKey),
 		path:     path,
-		hash:     root,
 		callback: callback,
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.nodeReqs[parent]
+		ancestor := s.nodeReqs[string(EncodeInternalKeyWithPath(common.Hash{}, parentPath, parent))]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
-	s.schedule(req)
+	s.scheduleNodeRequest(req)
 }
 
 // AddCodeEntry schedules the direct retrieval of a contract code that should not
 // be interpreted as a trie node, but rather accepted and stored into the database
 // as is.
-func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
+func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, parentPath []byte) {
 	// Short circuit if the entry is empty or already known
 	if hash == emptyState {
 		return
@@ -195,7 +183,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 	if s.membatch.hasCode(hash) {
 		return
 	}
-	if s.bloom == nil || s.bloom.Contains(hash[:]) {
+	if s.bloom == nil || s.bloom.ContainCode(hash[:]) {
 		// Bloom filter says this might be a duplicate, double check.
 		// If database says yes, the blob is present for sure.
 		// Note we only check the existence with new code scheme, fast
@@ -209,34 +197,34 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
-	req := &request{
+	req := &codeRequest{
 		path: path,
 		hash: hash,
-		code: true,
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.nodeReqs[parent] // the parent of codereq can ONLY be nodereq
+		ancestor := s.nodeReqs[string(EncodeInternalKeyWithPath(common.Hash{}, parentPath, parent))] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
-	s.schedule(req)
+	s.scheduleCodeRequest(req)
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval. To aid
 // both eth/6x style fast sync and snap/1x style state sync, the paths of trie
 // nodes are returned too, as well as separate hash list for codes.
-func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []common.Hash) {
+func (s *Sync) Missing(max int) ([]string, []common.Hash, []NodePath, []common.Hash) {
 	var (
+		nodeKeys   []string
 		nodeHashes []common.Hash
-		nodePaths  []SyncPath
 		codeHashes []common.Hash
+		nodePaths  []NodePath
 	)
 	for !s.queue.Empty() && (max == 0 || len(nodeHashes)+len(codeHashes) < max) {
-		// Retrieve th enext item in line
+		// Retrieve the next item in line
 		item, prio := s.queue.Peek()
 
 		// If we have too many already-pending tasks for this depth, throttle
@@ -248,61 +236,79 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		s.queue.Pop()
 		s.fetches[depth]++
 
-		hash := item.(common.Hash)
-		if req, ok := s.nodeReqs[hash]; ok {
+		switch item.(type) {
+		case common.Hash:
+			codeHashes = append(codeHashes, item.(common.Hash))
+		case string:
+			key := item.(string)
+			req, ok := s.nodeReqs[key]
+			if !ok {
+				log.Warn("Missing node request", "key", key)
+				continue // System very wrong, shouldn't happen
+			}
+			_, hash := DecodeInternalKey([]byte(key))
+			nodeKeys = append(nodeKeys, key)
 			nodeHashes = append(nodeHashes, hash)
-			nodePaths = append(nodePaths, newSyncPath(req.path))
-		} else {
-			codeHashes = append(codeHashes, hash)
+			nodePaths = append(nodePaths, NewNodePath(req.path))
 		}
 	}
-	return nodeHashes, nodePaths, codeHashes
+	return nodeKeys, nodeHashes, nodePaths, codeHashes
 }
 
-// Process injects the received data for requested item. Note it can
+// ProcessCode injects the received data for requested item. Note it can
 // happpen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
 // be treated as "non-requested" item or "already-processed" item but
 // there is no downside.
-func (s *Sync) Process(result SyncResult) error {
-	// If the item was not requested either for code or node, bail out
-	if s.nodeReqs[result.Hash] == nil && s.codeReqs[result.Hash] == nil {
+func (s *Sync) ProcessCode(result CodeSyncResult) error {
+	// If the code was not requested or it's already processed, bail out
+	req := s.codeReqs[result.Hash]
+	if req == nil {
 		return ErrNotRequested
 	}
-	// There is an pending code request for this data, commit directly
-	var filled bool
-	if req := s.codeReqs[result.Hash]; req != nil && req.data == nil {
-		filled = true
-		req.data = result.Data
-		s.commit(req)
-	}
-	// There is an pending node request for this data, fill it.
-	if req := s.nodeReqs[result.Hash]; req != nil && req.data == nil {
-		filled = true
-		// Decode the node data content and update the request
-		node, err := decodeNode(result.Hash[:], result.Data)
-		if err != nil {
-			return err
-		}
-		req.data = result.Data
-
-		// Create and schedule a request for all the children nodes
-		requests, err := s.children(req, node)
-		if err != nil {
-			return err
-		}
-		if len(requests) == 0 && req.deps == 0 {
-			s.commit(req)
-		} else {
-			req.deps += len(requests)
-			for _, child := range requests {
-				s.schedule(child)
-			}
-		}
-	}
-	if !filled {
+	if req.data != nil {
 		return ErrAlreadyProcessed
+	}
+	req.data = result.Data
+	return s.commitCodeRequest(req)
+}
+
+// ProcessNode injects the received data for requested item. Note it can
+// happpen that the single response commits two pending requests(e.g.
+// there are two requests one for code and one for node but the hash
+// is same). In this case the second response for the same hash will
+// be treated as "non-requested" item or "already-processed" item but
+// there is no downside.
+func (s *Sync) ProcessNode(result NodeSyncResult) error {
+	// If the trie node was not requested or it's already processed, bail out
+	req := s.nodeReqs[result.Key]
+	if req == nil {
+		return ErrNotRequested
+	}
+	if req.data != nil {
+		return ErrAlreadyProcessed
+	}
+	// Decode the node data content and update the request
+	_, hash := DecodeInternalKey([]byte(req.key))
+	node, err := decodeNode(hash.Bytes(), result.Data)
+	if err != nil {
+		return err
+	}
+	req.data = result.Data
+
+	// Create and schedule a request for all the children nodes
+	requests, err := s.children(req, node)
+	if err != nil {
+		return err
+	}
+	if len(requests) == 0 && req.deps == 0 {
+		s.commitNodeRequest(req)
+	} else {
+		req.deps += len(requests)
+		for _, child := range requests {
+			s.scheduleNodeRequest(child)
+		}
 	}
 	return nil
 }
@@ -312,15 +318,16 @@ func (s *Sync) Process(result SyncResult) error {
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
-		rawdb.WriteTrieNode(dbw, key, value)
+		storageKey, _ := DecodeInternalKey([]byte(key))
+		rawdb.WriteTrieNode(dbw, storageKey, value)
 		if s.bloom != nil {
-			s.bloom.Add(key[:])
+			s.bloom.AddNode([]byte(key))
 		}
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
 		if s.bloom != nil {
-			s.bloom.Add(key[:])
+			s.bloom.AddCode(key[:])
 		}
 	}
 	// Drop the membatch data and return
@@ -336,17 +343,38 @@ func (s *Sync) Pending() int {
 // schedule inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
-func (s *Sync) schedule(req *request) {
-	var reqset = s.nodeReqs
-	if req.code {
-		reqset = s.codeReqs
-	}
+func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
 	// If we're already requesting this node, add a new reference and stop
-	if old, ok := reqset[req.hash]; ok {
+	// TODO(rjl493456442) it seems impossible now since all the trie node
+	// has the unique key. Remove it.
+	if old, ok := s.nodeReqs[req.key]; ok {
 		old.parents = append(old.parents, req.parents...)
 		return
 	}
-	reqset[req.hash] = req
+	s.nodeReqs[req.key] = req
+
+	// Schedule the request for future retrieval. This queue is shared
+	// by both node requests and code requests. It can happen that there
+	// is a trie node and code has same hash. In this case two elements
+	// with same hash and same or different depth will be pushed. But it's
+	// ok the worst case is the second response will be treated as duplicated.
+	prio := int64(len(req.path)) << 56 // depth >= 128 will never happen, storage leaves will be included in their parents
+	for i := 0; i < 14 && i < len(req.path); i++ {
+		prio |= int64(15-req.path[i]) << (52 - i*4) // 15-nibble => lexicographic order
+	}
+	s.queue.Push(req.key, prio)
+}
+
+// schedule inserts a new state retrieval request into the fetch queue. If there
+// is already a pending request for this node, the new request will be discarded
+// and only a parent reference added to the old one.
+func (s *Sync) scheduleCodeRequest(req *codeRequest) {
+	// If we're already requesting this node, add a new reference and stop
+	if old, ok := s.codeReqs[req.hash]; ok {
+		old.parents = append(old.parents, req.parents...)
+		return
+	}
+	s.codeReqs[req.hash] = req
 
 	// Schedule the request for future retrieval. This queue is shared
 	// by both node requests and code requests. It can happen that there
@@ -362,7 +390,7 @@ func (s *Sync) schedule(req *request) {
 
 // children retrieves all the missing children of a state trie entry for future
 // retrieval scheduling.
-func (s *Sync) children(req *request, object node) ([]*request, error) {
+func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
 		path []byte
@@ -393,7 +421,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		panic(fmt.Sprintf("unknown node: %+v", node))
 	}
 	// Iterate over the children, and request all unknown ones
-	requests := make([]*request, 0, len(children))
+	requests := make([]*nodeRequest, 0, len(children))
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
@@ -405,33 +433,47 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 					paths = append(paths, hexToKeybytes(child.path[:2*common.HashLength]))
 					paths = append(paths, hexToKeybytes(child.path[2*common.HashLength:]))
 				}
-				if err := req.callback(paths, child.path, node, req.hash); err != nil {
+				_, hash := DecodeInternalKey([]byte(req.key))
+				if err := req.callback(paths, child.path, node, hash, req.path); err != nil {
 					return nil, err
 				}
 			}
 		}
 		// If the child references another node, resolve or schedule
 		if node, ok := (child.node).(hashNode); ok {
+			var (
+				inner []byte
+				owner common.Hash
+			)
+			if len(child.path) >= 2*common.HashLength {
+				owner = common.BytesToHash(hexToKeybytes(child.path[:2*common.HashLength]))
+				inner = child.path[2*common.HashLength:]
+			} else {
+				inner = child.path
+			}
+			var (
+				chash      = common.BytesToHash(node)
+				storageKey = EncodeStorageKey(owner, inner)
+				childKey   = EncodeInternalKey(storageKey, chash)
+			)
 			// Try to resolve the node from the local database
-			hash := common.BytesToHash(node)
-			if s.membatch.hasNode(hash) {
+			if s.membatch.hasNode(string(childKey)) {
 				continue
 			}
-			if s.bloom == nil || s.bloom.Contains(node) {
+			if s.bloom == nil || s.bloom.ContainNode(childKey) {
 				// Bloom filter says this might be a duplicate, double check.
-				// If database says yes, then at least the trie node is present
-				// and we hold the assumption that it's NOT legacy contract code.
-				if blob := rawdb.ReadTrieNode(s.database, hash); len(blob) > 0 {
+				blob, hash := rawdb.ReadTrieNode(s.database, storageKey)
+				if len(blob) == 0 {
+					bloomFaultMeter.Mark(1)
+				} else if hash == chash {
 					continue
 				}
-				// False positive, bump fault meter
-				bloomFaultMeter.Mark(1)
 			}
 			// Locally unknown node, schedule for retrieval
-			requests = append(requests, &request{
+			requests = append(requests, &nodeRequest{
+				key:      string(childKey),
 				path:     child.path,
-				hash:     hash,
-				parents:  []*request{req},
+				parents:  []*nodeRequest{req},
 				callback: req.callback,
 			})
 		}
@@ -442,22 +484,38 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 // commit finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
-func (s *Sync) commit(req *request) (err error) {
+func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	// Write the node content to the membatch
-	if req.code {
-		s.membatch.codes[req.hash] = req.data
-		delete(s.codeReqs, req.hash)
-		s.fetches[len(req.path)]--
-	} else {
-		s.membatch.nodes[req.hash] = req.data
-		delete(s.nodeReqs, req.hash)
-		s.fetches[len(req.path)]--
-	}
+	s.membatch.nodes[req.key] = req.data
+	delete(s.nodeReqs, req.key)
+	s.fetches[len(req.path)]--
+
 	// Check all parents for completion
 	for _, parent := range req.parents {
 		parent.deps--
 		if parent.deps == 0 {
-			if err := s.commit(parent); err != nil {
+			if err := s.commitNodeRequest(parent); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// commit finalizes a retrieval request and stores it into the membatch. If any
+// of the referencing parent requests complete due to this commit, they are also
+// committed themselves.
+func (s *Sync) commitCodeRequest(req *codeRequest) error {
+	// Write the node content to the membatch
+	s.membatch.codes[req.hash] = req.data
+	delete(s.codeReqs, req.hash)
+	s.fetches[len(req.path)]--
+
+	// Check all parents for completion
+	for _, parent := range req.parents {
+		parent.deps--
+		if parent.deps == 0 {
+			if err := s.commitNodeRequest(parent); err != nil {
 				return err
 			}
 		}

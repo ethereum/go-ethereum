@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -75,22 +76,50 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadTrieNode retrieves the trie node of the provided hash.
-func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(hash.Bytes())
-	return data
+// ReadTrieNode retrieves the trie node and the associated node hash of
+// the provided node key.
+func ReadTrieNode(db ethdb.KeyValueReader, key []byte) ([]byte, common.Hash) {
+	data, err := db.Get(trieNodeKey(key))
+	if err != nil {
+		return nil, common.Hash{}
+	}
+	return data, crypto.Keccak256Hash(data) // TODO use hasher pool to reduce allocation
 }
 
 // WriteTrieNode writes the provided trie node database.
-func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
-	if err := db.Put(hash.Bytes(), node); err != nil {
+func WriteTrieNode(db ethdb.KeyValueWriter, key []byte, node []byte) {
+	if err := db.Put(trieNodeKey(key), node); err != nil {
 		log.Crit("Failed to store trie node", "err", err)
 	}
 }
 
 // DeleteTrieNode deletes the specified trie node from the database.
-func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(hash.Bytes()); err != nil {
+func DeleteTrieNode(db ethdb.KeyValueWriter, key []byte) {
+	if err := db.Delete(trieNodeKey(key)); err != nil {
 		log.Crit("Failed to delete trie node", "err", err)
+	}
+}
+
+// ReadArchiveTrieNode retrieves the archive trie node with the given
+// associated node hash.
+func ReadArchiveTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, err := db.Get(hash.Bytes())
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// WriteArchiveTrieNode writes the provided archived trie node database.
+func WriteArchiveTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
+	if err := db.Put(hash.Bytes(), node); err != nil {
+		log.Crit("Failed to store archived trie node", "err", err)
+	}
+}
+
+// DeleteArchiveTrieNode deletes the specified archived trie node from the database.
+func DeleteArchiveTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(hash.Bytes()); err != nil {
+		log.Crit("Failed to delete archived trie node", "err", err)
 	}
 }

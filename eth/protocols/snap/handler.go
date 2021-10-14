@@ -323,7 +323,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
 					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
-				stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
+				stTrie, err := trie.NewWithOwner(req.Root, account, acc.Root, backend.Chain().StateCache().TrieDB())
 				if err != nil {
 					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
@@ -472,7 +472,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				if err != nil {
 					break
 				}
-				stTrie, err := trie.NewSecure(common.BytesToHash(account.Root), triedb)
+				stTrie, err := trie.NewSecureWithOwner(req.Root, common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
 				loads++ // always account database reads, even for failures
 				if err != nil {
 					break

@@ -453,10 +453,10 @@ func (s *stateSync) assignTasks() {
 
 // fillTasks fills the given request object with a maximum of n state download
 // tasks to send to the remote peer.
-func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths []trie.SyncPath, codes []common.Hash) {
+func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths []trie.NodePath, codes []common.Hash) {
 	// Refill available tasks from the scheduler.
 	if fill := n - (len(s.trieTasks) + len(s.codeTasks)); fill > 0 {
-		nodes, paths, codes := s.sched.Missing(fill)
+		_, nodes, paths, codes := s.sched.Missing(fill)
 		for i, hash := range nodes {
 			s.trieTasks[hash] = &trieTask{
 				path:     paths[i],
@@ -472,7 +472,7 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 	// Find tasks that haven't been tried with the request's peer. Prefer code
 	// over trie nodes as those can be written to disk and forgotten about.
 	nodes = make([]common.Hash, 0, n)
-	paths = make([]trie.SyncPath, 0, n)
+	paths = make([]trie.NodePath, 0, n)
 	codes = make([]common.Hash, 0, n)
 
 	req.trieTasks = make(map[common.Hash]*trieTask, n)
@@ -587,12 +587,12 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 // peer into the state trie, returning whether anything useful was written or any
 // error occurred.
 func (s *stateSync) processNodeData(blob []byte) (common.Hash, error) {
-	res := trie.SyncResult{Data: blob}
+	res := trie.NodeSyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
-	s.keccak.Read(res.Hash[:])
-	err := s.sched.Process(res)
-	return res.Hash, err
+	//s.keccak.Read(res.Hash[:])
+	err := s.sched.ProcessNode(res)
+	return common.Hash{}, err
 }
 
 // updateStats bumps the various state sync progress counters and displays a log

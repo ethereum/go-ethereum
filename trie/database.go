@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,12 +17,14 @@
 package trie
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -30,65 +32,71 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
-	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("trie/memcache/clean/hit", nil)
-	memcacheCleanMissMeter  = metrics.NewRegisteredMeter("trie/memcache/clean/miss", nil)
-	memcacheCleanReadMeter  = metrics.NewRegisteredMeter("trie/memcache/clean/read", nil)
-	memcacheCleanWriteMeter = metrics.NewRegisteredMeter("trie/memcache/clean/write", nil)
+	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
+	// layer had been invalidated due to the chain progressing forward far enough
+	// to not maintain the layer's original state.
+	ErrSnapshotStale = errors.New("snapshot stale")
 
-	memcacheDirtyHitMeter   = metrics.NewRegisteredMeter("trie/memcache/dirty/hit", nil)
-	memcacheDirtyMissMeter  = metrics.NewRegisteredMeter("trie/memcache/dirty/miss", nil)
-	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("trie/memcache/dirty/read", nil)
-	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("trie/memcache/dirty/write", nil)
+	// ErrSnapshotReadOnly is returned if the database is opened in read only mode
+	// and mutation is requested.
+	ErrSnapshotReadOnly = errors.New("read only")
 
-	memcacheFlushTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/flush/time", nil)
-	memcacheFlushNodesMeter = metrics.NewRegisteredMeter("trie/memcache/flush/nodes", nil)
-	memcacheFlushSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/flush/size", nil)
+	// errSnapshotCycle is returned if a snapshot is attempted to be inserted
+	// that forms a cycle in the snapshot tree.
+	errSnapshotCycle = errors.New("snapshot cycle")
 
-	memcacheGCTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/gc/time", nil)
-	memcacheGCNodesMeter = metrics.NewRegisteredMeter("trie/memcache/gc/nodes", nil)
-	memcacheGCSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/gc/size", nil)
-
-	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/commit/time", nil)
-	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("trie/memcache/commit/nodes", nil)
-	memcacheCommitSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/commit/size", nil)
+	// emptyRoot is the known root hash of an empty trie. In this package this
+	// special hash is used to represent empty layer.
+	emptyHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
-// Database is an intermediate write layer between the trie data structures and
-// the disk database. The aim is to accumulate trie writes in-memory and only
-// periodically flush a couple tries to disk, garbage collecting the remainder.
-//
-// Note, the trie Database is **not** thread safe in its mutations, but it **is**
-// thread safe in providing individual, independent node access. The rationale
-// behind this split design is to provide read access to RPC handlers and sync
-// servers even while the trie is executing expensive garbage collection.
-type Database struct {
-	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
+// Snapshot represents the functionality supported by a snapshot storage layer.
+type Snapshot interface {
+	// Root returns the root hash for which this snapshot was made.
+	Root() common.Hash
 
-	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
-	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
-	oldest  common.Hash                 // Oldest tracked node, flush-list head
-	newest  common.Hash                 // Newest tracked node, flush-list tail
+	// NodeBlob retrieves the RLP-encoded trie node blob associated with
+	// a particular key. The passed key should be encoded in internal format
+	// with hash encoded. No error will be returned if the node is not found.
+	NodeBlob(internalKey []byte) ([]byte, error)
+}
 
-	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
+// snapshot is the internal version of the snapshot data layer that supports some
+// additional methods compared to the public API.
+type snapshot interface {
+	Snapshot
 
-	gctime  time.Duration      // Time spent on garbage collection since last commit
-	gcnodes uint64             // Nodes garbage collected since last commit
-	gcsize  common.StorageSize // Data storage garbage collected since last commit
+	// Node retrieves the trie node associated with a particular key. The
+	// passed key should be encoded in internal format with hash encoded.
+	// No error will be returned if the node is not found.
+	Node(internalKey []byte) (node, error)
 
-	flushtime  time.Duration      // Time spent on data flushing since last commit
-	flushnodes uint64             // Nodes flushed since last commit
-	flushsize  common.StorageSize // Data storage flushed since last commit
+	// Parent returns the subsequent layer of a snapshot, or nil if the base was
+	// reached.
+	//
+	// Note, the method is an internal helper to avoid type switching between the
+	// disk and diff layers. There is no locking involved.
+	Parent() snapshot
 
-	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. metadata)
-	childrenSize  common.StorageSize // Storage size of the external children tracking
-	preimagesSize common.StorageSize // Storage size of the preimages cache
+	// Update creates a new layer on top of the existing snapshot diff tree with
+	// the given dirty trie node set. The deleted trie nodes are also included
+	// with the nil as the value.
+	//
+	// Note, the maps are retained by the method to avoid copying everything.
+	Update(blockRoot common.Hash, nodes map[string]*cachedNode, db *Database) *diffLayer
 
-	lock sync.RWMutex
+	// Journal commits an entire diff hierarchy to disk into a single journal entry.
+	// This is meant to be used during shutdown to persist the snapshot without
+	// flattening everything down (bad for reorgs).
+	Journal(buffer *bytes.Buffer) error
+
+	// Stale return whether this layer has become stale (was flattened across) or
+	// if it's still live.
+	Stale() bool
 }
 
 // rawNode is a simple binary blob used to differentiate between collapsed trie
@@ -141,22 +149,12 @@ func (n rawShortNode) fstring(ind string) string { panic("this should never end 
 type cachedNode struct {
 	node node   // Cached collapsed trie node, or raw rlp data
 	size uint16 // Byte size of the useful cached data
-
-	parents  uint32                 // Number of live nodes referencing this one
-	children map[common.Hash]uint16 // External children referenced by this node
-
-	flushPrev common.Hash // Previous node in the flush-list
-	flushNext common.Hash // Next node in the flush-list
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
 // node data included. It's an approximate size, but should be a lot better
 // than not counting them.
 var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
-
-// cachedNodeChildrenSize is the raw size of an initialized but empty external
-// reference map.
-const cachedNodeChildrenSize = 48
 
 // rlp returns the raw rlp encoded blob of the cached trie node, either directly
 // from the cache, or by regenerating it from the collapsed node.
@@ -178,36 +176,6 @@ func (n *cachedNode) obj(hash common.Hash) node {
 		return mustDecodeNode(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
-}
-
-// forChilds invokes the callback for all the tracked children of this node,
-// both the implicit ones from inside the node as well as the explicit ones
-// from outside the node.
-func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
-	for child := range n.children {
-		onChild(child)
-	}
-	if _, ok := n.node.(rawNode); !ok {
-		forGatherChildren(n.node, onChild)
-	}
-}
-
-// forGatherChildren traverses the node hierarchy of a collapsed storage node and
-// invokes the callback for all the hashnode children.
-func forGatherChildren(n node, onChild func(hash common.Hash)) {
-	switch n := n.(type) {
-	case *rawShortNode:
-		forGatherChildren(n.Val, onChild)
-	case rawFullNode:
-		for i := 0; i < 16; i++ {
-			forGatherChildren(n[i], onChild)
-		}
-	case hashNode:
-		onChild(common.BytesToHash(n))
-	case valueNode, nil, rawNode:
-	default:
-		panic(fmt.Sprintf("unknown node type: %T", n))
-	}
 }
 
 // simplifyNode traverses the hierarchy of an expanded memory node and discards
@@ -277,19 +245,56 @@ type Config struct {
 	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
 	Journal   string // Journal of clean cache to survive node restarts
 	Preimages bool   // Flag whether the preimage of trie key is recorded
+
+	// Archive mode indicates whether the flushed data will be stored with
+	// an additional piece of data according to the legacy state scheme. It's
+	// mainly used in the archive node mode which requires all historical state
+	// and storing the preserved state like genesis.
+	Archive bool
+
+	// ReadOnly mode indicates whether the database is opened in read only mode.
+	// All the mutations like journalling, updating disk layer will all be rejected.
+	ReadOnly bool
+
+	// Fallback is the function used to find the fallback base layer root. It's pretty
+	// common that there is no singleton trie persisted in the disk(e.g. migrated from
+	// the legacy database) so the function provided can find the alternative root as
+	// the base.
+	Fallback func() common.Hash
+
+	// OnCommit is called when the in-memory trie nodes are flushed into the disk.
+	// The passed key is in **internal** key format and the val can be nil which
+	// indicates the node is deleted from the disk.
+	OnCommit func(key, val []byte)
 }
 
-// NewDatabase creates a new trie database to store ephemeral trie content before
-// its written out to disk or garbage collected. No read cache is created, so all
-// data retrievals will hit the underlying disk database.
-func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
-	return NewDatabaseWithConfig(diskdb, nil)
+// Database is a multiple-layered structure for maintaining in-memory trie nodes.
+// It consists of one persistent base layer backed by a key-value store, on top
+// of which arbitrarily many in-memory diff layers are topped. The memory diffs
+// can form a tree with branching, but the disk layer is singleton and common to
+// all. If a reorg goes deeper than the disk layer, a batch of reverse diffs should
+// be applied. The deepest reorg can be handled depends on the amount of reverse
+// diffs tracked in the disk.
+type Database struct {
+	// readOnly is the flag whether the mutation is allowed to be applied.
+	// It will be set automatically when the database is journalled during
+	// the shutdown to reject all following unexpected mutations.
+	readOnly      bool
+	config        *Config
+	lock          sync.RWMutex
+	diskdb        ethdb.KeyValueStore      // Persistent database to store the snapshot
+	dirties       map[string]*cachedNode   // Data and references relationships of dirty trie nodes
+	cleans        *fastcache.Cache         // Megabytes permitted using for read caches
+	layers        map[common.Hash]snapshot // Collection of all known layers
+	preimages     map[common.Hash][]byte   // Preimages of nodes from the secure trie
+	preimagesSize common.StorageSize       // Storage size of the preimages cache
 }
 
-// NewDatabaseWithConfig creates a new trie database to store ephemeral trie content
-// before its written out to disk or garbage collected. It also acts as a read cache
-// for nodes loaded from disk.
-func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database {
+// NewDatabase attempts to load an already existing snapshot from a persistent
+// key-value store (with a number of memory layers from a journal). If the journal
+// is not matched with the base persistent layer, all the recorded diff layers
+// are discarded.
+func NewDatabase(diskdb ethdb.KeyValueStore, config *Config) *Database {
 	var cleans *fastcache.Cache
 	if config != nil && config.Cache > 0 {
 		if config.Journal == "" {
@@ -298,159 +303,56 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
 	}
-	db := &Database{
-		diskdb: diskdb,
-		cleans: cleans,
-		dirties: map[common.Hash]*cachedNode{{}: {
-			children: make(map[common.Hash]uint16),
-		}},
+	var readOnly bool
+	if config != nil {
+		readOnly = config.ReadOnly
 	}
-	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
+	db := &Database{
+		readOnly: readOnly,
+		config:   config,
+		diskdb:   diskdb,
+		//dirties:  make(map[string]*cachedNode),
+		cleans: cleans,
+		layers: make(map[common.Hash]snapshot),
+	}
+	head := loadSnapshot(diskdb, cleans, config, db)
+	for head != nil {
+		db.layers[head.Root()] = head
+		head = head.Parent()
+	}
+	if config == nil || config.Preimages {
 		db.preimages = make(map[common.Hash][]byte)
 	}
 	return db
 }
 
-// DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.KeyValueStore {
-	return db.diskdb
-}
+// InsertPreimage writes a new trie node pre-image to the memory database if it's
+// yet unknown. The method will NOT make a copy of the slice, only use if the
+// preimage will NOT be changed later on.
+func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
-// insert inserts a collapsed trie node into the memory database.
-// The blob size must be specified to allow proper size tracking.
-// All nodes inserted by this function will be reference tracked
-// and in theory should only used for **trie nodes** insertion.
-func (db *Database) insert(hash common.Hash, size int, node node) {
-	// If the node's already cached, skip
-	if _, ok := db.dirties[hash]; ok {
-		return
-	}
-	memcacheDirtyWriteMeter.Mark(int64(size))
-
-	// Create the cached entry for this node
-	entry := &cachedNode{
-		node:      simplifyNode(node),
-		size:      uint16(size),
-		flushPrev: db.newest,
-	}
-	entry.forChilds(func(child common.Hash) {
-		if c := db.dirties[child]; c != nil {
-			c.parents++
-		}
-	})
-	db.dirties[hash] = entry
-
-	// Update the flush-list endpoints
-	if db.oldest == (common.Hash{}) {
-		db.oldest, db.newest = hash, hash
-	} else {
-		db.dirties[db.newest].flushNext, db.newest = hash, hash
-	}
-	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
-}
-
-// insertPreimage writes a new trie node pre-image to the memory database if it's
-// yet unknown. The method will NOT make a copy of the slice,
-// only use if the preimage will NOT be changed later on.
-//
-// Note, this method assumes that the database's lock is held!
-func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 	// Short circuit if preimage collection is disabled
 	if db.preimages == nil {
 		return
 	}
-	// Track the preimage if a yet unknown one
-	if _, ok := db.preimages[hash]; ok {
-		return
+	for hash, preimage := range preimages {
+		if _, ok := db.preimages[hash]; ok {
+			continue
+		}
+		db.preimages[hash] = preimage
+		db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 	}
-	db.preimages[hash] = preimage
-	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
-// node retrieves a cached trie node from memory, or returns nil if none can be
-// found in the memory cache.
-func (db *Database) node(hash common.Hash) node {
-	// Retrieve the node from the clean cache if available
-	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
-			memcacheCleanHitMeter.Mark(1)
-			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc)
-		}
-	}
-	// Retrieve the node from the dirty cache if available
-	db.lock.RLock()
-	dirty := db.dirties[hash]
-	db.lock.RUnlock()
-
-	if dirty != nil {
-		memcacheDirtyHitMeter.Mark(1)
-		memcacheDirtyReadMeter.Mark(int64(dirty.size))
-		return dirty.obj(hash)
-	}
-	memcacheDirtyMissMeter.Mark(1)
-
-	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
-	if err != nil || enc == nil {
-		return nil
-	}
-	if db.cleans != nil {
-		db.cleans.Set(hash[:], enc)
-		memcacheCleanMissMeter.Mark(1)
-		memcacheCleanWriteMeter.Mark(int64(len(enc)))
-	}
-	return mustDecodeNode(hash[:], enc)
-}
-
-// Node retrieves an encoded cached trie node from memory. If it cannot be found
-// cached, the method queries the persistent database for the content.
-func (db *Database) Node(hash common.Hash) ([]byte, error) {
-	// It doesn't make sense to retrieve the metaroot
-	if hash == (common.Hash{}) {
-		return nil, errors.New("not found")
-	}
-	// Retrieve the node from the clean cache if available
-	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
-			memcacheCleanHitMeter.Mark(1)
-			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return enc, nil
-		}
-	}
-	// Retrieve the node from the dirty cache if available
-	db.lock.RLock()
-	dirty := db.dirties[hash]
-	db.lock.RUnlock()
-
-	if dirty != nil {
-		memcacheDirtyHitMeter.Mark(1)
-		memcacheDirtyReadMeter.Mark(int64(dirty.size))
-		return dirty.rlp(), nil
-	}
-	memcacheDirtyMissMeter.Mark(1)
-
-	// Content unavailable in memory, attempt to retrieve from disk
-	enc := rawdb.ReadTrieNode(db.diskdb, hash)
-	if len(enc) != 0 {
-		if db.cleans != nil {
-			db.cleans.Set(hash[:], enc)
-			memcacheCleanMissMeter.Mark(1)
-			memcacheCleanWriteMeter.Mark(int64(len(enc)))
-		}
-		return enc, nil
-	}
-	return nil, errors.New("not found")
-}
-
-// preimage retrieves a cached trie node pre-image from memory. If it cannot be
+// Preimage retrieves a cached trie node pre-image from memory. If it cannot be
 // found cached, the method queries the persistent database for the content.
-func (db *Database) preimage(hash common.Hash) []byte {
+func (db *Database) Preimage(hash common.Hash) []byte {
 	// Short circuit if preimage collection is disabled
 	if db.preimages == nil {
 		return nil
 	}
-	// Retrieve the node from cache if available
 	db.lock.RLock()
 	preimage := db.preimages[hash]
 	db.lock.RUnlock()
@@ -461,377 +363,419 @@ func (db *Database) preimage(hash common.Hash) []byte {
 	return rawdb.ReadPreimage(db.diskdb, hash)
 }
 
-// Nodes retrieves the hashes of all the nodes cached within the memory database.
-// This method is extremely expensive and should only be used to validate internal
-// states in test code.
-func (db *Database) Nodes() []common.Hash {
+// Snapshot retrieves a snapshot belonging to the given block root, or nil if no
+// snapshot is maintained for that block.
+func (db *Database) Snapshot(blockRoot common.Hash) Snapshot {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var hashes = make([]common.Hash, 0, len(db.dirties))
-	for hash := range db.dirties {
-		if hash != (common.Hash{}) { // Special case for "root" references/nodes
-			hashes = append(hashes, hash)
-		}
-	}
-	return hashes
+	return db.layers[convertEmpty(blockRoot)]
 }
 
-// Reference adds a new reference from a parent node to a child node.
-// This function is used to add reference between internal trie node
-// and external node(e.g. storage trie root), all internal trie nodes
-// are referenced together by database itself.
-func (db *Database) Reference(child common.Hash, parent common.Hash) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
+// insert inserts a collapsed trie node into the memory database.
+// The key must be the internal format trie node key. The blob
+// size must be specified to allow proper size tracking.
+//func (db *Database) insert(key []byte, size int, node node) {
+//	// If the node's already cached, skip
+//	if _, ok := db.dirties[string(key)]; ok {
+//		return
+//	}
+//	// Create the cached entry for this node
+//	db.dirties[string(key)] = &cachedNode{
+//		node: simplifyNode(node),
+//		size: uint16(size),
+//	}
+//}
 
-	db.reference(child, parent)
-}
-
-// reference is the private locked version of Reference.
-func (db *Database) reference(child common.Hash, parent common.Hash) {
-	// If the node does not exist, it's a node pulled from disk, skip
-	node, ok := db.dirties[child]
-	if !ok {
-		return
-	}
-	// If the reference already exists, only duplicate for roots
-	if db.dirties[parent].children == nil {
-		db.dirties[parent].children = make(map[common.Hash]uint16)
-		db.childrenSize += cachedNodeChildrenSize
-	} else if _, ok = db.dirties[parent].children[child]; ok && parent != (common.Hash{}) {
-		return
-	}
-	node.parents++
-	db.dirties[parent].children[child]++
-	if db.dirties[parent].children[child] == 1 {
-		db.childrenSize += common.HashLength + 2 // uint16 counter
-	}
-}
-
-// Dereference removes an existing reference from a root node.
-func (db *Database) Dereference(root common.Hash) {
-	// Sanity check to ensure that the meta-root is not removed
-	if root == (common.Hash{}) {
-		log.Error("Attempted to dereference the trie cache meta root")
-		return
-	}
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	db.dereference(root, common.Hash{})
-
-	db.gcnodes += uint64(nodes - len(db.dirties))
-	db.gcsize += storage - db.dirtiesSize
-	db.gctime += time.Since(start)
-
-	memcacheGCTimeTimer.Update(time.Since(start))
-	memcacheGCSizeMeter.Mark(int64(storage - db.dirtiesSize))
-	memcacheGCNodesMeter.Mark(int64(nodes - len(db.dirties)))
-
-	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
-}
-
-// dereference is the private locked version of Dereference.
-func (db *Database) dereference(child common.Hash, parent common.Hash) {
-	// Dereference the parent-child
-	node := db.dirties[parent]
-
-	if node.children != nil && node.children[child] > 0 {
-		node.children[child]--
-		if node.children[child] == 0 {
-			delete(node.children, child)
-			db.childrenSize -= (common.HashLength + 2) // uint16 counter
-		}
-	}
-	// If the child does not exist, it's a previously committed node.
-	node, ok := db.dirties[child]
-	if !ok {
-		return
-	}
-	// If there are no more references to the child, delete it and cascade
-	if node.parents > 0 {
-		// This is a special cornercase where a node loaded from disk (i.e. not in the
-		// memcache any more) gets reinjected as a new node (short node split into full,
-		// then reverted into short), causing a cached node to have no parents. That is
-		// no problem in itself, but don't make maxint parents out of it.
-		node.parents--
-	}
-	if node.parents == 0 {
-		// Remove the node from the flush-list
-		switch child {
-		case db.oldest:
-			db.oldest = node.flushNext
-			db.dirties[node.flushNext].flushPrev = common.Hash{}
-		case db.newest:
-			db.newest = node.flushPrev
-			db.dirties[node.flushPrev].flushNext = common.Hash{}
-		default:
-			db.dirties[node.flushPrev].flushNext = node.flushNext
-			db.dirties[node.flushNext].flushPrev = node.flushPrev
-		}
-		// Dereference all children and delete the node
-		node.forChilds(func(hash common.Hash) {
-			db.dereference(hash, child)
-		})
-		delete(db.dirties, child)
-		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-		if node.children != nil {
-			db.childrenSize -= cachedNodeChildrenSize
-		}
-	}
-}
-
-// Cap iteratively flushes old but still referenced trie nodes until the total
-// memory usage goes below the given threshold.
+// node retrieves a cached trie node from temporary set, or returns nil if none
+// can be found in it. This function can only be used as the auxiliary lookup for
+// layer. The passed key must be the internal key format.
+//func (db *Database) node(key []byte) node {
+//	db.lock.RLock()
+//	defer db.lock.RUnlock()
 //
-// Note, this method is a non-synchronized mutator. It is unsafe to call this
-// concurrently with other mutators.
-func (db *Database) Cap(limit common.StorageSize) error {
-	// Create a database batch to flush persistent data out. It is important that
-	// outside code doesn't see an inconsistent state (referenced data removed from
-	// memory cache during commit but not yet in persistent storage). This is ensured
-	// by only uncaching existing data when the database write finalizes.
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	batch := db.diskdb.NewBatch()
+//	dirty := db.dirties[string(key)]
+//	if dirty != nil {
+//		_, hash := DecodeInternalKey(key)
+//		return dirty.obj(hash)
+//	}
+//	return nil
+//}
 
-	// db.dirtiesSize only contains the useful data in the cache, but when reporting
-	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted.
-	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
-	size += db.childrenSize - common.StorageSize(len(db.dirties[common.Hash{}].children)*(common.HashLength+2))
+// nodeBlob retrieves a RLP-encoded trie node from memory, or returns nil if none
+// can be found in the memory cache. The passed key must be the internal key format.
+//func (db *Database) nodeBlob(key []byte) []byte {
+//	db.lock.RLock()
+//	defer db.lock.RUnlock()
+//
+//	dirty := db.dirties[string(key)]
+//	if dirty != nil {
+//		return dirty.rlp()
+//	}
+//	return nil
+//}
 
-	// If the preimage cache got large enough, push to disk. If it's still small
-	// leave for later to deduplicate writes.
-	flushPreimages := db.preimagesSize > 4*1024*1024
-	if flushPreimages {
-		if db.preimages == nil {
-			log.Error("Attempted to write preimages whilst disabled")
-		} else {
-			rawdb.WritePreimages(batch, db.preimages)
-			if batch.ValueSize() > ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					return err
-				}
-				batch.Reset()
-			}
+// Update adds a new snapshot into the tree, if that can be linked to an existing
+// old parent. It is disallowed to insert a disk layer (the origin of all).
+// The passed keys must all be encoded in the internal format.
+func (db *Database) Update(root common.Hash, parentRoot common.Hash, nodes map[string]*cachedNode) error {
+	// Reject noop updates to avoid self-loops. This is a special case that can
+	// only happen for Clique networks where empty blocks don't modify the state
+	// (0 block subsidy).
+	//
+	// Although we could silently ignore this internally, it should be the caller's
+	// responsibility to avoid even attempting to insert such a snapshot.
+	root, parentRoot = convertEmpty(root), convertEmpty(parentRoot)
+	if root == parentRoot {
+		if root == emptyHash {
+			return nil
 		}
+		return errSnapshotCycle
 	}
-	// Keep committing nodes from the flush-list until we're below allowance
-	oldest := db.oldest
-	for size > limit && oldest != (common.Hash{}) {
-		// Fetch the oldest referenced node and push into the batch
-		node := db.dirties[oldest]
-		rawdb.WriteTrieNode(batch, oldest, node.rlp())
-
-		// If we exceeded the ideal batch size, commit and reset
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Error("Failed to write flush list to disk", "err", err)
-				return err
-			}
-			batch.Reset()
-		}
-		// Iterate to the next flush item, or abort if the size cap was achieved. Size
-		// is the total size, including the useful cached data (hash -> blob), the
-		// cache item metadata, as well as external children mappings.
-		size -= common.StorageSize(common.HashLength + int(node.size) + cachedNodeSize)
-		if node.children != nil {
-			size -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
-		}
-		oldest = node.flushNext
+	// Generate a new snapshot on top of the parent
+	parent := db.Snapshot(parentRoot)
+	if parent == nil {
+		return fmt.Errorf("triedb parent [%#x] snapshot missing", parentRoot)
 	}
-	// Flush out any remainder data from the last batch
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to write flush list to disk", "err", err)
-		return err
-	}
-	// Write successful, clear out the flushed data
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if flushPreimages {
-		if db.preimages == nil {
-			log.Error("Attempted to reset preimage cache whilst disabled")
-		} else {
-			db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
-		}
+	// Short circuit if the database is in read only mode.
+	if db.readOnly {
+		return ErrSnapshotReadOnly
 	}
-	for db.oldest != oldest {
-		node := db.dirties[db.oldest]
-		delete(db.dirties, db.oldest)
-		db.oldest = node.flushNext
-
-		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-		if node.children != nil {
-			db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
-		}
-	}
-	if db.oldest != (common.Hash{}) {
-		db.dirties[db.oldest].flushPrev = common.Hash{}
-	}
-	db.flushnodes += uint64(nodes - len(db.dirties))
-	db.flushsize += storage - db.dirtiesSize
-	db.flushtime += time.Since(start)
-
-	memcacheFlushTimeTimer.Update(time.Since(start))
-	memcacheFlushSizeMeter.Mark(int64(storage - db.dirtiesSize))
-	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
-
-	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
-
+	snap := parent.(snapshot).Update(root, nodes, db)
+	db.layers[snap.root] = snap
 	return nil
 }
 
-// Commit iterates over all the children of a particular node, writes them out
-// to disk, forcefully tearing down all references in both directions. As a side
-// effect, all pre-images accumulated up to this point are also written.
+// Cap traverses downwards the snapshot tree from a head block hash until the
+// number of allowed layers are crossed. All layers beyond the permitted number
+// are flattened downwards.
 //
-// Note, this method is a non-synchronized mutator. It is unsafe to call this
-// concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
-	// Create a database batch to flush persistent data out. It is important that
-	// outside code doesn't see an inconsistent state (referenced data removed from
-	// memory cache during commit but not yet in persistent storage). This is ensured
-	// by only uncaching existing data when the database write finalizes.
-	start := time.Now()
-	batch := db.diskdb.NewBatch()
-
-	// Move all of the accumulated preimages into a write batch
-	if db.preimages != nil {
-		rawdb.WritePreimages(batch, db.preimages)
-		// Since we're going to replay trie node writes into the clean cache, flush out
-		// any batched pre-images before continuing.
-		if err := batch.Write(); err != nil {
-			return err
-		}
-		batch.Reset()
+// Note, the final diff layer count in general will be one more than the amount
+// requested. This happens because the bottom-most diff layer is the accumulator
+// which may or may not overflow and cascade to disk. Since this last layer's
+// survival is only known *after* capping, we need to omit it from the count if
+// we want to ensure that *at least* the requested number of diff layers remain.
+func (db *Database) Cap(root common.Hash, layers int) error {
+	// Retrieve the head snapshot to cap from
+	root = convertEmpty(root)
+	snap := db.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("triedb snapshot [%#x] missing", root)
 	}
-	// Move the trie itself into the batch, flushing if enough data is accumulated
-	nodes, storage := len(db.dirties), db.dirtiesSize
-
-	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher, callback); err != nil {
-		log.Error("Failed to commit trie from trie database", "err", err)
-		return err
+	diff, ok := snap.(*diffLayer)
+	if !ok {
+		return fmt.Errorf("triedb snapshot [%#x] is disk layer", root)
 	}
-	// Trie mostly committed to disk, flush any batch leftovers
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to write trie to disk", "err", err)
-		return err
-	}
-	// Uncache any leftovers in the last batch
+	// Run the internal capping and discard all stale layers
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	batch.Replay(uncacher)
-	batch.Reset()
-
-	// Reset the storage counters and bumped metrics
-	if db.preimages != nil {
+	// Short circuit if the database is in read only mode.
+	if db.readOnly {
+		return ErrSnapshotReadOnly
+	}
+	// Move all of the accumulated preimages into a write batch
+	if db.preimages != nil && db.preimagesSize > 4*1024*1024 {
+		batch := db.diskdb.NewBatch()
+		rawdb.WritePreimages(batch, db.preimages)
+		if err := batch.Write(); err != nil {
+			return err
+		}
 		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
 	}
-	memcacheCommitTimeTimer.Update(time.Since(start))
-	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
-	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
+	// Flattening the bottom-most diff layer requires special casing since there's
+	// no child to rewire to the grandparent. In that case we can fake a temporary
+	// child for the capping and then remove it.
+	if layers == 0 {
+		// If full commit was requested, flatten the diffs and merge onto disk
+		diff.lock.RLock()
+		base := diffToDisk(diff.flatten().(*diffLayer), db.config)
+		diff.lock.RUnlock()
 
-	logger := log.Info
-	if !report {
-		logger = log.Debug
+		// Replace the entire snapshot tree with the flat base
+		db.layers = map[common.Hash]snapshot{base.root: base}
+		return nil
 	}
-	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	persisted := db.cap(diff, layers)
 
-	// Reset the garbage collection statistics
-	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0
-	db.flushnodes, db.flushsize, db.flushtime = 0, 0, 0
-
+	// Remove any layer that is stale or links into a stale layer
+	children := make(map[common.Hash][]common.Hash)
+	for root, snap := range db.layers {
+		if diff, ok := snap.(*diffLayer); ok {
+			parent := diff.parent.Root()
+			children[parent] = append(children[parent], root)
+		}
+	}
+	var remove func(root common.Hash)
+	remove = func(root common.Hash) {
+		delete(db.layers, root)
+		for _, child := range children[root] {
+			remove(child)
+		}
+		delete(children, root)
+	}
+	for root, snap := range db.layers {
+		if snap.Stale() {
+			remove(root)
+		}
+	}
+	// If the disk layer was modified, regenerate all the cumulative blooms
+	if persisted != nil {
+		var rebloom func(root common.Hash)
+		rebloom = func(root common.Hash) {
+			if diff, ok := db.layers[root].(*diffLayer); ok {
+				diff.origin = persisted
+			}
+			for _, child := range children[root] {
+				rebloom(child)
+			}
+		}
+		rebloom(persisted.root)
+	}
 	return nil
 }
 
-// commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
-	// If the node does not exist, it's a previously committed node
-	node, ok := db.dirties[hash]
-	if !ok {
-		return nil
-	}
-	var err error
-	node.forChilds(func(child common.Hash) {
-		if err == nil {
-			err = db.commit(child, batch, uncacher, callback)
+// cap traverses downwards the diff tree until the number of allowed layers are
+// crossed. All diffs beyond the permitted number are flattened downwards. If the
+// layer limit is reached, memory cap is also enforced (but not before).
+//
+// The method returns the new disk layer if diffs were persisted into it.
+//
+// Note, the final diff layer count in general will be one more than the amount
+// requested. This happens because the bottom-most diff layer is the accumulator
+// which may or may not overflow and cascade to disk. Since this last layer's
+// survival is only known *after* capping, we need to omit it from the count if
+// we want to ensure that *at least* the requested number of diff layers remain.
+func (db *Database) cap(diff *diffLayer, layers int) *diskLayer {
+	// Dive until we run out of layers or reach the persistent database
+	for i := 0; i < layers-1; i++ {
+		// If we still have diff layers below, continue down
+		if parent, ok := diff.parent.(*diffLayer); ok {
+			diff = parent
+		} else {
+			// Diff stack too shallow, return without modifications
+			return nil
 		}
-	})
-	if err != nil {
+	}
+	// We're out of layers, flatten anything below, stopping if it's the disk or if
+	// the memory limit is not yet exceeded.
+	switch parent := diff.parent.(type) {
+	case *diskLayer:
+		return nil
+
+	case *diffLayer:
+		// Hold the write lock until the flattened parent is linked correctly.
+		// Otherwise, data race can happen which may lead the read operations to
+		// a stale parent layer.
+		diff.lock.Lock()
+		defer diff.lock.Unlock()
+
+		// Flatten the parent into the grandparent. The flattening internally obtains
+		// a write lock on grandparent.
+		flattened := parent.flatten().(*diffLayer)
+		db.layers[flattened.root] = flattened
+
+		diff.parent = flattened
+		if flattened.memory < aggregatorMemoryLimit {
+			return nil
+		}
+	default:
+		panic(fmt.Sprintf("unknown data layer in triedb: %T", parent))
+	}
+	// If the bottom-most layer is larger than our memory cap, persist to disk
+	bottom := diff.parent.(*diffLayer)
+
+	bottom.lock.RLock()
+	base := diffToDisk(bottom, db.config)
+	bottom.lock.RUnlock()
+
+	db.layers[base.root] = base
+	diff.parent = base
+	return base
+}
+
+// diffToDisk merges a bottom-most diff into the persistent disk layer underneath
+// it. The method will panic if called onto a non-bottom-most diff layer. The disk
+// layer persistence should be operated in an atomic way. All updates should be
+// discarded if the whole transition if not finished.
+func diffToDisk(bottom *diffLayer, config *Config) *diskLayer {
+	var (
+		base  = bottom.parent.(*diskLayer)
+		batch = base.diskdb.NewBatch()
+	)
+	// Mark the original base as stale as we're going to create a new wrapper
+	base.lock.Lock()
+	if base.stale {
+		panic("triedb parent disk layer is stale") // we've committed into the same base from two children, boo
+	}
+	base.stale = true
+	base.lock.Unlock()
+
+	// Push all updated accounts into the database.
+	// TODO all the nodes belong to the same layer should be written
+	// in atomic way. However a huge disk write should be avoid in the
+	// first place. A balance needs to be found to ensure that the bottom
+	// most layer is large enough to combine duplicated writes, and also
+	// the big write can be avoided.
+	for key, node := range bottom.nodes {
+		path, hash := DecodeInternalKey([]byte(key))
+		if node == nil {
+			rawdb.DeleteTrieNode(batch, path)
+		} else {
+			rawdb.WriteTrieNode(batch, path, node.rlp())
+			if config != nil && config.Archive {
+				rawdb.WriteArchiveTrieNode(batch, hash, node.rlp())
+			}
+		}
+		if config != nil && config.OnCommit != nil {
+			config.OnCommit([]byte(key), node.rlp())
+		}
+	}
+	// Flush all the updates in the single db operation. Ensure the
+	// disk layer transition is atomic.
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write bottom dirty trie nodes", "err", err)
+	}
+	log.Debug("Journalled triedb disk layer", "root", bottom.root)
+	res := &diskLayer{
+		db:     bottom.db,
+		root:   bottom.root,
+		cache:  base.cache,
+		diskdb: base.diskdb,
+	}
+	return res
+}
+
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
+// This is meant to be used during shutdown to persist the snapshot without
+// flattening everything down (bad for reorgs). And this function will mark the
+// database as read-only to prevent all following mutation to disk.
+func (db *Database) Journal(root common.Hash) error {
+	// Retrieve the head snapshot to journal from var snap snapshot
+	root = convertEmpty(root)
+	snap := db.Snapshot(root)
+	if snap == nil {
+		return fmt.Errorf("triedb snapshot [%#x] missing", root)
+	}
+	// Run the journaling
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Short circuit if the database is in read only mode.
+	if db.readOnly {
+		return ErrSnapshotReadOnly
+	}
+	// Firstly write out the metadata of journal
+	journal := new(bytes.Buffer)
+	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err
 	}
-	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteTrieNode(batch, hash, node.rlp())
-	if callback != nil {
-		callback(hash)
+	diskroot := db.diskRoot()
+	if diskroot == (common.Hash{}) {
+		return errors.New("invalid disk root in triedb")
 	}
-	if batch.ValueSize() >= ethdb.IdealBatchSize {
-		if err := batch.Write(); err != nil {
-			return err
-		}
-		db.lock.Lock()
-		batch.Replay(uncacher)
-		batch.Reset()
-		db.lock.Unlock()
+	// Secondly write out the disk layer root, ensure the
+	// diff journal is continuous with disk.
+	if err := rlp.Encode(journal, diskroot); err != nil {
+		return err
 	}
+	// Finally write out the journal of each layer in reverse order.
+	if err := snap.(snapshot).Journal(journal); err != nil {
+		return err
+	}
+	// Store the journal into the database and return
+	rawdb.WriteTriesJournal(db.diskdb, journal.Bytes())
+
+	// Set the db in read only mode to reject all following mutations
+	db.readOnly = true
+	log.Info("Stored snapshot journal in triedb", "disk", diskroot)
 	return nil
 }
 
-// cleaner is a database batch replayer that takes a batch of write operations
-// and cleans up the trie database from anything written to disk.
-type cleaner struct {
-	db *Database
+// Rebuild wipes all available journal from the persistent database and discard
+// all caches and diff layers. Using the given root to create a new disk layer.
+func (db *Database) Rebuild(root common.Hash) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	rawdb.DeleteTriesJournal(db.diskdb)
+
+	// Iterate over and mark all layers stale
+	for _, layer := range db.layers {
+		switch layer := layer.(type) {
+		case *diskLayer:
+			// Layer should be inactive now, mark it as stale
+			layer.lock.Lock()
+			layer.stale = true
+			layer.lock.Unlock()
+
+		case *diffLayer:
+			// If the layer is a simple diff, simply mark as stale
+			layer.lock.Lock()
+			atomic.StoreUint32(&layer.stale, 1)
+			layer.lock.Unlock()
+
+		default:
+			panic(fmt.Sprintf("unknown layer type: %T", layer))
+		}
+	}
+	db.layers = map[common.Hash]snapshot{
+		root: &diskLayer{
+			db:     db,
+			diskdb: db.diskdb,
+			cache:  db.cleans,
+			root:   root,
+		},
+	}
+	log.Info("Rebuild triedb", "root", root)
 }
 
-// Put reacts to database writes and implements dirty data uncaching. This is the
-// post-processing step of a commit operation where the already persisted trie is
-// removed from the dirty cache and moved into the clean cache. The reason behind
-// the two-phase commit is to ensure ensure data availability while moving from
-// memory to disk.
-func (c *cleaner) Put(key []byte, rlp []byte) error {
-	hash := common.BytesToHash(key)
+// DiskDB retrieves the persistent storage backing the trie database.
+func (db *Database) DiskDB() ethdb.KeyValueStore {
+	return db.diskdb
+}
 
-	// If the node does not exist, we're done on this path
-	node, ok := c.db.dirties[hash]
-	if !ok {
+// disklayer is an internal helper function to return the disk layer.
+// The lock of trieDB is assumed to be held already.
+func (db *Database) disklayer() *diskLayer {
+	var snap snapshot
+	for _, s := range db.layers {
+		snap = s
+		break
+	}
+	if snap == nil {
 		return nil
 	}
-	// Node still exists, remove it from the flush-list
-	switch hash {
-	case c.db.oldest:
-		c.db.oldest = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = common.Hash{}
-	case c.db.newest:
-		c.db.newest = node.flushPrev
-		c.db.dirties[node.flushPrev].flushNext = common.Hash{}
+	switch layer := snap.(type) {
+	case *diskLayer:
+		return layer
+	case *diffLayer:
+		return layer.origin
 	default:
-		c.db.dirties[node.flushPrev].flushNext = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
+		panic(fmt.Sprintf("%T: undefined layer", snap))
 	}
-	// Remove the node from the dirty cache
-	delete(c.db.dirties, hash)
-	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-	if node.children != nil {
-		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
-	}
-	// Move the flushed node into the clean cache to prevent insta-reloads
-	if c.db.cleans != nil {
-		c.db.cleans.Set(hash[:], rlp)
-		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
-	}
-	return nil
 }
 
-func (c *cleaner) Delete(key []byte) error {
-	panic("not implemented")
+// diskRoot is a internal helper function to return the disk layer root.
+// The lock of snapTree is assumed to be held already.
+func (db *Database) diskRoot() common.Hash {
+	disklayer := db.disklayer()
+	if disklayer == nil {
+		return common.Hash{}
+	}
+	return disklayer.Root()
+}
+
+// DiskLayer returns the disk layer for state accessing. It's usually used
+// as the fallback to access state in disk directly.
+func (db *Database) DiskLayer() Snapshot {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	return db.disklayer()
 }
 
 // Size returns the current storage size of the memory cache in front of the
@@ -840,12 +784,13 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	// db.dirtiesSize only contains the useful data in the cache, but when reporting
-	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted.
-	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
-	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
-	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
+	var nodes common.StorageSize
+	for _, layer := range db.layers {
+		if diff, ok := layer.(*diffLayer); ok {
+			nodes += common.StorageSize(diff.memory)
+		}
+	}
+	return nodes, db.preimagesSize
 }
 
 // saveCache saves clean state cache to given directory path
@@ -886,4 +831,17 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 			return
 		}
 	}
+}
+
+// Config returns the configures used by db.
+func (db *Database) Config() *Config {
+	return db.config
+}
+
+// convertEmpty converts the given hash to predefined emptyHash if it's empty.
+func convertEmpty(hash common.Hash) common.Hash {
+	if hash == (common.Hash{}) {
+		return emptyHash
+	}
+	return hash
 }

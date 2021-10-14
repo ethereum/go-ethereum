@@ -78,17 +78,17 @@ func TestHexKeybytes(t *testing.T) {
 }
 
 func TestHexToCompactInPlace(t *testing.T) {
-	for i, keyS := range []string{
+	for i, key := range []string{
 		"00",
 		"060a040c0f000a090b040803010801010900080d090a0a0d0903000b10",
 		"10",
 	} {
-		hexBytes, _ := hex.DecodeString(keyS)
+		hexBytes, _ := hex.DecodeString(key)
 		exp := hexToCompact(hexBytes)
 		sz := hexToCompactInPlace(hexBytes)
 		got := hexBytes[:sz]
 		if !bytes.Equal(exp, got) {
-			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, keyS, got, exp)
+			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, key, got, exp)
 		}
 	}
 }
@@ -107,6 +107,30 @@ func TestHexToCompactInPlaceRandom(t *testing.T) {
 		if !bytes.Equal(exp, got) {
 			t.Fatalf("encoding err \ncpt %x\nhex %x\ngot %x\nexp %x\n",
 				key, hexOrig, got, exp)
+		}
+	}
+}
+
+func TestHexReverseCompact(t *testing.T) {
+	tests := []struct{ hex, compact []byte }{
+		// empty keys, with and without terminator.
+		{hex: []byte{}, compact: []byte{0x00}},
+		{hex: []byte{16}, compact: []byte{0x02}},
+		// odd length, no terminator
+		{hex: []byte{1, 2, 3, 4, 5}, compact: []byte{0x12, 0x34, 0x51}},
+		// even length, no terminator
+		{hex: []byte{0, 1, 2, 3, 4, 5}, compact: []byte{0x01, 0x23, 0x45, 0x00}},
+		// odd length, terminator
+		{hex: []byte{15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0xf1, 0xcb, 0x83}},
+		// even length, terminator
+		{hex: []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x0f, 0x1c, 0xb8, 0x02}},
+	}
+	for _, test := range tests {
+		if c := hexToReverseCompact(test.hex); !bytes.Equal(c, test.compact) {
+			t.Errorf("hexToReverseCompact(%x) -> %x, want %x", test.hex, c, test.compact)
+		}
+		if h := reverseCompactToHex(test.compact); !bytes.Equal(h, test.hex) {
+			t.Errorf("reverseCompactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
 		}
 	}
 }

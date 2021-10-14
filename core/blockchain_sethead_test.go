@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -2004,7 +2005,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		chain.stateCache.TrieDB().Cap(canonblocks[tt.commitBlock-1].Root(), 0)
 		if snapshots {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
@@ -2015,12 +2016,8 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 	// Manually dereference anything not committed to not have to work with 128+ tries
-	for _, block := range sideblocks {
-		chain.stateCache.TrieDB().Dereference(block.Root())
-	}
-	for _, block := range canonblocks {
-		chain.stateCache.TrieDB().Dereference(block.Root())
-	}
+	chain.stateCache = state.NewDatabaseWithConfig(db, chain.stateCache.TrieDB().Config())
+
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64) error

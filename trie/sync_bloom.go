@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -39,6 +40,20 @@ var (
 	bloomFaultMeter = metrics.NewRegisteredMeter("trie/bloom/fault", nil)
 	bloomErrorGauge = metrics.NewRegisteredGauge("trie/bloom/error", nil)
 )
+
+// stateBloomHasher is a wrapper around a common.Hash to satisfy the interface
+// API requirements of the bloom library used. It's used to convert a unique
+// state key into a 64 bit mini hash.
+type stateBloomHasher []byte
+
+func (h stateBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (h stateBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
+func (h stateBloomHasher) Reset()                            { panic("not implemented") }
+func (h stateBloomHasher) BlockSize() int                    { panic("not implemented") }
+func (h stateBloomHasher) Size() int                         { return 8 }
+func (h stateBloomHasher) Sum64() uint64 {
+	return binary.BigEndian.Uint64(crypto.Keccak256(h))
+}
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
 // node or contract code already exists on disk or not. It self populates from the
@@ -98,8 +113,9 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	for it.Next() && atomic.LoadUint32(&b.closed) == 0 {
 		// If the database entry is a trie node, add it to the bloom
 		key := it.Key()
-		if len(key) == common.HashLength {
-			b.bloom.AddHash(binary.BigEndian.Uint64(key))
+		if ok, rawkey := rawdb.IsTrieNodeKey(key); ok {
+			key := EncodeInternalKey(rawkey, crypto.Keccak256Hash(it.Value()))
+			b.bloom.Add(stateBloomHasher(key))
 			bloomLoadMeter.Mark(1)
 		} else if ok, hash := rawdb.IsCodeKey(key); ok {
 			// If the database entry is a contract code, add it to the bloom
@@ -160,8 +176,18 @@ func (b *SyncBloom) Close() error {
 	return nil
 }
 
-// Add inserts a new trie node hash into the bloom filter.
-func (b *SyncBloom) Add(hash []byte) {
+// AddNode inserts a new trie node hash into the bloom filter.
+// The given key is expected to be encoded in internal format.
+func (b *SyncBloom) AddNode(key []byte) {
+	if atomic.LoadUint32(&b.closed) == 1 {
+		return
+	}
+	b.bloom.Add(stateBloomHasher(key))
+	bloomAddMeter.Mark(1)
+}
+
+// AddCode inserts a new contract code hash into the bloom filter.
+func (b *SyncBloom) AddCode(hash []byte) {
 	if atomic.LoadUint32(&b.closed) == 1 {
 		return
 	}
@@ -169,12 +195,34 @@ func (b *SyncBloom) Add(hash []byte) {
 	bloomAddMeter.Mark(1)
 }
 
-// Contains tests if the bloom filter contains the given hash:
-//   - false: the bloom definitely does not contain hash
-//   - true:  the bloom maybe contains hash
+// ContainNode tests if the bloom filter contains the given key:
+//   - false: the bloom definitely does not contain key
+//   - true:  the bloom maybe contains key
 //
 // While the bloom is being initialized, any query will return true.
-func (b *SyncBloom) Contains(hash []byte) bool {
+// Note the given key is expected to be encoded in internal format.
+func (b *SyncBloom) ContainNode(key []byte) bool {
+	bloomTestMeter.Mark(1)
+	if atomic.LoadUint32(&b.inited) == 0 {
+		// We didn't load all the trie nodes from the previous run of Geth yet. As
+		// such, we can't say for sure if a hash is not present for anything. Until
+		// the init is done, we're faking "possible presence" for everything.
+		return true
+	}
+	// Bloom initialized, check the real one and report any successful misses
+	maybe := b.bloom.Contains(stateBloomHasher(key))
+	if !maybe {
+		bloomMissMeter.Mark(1)
+	}
+	return maybe
+}
+
+// ContainCode tests if the bloom filter contains the given contract code:
+//   - false: the bloom definitely does not contain key
+//   - true:  the bloom maybe contains key
+//
+// While the bloom is being initialized, any query will return true.
+func (b *SyncBloom) ContainCode(hash []byte) bool {
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As

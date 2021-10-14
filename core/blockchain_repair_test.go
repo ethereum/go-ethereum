@@ -1805,15 +1805,17 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		if err := chain.stateCache.TrieDB().Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
+			t.Fatalf("Failed to flush trie state: %v", err)
+		}
 		if snapshots {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
 		}
 	}
-	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
-		t.Fatalf("Failed to import canonical chain tail: %v", err)
+	if index, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
+		t.Fatalf("Failed to import canonical chain tail: %v %d", err, index)
 	}
 	// Force run a freeze cycle
 	type freezer interface {

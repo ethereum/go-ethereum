@@ -175,7 +175,7 @@ func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer
 			break
 		}
 		// Retrieve the requested state entry
-		if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash[:]) {
+		if bloom := backend.StateBloom(); bloom != nil && !bloom.ContainNode(hash[:]) {
 			// Only lookup the trie node if there's chance that we actually have it
 			continue
 		}

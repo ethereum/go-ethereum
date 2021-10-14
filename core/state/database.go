@@ -42,7 +42,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -86,7 +86,7 @@ type Trie interface {
 
 	// Commit writes all nodes to the trie's memory database, tracking the internal
 	// and external (for account tries) references.
-	Commit(onleaf trie.LeafCallback) (common.Hash, int, error)
+	Commit(onleaf trie.LeafCallback) (*trie.CommitResult, error)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key.
@@ -115,7 +115,7 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            trie.NewDatabaseWithConfig(db, config),
+		db:            trie.NewDatabase(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}
@@ -137,8 +137,8 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(root, db.db)
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
+	tr, err := trie.NewSecureWithOwner(stateRoot, addrHash, root, db.db)
 	if err != nil {
 		return nil, err
 	}

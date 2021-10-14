@@ -443,7 +443,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 			return err
 		}
 	}
-	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	theTrie, err := trie.New(stRoot, trie.NewDatabase(db, &trie.Config{ReadOnly: true}))
 	if err != nil {
 		return err
 	}
