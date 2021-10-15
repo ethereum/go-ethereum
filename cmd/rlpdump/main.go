@@ -77,7 +77,7 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-
+	out := os.Stdout
 	if *reverseMode {
 		data, err := textToRlp(r)
 		if err != nil {
@@ -85,23 +85,32 @@ func main() {
 		}
 		fmt.Printf("0x%x\n", data)
 		return
-	}
-	s := rlp.NewStream(r, 0)
-	for {
-		if err := dump(s, 0); err != nil {
-			if err != io.EOF {
-				die(err)
-			}
-			break
-		}
-		fmt.Println()
-		if *single {
-			break
+	} else {
+		err := rlpToText(r, out)
+		if err != nil {
+			die(err)
 		}
 	}
 }
 
-func dump(s *rlp.Stream, depth int) error {
+func rlpToText(r io.Reader, out io.Writer) error {
+	s := rlp.NewStream(r, 0)
+	for {
+		if err := dump(s, 0, out); err != nil {
+			if err != io.EOF {
+				return err
+			}
+			break
+		}
+		fmt.Fprintln(out)
+		if *single {
+			break
+		}
+	}
+	return nil
+}
+
+func dump(s *rlp.Stream, depth int, out io.Writer) error {
 	kind, size, err := s.Kind()
 	if err != nil {
 		return err
@@ -113,28 +122,28 @@ func dump(s *rlp.Stream, depth int) error {
 			return err
 		}
 		if len(str) == 0 || !*noASCII && isASCII(str) {
-			fmt.Printf("%s%q", ws(depth), str)
+			fmt.Fprintf(out, "%s%q", ws(depth), str)
 		} else {
-			fmt.Printf("%s%x", ws(depth), str)
+			fmt.Fprintf(out, "%s%x", ws(depth), str)
 		}
 	case rlp.List:
 		s.List()
 		defer s.ListEnd()
 		if size == 0 {
-			fmt.Print(ws(depth) + "[]")
+			fmt.Fprintf(out, ws(depth)+"[]")
 		} else {
-			fmt.Println(ws(depth) + "[")
+			fmt.Fprintln(out, ws(depth)+"[")
 			for i := 0; ; i++ {
 				if i > 0 {
-					fmt.Print(",\n")
+					fmt.Fprint(out, ",\n")
 				}
-				if err := dump(s, depth+1); err == rlp.EOL {
+				if err := dump(s, depth+1, out); err == rlp.EOL {
 					break
 				} else if err != nil {
 					return err
 				}
 			}
-			fmt.Print(ws(depth) + "]")
+			fmt.Fprint(out, ws(depth)+"]")
 		}
 	}
 	return nil
