@@ -132,12 +132,29 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
-
+		// Check intrinsic gas
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
 			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
 			r.Error = err
+			results = append(results, r)
+			continue
 		} else if tx.Gas() < gas {
 			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+			results = append(results, r)
+			continue
+		}
+		// Validate <256bit fields
+		switch {
+		case tx.Value().BitLen() > 256:
+			r.Error = errors.New("value exceeds 256 bits")
+		case tx.GasPrice().BitLen() > 256:
+			r.Error = errors.New("gasPrice exceeds 256 bits")
+		case tx.GasTipCap().BitLen() > 256:
+			r.Error = errors.New("maxPriorityFeePerGas exceeds 256 bits")
+		case tx.GasFeeCap().BitLen() > 256:
+			r.Error = errors.New("maxFeePerGas exceeds 256 bits")
+		case tx.GasFeeCap().Cmp(tx.GasTipCap()) < 0:
+			r.Error = errors.New("maxFeePerGas < maxPriorityFeePerGas")
 		}
 		results = append(results, r)
 	}
