@@ -345,7 +345,7 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Exported preimages", "file", fn)
 	return nil
 }
-
+// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
 func ParseHexOrString(b string) ([]byte, error) {
 	k, err := hexutil.Decode(b)
 	if errors.Is(err,hexutil.ErrMissingPrefix) {
