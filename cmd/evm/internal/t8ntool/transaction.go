@@ -36,17 +36,19 @@ import (
 )
 
 type result struct {
-	Error   error
-	Address common.Address
-	Hash    common.Hash
+	Error        error
+	Address      common.Address
+	Hash         common.Hash
+	IntrinsicGas uint64
 }
 
 // MarshalJSON marshals as JSON with a hash.
 func (r *result) MarshalJSON() ([]byte, error) {
 	type xx struct {
-		Error   string          `json:"error,omitempty"`
-		Address *common.Address `json:"address,omitempty"`
-		Hash    *common.Hash    `json:"hash,omitempty"`
+		Error        string          `json:"error,omitempty"`
+		Address      *common.Address `json:"address,omitempty"`
+		Hash         *common.Hash    `json:"hash,omitempty"`
+		IntrinsicGas uint64          `json:"intrinsicGas,omitempty"`
 	}
 	var out xx
 	if r.Error != nil {
@@ -58,6 +60,7 @@ func (r *result) MarshalJSON() ([]byte, error) {
 	if r.Hash != (common.Hash{}) {
 		out.Hash = &r.Hash
 	}
+	out.IntrinsicGas = r.IntrinsicGas
 	return json.Marshal(out)
 }
 
@@ -138,10 +141,13 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = err
 			results = append(results, r)
 			continue
-		} else if tx.Gas() < gas {
-			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
-			results = append(results, r)
-			continue
+		} else {
+			r.IntrinsicGas = gas
+			if tx.Gas() < gas {
+				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+				results = append(results, r)
+				continue
+			}
 		}
 		// Validate <256bit fields
 		switch {
@@ -155,6 +161,8 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = errors.New("maxFeePerGas exceeds 256 bits")
 		case tx.GasFeeCap().Cmp(tx.GasTipCap()) < 0:
 			r.Error = errors.New("maxFeePerGas < maxPriorityFeePerGas")
+		case new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
+			r.Error = errors.New("gas * gasPrice exceeds 256 bits")
 		}
 		results = append(results, r)
 	}
