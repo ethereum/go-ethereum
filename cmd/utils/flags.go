@@ -780,6 +780,11 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	UTF8Fag = cli.BoolFlag{
+		Name:  "utf8",
+		Usage: "Consider parameters to be in UTF8 rather then a hex string started from 0x",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating

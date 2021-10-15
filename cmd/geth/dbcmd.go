@@ -122,6 +122,7 @@ corruption if it is aborted during execution'!`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
+			utils.UTF8Fag,
 		},
 		Description: "This command looks up the specified database key from the database.",
 	}
@@ -335,11 +336,19 @@ func dbGet(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	key, err := hexutil.Decode(ctx.Args().Get(0))
-	if err != nil {
-		log.Info("Could not decode the key", "error", err)
-		return err
+	var key []byte
+	if ctx.Bool(utils.UTF8Fag.Name) {
+		log.Info("Consider the key to be a UTF8 string")
+		key = []byte(ctx.Args().Get(0))
+	} else {
+		k, err := hexutil.Decode(ctx.Args().Get(0))
+		if err != nil {
+			log.Info("Could not decode the key", "error", err)
+			return err
+		}
+		key = k
 	}
+
 	data, err := db.Get(key)
 	if err != nil {
 		log.Info("Get operation failed", "error", err)
