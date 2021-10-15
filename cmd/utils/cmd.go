@@ -348,13 +348,10 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 
 func ParseHexOrString(b string) ([]byte, error) {
 	k, err := hexutil.Decode(b)
-	if err != nil {
-		if err == hexutil.ErrMissingPrefix {
-			return []byte(b), nil
-		}
-
-		return nil, err
+	if errors.Is(err,hexutil.ErrMissingPrefix) {
+		return []byte(b), nil
 	}
+	return k, err
 
 	return k, nil
 }
