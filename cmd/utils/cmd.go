@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -343,4 +344,17 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	}
 	log.Info("Exported preimages", "file", fn)
 	return nil
+}
+
+func ParseHexOrString(b string) ([]byte, error) {
+	k, err := hexutil.Decode(b)
+	if err != nil {
+		if err == hexutil.ErrMissingPrefix {
+			return []byte(b), nil
+		}
+
+		return nil, err
+	}
+
+	return k, nil
 }

@@ -122,7 +122,6 @@ corruption if it is aborted during execution'!`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.UTF8Fag,
 		},
 		Description: "This command looks up the specified database key from the database.",
 	}
@@ -336,17 +335,10 @@ func dbGet(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	var key []byte
-	if ctx.Bool(utils.UTF8Fag.Name) {
-		log.Info("Consider the key to be a UTF8 string")
-		key = []byte(ctx.Args().Get(0))
-	} else {
-		k, err := hexutil.Decode(ctx.Args().Get(0))
-		if err != nil {
-			log.Info("Could not decode the key", "error", err)
-			return err
-		}
-		key = k
+	key, err := utils.ParseHexOrString(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
 	}
 
 	data, err := db.Get(key)
@@ -369,7 +361,7 @@ func dbDelete(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
 
-	key, err := hexutil.Decode(ctx.Args().Get(0))
+	key, err := utils.ParseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
@@ -402,7 +394,7 @@ func dbPut(ctx *cli.Context) error {
 		data  []byte
 		err   error
 	)
-	key, err = hexutil.Decode(ctx.Args().Get(0))
+	key, err = utils.ParseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
