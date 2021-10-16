@@ -15,61 +15,18 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 	lru "github.com/hashicorp/golang-lru"
 )
-
-// SignerFn is a signer callback function to request a hash to be signed by a
-// backing account.
-//type SignerFn func(accounts.Account, []byte) ([]byte, error)
-
-// sigHash returns the hash which is used as input for the delegated-proof-of-stake
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
-func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
-
-	err := rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
-	})
-	if err != nil {
-		log.Debug("Fail to encode", err)
-	}
-	hasher.Sum(hash[:0])
-	return hash
-}
-
-func SigHash(header *types.Header) (hash common.Hash) {
-	return sigHash(header)
-}
 
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
@@ -85,7 +42,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	signature := header.Extra[len(header.Extra)-utils.ExtraSeal:]
 
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
+	pubkey, err := crypto.Ecrecover(utils.SigHash(header).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -916,7 +873,7 @@ func (c *XDPoS_v1) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	default:
 	}
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, sigHash(header).Bytes())
+	sighash, err := signFn(accounts.Account{Address: signer}, utils.SigHash(header).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -966,7 +923,7 @@ func (c *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error
 		return common.Address{}, consensus.ErrFailValidatorSignature
 	}
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), header.Validator)
+	pubkey, err := crypto.Ecrecover(utils.SigHash(header).Bytes(), header.Validator)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -1047,10 +1004,10 @@ func (c *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpoin
 	return signers, nil
 }
 
-func NewFaker(db ethdb.Database) *XDPoS_v1 {
+func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v1 {
 	var fakeEngine *XDPoS_v1
 	// Set any missing consensus parameters to their defaults
-	conf := params.TestXDPoSMockChainConfig.XDPoS
+	conf := config
 
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(utils.InmemorySnapshots)

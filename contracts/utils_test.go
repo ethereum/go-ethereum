@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var (
@@ -47,7 +48,7 @@ var (
 
 func getCommonBackend() *backends.SimulatedBackend {
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewXDCSimulatedBackend(genesis, 10000000)
+	backend := backends.NewXDCSimulatedBackend(genesis, 10000000, params.TestXDPoSMockChainConfig)
 	backend.Commit()
 
 	return backend

@@ -30,6 +30,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/contracts/chequebook/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var (
@@ -46,7 +47,7 @@ func newTestBackend() *backends.SimulatedBackend {
 		addr0: {Balance: big.NewInt(1000000000)},
 		addr1: {Balance: big.NewInt(1000000000)},
 		addr2: {Balance: big.NewInt(1000000000)},
-	}, 10000000)
+	}, 10000000, params.TestXDPoSMockChainConfig)
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
