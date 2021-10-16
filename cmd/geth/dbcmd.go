@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -335,7 +336,7 @@ func dbGet(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	key, err := utils.ParseHexOrString(ctx.Args().Get(0))
+	key, err := parseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
@@ -361,7 +362,7 @@ func dbDelete(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
 
-	key, err := utils.ParseHexOrString(ctx.Args().Get(0))
+	key, err := parseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
@@ -394,7 +395,7 @@ func dbPut(ctx *cli.Context) error {
 		data  []byte
 		err   error
 	)
-	key, err = utils.ParseHexOrString(ctx.Args().Get(0))
+	key, err = parseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
@@ -499,4 +500,13 @@ func freezerInspect(ctx *cli.Context) error {
 		f.DumpIndex(start, end)
 	}
 	return nil
+}
+
+// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
+func parseHexOrString(str string) ([]byte, error) {
+	b, err := hexutil.Decode(str)
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		return []byte(b), nil
+	}
+	return b, err
 }
