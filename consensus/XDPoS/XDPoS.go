@@ -72,6 +72,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 
 	return &XDPoS{
 		config: &conf,
+		db:     db,
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        *engine_v1.New(&conf, db),
@@ -89,6 +90,7 @@ func NewFaker(db ethdb.Database) *XDPoS {
 
 	fakeEngine = &XDPoS{
 		config: conf,
+		db:     db,
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        *engine_v1.NewFaker(db),
