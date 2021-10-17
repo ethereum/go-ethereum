@@ -78,10 +78,9 @@ func (f *Flagset) StringFlag(b *StringFlag) {
 }
 
 type IntFlag struct {
-	Name    string
-	Usage   string
-	Default int
-	Value   *int
+	Name  string
+	Usage string
+	Value *int
 }
 
 func (f *Flagset) IntFlag(i *IntFlag) {
@@ -89,14 +88,13 @@ func (f *Flagset) IntFlag(i *IntFlag) {
 		Name:  i.Name,
 		Usage: i.Usage,
 	})
-	f.set.IntVar(i.Value, i.Name, i.Default, i.Usage)
+	f.set.IntVar(i.Value, i.Name, *i.Value, i.Usage)
 }
 
 type Uint64Flag struct {
-	Name    string
-	Usage   string
-	Default uint64
-	Value   *uint64
+	Name  string
+	Usage string
+	Value *uint64
 }
 
 func (f *Flagset) Uint64Flag(i *Uint64Flag) {
@@ -104,17 +102,19 @@ func (f *Flagset) Uint64Flag(i *Uint64Flag) {
 		Name:  i.Name,
 		Usage: i.Usage,
 	})
-	f.set.Uint64Var(i.Value, i.Name, i.Default, i.Usage)
+	f.set.Uint64Var(i.Value, i.Name, *i.Value, i.Usage)
 }
 
 type BigIntFlag struct {
-	Name    string
-	Usage   string
-	Default *big.Int
-	Value   *big.Int
+	Name  string
+	Usage string
+	Value *big.Int
 }
 
 func (b *BigIntFlag) String() string {
+	if b.Value == nil {
+		return ""
+	}
 	return b.Value.String()
 }
 
@@ -145,15 +145,18 @@ func (f *Flagset) BigIntFlag(b *BigIntFlag) {
 type SliceStringFlag struct {
 	Name  string
 	Usage string
-	Value []string
+	Value *[]string
 }
 
 func (i *SliceStringFlag) String() string {
-	return strings.Join(i.Value, ",")
+	if i.Value == nil {
+		return ""
+	}
+	return strings.Join(*i.Value, ",")
 }
 
 func (i *SliceStringFlag) Set(value string) error {
-	i.Value = append(i.Value, value)
+	*i.Value = append(*i.Value, strings.Split(value, ",")...)
 	return nil
 }
 
@@ -171,25 +174,12 @@ type DurationFlag struct {
 	Value *time.Duration
 }
 
-func (d *DurationFlag) String() string {
-	return d.Value.String()
-}
-
-func (d *DurationFlag) Set(value string) error {
-	v, err := time.ParseDuration(value)
-	if err != nil {
-		return err
-	}
-	d.Value = &v
-	return nil
-}
-
 func (f *Flagset) DurationFlag(d *DurationFlag) {
 	f.addFlag(&FlagVar{
 		Name:  d.Name,
 		Usage: d.Usage,
 	})
-	f.set.Var(d, d.Name, d.Usage)
+	f.set.DurationVar(d.Value, d.Name, *d.Value, "")
 }
 
 type MapStringFlag struct {
@@ -199,6 +189,9 @@ type MapStringFlag struct {
 }
 
 func (m *MapStringFlag) String() string {
+	if m.Value == nil {
+		return ""
+	}
 	ls := []string{}
 	for k, v := range *m.Value {
 		ls = append(ls, k+"="+v)

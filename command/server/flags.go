@@ -44,11 +44,6 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
 		Value: c.cliConfig.GcMode,
 	})
-	f.BoolFlag(&flagset.BoolFlag{
-		Name:  "lightkdf",
-		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
-		Value: c.cliConfig.UseLightweightKDF,
-	})
 	f.MapStringFlag(&flagset.MapStringFlag{
 		Name:  "whitelist",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
@@ -76,7 +71,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	f.SliceStringFlag(&flagset.SliceStringFlag{
 		Name:  "txpool.locals",
 		Usage: "Comma separated accounts to treat as locals (no flush, priority inclusion)",
-		Value: c.cliConfig.TxPool.Locals,
+		Value: &c.cliConfig.TxPool.Locals,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "txpool.nolocals",
@@ -259,20 +254,31 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value: c.cliConfig.JsonRPC.IPCPath,
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:  "rpc.corsdomain",
+		Name:  "jsonrpc.corsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value: c.cliConfig.JsonRPC.Cors,
+		Value: &c.cliConfig.JsonRPC.Cors,
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:  "rpc.vhosts",
+		Name:  "jsonrpc.vhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value: c.cliConfig.JsonRPC.VHost,
+		Value: &c.cliConfig.JsonRPC.VHost,
 	})
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name: "jsonrpc.modules",
+		Usage: "API's offered over the HTTP-RPC interface",
+		Value: &c.cliConfig.JsonRPC.Modules,
+	})
+
 	// http options
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
 		Value: c.cliConfig.JsonRPC.Http.Enabled,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "http.addr",
+		Usage: "HTTP-RPC server listening interface",
+		Value: c.cliConfig.JsonRPC.Http.Host,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:  "http.port",
@@ -289,6 +295,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Name:  "ws",
 		Usage: "Enable the WS-RPC server",
 		Value: c.cliConfig.JsonRPC.Ws.Enabled,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "ws.addr",
+		Usage: "WS-RPC server listening interface",
+		Value: c.cliConfig.JsonRPC.Ws.Host,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:  "ws.port",
@@ -321,7 +332,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	f.SliceStringFlag(&flagset.SliceStringFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
-		Value: c.cliConfig.P2P.Discovery.Bootnodes,
+		Value: &c.cliConfig.P2P.Discovery.Bootnodes,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:  "maxpeers",
@@ -410,6 +421,28 @@ func (c *Command) Flags() *flagset.Flagset {
 		Name:  "metrics.influxdb.organization",
 		Usage: "InfluxDB organization name (v2 only)",
 		Value: c.cliConfig.Metrics.InfluxDB.Organization,
+	})
+
+	// account
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name:  "unlock",
+		Usage: "Comma separated list of accounts to unlock",
+		Value: &c.cliConfig.Accounts.Unlock,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "password",
+		Usage: "Password file to use for non-interactive password input",
+		Value: c.cliConfig.Accounts.PasswordFile,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:  "allow-insecure-unlock",
+		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http",
+		Value: c.cliConfig.Accounts.AllowInsecureUnlock,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:  "lightkdf",
+		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+		Value: c.cliConfig.Accounts.UseLightweightKDF,
 	})
 
 	return f

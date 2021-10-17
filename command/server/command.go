@@ -3,13 +3,16 @@ package server
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethstats"
@@ -29,6 +32,9 @@ type Command struct {
 
 	// cli configuration
 	cliConfig *Config
+
+	// final configuration
+	config *Config
 
 	configFile string
 
@@ -74,6 +80,7 @@ func (c *Command) Run(args []string) int {
 		c.UI.Error(err.Error())
 		return 1
 	}
+	c.config = config
 
 	// start the logger
 	setupLogger(*config.LogLevel)
@@ -121,7 +128,7 @@ func (c *Command) Run(args []string) int {
 	}
 
 	// register ethash service
-	if config.EthStats != nil {
+	if *config.EthStats != "" {
 		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), *config.EthStats); err != nil {
 			c.UI.Error(err.Error())
 			return 1
@@ -129,13 +136,23 @@ func (c *Command) Run(args []string) int {
 	}
 
 	// setup account manager (only keystore)
+	var borKeystore *keystore.KeyStore
 	{
 		keydir := stack.KeyStoreDir()
 		n, p := keystore.StandardScryptN, keystore.StandardScryptP
-		if *config.UseLightweightKDF {
+		if *config.Accounts.UseLightweightKDF {
 			n, p = keystore.LightScryptN, keystore.LightScryptP
 		}
-		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
+		borKeystore = keystore.NewKeyStore(keydir, n, p)
+		stack.AccountManager().AddBackend(borKeystore)
+	}
+
+	// unlock accounts if necessary
+	if len(config.Accounts.Unlock) != 0 {
+		if err := c.unlockAccounts(borKeystore); err != nil {
+			c.UI.Error(fmt.Sprintf("failed to unlock: %v", err))
+			return 1
+		}
 	}
 
 	// sealing (if enabled)
@@ -157,6 +174,49 @@ func (c *Command) Run(args []string) int {
 		return 1
 	}
 	return c.handleSignals()
+}
+
+func (c *Command) unlockAccounts(borKeystore *keystore.KeyStore) error {
+	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
+	if !c.node.Config().InsecureUnlockAllowed && c.node.Config().ExtRPCEnabled() {
+		return fmt.Errorf("account unlock with HTTP access is forbidden")
+	}
+
+	// read passwords from file if possible
+	passwords := []string{}
+	if *c.config.Accounts.PasswordFile != "" {
+		var err error
+		if passwords, err = readMultilineFile(*c.config.Accounts.PasswordFile); err != nil {
+			return err
+		}
+	}
+	decodePassword := func(addr common.Address, index int) (string, error) {
+		if len(passwords) > 0 {
+			if index < len(passwords) {
+				return passwords[index], nil
+			}
+			return passwords[len(passwords)-1], nil
+		}
+		// ask for the password
+		return c.UI.AskSecret(fmt.Sprintf("Please give a password to unlock '%s'", addr.String()))
+	}
+
+	for index, addrStr := range c.config.Accounts.Unlock {
+		if !common.IsHexAddress(addrStr) {
+			return fmt.Errorf("unlock value '%s' is not an address", addrStr)
+		}
+		acct := accounts.Account{Address: common.HexToAddress(addrStr)}
+
+		password, err := decodePassword(acct.Address, index)
+		if err != nil {
+			return err
+		}
+		if err := borKeystore.Unlock(acct, password); err != nil {
+			return err
+		}
+		log.Info("Unlocked account", "address", acct.Address.Hex())
+	}
+	return nil
 }
 
 func (c *Command) setupMetrics(config *MetricsConfig) error {
@@ -208,17 +268,19 @@ func (c *Command) handleSignals() int {
 	gracefulCh := make(chan struct{})
 	go func() {
 		c.node.Close()
+		c.node.Wait()
 		close(gracefulCh)
 	}()
 
-	select {
-	case <-signalCh:
-		return 1
-	case <-time.After(5 * time.Second):
-		return 1
-	case <-gracefulCh:
-		return 0
+	for i := 10; i > 0; i-- {
+		select {
+		case <-signalCh:
+			log.Warn("Already shutting down, interrupt more force stop.", "times", i-1)
+		case <-gracefulCh:
+			return 0
+		}
 	}
+	return 1
 }
 
 func setupLogger(logLevel string) {
@@ -238,4 +300,17 @@ func setupLogger(logLevel string) {
 		glogger.Verbosity(log.LvlInfo)
 	}
 	log.Root().SetHandler(glogger)
+}
+
+func readMultilineFile(path string) ([]string, error) {
+	text, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(text), "\n")
+	// Sanitise DOS line endings.
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return lines, nil
 }

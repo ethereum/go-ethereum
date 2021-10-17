@@ -1,13 +1,13 @@
 package server
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/command/server/chains"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -27,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/imdario/mergo"
+	"github.com/mitchellh/go-homedir"
 	gopsutil "github.com/shirou/gopsutil/mem"
 )
 
@@ -57,25 +57,25 @@ func durPtr(d time.Duration) *time.Duration {
 type Config struct {
 	chain *chains.Chain
 
-	Chain             *string
-	Debug             *bool
-	Whitelist         *map[string]string
-	UseLightweightKDF *bool
-	LogLevel          *string
-	DataDir           *string
-	P2P               *P2PConfig
-	SyncMode          *string
-	GcMode            *string
-	Snapshot          *bool
-	EthStats          *string
-	Heimdall          *HeimdallConfig
-	TxPool            *TxPoolConfig
-	Sealer            *SealerConfig
-	JsonRPC           *JsonRPCConfig
-	Gpo               *GpoConfig
-	Ethstats          *string
-	Metrics           *MetricsConfig
-	Cache             *CacheConfig
+	Chain     *string
+	Debug     *bool
+	Whitelist *map[string]string
+	LogLevel  *string
+	DataDir   *string
+	P2P       *P2PConfig
+	SyncMode  *string
+	GcMode    *string
+	Snapshot  *bool
+	EthStats  *string
+	Heimdall  *HeimdallConfig
+	TxPool    *TxPoolConfig
+	Sealer    *SealerConfig
+	JsonRPC   *JsonRPCConfig
+	Gpo       *GpoConfig
+	Ethstats  *string
+	Metrics   *MetricsConfig
+	Cache     *CacheConfig
+	Accounts  *AccountsConfig
 }
 
 type P2PConfig struct {
@@ -132,7 +132,6 @@ type JsonRPCConfig struct {
 	Modules []string
 	VHost   []string
 	Cors    []string
-	Bind    *string
 
 	GasCap   *uint64
 	TxFeeCap *float64
@@ -146,6 +145,7 @@ type APIConfig struct {
 	Enabled *bool
 	Port    *uint64
 	Prefix  *string
+	Host    *string
 }
 
 type GpoConfig struct {
@@ -187,14 +187,20 @@ type CacheConfig struct {
 	TxLookupLimit *uint64
 }
 
+type AccountsConfig struct {
+	Unlock              []string
+	PasswordFile        *string
+	AllowInsecureUnlock *bool
+	UseLightweightKDF   *bool
+}
+
 func DefaultConfig() *Config {
 	return &Config{
-		Chain:             stringPtr("mainnet"),
-		Debug:             boolPtr(false),
-		UseLightweightKDF: boolPtr(false),
-		Whitelist:         mapStrPtr(map[string]string{}),
-		LogLevel:          stringPtr("INFO"),
-		DataDir:           stringPtr(node.DefaultDataDir()),
+		Chain:     stringPtr("mainnet"),
+		Debug:     boolPtr(false),
+		Whitelist: mapStrPtr(map[string]string{}),
+		LogLevel:  stringPtr("INFO"),
+		DataDir:   stringPtr(defaultDataDir()),
 		P2P: &P2PConfig{
 			MaxPeers:     uint64Ptr(30),
 			MaxPendPeers: uint64Ptr(50),
@@ -235,6 +241,7 @@ func DefaultConfig() *Config {
 		},
 		Sealer: &SealerConfig{
 			Enabled:   boolPtr(false),
+			Etherbase: stringPtr(""),
 			GasCeil:   uint64Ptr(8000000),
 			GasPrice:  big.NewInt(params.GWei),
 			ExtraData: stringPtr(""),
@@ -247,6 +254,7 @@ func DefaultConfig() *Config {
 		},
 		JsonRPC: &JsonRPCConfig{
 			IPCDisable: boolPtr(false),
+			IPCPath:    stringPtr(""),
 			Modules:    []string{"web3", "net"},
 			Cors:       []string{"*"},
 			VHost:      []string{"*"},
@@ -256,11 +264,13 @@ func DefaultConfig() *Config {
 				Enabled: boolPtr(false),
 				Port:    uint64Ptr(8545),
 				Prefix:  stringPtr(""),
+				Host:    stringPtr("localhost"),
 			},
 			Ws: &APIConfig{
 				Enabled: boolPtr(false),
 				Port:    uint64Ptr(8546),
 				Prefix:  stringPtr(""),
+				Host:    stringPtr("localhost"),
 			},
 			Graphql: &APIConfig{
 				Enabled: boolPtr(false),
@@ -295,6 +305,12 @@ func DefaultConfig() *Config {
 			Preimages:     boolPtr(false),
 			TxLookupLimit: uint64Ptr(2350000),
 		},
+		Accounts: &AccountsConfig{
+			Unlock:              []string{},
+			PasswordFile:        stringPtr(""),
+			AllowInsecureUnlock: boolPtr(false),
+			UseLightweightKDF:   boolPtr(false),
+		},
 	}
 }
 
@@ -321,11 +337,6 @@ func (c *Config) loadChain() error {
 	c.chain = chain
 
 	// preload some default values that depend on the chain file
-
-	// the genesis files defines default bootnodes
-	if c.P2P.Discovery.Bootnodes == nil {
-		c.P2P.Discovery.Bootnodes = c.chain.Bootnodes
-	}
 	if c.P2P.Discovery.DNS == nil {
 		c.P2P.Discovery.DNS = c.chain.DNS
 	}
@@ -368,11 +379,11 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 		n.Miner.GasCeil = *c.Sealer.GasCeil
 		n.Miner.ExtraData = []byte(*c.Sealer.ExtraData)
 
-		if etherbase := c.Sealer.Etherbase; etherbase != nil {
-			if !common.IsHexAddress(*etherbase) {
-				return nil, fmt.Errorf("etherbase is not an address: %s", *etherbase)
+		if etherbase := *c.Sealer.Etherbase; etherbase != "" {
+			if !common.IsHexAddress(etherbase) {
+				return nil, fmt.Errorf("etherbase is not an address: %s", etherbase)
 			}
-			n.Miner.Etherbase = common.HexToAddress(*etherbase)
+			n.Miner.Etherbase = common.HexToAddress(etherbase)
 		}
 	}
 
@@ -495,17 +506,18 @@ func (c *Config) buildNode() (*node.Config, error) {
 	ipcPath := ""
 	if !*c.JsonRPC.IPCDisable {
 		ipcPath = clientIdentifier + ".ipc"
-		if c.JsonRPC.IPCPath != nil {
+		if *c.JsonRPC.IPCPath != "" {
 			ipcPath = *c.JsonRPC.IPCPath
 		}
 	}
 
 	cfg := &node.Config{
-		Name:              clientIdentifier,
-		DataDir:           *c.DataDir,
-		UseLightweightKDF: *c.UseLightweightKDF,
-		Version:           params.VersionWithCommit(gitCommit, gitDate),
-		IPCPath:           ipcPath,
+		Name:                  clientIdentifier,
+		DataDir:               *c.DataDir,
+		UseLightweightKDF:     *c.Accounts.UseLightweightKDF,
+		InsecureUnlockAllowed: *c.Accounts.AllowInsecureUnlock,
+		Version:               params.VersionWithCommit(gitCommit, gitDate),
+		IPCPath:               ipcPath,
 		P2P: p2p.Config{
 			MaxPeers:        int(*c.P2P.MaxPeers),
 			MaxPendingPeers: int(*c.P2P.MaxPendPeers),
@@ -526,11 +538,11 @@ func (c *Config) buildNode() (*node.Config, error) {
 	// enable jsonrpc endpoints
 	{
 		if *c.JsonRPC.Http.Enabled {
-			cfg.HTTPHost = *c.JsonRPC.Bind
+			cfg.HTTPHost = *c.JsonRPC.Http.Host
 			cfg.HTTPPort = int(*c.JsonRPC.Http.Port)
 		}
 		if *c.JsonRPC.Ws.Enabled {
-			cfg.WSHost = *c.JsonRPC.Bind
+			cfg.WSHost = *c.JsonRPC.Ws.Host
 			cfg.WSPort = int(*c.JsonRPC.Ws.Port)
 		}
 	}
@@ -541,15 +553,13 @@ func (c *Config) buildNode() (*node.Config, error) {
 	}
 	cfg.P2P.NAT = natif
 
-	// setup private key for DevP2P if not found
-	devP2PPrivKey, err := readDevP2PKey(*c.DataDir)
-	if err != nil {
-		return nil, err
-	}
-	cfg.P2P.PrivateKey = devP2PPrivKey
-
 	// Discovery
-	if cfg.P2P.BootstrapNodes, err = parseBootnodes(c.P2P.Discovery.Bootnodes); err != nil {
+	// if no bootnodes are defined, use the ones from the chain file.
+	bootnodes := c.P2P.Discovery.Bootnodes
+	if len(bootnodes) == 0 {
+		bootnodes = c.chain.Bootnodes
+	}
+	if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
 		return nil, err
 	}
 	if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
@@ -572,8 +582,8 @@ func (c *Config) buildNode() (*node.Config, error) {
 
 func (c *Config) Merge(cc ...*Config) error {
 	for _, elem := range cc {
-		if err := mergo.Merge(&c, elem); err != nil {
-			return err
+		if err := mergo.Merge(c, elem, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
+			return fmt.Errorf("failed to merge configurations: %v", err)
 		}
 	}
 	return nil
@@ -605,30 +615,24 @@ func parseBootnodes(urls []string) ([]*enode.Node, error) {
 	return dst, nil
 }
 
-const devP2PKeyPath = "devp2p.key"
-
-func readDevP2PKey(dataDir string) (*ecdsa.PrivateKey, error) {
-	path := filepath.Join(dataDir, devP2PKeyPath)
-	_, err := os.Stat(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to stat (%s): %v", path, err)
+func defaultDataDir() string {
+	// Try to place the data folder in the user's home dir
+	home, _ := homedir.Dir()
+	if home == "" {
+		// we cannot guess a stable location
+		return ""
 	}
-
-	if os.IsNotExist(err) {
-		priv, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Bor")
+	case "windows":
+		appdata := os.Getenv("LOCALAPPDATA")
+		if appdata == "" {
+			// Windows XP and below don't have LocalAppData.
+			panic("environment variable LocalAppData is undefined")
 		}
-		if err := crypto.SaveECDSA(path, priv); err != nil {
-			return nil, err
-		}
-		return priv, nil
+		return filepath.Join(appdata, "Bor")
+	default:
+		return filepath.Join(home, ".bor")
 	}
-
-	// exists
-	priv, err := crypto.LoadECDSA(path)
-	if err != nil {
-		return nil, err
-	}
-	return priv, nil
 }
