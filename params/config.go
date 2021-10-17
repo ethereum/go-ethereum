@@ -23,6 +23,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
+const (
+	ConsensusEngineVersion1 = "v1"
+	ConsensusEngineVersion2 = "v2"
+)
+
 var (
 	XDCMainnetGenesisHash = common.HexToHash("9326145f8a2c8c00bbe13afc7d7f3d9c868b5ef39d89f2f4e9390e9720298624") // XDC Mainnet genesis hash to enforce below configs on
 	MainnetGenesisHash    = common.HexToHash("8d13370621558f4ed0da587934473c0404729f28b0ff1d50e5fdd840457a2f17") // Mainnet genesis hash to enforce below configs on
@@ -191,11 +196,11 @@ func (c *XDPoSConfig) String() string {
 ConsensusVersion will return the consensus version to use for the provided block number. The returned int represent its version
 TODO: It's a dummy value for now until the 2.0 consensus engine is fully implemented.
 */
-func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int) int {
+func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int) string {
 	if c.V2ConsensusBlockNumber != nil && num.Cmp(c.V2ConsensusBlockNumber) > 0 {
-		return 2
+		return ConsensusEngineVersion2
 	}
-	return 1
+	return ConsensusEngineVersion1
 }
 
 // String implements the fmt.Stringer interface.

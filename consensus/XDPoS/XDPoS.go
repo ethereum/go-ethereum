@@ -121,9 +121,9 @@ func (c *XDPoS) APIs(chain consensus.ChainReader) []rpc.API {
 // from the signature in the header's extra-data section.
 func (c *XDPoS) Author(header *types.Header) (common.Address, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	case 2:
+	case params.ConsensusEngineVersion2:
 		return c.EngineV2.Author(header)
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.Author(header)
 	}
 }
@@ -131,7 +131,7 @@ func (c *XDPoS) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *XDPoS) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.VerifyHeader(chain, header, fullVerify)
 	}
 }
@@ -148,7 +148,7 @@ func (c *XDPoS) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 // uncles as this consensus mechanism doesn't permit uncles.
 func (c *XDPoS) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	switch c.config.BlockConsensusVersion(block.Number()) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.VerifyUncles(chain, block)
 	}
 }
@@ -157,7 +157,7 @@ func (c *XDPoS) VerifyUncles(chain consensus.ChainReader, block *types.Block) er
 // in the header satisfies the consensus protocol requirements.
 func (c *XDPoS) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.VerifySeal(chain, header)
 	}
 }
@@ -166,7 +166,7 @@ func (c *XDPoS) VerifySeal(chain consensus.ChainReader, header *types.Header) er
 // header for running the transactions on top.
 func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.Prepare(chain, header)
 	}
 }
@@ -175,7 +175,7 @@ func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error
 // rewards given, and returns the final block.
 func (c *XDPoS) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, parentState *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.Finalize(chain, header, state, parentState, txs, uncles, receipts)
 	}
 }
@@ -184,7 +184,7 @@ func (c *XDPoS) Finalize(chain consensus.ChainReader, header *types.Header, stat
 // the local signing credentials.
 func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
 	switch c.config.BlockConsensusVersion(block.Number()) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.Seal(chain, block, stop)
 	}
 }
@@ -194,7 +194,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 // current signer.
 func (c *XDPoS) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 	switch c.config.BlockConsensusVersion(parent.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.CalcDifficulty(chain, time, parent)
 	}
 }
@@ -216,49 +216,49 @@ func (c *XDPoS) GetPeriod() uint64 {
 
 func (c *XDPoS) IsAuthorisedAddress(header *types.Header, chain consensus.ChainReader, address common.Address) bool {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.IsAuthorisedAddress(header, chain, address)
 	}
 }
 
 func (c *XDPoS) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.GetMasternodes(chain, header)
 	}
 }
 
 func (c *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	switch c.config.BlockConsensusVersion(parent.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.YourTurn(chain, parent, signer)
 	}
 }
 
 func (c *XDPoS) GetValidator(creator common.Address, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.GetValidator(creator, chain, header)
 	}
 }
 
 func (c *XDPoS) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []utils.Masternode) error {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.UpdateMasternodes(chain, header, ms)
 	}
 }
 
 func (c *XDPoS) RecoverSigner(header *types.Header) (common.Address, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.RecoverSigner(header)
 	}
 }
 
 func (c *XDPoS) RecoverValidator(header *types.Header) (common.Address, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.RecoverValidator(header)
 	}
 }
@@ -266,7 +266,7 @@ func (c *XDPoS) RecoverValidator(header *types.Header) (common.Address, error) {
 // Get master nodes over extra data of previous checkpoint block.
 func (c *XDPoS) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header, n, e uint64) []common.Address {
 	switch c.config.BlockConsensusVersion(preCheckpointHeader.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.GetMasternodesFromCheckpointHeader(preCheckpointHeader, n, e)
 	}
 }
@@ -278,7 +278,7 @@ func (c *XDPoS) GetDb() ethdb.Database {
 
 func (c *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*utils.PublicApiSnapshot, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		sp, err := c.EngineV1.GetSnapshot(chain, header)
 		// Convert to a standard PublicApiSnapshot type, otherwise it's a breaking change to API
 		return &utils.PublicApiSnapshot{
@@ -294,7 +294,7 @@ func (c *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (
 
 func (c *XDPoS) GetAuthorisedSignersFromSnapshot(chain consensus.ChainReader, header *types.Header) ([]common.Address, error) {
 	switch c.config.BlockConsensusVersion(header.Number) {
-	default: // Default "1.0"
+	default: // Default "v1"
 		return c.EngineV1.GetAuthorisedSignersFromSnapshot(chain, header)
 	}
 }
