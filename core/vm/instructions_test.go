@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/big"
 	"testing"
 
@@ -88,6 +89,31 @@ func init() {
 		"shr":     opSHR,
 		"sar":     opSAR,
 	}
+}
+
+// getResult is a convenience function to generate the expected values
+func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
+	var (
+		env         = NewEVM(Context{}, nil, nil, params.TestChainConfig, Config{})
+		stack       = newstack()
+		pc          = uint64(0)
+		interpreter = env.interpreter.(*EVMInterpreter)
+	)
+	interpreter.intPool = poolOfIntPools.get()
+	result := make([]TwoOperandTestcase, len(args))
+	for i, param := range args {
+		x := new(big.Int).SetBytes(common.Hex2Bytes(param.x))
+		y := new(big.Int).SetBytes(common.Hex2Bytes(param.y))
+		stack.push(x)
+		stack.push(y)
+		_, err := opFn(&pc, interpreter, &callCtx{nil, stack, nil})
+		if err != nil {
+			log.Fatalln(err)
+		}
+		actual := stack.pop()
+		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
+	}
+	return result
 }
 
 func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
@@ -209,28 +235,6 @@ func TestSAR(t *testing.T) {
 	testTwoOperandOp(t, tests, opSAR, "sar")
 }
 
-// getResult is a convenience function to generate the expected values
-func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
-	var (
-		env         = NewEVM(Context{}, nil, nil, params.TestChainConfig, Config{})
-		stack       = newstack()
-		pc          = uint64(0)
-		interpreter = env.interpreter.(*EVMInterpreter)
-	)
-	interpreter.intPool = poolOfIntPools.get()
-	result := make([]TwoOperandTestcase, len(args))
-	for i, param := range args {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(param.x))
-		y := new(big.Int).SetBytes(common.Hex2Bytes(param.y))
-		stack.push(x)
-		stack.push(y)
-		opFn(&pc, interpreter, &callCtx{nil, stack, nil})
-		actual := stack.pop()
-		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
-	}
-	return result
-}
-
 // utility function to fill the json-file with testcases
 // Enable this test to generate the 'testcases_xx.json' files
 func TestWriteExpectedValues(t *testing.T) {
@@ -256,7 +260,10 @@ func TestJsonTestcases(t *testing.T) {
 			t.Fatal("Failed to read file", err)
 		}
 		var testcases []TwoOperandTestcase
-		json.Unmarshal(data, &testcases)
+		err = json.Unmarshal(data, &testcases)
+		if err != nil {
+			t.Fatal("Failed to unmarshal json", err)
+		}
 		testTwoOperandOp(t, testcases, twoOpMethods[name], name)
 	}
 }
@@ -578,43 +585,43 @@ func TestCreate2Addreses(t *testing.T) {
 		{
 			origin:   "0x0000000000000000000000000000000000000000",
 			salt:     "0x0000000000000000000000000000000000000000",
-			code:     "0x00",
+			code:     "xdc00",
 			expected: "0x4d1a2e2bb4f88f0250f26ffff098b0b30b26bf38",
 		},
 		{
 			origin:   "0xdeadbeef00000000000000000000000000000000",
 			salt:     "0x0000000000000000000000000000000000000000",
-			code:     "0x00",
+			code:     "xdc00",
 			expected: "0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3",
 		},
 		{
 			origin:   "0xdeadbeef00000000000000000000000000000000",
 			salt:     "0xfeed000000000000000000000000000000000000",
-			code:     "0x00",
+			code:     "xdc00",
 			expected: "0xD04116cDd17beBE565EB2422F2497E06cC1C9833",
 		},
 		{
 			origin:   "0x0000000000000000000000000000000000000000",
 			salt:     "0x0000000000000000000000000000000000000000",
-			code:     "0xdeadbeef",
+			code:     "xdcdeadbeef",
 			expected: "0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e",
 		},
 		{
 			origin:   "0x00000000000000000000000000000000deadbeef",
 			salt:     "0xcafebabe",
-			code:     "0xdeadbeef",
+			code:     "xdcdeadbeef",
 			expected: "0x60f3f640a8508fC6a86d45DF051962668E1e8AC7",
 		},
 		{
 			origin:   "0x00000000000000000000000000000000deadbeef",
 			salt:     "0xcafebabe",
-			code:     "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+			code:     "xdcdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 			expected: "0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C",
 		},
 		{
 			origin:   "0x0000000000000000000000000000000000000000",
 			salt:     "0x0000000000000000000000000000000000000000",
-			code:     "0x",
+			code:     "xdc",
 			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
 		},
 	} {
