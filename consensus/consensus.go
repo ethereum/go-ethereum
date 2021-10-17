@@ -18,12 +18,13 @@
 package consensus
 
 import (
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"math/big"
 )
 
 // ChainReader defines a small collection of methods needed to access the local

@@ -28,6 +28,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -56,7 +57,7 @@ func TestWaitDeployed(t *testing.T) {
 		backend := backends.NewXDCSimulatedBackend(
 			core.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000)},
-			}, 10000000,
+			}, 10000000, params.TestXDPoSMockChainConfig,
 		)
 
 		// Create the transaction.

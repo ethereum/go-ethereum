@@ -9,8 +9,10 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 func Position(list []common.Address, x common.Address) int {
@@ -108,4 +110,42 @@ func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
 		return list2[i].String() <= list2[j].String()
 	})
 	return reflect.DeepEqual(list1, list2)
+}
+
+// SignerFn is a signer callback function to request a hash to be signed by a
+// backing account.
+//type SignerFn func(accounts.Account, []byte) ([]byte, error)
+
+// sigHash returns the hash which is used as input for the delegated-proof-of-stake
+// signing. It is the hash of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// Note, the method requires the extra data to be at least 65 bytes, otherwise it
+// panics. This is done to avoid accidentally using both forms (signature present
+// or not), which could be abused to produce different hashes for the same header.
+func SigHash(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewKeccak256()
+
+	err := rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
+		header.MixDigest,
+		header.Nonce,
+	})
+	if err != nil {
+		log.Debug("Fail to encode", err)
+	}
+	hasher.Sum(hash[:0])
+	return hash
 }

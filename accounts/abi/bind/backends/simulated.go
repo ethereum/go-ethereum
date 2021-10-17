@@ -70,18 +70,18 @@ type SimulatedBackend struct {
 }
 
 // XDC simulated backend for testing purpose.
-func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfig *params.ChainConfig) *SimulatedBackend {
 	// database := ethdb.NewMemDatabase()
 	database := rawdb.NewMemoryDatabase()
 
 	genesis := core.Genesis{
 		GasLimit:  gasLimit, // need this big, support initial smart contract
-		Config:    params.TestXDPoSMockChainConfig,
+		Config:    chainConfig,
 		Alloc:     alloc,
 		ExtraData: append(make([]byte, 32), make([]byte, 65)...),
 	}
 	genesis.MustCommit(database)
-	consensus := XDPoS.NewFaker(database)
+	consensus := XDPoS.NewFaker(database, chainConfig)
 
 	// Attach mock trading and lending service
 	var DefaultConfig = XDCx.Config{
