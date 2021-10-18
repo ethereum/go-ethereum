@@ -18,6 +18,7 @@ package fetcher
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	mrand "math/rand"
 	"sort"
@@ -277,31 +278,28 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	)
 	errs := f.addTxs(txs)
 	for i, err := range errs {
-		if err != nil {
+		added = append(added, txs[i].Hash())
+		if err == nil {
+			continue
+		}
+		// Track a few interesting failure types
+		switch {
+		case errors.Is(err, core.ErrAlreadyKnown):
+			duplicate++
+
+		case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
+			underpriced++
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
-			if err == core.ErrUnderpriced || err == core.ErrReplaceUnderpriced {
-				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
-					f.underpriced.Pop()
-				}
-				f.underpriced.Add(txs[i].Hash())
+			for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
+				f.underpriced.Pop()
 			}
-			// Track a few interesting failure types
-			switch err {
-			case nil: // Noop, but need to handle to not count these
+			f.underpriced.Add(txs[i].Hash())
 
-			case core.ErrAlreadyKnown:
-				duplicate++
-
-			case core.ErrUnderpriced, core.ErrReplaceUnderpriced:
-				underpriced++
-
-			default:
-				otherreject++
-			}
+		default:
+			otherreject++
 		}
-		added = append(added, txs[i].Hash())
 	}
 	if direct {
 		txReplyKnownMeter.Mark(duplicate)
