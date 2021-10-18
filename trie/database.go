@@ -87,7 +87,7 @@ type snapshot interface {
 	// with the nil as the value.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, nodes map[string]*cachedNode, db *Database) *diffLayer
+	Update(blockRoot common.Hash, nodes map[string]*cachedNode) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -283,7 +283,6 @@ type Database struct {
 	config        *Config
 	lock          sync.RWMutex
 	diskdb        ethdb.KeyValueStore      // Persistent database to store the snapshot
-	dirties       map[string]*cachedNode   // Data and references relationships of dirty trie nodes
 	cleans        *fastcache.Cache         // Megabytes permitted using for read caches
 	layers        map[common.Hash]snapshot // Collection of all known layers
 	preimages     map[common.Hash][]byte   // Preimages of nodes from the secure trie
@@ -311,9 +310,8 @@ func NewDatabase(diskdb ethdb.KeyValueStore, config *Config) *Database {
 		readOnly: readOnly,
 		config:   config,
 		diskdb:   diskdb,
-		//dirties:  make(map[string]*cachedNode),
-		cleans: cleans,
-		layers: make(map[common.Hash]snapshot),
+		cleans:   cleans,
+		layers:   make(map[common.Hash]snapshot),
 	}
 	head := loadSnapshot(diskdb, cleans, config, db)
 	for head != nil {
@@ -372,49 +370,6 @@ func (db *Database) Snapshot(blockRoot common.Hash) Snapshot {
 	return db.layers[convertEmpty(blockRoot)]
 }
 
-// insert inserts a collapsed trie node into the memory database.
-// The key must be the internal format trie node key. The blob
-// size must be specified to allow proper size tracking.
-//func (db *Database) insert(key []byte, size int, node node) {
-//	// If the node's already cached, skip
-//	if _, ok := db.dirties[string(key)]; ok {
-//		return
-//	}
-//	// Create the cached entry for this node
-//	db.dirties[string(key)] = &cachedNode{
-//		node: simplifyNode(node),
-//		size: uint16(size),
-//	}
-//}
-
-// node retrieves a cached trie node from temporary set, or returns nil if none
-// can be found in it. This function can only be used as the auxiliary lookup for
-// layer. The passed key must be the internal key format.
-//func (db *Database) node(key []byte) node {
-//	db.lock.RLock()
-//	defer db.lock.RUnlock()
-//
-//	dirty := db.dirties[string(key)]
-//	if dirty != nil {
-//		_, hash := DecodeInternalKey(key)
-//		return dirty.obj(hash)
-//	}
-//	return nil
-//}
-
-// nodeBlob retrieves a RLP-encoded trie node from memory, or returns nil if none
-// can be found in the memory cache. The passed key must be the internal key format.
-//func (db *Database) nodeBlob(key []byte) []byte {
-//	db.lock.RLock()
-//	defer db.lock.RUnlock()
-//
-//	dirty := db.dirties[string(key)]
-//	if dirty != nil {
-//		return dirty.rlp()
-//	}
-//	return nil
-//}
-
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 // The passed keys must all be encoded in the internal format.
@@ -444,7 +399,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, nodes map[s
 	if db.readOnly {
 		return ErrSnapshotReadOnly
 	}
-	snap := parent.(snapshot).Update(root, nodes, db)
+	snap := parent.(snapshot).Update(root, nodes)
 	db.layers[snap.root] = snap
 	return nil
 }
@@ -641,7 +596,6 @@ func diffToDisk(bottom *diffLayer, config *Config) *diskLayer {
 	}
 	log.Debug("Journalled triedb disk layer", "root", bottom.root)
 	res := &diskLayer{
-		db:     bottom.db,
 		root:   bottom.root,
 		cache:  base.cache,
 		diskdb: base.diskdb,

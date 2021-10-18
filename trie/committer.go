@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -80,11 +79,8 @@ func returnCommitterToPool(h *committer) {
 }
 
 // Commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) Commit(n node, db *Database) (hashNode, error) {
-	if db == nil {
-		return nil, errors.New("no db provided")
-	}
-	h, err := c.commit(nil, n, db)
+func (c *committer) Commit(n node) (hashNode, error) {
+	h, err := c.commit(nil, n)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +88,7 @@ func (c *committer) Commit(n node, db *Database) (hashNode, error) {
 }
 
 // commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) commit(path []byte, n node, db *Database) (node, error) {
+func (c *committer) commit(path []byte, n node) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -109,7 +105,7 @@ func (c *committer) commit(path []byte, n node, db *Database) (node, error) {
 		if _, ok := cn.Val.(*fullNode); ok {
 			// Use concat here instead of append since the passed path
 			// might be mutated.
-			childV, err := c.commit(concat(path, cn.Key...), cn.Val, db)
+			childV, err := c.commit(concat(path, cn.Key...), cn.Val)
 			if err != nil {
 				return nil, err
 			}
@@ -117,20 +113,20 @@ func (c *committer) commit(path []byte, n node, db *Database) (node, error) {
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(path, collapsed, db)
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
 		return collapsed, nil
 	case *fullNode:
-		hashedKids, err := c.commitChildren(path, cn, db)
+		hashedKids, err := c.commitChildren(path, cn)
 		if err != nil {
 			return nil, err
 		}
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
-		hashedNode := c.store(path, collapsed, db)
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
@@ -144,7 +140,7 @@ func (c *committer) commit(path []byte, n node, db *Database) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]node, error) {
+func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -161,7 +157,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, err := c.commit(concat(path, byte(i)), child, db)
+		hashed, err := c.commit(concat(path, byte(i)), child)
 		if err != nil {
 			return children, err
 		}
@@ -177,7 +173,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, db *Database) ([17]
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (c *committer) store(path []byte, n node, db *Database) node {
+func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 

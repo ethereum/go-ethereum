@@ -636,7 +636,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (*CommitResult, error) {
 			h.commitLoop()
 		}()
 	}
-	newRoot, err := h.Commit(t.root, t.db)
+	newRoot, err := h.Commit(t.root)
 	if onleaf != nil {
 		// The leafch is created in newCommitter if there was an onleaf callback
 		// provided. The commitLoop only _reads_ from it, and the commit

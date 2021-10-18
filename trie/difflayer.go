@@ -40,7 +40,6 @@ var (
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
-	db     *Database  // Main database handler for accessing immature dirty nodes
 	origin *diskLayer // Base disk layer to directly use on bloom misses
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
@@ -53,9 +52,8 @@ type diffLayer struct {
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, root common.Hash, nodes map[string]*cachedNode, db *Database) *diffLayer {
+func newDiffLayer(parent snapshot, root common.Hash, nodes map[string]*cachedNode) *diffLayer {
 	dl := &diffLayer{
-		db:     db,
 		parent: parent,
 		root:   root,
 		nodes:  nodes,
@@ -137,8 +135,8 @@ func (dl *diffLayer) NodeBlob(key []byte) ([]byte, error) {
 
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items.
-func (dl *diffLayer) Update(blockRoot common.Hash, nodes map[string]*cachedNode, db *Database) *diffLayer {
-	return newDiffLayer(dl, blockRoot, nodes, db)
+func (dl *diffLayer) Update(blockRoot common.Hash, nodes map[string]*cachedNode) *diffLayer {
+	return newDiffLayer(dl, blockRoot, nodes)
 }
 
 // flatten pushes all data from this point downwards, flattening everything into

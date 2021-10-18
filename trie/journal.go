@@ -150,7 +150,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream, db *Database) (snapshot, erro
 			nodes[entry.Key] = nil
 		}
 	}
-	return loadDiffLayer(newDiffLayer(parent, root, nodes, db), r, db)
+	return loadDiffLayer(newDiffLayer(parent, root, nodes), r, db)
 }
 
 // Journal terminates any in-progress snapshot generation, also implicitly pushing
