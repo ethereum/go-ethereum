@@ -48,3 +48,4 @@ profile.cov
 
 **/yarn-error.log
 ./test
+./bor-debug-*

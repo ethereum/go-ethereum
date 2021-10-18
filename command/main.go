@@ -106,7 +106,7 @@ func (m *Meta2) NewFlagSet(n string) *flagset.Flagset {
 
 func (m *Meta2) Conn() (*grpc.ClientConn, error) {
 	if m.addr == "" {
-		m.addr = "http://localhost:3131"
+		m.addr = "127.0.0.1:3131"
 	}
 	conn, err := grpc.Dial(m.addr, grpc.WithInsecure())
 	if err != nil {

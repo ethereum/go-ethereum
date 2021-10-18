@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BorClient interface {
-	Debug(ctx context.Context, in *DebugInput, opts ...grpc.CallOption) (*DebugInput, error)
+	Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (*PprofResponse, error)
 }
 
 type borClient struct {
@@ -29,9 +29,9 @@ func NewBorClient(cc grpc.ClientConnInterface) BorClient {
 	return &borClient{cc}
 }
 
-func (c *borClient) Debug(ctx context.Context, in *DebugInput, opts ...grpc.CallOption) (*DebugInput, error) {
-	out := new(DebugInput)
-	err := c.cc.Invoke(ctx, "/proto.Bor/Debug", in, out, opts...)
+func (c *borClient) Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (*PprofResponse, error) {
+	out := new(PprofResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/Pprof", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (c *borClient) Debug(ctx context.Context, in *DebugInput, opts ...grpc.Call
 // All implementations must embed UnimplementedBorServer
 // for forward compatibility
 type BorServer interface {
-	Debug(context.Context, *DebugInput) (*DebugInput, error)
+	Pprof(context.Context, *PprofRequest) (*PprofResponse, error)
 	mustEmbedUnimplementedBorServer()
 }
 
@@ -50,8 +50,8 @@ type BorServer interface {
 type UnimplementedBorServer struct {
 }
 
-func (UnimplementedBorServer) Debug(context.Context, *DebugInput) (*DebugInput, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Debug not implemented")
+func (UnimplementedBorServer) Pprof(context.Context, *PprofRequest) (*PprofResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Pprof not implemented")
 }
 func (UnimplementedBorServer) mustEmbedUnimplementedBorServer() {}
 
@@ -66,20 +66,20 @@ func RegisterBorServer(s grpc.ServiceRegistrar, srv BorServer) {
 	s.RegisterService(&Bor_ServiceDesc, srv)
 }
 
-func _Bor_Debug_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DebugInput)
+func _Bor_Pprof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PprofRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BorServer).Debug(ctx, in)
+		return srv.(BorServer).Pprof(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.Bor/Debug",
+		FullMethod: "/proto.Bor/Pprof",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BorServer).Debug(ctx, req.(*DebugInput))
+		return srv.(BorServer).Pprof(ctx, req.(*PprofRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -92,8 +92,8 @@ var Bor_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Debug",
-			Handler:    _Bor_Debug_Handler,
+			MethodName: "Pprof",
+			Handler:    _Bor_Pprof_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
