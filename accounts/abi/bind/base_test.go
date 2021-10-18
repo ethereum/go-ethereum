@@ -31,7 +31,48 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
 )
+
+func mockSign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) { return tx, nil }
+
+type mockTransactor struct {
+	baseFee                *big.Int
+	gasTipCap              *big.Int
+	gasPrice               *big.Int
+	suggestGasTipCapCalled bool
+	suggestGasPriceCalled  bool
+}
+
+func (mt *mockTransactor) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	return &types.Header{BaseFee: mt.baseFee}, nil
+}
+
+func (mt *mockTransactor) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+	return []byte{1}, nil
+}
+
+func (mt *mockTransactor) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	return 0, nil
+}
+
+func (mt *mockTransactor) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	mt.suggestGasPriceCalled = true
+	return mt.gasPrice, nil
+}
+
+func (mt *mockTransactor) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	mt.suggestGasTipCapCalled = true
+	return mt.gasTipCap, nil
+}
+
+func (mt *mockTransactor) EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error) {
+	return 0, nil
+}
+
+func (mt *mockTransactor) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	return nil
+}
 
 type mockCaller struct {
 	codeAtBlockNumber         *big.Int
@@ -224,6 +265,51 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 		"memo":    []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
+}
+
+func TestTransactGasFee(t *testing.T) {
+	assert := assert.New(t)
+
+	// GasTipCap and GasFeeCap
+	// When opts.GasTipCap and opts.GasFeeCap are nil
+	mt := &mockTransactor{baseFee: big.NewInt(100), gasTipCap: big.NewInt(5)}
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts := &bind.TransactOpts{Signer: mockSign}
+	tx, err := bc.Transact(opts, "")
+	assert.Nil(err)
+	assert.Equal(big.NewInt(5), tx.GasTipCap())
+	assert.Equal(big.NewInt(205), tx.GasFeeCap())
+	assert.Nil(opts.GasTipCap)
+	assert.Nil(opts.GasFeeCap)
+	assert.True(mt.suggestGasTipCapCalled)
+
+	// Second call to Transact should use latest suggested GasTipCap
+	mt.gasTipCap = big.NewInt(6)
+	mt.suggestGasTipCapCalled = false
+	tx, err = bc.Transact(opts, "")
+	assert.Nil(err)
+	assert.Equal(big.NewInt(6), tx.GasTipCap())
+	assert.Equal(big.NewInt(206), tx.GasFeeCap())
+	assert.True(mt.suggestGasTipCapCalled)
+
+	// GasPrice
+	// When opts.GasPrice is nil
+	mt = &mockTransactor{gasPrice: big.NewInt(5)}
+	bc = bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
+	opts = &bind.TransactOpts{Signer: mockSign}
+	tx, err = bc.Transact(opts, "")
+	assert.Nil(err)
+	assert.Equal(big.NewInt(5), tx.GasPrice())
+	assert.Nil(opts.GasPrice)
+	assert.True(mt.suggestGasPriceCalled)
+
+	// Second call to Transact should use latest suggested GasPrice
+	mt.gasPrice = big.NewInt(6)
+	mt.suggestGasPriceCalled = false
+	tx, err = bc.Transact(opts, "")
+	assert.Nil(err)
+	assert.Equal(big.NewInt(6), tx.GasPrice())
+	assert.True(mt.suggestGasPriceCalled)
 }
 
 func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]interface{}, mockLog types.Log) {
