@@ -163,6 +163,8 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = errors.New("maxFeePerGas < maxPriorityFeePerGas")
 		case new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
 			r.Error = errors.New("gas * gasPrice exceeds 256 bits")
+		case new(big.Int).Mul(tx.GasFeeCap(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
+			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
 		}
 		results = append(results, r)
 	}
