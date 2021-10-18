@@ -1,5 +1,7 @@
 package main
 
+// Based on https://github.com/hashicorp/nomad/blob/main/command/operator_debug.go
+
 import (
 	"archive/tar"
 	"compress/gzip"
@@ -30,7 +32,9 @@ type DebugCommand struct {
 func (d *DebugCommand) Help() string {
 	return `Usage: bor debug
 
-  Debug`
+  Build an archive containing Bor pprof traces
+
+  ` + d.Flags().Help()
 }
 
 func (d *DebugCommand) Flags() *flagset.Flagset {
@@ -52,7 +56,7 @@ func (d *DebugCommand) Flags() *flagset.Flagset {
 
 // Synopsis implements the cli.Command interface
 func (d *DebugCommand) Synopsis() string {
-	return "Debug"
+	return "Build an archive containing Bor pprof traces"
 }
 
 // Run implements the cli.Command interface
