@@ -358,6 +358,8 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	n := ethconfig.Defaults
 	n.NetworkId = c.chain.NetworkId
 	n.Genesis = c.chain.Genesis
+	n.HeimdallURL = *c.Heimdall.URL
+	n.WithoutHeimdall = *c.Heimdall.Without
 
 	// txpool options
 	{

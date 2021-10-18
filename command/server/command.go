@@ -116,6 +116,8 @@ func (c *Command) Run(args []string) int {
 		return 1
 	}
 
+	log.Info("Heimdall setup", "url", ethCfg.HeimdallURL)
+
 	// debug tracing is enabled by default
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 
