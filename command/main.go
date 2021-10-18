@@ -7,9 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/command/flagset"
 	"github.com/ethereum/go-ethereum/command/server"
+	"github.com/ethereum/go-ethereum/command/server/proto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mitchellh/cli"
 	"github.com/ryanuber/columnize"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -40,6 +42,9 @@ func commands() map[string]cli.CommandFactory {
 		ErrorWriter: os.Stderr,
 	}
 
+	meta2 := &Meta2{
+		UI: ui,
+	}
 	meta := &Meta{
 		UI: ui,
 	}
@@ -52,6 +57,11 @@ func commands() map[string]cli.CommandFactory {
 		"version": func() (cli.Command, error) {
 			return &VersionCommand{
 				UI: ui,
+			}, nil
+		},
+		"debug": func() (cli.Command, error) {
+			return &DebugCommand{
+				Meta2: meta2,
 			}, nil
 		},
 		"account": func() (cli.Command, error) {
@@ -75,6 +85,42 @@ func commands() map[string]cli.CommandFactory {
 			}, nil
 		},
 	}
+}
+
+type Meta2 struct {
+	UI cli.Ui
+
+	addr string
+}
+
+func (m *Meta2) NewFlagSet(n string) *flagset.Flagset {
+	f := flagset.NewFlagSet(n)
+
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "address",
+		Value: &m.addr,
+		Usage: "Address of the grpc endpoint",
+	})
+	return f
+}
+
+func (m *Meta2) Conn() (*grpc.ClientConn, error) {
+	if m.addr == "" {
+		m.addr = "http://localhost:3131"
+	}
+	conn, err := grpc.Dial(m.addr, grpc.WithInsecure())
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to server: %v", err)
+	}
+	return conn, nil
+}
+
+func (m *Meta2) BorConn() (proto.BorClient, error) {
+	conn, err := m.Conn()
+	if err != nil {
+		return nil, err
+	}
+	return proto.NewBorClient(conn), nil
 }
 
 // Meta is a helper utility for the commands

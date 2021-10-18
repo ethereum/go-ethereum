@@ -13,6 +13,9 @@ GO ?= latest
 GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
 
+protoc:
+	protoc --go_out=. --go-grpc_out=. ./command/server/proto/*.proto
+
 bor:
 	$(GORUN) build/ci.go install ./cmd/geth
 	mkdir -p $(GOPATH)/bin/

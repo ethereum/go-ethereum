@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "/command/server/proto";
+
+service Bor {
+    rpc Debug(DebugInput) returns (DebugInput);
+}
+
+message DebugInput {
+
+}
