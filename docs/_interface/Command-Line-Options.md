@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.9-stable-eae3b194
+   1.10.10-stable-bb74230f
 
 COMMANDS:
    account                            Manage accounts
@@ -138,6 +138,7 @@ API AND CONSOLE OPTIONS:
   --graphql.corsdomain value          Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --graphql.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
   --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 50000000)
+  --rpc.evmtimeout value              Sets a timeout used for eth_call (0=infinite) (default: 5s)
   --rpc.txfeecap value                Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 1)
   --rpc.allow-unprotected-txs         Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC
   --jspath loadScript                 JavaScript root path for loadScript (default: ".")
