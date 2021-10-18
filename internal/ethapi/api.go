@@ -1337,7 +1337,7 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 	if current != nil {
 		baseFee = misc.CalcBaseFee(config, current)
 	}
-	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee, config)
+	return newRPCTransaction(tx, common.Hash{}, current.Number.Uint64(), 0, baseFee, config)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
