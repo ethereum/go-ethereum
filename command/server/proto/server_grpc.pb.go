@@ -19,6 +19,10 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BorClient interface {
 	Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (*PprofResponse, error)
+	PeersAdd(ctx context.Context, in *PeersAddRequest, opts ...grpc.CallOption) (*PeersAddResponse, error)
+	PeersRemove(ctx context.Context, in *PeersRemoveRequest, opts ...grpc.CallOption) (*PeersRemoveResponse, error)
+	PeersList(ctx context.Context, in *PeersListRequest, opts ...grpc.CallOption) (*PeersListResponse, error)
+	PeersStatus(ctx context.Context, in *PeersStatusRequest, opts ...grpc.CallOption) (*PeersStatusResponse, error)
 }
 
 type borClient struct {
@@ -38,11 +42,51 @@ func (c *borClient) Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *borClient) PeersAdd(ctx context.Context, in *PeersAddRequest, opts ...grpc.CallOption) (*PeersAddResponse, error) {
+	out := new(PeersAddResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/PeersAdd", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *borClient) PeersRemove(ctx context.Context, in *PeersRemoveRequest, opts ...grpc.CallOption) (*PeersRemoveResponse, error) {
+	out := new(PeersRemoveResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/PeersRemove", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *borClient) PeersList(ctx context.Context, in *PeersListRequest, opts ...grpc.CallOption) (*PeersListResponse, error) {
+	out := new(PeersListResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/PeersList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *borClient) PeersStatus(ctx context.Context, in *PeersStatusRequest, opts ...grpc.CallOption) (*PeersStatusResponse, error) {
+	out := new(PeersStatusResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/PeersStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BorServer is the server API for Bor service.
 // All implementations must embed UnimplementedBorServer
 // for forward compatibility
 type BorServer interface {
 	Pprof(context.Context, *PprofRequest) (*PprofResponse, error)
+	PeersAdd(context.Context, *PeersAddRequest) (*PeersAddResponse, error)
+	PeersRemove(context.Context, *PeersRemoveRequest) (*PeersRemoveResponse, error)
+	PeersList(context.Context, *PeersListRequest) (*PeersListResponse, error)
+	PeersStatus(context.Context, *PeersStatusRequest) (*PeersStatusResponse, error)
 	mustEmbedUnimplementedBorServer()
 }
 
@@ -52,6 +96,18 @@ type UnimplementedBorServer struct {
 
 func (UnimplementedBorServer) Pprof(context.Context, *PprofRequest) (*PprofResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Pprof not implemented")
+}
+func (UnimplementedBorServer) PeersAdd(context.Context, *PeersAddRequest) (*PeersAddResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PeersAdd not implemented")
+}
+func (UnimplementedBorServer) PeersRemove(context.Context, *PeersRemoveRequest) (*PeersRemoveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PeersRemove not implemented")
+}
+func (UnimplementedBorServer) PeersList(context.Context, *PeersListRequest) (*PeersListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PeersList not implemented")
+}
+func (UnimplementedBorServer) PeersStatus(context.Context, *PeersStatusRequest) (*PeersStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PeersStatus not implemented")
 }
 func (UnimplementedBorServer) mustEmbedUnimplementedBorServer() {}
 
@@ -84,6 +140,78 @@ func _Bor_Pprof_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Bor_PeersAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeersAddRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BorServer).PeersAdd(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Bor/PeersAdd",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BorServer).PeersAdd(ctx, req.(*PeersAddRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Bor_PeersRemove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeersRemoveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BorServer).PeersRemove(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Bor/PeersRemove",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BorServer).PeersRemove(ctx, req.(*PeersRemoveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Bor_PeersList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeersListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BorServer).PeersList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Bor/PeersList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BorServer).PeersList(ctx, req.(*PeersListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Bor_PeersStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeersStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BorServer).PeersStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Bor/PeersStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BorServer).PeersStatus(ctx, req.(*PeersStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Bor_ServiceDesc is the grpc.ServiceDesc for Bor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -94,6 +222,22 @@ var Bor_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Pprof",
 			Handler:    _Bor_Pprof_Handler,
+		},
+		{
+			MethodName: "PeersAdd",
+			Handler:    _Bor_PeersAdd_Handler,
+		},
+		{
+			MethodName: "PeersRemove",
+			Handler:    _Bor_PeersRemove_Handler,
+		},
+		{
+			MethodName: "PeersList",
+			Handler:    _Bor_PeersList_Handler,
+		},
+		{
+			MethodName: "PeersStatus",
+			Handler:    _Bor_PeersStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -18,7 +18,11 @@ func (a *Account) Help() string {
   
   Display the status of a specific deployment:
 
-    $ bor account import`
+    $ bor account import
+    
+  List the imported accounts in the keystore:
+    
+    $ bor account list`
 }
 
 // Synopsis implements the cli.Command interface
