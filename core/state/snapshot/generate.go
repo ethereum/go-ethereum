@@ -560,13 +560,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		default:
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
-			// currentLocation may lost its `storageHash` part, when currentLocation
-			// and dl.genMarker has the same `accountHash` part and abort generation
-			// before this function is firstly called in onAccount function,
-			//  which will result in ignoring updating the storage snapshot of
-			// that `accountHash`, thus the value in the cache of diskLayer will be an old one.
 			if bytes.Compare(currentLocation, dl.genMarker) < 0 {
-				currentLocation = dl.genMarker
+				log.Error("Snapshot generator went backwards",
+					"currentLocation", fmt.Sprintf("%x", currentLocation),
+					"genMarker", fmt.Sprintf("%x", dl.genMarker))
 			}
 
 			// Flush out the batch anyway no matter it's empty or not.
@@ -644,7 +641,11 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			stats.accounts++
 		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
-		if err := checkAndFlush(accountHash[:]); err != nil {
+		marker := accountHash[:]
+		if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
+			marker = append(marker, dl.genMarker[common.HashLength:]...)
+		}
+		if err := checkAndFlush(marker); err != nil {
 			return err
 		}
 		// If the iterated account is the contract, create a further loop to
