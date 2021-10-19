@@ -18,13 +18,13 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -69,7 +69,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 		t.Fatal("no error for wrong origin")
 	}
 	wantErr := wsHandshakeError{websocket.ErrBadHandshake, "403 Forbidden"}
-	if !reflect.DeepEqual(err, wantErr) {
+	if !errors.Is(err, wantErr) {
 		t.Fatalf("wrong error for wrong origin: %q", err)
 	}
 
