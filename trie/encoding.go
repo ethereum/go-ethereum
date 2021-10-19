@@ -94,9 +94,9 @@ func compactToHex(compact []byte) []byte {
 	return base[chop:]
 }
 
-// REVERSE-COMAPCT encoding is used for encoding trie node path in the trie node
+// SUFFIX-COMPACT encoding is used for encoding trie node path in the trie node
 // storage key. The main difference with COMPACT encoding is that the key flag
-// is put in the end of the key.
+// is put at the end of the key.
 //
 // e.g.
 // - the key [] is encoded as [0x00]
@@ -106,7 +106,7 @@ func compactToHex(compact []byte) []byte {
 // The main benefit of this format is the continuous paths can retain the shared
 // path prefix after encoding.
 
-func hexToReverseCompact(hex []byte) []byte {
+func hexToSuffixCompact(hex []byte) []byte {
 	terminator := byte(0)
 	if hasTerm(hex) {
 		terminator = 1
@@ -123,7 +123,7 @@ func hexToReverseCompact(hex []byte) []byte {
 	return buf
 }
 
-func reverseCompactToHex(compact []byte) []byte {
+func suffixCompactToHex(compact []byte) []byte {
 	if len(compact) == 0 {
 		return compact
 	}

@@ -17,10 +17,13 @@
 package trie
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
@@ -31,7 +34,31 @@ var (
 	// Note, bumping this up might drastically increase the size of the bloom
 	// filters that's stored in every diff layer. Don't do that without fully
 	// understanding all the implications.
-	aggregatorMemoryLimit = uint64(16 * 1024 * 1024)
+	aggregatorMemoryLimit = uint64(8 * 1024 * 1024)
+
+	// aggregatorItemLimit is an approximate number of items that will end up
+	// in the aggregator layer before it's flushed out to disk. A plain node
+	// weighs around 150B (average node size is around 82 bytes, plus the key
+	// size, 150 is a safe choice for us).
+	aggregatorItemLimit = aggregatorMemoryLimit / 150
+
+	// bloomTargetError is the target false positive rate when the aggregator
+	// layer is at its fullest. The actual value will probably move around up
+	// and down from this number, it's mostly a ballpark figure.
+	//
+	// Note, dropping this down might drastically increase the size of the bloom
+	// filters that's stored in every diff layer. Don't do that without fully
+	// understanding all the implications.
+	bloomTargetError = 0.02
+
+	// bloomSize is the ideal bloom filter size given the maximum number of items
+	// it's expected to hold and the target false positive error rate.
+	bloomSize = math.Ceil(float64(aggregatorItemLimit) * math.Log(bloomTargetError) / math.Log(1/math.Pow(2, math.Log(2))))
+
+	// bloomFuncs is the ideal number of bits a single entry should set in the
+	// bloom filter to keep its size to a minimum (given it's size and maximum
+	// entry count).
+	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
 )
 
 // diffLayer represents a collection of modifications made to the in-memory tries
@@ -44,10 +71,11 @@ type diffLayer struct {
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
 
-	root  common.Hash            // Root hash to which this snapshot diff belongs to
-	stale uint32                 // Signals that the layer became stale (state progressed)
-	nodes map[string]*cachedNode // Keyed trie nodes for retrieval. (nil means deleted)
-	lock  sync.RWMutex
+	root   common.Hash            // Root hash to which this snapshot diff belongs to
+	stale  uint32                 // Signals that the layer became stale (state progressed)
+	nodes  map[string]*cachedNode // Keyed trie nodes for retrieval (nil means deleted)
+	diffed *bloomfilter.Filter    // Bloom filter tracking all the diffed items up to the disk layer
+	lock   sync.RWMutex
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -60,19 +88,54 @@ func newDiffLayer(parent snapshot, root common.Hash, nodes map[string]*cachedNod
 	}
 	switch parent := parent.(type) {
 	case *diskLayer:
-		dl.origin = parent
+		dl.rebloom(parent)
 	case *diffLayer:
-		dl.origin = parent.origin
+		dl.rebloom(parent.origin)
 	default:
 		panic("unknown parent type")
 	}
 	for key, node := range nodes {
 		dl.memory += uint64(len(key) + int(node.size) + cachedNodeSize)
+		triedbDirtyWriteMeter.Mark(int64(node.size))
 	}
+	triedbDiffLayerSizeMeter.Mark(int64(dl.memory))
 	return dl
 }
 
-// Root returns the root hash for which this snapshot was made.
+// rebloom discards the layer's current bloom and rebuilds it from scratch based
+// on the parent's and the local diffs.
+func (dl *diffLayer) rebloom(origin *diskLayer) {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	defer func(start time.Time) {
+		triedbBloomIndexTimer.Update(time.Since(start))
+	}(time.Now())
+
+	// Inject the new origin that triggered the rebloom
+	dl.origin = origin
+
+	// Retrieve the parent bloom or create a fresh empty one
+	if parent, ok := dl.parent.(*diffLayer); ok {
+		parent.lock.RLock()
+		dl.diffed, _ = parent.diffed.Copy()
+		parent.lock.RUnlock()
+	} else {
+		dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+	}
+	for key := range dl.nodes {
+		dl.diffed.Add(stateBloomHasher(key))
+	}
+	// Calculate the current false positive rate and update the error rate meter.
+	// This is a bit cheating because subsequent layers will overwrite it, but it
+	// should be fine, we're only interested in ballpark figures.
+	k := float64(dl.diffed.K())
+	n := float64(dl.diffed.N())
+	m := float64(dl.diffed.M())
+	triedbBloomErrorGauge.Update(math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k))
+}
+
+// Root returns the root hash of corresponding state.
 func (dl *diffLayer) Root() common.Hash {
 	return dl.root
 }
@@ -91,9 +154,30 @@ func (dl *diffLayer) Stale() bool {
 // Node retrieves the trie node associated with a particular key.
 // The given key must be the internal format node key.
 func (dl *diffLayer) Node(key []byte) (node, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
 	dl.lock.RLock()
-	defer dl.lock.RUnlock()
+	hit := dl.diffed.Contains(stateBloomHasher(key))
+	if !hit {
+		hit = dl.diffed.Contains(stateBloomHasher(key))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+	dl.lock.RUnlock()
 
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if origin != nil {
+		triedbBloomMissMeter.Mark(1)
+		return origin.Node(key)
+	}
+	return dl.node(key, 0)
+}
+
+// node is the inner version of Node which counts the accessed layer depth.
+func (dl *diffLayer) node(key []byte, depth int) (node, error) {
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
 	if dl.Stale() {
@@ -101,19 +185,54 @@ func (dl *diffLayer) Node(key []byte) (node, error) {
 	}
 	// If the trie node is known locally, return it
 	if n, ok := dl.nodes[string(key)]; ok {
+		triedbDirtyHitMeter.Mark(1)
+		triedbDirtyNodeHitDepthHist.Update(int64(depth))
+		triedbBloomTrueHitMeter.Mark(1)
+
 		// The trie node is marked as deleted, don't bother parent anymore.
 		if n == nil {
 			return nil, nil
 		}
+		triedbDirtyReadMeter.Mark(int64(n.size))
 		_, hash := DecodeInternalKey(key)
 		return n.obj(hash), nil
 	}
+	// Trie node unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.node(key, depth+1)
+	}
+	// Failed to resolve through diff layers, mark a bloom error and use the disk
+	triedbBloomFalseHitMeter.Mark(1)
 	return dl.parent.Node(key)
 }
 
 // NodeBlob retrieves the trie node blob associated with a particular key.
 // The given key must be the internal format node key.
 func (dl *diffLayer) NodeBlob(key []byte) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	hit := dl.diffed.Contains(stateBloomHasher(key))
+	if !hit {
+		hit = dl.diffed.Contains(stateBloomHasher(key))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+	dl.lock.RUnlock()
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if origin != nil {
+		triedbBloomMissMeter.Mark(1)
+		return origin.NodeBlob(key)
+	}
+	return dl.nodeBlob(key, 0)
+}
+
+// nodeBlob is the inner version of NodeBlob which counts the accessed layer depth.
+func (dl *diffLayer) nodeBlob(key []byte, depth int) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -124,12 +243,23 @@ func (dl *diffLayer) NodeBlob(key []byte) ([]byte, error) {
 	}
 	// If the trie node is known locally, return it
 	if n, ok := dl.nodes[string(key)]; ok {
+		triedbDirtyHitMeter.Mark(1)
+		triedbDirtyNodeHitDepthHist.Update(int64(depth))
+		triedbBloomTrueHitMeter.Mark(1)
+
 		// The trie node is marked as deleted, don't bother parent anymore.
 		if n == nil {
 			return nil, nil
 		}
+		triedbDirtyReadMeter.Mark(int64(n.size))
 		return n.rlp(), nil
 	}
+	// Trie node unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.nodeBlob(key, depth+1)
+	}
+	// Failed to resolve through diff layers, mark a bloom error and use the disk
+	triedbBloomFalseHitMeter.Mark(1)
 	return dl.parent.NodeBlob(key)
 }
 
@@ -181,5 +311,6 @@ func (dl *diffLayer) flatten() snapshot {
 		memory: parent.memory + dl.memory,
 		root:   dl.root,
 		nodes:  parent.nodes,
+		diffed: dl.diffed,
 	}
 }

@@ -260,7 +260,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, &trie.Config{Archive: true}), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, &trie.Config{WriteLegacy: true}), nil)
 	if err != nil {
 		panic(err)
 	}

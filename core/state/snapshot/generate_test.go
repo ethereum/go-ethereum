@@ -57,7 +57,8 @@ func TestGeneration(t *testing.T) {
 	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
@@ -96,7 +97,8 @@ func TestGenerateExistentState(t *testing.T) {
 	helper.addSnapAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()})
 	helper.addSnapStorage("acc-3", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
 
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
@@ -157,17 +159,6 @@ func newHelper() *testHelper {
 	}
 }
 
-func newHelperWithConfig(config *trie.Config) *testHelper {
-	diskdb := memorydb.New()
-	triedb := trie.NewDatabase(diskdb, config)
-	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
-	return &testHelper{
-		diskdb:  diskdb,
-		triedb:  triedb,
-		accTrie: accTrie,
-	}
-}
-
 func (t *testHelper) addTrieAccount(acckey string, acc *Account) {
 	val, _ := rlp.EncodeToBytes(acc)
 	t.accTrie.Update([]byte(acckey), val)
@@ -207,7 +198,7 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 	return root.Bytes()
 }
 
-func (t *testHelper) CommitAndGenerate(runGen bool) (common.Hash, *diskLayer) {
+func (t *testHelper) CommitAndGenerate(runGen bool) (*trie.CommitResult, *diskLayer) {
 	result, _ := t.accTrie.Commit(nil)
 
 	for _, res := range t.uncommitted {
@@ -220,9 +211,9 @@ func (t *testHelper) CommitAndGenerate(runGen bool) (common.Hash, *diskLayer) {
 
 	if runGen {
 		snap := generateSnapshot(t.diskdb, t.triedb, 16, result.Root)
-		return result.Root, snap
+		return result, snap
 	}
-	return result.Root, nil
+	return result, nil
 }
 
 // Tests that snapshot generation with existent flat state, where the flat state
@@ -311,7 +302,8 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 		helper.addSnapStorage("acc-12", []string{"key-1", "key-2", "key-3", "key-4"}, []string{"val-1", "val-2", "val-3", "val-4"})
 	}
 
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	t.Logf("Root: %#x\n", root) // Root = 0x8746cce9fd9c658b2cfd639878ed6584b7a2b3e73bb40f607fcfa156002429a0
 
 	select {
@@ -368,7 +360,8 @@ func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 		helper.addSnapAccount("acc-7", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyRoot.Bytes()})          // after the end
 	}
 
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	t.Logf("Root: %#x\n", root) // Root = 0x825891472281463511e7ebcc7f109e4f9200c20fa384754e11fd605cd98464e8
 
 	select {
@@ -393,12 +386,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// without any storage slots to keep the test smaller.
 	var deletionKey []byte
-	helper := newHelperWithConfig(&trie.Config{OnCommit: func(key, val []byte) {
-		if deletionKey == nil {
-			storage, _ := trie.DecodeInternalKey(key)
-			deletionKey = append([]byte{}, storage...)
-		}
-	}})
+	helper := newHelper()
 
 	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}) // 0xc7a30f39aff471c95d8a837497ad0e49b65be475cc0953540f80cfcdbdcd9074
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
@@ -406,7 +394,14 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 
 	// Delete an account trie leaf and ensure the generator chokes
 	result, _ := helper.accTrie.Commit(nil) // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
+	helper.triedb.Update(common.Hash{}, result.Root, result.CommitTo(nil))
 	helper.triedb.Cap(result.Root, 0)
+
+	nodes := result.Nodes()
+	for k := range nodes {
+		storage, _ := trie.DecodeInternalKey([]byte(k))
+		deletionKey = append([]byte{}, storage...)
+	}
 	rawdb.DeleteTrieNode(helper.diskdb, deletionKey)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, result.Root)
@@ -443,7 +438,8 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 	stRoot = helper.makeStorageTrie(common.Hash{}, accThreeHash, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
 
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 
 	// Delete storage trie root of account one and three.
 	rawdb.DeleteTrieNode(helper.diskdb, trie.EncodeStorageKey(accOneHash, nil))
@@ -472,14 +468,7 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	// two of which also has the same 3-slot storage trie attached.
 	var (
 		storageKey []byte
-		helper     = newHelperWithConfig(&trie.Config{
-			OnCommit: func(key, val []byte) {
-				storage, hash := trie.DecodeInternalKey(key)
-				if hash == common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371") {
-					storageKey = append([]byte{}, storage...)
-				}
-			},
-		})
+		helper     = newHelper()
 	)
 	accOneHash := hashData([]byte("acc-1"))
 	accThreeHash := hashData([]byte("acc-3"))
@@ -490,8 +479,15 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	stRoot = helper.makeStorageTrie(common.Hash{}, accThreeHash, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
 
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 
+	for k := range result.Nodes() {
+		storage, hash := trie.DecodeInternalKey([]byte(k))
+		if hash == common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371") {
+			storageKey = append([]byte{}, storage...)
+		}
+	}
 	// Delete a node in the storage trie.
 	rawdb.DeleteTrieNode(helper.diskdb, storageKey)
 
@@ -548,7 +544,8 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("b-key-2")), []byte("b-val-2"))
 		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("b-key-3")), []byte("b-val-3"))
 	}
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 
 	// To verify the test: If we now inspect the snap db, there should exist extraneous storage items
 	if data := rawdb.ReadStorageSnapshot(helper.triedb.DiskDB(), hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
@@ -612,7 +609,8 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 			rawdb.WriteAccountSnapshot(helper.diskdb, key, val)
 		}
 	}
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -658,7 +656,8 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 		rawdb.WriteAccountSnapshot(helper.diskdb, common.HexToHash("0x06"), val)
 		rawdb.WriteAccountSnapshot(helper.diskdb, common.HexToHash("0x07"), val)
 	}
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -695,7 +694,8 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 		rawdb.WriteAccountSnapshot(helper.diskdb, common.HexToHash("0x04"), junk)
 		rawdb.WriteAccountSnapshot(helper.diskdb, common.HexToHash("0x05"), junk)
 	}
-	root, _ := helper.CommitAndGenerate(false)
+	result, _ := helper.CommitAndGenerate(false)
+	root := result.Root
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
 	case <-snap.genPending:
@@ -726,7 +726,8 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 		helper.addTrieAccount(fmt.Sprintf("acc-%d", i),
 			&Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 	}
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	t.Logf("Root: %#x\n", root) // Root: 0x6f7af6d2e1a1bf2b84a3beb3f8b64388465fbc1e274ca5d5d3fc787ca78f59e4
 
 	select {
@@ -772,7 +773,8 @@ func TestGenerateWithIncompleteStorage(t *testing.T) {
 		}
 		helper.addSnapStorage(accKey, moddedKeys, moddedVals)
 	}
-	root, snap := helper.CommitAndGenerate(true)
+	result, snap := helper.CommitAndGenerate(true)
+	root := result.Root
 	t.Logf("Root: %#x\n", root) // Root: 0xca73f6f05ba4ca3024ef340ef3dfca8fdabc1b677ff13f5a9571fd49c16e67ff
 
 	select {

@@ -21,24 +21,24 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ReadTriesJournal retrieves the serialized in-memory trie node diff layers saved at
+// ReadTrieJournal retrieves the serialized in-memory trie node diff layers saved at
 // the last shutdown. The blob is expected to be max a few 10s of megabytes.
-func ReadTriesJournal(db ethdb.KeyValueReader) []byte {
+func ReadTrieJournal(db ethdb.KeyValueReader) []byte {
 	data, _ := db.Get(triesJournalKey)
 	return data
 }
 
-// WriteTriesJournal stores the serialized in-memory trie node diff layers to save at
+// WriteTrieJournal stores the serialized in-memory trie node diff layers to save at
 // shutdown. The blob is expected to be max a few 10s of megabytes.
-func WriteTriesJournal(db ethdb.KeyValueWriter, journal []byte) {
+func WriteTrieJournal(db ethdb.KeyValueWriter, journal []byte) {
 	if err := db.Put(triesJournalKey, journal); err != nil {
 		log.Crit("Failed to store tries journal", "err", err)
 	}
 }
 
-// DeleteTriesJournal deletes the serialized in-memory trie node diff layers saved at
+// DeleteTrieJournal deletes the serialized in-memory trie node diff layers saved at
 // the last shutdown
-func DeleteTriesJournal(db ethdb.KeyValueWriter) {
+func DeleteTrieJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(triesJournalKey); err != nil {
 		log.Crit("Failed to remove tries journal", "err", err)
 	}

@@ -41,9 +41,9 @@ var (
 	bloomErrorGauge = metrics.NewRegisteredGauge("trie/bloom/error", nil)
 )
 
-// stateBloomHasher is a wrapper around a common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert a unique
-// state key into a 64 bit mini hash.
+// stateBloomHasher is a wrapper around a trie node internal key to satisfy
+// the interface API requirements of the bloom library used. It's used to
+// convert a unique state key into a 64 bit mini hash.
 type stateBloomHasher []byte
 
 func (h stateBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
@@ -195,13 +195,13 @@ func (b *SyncBloom) AddCode(hash []byte) {
 	bloomAddMeter.Mark(1)
 }
 
-// ContainNode tests if the bloom filter contains the given key:
+// ContainsNode tests if the bloom filter contains the given key:
 //   - false: the bloom definitely does not contain key
 //   - true:  the bloom maybe contains key
 //
 // While the bloom is being initialized, any query will return true.
 // Note the given key is expected to be encoded in internal format.
-func (b *SyncBloom) ContainNode(key []byte) bool {
+func (b *SyncBloom) ContainsNode(key []byte) bool {
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As
@@ -217,12 +217,12 @@ func (b *SyncBloom) ContainNode(key []byte) bool {
 	return maybe
 }
 
-// ContainCode tests if the bloom filter contains the given contract code:
+// ContainsCode tests if the bloom filter contains the given contract code:
 //   - false: the bloom definitely does not contain key
 //   - true:  the bloom maybe contains key
 //
 // While the bloom is being initialized, any query will return true.
-func (b *SyncBloom) ContainCode(hash []byte) bool {
+func (b *SyncBloom) ContainsCode(hash []byte) bool {
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As

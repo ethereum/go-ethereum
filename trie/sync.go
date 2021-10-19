@@ -145,7 +145,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if s.membatch.hasNode(string(internalKey)) {
 		return
 	}
-	if s.bloom == nil || s.bloom.ContainNode(internalKey) {
+	if s.bloom == nil || s.bloom.ContainsNode(internalKey) {
 		// Bloom filter says this might be a duplicate, double check.
 		blob, nodeHash := rawdb.ReadTrieNode(s.database, storageKey)
 		if len(blob) == 0 {
@@ -183,7 +183,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	if s.membatch.hasCode(hash) {
 		return
 	}
-	if s.bloom == nil || s.bloom.ContainCode(hash[:]) {
+	if s.bloom == nil || s.bloom.ContainsCode(hash[:]) {
 		// Bloom filter says this might be a duplicate, double check.
 		// If database says yes, the blob is present for sure.
 		// Note we only check the existence with new code scheme, fast
@@ -460,7 +460,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if s.membatch.hasNode(string(childKey)) {
 				continue
 			}
-			if s.bloom == nil || s.bloom.ContainNode(childKey) {
+			if s.bloom == nil || s.bloom.ContainsNode(childKey) {
 				// Bloom filter says this might be a duplicate, double check.
 				blob, hash := rawdb.ReadTrieNode(s.database, storageKey)
 				if len(blob) == 0 {

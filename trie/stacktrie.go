@@ -411,8 +411,7 @@ func (st *StackTrie) hash(path []byte) {
 				nodes[i] = nilValueNode
 				continue
 			}
-			prefix := append(append([]byte{}, path...), byte(i))
-			child.hash(prefix)
+			child.hash(append(path, byte(i)))
 			if len(child.val) < 32 {
 				nodes[i] = rawNode(child.val)
 			} else {

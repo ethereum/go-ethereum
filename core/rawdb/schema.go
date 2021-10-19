@@ -20,7 +20,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 )
@@ -102,6 +101,10 @@ var (
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	// maxTrieNodeStorageKeyLen is the upper limit of trie node storage key length.
+	// Check trie.MaxStorageKeyLen for more details.
+	maxTrieNodeStorageKeyLen = 65
 )
 
 const (
@@ -239,7 +242,12 @@ func trieNodeKey(key []byte) []byte {
 // if so return the raw encoded trie key as well.
 func IsTrieNodeKey(key []byte) (bool, []byte) {
 	if bytes.HasPrefix(key, TrieNodePrefix) {
-		return true, key[len(TrieNodePrefix):]
+		storageKey := key[len(TrieNodePrefix):]
+		// Check trie.MaxStorageKeyLen for the key length upper limit calculation.
+		if len(storageKey) > 0 && len(storageKey) < maxTrieNodeStorageKeyLen {
+			return true, storageKey
+		}
+		return false, nil
 	}
 	return false, nil
 }

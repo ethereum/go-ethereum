@@ -107,3 +107,12 @@ func TestDecodeStorageKey(t *testing.T) {
 		}
 	}
 }
+
+func TestStorageKeyLenRange(t *testing.T) {
+	// The maximum storage key length(can never be reached in practice) can be:
+	// - 32 bytes owner
+	// - encoded path of 32 bytes key(can never be reached), it's 33
+	if max, want := MaxStorageKeyLen(), 65; max != want {
+		t.Fatalf("Unexpected key len range, want %d got %d", want, max)
+	}
+}

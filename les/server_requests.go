@@ -428,7 +428,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 					p.bumpInvalid()
 					continue
 				}
-				trie, err = statedb.OpenStorageTrie(common.Hash{}, common.BytesToHash(request.AccKey), account.Root)
+				trie, err = statedb.OpenStorageTrie(root, common.BytesToHash(request.AccKey), account.Root)
 				if trie == nil || err != nil {
 					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
 					continue

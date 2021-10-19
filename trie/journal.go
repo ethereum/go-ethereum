@@ -46,8 +46,8 @@ type journalNode struct {
 }
 
 // loadJournal tries to parse the snapshot journal from the disk.
-func loadJournal(disk ethdb.KeyValueStore, base *diskLayer, db *Database) (snapshot, error) {
-	journal := rawdb.ReadTriesJournal(disk)
+func loadJournal(disk ethdb.KeyValueStore, base *diskLayer) (snapshot, error) {
+	journal := rawdb.ReadTrieJournal(disk)
 	if len(journal) == 0 {
 		return nil, errMissJournal
 	}
@@ -74,7 +74,7 @@ func loadJournal(disk ethdb.KeyValueStore, base *diskLayer, db *Database) (snaps
 		return nil, fmt.Errorf("%w want %x got %x", errUnmatchedJournal, base.root, root)
 	}
 	// Load all the snapshot diffs from the journal
-	snapshot, err := loadDiffLayer(base, r, db)
+	snapshot, err := loadDiffLayer(base, r)
 	if err != nil {
 		return nil, err
 	}
@@ -83,41 +83,38 @@ func loadJournal(disk ethdb.KeyValueStore, base *diskLayer, db *Database) (snaps
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, cleans *fastcache.Cache, config *Config, db *Database) snapshot {
+func loadSnapshot(diskdb ethdb.KeyValueStore, cleans *fastcache.Cache, config *Config) snapshot {
 	// Retrieve the root node of single persisted trie node.
 	_, hash := rawdb.ReadTrieNode(diskdb, EncodeStorageKey(common.Hash{}, nil))
 	if hash == (common.Hash{}) {
-		hash = emptyHash
+		hash = emptyRoot
 	}
 	base := &diskLayer{
-		db:     db,
 		diskdb: diskdb,
 		cache:  cleans,
 		root:   hash,
 	}
-	snapshot, err := loadJournal(diskdb, base, db)
+	snapshot, err := loadJournal(diskdb, base)
 	if err != nil {
 		// Print the log for missing trie node journal, but prevent to
-		// show useless information when the db is setup from scratch.
+		// show useless information when the db is created from scratch.
 		logger := log.Info
-		if hash == emptyHash && errors.Is(err, errMissJournal) {
+		if hash == emptyRoot && errors.Is(err, errMissJournal) {
 			logger = log.Debug
 		}
 		logger("Failed to load journal, discard it", "err", err)
 
-		if hash == emptyHash {
+		// Try to find a fallback state root if the db is empty. It can
+		// happen when upgrade from a legacy node database. In this case
+		// construct the db with a single disk layer.
+		if hash == emptyRoot {
 			if config != nil && config.Fallback != nil {
 				if fallback := config.Fallback(); fallback != (common.Hash{}) {
 					hash = fallback
 				}
 			}
 		}
-		base := &diskLayer{
-			db:     db,
-			diskdb: diskdb,
-			cache:  cleans,
-			root:   hash,
-		}
+		base.root = hash
 		return base
 	}
 	return snapshot
@@ -125,7 +122,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, cleans *fastcache.Cache, config *C
 
 // loadDiffLayer reads the next sections of a snapshot journal, reconstructing a new
 // diff and verifying that it can be linked to the requested parent.
-func loadDiffLayer(parent snapshot, r *rlp.Stream, db *Database) (snapshot, error) {
+func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	// Read the next diff journal entry
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
@@ -150,7 +147,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream, db *Database) (snapshot, erro
 			nodes[entry.Key] = nil
 		}
 	}
-	return loadDiffLayer(newDiffLayer(parent, root, nodes), r, db)
+	return loadDiffLayer(newDiffLayer(parent, root, nodes), r)
 }
 
 // Journal terminates any in-progress snapshot generation, also implicitly pushing

@@ -137,8 +137,14 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	verifyChainHeight(t, c.handler.fetcher, 4)
 
 	// Send a reorged announcement
-	blocks, _ := core.GenerateChain(rawdb.ReadChainConfig(s.db, s.backend.Blockchain().Genesis().Hash()), s.backend.Blockchain().GetBlockByNumber(3),
-		ethash.NewFaker(), s.db, 2, func(i int, gen *core.BlockGen) {
+	forks, _, teardown := newClientServerEnv(t, testnetConfig{
+		blocks:    3,
+		protocol:  protocol,
+		nopruning: true,
+	})
+	defer teardown()
+	blocks, _ := core.GenerateChainWithInMemoryDB(rawdb.ReadChainConfig(s.db, s.backend.Blockchain().Genesis().Hash()), s.backend.Blockchain().GetBlockByNumber(3),
+		ethash.NewFaker(), forks.backend.Blockchain().StateCache(), 2, func(i int, gen *core.BlockGen) {
 			gen.OffsetTime(-9) // higher block difficulty
 		})
 	s.backend.Blockchain().InsertChain(blocks)

@@ -29,7 +29,7 @@ type tracker struct {
 	deleted  map[string]struct{} // Set of deleted nodes, indexed by **storage** key
 }
 
-// newTracker initializes diff tracker.
+// newTracker initializes state diff tracker.
 func newTracker() *tracker {
 	return &tracker{
 		inserted: make(map[string]struct{}),
@@ -228,7 +228,7 @@ func (set *nodeSet) len() int {
 	return len(set.nodes)
 }
 
-// CommitResult wraps the trie commit result in the single struct.
+// CommitResult wraps the trie commit result in a single struct.
 type CommitResult struct {
 	Root common.Hash // The re-calculated trie root hash after commit
 

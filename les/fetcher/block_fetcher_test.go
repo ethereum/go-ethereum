@@ -30,15 +30,16 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
-	testdb       = rawdb.NewMemoryDatabase()
+	genesisGenDB = rawdb.NewMemoryDatabase()
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
-	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
+	genesis      = core.GenesisBlockForTesting(genesisGenDB, testAddress, big.NewInt(1000000000000000))
 	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 
@@ -46,8 +47,8 @@ var (
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
-func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+func makeChain(n int, seed byte, parent *types.Block, gendb ethdb.Database) ([]common.Hash, map[common.Hash]*types.Block) {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), gendb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
@@ -321,7 +322,7 @@ func TestLightSequentialAnnouncements(t *testing.T) { testSequentialAnnouncement
 func testSequentialAnnouncements(t *testing.T, light bool) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 
 	tester := newTester(light)
 	headerFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
@@ -358,7 +359,7 @@ func TestLightConcurrentAnnouncements(t *testing.T) { testConcurrentAnnouncement
 func testConcurrentAnnouncements(t *testing.T, light bool) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 
 	// Assemble a tester with a built in counter for the requests
 	tester := newTester(light)
@@ -414,7 +415,7 @@ func TestLightOverlappingAnnouncements(t *testing.T) { testOverlappingAnnounceme
 func testOverlappingAnnouncements(t *testing.T, light bool) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 
 	tester := newTester(light)
 	headerFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
@@ -459,7 +460,7 @@ func TestLightPendingDeduplication(t *testing.T) { testPendingDeduplication(t, t
 
 func testPendingDeduplication(t *testing.T, light bool) {
 	// Create a hash and corresponding block
-	hashes, blocks := makeChain(1, 0, genesis)
+	hashes, blocks := makeChain(1, 0, genesis, copyDB(genesisGenDB))
 
 	// Assemble a tester with a built in counter and delayed fetcher
 	tester := newTester(light)
@@ -508,7 +509,7 @@ func TestLightRandomArrivalImport(t *testing.T) { testRandomArrivalImport(t, tru
 func testRandomArrivalImport(t *testing.T, light bool) {
 	// Create a chain of blocks to import, and choose one to delay
 	targetBlocks := maxQueueDist
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 	skip := targetBlocks / 2
 
 	tester := newTester(light)
@@ -547,7 +548,7 @@ func testRandomArrivalImport(t *testing.T, light bool) {
 func TestQueueGapFill(t *testing.T) {
 	// Create a chain of blocks to import, and choose one to not announce at all
 	targetBlocks := maxQueueDist
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 	skip := targetBlocks / 2
 
 	tester := newTester(false)
@@ -574,7 +575,7 @@ func TestQueueGapFill(t *testing.T) {
 // announces, etc) do not get scheduled for import multiple times.
 func TestImportDeduplication(t *testing.T) {
 	// Create two blocks to import (one for duplication, the other for stalling)
-	hashes, blocks := makeChain(2, 0, genesis)
+	hashes, blocks := makeChain(2, 0, genesis, copyDB(genesisGenDB))
 
 	// Create the tester and wrap the importer with a counter
 	tester := newTester(false)
@@ -613,7 +614,7 @@ func TestImportDeduplication(t *testing.T) {
 // discarded to prevent wasting resources on useless blocks from faulty peers.
 func TestDistantPropagationDiscarding(t *testing.T) {
 	// Create a long chain to import and define the discard boundaries
-	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis)
+	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis, copyDB(genesisGenDB))
 	head := hashes[len(hashes)/2]
 
 	low, high := len(hashes)/2+maxUncleDist+1, len(hashes)/2-maxQueueDist-1
@@ -648,7 +649,7 @@ func TestLightDistantAnnouncementDiscarding(t *testing.T) { testDistantAnnouncem
 
 func testDistantAnnouncementDiscarding(t *testing.T, light bool) {
 	// Create a long chain to import and define the discard boundaries
-	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis)
+	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis, copyDB(genesisGenDB))
 	head := hashes[len(hashes)/2]
 
 	low, high := len(hashes)/2+maxUncleDist+1, len(hashes)/2-maxQueueDist-1
@@ -691,7 +692,7 @@ func TestLightInvalidNumberAnnouncement(t *testing.T) { testInvalidNumberAnnounc
 
 func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	// Create a single block to import and check numbers against
-	hashes, blocks := makeChain(1, 0, genesis)
+	hashes, blocks := makeChain(1, 0, genesis, copyDB(genesisGenDB))
 
 	tester := newTester(light)
 	badHeaderFetcher := tester.makeHeaderFetcher("bad", blocks, -gatherSlack)
@@ -758,7 +759,7 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 // made, and instead the header should be assembled into a whole block in itself.
 func TestEmptyBlockShortCircuit(t *testing.T) {
 	// Create a chain of blocks to import
-	hashes, blocks := makeChain(32, 0, genesis)
+	hashes, blocks := makeChain(32, 0, genesis, copyDB(genesisGenDB))
 
 	tester := newTester(false)
 	headerFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
@@ -812,11 +813,11 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 	}
 	// Create a valid chain and an infinite junk chain
 	targetBlocks := hashLimit + 2*maxQueueDist
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 	validHeaderFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
 	validBodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
-	attack, _ := makeChain(targetBlocks, 0, unknownBlock)
+	attack, _ := makeChain(targetBlocks, 0, unknownBlock, rawdb.NewMemoryDatabase())
 	attackerHeaderFetcher := tester.makeHeaderFetcher("attacker", nil, -gatherSlack)
 	attackerBodyFetcher := tester.makeBodyFetcher("attacker", nil, 0)
 
@@ -859,10 +860,10 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	}
 	// Create a valid chain and a batch of dangling (but in range) blocks
 	targetBlocks := hashLimit + 2*maxQueueDist
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis, copyDB(genesisGenDB))
 	attack := make(map[common.Hash]*types.Block)
 	for i := byte(0); len(attack) < blockLimit+2*maxQueueDist; i++ {
-		hashes, blocks := makeChain(maxQueueDist-1, i, unknownBlock)
+		hashes, blocks := makeChain(maxQueueDist-1, i, unknownBlock, rawdb.NewMemoryDatabase())
 		for _, hash := range hashes[:maxQueueDist-2] {
 			attack[hash] = blocks[hash]
 		}
@@ -893,4 +894,14 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 		verifyImportEvent(t, imported, true)
 	}
 	verifyImportDone(t, imported)
+}
+
+func copyDB(src ethdb.Database) ethdb.Database {
+	dest := rawdb.NewMemoryDatabase()
+	iter := src.NewIterator(nil, nil)
+	for iter.Next() {
+		dest.Put(iter.Key(), iter.Value())
+	}
+	iter.Release()
+	return dest
 }

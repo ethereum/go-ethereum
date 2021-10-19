@@ -72,12 +72,11 @@ type Trie struct {
 	// is not found then disk layer will be used as the fallback, all the loaded
 	// nodes will be checked by hash.
 	// All subsequent new states introduced by the trie operation can be accessed
-	// in the accumulated state tracker.
+	// in the accumulated dirty node set.
 	snap Snapshot
 
-	// Diff is the state tracker since the last commit operation. It will be
-	// reset after each commit and the captured state diff will be merged into
-	// the accumulated dirty set.
+	// Diff is the state diff tracker can ba used to capture newly added/deleted
+	// trie node. It will be reset after each commit operation.
 	diff *tracker
 
 	// Dirty is the container for maintaining all dirty nodes since creation.
@@ -372,8 +371,6 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
-		// In the meantime, evict the newly inserted branch node if it's in
-		// the deletion set.
 		t.diff.onInsert(EncodeStorageKey(t.owner, append(prefix, key[:matchlen]...)))
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
@@ -388,7 +385,6 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, n, nil
 
 	case nil:
-		// Evict the newly inserted short node if it's in the deletion set.
 		t.diff.onInsert(EncodeStorageKey(t.owner, prefix))
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
@@ -442,7 +438,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, nil // don't replace n on mismatch
 		}
 		if matchlen == len(key) {
-			// Mark the entire short node as deleted.
 			t.diff.onDelete(EncodeStorageKey(t.owner, prefix))
 			return true, nil, nil // remove n entirely for whole matches
 		}

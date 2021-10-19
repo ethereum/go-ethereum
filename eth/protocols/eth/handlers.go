@@ -164,32 +164,7 @@ func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer) [][]byte {
-	// Gather state data until the fetch or network limits is reached
-	var (
-		bytes int
-		nodes [][]byte
-	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(nodes) >= maxNodeDataServe ||
-			lookups >= 2*maxNodeDataServe {
-			break
-		}
-		// Retrieve the requested state entry
-		if bloom := backend.StateBloom(); bloom != nil && !bloom.ContainNode(hash[:]) {
-			// Only lookup the trie node if there's chance that we actually have it
-			continue
-		}
-		entry, err := backend.Chain().TrieNode(hash)
-		if len(entry) == 0 || err != nil {
-			// Read the contract code with prefix only to save unnecessary lookups.
-			entry, err = backend.Chain().ContractCodeWithPrefix(hash)
-		}
-		if err == nil && len(entry) > 0 {
-			nodes = append(nodes, entry)
-			bytes += len(entry)
-		}
-	}
-	return nodes
+	return nil
 }
 
 func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {

@@ -111,7 +111,7 @@ func TestHexToCompactInPlaceRandom(t *testing.T) {
 	}
 }
 
-func TestHexReverseCompact(t *testing.T) {
+func TestHexSuffixCompact(t *testing.T) {
 	tests := []struct{ hex, compact []byte }{
 		// empty keys, with and without terminator.
 		{hex: []byte{}, compact: []byte{0x00}},
@@ -126,11 +126,11 @@ func TestHexReverseCompact(t *testing.T) {
 		{hex: []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x0f, 0x1c, 0xb8, 0x02}},
 	}
 	for _, test := range tests {
-		if c := hexToReverseCompact(test.hex); !bytes.Equal(c, test.compact) {
-			t.Errorf("hexToReverseCompact(%x) -> %x, want %x", test.hex, c, test.compact)
+		if c := hexToSuffixCompact(test.hex); !bytes.Equal(c, test.compact) {
+			t.Errorf("hexToSuffixCompact(%x) -> %x, want %x", test.hex, c, test.compact)
 		}
-		if h := reverseCompactToHex(test.compact); !bytes.Equal(h, test.hex) {
-			t.Errorf("reverseCompactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
+		if h := suffixCompactToHex(test.compact); !bytes.Equal(h, test.hex) {
+			t.Errorf("suffixCompactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
 		}
 	}
 }

@@ -27,17 +27,15 @@ import (
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
-	db     *Database           // Main database handler for accessing immature dirty nodes
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
-
-	lock sync.RWMutex
+	lock  sync.RWMutex
 }
 
-// Root returns root hash for which this snapshot was made.
+// Root returns root hash of corresponding state.
 func (dl *diskLayer) Root() common.Hash {
 	return dl.root
 }
@@ -59,21 +57,12 @@ func (dl *diskLayer) Stale() bool {
 // Node retrieves the trie node associated with a particular key.
 // The given key must be the internal format node key.
 func (dl *diskLayer) Node(key []byte) (node, error) {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	if dl.stale {
-		return nil, ErrSnapshotStale
+	blob, err := dl.NodeBlob(key)
+	if err != nil {
+		return nil, err
 	}
-	path, hash := DecodeInternalKey(key)
-	blob, nodeHash := rawdb.ReadTrieNode(dl.diskdb, path)
-	if len(blob) == 0 || nodeHash != hash {
-		blob = rawdb.ReadArchiveTrieNode(dl.diskdb, hash)
-	}
-	if len(blob) > 0 {
-		return mustDecodeNode(hash[:], blob), nil
-	}
-	return nil, nil
+	_, hash := DecodeInternalKey(key)
+	return mustDecodeNode(hash[:], blob), nil
 }
 
 // NodeBlob retrieves the trie node blob associated with a particular key.
@@ -85,10 +74,30 @@ func (dl *diskLayer) NodeBlob(key []byte) ([]byte, error) {
 	if dl.stale {
 		return nil, ErrSnapshotStale
 	}
+	// If we're in the disk layer, all diff layers missed
+	triedbDirtyMissMeter.Mark(1)
+
+	// Try to retrieve the trie node from the memory cache
+	if dl.cache != nil {
+		if blob, found := dl.cache.HasGet(nil, key); found {
+			triedbCleanHitMeter.Mark(1)
+			triedbCleanReadMeter.Mark(int64(len(blob)))
+			return blob, nil
+		}
+		triedbCleanMissMeter.Mark(1)
+	}
 	path, hash := DecodeInternalKey(key)
 	blob, nodeHash := rawdb.ReadTrieNode(dl.diskdb, path)
 	if len(blob) == 0 || nodeHash != hash {
 		blob = rawdb.ReadArchiveTrieNode(dl.diskdb, hash)
+		if len(blob) != 0 {
+			triedbFallbackHitMeter.Mark(1)
+			triedbFallbackReadMeter.Mark(int64(len(blob)))
+		}
+	}
+	if dl.cache != nil {
+		dl.cache.Set(key, blob)
+		triedbCleanWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) > 0 {
 		return blob, nil

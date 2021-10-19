@@ -135,7 +135,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		hash := crypto.Keccak256Hash(it.Value())
 		ikey := string(EncodeInternalKey(nodeKey, hash))
 		if _, ok := elements[ikey]; !ok {
-			t.Errorf("state entry not reported %v", reverseCompactToHex(nodeKey))
+			t.Errorf("state entry not reported %v", suffixCompactToHex(nodeKey))
 		}
 	}
 	it.Release()
@@ -420,14 +420,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 		barNodeKey  []byte
 	)
 	diskdb := memorydb.New()
-	triedb := NewDatabase(diskdb, &Config{
-		OnCommit: func(key, val []byte) {
-			hash := crypto.Keccak256Hash(val)
-			if hash == barNodeHash {
-				barNodeKey = common.CopyBytes(key)
-			}
-		},
-	})
+	triedb := NewDatabase(diskdb, nil)
 	ctr, _ := New(common.Hash{}, triedb)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
@@ -435,6 +428,12 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	result, _ := ctr.Commit(nil)
 	root := result.Root
 
+	for key := range result.Nodes() {
+		_, hash := DecodeInternalKey([]byte(key))
+		if hash == barNodeHash {
+			barNodeKey = []byte(key)
+		}
+	}
 	if !memonly {
 		triedb.Update(root, common.Hash{}, result.CommitTo(nil))
 		triedb.Cap(root, 0)

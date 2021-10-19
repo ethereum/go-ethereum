@@ -157,7 +157,11 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 	for {
 		var err error
 		if t.trie == nil {
-			t.trie, err = trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database(), nil))
+			if len(t.id.AccKey) > 0 {
+				t.trie, err = trie.NewWithOwner(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root, trie.NewDatabase(t.db.backend.Database(), nil))
+			} else {
+				t.trie, err = trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database(), nil))
+			}
 		}
 		if err == nil {
 			err = fn()

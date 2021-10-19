@@ -740,43 +740,34 @@ func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
 // The test data was based on the 'master' code, and is basically random. It can be used
 // to check whether changes to the trie modifies the write order or data in any way.
 func TestCommitSequence(t *testing.T) {
-	t.Skip("The commit order is not deterministic")
+	t.Skip("FIX ME")
 
 	for i, tc := range []struct {
-		count              int
-		expWriteSeqHash    []byte
-		expCallbackSeqHash []byte
+		count           int
+		expWriteSeqHash []byte
 	}{
-		{20, common.FromHex("0e00dfd3d9ae274babcc2608d0886a285789af8076fa6a377ebd46994e50c9db"),
-			common.FromHex("326691b1ae9db8092d9edd9dfdf9903197d0661f9ee9255cde058324c4838b83")},
-		{200, common.FromHex("862c593c3e5c628671d4827dd359f9b53fc1d1bf234cfd0de815e6f6111ff3eb"),
-			common.FromHex("c94186c41b59ed5105cd18c771b62d93571d5666000143a83d09769e48d2252c")},
-		{2000, common.FromHex("8e5ca47cdabe0810d34a98f0bfda37f5da1a34bca193a6f237e3b40401405516"),
-			common.FromHex("82d4b65dbf4a1c4aebf41382e9841fc2d759746c2b618c282751e157a94abe5d")},
+		{20, common.FromHex("0e00dfd3d9ae274babcc2608d0886a285789af8076fa6a377ebd46994e50c9db")},
+		{200, common.FromHex("862c593c3e5c628671d4827dd359f9b53fc1d1bf234cfd0de815e6f6111ff3eb")},
+		{2000, common.FromHex("8e5ca47cdabe0810d34a98f0bfda37f5da1a34bca193a6f237e3b40401405516")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		callbackSponge := sha3.NewLegacyKeccak256()
-		db := NewDatabase(s, &Config{OnCommit: func(key, val []byte) {
-			callbackSponge.Write(key) // spongify the callback-order
-		}})
+
 		// Insert the test data into the trie
-		trie, _ := New(common.Hash{}, db)
+		trie, _ := New(common.Hash{}, NewDatabase(s, nil))
 		for i := 0; i < tc.count; i++ {
 			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
+
 		// Flush trie -> database
 		result, _ := trie.Commit(nil)
-		db.Update(result.Root, common.Hash{}, result.CommitTo(nil))
-		db.Cap(result.Root, 0)
-
+		for k, v := range result.Nodes() {
+			s.Put([]byte(k), v)
+		}
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
 			t.Errorf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
-		}
-		if got, exp := callbackSponge.Sum(nil), tc.expCallbackSeqHash; !bytes.Equal(got, exp) {
-			t.Errorf("test %d, call back sequence wrong:\ngot: %x exp %x\n", i, got, exp)
 		}
 	}
 }
@@ -803,9 +794,9 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		callbackSponge := sha3.NewLegacyKeccak256()
 		db := NewDatabase(s, &Config{
-			OnCommit: func(key, val []byte) {
-				callbackSponge.Write(key) // spongify the callback-order
-			},
+			//OnCommit: func(key, val []byte) {
+			//	callbackSponge.Write(key) // spongify the callback-order
+			//},
 		})
 		trie, _ := New(common.Hash{}, db)
 		for i := 0; i < tc.count; i++ {

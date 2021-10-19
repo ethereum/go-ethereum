@@ -57,6 +57,7 @@ type testOdr struct {
 	OdrBackend
 	indexerConfig *IndexerConfig
 	sdb, ldb      ethdb.Database
+	serverState   state.Database
 	disable       bool
 }
 
@@ -82,7 +83,19 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			req.Receipts = rawdb.ReadRawReceipts(odr.sdb, req.Hash, *number)
 		}
 	case *TrieRequest:
-		t, _ := trie.New(req.Id.Root, trie.NewDatabase(odr.sdb))
+		var (
+			err error
+			t   *trie.Trie
+		)
+		if len(req.Id.AccKey) > 0 {
+			block := rawdb.ReadBlock(odr.sdb, req.Id.BlockHash, req.Id.BlockNumber)
+			t, err = trie.NewWithOwner(block.Root(), common.BytesToHash(req.Id.AccKey), req.Id.Root, odr.serverState.TrieDB())
+		} else {
+			t, err = trie.New(req.Id.Root, odr.serverState.TrieDB())
+		}
+		if err != nil {
+			panic(err)
+		}
 		nodes := NewNodeSet()
 		t.Prove(req.Key, 0, nodes)
 		req.Proof = nodes
@@ -149,7 +162,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 		st = NewState(ctx, header, lc.Odr())
 	} else {
 		header := bc.GetHeaderByHash(bhash)
-		st, _ = state.New(header.Root, state.NewDatabase(db), nil)
+		st, _ = state.New(header.Root, bc.StateCache(), nil)
 	}
 
 	var res []byte
@@ -189,7 +202,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		} else {
 			chain = bc
 			header = bc.GetHeaderByHash(bhash)
-			st, _ = state.New(header.Root, state.NewDatabase(db), nil)
+			st, _ = state.New(header.Root, bc.StateCache(), nil)
 		}
 
 		// Perform read-only call.
@@ -253,6 +266,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	var (
 		sdb   = rawdb.NewMemoryDatabase()
 		ldb   = rawdb.NewMemoryDatabase()
+		gendb = rawdb.NewMemoryDatabase()
 		gspec = core.Genesis{
 			Alloc:   core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
@@ -260,14 +274,17 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 		genesis = gspec.MustCommit(sdb)
 	)
 	gspec.MustCommit(ldb)
+	gspec.MustCommit(gendb)
+
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, 4, testChainGen)
+
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), gendb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker(), nil)
 	if err != nil {
 		t.Fatal(err)

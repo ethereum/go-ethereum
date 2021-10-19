@@ -16,7 +16,9 @@
 
 package trie
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // NodePath is a path tuple identifying a particular trie node either in a single
 // trie (account) or a layered trie (account -> storage).
@@ -71,16 +73,25 @@ func EncodeStorageKey(owner common.Hash, path []byte) []byte {
 	if owner != (common.Hash{}) {
 		ret = append(ret, owner.Bytes()...)
 	}
-	return append(ret, hexToReverseCompact(path)...)
+	return append(ret, hexToSuffixCompact(path)...)
 }
 
 // DecodeStorageKey decodes the storage format node key and returns all the
 // key components. The returned key is in hex nibbles.
 func DecodeStorageKey(key []byte) (common.Hash, []byte) {
 	if len(key) <= common.HashLength {
-		return common.Hash{}, reverseCompactToHex(key)
+		return common.Hash{}, suffixCompactToHex(key)
 	}
-	return common.BytesToHash(key[:common.HashLength]), reverseCompactToHex(key[common.HashLength:])
+	return common.BytesToHash(key[:common.HashLength]), suffixCompactToHex(key[common.HashLength:])
+}
+
+// MaxStorageKeyLen returns the maximum storage key length. In practice,
+// it's impossible to reach this length since valueNode is always embedded
+// in the parent node. This function can be used to calculate the upper limit
+// of encoded storage key.
+func MaxStorageKeyLen() int {
+	key := EncodeStorageKey(common.HexToHash("deadbeef"), keybytesToHex(common.Hash{}.Bytes()))
+	return len(key)
 }
 
 // EncodeInternalKey appends the node hash in the end as a part of internal node

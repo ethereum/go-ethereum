@@ -189,16 +189,10 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
+func newTestClientHandler(gspec core.Genesis, backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
-		gspec  = core.Genesis{
-			Config:   params.AllEthashProtocolChanges,
-			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
-		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
 	genesis := gspec.MustCommit(db)
@@ -251,17 +245,11 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	}
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend, func()) {
+func newTestServerHandler(gspec core.Genesis, blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend, func()) {
 	var (
-		gspec = core.Genesis{
-			Config:   params.AllEthashProtocolChanges,
-			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
-		}
-		oracle *checkpointoracle.CheckpointOracle
+		oracle  *checkpointoracle.CheckpointOracle
+		genesis = gspec.MustCommit(db)
 	)
-	genesis := gspec.MustCommit(db)
 
 	// create a simulation backend and pre-commit several customized block to the database.
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
@@ -451,6 +439,7 @@ type testClient struct {
 	db      ethdb.Database
 	peer    *testPeer
 	handler *clientHandler
+	gspec   core.Genesis
 
 	chtIndexer       *core.ChainIndexer
 	bloomIndexer     *core.ChainIndexer
@@ -515,6 +504,7 @@ type testServer struct {
 	db      ethdb.Database
 	peer    *testPeer
 	handler *serverHandler
+	gspec   core.Genesis
 
 	chtIndexer       *core.ChainIndexer
 	bloomIndexer     *core.ChainIndexer
@@ -605,8 +595,14 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
-	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
+	gspec := core.Genesis{
+		Config:   params.AllEthashProtocolChanges,
+		Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
+		GasLimit: 100000000,
+		BaseFee:  big.NewInt(params.InitialBaseFee),
+	}
+	server, b, serverClose := newTestServerHandler(gspec, config.blocks, sindexers, sdb, clock)
+	client, clientClose := newTestClientHandler(gspec, b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
@@ -639,6 +635,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		db:               sdb,
 		peer:             cpeer,
 		handler:          server,
+		gspec:            gspec,
 		chtIndexer:       scIndexer,
 		bloomIndexer:     sbIndexer,
 		bloomTrieIndexer: sbtIndexer,
@@ -648,6 +645,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		db:               cdb,
 		peer:             speer,
 		handler:          client,
+		gspec:            gspec,
 		chtIndexer:       ccIndexer,
 		bloomIndexer:     cbIndexer,
 		bloomTrieIndexer: cbtIndexer,
