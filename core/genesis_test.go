@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"math/big"
 	"reflect"
 	"testing"
@@ -161,7 +160,7 @@ func TestSetupGenesis(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		config, hash, err := test.fn(db)
 		// Check the return values.
-		if !errors.Is(err, test.wantErr) {
+		if !reflect.DeepEqual(err, test.wantErr) {
 			spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
 			t.Errorf("%s: returned error %#v, want %#v", test.name, spew.NewFormatter(err), spew.NewFormatter(test.wantErr))
 		}

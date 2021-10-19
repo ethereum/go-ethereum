@@ -609,15 +609,6 @@ func (err *ConfigCompatError) Error() string {
 	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
 }
 
-func (err *ConfigCompatError) Is(target error) bool {
-	e, ok := target.(*ConfigCompatError)
-	return ok &&
-		e.What == err.What &&
-		e.RewindTo == err.RewindTo &&
-		e.StoredConfig.Cmp(err.StoredConfig) == 0 &&
-		e.NewConfig.Cmp(err.NewConfig) == 0
-}
-
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
 // that do not have or require information about the block.
 //
