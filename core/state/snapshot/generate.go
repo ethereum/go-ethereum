@@ -640,11 +640,13 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			stats.accounts++
 		}
-		// If we've exceeded our batch allowance or termination was requested, flush to disk
 		marker := accountHash[:]
-		if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
-			marker = append(marker, dl.genMarker[common.HashLength:]...)
+		// If the snap generation goes here after interrupted, genMarker may go backward
+		// when last genMarker is consisted of accountHash and storageHash
+		if accMarker != nil && bytes.Equal(marker, accMarker) && len(dl.genMarker) > common.HashLength {
+			marker = dl.genMarker[:]
 		}
+		// If we've exceeded our batch allowance or termination was requested, flush to disk
 		if err := checkAndFlush(marker); err != nil {
 			return err
 		}
