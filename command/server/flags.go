@@ -29,7 +29,7 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Path of the data directory to store information",
 		Value: &c.cliConfig.DataDir,
 	})
-	f.StringFlag(&flagset.StringFlag{
+	f.SliceStringFlag(&flagset.SliceStringFlag{
 		Name:  "config",
 		Usage: "File for the config file",
 		Value: &c.configFile,

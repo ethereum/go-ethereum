@@ -1,6 +1,8 @@
 package server
 
 import (
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -73,6 +75,34 @@ func TestConfigMerge(t *testing.T) {
 	}
 	assert.NoError(t, c0.Merge(c1))
 	assert.Equal(t, c0, expected)
+}
+
+func TestConfigHcl(t *testing.T) {
+	readConfig := func(data string, format string) *Config {
+		tmpDir, err := ioutil.TempDir("/tmp", "test-config")
+		assert.NoError(t, err)
+
+		filename := filepath.Join(tmpDir, "config."+format)
+		assert.NoError(t, ioutil.WriteFile(filename, []byte(data), 0755))
+
+		config, err := readConfigFile(filename)
+		assert.NoError(t, err)
+		return config
+	}
+
+	cfg := `{
+		"datadir": "datadir",
+		"p2p": {
+			"max_peers": 30
+		}
+	}`
+	config := readConfig(cfg, "json")
+	assert.Equal(t, config, &Config{
+		DataDir: "datadir",
+		P2P: &P2PConfig{
+			MaxPeers: 30,
+		},
+	})
 }
 
 var dummyEnodeAddr = "enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303"

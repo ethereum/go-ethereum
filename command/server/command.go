@@ -36,7 +36,7 @@ type Command struct {
 	// final configuration
 	config *Config
 
-	configFile string
+	configFile []string
 
 	// bor node
 	node *node.Node
@@ -65,8 +65,8 @@ func (c *Command) Run(args []string) int {
 
 	// read config file
 	config := DefaultConfig()
-	if c.configFile != "" {
-		cfg, err := readConfigFile(c.configFile)
+	for _, configFile := range c.configFile {
+		cfg, err := readConfigFile(configFile)
 		if err != nil {
 			c.UI.Error(err.Error())
 			return 1
@@ -130,8 +130,8 @@ func (c *Command) Run(args []string) int {
 	}
 
 	// register ethash service
-	if config.EthStats != "" {
-		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), config.EthStats); err != nil {
+	if config.Ethstats != "" {
+		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), config.Ethstats); err != nil {
 			c.UI.Error(err.Error())
 			return 1
 		}

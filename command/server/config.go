@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -33,141 +34,140 @@ import (
 type Config struct {
 	chain *chains.Chain
 
-	Chain     string
-	Debug     bool
-	Whitelist map[string]string
-	LogLevel  string
-	DataDir   string
-	P2P       *P2PConfig
-	SyncMode  string
-	GcMode    string
-	Snapshot  bool
-	EthStats  string
-	Heimdall  *HeimdallConfig
-	TxPool    *TxPoolConfig
-	Sealer    *SealerConfig
-	JsonRPC   *JsonRPCConfig
-	Gpo       *GpoConfig
-	Ethstats  string
-	Metrics   *MetricsConfig
-	Cache     *CacheConfig
-	Accounts  *AccountsConfig
+	Chain     string            `json:"chain"`
+	Debug     bool              `json:""`
+	Whitelist map[string]string `json:""`
+	LogLevel  string            `json:"log-level"`
+	DataDir   string            `json:"data-dir"`
+	P2P       *P2PConfig        `json:""`
+	SyncMode  string            `json:"sync-mode"`
+	GcMode    string            `json:"gc-mode"`
+	Snapshot  bool              `json:"snapshot"`
+	Heimdall  *HeimdallConfig   `json:"heimdall"`
+	TxPool    *TxPoolConfig     `json:"txpool"`
+	Sealer    *SealerConfig     `json:"sealer"`
+	JsonRPC   *JsonRPCConfig    `json:"jsonrpc"`
+	Gpo       *GpoConfig        `json:"gpo"`
+	Ethstats  string            `json:"ethstats"`
+	Metrics   *MetricsConfig    `json:""`
+	Cache     *CacheConfig      `json:""`
+	Accounts  *AccountsConfig   `json:""`
 }
 
 type P2PConfig struct {
-	MaxPeers     uint64
-	MaxPendPeers uint64
-	Bind         string
-	Port         uint64
-	NoDiscover   bool
-	NAT          string
-	Discovery    *P2PDiscovery
+	MaxPeers     uint64        `json:"max_peers"`
+	MaxPendPeers uint64        `json:"max_pend_peers"`
+	Bind         string        `json:""`
+	Port         uint64        `json:""`
+	NoDiscover   bool          `json:""`
+	NAT          string        `json:""`
+	Discovery    *P2PDiscovery `json:""`
 }
 
 type P2PDiscovery struct {
-	V5Enabled    bool
-	Bootnodes    []string
-	BootnodesV4  []string
-	BootnodesV5  []string
-	StaticNodes  []string
-	TrustedNodes []string
-	DNS          []string
+	V5Enabled    bool     `json:""`
+	Bootnodes    []string `json:""`
+	BootnodesV4  []string `json:""`
+	BootnodesV5  []string `json:""`
+	StaticNodes  []string `json:""`
+	TrustedNodes []string `json:""`
+	DNS          []string `json:""`
 }
 
 type HeimdallConfig struct {
-	URL     string
-	Without bool
+	URL     string `json:""`
+	Without bool   `json:""`
 }
 
 type TxPoolConfig struct {
-	Locals       []string
-	NoLocals     bool
-	Journal      string
-	Rejournal    time.Duration
-	PriceLimit   uint64
-	PriceBump    uint64
-	AccountSlots uint64
-	GlobalSlots  uint64
-	AccountQueue uint64
-	GlobalQueue  uint64
-	LifeTime     time.Duration
+	Locals       []string      `json:""`
+	NoLocals     bool          `json:""`
+	Journal      string        `json:""`
+	Rejournal    time.Duration `json:""`
+	PriceLimit   uint64        `json:""`
+	PriceBump    uint64        `json:""`
+	AccountSlots uint64        `json:""`
+	GlobalSlots  uint64        `json:""`
+	AccountQueue uint64        `json:""`
+	GlobalQueue  uint64        `json:""`
+	LifeTime     time.Duration `json:""`
 }
 
 type SealerConfig struct {
-	Enabled   bool
-	Etherbase string
-	ExtraData string
-	GasCeil   uint64
-	GasPrice  *big.Int
+	Enabled   bool     `json:""`
+	Etherbase string   `json:""`
+	ExtraData string   `json:""`
+	GasCeil   uint64   `json:""`
+	GasPrice  *big.Int `json:""`
 }
 
 type JsonRPCConfig struct {
-	IPCDisable bool
-	IPCPath    string
+	IPCDisable bool   `json:""`
+	IPCPath    string `json:""`
 
-	Modules []string
-	VHost   []string
-	Cors    []string
+	Modules []string `json:""`
+	VHost   []string `json:""`
+	Cors    []string `json:""`
 
-	GasCap   uint64
-	TxFeeCap float64
+	GasCap   uint64  `json:""`
+	TxFeeCap float64 `json:""`
 
-	Http    *APIConfig
-	Ws      *APIConfig
-	Graphql *APIConfig
+	Http    *APIConfig `json:""`
+	Ws      *APIConfig `json:""`
+	Graphql *APIConfig `json:""`
 }
 
 type APIConfig struct {
-	Enabled bool
-	Port    uint64
-	Prefix  string
-	Host    string
+	Enabled bool   `json:""`
+	Port    uint64 `json:""`
+	Prefix  string `json:""`
+	Host    string `json:""`
 }
 
 type GpoConfig struct {
-	Blocks      uint64
-	Percentile  uint64
-	MaxPrice    *big.Int
-	IgnorePrice *big.Int
+	Blocks      uint64   `json:""`
+	Percentile  uint64   `json:""`
+	MaxPrice    *big.Int `json:""`
+	IgnorePrice *big.Int `json:""`
 }
 
 type MetricsConfig struct {
-	Enabled   bool
-	Expensive bool
-	InfluxDB  *InfluxDBConfig
+	Enabled   bool            `json:""`
+	Expensive bool            `json:""`
+	InfluxDB  *InfluxDBConfig `json:""`
 }
 
 type InfluxDBConfig struct {
-	V1Enabled    bool
-	Endpoint     string
-	Database     string
-	Username     string
-	Password     string
-	Tags         map[string]string
-	V2Enabled    bool
-	Token        string
-	Bucket       string
-	Organization string
+	V1Enabled    bool              `json:""`
+	Endpoint     string            `json:""`
+	Database     string            `json:""`
+	Username     string            `json:""`
+	Password     string            `json:""`
+	Tags         map[string]string `json:""`
+	V2Enabled    bool              `json:""`
+	Token        string            `json:""`
+	Bucket       string            `json:""`
+	Organization string            `json:""`
 }
 
 type CacheConfig struct {
-	Cache         uint64
-	PercGc        uint64
-	PercSnapshot  uint64
-	PercDatabase  uint64
-	PercTrie      uint64
-	Journal       string
-	Rejournal     time.Duration
-	NoPrefetch    bool
-	Preimages     bool
-	TxLookupLimit uint64
+	Cache         uint64        `json:""`
+	PercGc        uint64        `json:""`
+	PercSnapshot  uint64        `json:""`
+	PercDatabase  uint64        `json:""`
+	PercTrie      uint64        `json:""`
+	Journal       string        `json:""`
+	Rejournal     time.Duration `json:""`
+	NoPrefetch    bool          `json:""`
+	Preimages     bool          `json:""`
+	TxLookupLimit uint64        `json:""`
 }
 
 type AccountsConfig struct {
-	Unlock              []string
-	PasswordFile        string
-	AllowInsecureUnlock bool
-	UseLightweightKDF   bool
+	Unlock              []string `json:""`
+	PasswordFile        string   `json:""`
+	AllowInsecureUnlock bool     `json:""`
+	UseLightweightKDF   bool     `json:""`
 }
 
 func DefaultConfig() *Config {
@@ -201,7 +201,6 @@ func DefaultConfig() *Config {
 		SyncMode: "fast",
 		GcMode:   "full",
 		Snapshot: true,
-		EthStats: "",
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
@@ -297,12 +296,19 @@ func readConfigFile(path string) (*Config, error) {
 	}
 	// TODO: Use hcl as config format
 	ext := filepath.Ext(path)
-	switch ext {
-	case ".toml":
+	if ext == ".toml" {
 		return readLegacyConfig(data)
-	default:
-		return nil, fmt.Errorf("file path extension '%s' not found", ext)
 	}
+
+	// read configuration file
+	if ext != ".json" {
+		return nil, fmt.Errorf("suffix of %s is not json", path)
+	}
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }
 
 func (c *Config) loadChain() error {
