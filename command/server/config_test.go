@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -20,11 +21,14 @@ func TestConfigDefault(t *testing.T) {
 
 func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
-		Chain: stringPtr("0"),
-		Debug: boolPtr(false),
-		Whitelist: mapStrPtr(map[string]string{
+		Chain: "0",
+		Debug: true,
+		Whitelist: map[string]string{
 			"a": "b",
-		}),
+		},
+		TxPool: &TxPoolConfig{
+			LifeTime: 5 * time.Second,
+		},
 		P2P: &P2PConfig{
 			Discovery: &P2PDiscovery{
 				StaticNodes: []string{
@@ -34,11 +38,12 @@ func TestConfigMerge(t *testing.T) {
 		},
 	}
 	c1 := &Config{
-		Chain: stringPtr("1"),
-		Whitelist: mapStrPtr(map[string]string{
+		Chain: "1",
+		Whitelist: map[string]string{
 			"b": "c",
-		}),
+		},
 		P2P: &P2PConfig{
+			MaxPeers: 10,
 			Discovery: &P2PDiscovery{
 				StaticNodes: []string{
 					"b",
@@ -47,13 +52,17 @@ func TestConfigMerge(t *testing.T) {
 		},
 	}
 	expected := &Config{
-		Chain: stringPtr("1"),
-		Debug: boolPtr(false),
-		Whitelist: mapStrPtr(map[string]string{
+		Chain: "1",
+		Debug: true,
+		Whitelist: map[string]string{
 			"a": "b",
 			"b": "c",
-		}),
+		},
+		TxPool: &TxPoolConfig{
+			LifeTime: 5 * time.Second,
+		},
 		P2P: &P2PConfig{
+			MaxPeers: 10,
 			Discovery: &P2PDiscovery{
 				StaticNodes: []string{
 					"a",

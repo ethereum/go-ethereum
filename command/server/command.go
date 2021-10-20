@@ -83,7 +83,7 @@ func (c *Command) Run(args []string) int {
 	c.config = config
 
 	// start the logger
-	setupLogger(*config.LogLevel)
+	setupLogger(config.LogLevel)
 
 	// load the chain genesis
 	if err := config.loadChain(); err != nil {
@@ -122,7 +122,7 @@ func (c *Command) Run(args []string) int {
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 
 	// graphql is started from another place
-	if *config.JsonRPC.Graphql.Enabled {
+	if config.JsonRPC.Graphql.Enabled {
 		if err := graphql.New(stack, backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.Modules); err != nil {
 			c.UI.Error(fmt.Sprintf("Failed to register the GraphQL service: %v", err))
 			return 1
@@ -130,8 +130,8 @@ func (c *Command) Run(args []string) int {
 	}
 
 	// register ethash service
-	if *config.EthStats != "" {
-		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), *config.EthStats); err != nil {
+	if config.EthStats != "" {
+		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), config.EthStats); err != nil {
 			c.UI.Error(err.Error())
 			return 1
 		}
@@ -142,7 +142,7 @@ func (c *Command) Run(args []string) int {
 	{
 		keydir := stack.KeyStoreDir()
 		n, p := keystore.StandardScryptN, keystore.StandardScryptP
-		if *config.Accounts.UseLightweightKDF {
+		if config.Accounts.UseLightweightKDF {
 			n, p = keystore.LightScryptN, keystore.LightScryptP
 		}
 		borKeystore = keystore.NewKeyStore(keydir, n, p)
@@ -158,7 +158,7 @@ func (c *Command) Run(args []string) int {
 	}
 
 	// sealing (if enabled)
-	if *config.Sealer.Enabled {
+	if config.Sealer.Enabled {
 		if err := backend.StartMining(1); err != nil {
 			c.UI.Error(err.Error())
 			return 1
@@ -186,9 +186,9 @@ func (c *Command) unlockAccounts(borKeystore *keystore.KeyStore) error {
 
 	// read passwords from file if possible
 	passwords := []string{}
-	if *c.config.Accounts.PasswordFile != "" {
+	if c.config.Accounts.PasswordFile != "" {
 		var err error
-		if passwords, err = readMultilineFile(*c.config.Accounts.PasswordFile); err != nil {
+		if passwords, err = readMultilineFile(c.config.Accounts.PasswordFile); err != nil {
 			return err
 		}
 	}
@@ -222,8 +222,8 @@ func (c *Command) unlockAccounts(borKeystore *keystore.KeyStore) error {
 }
 
 func (c *Command) setupMetrics(config *MetricsConfig) error {
-	metrics.Enabled = *config.Enabled
-	metrics.EnabledExpensive = *config.Expensive
+	metrics.Enabled = config.Enabled
+	metrics.EnabledExpensive = config.Expensive
 
 	if !metrics.Enabled {
 		// metrics are disabled, do not set up any sink
@@ -233,22 +233,22 @@ func (c *Command) setupMetrics(config *MetricsConfig) error {
 	log.Info("Enabling metrics collection")
 
 	// influxdb
-	if v1Enabled, v2Enabled := (*config.InfluxDB.V1Enabled), (*config.InfluxDB.V2Enabled); v1Enabled || v2Enabled {
+	if v1Enabled, v2Enabled := (config.InfluxDB.V1Enabled), (config.InfluxDB.V2Enabled); v1Enabled || v2Enabled {
 		if v1Enabled && v2Enabled {
 			return fmt.Errorf("both influx v1 and influx v2 cannot be enabled")
 		}
 
 		cfg := config.InfluxDB
-		tags := *cfg.Tags
-		endpoint := *cfg.Endpoint
+		tags := cfg.Tags
+		endpoint := cfg.Endpoint
 
 		if v1Enabled {
 			log.Info("Enabling metrics export to InfluxDB (v1)")
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, *cfg.Database, *cfg.Username, *cfg.Password, "geth.", tags)
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, cfg.Database, cfg.Username, cfg.Password, "geth.", tags)
 		}
 		if v2Enabled {
 			log.Info("Enabling metrics export to InfluxDB (v2)")
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, *cfg.Token, *cfg.Bucket, *cfg.Organization, "geth.", tags)
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, cfg.Token, cfg.Bucket, cfg.Organization, "geth.", tags)
 		}
 	}
 

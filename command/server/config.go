@@ -30,66 +30,42 @@ import (
 	gopsutil "github.com/shirou/gopsutil/mem"
 )
 
-func mapStrPtr(m map[string]string) *map[string]string {
-	return &m
-}
-
-func stringPtr(s string) *string {
-	return &s
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
-func uint64Ptr(i uint64) *uint64 {
-	return &i
-}
-
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func durPtr(d time.Duration) *time.Duration {
-	return &d
-}
-
 type Config struct {
 	chain *chains.Chain
 
-	Chain     *string
-	Debug     *bool
-	Whitelist *map[string]string
-	LogLevel  *string
-	DataDir   *string
+	Chain     string
+	Debug     bool
+	Whitelist map[string]string
+	LogLevel  string
+	DataDir   string
 	P2P       *P2PConfig
-	SyncMode  *string
-	GcMode    *string
-	Snapshot  *bool
-	EthStats  *string
+	SyncMode  string
+	GcMode    string
+	Snapshot  bool
+	EthStats  string
 	Heimdall  *HeimdallConfig
 	TxPool    *TxPoolConfig
 	Sealer    *SealerConfig
 	JsonRPC   *JsonRPCConfig
 	Gpo       *GpoConfig
-	Ethstats  *string
+	Ethstats  string
 	Metrics   *MetricsConfig
 	Cache     *CacheConfig
 	Accounts  *AccountsConfig
 }
 
 type P2PConfig struct {
-	MaxPeers     *uint64
-	MaxPendPeers *uint64
-	Bind         *string
-	Port         *uint64
-	NoDiscover   *bool
-	NAT          *string
+	MaxPeers     uint64
+	MaxPendPeers uint64
+	Bind         string
+	Port         uint64
+	NoDiscover   bool
+	NAT          string
 	Discovery    *P2PDiscovery
 }
 
 type P2PDiscovery struct {
-	V5Enabled    *bool
+	V5Enabled    bool
 	Bootnodes    []string
 	BootnodesV4  []string
 	BootnodesV5  []string
@@ -99,42 +75,42 @@ type P2PDiscovery struct {
 }
 
 type HeimdallConfig struct {
-	URL     *string
-	Without *bool
+	URL     string
+	Without bool
 }
 
 type TxPoolConfig struct {
 	Locals       []string
-	NoLocals     *bool
-	Journal      *string
-	Rejournal    *time.Duration
-	PriceLimit   *uint64
-	PriceBump    *uint64
-	AccountSlots *uint64
-	GlobalSlots  *uint64
-	AccountQueue *uint64
-	GlobalQueue  *uint64
-	LifeTime     *time.Duration
+	NoLocals     bool
+	Journal      string
+	Rejournal    time.Duration
+	PriceLimit   uint64
+	PriceBump    uint64
+	AccountSlots uint64
+	GlobalSlots  uint64
+	AccountQueue uint64
+	GlobalQueue  uint64
+	LifeTime     time.Duration
 }
 
 type SealerConfig struct {
-	Enabled   *bool
-	Etherbase *string
-	ExtraData *string
-	GasCeil   *uint64
+	Enabled   bool
+	Etherbase string
+	ExtraData string
+	GasCeil   uint64
 	GasPrice  *big.Int
 }
 
 type JsonRPCConfig struct {
-	IPCDisable *bool
-	IPCPath    *string
+	IPCDisable bool
+	IPCPath    string
 
 	Modules []string
 	VHost   []string
 	Cors    []string
 
-	GasCap   *uint64
-	TxFeeCap *float64
+	GasCap   uint64
+	TxFeeCap float64
 
 	Http    *APIConfig
 	Ws      *APIConfig
@@ -142,74 +118,74 @@ type JsonRPCConfig struct {
 }
 
 type APIConfig struct {
-	Enabled *bool
-	Port    *uint64
-	Prefix  *string
-	Host    *string
+	Enabled bool
+	Port    uint64
+	Prefix  string
+	Host    string
 }
 
 type GpoConfig struct {
-	Blocks      *uint64
-	Percentile  *uint64
+	Blocks      uint64
+	Percentile  uint64
 	MaxPrice    *big.Int
 	IgnorePrice *big.Int
 }
 
 type MetricsConfig struct {
-	Enabled   *bool
-	Expensive *bool
+	Enabled   bool
+	Expensive bool
 	InfluxDB  *InfluxDBConfig
 }
 
 type InfluxDBConfig struct {
-	V1Enabled    *bool
-	Endpoint     *string
-	Database     *string
-	Username     *string
-	Password     *string
-	Tags         *map[string]string
-	V2Enabled    *bool
-	Token        *string
-	Bucket       *string
-	Organization *string
+	V1Enabled    bool
+	Endpoint     string
+	Database     string
+	Username     string
+	Password     string
+	Tags         map[string]string
+	V2Enabled    bool
+	Token        string
+	Bucket       string
+	Organization string
 }
 
 type CacheConfig struct {
-	Cache         *uint64
-	PercGc        *uint64
-	PercSnapshot  *uint64
-	PercDatabase  *uint64
-	PercTrie      *uint64
-	Journal       *string
-	Rejournal     *time.Duration
-	NoPrefetch    *bool
-	Preimages     *bool
-	TxLookupLimit *uint64
+	Cache         uint64
+	PercGc        uint64
+	PercSnapshot  uint64
+	PercDatabase  uint64
+	PercTrie      uint64
+	Journal       string
+	Rejournal     time.Duration
+	NoPrefetch    bool
+	Preimages     bool
+	TxLookupLimit uint64
 }
 
 type AccountsConfig struct {
 	Unlock              []string
-	PasswordFile        *string
-	AllowInsecureUnlock *bool
-	UseLightweightKDF   *bool
+	PasswordFile        string
+	AllowInsecureUnlock bool
+	UseLightweightKDF   bool
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Chain:     stringPtr("mainnet"),
-		Debug:     boolPtr(false),
-		Whitelist: mapStrPtr(map[string]string{}),
-		LogLevel:  stringPtr("INFO"),
-		DataDir:   stringPtr(defaultDataDir()),
+		Chain:     "mainnet",
+		Debug:     false,
+		Whitelist: map[string]string{},
+		LogLevel:  "INFO",
+		DataDir:   defaultDataDir(),
 		P2P: &P2PConfig{
-			MaxPeers:     uint64Ptr(30),
-			MaxPendPeers: uint64Ptr(50),
-			Bind:         stringPtr("0.0.0.0"),
-			Port:         uint64Ptr(30303),
-			NoDiscover:   boolPtr(false),
-			NAT:          stringPtr("any"),
+			MaxPeers:     30,
+			MaxPendPeers: 50,
+			Bind:         "0.0.0.0",
+			Port:         30303,
+			NoDiscover:   false,
+			NAT:          "any",
 			Discovery: &P2PDiscovery{
-				V5Enabled:    boolPtr(false),
+				V5Enabled:    false,
 				Bootnodes:    []string{},
 				BootnodesV4:  []string{},
 				BootnodesV5:  []string{},
@@ -219,97 +195,97 @@ func DefaultConfig() *Config {
 			},
 		},
 		Heimdall: &HeimdallConfig{
-			URL:     stringPtr("http://localhost:1317"),
-			Without: boolPtr(false),
+			URL:     "http://localhost:1317",
+			Without: false,
 		},
-		SyncMode: stringPtr("fast"),
-		GcMode:   stringPtr("full"),
-		Snapshot: boolPtr(true),
-		EthStats: stringPtr(""),
+		SyncMode: "fast",
+		GcMode:   "full",
+		Snapshot: true,
+		EthStats: "",
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
-			NoLocals:     boolPtr(false),
-			Journal:      stringPtr(""),
-			Rejournal:    durPtr(1 * time.Hour),
-			PriceLimit:   uint64Ptr(1),
-			PriceBump:    uint64Ptr(10),
-			AccountSlots: uint64Ptr(16),
-			GlobalSlots:  uint64Ptr(4096),
-			AccountQueue: uint64Ptr(64),
-			GlobalQueue:  uint64Ptr(1024),
-			LifeTime:     durPtr(3 * time.Hour),
+			NoLocals:     false,
+			Journal:      "",
+			Rejournal:    time.Duration(1 * time.Hour),
+			PriceLimit:   1,
+			PriceBump:    10,
+			AccountSlots: 16,
+			GlobalSlots:  4096,
+			AccountQueue: 64,
+			GlobalQueue:  1024,
+			LifeTime:     time.Duration(3 * time.Hour),
 		},
 		Sealer: &SealerConfig{
-			Enabled:   boolPtr(false),
-			Etherbase: stringPtr(""),
-			GasCeil:   uint64Ptr(8000000),
+			Enabled:   false,
+			Etherbase: "",
+			GasCeil:   8000000,
 			GasPrice:  big.NewInt(params.GWei),
-			ExtraData: stringPtr(""),
+			ExtraData: "",
 		},
 		Gpo: &GpoConfig{
-			Blocks:      uint64Ptr(20),
-			Percentile:  uint64Ptr(60),
+			Blocks:      20,
+			Percentile:  60,
 			MaxPrice:    gasprice.DefaultMaxPrice,
 			IgnorePrice: gasprice.DefaultIgnorePrice,
 		},
 		JsonRPC: &JsonRPCConfig{
-			IPCDisable: boolPtr(false),
-			IPCPath:    stringPtr(""),
+			IPCDisable: false,
+			IPCPath:    "",
 			Modules:    []string{"web3", "net"},
 			Cors:       []string{"*"},
 			VHost:      []string{"*"},
-			GasCap:     uint64Ptr(ethconfig.Defaults.RPCGasCap),
-			TxFeeCap:   float64Ptr(ethconfig.Defaults.RPCTxFeeCap),
+			GasCap:     ethconfig.Defaults.RPCGasCap,
+			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
 			Http: &APIConfig{
-				Enabled: boolPtr(false),
-				Port:    uint64Ptr(8545),
-				Prefix:  stringPtr(""),
-				Host:    stringPtr("localhost"),
+				Enabled: false,
+				Port:    8545,
+				Prefix:  "",
+				Host:    "localhost",
 			},
 			Ws: &APIConfig{
-				Enabled: boolPtr(false),
-				Port:    uint64Ptr(8546),
-				Prefix:  stringPtr(""),
-				Host:    stringPtr("localhost"),
+				Enabled: false,
+				Port:    8546,
+				Prefix:  "",
+				Host:    "localhost",
 			},
 			Graphql: &APIConfig{
-				Enabled: boolPtr(false),
+				Enabled: false,
 			},
 		},
-		Ethstats: stringPtr(""),
+		Ethstats: "",
 		Metrics: &MetricsConfig{
-			Enabled:   boolPtr(false),
-			Expensive: boolPtr(false),
+			Enabled:   false,
+			Expensive: false,
 			InfluxDB: &InfluxDBConfig{
-				V1Enabled:    boolPtr(false),
-				Endpoint:     stringPtr(""),
-				Database:     stringPtr(""),
-				Username:     stringPtr(""),
-				Password:     stringPtr(""),
-				Tags:         mapStrPtr(map[string]string{}),
-				V2Enabled:    boolPtr(false),
-				Token:        stringPtr(""),
-				Bucket:       stringPtr(""),
-				Organization: stringPtr(""),
+				V1Enabled:    false,
+				Endpoint:     "",
+				Database:     "",
+				Username:     "",
+				Password:     "",
+				Tags:         map[string]string{},
+				V2Enabled:    false,
+				Token:        "",
+				Bucket:       "",
+				Organization: "",
 			},
 		},
 		Cache: &CacheConfig{
-			Cache:         uint64Ptr(1024),
-			PercDatabase:  uint64Ptr(50),
-			PercTrie:      uint64Ptr(15),
-			PercGc:        uint64Ptr(25),
-			PercSnapshot:  uint64Ptr(10),
-			Journal:       stringPtr("triecache"),
-			Rejournal:     durPtr(60 * time.Minute),
-			NoPrefetch:    boolPtr(false),
-			Preimages:     boolPtr(false),
-			TxLookupLimit: uint64Ptr(2350000),
+			Cache:         1024,
+			PercDatabase:  50,
+			PercTrie:      15,
+			PercGc:        25,
+			PercSnapshot:  10,
+			Journal:       "triecache",
+			Rejournal:     60 * time.Minute,
+			NoPrefetch:    false,
+			Preimages:     false,
+			TxLookupLimit: 2350000,
 		},
 		Accounts: &AccountsConfig{
 			Unlock:              []string{},
-			PasswordFile:        stringPtr(""),
-			AllowInsecureUnlock: boolPtr(false),
-			UseLightweightKDF:   boolPtr(false),
+			PasswordFile:        "",
+			AllowInsecureUnlock: false,
+			UseLightweightKDF:   false,
 		},
 	}
 }
@@ -330,9 +306,9 @@ func readConfigFile(path string) (*Config, error) {
 }
 
 func (c *Config) loadChain() error {
-	chain, ok := chains.GetChain(*c.Chain)
+	chain, ok := chains.GetChain(c.Chain)
 	if !ok {
-		return fmt.Errorf("chain '%s' not found", *c.Chain)
+		return fmt.Errorf("chain '%s' not found", c.Chain)
 	}
 	c.chain = chain
 
@@ -342,10 +318,10 @@ func (c *Config) loadChain() error {
 	}
 
 	// depending on the chain we have different cache values
-	if *c.Chain != "mainnet" {
-		c.Cache.Cache = uint64Ptr(4096)
+	if c.Chain != "mainnet" {
+		c.Cache.Cache = 4096
 	} else {
-		c.Cache.Cache = uint64Ptr(1024)
+		c.Cache.Cache = 1024
 	}
 	return nil
 }
@@ -358,30 +334,30 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	n := ethconfig.Defaults
 	n.NetworkId = c.chain.NetworkId
 	n.Genesis = c.chain.Genesis
-	n.HeimdallURL = *c.Heimdall.URL
-	n.WithoutHeimdall = *c.Heimdall.Without
+	n.HeimdallURL = c.Heimdall.URL
+	n.WithoutHeimdall = c.Heimdall.Without
 
 	// txpool options
 	{
-		n.TxPool.NoLocals = *c.TxPool.NoLocals
-		n.TxPool.Journal = *c.TxPool.Journal
-		n.TxPool.Rejournal = *c.TxPool.Rejournal
-		n.TxPool.PriceLimit = *c.TxPool.PriceLimit
-		n.TxPool.PriceBump = *c.TxPool.PriceBump
-		n.TxPool.AccountSlots = *c.TxPool.AccountSlots
-		n.TxPool.GlobalSlots = *c.TxPool.GlobalSlots
-		n.TxPool.AccountQueue = *c.TxPool.AccountQueue
-		n.TxPool.GlobalQueue = *c.TxPool.GlobalQueue
-		n.TxPool.Lifetime = *c.TxPool.LifeTime
+		n.TxPool.NoLocals = c.TxPool.NoLocals
+		n.TxPool.Journal = c.TxPool.Journal
+		n.TxPool.Rejournal = c.TxPool.Rejournal
+		n.TxPool.PriceLimit = c.TxPool.PriceLimit
+		n.TxPool.PriceBump = c.TxPool.PriceBump
+		n.TxPool.AccountSlots = c.TxPool.AccountSlots
+		n.TxPool.GlobalSlots = c.TxPool.GlobalSlots
+		n.TxPool.AccountQueue = c.TxPool.AccountQueue
+		n.TxPool.GlobalQueue = c.TxPool.GlobalQueue
+		n.TxPool.Lifetime = c.TxPool.LifeTime
 	}
 
 	// miner options
 	{
 		n.Miner.GasPrice = c.Sealer.GasPrice
-		n.Miner.GasCeil = *c.Sealer.GasCeil
-		n.Miner.ExtraData = []byte(*c.Sealer.ExtraData)
+		n.Miner.GasCeil = c.Sealer.GasCeil
+		n.Miner.ExtraData = []byte(c.Sealer.ExtraData)
 
-		if etherbase := *c.Sealer.Etherbase; etherbase != "" {
+		if etherbase := c.Sealer.Etherbase; etherbase != "" {
 			if !common.IsHexAddress(etherbase) {
 				return nil, fmt.Errorf("etherbase is not an address: %s", etherbase)
 			}
@@ -398,7 +374,7 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	// whitelist
 	{
 		n.Whitelist = map[uint64]common.Hash{}
-		for k, v := range *c.Whitelist {
+		for k, v := range c.Whitelist {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
 				return nil, fmt.Errorf("invalid whitelist block number %s: %v", k, err)
@@ -413,9 +389,9 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 
 	// cache
 	{
-		cache := *c.Cache.Cache
-		calcPerc := func(val *uint64) int {
-			return int(cache * (*val) / 100)
+		cache := c.Cache.Cache
+		calcPerc := func(val uint64) int {
+			return int(cache * (val) / 100)
 		}
 
 		// Cap the cache allowance
@@ -437,28 +413,28 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 		godebug.SetGCPercent(int(gogc))
 
-		n.TrieCleanCacheJournal = *c.Cache.Journal
-		n.TrieCleanCacheRejournal = *c.Cache.Rejournal
+		n.TrieCleanCacheJournal = c.Cache.Journal
+		n.TrieCleanCacheRejournal = c.Cache.Rejournal
 		n.DatabaseCache = calcPerc(c.Cache.PercDatabase)
 		n.SnapshotCache = calcPerc(c.Cache.PercSnapshot)
 		n.TrieCleanCache = calcPerc(c.Cache.PercTrie)
 		n.TrieDirtyCache = calcPerc(c.Cache.PercGc)
-		n.NoPrefetch = *c.Cache.NoPrefetch
-		n.Preimages = *c.Cache.Preimages
-		n.TxLookupLimit = *c.Cache.TxLookupLimit
+		n.NoPrefetch = c.Cache.NoPrefetch
+		n.Preimages = c.Cache.Preimages
+		n.TxLookupLimit = c.Cache.TxLookupLimit
 	}
 
-	n.RPCGasCap = *c.JsonRPC.GasCap
+	n.RPCGasCap = c.JsonRPC.GasCap
 	if n.RPCGasCap != 0 {
 		log.Info("Set global gas cap", "cap", n.RPCGasCap)
 	} else {
 		log.Info("Global gas cap disabled")
 	}
-	n.RPCTxFeeCap = *c.JsonRPC.TxFeeCap
+	n.RPCTxFeeCap = c.JsonRPC.TxFeeCap
 
 	// sync mode. It can either be "fast", "full" or "snap". We disable
 	// for now the "light" mode.
-	switch *c.SyncMode {
+	switch c.SyncMode {
 	case "fast":
 		n.SyncMode = downloader.FastSync
 	case "full":
@@ -466,11 +442,11 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	case "snap":
 		n.SyncMode = downloader.SnapSync
 	default:
-		return nil, fmt.Errorf("sync mode '%s' not found", *c.SyncMode)
+		return nil, fmt.Errorf("sync mode '%s' not found", c.SyncMode)
 	}
 
 	// archive mode. It can either be "archive" or "full".
-	switch *c.GcMode {
+	switch c.GcMode {
 	case "full":
 		n.NoPruning = false
 	case "archive":
@@ -480,11 +456,11 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 			log.Info("Enabling recording of key preimages since archive mode is used")
 		}
 	default:
-		return nil, fmt.Errorf("gcmode '%s' not found", *c.GcMode)
+		return nil, fmt.Errorf("gcmode '%s' not found", c.GcMode)
 	}
 
 	// snapshot disable check
-	if *c.Snapshot {
+	if c.Snapshot {
 		if n.SyncMode == downloader.SnapSync {
 			log.Info("Snap sync requested, enabling --snapshot")
 		} else {
@@ -506,50 +482,50 @@ var (
 
 func (c *Config) buildNode() (*node.Config, error) {
 	ipcPath := ""
-	if !*c.JsonRPC.IPCDisable {
+	if !c.JsonRPC.IPCDisable {
 		ipcPath = clientIdentifier + ".ipc"
-		if *c.JsonRPC.IPCPath != "" {
-			ipcPath = *c.JsonRPC.IPCPath
+		if c.JsonRPC.IPCPath != "" {
+			ipcPath = c.JsonRPC.IPCPath
 		}
 	}
 
 	cfg := &node.Config{
 		Name:                  clientIdentifier,
-		DataDir:               *c.DataDir,
-		UseLightweightKDF:     *c.Accounts.UseLightweightKDF,
-		InsecureUnlockAllowed: *c.Accounts.AllowInsecureUnlock,
+		DataDir:               c.DataDir,
+		UseLightweightKDF:     c.Accounts.UseLightweightKDF,
+		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,
 		Version:               params.VersionWithCommit(gitCommit, gitDate),
 		IPCPath:               ipcPath,
 		P2P: p2p.Config{
-			MaxPeers:        int(*c.P2P.MaxPeers),
-			MaxPendingPeers: int(*c.P2P.MaxPendPeers),
-			ListenAddr:      *c.P2P.Bind + ":" + strconv.Itoa(int(*c.P2P.Port)),
-			DiscoveryV5:     *c.P2P.Discovery.V5Enabled,
+			MaxPeers:        int(c.P2P.MaxPeers),
+			MaxPendingPeers: int(c.P2P.MaxPendPeers),
+			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
+			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
 		},
 		HTTPModules:         c.JsonRPC.Modules,
 		HTTPCors:            c.JsonRPC.Cors,
 		HTTPVirtualHosts:    c.JsonRPC.VHost,
-		HTTPPathPrefix:      *c.JsonRPC.Http.Prefix,
+		HTTPPathPrefix:      c.JsonRPC.Http.Prefix,
 		WSModules:           c.JsonRPC.Modules,
 		WSOrigins:           c.JsonRPC.Cors,
-		WSPathPrefix:        *c.JsonRPC.Ws.Prefix,
+		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
 		GraphQLCors:         c.JsonRPC.Cors,
 		GraphQLVirtualHosts: c.JsonRPC.VHost,
 	}
 
 	// enable jsonrpc endpoints
 	{
-		if *c.JsonRPC.Http.Enabled {
-			cfg.HTTPHost = *c.JsonRPC.Http.Host
-			cfg.HTTPPort = int(*c.JsonRPC.Http.Port)
+		if c.JsonRPC.Http.Enabled {
+			cfg.HTTPHost = c.JsonRPC.Http.Host
+			cfg.HTTPPort = int(c.JsonRPC.Http.Port)
 		}
-		if *c.JsonRPC.Ws.Enabled {
-			cfg.WSHost = *c.JsonRPC.Ws.Host
-			cfg.WSPort = int(*c.JsonRPC.Ws.Port)
+		if c.JsonRPC.Ws.Enabled {
+			cfg.WSHost = c.JsonRPC.Ws.Host
+			cfg.WSPort = int(c.JsonRPC.Ws.Port)
 		}
 	}
 
-	natif, err := nat.Parse(*c.P2P.NAT)
+	natif, err := nat.Parse(c.P2P.NAT)
 	if err != nil {
 		return nil, fmt.Errorf("wrong 'nat' flag: %v", err)
 	}
@@ -574,7 +550,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		return nil, err
 	}
 
-	if *c.P2P.NoDiscover {
+	if c.P2P.NoDiscover {
 		// Disable networking, for now, we will not even allow incomming connections
 		cfg.P2P.MaxPeers = 0
 		cfg.P2P.NoDiscovery = true

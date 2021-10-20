@@ -78,9 +78,10 @@ func (f *Flagset) StringFlag(b *StringFlag) {
 }
 
 type IntFlag struct {
-	Name  string
-	Usage string
-	Value *int
+	Name    string
+	Usage   string
+	Value   *int
+	Default int
 }
 
 func (f *Flagset) IntFlag(i *IntFlag) {
@@ -88,13 +89,14 @@ func (f *Flagset) IntFlag(i *IntFlag) {
 		Name:  i.Name,
 		Usage: i.Usage,
 	})
-	f.set.IntVar(i.Value, i.Name, *i.Value, i.Usage)
+	f.set.IntVar(i.Value, i.Name, i.Default, i.Usage)
 }
 
 type Uint64Flag struct {
-	Name  string
-	Usage string
-	Value *uint64
+	Name    string
+	Usage   string
+	Value   *uint64
+	Default uint64
 }
 
 func (f *Flagset) Uint64Flag(i *Uint64Flag) {
@@ -102,7 +104,7 @@ func (f *Flagset) Uint64Flag(i *Uint64Flag) {
 		Name:  i.Name,
 		Usage: i.Usage,
 	})
-	f.set.Uint64Var(i.Value, i.Name, *i.Value, i.Usage)
+	f.set.Uint64Var(i.Value, i.Name, i.Default, i.Usage)
 }
 
 type BigIntFlag struct {
@@ -169,9 +171,10 @@ func (f *Flagset) SliceStringFlag(s *SliceStringFlag) {
 }
 
 type DurationFlag struct {
-	Name  string
-	Usage string
-	Value *time.Duration
+	Name    string
+	Usage   string
+	Value   *time.Duration
+	Default time.Duration
 }
 
 func (f *Flagset) DurationFlag(d *DurationFlag) {
@@ -179,7 +182,7 @@ func (f *Flagset) DurationFlag(d *DurationFlag) {
 		Name:  d.Name,
 		Usage: d.Usage,
 	})
-	f.set.DurationVar(d.Value, d.Name, *d.Value, "")
+	f.set.DurationVar(d.Value, d.Name, d.Default, "")
 }
 
 type MapStringFlag struct {
@@ -224,9 +227,10 @@ func (f *Flagset) MapStringFlag(m *MapStringFlag) {
 }
 
 type Float64Flag struct {
-	Name  string
-	Usage string
-	Value *float64
+	Name    string
+	Usage   string
+	Value   *float64
+	Default float64
 }
 
 func (f *Flagset) Float64Flag(i *Float64Flag) {
@@ -234,5 +238,5 @@ func (f *Flagset) Float64Flag(i *Float64Flag) {
 		Name:  i.Name,
 		Usage: i.Usage,
 	})
-	f.set.Float64Var(i.Value, i.Name, *i.Value, "")
+	f.set.Float64Var(i.Value, i.Name, i.Default, "")
 }
