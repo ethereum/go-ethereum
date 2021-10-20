@@ -39,7 +39,6 @@ type Merger struct {
 	db            ethdb.KeyValueStore
 	status        transitionStatus
 	leavePoWCalls []func()
-	enterPoSCalls []func()
 	lock          sync.Mutex
 }
 
@@ -64,15 +63,6 @@ func (m *Merger) SubscribeLeavePoW(callback func()) {
 	defer m.lock.Unlock()
 
 	m.leavePoWCalls = append(m.leavePoWCalls, callback)
-}
-
-// SubscribeEnterPoS registers callback so that if the chain leaves
-// from the 'transition' stage and enters the PoS stage it can be invoked.
-func (m *Merger) SubscribeEnterPoS(callback func()) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	m.enterPoSCalls = append(m.enterPoSCalls, callback)
 }
 
 // LeavePoW is called whenever the first NewHead message received
@@ -111,9 +101,6 @@ func (m *Merger) EnterPoS() {
 		log.Crit("Failed to encode the transition status", "err", err)
 	}
 	rawdb.WriteTransitionStatus(m.db, blob)
-	for _, call := range m.enterPoSCalls {
-		call()
-	}
 	log.Info("Entered PoS stage")
 }
 

@@ -53,7 +53,7 @@ type ForkChoice struct {
 
 	// preserve is a helper function used in td fork choice.
 	// Miners will prefer to choose the local mined block if the
-	// local td is equal to the extern one. It can nil for light
+	// local td is equal to the extern one. It can be nil for light
 	// client
 	preserve func(header *types.Header) bool
 }

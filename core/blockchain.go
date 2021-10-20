@@ -928,7 +928,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number.Cmp(head.Number()) >= 0 {
 			reorg, err := bc.forker.Reorg(bc.CurrentFastBlock().Header(), head.Header())
-			if err != nil || !reorg {
+			if err != nil {
+				log.Warn("Reorg failed", "err", err)
+				return false
+			} else if !reorg {
 				return false
 			}
 			rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
@@ -1184,9 +1187,6 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1436,7 +1436,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if reorg {
 				// Switch to import mode if the forker says the reorg is necessary
 				// and also the block is not on the canonical chain.
-				// In eth2 the forker always returns True for reorg desision(blindly trust
+				// In eth2 the forker always returns true for reorg decision (blindly trusting
 				// the external consensus engine), but in order to prevent the unnecessary
 				// reorgs when importing known blocks, the special case is handled here.
 				if bc.GetCanonicalHash(block.NumberU64()) != block.Hash() || block.NumberU64() > current.NumberU64() {

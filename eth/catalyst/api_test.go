@@ -73,52 +73,6 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
-// TODO (MariusVanDerWijden) reenable once engine api is updated to the latest spec
-/*
-func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, []*types.Block) {
-	if fork >= n {
-		fork = n - 1
-	}
-	db := rawdb.NewMemoryDatabase()
-	config := &params.ChainConfig{
-		ChainID:             big.NewInt(1337),
-		HomesteadBlock:      big.NewInt(0),
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Ethash:              new(params.EthashConfig),
-	}
-	genesis := &core.Genesis{
-		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
-		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
-	}
-	generate := func(i int, g *core.BlockGen) {
-		g.OffsetTime(5)
-		g.SetExtra([]byte("test"))
-	}
-	generateFork := func(i int, g *core.BlockGen) {
-		g.OffsetTime(5)
-		g.SetExtra([]byte("testF"))
-	}
-	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
-	blocks = append([]*types.Block{gblock}, blocks...)
-	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)
-	return genesis, blocks, forkedBlocks
-}
-*/
-
 func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, blocks)
@@ -172,9 +126,6 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice, nil)
-	if err := api.ConsensusValidated(ConsensusValidatedParams{BlockHash: blocks[5].Hash(), Status: VALID.Status}); err == nil {
-		t.Errorf("consensus validated before total terminal difficulty should fail")
-	}
 
 	if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: blocks[5].Hash()}); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")

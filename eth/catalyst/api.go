@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	chainParams "github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -196,15 +194,7 @@ func (api *ConsensusAPI) GetPayload(PayloadID hexutil.Uint64) (*ExecutableData, 
 func (api *ConsensusAPI) ConsensusValidated(params ConsensusValidatedParams) error {
 	switch params.Status {
 	case VALID.Status:
-		// Finalize the transition if it's the first `FinalisedBlock` event.
-		merger := api.merger()
-		if !merger.EnteredPoS() {
-			if err := api.checkTerminalTotalDifficulty(params.BlockHash); err != nil {
-				return err
-			}
-			merger.EnterPoS()
-		}
-		return nil //api.setHead(params.BlockHash)
+		return nil
 	case INVALID.Status:
 		// TODO (MariusVanDerWijden) delete the block from the bc
 		return nil
@@ -258,6 +248,10 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 	if err := api.eth.BlockChain().InsertBlock(block); err != nil {
 		return INVALID, err
 	}
+	merger := api.merger()
+	if !merger.LeftPoW() {
+		merger.LeavePoW()
+	}
 	return VALID, nil
 }
 
@@ -277,7 +271,7 @@ func (api *ConsensusAPI) assembleBlock(params AssembleBlockParams) (*ExecutableD
 	}
 
 	if params.Timestamp < parent.Time() {
-		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
+		return nil, fmt.Errorf("child timestamp lower than parent's: %d < %d", params.Timestamp, parent.Time())
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
 		diff := time.Duration(params.Timestamp-now) * time.Second
@@ -468,8 +462,8 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
-	if !merger.LeftPoW() {
-		merger.LeavePoW()
+	if !merger.EnteredPoS() {
+		merger.EnterPoS()
 	}
 	log.Info("Setting head", "head", newHead)
 	if api.light {
@@ -507,64 +501,4 @@ func (api *ConsensusAPI) merger() *core.Merger {
 		return api.les.Merger()
 	}
 	return api.eth.Merger()
-}
-
-// Helper API for the merge f2f
-
-func (api *ConsensusAPI) ExportChain(path string) error {
-	if api.light {
-		return errors.New("cannot export chain in light mode")
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	return api.eth.BlockChain().Export(f)
-}
-
-func (api *ConsensusAPI) ImportChain(path string) error {
-	if api.light {
-		return errors.New("cannot import chain in light mode")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	for {
-		var block types.Block
-		if err := block.DecodeRLP(rlp.NewStream(f, 0)); err != nil {
-			break
-		}
-		if err := api.eth.BlockChain().InsertBlock(&block); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (api *ConsensusAPI) ExportExecutableData(path string) error {
-	if api.light {
-		return errors.New("cannot export chain in light mode")
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	for i := uint64(0); i < api.eth.BlockChain().CurrentBlock().NumberU64(); i++ {
-		block := api.eth.BlockChain().GetBlockByNumber(i)
-		exec := BlockToExecutableData(block, common.Hash{})
-		b, err := exec.MarshalJSON()
-		if err != nil {
-			return err
-		}
-		if _, err := f.Write(b); err != nil {
-			return err
-		}
-		f.Write([]byte("\n"))
-	}
-	return nil
-}
-
-func (api *ConsensusAPI) GetHead() (common.Hash, error) {
-	return api.eth.BlockChain().CurrentBlock().Hash(), nil
 }
