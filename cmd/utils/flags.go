@@ -686,7 +686,7 @@ var (
 	}
 	GpoMaxGasPriceFlag = cli.Int64Flag{
 		Name:  "gpo.maxprice",
-		Usage: "Maximum gas price will be recommended by gpo",
+		Usage: "Maximum transaction priority fee (or gasprice before London fork) to be recommended by gpo",
 		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
 	}
 	GpoIgnoreGasPriceFlag = cli.Int64Flag{

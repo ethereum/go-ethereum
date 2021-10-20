@@ -257,6 +257,14 @@ func TestT9n(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
+		{ // Transactions with value exceeding 256 bits
+			base: "./testdata/17",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "London",
+			},
+			expOut: "exp.json",
+		},
 	} {
 
 		args := []string{"t9n"}
