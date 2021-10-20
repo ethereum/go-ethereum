@@ -52,7 +52,7 @@ repository checked out correctly, you can build the generator with:
 
 ```
 $ cd $GOPATH/src/github.com/ethereum/go-ethereum
-$ make abigen
+$ go build ./cmd/abigen
 ```
 
 ### Generating the bindings
