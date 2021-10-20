@@ -18,8 +18,6 @@ package core
 
 import (
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -28,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -66,6 +65,19 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
+
+	parityLogContext := vm.ParityLogContext{
+		BlockHash:   block.Hash(),
+		BlockNumber: block.NumberU64(),
+	}
+	tracer, err := vm.NewParityLogger(&parityLogContext, block.NumberU64(), 10000, 100)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("create parity logger failed: %w", err)
+	}
+	defer tracer.Close()
+	cfg.Debug = true
+	cfg.Tracer = tracer
+
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
@@ -74,6 +86,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+		parityLogContext.TxPos = i
+		parityLogContext.TxHash = tx.Hash()
+
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -88,6 +103,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
+	vm.ReceiptDumpLogger(block.NumberU64(), 10000, 100, receipts)
 
 	return receipts, allLogs, *usedGas, nil
 }
