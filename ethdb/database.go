@@ -22,12 +22,19 @@ import (
 	"io"
 )
 
+var (
+	// ErrKVNotFound is returned if a key is requested that is not found in
+	// the KeyValueStore.
+	ErrKVNotFound = errors.New("not found")
+)
+
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
 	// Has retrieves if a key is present in the key-value data store.
 	Has(key []byte) (bool, error)
 
 	// Get retrieves the given key if it's present in the key-value data store.
+	// Returns ErrKVNotFound if the key is not found.
 	Get(key []byte) ([]byte, error)
 }
 
@@ -37,6 +44,7 @@ type KeyValueWriter interface {
 	Put(key []byte, value []byte) error
 
 	// Delete removes the key from the key-value data store.
+	// If the key doesn't exist, this method returns no error.
 	Delete(key []byte) error
 }
 

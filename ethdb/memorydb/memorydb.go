@@ -31,14 +31,6 @@ var (
 	// errMemorydbClosed is returned if a memory database was already closed at the
 	// invocation of a data access operation.
 	errMemorydbClosed = errors.New("database closed")
-
-	// errMemorydbNotFound is returned if a key is requested that is not found in
-	// the provided memory database.
-	errMemorydbNotFound = errors.New("not found")
-
-	// errSnapshotReleased is returned if callers want to retrieve data from a
-	// released snapshot.
-	errSnapshotReleased = errors.New("snapshot released")
 )
 
 // Database is an ephemeral key-value store. Apart from basic data storage
@@ -66,7 +58,7 @@ func NewWithCap(size int) *Database {
 }
 
 // Close deallocates the internal map and ensures any consecutive data access op
-// failes with an error.
+// fails with an error.
 func (db *Database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -98,7 +90,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, errMemorydbNotFound
+	return nil, ethdb.ErrKVNotFound
 }
 
 // Put inserts the given value into the key-value store.
@@ -358,7 +350,7 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 	defer snap.lock.RUnlock()
 
 	if snap.db == nil {
-		return false, errSnapshotReleased
+		return false, ethdb.ErrSnapshotReleased
 	}
 	_, ok := snap.db[string(key)]
 	return ok, nil
@@ -371,12 +363,12 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	defer snap.lock.RUnlock()
 
 	if snap.db == nil {
-		return nil, errSnapshotReleased
+		return nil, ethdb.ErrSnapshotReleased
 	}
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, errMemorydbNotFound
+	return nil, ethdb.ErrSnapshotNotFound
 }
 
 // Release releases associated resources. Release should always succeed and can

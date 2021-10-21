@@ -188,6 +188,9 @@ func (db *Database) Has(key []byte) (bool, error) {
 // Get retrieves the given key if it's present in the key-value store.
 func (db *Database) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
+	if err == leveldb.ErrNotFound {
+		return nil, ethdb.ErrKVNotFound
+	}
 	if err != nil {
 		return nil, err
 	}

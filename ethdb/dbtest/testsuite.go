@@ -216,6 +216,10 @@ func TestKeyValueStoreSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			t.Errorf("wrong value: %t", got)
 		}
 
+		if _, err := db.Get(key); err != ethdb.ErrKVNotFound {
+			t.Errorf("expected ethdb.ErrKVNotFound")
+		}
+
 		value := []byte("hello world")
 		if err := db.Put(key, value); err != nil {
 			t.Error(err)

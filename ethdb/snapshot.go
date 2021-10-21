@@ -16,13 +16,28 @@
 
 package ethdb
 
+import "errors"
+
+var (
+	// ErrSnapshotNotFound is returned if a key is requested that is not found in
+	// a snapshot.
+	ErrSnapshotNotFound = errors.New("not found")
+
+	// ErrSnapshotReleased is returned if callers want to retrieve data from a
+	// released snapshot.
+	ErrSnapshotReleased = errors.New("snapshot released")
+)
+
 type Snapshot interface {
 	// Has retrieves if a key is present in the snapshot backing by a key-value
 	// data store.
+	// Returns ErrSnapshotReleased if the Snapshot has already been released.
 	Has(key []byte) (bool, error)
 
 	// Get retrieves the given key if it's present in the snapshot backing by
 	// key-value data store.
+	// Returns ErrSnapshotReleased if the Snapshot has already been released.
+	// Returns ErrSnapshotNotFound if the key is not found in the Snapshot.
 	Get(key []byte) ([]byte, error)
 
 	// Release releases associated resources. Release should always succeed and can
