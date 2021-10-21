@@ -75,18 +75,18 @@ func (p *Peer) broadcastTransactions() {
 		if done == nil && len(queue) > 0 {
 			// Pile transaction until we reach our allowed network limit
 			var (
-				hashes []common.Hash
-				txs    []*types.Transaction
-				size   common.StorageSize
+				hashesCount uint64
+				txs         []*types.Transaction
+				size        common.StorageSize
 			)
 			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
 				if tx := p.txpool.Get(queue[i]); tx != nil {
 					txs = append(txs, tx)
 					size += tx.Size()
 				}
-				hashes = append(hashes, queue[i])
+				hashesCount++
 			}
-			queue = queue[:copy(queue, queue[len(hashes):])]
+			queue = queue[:copy(queue, queue[hashesCount:])]
 
 			// If there's anything available to transfer, fire up an async writer
 			if len(txs) > 0 {

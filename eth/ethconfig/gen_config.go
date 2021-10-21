@@ -55,6 +55,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
+		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
@@ -98,6 +99,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
 	enc.RPCGasCap = c.RPCGasCap
+	enc.RPCEVMTimeout = c.RPCEVMTimeout
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
@@ -145,6 +147,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
+		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
@@ -264,6 +267,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCGasCap != nil {
 		c.RPCGasCap = *dec.RPCGasCap
+	}
+	if dec.RPCEVMTimeout != nil {
+		c.RPCEVMTimeout = *dec.RPCEVMTimeout
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap

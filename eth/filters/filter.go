@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/consensus"
 )
@@ -52,6 +53,8 @@ type Backend interface {
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	Engine() consensus.Engine
+
+	ChainConfig() *params.ChainConfig
 }
 
 // Filter can be used to retrieve and filter logs.
@@ -69,7 +72,7 @@ type Filter struct {
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
-// figure out whether a particular block is interesting or not.
+// figure out whether a fzticular block is interesting or not.
 func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,

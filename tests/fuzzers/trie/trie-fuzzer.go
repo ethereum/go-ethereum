@@ -69,7 +69,7 @@ func newDataSource(input []byte) *dataSource {
 		input, bytes.NewReader(input),
 	}
 }
-func (ds *dataSource) ReadByte() byte {
+func (ds *dataSource) readByte() byte {
 	if b, err := ds.reader.ReadByte(); err != nil {
 		return 0
 	} else {
@@ -89,22 +89,22 @@ func Generate(input []byte) randTest {
 	r := newDataSource(input)
 	genKey := func() []byte {
 
-		if len(allKeys) < 2 || r.ReadByte() < 0x0f {
+		if len(allKeys) < 2 || r.readByte() < 0x0f {
 			// new key
-			key := make([]byte, r.ReadByte()%50)
+			key := make([]byte, r.readByte()%50)
 			r.Read(key)
 			allKeys = append(allKeys, key)
 			return key
 		}
 		// use existing key
-		return allKeys[int(r.ReadByte())%len(allKeys)]
+		return allKeys[int(r.readByte())%len(allKeys)]
 	}
 
 	var steps randTest
 
 	for i := 0; !r.Ended(); i++ {
 
-		step := randTestStep{op: int(r.ReadByte()) % opMax}
+		step := randTestStep{op: int(r.readByte()) % opMax}
 		switch step.op {
 		case opUpdate:
 			step.key = genKey()
@@ -162,11 +162,11 @@ func runRandTest(rt randTest) error {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, rt[i].err = tr.Commit(nil)
+			_, _, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, err := tr.Commit(nil)
+			hash, _, err := tr.Commit(nil)
 			if err != nil {
 				return err
 			}

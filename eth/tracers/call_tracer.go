@@ -189,6 +189,5 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 	return
 }
 func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) { }
-
-// 1/25: 3h
-// 1/26: 3h
+func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) { }
+func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
