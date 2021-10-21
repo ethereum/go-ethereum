@@ -395,6 +395,8 @@ func (pool *TxPool) loop() {
 					queuedEvictionMeter.Mark(int64(len(list)))
 				}
 			}
+			// force a reheap of the priced list every now and then.
+			pool.priced.Reheap()
 			pool.mu.Unlock()
 
 		// Handle local transaction journal rotation
