@@ -44,27 +44,40 @@ func TestExportGzip(t *testing.T) {
 	testExport(t, f)
 }
 
+type testIterator struct {
+	index int
+}
+
+func newTestIterator() *testIterator {
+	return &testIterator{index: -1}
+}
+
+func (iter *testIterator) Next() ([]byte, []byte, bool) {
+	if iter.index >= 999 {
+		return nil, nil, false
+	}
+	iter.index += 1
+	if iter.index == 42 {
+		iter.index += 1
+	}
+	return []byte(fmt.Sprintf("key-%04d", iter.index)), []byte(fmt.Sprintf("value %d", iter.index)), true
+}
+
+func (iter *testIterator) Release() {}
+
 func testExport(t *testing.T, f string) {
-	db := rawdb.NewMemoryDatabase()
-	// Populate some keys
-	for i := 0; i < 1000; i++ {
-		db.Put([]byte(fmt.Sprintf("key-%04d", i)), []byte(fmt.Sprintf("value %d", i)))
-	}
-	checker := func(key []byte) bool {
-		return string(key) != "key-0042"
-	}
-	err := ExportChaindata(db, f, "testdata", checker, [][]byte{[]byte("key")}, make(chan struct{}))
+	err := ExportChaindata(f, "testdata", newTestIterator(), make(chan struct{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	db2 := rawdb.NewMemoryDatabase()
-	err = ImportLDBData(db2, f, 5, make(chan struct{}))
+	db := rawdb.NewMemoryDatabase()
+	err = ImportLDBData(db, f, 5, make(chan struct{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// verify
 	for i := 0; i < 1000; i++ {
-		v, err := db2.Get([]byte(fmt.Sprintf("key-%04d", i)))
+		v, err := db.Get([]byte(fmt.Sprintf("key-%04d", i)))
 		if (i < 5 || i == 42) && err == nil {
 			t.Fatalf("expected no element at idx %d, got '%v'", i, string(v))
 		}
@@ -74,6 +87,81 @@ func testExport(t *testing.T, f string) {
 			}
 			if have, want := string(v), fmt.Sprintf("value %d", i); have != want {
 				t.Fatalf("have %v, want %v", have, want)
+			}
+		}
+	}
+	v, err := db.Get([]byte(fmt.Sprintf("key-%04d", 1000)))
+	if err == nil {
+		t.Fatalf("expected no element at idx %d, got '%v'", 1000, string(v))
+	}
+}
+
+// testDeletion tests if the deletion markers can be exported/imported correctly
+func TestDeletionExport(t *testing.T) {
+	f := fmt.Sprintf("%v/tempdump", os.TempDir())
+	defer func() {
+		os.Remove(f)
+	}()
+	testDeletion(t, f)
+}
+
+// TestDeletionExportGzip tests if the deletion markers can be exported/imported
+// correctly with gz compression.
+func TestDeletionExportGzip(t *testing.T) {
+	f := fmt.Sprintf("%v/tempdump.gz", os.TempDir())
+	defer func() {
+		os.Remove(f)
+	}()
+	testDeletion(t, f)
+}
+
+type deletionIterator struct {
+	index int
+}
+
+func newDeletionIterator() *deletionIterator {
+	return &deletionIterator{index: -1}
+}
+
+func (iter *deletionIterator) Next() ([]byte, []byte, bool) {
+	if iter.index >= 999 {
+		return nil, nil, false
+	}
+	iter.index += 1
+	if iter.index == 42 {
+		iter.index += 1
+	}
+	return []byte(fmt.Sprintf("key-%04d", iter.index)), nil, true
+}
+
+func (iter *deletionIterator) Release() {}
+
+func testDeletion(t *testing.T, f string) {
+	err := ExportChaindata(f, "testdata", newDeletionIterator(), make(chan struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := rawdb.NewMemoryDatabase()
+	for i := 0; i < 1000; i++ {
+		db.Put([]byte(fmt.Sprintf("key-%04d", i)), []byte(fmt.Sprintf("value %d", i)))
+	}
+	err = ImportLDBData(db, f, 5, make(chan struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 1000; i++ {
+		v, err := db.Get([]byte(fmt.Sprintf("key-%04d", i)))
+		if i < 5 || i == 42 {
+			if err != nil {
+				t.Fatalf("expected element at idx %d, got '%v'", i, err)
+			}
+			if have, want := string(v), fmt.Sprintf("value %d", i); have != want {
+				t.Fatalf("have %v, want %v", have, want)
+			}
+		}
+		if !(i < 5 || i == 42) {
+			if err == nil {
+				t.Fatalf("expected no element idx %d: %v", i, string(v))
 			}
 		}
 	}
@@ -106,4 +194,24 @@ func TestImportFutureFormat(t *testing.T) {
 	if !strings.HasPrefix(err.Error(), "incompatible version") {
 		t.Fatalf("wrong error: %v", err)
 	}
+}
+
+func TestMyTest(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	db.Put([]byte{0x1, 0x2}, []byte{0x3})
+	v, err := db.Get([]byte{0x1, 0x2})
+	fmt.Println(v, err)
+
+	db.Put([]byte{0x1, 0x2}, []byte{})
+	v, err = db.Get([]byte{0x1, 0x2})
+	fmt.Println(v, err)
+
+	db.Put([]byte{0x1, 0x2}, nil)
+	v, err = db.Get([]byte{0x1, 0x2})
+	fmt.Println(v, err)
+
+	db.Delete([]byte{0x1, 0x2})
+	v, err = db.Get([]byte{0x1, 0x2})
+	fmt.Println(v, err)
 }

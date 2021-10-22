@@ -581,26 +581,65 @@ func importLDBdata(ctx *cli.Context) error {
 	return utils.ImportLDBData(db, fName, int64(start), stop)
 }
 
-// exporter defines all the necessary information for chain data export.
-type exporter struct {
-	// checker returns the indicator that whether the given data is the
-	// requested chain data.
-	checker func(key []byte) bool
+type preimageIterator struct {
+	iter ethdb.Iterator
+}
 
-	// prefixes specifies the key prefixes needed to obtain the specified
-	// chain data for database iteration.
-	prefixes [][]byte
+func (iter *preimageIterator) Next() ([]byte, []byte, bool) {
+	for iter.iter.Next() {
+		key := iter.iter.Key()
+		if bytes.HasPrefix(key, rawdb.PreimagePrefix) && len(key) == (len(rawdb.PreimagePrefix)+common.HashLength) {
+			return key, iter.iter.Value(), true
+		}
+	}
+	return nil, nil, false
+}
+
+func (iter *preimageIterator) Release() {
+	iter.iter.Release()
+}
+
+type snapshotIterator struct {
+	init    bool
+	account ethdb.Iterator
+	storage ethdb.Iterator
+}
+
+func (iter *snapshotIterator) Next() ([]byte, []byte, bool) {
+	if !iter.init {
+		iter.init = true
+		return rawdb.SnapshotRootKey, nil, true
+	}
+	for iter.account.Next() {
+		key := iter.account.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == (len(rawdb.SnapshotAccountPrefix)+common.HashLength) {
+			return key, iter.account.Value(), true
+		}
+	}
+	for iter.storage.Next() {
+		key := iter.storage.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == (len(rawdb.SnapshotStoragePrefix)+2*common.HashLength) {
+			return key, iter.storage.Value(), true
+		}
+	}
+	return nil, nil, false
+}
+
+func (iter *snapshotIterator) Release() {
+	iter.account.Release()
+	iter.storage.Release()
 }
 
 // chainExporters defines the export scheme for all exportable chain data.
-var chainExporters = map[string]*exporter{
-	"preimage": {
-		checker:  preimageChecker,
-		prefixes: [][]byte{rawdb.PreimagePrefix},
+var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator {
+	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
+		iter := db.NewIterator(rawdb.PreimagePrefix, nil)
+		return &preimageIterator{iter: iter}
 	},
-	"snapshot": {
-		checker:  snapshotChecker,
-		prefixes: [][]byte{rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix},
+	"snapshot": func(db ethdb.Database) utils.ChainDataIterator {
+		account := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+		storage := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+		return &snapshotIterator{account: account, storage: storage}
 	},
 }
 
@@ -635,23 +674,5 @@ func exportChaindata(ctx *cli.Context) error {
 		close(stop)
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	return utils.ExportChaindata(db, ctx.Args().Get(1), kind, exporter.checker, exporter.prefixes, stop)
-}
-
-// preimageChecker returns the indicator whether the chain data pointed by
-// the given key is preimage.
-func preimageChecker(key []byte) bool {
-	return bytes.HasPrefix(key, rawdb.PreimagePrefix) && len(key) == (len(rawdb.PreimagePrefix)+common.HashLength)
-}
-
-// snapshotChecker returns the indicator whether the chain data pointed by
-// the given key is snapshot(account snapshot or storage snapshot).
-func snapshotChecker(key []byte) bool {
-	if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == (len(rawdb.SnapshotAccountPrefix)+common.HashLength) {
-		return true
-	}
-	if bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == (len(rawdb.SnapshotStoragePrefix)+2*common.HashLength) {
-		return true
-	}
-	return false
+	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
 }

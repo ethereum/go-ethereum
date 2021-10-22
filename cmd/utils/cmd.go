@@ -423,7 +423,11 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 			count++
 			continue
 		}
-		batch.Put(key, val)
+		if len(val) == 0 {
+			batch.Delete(key)
+		} else {
+			batch.Put(key, val)
+		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return err
@@ -459,10 +463,23 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	return nil
 }
 
-// ExportChaindata the given data type (truncating any data already present) in
-// the file. If the suffix is 'gz', gzip compression is used.
-func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key []byte) bool, prefixes [][]byte, interrupt chan struct{}) error {
+// ChainDataIterator is an interface wraps all necessary functions to iterate
+// the exporting chain data.
+type ChainDataIterator interface {
+	// Next returns the key-value pair for next exporting entry in the iterator.
+	// When the end is reached, it will return (nil, nil, false).
+	Next() ([]byte, []byte, bool)
+
+	// Release releases associated resources. Release should always succeed and can
+	// be called multiple times without causing error.
+	Release()
+}
+
+// ExportChaindata exports the given data type (truncating any data already present)
+// in the file. If the suffix is 'gz', gzip compression is used.
+func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt chan struct{}) error {
 	log.Info("Exporting chain data", "file", fn, "kind", kind)
+	defer iter.Release()
 
 	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -485,43 +502,35 @@ func ExportChaindata(db ethdb.Database, fn string, kind string, checker func(key
 	}); err != nil {
 		return err
 	}
+	// Extract data from source iterator and dump them out to file
 	var (
 		count  int64
 		start  = time.Now()
 		logged = time.Now()
 	)
-	for _, prefix := range prefixes {
-		it := db.NewIterator(prefix, nil)
-		for it.Next() {
-			// Filter out the non-requested data by the offered checker
-			if !checker(it.Key()) {
-				continue
-			}
-			if err := rlp.Encode(writer, it.Key()); err != nil {
-				return err
-			}
-			if err := rlp.Encode(writer, it.Value()); err != nil {
-				return err
-			}
-			if count%1000 == 0 {
-				// Check interruption emitted by ctrl+c
-				select {
-				case <-interrupt:
-					it.Release()
-					log.Info("Chain data exporting interrupted", "file", fn,
-						"kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
-					return nil
-				default:
-				}
-				if time.Since(logged) > 8*time.Second {
-					log.Info("Exporting chain data", "file", fn, "kind", kind,
-						"count", count, "elapsed", common.PrettyDuration(time.Since(start)))
-					logged = time.Now()
-				}
-			}
-			count++
+	for key, val, next := iter.Next(); next;  key, val, next = iter.Next() {
+		if err := rlp.Encode(writer, key); err != nil {
+			return err
 		}
-		it.Release()
+		if err := rlp.Encode(writer, val); err != nil {
+			return err
+		}
+		if count%1000 == 0 {
+			// Check interruption emitted by ctrl+c
+			select {
+			case <-interrupt:
+				log.Info("Chain data exporting interrupted", "file", fn,
+					"kind", kind, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+				return nil
+			default:
+			}
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Exporting chain data", "file", fn, "kind", kind,
+					"count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+		count++
 	}
 	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count,
 		"elapsed", common.PrettyDuration(time.Since(start)))

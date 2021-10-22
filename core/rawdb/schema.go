@@ -48,8 +48,8 @@ var (
 	// snapshotDisabledKey flags that the snapshot should not be maintained due to initial sync.
 	snapshotDisabledKey = []byte("SnapshotDisabled")
 
-	// snapshotRootKey tracks the hash of the last snapshot.
-	snapshotRootKey = []byte("SnapshotRoot")
+	// SnapshotRootKey tracks the hash of the last snapshot.
+	SnapshotRootKey = []byte("SnapshotRoot")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
