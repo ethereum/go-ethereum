@@ -165,7 +165,7 @@ func (c *Command) Run(args []string) int {
 		}
 	}
 
-	if err := c.setupMetrics(config.Metrics); err != nil {
+	if err := c.setupTelemetry(config.Telemetry); err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
@@ -221,7 +221,7 @@ func (c *Command) unlockAccounts(borKeystore *keystore.KeyStore) error {
 	return nil
 }
 
-func (c *Command) setupMetrics(config *MetricsConfig) error {
+func (c *Command) setupTelemetry(config *TelemetryConfig) error {
 	metrics.Enabled = config.Enabled
 	metrics.EnabledExpensive = config.Expensive
 

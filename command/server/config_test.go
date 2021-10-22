@@ -1,8 +1,6 @@
 package server
 
 import (
-	"io/ioutil"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -23,8 +21,8 @@ func TestConfigDefault(t *testing.T) {
 
 func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
-		Chain: "0",
-		Debug: true,
+		Chain:    "0",
+		Snapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 		},
@@ -54,8 +52,8 @@ func TestConfigMerge(t *testing.T) {
 		},
 	}
 	expected := &Config{
-		Chain: "1",
-		Debug: true,
+		Chain:    "1",
+		Snapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 			"b": "c",
@@ -77,31 +75,29 @@ func TestConfigMerge(t *testing.T) {
 	assert.Equal(t, c0, expected)
 }
 
-func TestConfigHcl(t *testing.T) {
-	readConfig := func(data string, format string) *Config {
-		tmpDir, err := ioutil.TempDir("/tmp", "test-config")
+func TestConfigLoadFile(t *testing.T) {
+	readFile := func(path string) {
+		config, err := readConfigFile(path)
 		assert.NoError(t, err)
-
-		filename := filepath.Join(tmpDir, "config."+format)
-		assert.NoError(t, ioutil.WriteFile(filename, []byte(data), 0755))
-
-		config, err := readConfigFile(filename)
-		assert.NoError(t, err)
-		return config
+		assert.Equal(t, config, &Config{
+			DataDir: "./data",
+			P2P: &P2PConfig{
+				MaxPeers: 30,
+			},
+			TxPool: &TxPoolConfig{
+				LifeTime: time.Duration(1 * time.Second),
+			},
+			Cache: &CacheConfig{},
+		})
 	}
 
-	cfg := `{
-		"datadir": "datadir",
-		"p2p": {
-			"max_peers": 30
-		}
-	}`
-	config := readConfig(cfg, "json")
-	assert.Equal(t, config, &Config{
-		DataDir: "datadir",
-		P2P: &P2PConfig{
-			MaxPeers: 30,
-		},
+	// read file in hcl format
+	t.Run("hcl", func(t *testing.T) {
+		readFile("./testdata/simple.hcl")
+	})
+	// read file in json format
+	t.Run("json", func(t *testing.T) {
+		readFile("./testdata/simple.json")
 	})
 }
 

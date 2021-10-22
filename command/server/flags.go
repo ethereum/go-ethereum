@@ -9,11 +9,6 @@ func (c *Command) Flags() *flagset.Flagset {
 
 	f := flagset.NewFlagSet("server")
 
-	f.BoolFlag(&flagset.BoolFlag{
-		Name:  "debug",
-		Usage: "Path of the file to apply",
-		Value: &c.cliConfig.Debug,
-	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "chain",
 		Usage: "Name of the chain to sync",
@@ -364,63 +359,63 @@ func (c *Command) Flags() *flagset.Flagset {
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics",
 		Usage: "Enable metrics collection and reporting",
-		Value: &c.cliConfig.Metrics.Enabled,
+		Value: &c.cliConfig.Telemetry.Enabled,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics.expensive",
 		Usage: "Enable expensive metrics collection and reporting",
-		Value: &c.cliConfig.Metrics.Expensive,
+		Value: &c.cliConfig.Telemetry.Expensive,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics.influxdb",
 		Usage: "Enable metrics export/push to an external InfluxDB database (v1)",
-		Value: &c.cliConfig.Metrics.InfluxDB.V1Enabled,
+		Value: &c.cliConfig.Telemetry.InfluxDB.V1Enabled,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "InfluxDB API endpoint to report metrics to",
-		Value: &c.cliConfig.Metrics.InfluxDB.Endpoint,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Endpoint,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.database",
 		Usage: "InfluxDB database name to push reported metrics to",
-		Value: &c.cliConfig.Metrics.InfluxDB.Database,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Database,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.username",
 		Usage: "Username to authorize access to the database",
-		Value: &c.cliConfig.Metrics.InfluxDB.Username,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Username,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.password",
 		Usage: "Password to authorize access to the database",
-		Value: &c.cliConfig.Metrics.InfluxDB.Password,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Password,
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
 		Name:  "metrics.influxdb.tags",
 		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Value: &c.cliConfig.Metrics.InfluxDB.Tags,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Tags,
 	})
 	// influx db v2
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics.influxdbv2",
 		Usage: "Enable metrics export/push to an external InfluxDB v2 database",
-		Value: &c.cliConfig.Metrics.InfluxDB.V2Enabled,
+		Value: &c.cliConfig.Telemetry.InfluxDB.V2Enabled,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.token",
 		Usage: "Token to authorize access to the database (v2 only)",
-		Value: &c.cliConfig.Metrics.InfluxDB.Token,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Token,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.bucket",
 		Usage: "InfluxDB bucket name to push reported metrics to (v2 only)",
-		Value: &c.cliConfig.Metrics.InfluxDB.Bucket,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Bucket,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "metrics.influxdb.organization",
 		Usage: "InfluxDB organization name (v2 only)",
-		Value: &c.cliConfig.Metrics.InfluxDB.Organization,
+		Value: &c.cliConfig.Telemetry.InfluxDB.Organization,
 	})
 
 	// account
