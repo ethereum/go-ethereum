@@ -132,5 +132,21 @@
     "severity": "High",
     "CVE": "CVE-2021-39137",
     "check": "(Geth\\/v1\\.10\\.(0|1|2|3|4|5|6|7)-.*)$"
+  },
+  {
+    "name": "DoS via maliciously crafted p2p message",
+    "uid": "GETH-2021-03",
+    "summary": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer.",
+    "description": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer.\nFurther details will be released at a later point in time, in accordance with our official disclosure policy.",
+    "links": [
+      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v",
+      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities"
+    ],
+    "introduced": "v1.10.0",
+    "fixed": "v1.10.9",
+    "published": "2021-10-24",
+    "severity": "Medium",
+    "CVE": "CVE-2021-41173",
+    "check": "(Geth\\/v1\\.10\\.(0|1|2|3|4|5|6|7|8)-.*)$"
   }
 ]
