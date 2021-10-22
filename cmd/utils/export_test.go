@@ -195,23 +195,3 @@ func TestImportFutureFormat(t *testing.T) {
 		t.Fatalf("wrong error: %v", err)
 	}
 }
-
-func TestMyTest(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-
-	db.Put([]byte{0x1, 0x2}, []byte{0x3})
-	v, err := db.Get([]byte{0x1, 0x2})
-	fmt.Println(v, err)
-
-	db.Put([]byte{0x1, 0x2}, []byte{})
-	v, err = db.Get([]byte{0x1, 0x2})
-	fmt.Println(v, err)
-
-	db.Put([]byte{0x1, 0x2}, nil)
-	v, err = db.Get([]byte{0x1, 0x2})
-	fmt.Println(v, err)
-
-	db.Delete([]byte{0x1, 0x2})
-	v, err = db.Get([]byte{0x1, 0x2})
-	fmt.Println(v, err)
-}
