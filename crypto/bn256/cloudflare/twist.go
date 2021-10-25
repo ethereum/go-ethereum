@@ -150,15 +150,15 @@ func (c *twistPoint) Double(a *twistPoint) {
 	t.Add(d, d)
 	c.x.Sub(f, t)
 
+	c.z.Mul(&a.y, &a.z)
+	c.z.Add(&c.z, &c.z)
+
 	t.Add(C, C)
 	t2.Add(t, t)
 	t.Add(t2, t2)
 	c.y.Sub(d, &c.x)
 	t2.Mul(e, &c.y)
 	c.y.Sub(t2, t)
-
-	t.Mul(&a.y, &a.z)
-	c.z.Add(t, t)
 }
 
 func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int) {

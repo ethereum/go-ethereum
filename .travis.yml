@@ -2,13 +2,21 @@ language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
 jobs:
+  allow_failures:
+    - stage: build
+      os: osx
+      go: 1.17.x
+      env:
+        - azure-osx
+        - azure-ios
+        - cocoapods-ios
 
   include:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - lint
       git:
@@ -22,7 +30,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
@@ -34,7 +42,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
@@ -44,28 +52,35 @@ jobs:
     - stage: build
       os: linux
       dist: bionic
-      go: 1.15.x
+      go: 1.16.x
       env:
         - GO111MODULE=on
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
+    # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
-      os: osx
-      osx_image: xcode11.3
-      go: 1.15.x
+      if: type = cron
+      os: linux
+      dist: bionic
+      go: 1.17.x
+      env:
+        - azure-purge
+        - GO111MODULE=on
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go purge -store gethstore/builds -days 14
+
+    # This builder executes race tests
+    - stage: build
+      if: type = cron
+      os: linux
+      dist: bionic
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
-        - echo "Increase the maximum number of open file descriptors on macOS"
-        - NOFILE=20480
-        - sudo sysctl -w kern.maxfiles=$NOFILE
-        - sudo sysctl -w kern.maxfilesperproc=$NOFILE
-        - sudo launchctl limit maxfiles $NOFILE $NOFILE
-        - sudo launchctl limit maxfiles
-        - ulimit -S -n $NOFILE
-        - ulimit -n
-        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test  -race -coverage $TEST_PACKAGES
+
