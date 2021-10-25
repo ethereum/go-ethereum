@@ -85,6 +85,7 @@ type Config struct {
 	// Account has the validator account related settings
 	Accounts *AccountsConfig `hcl:"accounts,block"`
 
+	// GRPC has the grpc server related settings
 	GRPC *GRPCConfig
 }
 
@@ -229,6 +230,7 @@ type JsonRPCConfig struct {
 }
 
 type GRPCConfig struct {
+	// Addr is the bind address for the grpc rpc server
 	Addr string
 }
 
