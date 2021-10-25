@@ -55,7 +55,7 @@ func processStateChanges(event core.StateChangeEvent, crit ethereum.FilterQuery)
 // buildAccountDiff
 func buildAccountDiff(addr common.Address, modifiedAccount state.ModifiedAccount) (AccountDiff, error) {
 	emptyAccountDiff := AccountDiff{}
-	accountBytes, err := rlp.EncodeToBytes(modifiedAccount.Account)
+	accountBytes, err := rlp.EncodeToBytes(modifiedAccount.StateAccount)
 	if err != nil {
 		return emptyAccountDiff, err
 	}

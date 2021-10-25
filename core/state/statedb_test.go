@@ -115,7 +115,7 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 func getNewModifiedAccount() ModifiedAccount {
 	return ModifiedAccount{
 		Storage: make(map[common.Hash]common.Hash),
-		Account: Account{
+		StateAccount: types.StateAccount{
 			Nonce:    0,
 			Balance:  big.NewInt(0),
 			Root:     emptyRoot,
@@ -127,7 +127,7 @@ func getNewModifiedAccount() ModifiedAccount {
 func setBalanceForAddr(state *StateDB, addr common.Address, expectedModifiedAccount ModifiedAccount) ModifiedAccount {
 	balance := big.NewInt(rand.Int63())
 	state.SetBalance(addr, balance)
-	expectedModifiedAccount.Account.Balance = balance
+	expectedModifiedAccount.StateAccount.Balance = balance
 
 	return expectedModifiedAccount
 }
@@ -135,7 +135,7 @@ func setBalanceForAddr(state *StateDB, addr common.Address, expectedModifiedAcco
 func addBalanceForAddr(state *StateDB, addr common.Address, additionalBalance *big.Int, expectedModifiedAccount ModifiedAccount) ModifiedAccount {
 	state.AddBalance(addr, additionalBalance)
 	newBalance := additionalBalance.Int64() + expectedModifiedAccount.Balance.Int64()
-	expectedModifiedAccount.Account.Balance = big.NewInt(newBalance)
+	expectedModifiedAccount.StateAccount.Balance = big.NewInt(newBalance)
 
 	return expectedModifiedAccount
 }

@@ -752,7 +752,7 @@ func TestStateChangeSubscription(t *testing.T) {
 		address2 = common.HexToAddress("0x2")
 
 		modifiedAccount1 = state.ModifiedAccount{
-			Account: state.Account{
+			StateAccount: types.StateAccount{
 				Nonce:   0,
 				Balance: big.NewInt(100),
 				Root:    common.HexToHash("0x01"),
@@ -761,7 +761,7 @@ func TestStateChangeSubscription(t *testing.T) {
 		}
 
 		modifiedAccount2 = state.ModifiedAccount{
-			Account: state.Account{
+			StateAccount: types.StateAccount{
 				Nonce:   0,
 				Balance: big.NewInt(200),
 				Root:    common.HexToHash("0x02"),
@@ -914,7 +914,7 @@ func TestStateChangeSubscription(t *testing.T) {
 }
 
 func getAccountDiff(accountAddress common.Address, modifedAccount state.ModifiedAccount, t *testing.T) AccountDiff {
-	accountRlp, accountRlpErr := rlp.EncodeToBytes(modifedAccount.Account)
+	accountRlp, accountRlpErr := rlp.EncodeToBytes(modifedAccount.StateAccount)
 	if accountRlpErr != nil {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Failed to encode account diff")
