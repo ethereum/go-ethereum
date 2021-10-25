@@ -21,8 +21,8 @@ func TestConfigDefault(t *testing.T) {
 
 func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
-		Chain: "0",
-		Debug: true,
+		Chain:    "0",
+		Snapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 		},
@@ -52,8 +52,8 @@ func TestConfigMerge(t *testing.T) {
 		},
 	}
 	expected := &Config{
-		Chain: "1",
-		Debug: true,
+		Chain:    "1",
+		Snapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 			"b": "c",
@@ -73,6 +73,32 @@ func TestConfigMerge(t *testing.T) {
 	}
 	assert.NoError(t, c0.Merge(c1))
 	assert.Equal(t, c0, expected)
+}
+
+func TestConfigLoadFile(t *testing.T) {
+	readFile := func(path string) {
+		config, err := readConfigFile(path)
+		assert.NoError(t, err)
+		assert.Equal(t, config, &Config{
+			DataDir: "./data",
+			P2P: &P2PConfig{
+				MaxPeers: 30,
+			},
+			TxPool: &TxPoolConfig{
+				LifeTime: time.Duration(1 * time.Second),
+			},
+			Cache: &CacheConfig{},
+		})
+	}
+
+	// read file in hcl format
+	t.Run("hcl", func(t *testing.T) {
+		readFile("./testdata/simple.hcl")
+	})
+	// read file in json format
+	t.Run("json", func(t *testing.T) {
+		readFile("./testdata/simple.json")
+	})
 }
 
 var dummyEnodeAddr = "enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303"
