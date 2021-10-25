@@ -328,4 +328,17 @@ func TestRlpDecodeParentHash(t *testing.T) {
 			}
 		}
 	}
+	{
+		// Test some invalid erroneous stuff
+		for i, rlpData := range [][]byte{
+			nil,
+			common.FromHex("0x"),
+			common.FromHex("0x01"),
+			common.FromHex("0x3031323334"),
+		} {
+			if have, want := HeaderParentHashFromRLP(rlpData), (common.Hash{}); have != want {
+				t.Fatalf("invalid %d: have %x, want %x", i, have, want)
+			}
+		}
+	}
 }
