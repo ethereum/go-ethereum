@@ -97,17 +97,15 @@ func (m *Meta2) NewFlagSet(n string) *flagset.Flagset {
 	f := flagset.NewFlagSet(n)
 
 	f.StringFlag(&flagset.StringFlag{
-		Name:  "address",
-		Value: &m.addr,
-		Usage: "Address of the grpc endpoint",
+		Name:    "address",
+		Value:   &m.addr,
+		Usage:   "Address of the grpc endpoint",
+		Default: "127.0.0.1:3131",
 	})
 	return f
 }
 
 func (m *Meta2) Conn() (*grpc.ClientConn, error) {
-	if m.addr == "" {
-		m.addr = "127.0.0.1:3131"
-	}
 	conn, err := grpc.Dial(m.addr, grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)

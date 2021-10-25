@@ -41,9 +41,10 @@ func (d *DebugCommand) Flags() *flagset.Flagset {
 	flags := d.NewFlagSet("debug")
 
 	flags.Uint64Flag(&flagset.Uint64Flag{
-		Name:  "seconds",
-		Usage: "seconds to trace",
-		Value: &d.seconds,
+		Name:    "seconds",
+		Usage:   "seconds to trace",
+		Value:   &d.seconds,
+		Default: 5,
 	})
 	flags.StringFlag(&flagset.StringFlag{
 		Name:  "output",
