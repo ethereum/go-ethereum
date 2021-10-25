@@ -81,24 +81,6 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	WriteHeadHeaderHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
 	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
-	/**
-	Sanity check
-	This code should be removed before merging this PR, but it
-	is useful for validating that things work as expected.
-	*/
-	for i := uint64(0); i < frozen; i++ {
-		h, err := db.Ancient(freezerHashTable, i)
-		if err != nil {
-			log.Crit("Something bad happened", "number", i, "err", err)
-		}
-		num := ReadHeaderNumber(db, common.BytesToHash(h))
-		if num == nil {
-			log.Crit("Missing hash->number mapping", "number", i, "err", err)
-		}
-		if *num != i {
-			log.Crit("Erroneous hash->number mapping", "number", i)
-		}
-	}
 }
 
 type blockTxHashes struct {
