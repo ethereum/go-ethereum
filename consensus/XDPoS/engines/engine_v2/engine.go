@@ -9,8 +9,10 @@ import (
 )
 
 type XDPoS_v2 struct {
-	config *params.XDPoSConfig // Consensus engine configuration parameters
-	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	config      *params.XDPoSConfig // Consensus engine configuration parameters
+	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	BroadcastCh chan interface{}
+	BFTQueue    chan interface{}
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
@@ -38,5 +40,198 @@ func (consensus *XDPoS_v2) Author(header *types.Header) (common.Address, error) 
 }
 
 func (consensus *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
+	return nil
+}
+
+// Push mesages(i.e vote, sync info & timeout) into BFTQueue. This funciton shall be called by BFT protocal manager
+func (consensus *XDPoS_v2) Enqueue() error {
+	return nil
+}
+
+// Main function for the v2 consensus.
+func (consensus *XDPoS_v2) Dispatcher() error {
+	// 1. Pull message from the BFTQueue and call the relevant handler by message type, such as vote, timeout or syncInfo
+	// 2. Only 1 message processing at the time
+	return nil
+}
+
+/*
+	SyncInfo workflow
+*/
+// Verify syncInfo and trigger trigger process QC or TC if successful
+func (consensus *XDPoS_v2) VeifySyncInoMessage(header *types.Header) error {
+	/*
+		1. Verify items including:
+				- veifyQC
+				- veifyTC
+		2. Broadcast(Not part of consensus)
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) SyncInfoHandler(header *types.Header) error {
+	/*
+		1. processQC
+		2. processTC
+	*/
+	return nil
+}
+
+/*
+	Vote workflow
+*/
+func (consensus *XDPoS_v2) VerifyVoteMessage() error {
+	/*
+		  1. Check signature:
+					- Use ecRecover to get the public key
+					- Use the above public key to find out the xdc address
+					- Use the above xdc address to check against the master node list(For the running epoch)
+			2. Verify blockInfo
+			3. Broadcast(Not part of consensus)
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) VoteHandler() {
+	/*
+		1. checkRoundNumber
+		3. Collect vote (TODO)
+		4. Genrate QC (TODO)
+		5. processQC
+	*/
+}
+
+/*
+	Timeout workflow
+*/
+// Verify timeout message type from peers in bft.go
+func (consensus *XDPoS_v2) VerifyTimeoutMessage() error {
+	/*
+		  1. Check signature:
+					- Use ecRecover to get the public key
+					- Use the above public key to find out the xdc address
+					- Use the above xdc address to check against the master node(For the running epoch)
+			2. Broadcast(Not part of consensus)
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) TimeoutHandler() {
+	/*
+		1. checkRoundNumber()
+		2. Collect timeout (TODO)
+		3. Genrate TC (TODO)
+		4. processTC()
+		5. generateSyncInfo()
+	*/
+}
+
+/*
+	Process Block workflow
+*/
+func (consensus *XDPoS_v2) ProcessBlockHandler() {
+	/*
+		1. processQC()
+		2. verifyVotingRule()
+		3. sendVote()
+
+	*/
+}
+
+/*
+	QC & TC Utils
+*/
+
+// Genrate blockInfo which contains Hash, round and blockNumber and send to queue
+func (consensus *XDPoS_v2) generateBlockInfo() error {
+	return nil
+}
+
+// To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
+func (consensus *XDPoS_v2) veifyBlockInfo(header *types.Header) error {
+	return nil
+}
+
+func (consensus *XDPoS_v2) veifyQC(header *types.Header) error {
+	/*
+		1. Verify signer signatures: (List of signatures)
+					- Use ecRecover to get the public key
+					- Use the above public key to find out the xdc address
+					- Use the above xdc address to check against the master node list(For the received QC epoch)
+		2. Verify blockInfo
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) veifyTC(header *types.Header) error {
+	/*
+		1. Verify signer signature: (List of signatures)
+					- Use ecRecover to get the public key
+					- Use the above public key to find out the xdc address
+					- Use the above xdc address to check against the master node list(For the received TC epoch)
+	*/
+	return nil
+}
+
+// Update local QC variables including highestQC & lockQC, as well as update commit blockInfo before call
+func (consensus *XDPoS_v2) processQC(header *types.Header) error {
+	/*
+		1. Update HighestQC and LockQC
+		2. Update commit block info (TODO)
+		3. Check QC round >= node's currentRound. If yes, call setNewRound
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) processTC(header *types.Header) error {
+	/*
+		1. Update highestTC
+		2. Check TC round >= node's currentRound. If yes, call setNewRound
+	*/
+	return nil
+}
+
+func (consensus *XDPoS_v2) setNewRound() error {
+	/*
+		1. Set currentRound = QC round + 1 (or TC round +1)
+		2. Reset timer
+		3. Reset vote and timeout Pools
+	*/
+	return nil
+}
+
+// Verify round number against node's local round number(Should be equal)
+func (consensus *XDPoS_v2) checkRoundNumber(header *types.Header) error {
+	return nil
+}
+
+// Hot stuff rule to decide whether this node is eligible to vote for the received block
+func (consensus *XDPoS_v2) verifyVotingRule(header *types.Header) error {
+	/*
+		(TODO)
+	*/
+	return nil
+}
+
+// Once Hot stuff voting rule has verified, this node can then send vote
+func (consensus *XDPoS_v2) sendVote(header *types.Header) error {
+	// First step: Generate the signature by using node's private key(The signature is the blockInfo signature)
+	// Second step: Construct the vote struct with the above signature & blockinfo struct
+	// Third step: Send the vote to broadcast channel
+	return nil
+}
+
+// Generate and send timeout into BFT channel.
+func (consensus *XDPoS_v2) sendTimeout() error {
+	/*
+		1. timeout.round = currentRound
+		2. Sign the signature
+		3. send to broadcast channel
+	*/
+	return nil
+}
+
+// Generate and send syncInfo into Broadcast channel. The SyncInfo includes local highest QC & TC
+func (consensus *XDPoS_v2) sendSyncInfo() error {
 	return nil
 }
