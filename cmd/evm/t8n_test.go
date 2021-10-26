@@ -170,13 +170,37 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp2.json",
 		},
+		{ // Difficulty calculation on arrow glacier
+			base: "./testdata/19",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "London", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_london.json",
+		},
+		{ // Difficulty calculation on arrow glacier
+			base: "./testdata/19",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "ArrowGlacier", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_arrowglacier.json",
+		},
 	} {
 
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
 		args = append(args, tc.input.get(tc.base)...)
+		var qArgs []string // quoted args for debugging purposes
+		for _, arg := range args{
+			if len(arg) == 0{
+				qArgs = append(qArgs,`""`)
+			}else{
+				qArgs = append(qArgs, arg)
+			}
+		}
+		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
 		tt.Run("evm-test", args...)
-		tt.Logf("args: %v\n", strings.Join(args, " "))
 		// Compare the expected output, if provided
 		if tc.expOut != "" {
 			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
