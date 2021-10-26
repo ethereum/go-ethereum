@@ -620,9 +620,6 @@ func checkAncientCount(t *testing.T, store ethdb.AncientStore, kind string, n ui
 	// Check at index n-1.
 	if n > 0 {
 		index := n - 1
-		if ok, _ := store.HasAncient(kind, index); !ok {
-			t.Errorf("HasAncient(%q, %d) returned false unexpectedly", kind, index)
-		}
 		if _, err := store.Ancient(kind, index); err != nil {
 			t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 		}
@@ -630,9 +627,6 @@ func checkAncientCount(t *testing.T, store ethdb.AncientStore, kind string, n ui
 
 	// Check at index n.
 	index := n
-	if ok, _ := store.HasAncient(kind, index); ok {
-		t.Errorf("HasAncient(%q, %d) returned true unexpectedly", kind, index)
-	}
 	if _, err := store.Ancient(kind, index); err == nil {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != ethdb.ErrAncientOutOfBounds {

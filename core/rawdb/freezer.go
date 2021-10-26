@@ -185,15 +185,6 @@ func (f *freezer) Close() error {
 	return nil
 }
 
-// HasAncient returns an indicator whether the specified ancient data exists
-// in the freezer.
-func (f *freezer) HasAncient(kind string, number uint64) (bool, error) {
-	if table := f.tables[kind]; table != nil {
-		return table.has(number), nil
-	}
-	return false, ethdb.ErrAncientUnknownKind
-}
-
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {

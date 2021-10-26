@@ -50,12 +50,6 @@ func (t *table) Get(key []byte) ([]byte, error) {
 	return t.db.Get(append([]byte(t.prefix), key...))
 }
 
-// HasAncient is a noop passthrough that just forwards the request to the underlying
-// database.
-func (t *table) HasAncient(kind string, number uint64) (bool, error) {
-	return t.db.HasAncient(kind, number)
-}
-
 // Ancient is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) Ancient(kind string, number uint64) ([]byte, error) {

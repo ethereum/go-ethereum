@@ -95,11 +95,6 @@ var (
 
 // AncientReader contains the methods required to read from immutable ancient data.
 type AncientReader interface {
-	// HasAncient returns an indicator whether the specified data exists in the
-	// ancient store.
-	// Returns ErrAncientUnknownKind if the kind is unknown.
-	HasAncient(kind string, number uint64) (bool, error)
-
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	// Returns ErrAncientUnknownKind if the kind is unknown.
 	Ancient(kind string, number uint64) ([]byte, error)
