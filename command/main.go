@@ -84,6 +84,31 @@ func commands() map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+		"peers": func() (cli.Command, error) {
+			return &PeersCommand{
+				UI: ui,
+			}, nil
+		},
+		"peers add": func() (cli.Command, error) {
+			return &PeersAddCommand{
+				Meta2: meta2,
+			}, nil
+		},
+		"peers remove": func() (cli.Command, error) {
+			return &PeersRemoveCommand{
+				Meta2: meta2,
+			}, nil
+		},
+		"peers list": func() (cli.Command, error) {
+			return &PeersListCommand{
+				Meta2: meta2,
+			}, nil
+		},
+		"peers status": func() (cli.Command, error) {
+			return &PeersStatusCommand{
+				Meta2: meta2,
+			}, nil
+		},
 	}
 }
 
@@ -171,5 +196,12 @@ func (m *Meta) GetKeystore() (*keystore.KeyStore, error) {
 func formatList(in []string) string {
 	columnConf := columnize.DefaultConfig()
 	columnConf.Empty = "<none>"
+	return columnize.Format(in, columnConf)
+}
+
+func formatKV(in []string) string {
+	columnConf := columnize.DefaultConfig()
+	columnConf.Empty = "<none>"
+	columnConf.Glue = " = "
 	return columnize.Format(in, columnConf)
 }

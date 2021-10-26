@@ -446,6 +446,5 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Address and port to bind the GRPC server",
 		Value: &c.cliConfig.GRPC.Addr,
 	})
-
 	return f
 }
