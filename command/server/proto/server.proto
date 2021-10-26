@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "/command/server/proto";
+
+service Bor {
+    rpc Pprof(PprofRequest) returns (PprofResponse);
+}
+
+message PprofRequest {
+    Type type = 1;
+
+    string profile = 2;
+
+    int64 seconds = 3;
+
+    enum Type {
+        LOOKUP = 0;
+        CPU = 1;
+        TRACE = 2;
+    }
+}
+
+message PprofResponse {
+    string payload = 1;
+    map<string, string> headers = 2;
+}

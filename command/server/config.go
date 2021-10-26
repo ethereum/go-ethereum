@@ -84,6 +84,9 @@ type Config struct {
 
 	// Account has the validator account related settings
 	Accounts *AccountsConfig `hcl:"accounts,block"`
+
+	// GRPC has the grpc server related settings
+	GRPC *GRPCConfig
 }
 
 type P2PConfig struct {
@@ -224,6 +227,11 @@ type JsonRPCConfig struct {
 
 	// Http has the json-rpc graphql related settings
 	Graphql *APIConfig `hcl:"graphql,block"`
+}
+
+type GRPCConfig struct {
+	// Addr is the bind address for the grpc rpc server
+	Addr string
 }
 
 type APIConfig struct {
@@ -458,6 +466,9 @@ func DefaultConfig() *Config {
 			PasswordFile:        "",
 			AllowInsecureUnlock: false,
 			UseLightweightKDF:   false,
+		},
+		GRPC: &GRPCConfig{
+			Addr: ":3131",
 		},
 	}
 }
