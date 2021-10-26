@@ -44,7 +44,7 @@ func (d *DebugCommand) Flags() *flagset.Flagset {
 		Name:    "seconds",
 		Usage:   "seconds to trace",
 		Value:   &d.seconds,
-		Default: 5,
+		Default: 2,
 	})
 	flags.StringFlag(&flagset.StringFlag{
 		Name:  "output",
