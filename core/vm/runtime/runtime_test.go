@@ -494,7 +494,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//Execute(loopingCode, nil, &Config{
 	//	EVMConfig: vm.Config{
 	//		Debug:  true,
-	//		Tracer: tracer,
+	//		JSTracer: tracer,
 	//	}})
 	// 100M gas
 	benchmarkNonModifyingCode(100000000, staticCallIdentity, "staticcall-identity-100M", "", b)

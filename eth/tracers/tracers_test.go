@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/native"
+	//"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
@@ -205,7 +205,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracerLegacy(t *testing.T) {
-	newTracer := func() native.Tracer {
+	newTracer := func() Tracer {
 		tracer, err := New("callTracerLegacy", new(Context))
 		if err != nil {
 			t.Fatalf("failed to create call tracer: %v", err)
@@ -217,7 +217,7 @@ func TestCallTracerLegacy(t *testing.T) {
 }
 
 func TestCallTracer(t *testing.T) {
-	newTracer := func() native.Tracer {
+	newTracer := func() Tracer {
 		tracer, err := New("callTracer", new(Context))
 		if err != nil {
 			t.Fatalf("failed to create call tracer: %v", err)
@@ -229,18 +229,17 @@ func TestCallTracer(t *testing.T) {
 }
 
 func TestCallTracerNative(t *testing.T) {
-	newTracer := func() native.Tracer {
-		tracer, ok := native.New("callTracerNative")
-		if !ok {
-			t.Fatal("failed to create native call tracer")
+	newTracer := func() Tracer {
+		tracer, err := New("callTracerNative", nil /* TODO? */)
+		if err != nil {
+			t.Fatalf("failed to create native call tracer: %v", err)
 		}
 		return tracer
 	}
-
 	testCallTracer(newTracer, "call_tracer", t)
 }
 
-func testCallTracer(newTracer func() native.Tracer, dirPath string, t *testing.T) {
+func testCallTracer(newTracer func() Tracer, dirPath string, t *testing.T) {
 	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -431,7 +430,7 @@ func BenchmarkTracers(b *testing.B) {
 			if err := json.Unmarshal(blob, test); err != nil {
 				b.Fatalf("failed to parse testcase: %v", err)
 			}
-			newTracer := func() native.Tracer {
+			newTracer := func() Tracer {
 				tracer, err := New("callTracer", new(Context))
 				if err != nil {
 					b.Fatalf("failed to create call tracer: %v", err)
@@ -443,7 +442,7 @@ func BenchmarkTracers(b *testing.B) {
 	}
 }
 
-func benchTracer(newTracer func() native.Tracer, test *callTracerTest, b *testing.B) {
+func benchTracer(newTracer func() Tracer, test *callTracerTest, b *testing.B) {
 	// Configure a blockchain with the given prestate
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {

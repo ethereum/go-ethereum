@@ -26,10 +26,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 func init() {
-	register("callTracerNative", NewCallTracer)
+	tracers.RegisterNativeTracer("callTracerNative", NewCallTracer)
 }
 
 type callFrame struct {
@@ -45,20 +46,20 @@ type callFrame struct {
 	Calls   []callFrame `json:"calls,omitempty"`
 }
 
-type CallTracer struct {
+type callTracer struct {
 	callstack []callFrame
 }
 
 // NewCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.Tracer.
-func NewCallTracer() Tracer {
+func NewCallTracer() tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	t := &CallTracer{callstack: make([]callFrame, 1)}
+	t := &callTracer{callstack: make([]callFrame, 1)}
 	return t
 }
 
-func (t *CallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
@@ -72,7 +73,7 @@ func (t *CallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 	}
 }
 
-func (t *CallTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 	t.callstack[0].Output = bytesToHex(output)
 	t.callstack[0].GasUsed = uintToHex(gasUsed)
 	if err != nil {
@@ -80,13 +81,13 @@ func (t *CallTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 	}
 }
 
-func (t *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *callTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
-func (t *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *callTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
-func (t *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	call := callFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
@@ -98,7 +99,7 @@ func (t *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 	t.callstack = append(t.callstack, call)
 }
 
-func (t *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size := len(t.callstack)
 	if size <= 1 {
 		return
@@ -120,7 +121,7 @@ func (t *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *CallTracer) GetResult() (json.RawMessage, error) {
+func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
@@ -129,6 +130,10 @@ func (t *CallTracer) GetResult() (json.RawMessage, error) {
 		return nil, err
 	}
 	return json.RawMessage(res), nil
+}
+
+func (t *callTracer) Stop(err error) {
+	// TODO
 }
 
 func bytesToHex(s []byte) string {

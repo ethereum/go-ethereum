@@ -18,14 +18,55 @@
 package tracers
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/internal/tracers"
 )
 
-// all contains all the built in JavaScript tracers by name.
-var all = make(map[string]string)
+// Tracer interface extends vm.JSTracer and additionally
+// allows collecting the tracing result.
+type Tracer interface {
+	vm.Tracer
+	GetResult() (json.RawMessage, error)
+	// Stop terminates execution of the tracer at the first opportune moment.
+	Stop(err error)
+}
+
+var (
+	nativeTracers map[string]func() Tracer = make(map[string]func() Tracer)
+	jsTracers                              = make(map[string]string)
+)
+
+// RegisterNativeTracer makes native tracers in this directory which adhere
+// to the `JSTracer` interface available to the rest of the codebase.
+// It is typically invoked in the `init()` function.
+func RegisterNativeTracer(name string, ctor func() Tracer) {
+	nativeTracers[name] = ctor
+}
+
+// New returns a new instance of a tracer,
+// 1. If 'code' is the name of a registered native tracer, then that tracer
+//   is instantiated and returned
+// 2. If 'code' is the name of a registered js-tracer, then that tracer is
+//   instantiated and returned
+// 3. Otherwise, the code is interpreted as the js code of a js-tracer, and
+//   is evaluated and returned.
+func New(code string, ctx *Context) (Tracer, error) {
+	// Resolve native tracer
+	if fn, ok := nativeTracers[code]; ok {
+		return fn(), nil
+	}
+	panic(fmt.Sprintf("no native tracer %v found", code))
+	// Resolve js-tracers by name and assemble the tracer object
+	if tracer, ok := jsTracers[code]; ok {
+		code = tracer
+	}
+	return newJsTracer(code, ctx)
+}
 
 // camel converts a snake cased input string into a camel cased output.
 func camel(str string) string {
@@ -40,14 +81,6 @@ func camel(str string) string {
 func init() {
 	for _, file := range tracers.AssetNames() {
 		name := camel(strings.TrimSuffix(file, ".js"))
-		all[name] = string(tracers.MustAsset(file))
+		jsTracers[name] = string(tracers.MustAsset(file))
 	}
-}
-
-// tracer retrieves a specific JavaScript tracer by name.
-func tracer(name string) (string, bool) {
-	if tracer, ok := all[name]; ok {
-		return tracer, true
-	}
-	return "", false
 }
