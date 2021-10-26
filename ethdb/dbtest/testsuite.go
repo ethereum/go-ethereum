@@ -607,6 +607,59 @@ func TestAncientStoreSuite(t *testing.T, New AncientCreator) {
 			checkAncientCount(t, store, "test", 10)
 		}
 	})
+
+	t.Run("AncientRange", func(t *testing.T) {
+		t.Parallel()
+
+		store, closeAndCleanup := New(tableDef)
+		defer closeAndCleanup()
+
+		const itemCount = 100
+		const itemSize = 100
+
+		_, _ = store.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+			for i := 0; i < itemCount; i++ {
+				require.NoError(t, op.AppendRaw(testKind, uint64(i), getChunk(itemSize, i)))
+			}
+			return nil
+		})
+
+		generateResult := func(start, count int) [][]byte {
+			res := make([][]byte, count)
+			for i := 0; i < count; i++ {
+				res[i] = getChunk(itemSize, start+i)
+			}
+			return res
+		}
+
+		// out of bounds
+		_, err := store.AncientRange(testKind, itemCount, 1, 10*itemSize)
+		require.Equal(t, err, ethdb.ErrAncientOutOfBounds)
+
+		// 1 item
+		items, err := store.AncientRange(testKind, 0, 1, 10*itemSize)
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		require.Equal(t, generateResult(0, 1), items)
+
+		// 5 items
+		items, err = store.AncientRange(testKind, 0, 5, 10*itemSize)
+		require.NoError(t, err)
+		require.Len(t, items, 5)
+		require.Equal(t, generateResult(0, 5), items)
+
+		// 10 items overlapping the end
+		items, err = store.AncientRange(testKind, itemCount-5, 10, 20*itemSize)
+		require.NoError(t, err)
+		require.Len(t, items, 5)
+		require.Equal(t, generateResult(itemCount-5, 5), items)
+
+		// maxBytes
+		items, err = store.AncientRange(testKind, 0, 15, 10*itemSize)
+		require.NoError(t, err)
+		require.Len(t, items, 10)
+		require.Equal(t, generateResult(0, 10), items)
+	})
 }
 
 // checkAncientCount verifies that the AncientStore contains n items.
@@ -623,6 +676,12 @@ func checkAncientCount(t *testing.T, store ethdb.AncientStore, kind string, n ui
 		if _, err := store.Ancient(kind, index); err != nil {
 			t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 		}
+		if err := store.ReadAncients(func(reader ethdb.AncientReader) error {
+			_, err := reader.Ancient(kind, index)
+			return err
+		}); err != nil {
+			t.Errorf("ReadAncients{Ancient()}(%q, %d) returned unexpected error %q", kind, index, err)
+		}
 	}
 
 	// Check at index n.
@@ -631,6 +690,14 @@ func checkAncientCount(t *testing.T, store ethdb.AncientStore, kind string, n ui
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != ethdb.ErrAncientOutOfBounds {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
+	}
+	if err := store.ReadAncients(func(reader ethdb.AncientReader) error {
+		_, err := reader.Ancient(kind, index)
+		return err
+	}); err == nil {
+		t.Errorf("ReadAncients{Ancient()}(%q, %d) didn't return expected error", kind, index)
+	} else if err != ethdb.ErrAncientOutOfBounds {
+		t.Errorf("ReadAncients{Ancient()}(%q, %d) returned unexpected error %q", kind, index, err)
 	}
 }
 
