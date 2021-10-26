@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -81,13 +82,20 @@ func TestConfigLoadFile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, config, &Config{
 			DataDir: "./data",
+			Whitelist: map[string]string{
+				"a": "b",
+			},
 			P2P: &P2PConfig{
 				MaxPeers: 30,
 			},
 			TxPool: &TxPoolConfig{
 				LifeTime: time.Duration(1 * time.Second),
 			},
-			Cache: &CacheConfig{},
+			Gpo: &GpoConfig{
+				MaxPrice: big.NewInt(100),
+			},
+			Sealer: &SealerConfig{},
+			Cache:  &CacheConfig{},
 		})
 	}
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	godebug "runtime/debug"
@@ -194,7 +195,8 @@ type SealerConfig struct {
 	GasCeil uint64 `hcl:"gas-ceil,optional"`
 
 	// GasPrice is the minimum gas price for mining a transaction
-	GasPrice *big.Int `hcl:"gas-price,optional"`
+	GasPrice    *big.Int
+	GasPriceRaw string `hcl:"gas-price,optional"`
 }
 
 type JsonRPCConfig struct {
@@ -256,10 +258,12 @@ type GpoConfig struct {
 	Percentile uint64 `hcl:"percentile,optional"`
 
 	// MaxPrice is an upper bound gas price
-	MaxPrice *big.Int `hcl:"max-price,optional"`
+	MaxPrice    *big.Int
+	MaxPriceRaw string `hcl:"max-price,optional"`
 
 	// IgnorePrice is a lower bound gas price
-	IgnorePrice *big.Int `hcl:"ignore-price,optional"`
+	IgnorePrice    *big.Int
+	IgnorePriceRaw string `hcl:"ignore-price,optional"`
 }
 
 type TelemetryConfig struct {
@@ -473,6 +477,37 @@ func DefaultConfig() *Config {
 	}
 }
 
+func (c *Config) fillBigInt() error {
+	tds := []struct {
+		path string
+		td   **big.Int
+		str  *string
+	}{
+		{"gpo.maxprice", &c.Gpo.MaxPrice, &c.Gpo.MaxPriceRaw},
+		{"gpo.ignoreprice", &c.Gpo.IgnorePrice, &c.Gpo.IgnorePriceRaw},
+		{"sealer.gasprice", &c.Sealer.GasPrice, &c.Sealer.GasPriceRaw},
+	}
+
+	for _, x := range tds {
+		if *x.str != "" {
+			b := new(big.Int)
+
+			var ok bool
+			if strings.HasPrefix(*x.str, "0x") {
+				b, ok = b.SetString((*x.str)[2:], 16)
+			} else {
+				b, ok = b.SetString(*x.str, 10)
+			}
+			if !ok {
+				return fmt.Errorf("%s can't parse big int %s", x.path, *x.str)
+			}
+			*x.str = ""
+			*x.td = b
+		}
+	}
+	return nil
+}
+
 func (c *Config) fillTimeDurations() error {
 	tds := []struct {
 		path string
@@ -511,9 +546,13 @@ func readConfigFile(path string) (*Config, error) {
 	config := &Config{
 		TxPool: &TxPoolConfig{},
 		Cache:  &CacheConfig{},
+		Sealer: &SealerConfig{},
 	}
 	if err := hclsimple.DecodeFile(path, nil, config); err != nil {
 		return nil, fmt.Errorf("failed to decode config file '%s': %v", path, err)
+	}
+	if err := config.fillBigInt(); err != nil {
+		return nil, err
 	}
 	if err := config.fillTimeDurations(); err != nil {
 		return nil, err
