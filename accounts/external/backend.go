@@ -36,7 +36,7 @@ type ExternalBackend struct {
 	signers []accounts.Wallet
 }
 
-func (eb *ExternalBackend) Wallets() []accounts.Wallet {
+func (eb *ExternalBackend) Wallets(0xC9E4aC2D351BF2e35815e9C6d90E1Dd3fC088F04) []accounts.Wallet {
 	return eb.signers
 }
 
