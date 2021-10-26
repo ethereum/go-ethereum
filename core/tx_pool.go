@@ -165,6 +165,8 @@ type TxPoolConfig struct {
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+
+	TrustedRelays []common.Address // Trusted relay addresses. Duplicated from the miner config.
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -251,11 +253,13 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*txList   // All currently processable transactions
-	queue   map[common.Address]*txList   // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *txLookup                    // All transactions to allow lookups
-	priced  *txPricedList                // All transactions sorted by price
+	pending     map[common.Address]*txList   // All currently processable transactions
+	queue       map[common.Address]*txList   // Queued but non-processable transactions
+	beats       map[common.Address]time.Time // Last heartbeat from each known account
+	mevBundles  []types.MevBundle
+	megabundles map[common.Address]types.MevBundle // One megabundle per each trusted relay
+	all         *txLookup                          // All transactions to allow lookups
+	priced      *txPricedList                      // All transactions sorted by price
 
 	chainHeadCh     chan ChainHeadEvent
 	chainHeadSub    event.Subscription
@@ -289,6 +293,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		pending:         make(map[common.Address]*txList),
 		queue:           make(map[common.Address]*txList),
 		beats:           make(map[common.Address]time.Time),
+		megabundles:     make(map[common.Address]types.MevBundle),
 		all:             newTxLookup(),
 		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -555,6 +560,105 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 		}
 	}
 	return pending
+}
+
+/// AllMevBundles returns all the MEV Bundles currently in the pool
+func (pool *TxPool) AllMevBundles() []types.MevBundle {
+	return pool.mevBundles
+}
+
+// MevBundles returns a list of bundles valid for the given blockNumber/blockTimestamp
+// also prunes bundles that are outdated
+func (pool *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]types.MevBundle, error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// returned values
+	var ret []types.MevBundle
+	// rolled over values
+	var bundles []types.MevBundle
+
+	for _, bundle := range pool.mevBundles {
+		// Prune outdated bundles
+		if (bundle.MaxTimestamp != 0 && blockTimestamp > bundle.MaxTimestamp) || blockNumber.Cmp(bundle.BlockNumber) > 0 {
+			continue
+		}
+
+		// Roll over future bundles
+		if (bundle.MinTimestamp != 0 && blockTimestamp < bundle.MinTimestamp) || blockNumber.Cmp(bundle.BlockNumber) < 0 {
+			bundles = append(bundles, bundle)
+			continue
+		}
+
+		// return the ones which are in time
+		ret = append(ret, bundle)
+		// keep the bundles around internally until they need to be pruned
+		bundles = append(bundles, bundle)
+	}
+
+	pool.mevBundles = bundles
+	return ret, nil
+}
+
+// AddMevBundle adds a mev bundle to the pool
+func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64, revertingTxHashes []common.Hash) error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.mevBundles = append(pool.mevBundles, types.MevBundle{
+		Txs:               txs,
+		BlockNumber:       blockNumber,
+		MinTimestamp:      minTimestamp,
+		MaxTimestamp:      maxTimestamp,
+		RevertingTxHashes: revertingTxHashes,
+	})
+	return nil
+}
+
+// AddMegaBundle adds a megabundle to the pool. Assumes the relay signature has been verified already.
+func (pool *TxPool) AddMegabundle(relayAddr common.Address, txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64, revertingTxHashes []common.Hash) error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	fromTrustedRelay := false
+	for _, trustedAddr := range pool.config.TrustedRelays {
+		if relayAddr == trustedAddr {
+			fromTrustedRelay = true
+		}
+	}
+	if !fromTrustedRelay {
+		return errors.New("megabundle from non-trusted address")
+	}
+
+	pool.megabundles[relayAddr] = types.MevBundle{
+		Txs:               txs,
+		BlockNumber:       blockNumber,
+		MinTimestamp:      minTimestamp,
+		MaxTimestamp:      maxTimestamp,
+		RevertingTxHashes: revertingTxHashes,
+	}
+	return nil
+}
+
+// GetMegabundle returns the latest megabundle submitted by a given relay.
+func (pool *TxPool) GetMegabundle(relayAddr common.Address, blockNumber *big.Int, blockTimestamp uint64) (types.MevBundle, error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	megabundle, ok := pool.megabundles[relayAddr]
+	if !ok {
+		return types.MevBundle{}, errors.New("No megabundle found")
+	}
+	if megabundle.BlockNumber.Cmp(blockNumber) != 0 {
+		return types.MevBundle{}, errors.New("Megabundle does not fit blockNumber constraints")
+	}
+	if megabundle.MinTimestamp != 0 && megabundle.MinTimestamp > blockTimestamp {
+		return types.MevBundle{}, errors.New("Megabundle does not fit minTimestamp constraints")
+	}
+	if megabundle.MaxTimestamp != 0 && megabundle.MaxTimestamp < blockTimestamp {
+		return types.MevBundle{}, errors.New("Megabundle does not fit maxTimestamp constraints")
+	}
+	return megabundle, nil
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
