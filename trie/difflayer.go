@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
@@ -99,6 +100,8 @@ func newDiffLayer(parent snapshot, root common.Hash, nodes map[string]*cachedNod
 		triedbDirtyWriteMeter.Mark(int64(node.size))
 	}
 	triedbDiffLayerSizeMeter.Mark(int64(dl.memory))
+	triedbDiffLayerNodesMeter.Mark(int64(len(nodes)))
+	log.Debug("Created new diff layer", "nodes", len(nodes), "size", common.StorageSize(dl.memory))
 	return dl
 }
 

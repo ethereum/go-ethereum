@@ -52,7 +52,7 @@ var (
 
 	triedbDirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("trie/triedb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	triedbCommitTimeTimer  = metrics.NewRegisteredResettingTimer("trie/triedb/commit/time", nil)
+	triedbCommitTimeTimer  = metrics.NewRegisteredTimer("trie/triedb/commit/time", nil)
 	triedbCommitNodesMeter = metrics.NewRegisteredMeter("trie/triedb/commit/nodes", nil)
 	triedbCommitSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/commit/size", nil)
 
@@ -63,7 +63,8 @@ var (
 	triedbBloomFalseHitMeter = metrics.NewRegisteredMeter("trie/triedb/bloom/falsehit", nil)
 	triedbBloomMissMeter     = metrics.NewRegisteredMeter("trie/triedb/bloom/miss", nil)
 
-	triedbDiffLayerSizeMeter = metrics.NewRegisteredMeter("trie/triedb/diff/size", nil)
+	triedbDiffLayerSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/diff/size", nil)
+	triedbDiffLayerNodesMeter = metrics.NewRegisteredMeter("trie/triedb/diff/nodes", nil)
 
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
