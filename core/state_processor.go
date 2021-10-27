@@ -154,7 +154,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 func ApplyTransactionForPreExec(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	blockContext := NewEVMBlockContext(header, bc, author)
+	blockContext.BaseFee = big.NewInt(0)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	vmenv.Context.BaseFee = big.NewInt(0)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
