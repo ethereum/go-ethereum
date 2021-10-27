@@ -12,7 +12,7 @@ defaults:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Install Go
@@ -34,3 +34,5 @@ jobs:
         with:
           version: v1.42.1
           only-new-issues: true
+          skip-pkg-cache: true
+          skip-build-cache: true:w

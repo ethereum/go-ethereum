@@ -13,14 +13,14 @@ env:
   TEMP_ARTIFACT_NAME: geth
   BUILT_BINARY_PATH: build/bin
   BUILT_BINARY_NAME: geth
-  OSS_ARCHIVE_FILE_NAME: eth-latest-linux-amd64
-  OSS_ARCHIVE_BUCKET: debank-artifacts
-  OSS_ARCHIVE_FILE_PREFIX: downloads
-  OSS_DOMESTIC_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+  ARCHIVE_FILE_NAME: eth-latest-linux-amd64
+  ARCHIVE_BUCKET: debank-build-artifacts
+  ARCHIVE_FILE_PREFIX: downloads
+  AWS_REGION: ap-northeast-1
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
@@ -32,19 +32,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Make binaries
         run: |
           git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}:x-oauth-basic@github.com/DeBankDeFi".insteadOf "https://github.com/DeBankDeFi"
-          make geth
+          make
 
       - name: Archive built binaries
         uses: actions/upload-artifact@v2
@@ -54,7 +45,7 @@ jobs:
           retention-days: 1
 
   package:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build
     steps:
       - name: Download built binaries
@@ -65,30 +56,27 @@ jobs:
 
       - name: Archive artifacts
         run: |
-          mkdir $OSS_ARCHIVE_FILE_NAME
-          cp $BUILT_BINARY_PATH/$BUILT_BINARY_NAME $OSS_ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
-          sha256sum $OSS_ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME --tag >> $OSS_ARCHIVE_FILE_NAME/sha256.checksum
-          chmod u+x $OSS_ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
-          $OSS_ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
-          tar cvfz $OSS_ARCHIVE_FILE_NAME.tar.gz $OSS_ARCHIVE_FILE_NAME
+          mkdir $ARCHIVE_FILE_NAME
+          cp $BUILT_BINARY_PATH/$BUILT_BINARY_NAME $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
+          sha256sum $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME --tag >> $ARCHIVE_FILE_NAME/sha256.checksum
+          chmod u+x $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
+          $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
+          tar cvfz $ARCHIVE_FILE_NAME.tar.gz $ARCHIVE_FILE_NAME
 
-      - name: Setup aliyun oss
-        uses: barryz/setup-ossutil@master
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          endpoint: ${{ env.OSS_DOMESTIC_ENDPOINT }}
-          access-key-id: ${{ secrets.OSS_KEY_ID }}
-          access-key-secret: ${{ secrets.OSS_KEY_SECRET }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Copy artifacts to oss
+      - name: Copy artifacts to s3
         run: |
-          ossutil cp -rf $OSS_ARCHIVE_FILE_NAME.tar.gz oss://$OSS_ARCHIVE_BUCKET/$OSS_ARCHIVE_FILE_PREFIX/$OSS_ARCHIVE_FILE_NAME.tar.gz
-          ossutil set-acl oss://$OSS_ARCHIVE_BUCKET/$OSS_ARCHIVE_FILE_PREFIX/$OSS_ARCHIVE_FILE_NAME.tar.gz public-read
+          aws s3 cp $ARCHIVE_FILE_NAME.tar.gz s3://$ARCHIVE_BUCKET/$ARCHIVE_FILE_PREFIX/$ARCHIVE_FILE_NAME.tar.gz --acl public-read
 
       - name: comment PR
         uses: unsplash/comment-on-pr@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          msg: "Artifacts uploaded, click or copy [this link](https://${{ env.OSS_ARCHIVE_BUCKET }}.${{ env.OSS_DOMESTIC_ENDPOINT }}/${{ env.OSS_ARCHIVE_FILE_PREFIX }}/${{ env.OSS_ARCHIVE_FILE_NAME }}.tar.gz) to download. :tada:"
+          msg: "Artifacts uploaded, click or copy [this link](https://${{ env.ARCHIVE_BUCKET }}.s3.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ARCHIVE_FILE_PREFIX }}/${{ env.ARCHIVE_FILE_NAME }}.tar.gz) to download. :tada:"
           check_for_duplicate_msg: true
         continue-on-error: true
