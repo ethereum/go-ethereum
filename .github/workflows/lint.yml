@@ -35,4 +35,4 @@ jobs:
           version: v1.42.1
           only-new-issues: true
           skip-pkg-cache: true
-          skip-build-cache: true:w
+          skip-build-cache: true
