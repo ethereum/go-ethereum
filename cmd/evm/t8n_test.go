@@ -170,6 +170,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp2.json",
 		},
+		{ // Difficulty calculation - with uncles + Berlin
+			base: "./testdata/14",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.uncles.json", "Berlin", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_berlin.json",
+		},
 		{ // Difficulty calculation on arrow glacier
 			base: "./testdata/19",
 			input: t8nInput{
@@ -192,10 +200,10 @@ func TestT8n(t *testing.T) {
 		args = append(args, tc.output.get()...)
 		args = append(args, tc.input.get(tc.base)...)
 		var qArgs []string // quoted args for debugging purposes
-		for _, arg := range args{
-			if len(arg) == 0{
-				qArgs = append(qArgs,`""`)
-			}else{
+		for _, arg := range args {
+			if len(arg) == 0 {
+				qArgs = append(qArgs, `""`)
+			} else {
 				qArgs = append(qArgs, arg)
 			}
 		}
