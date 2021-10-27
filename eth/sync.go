@@ -18,7 +18,6 @@ package eth
 
 import (
 	"math/big"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -28,22 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
 	defaultMinSyncPeers = 5                // Amount of peers desired to start syncing
-
-	// This is the target size for the packs of transactions sent by txsyncLoop64.
-	// A pack can get larger than this if a single transactions exceeds this size.
-	txsyncPackSize = 100 * 1024
 )
-
-type txsync struct {
-	p   *eth.Peer
-	txs []*types.Transaction
-}
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (h *handler) syncTransactions(p *eth.Peer) {
@@ -54,7 +43,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	//
 	// TODO(karalabe): Figure out if we could get away with random order somehow
 	var txs types.Transactions
-	pending, _ := h.txpool.Pending(false)
+	pending := h.txpool.Pending(false)
 	for _, batch := range pending {
 		txs = append(txs, batch...)
 	}
@@ -64,94 +53,11 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	// The eth/65 protocol introduces proper transaction announcements, so instead
 	// of dripping transactions across multiple peers, just send the entire list as
 	// an announcement and let the remote side decide what they need (likely nothing).
-	if p.Version() >= eth.ETH65 {
-		hashes := make([]common.Hash, len(txs))
-		for i, tx := range txs {
-			hashes[i] = tx.Hash()
-		}
-		p.AsyncSendPooledTransactionHashes(hashes)
-		return
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
 	}
-	// Out of luck, peer is running legacy protocols, drop the txs over
-	select {
-	case h.txsyncCh <- &txsync{p: p, txs: txs}:
-	case <-h.quitSync:
-	}
-}
-
-// txsyncLoop64 takes care of the initial transaction sync for each new
-// connection. When a new peer appears, we relay all currently pending
-// transactions. In order to minimise egress bandwidth usage, we send
-// the transactions in small packs to one peer at a time.
-func (h *handler) txsyncLoop64() {
-	defer h.wg.Done()
-
-	var (
-		pending = make(map[enode.ID]*txsync)
-		sending = false               // whether a send is active
-		pack    = new(txsync)         // the pack that is being sent
-		done    = make(chan error, 1) // result of the send
-	)
-
-	// send starts a sending a pack of transactions from the sync.
-	send := func(s *txsync) {
-		if s.p.Version() >= eth.ETH65 {
-			panic("initial transaction syncer running on eth/65+")
-		}
-		// Fill pack with transactions up to the target size.
-		size := common.StorageSize(0)
-		pack.p = s.p
-		pack.txs = pack.txs[:0]
-		for i := 0; i < len(s.txs) && size < txsyncPackSize; i++ {
-			pack.txs = append(pack.txs, s.txs[i])
-			size += s.txs[i].Size()
-		}
-		// Remove the transactions that will be sent.
-		s.txs = s.txs[:copy(s.txs, s.txs[len(pack.txs):])]
-		if len(s.txs) == 0 {
-			delete(pending, s.p.Peer.ID())
-		}
-		// Send the pack in the background.
-		s.p.Log().Trace("Sending batch of transactions", "count", len(pack.txs), "bytes", size)
-		sending = true
-		go func() { done <- pack.p.SendTransactions(pack.txs) }()
-	}
-	// pick chooses the next pending sync.
-	pick := func() *txsync {
-		if len(pending) == 0 {
-			return nil
-		}
-		n := rand.Intn(len(pending)) + 1
-		for _, s := range pending {
-			if n--; n == 0 {
-				return s
-			}
-		}
-		return nil
-	}
-
-	for {
-		select {
-		case s := <-h.txsyncCh:
-			pending[s.p.Peer.ID()] = s
-			if !sending {
-				send(s)
-			}
-		case err := <-done:
-			sending = false
-			// Stop tracking peers that cause send failures.
-			if err != nil {
-				pack.p.Log().Debug("Transaction send failed", "err", err)
-				delete(pending, pack.p.Peer.ID())
-			}
-			// Schedule the next send.
-			if s := pick(); s != nil {
-				send(s)
-			}
-		case <-h.quitSync:
-			return
-		}
-	}
+	p.AsyncSendPooledTransactionHashes(hashes)
 }
 
 // chainSyncer coordinates blockchain sync components.
@@ -276,7 +182,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
-		td := cs.handler.chain.GetTdByHash(block.Hash())
+		td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
 		return downloader.FastSync, td
 	}
 	// We are probably in full sync, but we might have rewound to before the
@@ -284,7 +190,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
 		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
 			block := cs.handler.chain.CurrentFastBlock()
-			td := cs.handler.chain.GetTdByHash(block.Hash())
+			td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
 			return downloader.FastSync, td
 		}
 	}

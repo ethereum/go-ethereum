@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -38,7 +37,6 @@ func makeWizard(network string) *wizard {
 		},
 		servers:  make(map[string]*sshClient),
 		services: make(map[string][]string),
-		in:       bufio.NewReader(os.Stdin),
 	}
 }
 

@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -100,7 +101,8 @@ func (t *Type) isReferenceType() bool {
 		return false
 	}
 	// Reference types must have a leading uppercase character
-	return unicode.IsUpper([]rune(t.Type)[0])
+	r, _ := utf8.DecodeRuneInString(t.Type)
+	return unicode.IsUpper(r)
 }
 
 type Types map[string][]Type

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
-// +build !gofuzz
-// +build cgo
+//go:build !gofuzz && cgo
+// +build !gofuzz,cgo
 
 package secp256k1
 
