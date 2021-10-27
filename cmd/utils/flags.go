@@ -469,6 +469,11 @@ var (
 		Usage: "Time interval to recreate the block being mined",
 		Value: ethconfig.Defaults.Miner.Recommit,
 	}
+	MinerMaxMergedBundles = cli.IntFlag{
+		Name:  "miner.maxmergedbundles",
+		Usage: "flashbots - The maximum amount of bundles to merge. The miner will run this many workers in parallel to calculate if the full block is more profitable with these additional bundles.",
+		Value: 3,
+	}
 	MinerNoVerifyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
@@ -1401,6 +1406,8 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
 	}
+
+	cfg.MaxMergedBundles = ctx.GlobalInt(MinerMaxMergedBundles.Name)
 }
 
 func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {

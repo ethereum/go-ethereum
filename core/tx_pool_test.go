@@ -2561,3 +2561,13 @@ func BenchmarkPoolMultiAccountBatchInsert(b *testing.B) {
 		pool.AddRemotesSync([]*types.Transaction{tx})
 	}
 }
+
+func checkBundles(t *testing.T, pool *TxPool, block int64, timestamp uint64, expectedRes int, expectedRemaining int) {
+	res, _ := pool.MevBundles(big.NewInt(block), timestamp)
+	if len(res) != expectedRes {
+		t.Fatalf("expected returned bundles did not match got %d, expected %d", len(res), expectedRes)
+	}
+	if len(pool.mevBundles) != expectedRemaining {
+		t.Fatalf("expected remaining bundles did not match got %d, expected %d", len(pool.mevBundles), expectedRemaining)
+	}
+}
