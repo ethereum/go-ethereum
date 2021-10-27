@@ -678,11 +678,12 @@ func (db *Database) Journal(root common.Hash) error {
 		return err
 	}
 	// Store the journal into the database and return
+	size := journal.Len()
 	rawdb.WriteTrieJournal(db.diskdb, journal.Bytes())
 
 	// Set the db in read only mode to reject all following mutations
 	db.readOnly = true
-	log.Info("Stored snapshot journal in triedb", "disk", diskroot)
+	log.Info("Stored snapshot journal in triedb", "disk", diskroot, "size", common.StorageSize(size))
 	return nil
 }
 

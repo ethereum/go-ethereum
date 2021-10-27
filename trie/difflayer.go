@@ -35,13 +35,12 @@ var (
 	// Note, bumping this up might drastically increase the size of the bloom
 	// filters that's stored in every diff layer. Don't do that without fully
 	// understanding all the implications.
-	aggregatorMemoryLimit = uint64(8 * 1024 * 1024)
+	aggregatorMemoryLimit = uint64(32 * 1024 * 1024)
 
 	// aggregatorItemLimit is an approximate number of items that will end up
 	// in the aggregator layer before it's flushed out to disk. A plain node
-	// weighs around 150B (average node size is around 82 bytes, plus the key
-	// size, 150 is a safe choice for us).
-	aggregatorItemLimit = aggregatorMemoryLimit / 150
+	// weighs around 400B.
+	aggregatorItemLimit = aggregatorMemoryLimit / 400
 
 	// bloomTargetError is the target false positive rate when the aggregator
 	// layer is at its fullest. The actual value will probably move around up
