@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ['1.17' ]
+    env:
+      GOPATH: ${{ github.workspace }}
+      GOBIN: ${{ github.workspace }}/bin
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/github.com/ethereum/go-ethereum
+    name: Go ${{ matrix.go }} test
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.GOPATH }}/github.com/ethereum/go-ethereum
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go run build/ci.go test

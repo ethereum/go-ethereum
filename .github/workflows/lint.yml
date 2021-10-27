@@ -1,0 +1,22 @@
+name: lint
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.17' ]
+    name: Go ${{ matrix.go }} lint
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: false
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go run build/ci.go lint
+
