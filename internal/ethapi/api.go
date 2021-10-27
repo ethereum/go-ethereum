@@ -2085,13 +2085,32 @@ func NewPrivateTxBundleAPI(b Backend) *PrivateTxBundleAPI {
 	return &PrivateTxBundleAPI{b}
 }
 
-// SendBundleArgs represents the arguments for a call.
+// SendBundleArgs represents the arguments for a SendBundle call.
 type SendBundleArgs struct {
 	Txs               []hexutil.Bytes `json:"txs"`
 	BlockNumber       rpc.BlockNumber `json:"blockNumber"`
 	MinTimestamp      *uint64         `json:"minTimestamp"`
 	MaxTimestamp      *uint64         `json:"maxTimestamp"`
 	RevertingTxHashes []common.Hash   `json:"revertingTxHashes"`
+}
+
+// SendMegabundleArgs represents the arguments for a SendMegabundle call.
+type SendMegabundleArgs struct {
+	Txs               []hexutil.Bytes `json:"txs"`
+	BlockNumber       uint64          `json:"blockNumber"`
+	MinTimestamp      *uint64         `json:"minTimestamp"`
+	MaxTimestamp      *uint64         `json:"maxTimestamp"`
+	RevertingTxHashes []common.Hash   `json:"revertingTxHashes"`
+	RelaySignature    hexutil.Bytes   `json:"relaySignature"`
+}
+
+// UnsignedMegabundle is used for serialization and subsequent digital signing.
+type UnsignedMegabundle struct {
+	Txs               []hexutil.Bytes
+	BlockNumber       uint64
+	MinTimestamp      uint64
+	MaxTimestamp      uint64
+	RevertingTxHashes []common.Hash
 }
 
 // SendBundle will add the signed transaction to the transaction pool.
@@ -2122,4 +2141,59 @@ func (s *PrivateTxBundleAPI) SendBundle(ctx context.Context, args SendBundleArgs
 	}
 
 	return s.b.SendBundle(ctx, txs, args.BlockNumber, minTimestamp, maxTimestamp, args.RevertingTxHashes)
+}
+
+// Recovers the Ethereum address of the trusted relay that signed the megabundle.
+func RecoverRelayAddress(args SendMegabundleArgs) (common.Address, error) {
+	megabundle := UnsignedMegabundle{Txs: args.Txs, BlockNumber: args.BlockNumber, RevertingTxHashes: args.RevertingTxHashes}
+	if args.MinTimestamp != nil {
+		megabundle.MinTimestamp = *args.MinTimestamp
+	} else {
+		megabundle.MinTimestamp = 0
+	}
+	if args.MaxTimestamp != nil {
+		megabundle.MaxTimestamp = *args.MaxTimestamp
+	} else {
+		megabundle.MaxTimestamp = 0
+	}
+	rlpEncoding, _ := rlp.EncodeToBytes(megabundle)
+	signature := args.RelaySignature
+	signature[64] -= 27 // account for Ethereum V
+	recoveredPubkey, err := crypto.SigToPub(accounts.TextHash(rlpEncoding), args.RelaySignature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return crypto.PubkeyToAddress(*recoveredPubkey), nil
+}
+
+// SendMegabundle will add the signed megabundle to one of the workers for evaluation.
+func (s *PrivateTxBundleAPI) SendMegabundle(ctx context.Context, args SendMegabundleArgs) error {
+	log.Info("Received a Megabundle request", "signature", args.RelaySignature)
+	var txs types.Transactions
+	if len(args.Txs) == 0 {
+		return errors.New("megabundle missing txs")
+	}
+	if args.BlockNumber == 0 {
+		return errors.New("megabundle missing blockNumber")
+	}
+	for _, encodedTx := range args.Txs {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(encodedTx); err != nil {
+			return err
+		}
+		txs = append(txs, tx)
+	}
+	var minTimestamp, maxTimestamp uint64
+	if args.MinTimestamp != nil {
+		minTimestamp = *args.MinTimestamp
+	}
+	if args.MaxTimestamp != nil {
+		maxTimestamp = *args.MaxTimestamp
+	}
+	relayAddr, err := RecoverRelayAddress(args)
+	log.Info("Megabundle", "relayAddr", relayAddr, "err", err)
+	if err != nil {
+		return err
+	}
+	return s.b.SendMegabundle(ctx, txs, rpc.BlockNumber(args.BlockNumber), minTimestamp, maxTimestamp, args.RevertingTxHashes, relayAddr)
 }

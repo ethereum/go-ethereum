@@ -53,6 +53,7 @@ type Config struct {
 	Recommit         time.Duration  // The time interval for miner to re-create mining work.
 	Noverify         bool           // Disable remote mining solution verification(only useful in ethash).
 	MaxMergedBundles int
+	TrustedRelays    []common.Address `toml:",omitempty"` // Trusted relay addresses to receive tasks from.
 }
 
 // Miner creates blocks and searches for proof-of-work values.

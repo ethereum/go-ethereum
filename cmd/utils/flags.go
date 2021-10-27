@@ -469,10 +469,15 @@ var (
 		Usage: "Time interval to recreate the block being mined",
 		Value: ethconfig.Defaults.Miner.Recommit,
 	}
-	MinerMaxMergedBundles = cli.IntFlag{
+	MinerMaxMergedBundlesFlag = cli.IntFlag{
 		Name:  "miner.maxmergedbundles",
 		Usage: "flashbots - The maximum amount of bundles to merge. The miner will run this many workers in parallel to calculate if the full block is more profitable with these additional bundles.",
 		Value: 3,
+	}
+	MinerTrustedRelaysFlag = cli.StringFlag{
+		Name:  "miner.trustedrelays",
+		Usage: "flashbots - The Ethereum addresses of trusted relays for signature verification. The miner will accept signed bundles and other tasks from the relay, being reasonably certain about DDoS safety.",
+		Value: "0x870e2734DdBe2Fba9864f33f3420d59Bc641f2be",
 	}
 	MinerNoVerifyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
@@ -1354,6 +1359,15 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	if ctx.GlobalIsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.GlobalDuration(TxPoolLifetimeFlag.Name)
 	}
+
+	addresses := strings.Split(ctx.GlobalString(MinerTrustedRelaysFlag.Name), ",")
+	for _, address := range addresses {
+		if trimmed := strings.TrimSpace(address); !common.IsHexAddress(trimmed) {
+			Fatalf("Invalid account in --miner.trustedrelays: %s", trimmed)
+		} else {
+			cfg.TrustedRelays = append(cfg.TrustedRelays, common.HexToAddress(trimmed))
+		}
+	}
 }
 
 func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
@@ -1407,7 +1421,17 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
 	}
 
-	cfg.MaxMergedBundles = ctx.GlobalInt(MinerMaxMergedBundles.Name)
+	cfg.MaxMergedBundles = ctx.GlobalInt(MinerMaxMergedBundlesFlag.Name)
+
+	addresses := strings.Split(ctx.GlobalString(MinerTrustedRelaysFlag.Name), ",")
+	for _, address := range addresses {
+		if trimmed := strings.TrimSpace(address); !common.IsHexAddress(trimmed) {
+			Fatalf("Invalid account in --miner.trustedrelays: %s", trimmed)
+		} else {
+			cfg.TrustedRelays = append(cfg.TrustedRelays, common.HexToAddress(trimmed))
+		}
+	}
+	log.Info("Trusted relays set as", "addresses", cfg.TrustedRelays)
 }
 
 func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {

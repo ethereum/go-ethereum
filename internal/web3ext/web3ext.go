@@ -581,6 +581,11 @@ web3._extend({
 			call: 'eth_sendBundle',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'sendMegabundle',
+			call: 'eth_sendMegabundle',
+			params: 1
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
