@@ -24,10 +24,13 @@ var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit string
 	gitDate   string
-	VersionMajor = 1        // Major version component of the current release
-	VersionMinor = 10       // Minor version component of the current release
-	VersionPatch = 8        // Patch version component of the current release
-	VersionMeta  = "stable-debank" // Version metadata to append to the version string
+)
+
+const (
+	VersionMajor = 1                 // Major version component of the current release
+	VersionMinor = 10                // Minor version component of the current release
+	VersionPatch = 11                // Patch version component of the current release
+	VersionMeta  = "unstable-debank" // Version metadata to append to the version string
 )
 
 // Version holds the textual version string.

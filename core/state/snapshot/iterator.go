@@ -385,7 +385,7 @@ func (it *diskStorageIterator) Hash() common.Hash {
 	return common.BytesToHash(it.it.Key()) // The prefix will be truncated
 }
 
-// Slot returns the raw strorage slot content the iterator is currently at.
+// Slot returns the raw storage slot content the iterator is currently at.
 func (it *diskStorageIterator) Slot() []byte {
 	return it.it.Value()
 }

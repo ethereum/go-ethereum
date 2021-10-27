@@ -1785,6 +1785,132 @@ var bindTests = []struct {
 		nil,
 		nil,
 	},
+	// Test resolving single struct argument
+	{
+		`NewSingleStructArgument`,
+		`
+		 pragma solidity ^0.8.0;
+
+		 contract NewSingleStructArgument {
+			 struct MyStruct{
+				 uint256 a;
+				 uint256 b;
+			 }
+			 event StructEvent(MyStruct s);
+			 function TestEvent() public {
+				 emit StructEvent(MyStruct({a: 1, b: 2}));
+			 }
+		 }
+	   `,
+		[]string{"608060405234801561001057600080fd5b50610113806100206000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806324ec1d3f14602d575b600080fd5b60336035565b005b7fb4b2ff75e30cb4317eaae16dd8a187dd89978df17565104caa6c2797caae27d460405180604001604052806001815260200160028152506040516078919060ba565b60405180910390a1565b6040820160008201516096600085018260ad565b50602082015160a7602085018260ad565b50505050565b60b48160d3565b82525050565b600060408201905060cd60008301846082565b92915050565b600081905091905056fea26469706673582212208823628796125bf9941ce4eda18da1be3cf2931b231708ab848e1bd7151c0c9a64736f6c63430008070033"},
+		[]string{`[{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"indexed":false,"internalType":"struct Test.MyStruct","name":"s","type":"tuple"}],"name":"StructEvent","type":"event"},{"inputs":[],"name":"TestEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]`},
+		`
+			"math/big"
+
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/ethereum/go-ethereum/eth/ethconfig"
+	   `,
+		`
+			var (
+				key, _  = crypto.GenerateKey()
+				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+			)
+			defer sim.Close()
+
+			_, _, d, err := DeployNewSingleStructArgument(user, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy contract %v", err)
+			}
+			sim.Commit()
+
+			_, err = d.TestEvent(user)
+			if err != nil {
+				t.Fatalf("Failed to call contract %v", err)
+			}
+			sim.Commit()
+
+			it, err := d.FilterStructEvent(nil)
+			if err != nil {
+				t.Fatalf("Failed to filter contract event %v", err)
+			}
+			var count int
+			for it.Next() {
+				if it.Event.S.A.Cmp(big.NewInt(1)) != 0 {
+					t.Fatal("Unexpected contract event")
+				}
+				if it.Event.S.B.Cmp(big.NewInt(2)) != 0 {
+					t.Fatal("Unexpected contract event")
+				}
+				count += 1
+			}
+			if count != 1 {
+				t.Fatal("Unexpected contract event number")
+			}
+			`,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	// Test errors introduced in v0.8.4
+	{
+		`NewErrors`,
+		`
+		pragma solidity >0.8.4;
+	
+		contract NewErrors {
+			error MyError(uint256);
+			error MyError1(uint256);
+			error MyError2(uint256, uint256);
+			error MyError3(uint256 a, uint256 b, uint256 c);
+			function Error() public pure {
+				revert MyError3(1,2,3);
+			}
+		}
+	   `,
+		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
+		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
+		`
+			"math/big"
+	
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/ethereum/go-ethereum/eth/ethconfig"
+	   `,
+		`
+			var (
+				key, _  = crypto.GenerateKey()
+				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+			)
+			defer sim.Close()
+	
+			_, tx, contract, err := DeployNewErrors(user, sim)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sim.Commit()
+			_, err = bind.WaitDeployed(nil, sim, tx)
+			if err != nil {
+				t.Error(err)
+			}
+			if err := contract.Error(new(bind.CallOpts)); err == nil {
+				t.Fatalf("expected contract to throw error")
+			}
+			// TODO (MariusVanDerWijden unpack error using abigen
+			// once that is implemented
+	   `,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
 }
 
 // Tests that packages generated by the binder can be successfully compiled and
