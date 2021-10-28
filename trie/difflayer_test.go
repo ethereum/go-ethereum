@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"math/rand"
 	"testing"
 
@@ -50,6 +51,7 @@ func emptyLayer() *diskLayer {
 
 func benchmarkSearch(b *testing.B, depth int) {
 	var target []byte
+	var want []byte
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent snapshot, index int) *diffLayer {
 		var nodes = make(map[string]*cachedNode)
@@ -57,9 +59,11 @@ func benchmarkSearch(b *testing.B, depth int) {
 			hash := randomHash()
 			path := randomHash().Bytes()
 			key := EncodeInternalKey(path, hash)
-			nodes[string(key)] = randomNode()
+			val := randomNode()
+			nodes[string(key)] = val
 
 			if target == nil && depth == index {
+				want = val.rlp()
 				target = append([]byte{}, key...)
 			}
 		}
@@ -71,8 +75,18 @@ func benchmarkSearch(b *testing.B, depth int) {
 		layer = fill(layer, i)
 	}
 	b.ResetTimer()
+	var (
+		have []byte
+		err  error
+	)
 	for i := 0; i < b.N; i++ {
-		layer.NodeBlob(target)
+		have, err = layer.NodeBlob(target)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	if !bytes.Equal(have, want) {
+		b.Fatalf("have %x want %x", have, want)
 	}
 }
 
