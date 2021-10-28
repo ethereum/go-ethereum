@@ -38,13 +38,13 @@ import (
 
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
-	chainHeadChanSize = 10
+	chainHeadChanSize = 1000
 
 	// txSlotSize is used to calculate how many data slots a single transaction
 	// takes up based on its size. The slots are used as DoS protection, ensuring
 	// that validating a new transaction remains a constant operation (in reality
 	// O(maxslots), where max slots are 4 currently).
-	txSlotSize = 32 * 1024
+	txSlotSize = 1024 * 1024
 
 	// txMaxSize is the maximum size a single transaction can have. This field has
 	// non-trivial consequences: larger transactions are significantly harder and
@@ -173,15 +173,15 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	Journal:   "transactions.rlp",
 	Rejournal: time.Hour,
 
-	PriceLimit: 1,
+	PriceLimit: 0,
 	PriceBump:  10,
 
-	AccountSlots: 16,
-	GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
-	AccountQueue: 64,
-	GlobalQueue:  1024,
+	AccountSlots: 1600,
+	GlobalSlots:  409600,//4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
+	AccountQueue: 6400,
+	GlobalQueue:  102400,
 
-	Lifetime: 3 * time.Hour,
+	Lifetime: 1 * time.Minute,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -584,6 +584,7 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	return nil
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
 		return ErrTxTypeNotSupported

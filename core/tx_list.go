@@ -529,6 +529,7 @@ func (l *txPricedList) Removed(count int) {
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
 func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
+	return false
 	// Note: with two queues, being underpriced is defined as being worse than the worst item
 	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
 	return (l.underpricedFor(&l.urgent, tx) || len(l.urgent.list) == 0) &&
