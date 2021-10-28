@@ -145,7 +145,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if s.membatch.hasNode(string(internalKey)) {
 		return
 	}
-	if s.bloom == nil || s.bloom.ContainsNode(internalKey) {
+	if s.bloom == nil || s.bloom.Contains(root.Bytes()) {
 		// Bloom filter says this might be a duplicate, double check.
 		blob, nodeHash := rawdb.ReadTrieNode(s.database, storageKey)
 		if len(blob) == 0 {
@@ -183,7 +183,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	if s.membatch.hasCode(hash) {
 		return
 	}
-	if s.bloom == nil || s.bloom.ContainsCode(hash[:]) {
+	if s.bloom == nil || s.bloom.Contains(hash[:]) {
 		// Bloom filter says this might be a duplicate, double check.
 		// If database says yes, the blob is present for sure.
 		// Note we only check the existence with new code scheme, fast
@@ -318,16 +318,16 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
-		storageKey, _ := DecodeInternalKey([]byte(key))
+		storageKey, hash := DecodeInternalKey([]byte(key))
 		rawdb.WriteTrieNode(dbw, storageKey, value)
 		if s.bloom != nil {
-			s.bloom.AddNode([]byte(key))
+			s.bloom.Add(hash.Bytes())
 		}
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
 		if s.bloom != nil {
-			s.bloom.AddCode(key[:])
+			s.bloom.Add(key[:])
 		}
 	}
 	// Drop the membatch data and return
@@ -460,7 +460,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if s.membatch.hasNode(string(childKey)) {
 				continue
 			}
-			if s.bloom == nil || s.bloom.ContainsNode(childKey) {
+			if s.bloom == nil || s.bloom.Contains(chash.Bytes()) {
 				// Bloom filter says this might be a duplicate, double check.
 				blob, hash := rawdb.ReadTrieNode(s.database, storageKey)
 				if len(blob) == 0 {

@@ -61,6 +61,9 @@ func (dl *diskLayer) Node(key []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(blob) == 0 {
+		return nil, nil
+	}
 	_, hash := DecodeInternalKey(key)
 	return mustDecodeNode(hash[:], blob), nil
 }

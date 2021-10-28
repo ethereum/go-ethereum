@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"encoding/binary"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -35,7 +36,7 @@ var (
 	// Note, bumping this up might drastically increase the size of the bloom
 	// filters that's stored in every diff layer. Don't do that without fully
 	// understanding all the implications.
-	aggregatorMemoryLimit = uint64(32 * 1024 * 1024)
+	aggregatorMemoryLimit = uint64(256 * 1024 * 1024)
 
 	// aggregatorItemLimit is an approximate number of items that will end up
 	// in the aggregator layer before it's flushed out to disk. A plain node
@@ -126,7 +127,8 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 		dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
 	}
 	for key := range dl.nodes {
-		dl.diffed.Add(stateBloomHasher(key))
+		_, hash := DecodeInternalKey([]byte(key))
+		dl.diffed.AddHash(binary.BigEndian.Uint64(hash.Bytes()))
 	}
 	// Calculate the current false positive rate and update the error rate meter.
 	// This is a bit cheating because subsequent layers will overwrite it, but it
@@ -158,11 +160,9 @@ func (dl *diffLayer) Stale() bool {
 func (dl *diffLayer) Node(key []byte) (node, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
+	_, hash := DecodeInternalKey(key)
 	dl.lock.RLock()
-	hit := dl.diffed.Contains(stateBloomHasher(key))
-	if !hit {
-		hit = dl.diffed.Contains(stateBloomHasher(key))
-	}
+	hit := dl.diffed.ContainsHash(binary.BigEndian.Uint64(hash.Bytes()))
 	var origin *diskLayer
 	if !hit {
 		origin = dl.origin // extract origin while holding the lock
@@ -213,11 +213,9 @@ func (dl *diffLayer) node(key []byte, depth int) (node, error) {
 func (dl *diffLayer) NodeBlob(key []byte) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
+	_, hash := DecodeInternalKey(key)
 	dl.lock.RLock()
-	hit := dl.diffed.Contains(stateBloomHasher(key))
-	if !hit {
-		hit = dl.diffed.Contains(stateBloomHasher(key))
-	}
+	hit := dl.diffed.ContainsHash(binary.BigEndian.Uint64(hash.Bytes()))
 	var origin *diskLayer
 	if !hit {
 		origin = dl.origin // extract origin while holding the lock
