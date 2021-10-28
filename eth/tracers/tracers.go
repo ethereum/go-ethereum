@@ -19,7 +19,6 @@ package tracers
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -60,7 +59,6 @@ func New(code string, ctx *Context) (Tracer, error) {
 	if fn, ok := nativeTracers[code]; ok {
 		return fn(), nil
 	}
-	panic(fmt.Sprintf("no native tracer %v found", code))
 	// Resolve js-tracers by name and assemble the tracer object
 	if tracer, ok := jsTracers[code]; ok {
 		code = tracer
