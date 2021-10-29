@@ -337,6 +337,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		Time:        new(big.Int).SetUint64(uint64(5)),
 		Difficulty:  big.NewInt(0xffffffff),
 		GasLimit:    gas,
+		BaseFee:     big.NewInt(8),
 	}
 	alloc := core.GenesisAlloc{}
 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
