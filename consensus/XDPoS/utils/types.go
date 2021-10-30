@@ -57,3 +57,50 @@ type PublicApiSnapshot struct {
 	Votes   []*clique.Vote                  `json:"votes"`   // List of votes cast in chronological order
 	Tally   map[common.Address]clique.Tally `json:"tally"`   // Current vote tally to avoid recalculating
 }
+
+// Round number type in XDPoS 2.0
+type Round uint64
+
+// Vote message in XDPoS 2.0
+type Vote struct {
+	ProposedBlockInfo BlockInfo
+	Signature         []byte
+}
+
+// Timeout message in XDPoS 2.0
+type Timeout struct {
+	Round     Round
+	Signature []byte
+}
+
+// BFT Sync Info message in XDPoS 2.0
+type SyncInfo struct {
+	HighestQuorumCert  QuorumCert
+	HighestTimeoutCert TimeoutCert
+}
+
+// Block Info struct in XDPoS 2.0, used for vote message, etc.
+type BlockInfo struct {
+	Hash   common.Hash
+	Round  Round
+	Number *big.Int
+}
+
+// Quorum Certificate struct in XDPoS 2.0
+type QuorumCert struct {
+	ProposedBlockInfo BlockInfo
+	Signatures        [][]byte
+}
+
+// Timeout Certificate struct in XDPoS 2.0
+type TimeoutCert struct {
+	Round      Round
+	Signatures [][]byte
+}
+
+// The parsed extra fields in block header in XDPoS 2.0 (excluding the version byte)
+// The version byte (consensus version) is the first byte in header's extra and it's only valid with value >= 2
+type ExtraFields_v2 struct {
+	Round      Round
+	QuorumCert QuorumCert
+}

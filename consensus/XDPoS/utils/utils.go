@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
@@ -148,4 +149,56 @@ func SigHash(header *types.Header) (hash common.Hash) {
 	}
 	hasher.Sum(hash[:0])
 	return hash
+}
+
+// Encode XDPoS 2.0 extra fields into bytes
+func (e *ExtraFields_v2) EncodeToBytes() ([]byte, error) {
+	bytes, err := rlp.EncodeToBytes(e)
+	if err != nil {
+		return nil, err
+	}
+	versionByte := []byte{2}
+	return append(versionByte, bytes...), nil
+}
+
+// Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
+func DecodeBytesExtraFields(b []byte, val interface{}) error {
+	if len(b) == 0 {
+		return fmt.Errorf("extra field is 0 length")
+	}
+	switch b[0] {
+	case 1:
+		return fmt.Errorf("consensus version 1 is not applicable for decoding extra fields")
+	case 2:
+		return rlp.DecodeBytes(b[1:], val)
+	default:
+		return fmt.Errorf("consensus version %d is not defined", b[0])
+	}
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
+}
+
+func (m *Vote) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func (m *Timeout) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func (m *SyncInfo) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func VoteSigHash(m *BlockInfo) common.Hash {
+	return rlpHash(m)
+}
+
+func TimeoutSigHash(m *Round) common.Hash {
+	return rlpHash(m)
 }
