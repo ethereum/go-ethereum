@@ -632,17 +632,23 @@ func (w *worker) resultLoop() {
 				receipts = make([]*types.Receipt, len(task.receipts))
 				logs     []*types.Log
 			)
-			for i, receipt := range task.receipts {
+			for i, taskReceipt := range task.receipts {
+				receipt := new(types.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
+
 				// add block location fields
 				receipt.BlockHash = hash
 				receipt.BlockNumber = block.Number()
 				receipt.TransactionIndex = uint(i)
 
-				receipts[i] = new(types.Receipt)
-				*receipts[i] = *receipt
 				// Update the block hash in all logs since it is now available and not when the
 				// receipt/log of individual transactions were created.
-				for _, log := range receipt.Logs {
+				receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
+				for i, taskLog := range taskReceipt.Logs {
+					log := new(types.Log)
+					receipt.Logs[i] = log
+					*log = *taskLog
 					log.BlockHash = hash
 				}
 				logs = append(logs, receipt.Logs...)
