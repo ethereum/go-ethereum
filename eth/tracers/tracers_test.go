@@ -120,6 +120,85 @@ type callTracerTest struct {
 	Result  *callTrace    `json:"result"`
 }
 
+// TestZeroValueToNotExitCall tests the calltracer(s) on the following:
+// Tx to A, A calls B with zero value. B does not already exist.
+// Expected: that enter/exit is invoked and the inner call is shown in the result
+func TestZeroValueToNotExitCall(t *testing.T) {
+	var to = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+	privkey, err := crypto.HexToECDSA("0000000000000000deadbeef00000000000000000000000000000000deadbeef")
+	if err != nil {
+		t.Fatalf("err %v", err)
+	}
+	signer := types.NewEIP155Signer(big.NewInt(1))
+	tx, err := types.SignNewTx(privkey, signer, &types.LegacyTx{
+		GasPrice: big.NewInt(0),
+		Gas:      50000,
+		To:       &to,
+	})
+	if err != nil {
+		t.Fatalf("err %v", err)
+	}
+	origin, _ := signer.Sender(tx)
+	txContext := vm.TxContext{
+		Origin:   origin,
+		GasPrice: big.NewInt(1),
+	}
+	context := vm.BlockContext{
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
+		Coinbase:    common.Address{},
+		BlockNumber: new(big.Int).SetUint64(8000000),
+		Time:        new(big.Int).SetUint64(5),
+		Difficulty:  big.NewInt(0x30000),
+		GasLimit:    uint64(6000000),
+	}
+	var code = []byte{
+		byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), // in and outs zero
+		byte(vm.DUP1), byte(vm.PUSH1), 0xff, byte(vm.GAS), // value=0,address=0xff, gas=GAS
+		byte(vm.CALL),
+	}
+	var alloc = core.GenesisAlloc{
+		to: core.GenesisAccount{
+			Nonce: 1,
+			Code:  code,
+		},
+		origin: core.GenesisAccount{
+			Nonce:   0,
+			Balance: big.NewInt(500000000000000),
+		},
+	}
+	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
+	// Create the tracer, the EVM environment and run it
+	tracer, err := New("callTracer", new(Context))
+	if err != nil {
+		t.Fatalf("failed to create call tracer: %v", err)
+	}
+	evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	msg, err := tx.AsMessage(signer, nil)
+	if err != nil {
+		t.Fatalf("failed to prepare transaction for tracing: %v", err)
+	}
+	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+	if _, err = st.TransitionDb(); err != nil {
+		t.Fatalf("failed to execute transaction: %v", err)
+	}
+	// Retrieve the trace result and compare against the etalon
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatalf("failed to retrieve trace result: %v", err)
+	}
+	have := new(callTrace)
+	if err := json.Unmarshal(res, have); err != nil {
+		t.Fatalf("failed to unmarshal trace result: %v", err)
+	}
+	wantStr := `{"type":"CALL","from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","to":"0x00000000000000000000000000000000deadbeef","value":"0x0","gas":"0x7148","gasUsed":"0x2d0","input":"0x","output":"0x","calls":[{"type":"CALL","from":"0x00000000000000000000000000000000deadbeef","to":"0x00000000000000000000000000000000000000ff","value":"0x0","gas":"0x6cbf","gasUsed":"0x0","input":"0x","output":"0x"}]}`
+	want := new(callTrace)
+	json.Unmarshal([]byte(wantStr), want)
+	if !jsonEqual(have, want) {
+		t.Error("have != want")
+	}
+}
+
 func TestPrestateTracerCreate2(t *testing.T) {
 	unsignedTx := types.NewTransaction(1, common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
 		new(big.Int), 5000000, big.NewInt(1), []byte{})
