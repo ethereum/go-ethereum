@@ -59,11 +59,11 @@ func (consensus *XDPoS_v2) Dispatcher() error {
 	SyncInfo workflow
 */
 // Verify syncInfo and trigger trigger process QC or TC if successful
-func (consensus *XDPoS_v2) VeifySyncInoMessage(header *types.Header) error {
+func (consensus *XDPoS_v2) VerifySyncInfoMessage(header *types.Header) error {
 	/*
 		1. Verify items including:
-				- veifyQC
-				- veifyTC
+				- verifyQC
+				- verifyTC
 		2. Broadcast(Not part of consensus)
 	*/
 	return nil
@@ -148,11 +148,11 @@ func (consensus *XDPoS_v2) generateBlockInfo() error {
 }
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
-func (consensus *XDPoS_v2) veifyBlockInfo(header *types.Header) error {
+func (consensus *XDPoS_v2) verifyBlockInfo(header *types.Header) error {
 	return nil
 }
 
-func (consensus *XDPoS_v2) veifyQC(header *types.Header) error {
+func (consensus *XDPoS_v2) verifyQC(header *types.Header) error {
 	/*
 		1. Verify signer signatures: (List of signatures)
 					- Use ecRecover to get the public key
@@ -163,7 +163,7 @@ func (consensus *XDPoS_v2) veifyQC(header *types.Header) error {
 	return nil
 }
 
-func (consensus *XDPoS_v2) veifyTC(header *types.Header) error {
+func (consensus *XDPoS_v2) verifyTC(header *types.Header) error {
 	/*
 		1. Verify signer signature: (List of signatures)
 					- Use ecRecover to get the public key
@@ -208,7 +208,11 @@ func (consensus *XDPoS_v2) checkRoundNumber(header *types.Header) error {
 // Hot stuff rule to decide whether this node is eligible to vote for the received block
 func (consensus *XDPoS_v2) verifyVotingRule(header *types.Header) error {
 	/*
-		(TODO)
+		Make sure this node has not voted for this round. We can have a variable highestVotedRound, and check currentRound > highestVotedRound.
+		HotStuff Voting rule:
+		header's round == local current round, AND (one of the following two:)
+		header's block extends LockQC's ProposedBlockInfo (we need a isExtending(block_a, block_b) function), OR
+		header's QC's ProposedBlockInfo.Round > LockQC's ProposedBlockInfo.Round
 	*/
 	return nil
 }
