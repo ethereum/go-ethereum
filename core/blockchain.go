@@ -1436,11 +1436,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
-
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
+	// Left-trim all the known blocks that don't need to build snapshot
+	if bc.skipBlock(err, it) {
 		// First block (and state) is known
 		//   1. We did a roll-back, and should now do a re-import
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
@@ -1451,7 +1450,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
-		for block != nil && err == ErrKnownBlock {
+		for block != nil && bc.skipBlock(err, it) {
 			externTd = new(big.Int).Add(externTd, block.Difficulty())
 			if localTd.Cmp(externTd) < 0 {
 				break
@@ -1469,7 +1468,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		for block != nil && err == ErrKnownBlock {
+		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
@@ -1501,8 +1500,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// If there are any still remaining, mark as ignored
 		return it.index, err
 
-	// Some other error occurred, abort
-	case err != nil:
+	// Some other error(except ErrKnownBlock) occurred, abort.
+	// ErrKnownBlock is allowed here since some known blocks
+	// still need re-execution to generate snapshots that are missing
+	case err != nil && !errors.Is(err, ErrKnownBlock):
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
@@ -1520,7 +1521,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -1535,8 +1536,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
 		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		if err == ErrKnownBlock {
+		// its header and body was already in the database). But if the corresponding
+		// snapshot layer is missing, forcibly rerun the execution to build it.
+		if bc.skipBlock(err, it) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
 				logger = log.Warn
@@ -2011,6 +2013,47 @@ func (bc *BlockChain) futureBlocksLoop() {
 			return
 		}
 	}
+}
+
+// skipBlock returns 'true', if the block being imported can be skipped over, meaning
+// that the block does not need to be processed but can be considered already fully 'done'.
+func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
+	// We can only ever bypass processing if the only error returned by the validator
+	// is ErrKnownBlock, which means all checks passed, but we already have the block
+	// and state.
+	if !errors.Is(err, ErrKnownBlock) {
+		return false
+	}
+	// If we're not using snapshots, we can skip this, since we have both block
+	// and (trie-) state
+	if bc.snaps == nil {
+		return true
+	}
+	var (
+		header     = it.current() // header can't be nil
+		parentRoot common.Hash
+	)
+	// If we also have the snapshot-state, we can skip the processing.
+	if bc.snaps.Snapshot(header.Root) != nil {
+		return true
+	}
+	// In this case, we have the trie-state but not snapshot-state. If the parent
+	// snapshot-state exists, we need to process this in order to not get a gap
+	// in the snapshot layers.
+	// Resolve parent block
+	if parent := it.previous(); parent != nil {
+		parentRoot = parent.Root
+	} else if parent = bc.GetHeaderByHash(header.ParentHash); parent != nil {
+		parentRoot = parent.Root
+	}
+	if parentRoot == (common.Hash{}) {
+		return false // Theoretically impossible case
+	}
+	// Parent is also missing snapshot: we can skip this. Otherwise process.
+	if bc.snaps.Snapshot(parentRoot) == nil {
+		return true
+	}
+	return false
 }
 
 // maintainTxIndex is responsible for the construction and deletion of the
