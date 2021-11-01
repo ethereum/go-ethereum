@@ -52,15 +52,16 @@ func newTestIterator() *testIterator {
 	return &testIterator{index: -1}
 }
 
-func (iter *testIterator) Next() ([]byte, []byte, bool) {
+func (iter *testIterator) Next() (byte, []byte, []byte, bool) {
 	if iter.index >= 999 {
-		return nil, nil, false
+		return 0, nil, nil, false
 	}
 	iter.index += 1
 	if iter.index == 42 {
 		iter.index += 1
 	}
-	return []byte(fmt.Sprintf("key-%04d", iter.index)), []byte(fmt.Sprintf("value %d", iter.index)), true
+	return OpBatchAdd, []byte(fmt.Sprintf("key-%04d", iter.index)),
+		[]byte(fmt.Sprintf("value %d", iter.index)), true
 }
 
 func (iter *testIterator) Release() {}
@@ -123,15 +124,15 @@ func newDeletionIterator() *deletionIterator {
 	return &deletionIterator{index: -1}
 }
 
-func (iter *deletionIterator) Next() ([]byte, []byte, bool) {
+func (iter *deletionIterator) Next() (byte, []byte, []byte, bool) {
 	if iter.index >= 999 {
-		return nil, nil, false
+		return 0, nil, nil, false
 	}
 	iter.index += 1
 	if iter.index == 42 {
 		iter.index += 1
 	}
-	return []byte(fmt.Sprintf("key-%04d", iter.index)), nil, true
+	return OpBatchDel, []byte(fmt.Sprintf("key-%04d", iter.index)), nil, true
 }
 
 func (iter *deletionIterator) Release() {}

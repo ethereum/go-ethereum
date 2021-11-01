@@ -585,14 +585,14 @@ type preimageIterator struct {
 	iter ethdb.Iterator
 }
 
-func (iter *preimageIterator) Next() ([]byte, []byte, bool) {
+func (iter *preimageIterator) Next() (byte, []byte, []byte, bool) {
 	for iter.iter.Next() {
 		key := iter.iter.Key()
 		if bytes.HasPrefix(key, rawdb.PreimagePrefix) && len(key) == (len(rawdb.PreimagePrefix)+common.HashLength) {
-			return key, iter.iter.Value(), true
+			return utils.OpBatchAdd, key, iter.iter.Value(), true
 		}
 	}
-	return nil, nil, false
+	return 0, nil, nil, false
 }
 
 func (iter *preimageIterator) Release() {
@@ -605,24 +605,24 @@ type snapshotIterator struct {
 	storage ethdb.Iterator
 }
 
-func (iter *snapshotIterator) Next() ([]byte, []byte, bool) {
+func (iter *snapshotIterator) Next() (byte, []byte, []byte, bool) {
 	if !iter.init {
 		iter.init = true
-		return rawdb.SnapshotRootKey, nil, true
+		return utils.OpBatchDel, rawdb.SnapshotRootKey, nil, true
 	}
 	for iter.account.Next() {
 		key := iter.account.Key()
 		if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == (len(rawdb.SnapshotAccountPrefix)+common.HashLength) {
-			return key, iter.account.Value(), true
+			return utils.OpBatchAdd, key, iter.account.Value(), true
 		}
 	}
 	for iter.storage.Next() {
 		key := iter.storage.Key()
 		if bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == (len(rawdb.SnapshotStoragePrefix)+2*common.HashLength) {
-			return key, iter.storage.Value(), true
+			return utils.OpBatchAdd, key, iter.storage.Value(), true
 		}
 	}
-	return nil, nil, false
+	return 0, nil, nil, false
 }
 
 func (iter *snapshotIterator) Release() {
@@ -631,7 +631,7 @@ func (iter *snapshotIterator) Release() {
 }
 
 // chainExporters defines the export scheme for all exportable chain data.
-var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator {
+var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
 		iter := db.NewIterator(rawdb.PreimagePrefix, nil)
 		return &preimageIterator{iter: iter}

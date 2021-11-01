@@ -362,6 +362,10 @@ type exportHeader struct {
 }
 
 const exportMagic = "gethdbdump"
+const (
+	OpBatchAdd = 0
+	OpBatchDel = 1
+)
 
 // ImportLDBData imports a batch of snapshot data into the database
 func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
@@ -393,9 +397,8 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	if header.Version != 0 {
 		return fmt.Errorf("incompatible version %d, (support only 0)", header.Version)
 	}
-	tStamp := time.Unix(int64(header.UnixTime), 0)
 	log.Info("Importing data", "file", f, "type", header.Kind, "data age",
-		common.PrettyDuration(time.Since(tStamp)))
+		common.PrettyDuration(time.Since(time.Unix(int64(header.UnixTime), 0))))
 
 	// Import the snapshot in batches to prevent disk thrashing
 	var (
@@ -406,27 +409,33 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	)
 	for {
 		// Read the next entry
-		var key, val []byte
-		if err := stream.Decode(&key); err != nil {
+		var (
+			op       byte
+			key, val []byte
+		)
+		if err := stream.Decode(&op); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return err
 		}
+		if err := stream.Decode(&key); err != nil {
+			return err
+		}
 		if err := stream.Decode(&val); err != nil {
-			if err == io.EOF {
-				break
-			}
 			return err
 		}
 		if count < startIndex {
 			count++
 			continue
 		}
-		if len(val) == 0 {
+		switch op {
+		case OpBatchDel:
 			batch.Delete(key)
-		} else {
+		case OpBatchAdd:
 			batch.Put(key, val)
+		default:
+			return fmt.Errorf("unknown op %d\n", op)
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -467,8 +476,8 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 // the exporting chain data.
 type ChainDataIterator interface {
 	// Next returns the key-value pair for next exporting entry in the iterator.
-	// When the end is reached, it will return (nil, nil, false).
-	Next() ([]byte, []byte, bool)
+	// When the end is reached, it will return (0, nil, nil, false).
+	Next() (byte, []byte, []byte, bool)
 
 	// Release releases associated resources. Release should always succeed and can
 	// be called multiple times without causing error.
@@ -508,7 +517,14 @@ func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt c
 		start  = time.Now()
 		logged = time.Now()
 	)
-	for key, val, next := iter.Next(); next;  key, val, next = iter.Next() {
+	for {
+		op, key, val, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err := rlp.Encode(writer, op); err != nil {
+			return err
+		}
 		if err := rlp.Encode(writer, key); err != nil {
 			return err
 		}
