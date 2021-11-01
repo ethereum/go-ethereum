@@ -167,6 +167,21 @@ var transactionCommand = cli.Command{
 	},
 }
 
+var blockBuilderCommand = cli.Command{
+	Name:    "block-builder",
+	Aliases: []string{"b11r"},
+	Usage:   "builds a block",
+	Action:  t8ntool.BuildBlock,
+	Flags: []cli.Flag{
+		t8ntool.OutputBasedir,
+		t8ntool.OutputBlockFlag,
+		t8ntool.InputHeaderFlag,
+		t8ntool.InputUnclesFlag,
+		t8ntool.InputTxsRlpFlag,
+		t8ntool.VerbosityFlag,
+	},
+}
+
 func init() {
 	app.Flags = []cli.Flag{
 		BenchFlag,
@@ -200,6 +215,7 @@ func init() {
 		stateTestCommand,
 		stateTransitionCommand,
 		transactionCommand,
+		blockBuilderCommand,
 	}
 	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }

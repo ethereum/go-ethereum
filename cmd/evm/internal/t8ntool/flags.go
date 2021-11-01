@@ -68,6 +68,14 @@ var (
 			"\t<file> - into the file <file> ",
 		Value: "result.json",
 	}
+	OutputBlockFlag = cli.StringFlag{
+		Name: "output.block",
+		Usage: "Determines where to put the `block` after building.\n" +
+			"\t`stdout` - into the stdout output\n" +
+			"\t`stderr` - into the stderr output\n" +
+			"\t<file> - into the file <file> ",
+		Value: "block.json",
+	}
 	InputAllocFlag = cli.StringFlag{
 		Name:  "input.alloc",
 		Usage: "`stdin` or file name of where to find the prestate alloc to use.",
@@ -81,9 +89,24 @@ var (
 	InputTxsFlag = cli.StringFlag{
 		Name: "input.txs",
 		Usage: "`stdin` or file name of where to find the transactions to apply. " +
-			"If the file prefix is '.rlp', then the data is interpreted as an RLP list of signed transactions." +
+			"If the file extension is '.rlp', then the data is interpreted as an RLP list of signed transactions." +
 			"The '.rlp' format is identical to the output.body format.",
 		Value: "txs.json",
+	}
+	InputHeaderFlag = cli.StringFlag{
+		Name:  "input.header",
+		Usage: "`stdin` or file name of where to find the block header to use.",
+		Value: "header.json",
+	}
+	InputUnclesFlag = cli.StringFlag{
+		Name:  "input.uncles",
+		Usage: "`stdin` or file name of where to find the uncle headers to use.",
+		Value: "uncles.json",
+	}
+	InputTxsRlpFlag = cli.StringFlag{
+		Name:  "input.txsRlp",
+		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
+		Value: "txs.rlp",
 	}
 	RewardFlag = cli.Int64Flag{
 		Name:  "state.reward",

@@ -88,21 +88,14 @@ func Transition(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 
 	var (
-		err     error
-		tracer  vm.EVMLogger
-		baseDir = ""
+		err    error
+		tracer vm.EVMLogger
 	)
 	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
 
-	// If user specified a basedir, make sure it exists
-	if ctx.IsSet(OutputBasedir.Name) {
-		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
-			err := os.MkdirAll(base, 0755) // //rw-r--r--
-			if err != nil {
-				return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
-			}
-			baseDir = base
-		}
+	baseDir, err := createBasedir(ctx)
+	if err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
 	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
@@ -430,4 +423,19 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stderr.WriteString("\n")
 	}
 	return nil
+}
+
+// If user specified a basedir, make sure it exists
+func createBasedir(ctx *cli.Context) (string, error) {
+	baseDir := ""
+	if ctx.IsSet(OutputBasedir.Name) {
+		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
+			err := os.MkdirAll(base, 0755) // //rw-r--r--
+			if err != nil {
+				return "", err
+			}
+			baseDir = base
+		}
+	}
+	return baseDir, nil
 }
