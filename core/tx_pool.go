@@ -1183,12 +1183,12 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 		// Update all accounts to the latest known pending nonce
-		nonces := make(map[common.Address]uint64)
+		nonces := make(map[common.Address]uint64, len(pool.pending))
 		for addr, list := range pool.pending {
 			highestPending := list.LastElement()
 			nonces[addr] = highestPending.Nonce() + 1
 		}
-		pool.pendingNonces.resetAll(nonces)
+		pool.pendingNonces.setAll(nonces)
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
 	pool.truncatePending()
