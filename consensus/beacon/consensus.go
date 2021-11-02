@@ -191,6 +191,16 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if len(header.Extra) > 32 {
 		return fmt.Errorf("extra-data longer than 32 bytes (%d)", len(header.Extra))
 	}
+	// Verify the seal parts. Ensure the mixhash, nonce and uncle hash are the expected value.
+	if header.MixDigest != (common.Hash{}) {
+		return errInvalidMixDigest
+	}
+	if header.Nonce != beaconNonce {
+		return errInvalidNonce
+	}
+	if header.UncleHash != types.EmptyUncleHash {
+		return errInvalidUncleHash
+	}
 	// Verify the block's difficulty to ensure it's the default constant
 	if beaconDifficulty.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
@@ -204,6 +214,10 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
+	// Verify that the block number is parent's +1
+	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
+		return consensus.ErrInvalidNumber
+	}
 	// Verify that the gas limit remains within allowed bounds
 	if !chain.Config().IsLondon(header.Number) {
 		// Verify BaseFee not present before EIP-1559 fork.
@@ -216,20 +230,6 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
-	}
-	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
-		return consensus.ErrInvalidNumber
-	}
-	// Verify the seal parts. Ensure the mixhash, nonce and uncle hash are the expected value.
-	if header.MixDigest != (common.Hash{}) {
-		return errInvalidMixDigest
-	}
-	if header.Nonce != beaconNonce {
-		return errInvalidNonce
-	}
-	if header.UncleHash != types.EmptyUncleHash {
-		return errInvalidUncleHash
 	}
 	return nil
 }

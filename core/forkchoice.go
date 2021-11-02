@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/big"
 	mrand "math/rand"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -49,7 +48,6 @@ type ChainReader interface {
 type ForkChoice struct {
 	chain ChainReader
 	rand  *mrand.Rand
-	lock  sync.RWMutex
 
 	// preserve is a helper function used in td fork choice.
 	// Miners will prefer to choose the local mined block if the
@@ -71,15 +69,12 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 	}
 }
 
-// Reorg returns the result whether the reorg should be applied
+// ReorgNeeded returns whether the reorg should be applied
 // based on the given external header and local canonical chain.
 // In the td mode, the new head is chosen if the corresponding
 // total difficulty is higher. In the extern mode, the trusted
 // header is always selected as the head.
-func (f *ForkChoice) Reorg(current *types.Header, header *types.Header) (bool, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
+func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 	var (
 		localTD  = f.chain.GetTd(current.Hash(), current.Number.Uint64())
 		externTd = f.chain.GetTd(header.Hash(), header.Number.Uint64())

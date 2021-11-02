@@ -135,7 +135,7 @@ type headerWriteResult struct {
 // Reorg reorgs the local canonical chain into the specified chain. The reorg
 // can be classified into two cases: (a) extend the local chain (b) switch the
 // head to the given header.
-func (hc *HeaderChain) Reorg(headers []*types.Header) error {
+func (hc *HeaderChain) Reorg(headers []*types.Header, inserted []rawdb.NumberHash) error {
 	// Short circuit if nothing to reorg.
 	if len(headers) == 0 {
 		return nil
@@ -179,11 +179,9 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 		}
 	}
 	// Extend the canonical chain with the new headers
-	for i := 0; i < len(headers); i++ {
-		hash := headers[i].Hash()
-		num := headers[i].Number.Uint64()
-		rawdb.WriteCanonicalHash(batch, hash, num)
-		rawdb.WriteHeadHeaderHash(batch, hash)
+	for _, hn := range inserted {
+		rawdb.WriteCanonicalHash(batch, hn.Hash, hn.Number)
+		rawdb.WriteHeadHeaderHash(batch, hn.Hash)
 	}
 	if err := batch.Write(); err != nil {
 		return err
@@ -199,17 +197,17 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 // parents are already known. The chain head header won't be updated in this
 // function, the additional setChainHead is expected in order to finish the entire
 // procedure.
-func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
+func (hc *HeaderChain) WriteHeaders(headers []*types.Header) ([]rawdb.NumberHash, error) {
 	if len(headers) == 0 {
-		return 0, nil
+		return []rawdb.NumberHash{}, nil
 	}
 	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
-		return 0, consensus.ErrUnknownAncestor
+		return []rawdb.NumberHash{}, consensus.ErrUnknownAncestor
 	}
 	var (
 		newTD       = new(big.Int).Set(ptd) // Total difficulty of inserted chain
-		inserted    []numberHash            // Ephemeral lookup of number/hash for the chain
+		inserted    []rawdb.NumberHash      // Ephemeral lookup of number/hash for the chain
 		parentKnown = true                  // Set to true to force hc.HasHeader check the first iteration
 		batch       = hc.chainDb.NewBatch()
 	)
@@ -235,7 +233,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
 			rawdb.WriteHeader(batch, header)
-			inserted = append(inserted, numberHash{number, hash})
+			inserted = append(inserted, rawdb.NumberHash{number, hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
 		}
@@ -244,13 +242,13 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	// Skip the slow disk write of all headers if interrupted.
 	if hc.procInterrupt() {
 		log.Debug("Premature abort during headers import")
-		return 0, errors.New("aborted")
+		return []rawdb.NumberHash{}, errors.New("aborted")
 	}
 	// Commit to disk!
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write headers", "error", err)
 	}
-	return len(inserted), nil
+	return inserted, nil
 }
 
 // writeHeadersAndSetHead writes a batch of block headers and applies the last
@@ -270,17 +268,17 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		lastHash   = headers[len(headers)-1].Hash()
 		result     = &headerWriteResult{
 			status:     NonStatTy,
-			ignored:    len(headers) - inserted,
-			imported:   inserted,
+			ignored:    len(headers) - len(inserted),
+			imported:   len(inserted),
 			lastHash:   lastHash,
 			lastHeader: lastHeader,
 		}
 	)
 	// Ask the fork choicer if the reorg is necessary
-	if reorg, err := forker.Reorg(hc.CurrentHeader(), lastHeader); err != nil {
+	if reorg, err := forker.ReorgNeeded(hc.CurrentHeader(), lastHeader); err != nil {
 		return nil, err
 	} else if !reorg {
-		if inserted != 0 {
+		if len(inserted) != 0 {
 			result.status = SideStatTy
 		}
 		return result, nil
@@ -291,7 +289,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		return result, nil
 	}
 	// Apply the reorg operation
-	if err := hc.Reorg(headers); err != nil {
+	if err := hc.Reorg(headers, inserted); err != nil {
 		return nil, err
 	}
 	result.status = CanonStatTy

@@ -403,7 +403,7 @@ func (lc *LightChain) SetChainHead(header *types.Header) error {
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
-	if err := lc.hc.Reorg([]*types.Header{header}); err != nil {
+	if err := lc.hc.Reorg([]*types.Header{header}, []rawdb.NumberHash{{Number: header.Number.Uint64(), Hash: header.Hash()}}); err != nil {
 		return err
 	}
 	// Emit events
