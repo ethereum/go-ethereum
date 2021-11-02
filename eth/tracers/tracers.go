@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/internal/tracers"
 )
 
-// Tracer interface extends vm.JSTracer and additionally
+// Tracer interface extends vm.Tracer and additionally
 // allows collecting the tracing result.
 type Tracer interface {
 	vm.Tracer
@@ -40,9 +40,9 @@ var (
 	jsTracers                              = make(map[string]string)
 )
 
-// RegisterNativeTracer makes native tracers in this directory which adhere
-// to the `JSTracer` interface available to the rest of the codebase.
-// It is typically invoked in the `init()` function.
+// RegisterNativeTracer makes native tracers which adhere
+// to the `Tracer` interface available to the rest of the codebase.
+// It is typically invoked in the `init()` function, e.g. see the `native/call.go`.
 func RegisterNativeTracer(name string, ctor func() Tracer) {
 	nativeTracers[name] = ctor
 }
