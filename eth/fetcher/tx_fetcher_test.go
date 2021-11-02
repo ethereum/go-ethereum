@@ -304,7 +304,6 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 	// Create a channel to control when tx requests can fail
 	proceed := make(chan struct{})
-	defer close(proceed)
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
@@ -1267,7 +1266,6 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 		for {
 			select {
 			case <-wait:
-				continue
 			default:
 				return
 			}
