@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -48,6 +49,8 @@ type callFrame struct {
 
 type callTracer struct {
 	callstack []callFrame
+	interrupt uint32 // Atomic flag to signal execution interruption
+	reason    error  // Textual reason for the interruption
 }
 
 // NewCallTracer returns a native go tracer which tracks
@@ -88,6 +91,12 @@ func (t *callTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	// Skip if tracing was interrupted
+	if atomic.LoadUint32(&t.interrupt) > 0 {
+		// TODO: env.Cancel()
+		return
+	}
+
 	call := callFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
@@ -129,11 +138,12 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(res), nil
+	return json.RawMessage(res), t.reason
 }
 
 func (t *callTracer) Stop(err error) {
-	// TODO
+	t.reason = err
+	atomic.StoreUint32(&t.interrupt, 1)
 }
 
 func bytesToHex(s []byte) string {
