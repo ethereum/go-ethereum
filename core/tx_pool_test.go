@@ -2546,7 +2546,7 @@ func BenchmarkPoolMultiAccountBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, _ := setupTxPool()
 	defer pool.Stop()
-
+	b.ReportAllocs()
 	batches := make(types.Transactions, b.N)
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.GenerateKey()
