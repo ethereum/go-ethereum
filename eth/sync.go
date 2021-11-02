@@ -62,6 +62,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 
 // chainSyncer coordinates blockchain sync components.
 type chainSyncer struct {
+	ttd         *big.Int // Terminal difficulty to leave self-triggering sync
 	handler     *handler
 	force       *time.Timer
 	forced      bool // true when force timer fired
@@ -80,6 +81,7 @@ type chainSyncOp struct {
 // newChainSyncer creates a chainSyncer.
 func newChainSyncer(handler *handler) *chainSyncer {
 	return &chainSyncer{
+		ttd:         handler.chain.Config().TerminalTotalDifficulty,
 		handler:     handler,
 		peerEventCh: make(chan struct{}),
 	}
@@ -112,17 +114,26 @@ func (cs *chainSyncer) loop() {
 	cs.force = time.NewTimer(forceSyncCycle)
 	defer cs.force.Stop()
 
+	var warned time.Time
 	for {
-		//if op := cs.nextSyncOp(); op != nil {
-		//	cs.startSync(op)
-		//}
+		if op := cs.nextSyncOp(); op != nil {
+			cs.startSync(op)
+		}
 		select {
 		case <-cs.peerEventCh:
 			// Peer information changed, recheck.
-		case <-cs.doneCh:
+		case err := <-cs.doneCh:
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
+
+			// If we've reached the merge transition but no beacon client is available, or
+			// it has not yet switched us over, keep warning the user that their infra is
+			// potentially flaky.
+			if err == downloader.ErrMergeTransition && time.Since(warned) > 10*time.Second {
+				log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
+				warned = time.Now()
+			}
 		case <-cs.force.C:
 			cs.forced = true
 
@@ -143,9 +154,16 @@ func (cs *chainSyncer) loop() {
 // nextSyncOp determines whether sync is required at this time.
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
-		return nil // Sync already running.
+		return nil // Sync already running
 	}
-	// Disable the td based sync trigger after the transition
+	// If a beacon client once took over control, disable the entire legacy sync
+	// path from here on end. Note, there is a slight "race" between reaching TTD
+	// and the beacon client taking over. The downloader will enforce that nothing
+	// above the first TTD will be delivered to the chain for import.
+	//
+	// An alternative would be to check the local chain for exceeding the TTD and
+	// avoid triggering a sync in that case, but that could also miss sibling or
+	// other family TTD block being accepted.
 	if cs.handler.merger.TDDReached() {
 		return nil
 	}
@@ -159,16 +177,17 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
+	// We have enough peers, pick the one with the highest TD, but avoid going
+	// over the terminal total difficulty. Above that we expect the consensus
+	// clients to direct the chain head to sync to.
 	peer := cs.handler.peers.peerWithHighestTD()
 	if peer == nil {
 		return nil
 	}
 	mode, ourTD := cs.modeAndLocalHead()
-
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
-		return nil // We're in sync.
+		return nil // We're in sync
 	}
 	return op
 }
@@ -227,7 +246,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		}
 	}
 	// Run the sync cycle, and disable snap sync if we're past the pivot block
-	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, op.mode)
+	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.Config().TerminalTotalDifficulty, op.mode)
 	if err != nil {
 		return err
 	}
