@@ -138,25 +138,29 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*catalyst.ExecutableData, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*catalyst.ExecutableDataV1, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
-	payload, err := n.api.PreparePayload(catalyst.AssembleBlockParams{
+	payloadAttribute := catalyst.PayloadAttributesV1{
 		ParentHash: parentHash,
 		Timestamp:  uint64(time.Now().Unix()),
-	})
+	}
+	payload, err := n.api.ForkchoiceUpdatedV1(catalyst.ForkChoiceParams{HeadBlockHash: parentHash, PayloadAttributes: &payloadAttribute})
 	if err != nil {
 		return nil, err
 	}
-	return n.api.GetPayload(hexutil.Uint64(payload.PayloadID))
+	// TODO (MariusVanDerWijden) compute payload id
+	_ = payload
+	payloadid := 0
+	return n.api.GetPayload(hexutil.Uint64(payloadid))
 }
 
-func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
+func (n *ethNode) insertBlock(eb catalyst.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
-	newResp, err := n.api.ExecutePayload(eb)
+	newResp, err := n.api.ExecutePayloadV1(eb)
 	if err != nil {
 		return err
 	} else if newResp.Status != "VALID" {
@@ -165,7 +169,7 @@ func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
 	return nil
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.ExecutableData) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -176,7 +180,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	if err != nil {
 		return err
 	}
-	if err := n.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: block.Hash(), Status: "VALID"}); err != nil {
+	if _, err := n.api.ForkchoiceUpdatedV1(catalyst.ForkChoiceParams{HeadBlockHash: block.Hash()}); err != nil {
 		return err
 	}
 	return nil
@@ -275,7 +279,7 @@ func (mgr *nodeManager) run() {
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range append(nodes) {
-			node.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: oldest.Hash(), Status: catalyst.VALID.Status})
+			node.api.ForkchoiceUpdatedV1(catalyst.ForkChoiceParams{HeadBlockHash: oldest.Hash()})
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]

@@ -85,7 +85,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
 	ethservice.TxPool().AddLocal(tx)
-	blockParams := AssembleBlockParams{
+	blockParams := PayloadAttributesV1{
 		ParentHash: blocks[9].Hash(),
 		Timestamp:  blocks[9].Time() + 5,
 	}
@@ -107,7 +107,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.insertTransactions(blocks[9].Transactions())
-	blockParams := AssembleBlockParams{
+	blockParams := PayloadAttributesV1{
 		ParentHash: blocks[8].Hash(),
 		Timestamp:  blocks[8].Time() + 5,
 	}
@@ -127,13 +127,15 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 
 	api := NewConsensusAPI(ethservice, nil)
 
-	if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: blocks[5].Hash()}); err == nil {
+	if _, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{HeadBlockHash: blocks[5].Hash()}); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
 
 func TestEth2PrepareAndGetPayload(t *testing.T) {
 	genesis, blocks := generatePreMergeChain(10)
+	// We need to properly set the terminal total difficulty
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[9].Difficulty())
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
 
@@ -141,15 +143,16 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.insertTransactions(blocks[9].Transactions())
-	blockParams := AssembleBlockParams{
+	blockParams := PayloadAttributesV1{
 		ParentHash: blocks[8].Hash(),
 		Timestamp:  blocks[8].Time() + 5,
 	}
-	respID, err := api.PreparePayload(blockParams)
+	_, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{HeadBlockHash: blockParams.ParentHash, PayloadAttributes: &blockParams})
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	execData, err := api.GetPayload(hexutil.Uint64(respID.PayloadID))
+	payloadID := computePayloadId(blockParams.ParentHash, &blockParams)
+	execData, err := api.GetPayload(hexutil.Uint64(payloadID))
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -200,7 +203,7 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := api.assembleBlock(AssembleBlockParams{
+		execData, err := api.assembleBlock(PayloadAttributesV1{
 			ParentHash: parent.Hash(),
 			Timestamp:  parent.Time() + 5,
 		})
@@ -211,7 +214,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
-		newResp, err := api.ExecutePayload(*execData)
+		newResp, err := api.ExecutePayloadV1(*execData)
 		if err != nil || newResp.Status != "VALID" {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
@@ -220,7 +223,7 @@ func TestEth2NewBlock(t *testing.T) {
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
 
-		if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: block.Hash(), FinalizedBlockHash: block.Hash()}); err != nil {
+		if _, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{HeadBlockHash: block.Hash(), FinalizedBlockHash: block.Hash()}); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
@@ -237,7 +240,7 @@ func TestEth2NewBlock(t *testing.T) {
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
-		execData, err := api.assembleBlock(AssembleBlockParams{
+		execData, err := api.assembleBlock(PayloadAttributesV1{
 			ParentHash: parent.Hash(),
 			Timestamp:  parent.Time() + 6,
 		})
@@ -248,18 +251,14 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
-		newResp, err := api.ExecutePayload(*execData)
+		newResp, err := api.ExecutePayloadV1(*execData)
 		if err != nil || newResp.Status != "VALID" {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
 			t.Fatalf("Chain head shouldn't be updated")
 		}
-
-		if err := api.ConsensusValidated(ConsensusValidatedParams{BlockHash: block.Hash(), Status: "VALID"}); err != nil {
-			t.Fatalf("Failed to insert block: %v", err)
-		}
-		if err := api.ForkchoiceUpdated(ForkChoiceParams{FinalizedBlockHash: block.Hash(), HeadBlockHash: block.Hash()}); err != nil {
+		if _, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{FinalizedBlockHash: block.Hash(), HeadBlockHash: block.Hash()}); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
@@ -358,33 +357,32 @@ func TestFullAPI(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		params := AssembleBlockParams{
+		params := PayloadAttributesV1{
 			ParentHash:   parent.Hash(),
 			Timestamp:    parent.Time() + 1,
 			Random:       crypto.Keccak256Hash([]byte{byte(i)}),
 			FeeRecipient: parent.Coinbase(),
 		}
-		resp, err := api.PreparePayload(params)
+		resp, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{HeadBlockHash: params.ParentHash, PayloadAttributes: &params})
 		if err != nil {
-			t.Fatalf("can't prepare payload: %v", err)
+			t.Fatalf("error preparing payload, err=%v", err)
 		}
-		payload, err := api.GetPayload(hexutil.Uint64(resp.PayloadID))
+		if resp.Status != VALID.Status {
+			t.Fatalf("error preparing payload, invalid status: %v", resp.Status)
+		}
+		payloadID := computePayloadId(params.ParentHash, &params)
+		payload, err := api.GetPayload(hexutil.Uint64(payloadID))
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
-		execResp, err := api.ExecutePayload(*payload)
+		execResp, err := api.ExecutePayloadV1(*payload)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
 		if execResp.Status != VALID.Status {
 			t.Fatalf("invalid status: %v", execResp.Status)
 		}
-
-		if err := api.ConsensusValidated(ConsensusValidatedParams{BlockHash: payload.BlockHash, Status: VALID.Status}); err != nil {
-			t.Fatalf("failed to validate consensus: %v", err)
-		}
-
-		if err := api.ForkchoiceUpdated(ForkChoiceParams{HeadBlockHash: payload.BlockHash, FinalizedBlockHash: payload.BlockHash}); err != nil {
+		if _, err := api.ForkchoiceUpdatedV1(ForkChoiceParams{HeadBlockHash: payload.BlockHash, FinalizedBlockHash: payload.BlockHash}); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
