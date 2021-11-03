@@ -233,7 +233,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) ([]rawdb.NumberHash
 			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
 			rawdb.WriteHeader(batch, header)
-			inserted = append(inserted, rawdb.NumberHash{number, hash})
+			inserted = append(inserted, rawdb.NumberHash{Number: number, Hash: hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
 		}
