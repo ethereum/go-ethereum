@@ -223,7 +223,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Error(err)
 	}
 	if string(res) != "false" {
-		t.Errorf("JSTracer should not consider blake2f as precompile in byzantium")
+		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
 	}
 
 	tracer, _ = New("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", new(Context))
@@ -233,7 +233,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Error(err)
 	}
 	if string(res) != "true" {
-		t.Errorf("JSTracer should consider blake2f as precompile in istanbul")
+		t.Errorf("Tracer should consider blake2f as precompile in istanbul")
 	}
 }
 
