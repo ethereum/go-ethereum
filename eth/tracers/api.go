@@ -866,7 +866,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		go func() {
 			<-deadlineCtx.Done()
 			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.Stop(errors.New("execution timeout"))
+				tracer.(Tracer).Stop(errors.New("execution timeout"))
 			}
 		}()
 		defer cancel()
