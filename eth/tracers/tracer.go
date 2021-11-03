@@ -363,9 +363,9 @@ func (r *frameResult) pushObject(vm *duktape.Context) {
 	vm.PutPropString(obj, "getError")
 }
 
-// Tracer provides an implementation of Tracer that evaluates a Javascript
+// jsTracer provides an implementation of Tracer that evaluates a Javascript
 // function for each VM execution step.
-type JSTracer struct {
+type jsTracer struct {
 	vm *duktape.Context // Javascript VM instance
 
 	tracerObject int // Stack index of the tracer JavaScript object
@@ -409,8 +409,8 @@ type Context struct {
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
-func newJsTracer(code string, ctx *Context) (*JSTracer, error) {
-	tracer := &JSTracer{
+func newJsTracer(code string, ctx *Context) (*jsTracer, error) {
+	tracer := &jsTracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
 		opWrapper:       new(opWrapper),
@@ -623,14 +623,14 @@ func newJsTracer(code string, ctx *Context) (*JSTracer, error) {
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (jst *JSTracer) Stop(err error) {
+func (jst *jsTracer) Stop(err error) {
 	jst.reason = err
 	atomic.StoreUint32(&jst.interrupt, 1)
 }
 
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
-func (jst *JSTracer) call(noret bool, method string, args ...string) (json.RawMessage, error) {
+func (jst *jsTracer) call(noret bool, method string, args ...string) (json.RawMessage, error) {
 	// Execute the JavaScript call and return any error
 	jst.vm.PushString(method)
 	for _, arg := range args {
@@ -666,7 +666,7 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (jst *JSTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	jst.ctx["type"] = "CALL"
 	if create {
 		jst.ctx["type"] = "CREATE"
@@ -696,7 +696,7 @@ func (jst *JSTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (jst *JSTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (jst *jsTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	if !jst.traceSteps {
 		return
 	}
@@ -732,7 +732,7 @@ func (jst *JSTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (jst *JSTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (jst *jsTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	if jst.err != nil {
 		return
 	}
@@ -746,7 +746,7 @@ func (jst *JSTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (jst *JSTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (jst *jsTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	jst.ctx["output"] = output
 	jst.ctx["time"] = t.String()
 	jst.ctx["gasUsed"] = gasUsed
@@ -757,7 +757,7 @@ func (jst *JSTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (jst *JSTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (jst *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !jst.traceCallFrames {
 		return
 	}
@@ -787,7 +787,7 @@ func (jst *JSTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (jst *JSTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if !jst.traceCallFrames {
 		return
 	}
@@ -811,7 +811,7 @@ func (jst *JSTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
-func (jst *JSTracer) GetResult() (json.RawMessage, error) {
+func (jst *jsTracer) GetResult() (json.RawMessage, error) {
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 
@@ -833,7 +833,7 @@ func (jst *JSTracer) GetResult() (json.RawMessage, error) {
 }
 
 // addToObj pushes a field to a JS object.
-func (jst *JSTracer) addToObj(obj int, key string, val interface{}) {
+func (jst *jsTracer) addToObj(obj int, key string, val interface{}) {
 	pushValue(jst.vm, val)
 	jst.vm.PutPropString(obj, key)
 }

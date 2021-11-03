@@ -850,7 +850,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		txContext = core.NewEVMTxContext(message)
 	)
 	switch {
-	case config != nil && config.Tracer != nil:
+	case config == nil:
+		tracer = vm.NewStructLogger(nil)
+	case config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
 		timeout := defaultTraceTimeout
 		if config.Timeout != nil {
@@ -858,22 +860,19 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 				return nil, err
 			}
 		}
-		// Native tracers take precedence
-		if tracer, err = New(*config.Tracer, txctx); err != nil {
+		if t, err := New(*config.Tracer, txctx); err != nil {
 			return nil, err
+		} else {
+			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+					t.Stop(errors.New("execution timeout"))
+				}
+			}()
+			defer cancel()
+			tracer = t
 		}
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(Tracer).Stop(errors.New("execution timeout"))
-			}
-		}()
-		defer cancel()
-
-	case config == nil:
-		tracer = vm.NewStructLogger(nil)
-
 	default:
 		tracer = vm.NewStructLogger(config.LogConfig)
 	}
