@@ -129,8 +129,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 
 	// varSize is the size of the variable
 	var varSize int
+	numericTypes := map[string]bool{"int": true, "uint": true, "fixed": true, "ufixed": true}
 	if len(parsedType[3]) > 0 {
-		if !map[string]bool{"int": true, "uint": true, "fixed": true, "ufixed": true, "bytes": true}[parsedType[1]] {
+		if !numericTypes[parsedType[1]] && parsedType[1] != "bytes" {
 			return Type{}, fmt.Errorf("only int, uint, fixed, ufixed, bytes types can have variable size specified: %s", t)
 		}
 		var err error
@@ -138,14 +139,20 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		if err != nil {
 			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 		}
-		if strconv.Itoa(varSize) != parsedType[3] || varSize == 0 ||
-			(map[string]bool{"int": true, "uint": true, "fixed": true, "ufixed": true}[parsedType[1]] &&
-				(varSize == 0 || varSize%8 != 0 || varSize > 256)) ||
-			(parsedType[1] == "bytes" && varSize > 32) {
+		switch {
+		case strconv.Itoa(varSize) != parsedType[3]:
+			fallthrough
+		case varSize == 0:
+			fallthrough
+		case varSize > 256:
+			fallthrough
+		case varSize%8 != 0 && parsedType[1] != "bytes":
+			fallthrough
+		case varSize > 32 && parsedType[1] == "bytes":
 			return Type{}, fmt.Errorf("abi: wrong variable size: %s", parsedType[3])
 		}
 	} else {
-		if parsedType[0] == "uint" || parsedType[0] == "int" || parsedType[0] == "fixed" || parsedType[0] == "ufixed" {
+		if numericTypes[parsedType[0]] {
 			// this should fail because it means that there's something wrong with
 			// the abi type (the compiler should always format it to the size...always)
 			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
