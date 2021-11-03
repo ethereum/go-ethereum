@@ -36,7 +36,7 @@ func (t *CountdownTimer) StopTimer() {
 
 // Reset will start the countdown timer if it's already stopped, or simply reset the countdown time back to the defual `duration`
 func (t *CountdownTimer) Reset() {
-	if !t.getInitilisedValue() {
+	if !t.isInitilised() {
 		t.setInitilised(true)
 		go t.startTimer()
 	} else {
@@ -76,7 +76,7 @@ func (t *CountdownTimer) setInitilised(value bool) {
 	t.initilised = value
 }
 
-func (t *CountdownTimer) getInitilisedValue() bool {
+func (t *CountdownTimer) isInitilised() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	return t.initilised

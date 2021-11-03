@@ -22,7 +22,7 @@ type XDPoS_v2 struct {
 
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 	// Setup Timer
-	duration := time.Duration(config.ConsensusV2Config.TimeoutWorkerDuration) * time.Millisecond
+	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Millisecond
 	timer := countdown.NewCountDown(duration)
 
 	engine := &XDPoS_v2{
@@ -41,7 +41,7 @@ func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v2 {
 	// Set any missing consensus parameters to their defaults
 	conf := config
 	// Setup Timer
-	duration := time.Duration(config.ConsensusV2Config.TimeoutWorkerDuration) * time.Millisecond
+	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Millisecond
 	timer := countdown.NewCountDown(duration)
 
 	// Allocate the snapshot caches and create the engine
