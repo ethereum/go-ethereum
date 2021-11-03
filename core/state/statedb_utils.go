@@ -66,18 +66,20 @@ func GetOpening(statedb *StateDB, address common.Address) [32]byte {
 	return ret
 }
 
+// The smart contract and the compiled byte code (in corresponding *.go file) is at commit "KYC Layer added." 7f856ffe672162dfa9c4006c89afb45a24fb7f9f
+// Notice that if smart contract and the compiled byte code (in corresponding *.go file) changes, below also changes
 var (
 	slotValidatorMapping = map[string]uint64{
 		"withdrawsState":         0,
 		"validatorsState":        1,
 		"voters":                 2,
-		"candidates":             3,
-		"candidateCount":         4,
-		"minCandidateCap":        5,
-		"minVoterCap":            6,
-		"maxValidatorNumber":     7,
-		"candidateWithdrawDelay": 8,
-		"voterWithdrawDelay":     9,
+		"candidates":             8,
+		"candidateCount":         9,
+		"minCandidateCap":        11,
+		"minVoterCap":            12,
+		"maxValidatorNumber":     13,
+		"candidateWithdrawDelay": 14,
+		"voterWithdrawDelay":     15,
 	}
 )
 
