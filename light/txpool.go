@@ -22,16 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 const (
@@ -89,7 +88,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:      config,
-		signer:      types.NewEIP155Signer(config.ChainID),
+		signer:      types.NewEIP155Signer(config.ChainId),
 		nonce:       make(map[common.Address]uint64),
 		pending:     make(map[common.Hash]*types.Transaction),
 		mined:       make(map[common.Hash][]*types.Transaction),
@@ -184,8 +183,9 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
 			return err
 		}
-		rawdb.WriteTxLookupEntries(pool.chainDb, block)
-
+		if err := core.WriteTxLookupEntries(pool.chainDb, block); err != nil {
+			return err
+		}
 		// Update the transaction pool's state
 		for _, tx := range list {
 			delete(pool.pending, tx.Hash())
@@ -199,17 +199,15 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 // rollbackTxs marks the transactions contained in recently rolled back blocks
 // as rolled back. It also removes any positional lookup entries.
 func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
-	batch := pool.chainDb.NewBatch()
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			rawdb.DeleteTxLookupEntry(batch, txHash)
+			core.DeleteTxLookupEntry(pool.chainDb, txHash)
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}
 		delete(pool.mined, hash)
 	}
-	batch.Write()
 }
 
 // reorgOnNewHead sets a new head header, processing (and rolling back if necessary)
@@ -260,7 +258,7 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 		idx2 := idx - txPermanent
 		if len(pool.mined) > 0 {
 			for i := pool.clearIdx; i < idx2; i++ {
-				hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
+				hash := core.GetCanonicalHash(pool.chainDb, i)
 				if list, ok := pool.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
 					for i, tx := range list {
@@ -323,9 +321,9 @@ func (pool *TxPool) Stop() {
 	log.Info("Transaction pool stopped")
 }
 
-// SubscribeNewTxsEvent registers a subscription of core.NewTxsEvent and
+// SubscribeTxPreEvent registers a subscription of core.TxPreEvent and
 // starts sending event to the given channel.
-func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+func (pool *TxPool) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
@@ -345,6 +343,30 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		from common.Address
 		err  error
 	)
+
+	// check if sender is in black list
+	if tx.From() != nil && common.Blacklist[*tx.From()] {
+		return fmt.Errorf("Reject transaction with sender in black-list: %v", tx.From().Hex())
+	}
+	// check if receiver is in black list
+	if tx.To() != nil && common.Blacklist[*tx.To()] {
+		return fmt.Errorf("Reject transaction with receiver in black-list: %v", tx.To().Hex())
+	}
+
+	// validate minFee slot for XDCZ
+	if tx.IsXDCZApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXDCZApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
+	}
+	// validate balance slot, token decimal for XDCX
+	if tx.IsXDCXApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXDCXApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
+	}
 
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
@@ -414,7 +436,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
-		go self.txFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
+		go self.txFeed.Send(core.TxPreEvent{Tx: tx})
 	}
 
 	// Print a log message if low enough level is set
@@ -506,16 +528,14 @@ func (self *TxPool) Content() (map[common.Address]types.Transactions, map[common
 func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
 	var hashes []common.Hash
-	batch := self.chainDb.NewBatch()
 	for _, tx := range txs {
+		//self.RemoveTx(tx.Hash())
 		hash := tx.Hash()
 		delete(self.pending, hash)
-		batch.Delete(hash.Bytes())
+		self.chainDb.Delete(hash[:])
 		hashes = append(hashes, hash)
 	}
-	batch.Write()
 	self.relay.Discard(hashes)
 }
 

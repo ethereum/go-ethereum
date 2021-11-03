@@ -20,23 +20,24 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"reflect"
 	"strings"
 	"unicode"
 
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/dashboard"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/internal/debug"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 
@@ -93,7 +94,7 @@ type XDCConfig struct {
 	Shh         whisper.Config
 	Node        node.Config
 	Ethstats    ethstatsConfig
-	Dashboard   dashboard.Config
+	XDCX        XDCx.Config
 	Account     account
 	StakeEnable bool
 	Bootnodes   Bootnodes
@@ -130,8 +131,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	cfg := XDCConfig{
 		Eth:         eth.DefaultConfig,
 		Shh:         whisper.DefaultConfig,
+		XDCX:        XDCx.DefaultConfig,
 		Node:        defaultNodeConfig(),
-		Dashboard:   dashboard.DefaultConfig,
 		StakeEnable: true,
 		Verbosity:   3,
 		NAT:         "",
@@ -156,6 +157,17 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Check testnet is enable.
 	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
 		common.IsTestnet = true
+		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
+		cfg.Eth.NetworkId = 51
+		common.RelayerRegistrationSMC = common.RelayerRegistrationSMCTestnet
+		common.TIPTRC21Fee = common.TIPXDCXTestnet
+		common.TIPTRC21Fee = common.TIPTRC21FeeTestnet
+		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
+	}
+
+	// Rewound
+	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
+		common.Rewound = uint64(rewound)
 	}
 
 	// Check rollback hash exist.
@@ -164,10 +176,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	}
 
 	// Check GasPrice
-	common.MinGasPrice = common.DefaultMinGasPrice
-	if ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
-		if gasPrice := int64(ctx.GlobalInt(utils.MinerGasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
-			common.MinGasPrice = gasPrice
+	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
+	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
+		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}
 
@@ -197,8 +209,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
-	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
-
+	utils.SetXDCXConfig(ctx, &cfg.XDCX, cfg.Node.DataDir)
 	return stack, cfg
 }
 
@@ -227,14 +238,12 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.GlobalIsSet(utils.ConstantinopleOverrideFlag.Name) {
-		cfg.Eth.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
-	}
+
+	// Register XDCX's OrderBook service if requested.
+	// enable in default
+	utils.RegisterXDCXService(stack, &cfg.XDCX)
 	utils.RegisterEthService(stack, &cfg.Eth)
 
-	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
-	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
 	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
@@ -245,9 +254,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
 			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
 		}
-		if ctx.GlobalIsSet(utils.WhisperRestrictConnectionBetweenLightClientsFlag.Name) {
-			cfg.Shh.RestrictConnectionBetweenLightClients = true
-		}
 		utils.RegisterShhService(stack, &cfg.Shh)
 	}
 
@@ -255,6 +261,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
+
 	return stack, cfg
 }
 
@@ -272,17 +279,7 @@ func dumpConfig(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	dump := os.Stdout
-	if ctx.NArg() > 0 {
-		dump, err = os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
-		}
-		defer dump.Close()
-	}
-	dump.WriteString(comment)
-	dump.Write(out)
-
+	io.WriteString(os.Stdout, comment)
+	os.Stdout.Write(out)
 	return nil
 }

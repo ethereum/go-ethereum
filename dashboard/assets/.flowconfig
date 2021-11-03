@@ -1,9 +1,0 @@
-[ignore]
-<PROJECT_ROOT>/node_modules/material-ui/.*\.js\.flow
-
-[libs]
-<PROJECT_ROOT>/flow-typed/
-node_modules/jss/flow-typed
-
-[options]
-include_warnings=true

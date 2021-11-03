@@ -17,11 +17,12 @@
 package types
 
 import (
+	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 //go:generate gencodec -type Log -field-override logMarshaling -out gen_log_json.go
@@ -47,7 +48,7 @@ type Log struct {
 	TxIndex uint `json:"transactionIndex" gencodec:"required"`
 	// hash of the block in which the transaction was included
 	BlockHash common.Hash `json:"blockHash"`
-	// index of the log in the block
+	// index of the log in the receipt
 	Index uint `json:"logIndex" gencodec:"required"`
 
 	// The Removed field is true if this log was reverted due to a chain reorganisation.
@@ -92,6 +93,10 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 		l.Address, l.Topics, l.Data = dec.Address, dec.Topics, dec.Data
 	}
 	return err
+}
+
+func (l *Log) String() string {
+	return fmt.Sprintf(`log: %x %x %x %x %d %x %d`, l.Address, l.Topics, l.Data, l.TxHash, l.TxIndex, l.BlockHash, l.Index)
 }
 
 // LogForStorage is a wrapper around a Log that flattens and parses the entire content of

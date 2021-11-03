@@ -18,32 +18,27 @@
 package web3ext
 
 var Modules = map[string]string{
-	"accounting": Accounting_JS,
-	"admin":      Admin_JS,
-	"chequebook": Chequebook_JS,
-	"clique":     Clique_JS,
-	"ethash":     Ethash_JS,
-	"XDPoS":      XDPoS_JS,
-	"debug":      Debug_JS,
-	"eth":        Eth_JS,
-	"miner":      Miner_JS,
-	"net":        Net_JS,
-	"personal":   Personal_JS,
-	"rpc":        RPC_JS,
-	"shh":        Shh_JS,
-	"swarmfs":    SWARMFS_JS,
-	"txpool":     TxPool_JS,
+	"admin":       Admin_JS,
+	"chequebook":  Chequebook_JS,
+	"clique":      Clique_JS,
+	"XDPoS":       XDPoS_JS,
+	"debug":       Debug_JS,
+	"eth":         Eth_JS,
+	"miner":       Miner_JS,
+	"net":         Net_JS,
+	"personal":    Personal_JS,
+	"rpc":         RPC_JS,
+	"shh":         Shh_JS,
+	"XDCx":        XDCX_JS,
+	"XDCxlending": XDCXLending_JS,
+	"swarmfs":     SWARMFS_JS,
+	"txpool":      TxPool_JS,
 }
 
 const Chequebook_JS = `
 web3._extend({
 	property: 'chequebook',
 	methods: [
-		new web3._extend.Method({
-			name: 'chainId',
-			call: 'eth_chainId',
-			params: 0
-		}),
 		new web3._extend.Method({
 			name: 'deposit',
 			call: 'chequebook_deposit',
@@ -117,34 +112,6 @@ web3._extend({
 });
 `
 
-const Ethash_JS = `
-web3._extend({
-	property: 'ethash',
-	methods: [
-		new web3._extend.Method({
-			name: 'getWork',
-			call: 'ethash_getWork',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'getHashrate',
-			call: 'ethash_getHashrate',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'submitWork',
-			call: 'ethash_submitWork',
-			params: 3,
-		}),
-		new web3._extend.Method({
-			name: 'submitHashRate',
-			call: 'ethash_submitHashRate',
-			params: 2,
-		}),
-	]
-});
-`
-
 const XDPoS_JS = `
 web3._extend({
 	property: 'XDPoS',
@@ -174,8 +141,8 @@ web3._extend({
 	],
 	properties: [
 		new web3._extend.Property({
-			name: 'proposals',
-			getter: 'XDPoS_proposals'
+			name: 'networkInformation',
+			getter: 'XDPoS_networkInformation'
 		}),
 	]
 });
@@ -193,16 +160,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'removePeer',
 			call: 'admin_removePeer',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'addTrustedPeer',
-			call: 'admin_addTrustedPeer',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'removeTrustedPeer',
-			call: 'admin_removeTrustedPeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -395,8 +352,8 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
-			name: 'setMutexProfileFraction',
-			call: 'debug_setMutexProfileFraction',
+			name: 'setMutexProfileRate',
+			call: 'debug_setMutexProfileRate',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -418,24 +375,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'traceBlockFromFile',
 			call: 'debug_traceBlockFromFile',
-			params: 2,
-			inputFormatter: [null, null]
-		}),
-		new web3._extend.Method({
-			name: 'traceBadBlock',
-			call: 'debug_traceBadBlock',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'standardTraceBadBlockToFile',
-			call: 'debug_standardTraceBadBlockToFile',
-			params: 2,
-			inputFormatter: [null, null]
-		}),
-		new web3._extend.Method({
-			name: 'standardTraceBlockToFile',
-			call: 'debug_standardTraceBlockToFile',
 			params: 2,
 			inputFormatter: [null, null]
 		}),
@@ -542,10 +481,10 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
 		new web3._extend.Method({
-			name: 'getProof',
-			call: 'eth_getProof',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
+			name: 'getOwnerByCoinbase',
+			call: 'eth_getOwnerByCoinbase',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 	],
 	properties: [
@@ -595,11 +534,6 @@ web3._extend({
 			call: 'miner_setGasPrice',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
-			name: 'setRecommitInterval',
-			call: 'miner_setRecommitInterval',
-			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',
@@ -702,6 +636,326 @@ web3._extend({
 });
 `
 
+const XDCX_JS = `
+web3._extend({
+	property: 'XDCx',
+	methods: [
+		new web3._extend.Method({
+			name: 'version',
+			call: 'XDCx_version',
+			params: 0,
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'info',
+			call: 'XDCx_info',
+			params: 0
+		}),
+		new web3._extend.Method({
+            name: 'getFeeByEpoch',
+            call: 'XDCx_getFeeByEpoch',
+            params: 1,
+            inputFormatter: [null, web3._extend.formatters.inputAddressFormatter]
+        }),
+		new web3._extend.Method({
+            name: 'sendOrderRawTransaction',
+            call: 'XDCx_sendOrderRawTransaction',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'sendLendingRawTransaction',
+            call: 'XDCx_sendLendingRawTransaction',
+            params: 1
+		}),
+		
+		new web3._extend.Method({
+            name: 'sendOrderTransaction',
+            call: 'XDCx_sendOrder',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'sendLendingTransaction',
+            call: 'XDCx_sendLending',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'getOrderTxMatchByHash',
+            call: 'XDCx_getOrderTxMatchByHash',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'getOrderPoolContent',
+            call: 'XDCx_getOrderPoolContent',
+            params: 0
+		}),
+		new web3._extend.Method({
+            name: 'getOrderStats',
+            call: 'XDCx_getOrderStats',
+            params: 0
+		}),
+		new web3._extend.Method({
+            name: 'getOrderCount',
+            call: 'XDCx_getOrderCount',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'getBestBid',
+            call: 'XDCx_getBestBid',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBestAsk',
+            call: 'XDCx_getBestAsk',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBidTree',
+            call: 'XDCx_getBidTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getAskTree',
+            call: 'XDCx_getAskTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getOrderById',
+            call: 'XDCx_getOrderById',
+            params: 3
+		}),
+		new web3._extend.Method({
+            name: 'getPrice',
+            call: 'XDCx_getPrice',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLastEpochPrice',
+            call: 'XDCx_getLastEpochPrice',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getCurrentEpochPrice',
+            call: 'XDCx_getCurrentEpochPrice',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getTradingOrderBookInfo',
+            call: 'XDCx_getTradingOrderBookInfo',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLiquidationPriceTree',
+            call: 'XDCx_getLiquidationPriceTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getInvestingTree',
+            call: 'XDCx_getInvestingTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBorrowingTree',
+            call: 'XDCx_getBorrowingTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLendingOrderBookInfo',
+            call: 'XDCx_getLendingOrderBookInfo',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLendingOrderTree',
+            call: 'XDCx_getLendingOrderTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLendingTradeTree',
+            call: 'XDCx_getLendingTradeTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLiquidationTimeTree',
+            call: 'XDCx_getLiquidationTimeTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLendingOrderCount',
+            call: 'XDCx_getLendingOrderCount',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'getBestInvesting',
+            call: 'XDCx_getBestInvesting',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBestBorrowing',
+            call: 'XDCx_getBestBorrowing',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBids',
+            call: 'XDCx_getBids',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getAsks',
+            call: 'XDCx_getAsks',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getInvests',
+            call: 'XDCx_getInvests',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBorrows',
+            call: 'XDCx_getBorrows',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getLendingTxMatchByHash',
+            call: 'XDCx_getLendingTxMatchByHash',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'getLiquidatedTradesByTxHash',
+            call: 'XDCx_getLiquidatedTradesByTxHash',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'getLendingOrderById',
+            call: 'XDCx_getLendingOrderById',
+            params: 3
+		}),
+		new web3._extend.Method({
+            name: 'getLendingTradeById',
+            call: 'XDCx_getLendingTradeById',
+            params: 3
+		}),
+	]
+});
+`
+
+const XDCXLending_JS = `
+web3._extend({
+	property: 'XDCxlending',
+	methods: [
+		new web3._extend.Method({
+			name: 'version',
+			call: 'XDCxlending_version',
+			params: 0,
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'info',
+			call: 'XDCxlending_info',
+			params: 0
+		}),
+		new web3._extend.Method({
+            name: 'createOrder',
+            call: 'XDCxlending_createOrder',
+            params: 1,
+            inputFormatter: [null]
+        }),
+        new web3._extend.Method({
+            name: 'cancelOrder',
+            call: 'XDCxlending_cancelOrder',
+            params: 1,
+            inputFormatter: [null]
+        }),
+        new web3._extend.Method({
+            name: 'getOrders',
+            call: 'XDCxlending_getOrders',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'getOrderNonce',
+            call: 'XDCxlending_getOrderNonce',
+            params: 1,
+            inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+		new web3._extend.Method({
+            name: 'getFeeByEpoch',
+            call: 'XDCxlending_GetFeeByEpoch',
+            params: 1,
+            inputFormatter: [null, web3._extend.formatters.inputAddressFormatter]
+        }),
+		new web3._extend.Method({
+            name: 'getPendingOrders',
+            call: 'XDCxlending_getPendingOrders',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'getAllPendingHashes',
+            call: 'XDCxlending_getAllPendingHashes',
+            params: 0
+        }),
+		new web3._extend.Method({
+            name: 'sendOrderRawTransaction',
+            call: 'XDCxlending_sendOrderRawTransaction',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'sendOrderTransaction',
+            call: 'XDCxlending_sendOrder',
+            params: 1
+		}),
+		new web3._extend.Method({
+            name: 'getOrderCount',
+            call: 'XDCxlending_getOrderCount',
+            params: 1
+        }),
+		new web3._extend.Method({
+            name: 'getBestBid',
+            call: 'XDCxlending_getBestBid',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBestAsk',
+            call: 'XDCxlending_getBestAsk',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getBidTree',
+            call: 'XDCxlending_getBidTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getAskTree',
+            call: 'XDCxlending_getAskTree',
+            params: 2
+		}),
+		new web3._extend.Method({
+            name: 'getOrderById',
+            call: 'XDCxlending_getOrderById',
+            params: 3
+		}),
+		new web3._extend.Method({
+            name: 'getPrice',
+            call: 'XDCxlending_getPrice',
+            params: 2
+		}),
+	]
+});
+`
+
+/*
+   var sendOrderRawTransaction = new Method({
+       name: 'sendOrderRawTransaction',
+       call: 'eth_sendOrderRawTransaction',
+       params: 1,
+       inputFormatter: [null]
+   });
+
+   var sendOrderTransaction = new Method({
+       name: 'sendOrder',
+       call: 'XDCx_sendOrder',
+       params: 1,
+       inputFormatter: [null]
+   });
+*/
+
 const SWARMFS_JS = `
 web3._extend({
 	property: 'swarmfs',
@@ -748,50 +1002,6 @@ web3._extend({
 				status.queued = web3._extend.utils.toDecimal(status.queued);
 				return status;
 			}
-		}),
-	]
-});
-`
-
-const Accounting_JS = `
-web3._extend({
-	property: 'accounting',
-	methods: [
-		new web3._extend.Property({
-			name: 'balance',
-			getter: 'account_balance'
-		}),
-		new web3._extend.Property({
-			name: 'balanceCredit',
-			getter: 'account_balanceCredit'
-		}),
-		new web3._extend.Property({
-			name: 'balanceDebit',
-			getter: 'account_balanceDebit'
-		}),
-		new web3._extend.Property({
-			name: 'bytesCredit',
-			getter: 'account_bytesCredit'
-		}),
-		new web3._extend.Property({
-			name: 'bytesDebit',
-			getter: 'account_bytesDebit'
-		}),
-		new web3._extend.Property({
-			name: 'msgCredit',
-			getter: 'account_msgCredit'
-		}),
-		new web3._extend.Property({
-			name: 'msgDebit',
-			getter: 'account_msgDebit'
-		}),
-		new web3._extend.Property({
-			name: 'peerDrops',
-			getter: 'account_peerDrops'
-		}),
-		new web3._extend.Property({
-			name: 'selfDrops',
-			getter: 'account_selfDrops'
 		}),
 	]
 });

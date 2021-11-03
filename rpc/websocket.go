@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -30,8 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/log"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/websocket"
 )
 
@@ -119,7 +118,12 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	return f
 }
 
-func wsGetConfig(endpoint, origin string) (*websocket.Config, error) {
+// DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
+// that is listening on the given endpoint.
+//
+// The context is used for the initial connection establishment. It does not
+// affect subsequent interactions with the client.
+func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error) {
 	if origin == "" {
 		var err error
 		if origin, err = os.Hostname(); err != nil {
@@ -132,25 +136,6 @@ func wsGetConfig(endpoint, origin string) (*websocket.Config, error) {
 		}
 	}
 	config, err := websocket.NewConfig(endpoint, origin)
-	if err != nil {
-		return nil, err
-	}
-
-	if config.Location.User != nil {
-		b64auth := base64.StdEncoding.EncodeToString([]byte(config.Location.User.String()))
-		config.Header.Add("Authorization", "Basic "+b64auth)
-		config.Location.User = nil
-	}
-	return config, nil
-}
-
-// DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
-// that is listening on the given endpoint.
-//
-// The context is used for the initial connection establishment. It does not
-// affect subsequent interactions with the client.
-func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error) {
-	config, err := wsGetConfig(endpoint, origin)
 	if err != nil {
 		return nil, err
 	}

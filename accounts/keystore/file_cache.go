@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/log"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.
@@ -56,9 +56,9 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 
 	var newLastMod time.Time
 	for _, fi := range files {
-		path := filepath.Join(keyDir, fi.Name())
 		// Skip any non-key files from the folder
-		if nonKeyFile(fi) {
+		path := filepath.Join(keyDir, fi.Name())
+		if skipKeyFile(fi) {
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
@@ -88,8 +88,8 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 	return creates, deletes, updates, nil
 }
 
-// nonKeyFile ignores editor backups, hidden files and folders/symlinks.
-func nonKeyFile(fi os.FileInfo) bool {
+// skipKeyFile ignores editor backups, hidden files and folders/symlinks.
+func skipKeyFile(fi os.FileInfo) bool {
 	// Skip editor backups and UNIX-style hidden files.
 	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
 		return true

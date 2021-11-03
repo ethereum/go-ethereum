@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 type diffTest struct {
@@ -76,7 +76,7 @@ func TestCalcDifficulty(t *testing.T) {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
 		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
 			Number:     number,
-			Time:       test.ParentTimestamp,
+			Time:       new(big.Int).SetUint64(test.ParentTimestamp),
 			Difficulty: test.ParentDifficulty,
 		})
 		if diff.Cmp(test.CurrentDifficulty) != 0 {

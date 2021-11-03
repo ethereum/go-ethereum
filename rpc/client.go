@@ -32,7 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 var (
@@ -60,7 +60,7 @@ const (
 	// The approach taken here is to maintain a per-subscription linked list buffer
 	// shrinks on demand. If the buffer reaches the size below, the subscription is
 	// dropped.
-	maxClientSubscriptionBuffer = 20000
+	maxClientSubscriptionBuffer = 8000
 )
 
 // BatchElem is an element in a batch request.
@@ -117,8 +117,7 @@ type Client struct {
 
 	// for dispatch
 	close       chan struct{}
-	closing     chan struct{}                  // closed when client is quitting
-	didClose    chan struct{}                  // closed when client quits
+	didQuit     chan struct{}                  // closed when client quits
 	reconnected chan net.Conn                  // where write/reconnect sends the new connection
 	readErr     chan error                     // errors from read
 	readResp    chan []*jsonrpcMessage         // valid messages from read
@@ -172,8 +171,6 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		return DialHTTP(rawurl)
 	case "ws", "wss":
 		return DialWebsocket(ctx, rawurl, "")
-	case "stdio":
-		return DialStdIO(ctx)
 	case "":
 		return DialIPC(ctx, rawurl)
 	default:
@@ -187,13 +184,13 @@ func newClient(initctx context.Context, connectFunc func(context.Context) (net.C
 		return nil, err
 	}
 	_, isHTTP := conn.(*httpConn)
+
 	c := &Client{
 		writeConn:   conn,
 		isHTTP:      isHTTP,
 		connectFunc: connectFunc,
 		close:       make(chan struct{}),
-		closing:     make(chan struct{}),
-		didClose:    make(chan struct{}),
+		didQuit:     make(chan struct{}),
 		reconnected: make(chan net.Conn),
 		readErr:     make(chan error),
 		readResp:    make(chan []*jsonrpcMessage),
@@ -230,8 +227,8 @@ func (c *Client) Close() {
 	}
 	select {
 	case c.close <- struct{}{}:
-		<-c.didClose
-	case <-c.didClose:
+		<-c.didQuit
+	case <-c.didQuit:
 	}
 }
 
@@ -266,7 +263,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		return err
 	}
 
-	// dispatch has accepted the request and will close the channel when it quits.
+	// dispatch has accepted the request and will close the channel it when it quits.
 	switch resp, err := op.wait(ctx); {
 	case err != nil:
 		return err
@@ -276,6 +273,40 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		return ErrNoResult
 	default:
 		return json.Unmarshal(resp.Result, &result)
+	}
+}
+
+// CallContext performs a JSON-RPC call with the given arguments. If the context is
+// canceled before the call has successfully returned, CallContext returns immediately.
+//
+// The result must be a pointer so that package json can unmarshal into it. You
+// can also pass nil, in which case the result is ignored.
+func (c *Client) GetResultCallContext(ctx context.Context, result interface{}, method string, args ...interface{}) (json.RawMessage, error) {
+	msg, err := c.newMessage(method, args...)
+	if err != nil {
+		return nil, err
+	}
+	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
+
+	if c.isHTTP {
+		err = c.sendHTTP(ctx, op, msg)
+	} else {
+		err = c.send(ctx, op, msg)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// dispatch has accepted the request and will close the channel it when it quits.
+	switch resp, err := op.wait(ctx); {
+	case err != nil:
+		return nil, err
+	case resp.Error != nil:
+		return nil, resp.Error
+	case len(resp.Result) == 0:
+		return nil, ErrNoResult
+	default:
+		return resp.Result, json.Unmarshal(resp.Result, &result)
 	}
 }
 
@@ -431,9 +462,7 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 		// This can happen if the client is overloaded or unable to keep up with
 		// subscription notifications.
 		return ctx.Err()
-	case <-c.closing:
-		return ErrClientQuit
-	case <-c.didClose:
+	case <-c.didQuit:
 		return ErrClientQuit
 	}
 }
@@ -451,7 +480,6 @@ func (c *Client) write(ctx context.Context, msg interface{}) error {
 	}
 	c.writeConn.SetWriteDeadline(deadline)
 	err := json.NewEncoder(c.writeConn).Encode(msg)
-	c.writeConn.SetWriteDeadline(time.Time{})
 	if err != nil {
 		c.writeConn = nil
 	}
@@ -468,7 +496,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 	case c.reconnected <- newconn:
 		c.writeConn = newconn
 		return nil
-	case <-c.didClose:
+	case <-c.didQuit:
 		newconn.Close()
 		return ErrClientQuit
 	}
@@ -486,9 +514,8 @@ func (c *Client) dispatch(conn net.Conn) {
 		requestOpLock = c.requestOp // nil while the send lock is held
 		reading       = true        // if true, a read loop is running
 	)
-	defer close(c.didClose)
+	defer close(c.didQuit)
 	defer func() {
-		close(c.closing)
 		c.closeRequestOps(ErrClientQuit)
 		conn.Close()
 		if reading {
@@ -531,13 +558,13 @@ func (c *Client) dispatch(conn net.Conn) {
 			}
 
 		case err := <-c.readErr:
-			log.Debug("<-readErr", "err", err)
+			log.Debug(fmt.Sprintf("<-readErr: %v", err))
 			c.closeRequestOps(err)
 			conn.Close()
 			reading = false
 
 		case newconn := <-c.reconnected:
-			log.Debug("<-reconnected", "reading", reading, "remote", conn.RemoteAddr())
+			log.Debug(fmt.Sprintf("<-reconnected: (reading=%t) %v", reading, conn.RemoteAddr()))
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case.
 				conn.Close()
@@ -594,7 +621,7 @@ func (c *Client) closeRequestOps(err error) {
 
 func (c *Client) handleNotification(msg *jsonrpcMessage) {
 	if !strings.HasSuffix(msg.Method, notificationMethodSuffix) {
-		log.Debug("dropping non-subscription message", "msg", msg)
+		log.Debug(fmt.Sprint("dropping non-subscription message: ", msg))
 		return
 	}
 	var subResult struct {
@@ -602,7 +629,7 @@ func (c *Client) handleNotification(msg *jsonrpcMessage) {
 		Result json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(msg.Params, &subResult); err != nil {
-		log.Debug("dropping invalid subscription message", "msg", msg)
+		log.Debug(fmt.Sprint("dropping invalid subscription message: ", msg))
 		return
 	}
 	if c.subs[subResult.ID] != nil {
@@ -613,7 +640,7 @@ func (c *Client) handleNotification(msg *jsonrpcMessage) {
 func (c *Client) handleResponse(msg *jsonrpcMessage) {
 	op := c.respWait[string(msg.ID)]
 	if op == nil {
-		log.Debug("unsolicited response", "msg", msg)
+		log.Debug(fmt.Sprintf("unsolicited response %v", msg))
 		return
 	}
 	delete(c.respWait, string(msg.ID))

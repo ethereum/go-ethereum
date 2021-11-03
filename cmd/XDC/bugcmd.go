@@ -26,10 +26,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/internal/browser"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/cmd/internal/browser"
+	"github.com/XinFinOrg/XDPoSChain/params"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +41,7 @@ var bugCommand = cli.Command{
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
-const issueURL = "https://github.com/ethereum/go-ethereum/issues/new"
+const issueUrl = "https://github.com/XinFinOrg/XDPoSChain/issues/new"
 
 // reportBug reports a bug by opening a new URL to the go-ethereum GH issue
 // tracker and setting default values as the issue body.
@@ -49,17 +49,15 @@ func reportBug(ctx *cli.Context) error {
 	// execute template and write contents to buff
 	var buff bytes.Buffer
 
-	fmt.Fprintln(&buff, "#### System information")
-	fmt.Fprintln(&buff)
-	fmt.Fprintln(&buff, "Version:", params.VersionWithMeta)
+	fmt.Fprintln(&buff, header)
+	fmt.Fprintln(&buff, "Version:", params.Version)
 	fmt.Fprintln(&buff, "Go Version:", runtime.Version())
 	fmt.Fprintln(&buff, "OS:", runtime.GOOS)
 	printOSDetails(&buff)
-	fmt.Fprintln(&buff, header)
 
 	// open a new GH issue
-	if !browser.Open(issueURL + "?body=" + url.QueryEscape(buff.String())) {
-		fmt.Printf("Please file a new issue at %s using this template:\n\n%s", issueURL, buff.String())
+	if !browser.Open(issueUrl + "?body=" + url.QueryEscape(buff.String())) {
+		fmt.Printf("Please file a new issue at %s using this template:\n%s", issueUrl, buff.String())
 	}
 	return nil
 }
@@ -99,15 +97,13 @@ func printCmdOut(w io.Writer, prefix, path string, args ...string) {
 	fmt.Fprintf(w, "%s%s\n", prefix, bytes.TrimSpace(out))
 }
 
-const header = `
-#### Expected behaviour
+const header = `Please answer these questions before submitting your issue. Thanks!
 
-
-#### Actual behaviour
-
-
-#### Steps to reproduce the behaviour
-
-
-#### Backtrace
+#### What did you do?
+ 
+#### What did you expect to see?
+ 
+#### What did you see instead?
+ 
+#### System details
 `

@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // Filter represents a Whisper message filter
@@ -248,6 +248,23 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 // Topics are not checked here, since this is done by topic matchers.
 func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	return f.PoW <= 0 || envelope.pow >= f.PoW
+}
+
+func matchSingleTopic(topic TopicType, bt []byte) bool {
+	if len(bt) > TopicLength {
+		bt = bt[:TopicLength]
+	}
+
+	if len(bt) < TopicLength {
+		return false
+	}
+
+	for j, b := range bt {
+		if topic[j] != b {
+			return false
+		}
+	}
+	return true
 }
 
 // IsPubKeyEqual checks that two public keys are equal

@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 // A BigInt represents a signed multi-precision integer.
@@ -83,13 +83,6 @@ func (bi *BigInt) SetString(x string, base int) {
 
 // BigInts represents a slice of big ints.
 type BigInts struct{ bigints []*big.Int }
-
-// NewBigInts creates a slice of uninitialized big numbers.
-func NewBigInts(size int) *BigInts {
-	return &BigInts{
-		bigints: make([]*big.Int, size),
-	}
-}
 
 // Size returns the number of big ints in the slice.
 func (bi *BigInts) Size() int {

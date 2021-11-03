@@ -19,8 +19,8 @@ package les
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/XinFinOrg/XDPoSChain/common/bitutil"
+	"github.com/XinFinOrg/XDPoSChain/light"
 )
 
 const (
@@ -43,7 +43,7 @@ const (
 
 // startBloomHandlers starts a batch of goroutines to accept bloom bit database
 // retrievals from possibly a range of filters and serving the data to satisfy.
-func (eth *LightEthereum) startBloomHandlers(sectionSize uint64) {
+func (eth *LightEthereum) startBloomHandlers() {
 	for i := 0; i < bloomServiceThreads; i++ {
 		go func() {
 			for {
@@ -57,7 +57,7 @@ func (eth *LightEthereum) startBloomHandlers(sectionSize uint64) {
 					compVectors, err := light.GetBloomBits(task.Context, eth.odr, task.Bit, task.Sections)
 					if err == nil {
 						for i := range task.Sections {
-							if blob, err := bitutil.DecompressBytes(compVectors[i], int(sectionSize/8)); err == nil {
+							if blob, err := bitutil.DecompressBytes(compVectors[i], int(light.BloomTrieFrequency/8)); err == nil {
 								task.Bitsets[i] = blob
 							} else {
 								task.Error = err
@@ -72,3 +72,13 @@ func (eth *LightEthereum) startBloomHandlers(sectionSize uint64) {
 		}()
 	}
 }
+
+const (
+	// bloomConfirms is the number of confirmation blocks before a bloom section is
+	// considered probably final and its rotated bits are calculated.
+	bloomConfirms = 256
+
+	// bloomThrottling is the time to wait between processing two consecutive index
+	// sections. It's useful during chain upgrades to prevent disk overload.
+	bloomThrottling = 100 * time.Millisecond
+)

@@ -20,30 +20,26 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math/rand"
-	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner"
-	multiSignWalletContract "github.com/ethereum/go-ethereum/contracts/multisigwallet"
-	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
-	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
+	blockSignerContract "github.com/XinFinOrg/XDPoSChain/contracts/blocksigner"
+	multiSignWalletContract "github.com/XinFinOrg/XDPoSChain/contracts/multisigwallet"
+	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize"
+	validatorContract "github.com/XinFinOrg/XDPoSChain/contracts/validator"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.
@@ -55,12 +51,11 @@ func (w *wizard) makeGenesis() {
 		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
-			HomesteadBlock:      big.NewInt(1),
-			EIP150Block:         big.NewInt(2),
-			EIP155Block:         big.NewInt(3),
-			EIP158Block:         big.NewInt(3),
-			ByzantiumBlock:      big.NewInt(4),
-			ConstantinopleBlock: big.NewInt(5),
+			HomesteadBlock: big.NewInt(1),
+			EIP150Block:    big.NewInt(2),
+			EIP155Block:    big.NewInt(3),
+			EIP158Block:    big.NewInt(3),
+			ByzantiumBlock: big.NewInt(4),
 		},
 	}
 	// Figure out which consensus engine to choose
@@ -127,8 +122,8 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many XDC should be rewarded to masternode? (default = 5000)")
-		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(5000))
+		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
+		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(10))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
@@ -157,7 +152,7 @@ func (w *wizard) makeGenesis() {
 			}
 		}
 		validatorCap := new(big.Int)
-		validatorCap.SetString("10000000000000000000000000", 10)
+		validatorCap.SetString("50000000000000000000000", 10)
 		var validatorCaps []*big.Int
 		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 		for i, signer := range signers {
@@ -176,13 +171,13 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Gap = uint64(w.readDefaultInt(450))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xdc746249C61f5832C5eEd53172776b460491bDcd5C)")
+		fmt.Println("What is foundation wallet address? (default = xdc0000000000000000000000000000000000000068)")
 		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr := crypto.PubkeyToAddress(pKey.PublicKey)
-		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+		contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 		transactOpts := bind.NewKeyedTransactor(pKey)
 
 		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend, signers, validatorCaps, owner)
@@ -236,8 +231,8 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, multiSignWalletAddr, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletAddr, nil, f)
-		fBalance := big.NewInt(0) // 3 billion
-		fBalance.Add(fBalance, big.NewInt(0*1000*1000*1000))
+		fBalance := big.NewInt(0) // 16m
+		fBalance.Add(fBalance, big.NewInt(16*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[common.HexToAddress(common.FoudationAddr)] = core.GenesisAccount{
 			Balance: fBalance,
@@ -303,11 +298,11 @@ func (w *wizard) makeGenesis() {
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletTeamAddr, nil, f)
 		// Team balance.
-		balance := big.NewInt(0) // 20 billion
-		balance.Add(balance, big.NewInt(30*1000*1000))
+		balance := big.NewInt(0) // 12m
+		balance.Add(balance, big.NewInt(12*1000*1000))
 		balance.Mul(balance, big.NewInt(1000000000000000000))
 		subBalance := big.NewInt(0) // i * 50k
-		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*10*1000*1000))
+		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
 		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
 		balance.Sub(balance, subBalance) // 12m - i * 50k
 		genesis.Alloc[common.HexToAddress(common.TeamAddr)] = core.GenesisAccount{
@@ -317,10 +312,10 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("What is swap wallet address for fund 37.47Billion XDC?")
+		fmt.Println("What is swap wallet address for fund 55m XDC?")
 		swapAddr := *w.readAddress()
-		baseBalance := big.NewInt(0) // 14.5Billion
-		baseBalance.Add(baseBalance, big.NewInt(3747*1000*1000*10))
+		baseBalance := big.NewInt(0) // 55m
+		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,
@@ -349,59 +344,12 @@ func (w *wizard) makeGenesis() {
 	// Query the user for some custom extras
 	fmt.Println()
 	fmt.Println("Specify your chain/network ID if you want an explicit one (default = random)")
-	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
+	genesis.Config.ChainId = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// All done, store the genesis and flush to disk
 	log.Info("Configured new genesis block")
 
 	w.conf.Genesis = genesis
-	w.conf.flush()
-}
-
-// importGenesis imports a Geth genesis spec into puppeth.
-func (w *wizard) importGenesis() {
-	// Request the genesis JSON spec URL from the user
-	fmt.Println()
-	fmt.Println("Where's the genesis file? (local file or http/https url)")
-	url := w.readURL()
-
-	// Convert the various allowed URLs to a reader stream
-	var reader io.Reader
-
-	switch url.Scheme {
-	case "http", "https":
-		// Remote web URL, retrieve it via an HTTP client
-		res, err := http.Get(url.String())
-		if err != nil {
-			log.Error("Failed to retrieve remote genesis", "err", err)
-			return
-		}
-		defer res.Body.Close()
-		reader = res.Body
-
-	case "":
-		// Schemaless URL, interpret as a local file
-		file, err := os.Open(url.String())
-		if err != nil {
-			log.Error("Failed to open local genesis", "err", err)
-			return
-		}
-		defer file.Close()
-		reader = file
-
-	default:
-		log.Error("Unsupported genesis URL scheme", "scheme", url.Scheme)
-		return
-	}
-	// Parse the genesis file and inject it successful
-	var genesis core.Genesis
-	if err := json.NewDecoder(reader).Decode(&genesis); err != nil {
-		log.Error("Invalid genesis spec: %v", err)
-		return
-	}
-	log.Info("Imported genesis block")
-
-	w.conf.Genesis = &genesis
 	w.conf.flush()
 }
 
@@ -411,85 +359,47 @@ func (w *wizard) manageGenesis() {
 	// Figure out whether to modify or export the genesis
 	fmt.Println()
 	fmt.Println(" 1. Modify existing fork rules")
-	fmt.Println(" 2. Export genesis configurations")
+	fmt.Println(" 2. Export genesis configuration")
 	fmt.Println(" 3. Remove genesis configuration")
 
 	choice := w.read()
-	switch choice {
-	case "1":
+	switch {
+	case choice == "1":
 		// Fork rule updating requested, iterate over each fork
 		fmt.Println()
 		fmt.Printf("Which block should Homestead come into effect? (default = %v)\n", w.conf.Genesis.Config.HomesteadBlock)
 		w.conf.Genesis.Config.HomesteadBlock = w.readDefaultBigInt(w.conf.Genesis.Config.HomesteadBlock)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP150 (Tangerine Whistle) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP150Block)
+		fmt.Printf("Which block should EIP150 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP150Block)
 		w.conf.Genesis.Config.EIP150Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP150Block)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP155 (Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP155Block)
+		fmt.Printf("Which block should EIP155 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP155Block)
 		w.conf.Genesis.Config.EIP155Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP155Block)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP158/161 (also Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP158Block)
+		fmt.Printf("Which block should EIP158 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP158Block)
 		w.conf.Genesis.Config.EIP158Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP158Block)
 
 		fmt.Println()
 		fmt.Printf("Which block should Byzantium come into effect? (default = %v)\n", w.conf.Genesis.Config.ByzantiumBlock)
 		w.conf.Genesis.Config.ByzantiumBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ByzantiumBlock)
 
-		fmt.Println()
-		fmt.Printf("Which block should Constantinople come into effect? (default = %v)\n", w.conf.Genesis.Config.ConstantinopleBlock)
-		w.conf.Genesis.Config.ConstantinopleBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ConstantinopleBlock)
-		if w.conf.Genesis.Config.PetersburgBlock == nil {
-			w.conf.Genesis.Config.PetersburgBlock = w.conf.Genesis.Config.ConstantinopleBlock
-		}
-		fmt.Println()
-		fmt.Printf("Which block should Constantinople-Fix (remove EIP-1283) come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
-		w.conf.Genesis.Config.PetersburgBlock = w.readDefaultBigInt(w.conf.Genesis.Config.PetersburgBlock)
-
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
 
-		w.conf.flush()
-
-	case "2":
+	case choice == "2":
 		// Save whatever genesis configuration we currently have
 		fmt.Println()
-		fmt.Printf("Which folder to save the genesis specs into? (default = current)\n")
-		fmt.Printf("  Will create %s.json, %s-aleth.json, %s-harmony.json, %s-parity.json\n", w.network, w.network, w.network, w.network)
-
-		folder := w.readDefaultString(".")
-		if err := os.MkdirAll(folder, 0755); err != nil {
-			log.Error("Failed to create spec folder", "folder", folder, "err", err)
-			return
-		}
+		fmt.Printf("Which file to save the genesis into? (default = %s.json)\n", w.network)
 		out, _ := json.MarshalIndent(w.conf.Genesis, "", "  ")
-
-		// Export the native genesis spec used by puppeth and Geth
-		gethJson := filepath.Join(folder, fmt.Sprintf("%s.json", w.network))
-		if err := ioutil.WriteFile((gethJson), out, 0644); err != nil {
+		if err := ioutil.WriteFile(w.readDefaultString(fmt.Sprintf("%s.json", w.network)), out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
-			return
 		}
-		log.Info("Saved native genesis chain spec", "path", gethJson)
+		log.Info("Exported existing genesis block")
 
-		// Export the genesis spec used by Aleth (formerly C++ Ethereum)
-		if spec, err := newAlethGenesisSpec(w.network, w.conf.Genesis); err != nil {
-			log.Error("Failed to create Aleth chain spec", "err", err)
-		} else {
-			saveGenesis(folder, w.network, "aleth", spec)
-		}
-		// Export the genesis spec used by Parity
-		if spec, err := newParityChainSpec(w.network, w.conf.Genesis, []string{}); err != nil {
-			log.Error("Failed to create Parity chain spec", "err", err)
-		} else {
-			saveGenesis(folder, w.network, "parity", spec)
-		}
-		// Export the genesis spec used by Harmony (formerly EthereumJ
-		saveGenesis(folder, w.network, "harmony", w.conf.Genesis)
-
-	case "3":
+	case choice == "3":
 		// Make sure we don't have any services running
 		if len(w.conf.servers()) > 0 {
 			log.Error("Genesis reset requires all services and servers torn down")
@@ -499,20 +409,8 @@ func (w *wizard) manageGenesis() {
 
 		w.conf.Genesis = nil
 		w.conf.flush()
+
 	default:
 		log.Error("That's not something I can do")
-		return
 	}
-}
-
-// saveGenesis JSON encodes an arbitrary genesis spec into a pre-defined file.
-func saveGenesis(folder, network, client string, spec interface{}) {
-	path := filepath.Join(folder, fmt.Sprintf("%s-%s.json", network, client))
-
-	out, _ := json.Marshal(spec)
-	if err := ioutil.WriteFile(path, out, 0644); err != nil {
-		log.Error("Failed to save genesis file", "client", client, "err", err)
-		return
-	}
-	log.Info("Saved genesis chain spec", "client", client, "path", path)
 }

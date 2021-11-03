@@ -41,23 +41,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/ethstats"
+	"github.com/XinFinOrg/XDPoSChain/les"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discv5"
+	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
+	"github.com/XinFinOrg/XDPoSChain/params"
 	"golang.org/x/net/websocket"
 )
 
@@ -76,6 +76,9 @@ var (
 
 	accJSONFlag = flag.String("account.json", "", "Key json file to fund user requests with")
 	accPassFlag = flag.String("account.pass", "", "Decryption password to access faucet funds")
+
+	githubUser  = flag.String("github.user", "", "GitHub user to authenticate with for Gist access")
+	githubToken = flag.String("github.token", "", "GitHub personal token to access Gists with")
 
 	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
 	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
@@ -157,8 +160,7 @@ func main() {
 	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
-	// Delete trailing newline in password
-	pass := strings.TrimSuffix(string(blob), "\n")
+	pass := string(blob)
 
 	ks := keystore.NewKeyStore(filepath.Join(os.Getenv("HOME"), ".faucet", "keys"), keystore.StandardScryptN, keystore.StandardScryptP)
 	if blob, err = ioutil.ReadFile(*accJSONFlag); err != nil {
@@ -199,8 +201,6 @@ type faucet struct {
 
 	keystore *keystore.KeyStore // Keystore containing the single signer
 	account  accounts.Account   // Account funding user faucet requests
-	head     *types.Header      // Current head header of the faucet
-	balance  *big.Int           // Current balance of the faucet
 	nonce    uint64             // Current pending nonce of the faucet
 	price    *big.Int           // Current gas price to issue funds with
 
@@ -216,7 +216,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "XDC",
-		Version: params.VersionWithMeta,
+		Version: params.Version,
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
@@ -255,10 +255,8 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 	for _, boot := range enodes {
-		old, err := enode.ParseV4(boot.String())
-		if err == nil {
-			stack.Server().AddPeer(old)
-		}
+		old, _ := discover.ParseNode(boot.String())
+		stack.Server().AddPeer(old)
 	}
 	// Attach to the client and retrieve and interesting metadatas
 	api, err := stack.Attach()
@@ -328,30 +326,33 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		nonce   uint64
 		err     error
 	)
-	for head == nil || balance == nil {
-		// Retrieve the current stats cached by the faucet
-		f.lock.RLock()
-		if f.head != nil {
-			head = types.CopyHeader(f.head)
+	for {
+		// Attempt to retrieve the stats, may error on no faucet connectivity
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		head, err = f.client.HeaderByNumber(ctx, nil)
+		if err == nil {
+			balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number)
+			if err == nil {
+				nonce, err = f.client.NonceAt(ctx, f.account.Address, nil)
+			}
 		}
-		if f.balance != nil {
-			balance = new(big.Int).Set(f.balance)
-		}
-		nonce = f.nonce
-		f.lock.RUnlock()
+		cancel()
 
-		if head == nil || balance == nil {
-			// Report the faucet offline until initial stats are ready
-			if err = sendError(conn, errors.New("Faucet offline")); err != nil {
+		// If stats retrieval failed, wait a bit and retry
+		if err != nil {
+			if err = sendError(conn, errors.New("Faucet offline: "+err.Error())); err != nil {
 				log.Warn("Failed to send faucet error to client", "err", err)
 				return
 			}
 			time.Sleep(3 * time.Second)
+			continue
 		}
+		// Initial stats reported successfully, proceed with user interaction
+		break
 	}
 	// Send over the initial stats and the latest header
 	if err = send(conn, map[string]interface{}{
-		"funds":    new(big.Int).Div(balance, ether),
+		"funds":    balance.Div(balance, ether),
 		"funded":   nonce,
 		"peers":    f.stack.Server().PeerCount(),
 		"requests": f.reqs,
@@ -449,7 +450,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		case *noauthFlag:
 			username, avatar, address, err = authNoAuth(msg.URL)
 		default:
-			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
+			err = errors.New("Something funky happened, please open an issue at https://github.com/XinFinOrg/XDPoSChain/issues")
 		}
 		if err != nil {
 			if err = sendError(conn, err); err != nil {
@@ -473,7 +474,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
 			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, 21000, f.price, nil)
-			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainID)
+			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainId)
 			if err != nil {
 				f.lock.Unlock()
 				if err = sendError(conn, err); err != nil {
@@ -521,47 +522,6 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 	}
 }
 
-// refresh attempts to retrieve the latest header from the chain and extract the
-// associated faucet balance and nonce for connectivity caching.
-func (f *faucet) refresh(head *types.Header) error {
-	// Ensure a state update does not run for too long
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// If no header was specified, use the current chain head
-	var err error
-	if head == nil {
-		if head, err = f.client.HeaderByNumber(ctx, nil); err != nil {
-			return err
-		}
-	}
-	// Retrieve the balance, nonce and gas price from the current head
-	var (
-		balance *big.Int
-		nonce   uint64
-		price   *big.Int
-	)
-	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number); err != nil {
-		return err
-	}
-	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
-		return err
-	}
-	if price, err = f.client.SuggestGasPrice(ctx); err != nil {
-		return err
-	}
-	// Everything succeeded, update the cached stats and eject old requests
-	f.lock.Lock()
-	f.head, f.balance = head, balance
-	f.price, f.nonce = price, nonce
-	for len(f.reqs) > 0 && f.reqs[0].Tx.Nonce() < f.nonce {
-		f.reqs = f.reqs[1:]
-	}
-	f.lock.Unlock()
-
-	return nil
-}
-
 // loop keeps waiting for interesting events and pushes them out to connected
 // websockets.
 func (f *faucet) loop() {
@@ -579,27 +539,45 @@ func (f *faucet) loop() {
 	go func() {
 		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
-			timestamp := time.Unix(int64(head.Time), 0)
-			if time.Since(timestamp) > time.Hour {
-				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
-				continue
+			var (
+				balance *big.Int
+				nonce   uint64
+				price   *big.Int
+				err     error
+			)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number)
+			if err == nil {
+				nonce, err = f.client.NonceAt(ctx, f.account.Address, nil)
+				if err == nil {
+					price, err = f.client.SuggestGasPrice(ctx)
+				}
 			}
-			if err := f.refresh(head); err != nil {
+			cancel()
+
+			// If querying the data failed, try for the next block
+			if err != nil {
 				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
 				continue
+			} else {
+				log.Info("Updated faucet state", "block", head.Number, "hash", head.Hash(), "balance", balance, "nonce", nonce, "price", price)
 			}
 			// Faucet state retrieved, update locally and send to clients
+			balance = new(big.Int).Div(balance, ether)
+
+			f.lock.Lock()
+			f.price, f.nonce = price, nonce
+			for len(f.reqs) > 0 && f.reqs[0].Tx.Nonce() < f.nonce {
+				f.reqs = f.reqs[1:]
+			}
+			f.lock.Unlock()
+
 			f.lock.RLock()
-			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
-
-			balance := new(big.Int).Div(f.balance, ether)
-			peers := f.stack.Server().PeerCount()
-
 			for _, conn := range f.conns {
 				if err := send(conn, map[string]interface{}{
 					"funds":    balance,
 					"funded":   f.nonce,
-					"peers":    peers,
+					"peers":    f.stack.Server().PeerCount(),
 					"requests": f.reqs,
 				}, time.Second); err != nil {
 					log.Warn("Failed to send stats to client", "err", err)
@@ -658,6 +636,59 @@ func sendError(conn *websocket.Conn, err error) error {
 // setting the write deadline to 1 second to prevent waiting forever.
 func sendSuccess(conn *websocket.Conn, msg string) error {
 	return send(conn, map[string]string{"success": msg}, time.Second)
+}
+
+// authGitHub tries to authenticate a faucet request using GitHub gists, returning
+// the username, avatar URL and Ethereum address to fund on success.
+func authGitHub(url string) (string, string, common.Address, error) {
+	// Retrieve the gist from the GitHub Gist APIs
+	parts := strings.Split(url, "/")
+	req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
+	if *githubUser != "" {
+		req.SetBasicAuth(*githubUser, *githubToken)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	var gist struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Files map[string]struct {
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&gist)
+	res.Body.Close()
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	if gist.Owner.Login == "" {
+		return "", "", common.Address{}, errors.New("Anonymous Gists not allowed")
+	}
+	// Iterate over all the files and look for Ethereum addresses
+	var address common.Address
+	for _, file := range gist.Files {
+		content := strings.TrimSpace(file.Content)
+		if len(content) == 2+common.AddressLength*2 {
+			address = common.HexToAddress(content)
+		}
+	}
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	// Validate the user's existence since the API is unhelpful here
+	if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
+		return "", "", common.Address{}, err
+	}
+	res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return "", "", common.Address{}, errors.New("Invalid user... boom!")
+	}
+	// Everything passed validation, return the gathered infos
+	return gist.Owner.Login + "@github", fmt.Sprintf("https://github.com/%s.png?size=64", gist.Owner.Login), address, nil
 }
 
 // authTwitter tries to authenticate a faucet request using Twitter posts, returning

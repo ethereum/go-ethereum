@@ -19,9 +19,11 @@ package core
 import (
 	"container/list"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
 )
 
 // Implement our EthTest Manager
@@ -76,11 +78,14 @@ func (tm *TestManager) Db() ethdb.Database {
 }
 
 func NewTestManager() *TestManager {
+	db := rawdb.NewMemoryDatabase()
+
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)
-	testManager.db = ethdb.NewMemDatabase()
+	testManager.db = db
 	// testManager.txPool = NewTxPool(testManager)
 	// testManager.blockChain = NewBlockChain(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
+
 	return testManager
 }

@@ -19,21 +19,22 @@ package les
 import (
 	"bytes"
 	"context"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/light"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
@@ -63,13 +64,9 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
 	if bc != nil {
-		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number)
-		}
+		receipts = core.GetBlockReceipts(db, bhash, core.GetBlockNumber(db, bhash))
 	} else {
-		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-			receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
-		}
+		receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash, core.GetBlockNumber(db, bhash))
 	}
 	if receipts == nil {
 		return nil
@@ -131,27 +128,38 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(math.MaxBig256)
-
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
+				feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+				var balanceTokenFee *big.Int
+				if value, ok := feeCapacity[testContractAddr]; ok {
+					balanceTokenFee = value
+				}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 
 				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+				vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
-				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
+				owner := common.Address{}
+				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
 				res = append(res, ret...)
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
-			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(testBankAddress, math.MaxBig256)
-			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
+			statedb := light.NewState(ctx, header, lc.Odr())
+			statedb.SetBalance(testBankAddress, math.MaxBig256)
+			feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+			var balanceTokenFee *big.Int
+			if value, ok := feeCapacity[testContractAddr]; ok {
+				balanceTokenFee = value
+			}
+			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, state, config, vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
-			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
-			if state.Error() == nil {
+			owner := common.Address{}
+			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
+			if statedb.Error() == nil {
 				res = append(res, ret...)
 			}
 		}
@@ -159,21 +167,35 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 	return res
 }
 
-// testOdr tests odr requests whose validation guaranteed by block headers.
 func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, true)
-	defer tearDown()
-	client.pm.synchronise(client.rPeer)
+	peers := newPeerSet()
+	dist := newRequestDistributor(peers, make(chan struct{}))
+	rm := newRetrieveManager(peers, dist, nil)
+	db := rawdb.NewMemoryDatabase()
+	ldb := rawdb.NewMemoryDatabase()
+	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
+	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
+	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
+	select {
+	case <-time.After(time.Millisecond * 100):
+	case err := <-err1:
+		t.Fatalf("peer 1 handshake error: %v", err)
+	case err := <-err2:
+		t.Fatalf("peer 1 handshake error: %v", err)
+	}
+
+	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
-			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			b1 := fn(light.NoOdr, server.db, server.pm.chainConfig, server.pm.blockchain.(*core.BlockChain), nil, bhash)
+		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
+			bhash := core.GetCanonicalHash(db, i)
+			b1 := fn(light.NoOdr, db, pm.chainConfig, pm.blockchain.(*core.BlockChain), nil, bhash)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
-			b2 := fn(ctx, client.db, client.pm.chainConfig, nil, client.pm.blockchain.(*light.LightChain), bhash)
+			b2 := fn(ctx, ldb, lpm.chainConfig, nil, lpm.blockchain.(*light.LightChain), bhash)
 
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
@@ -185,20 +207,21 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 			}
 		}
 	}
+
 	// temporarily remove peer to test odr fails
 	// expect retrievals to fail (except genesis block) without a les peer
-	client.peers.Unregister(client.rPeer.id)
+	peers.Unregister(lpeer.id)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	test(expFail)
 	// expect all retrievals to pass
-	client.peers.Register(client.rPeer)
+	peers.Register(lpeer)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
-	client.peers.lock.Lock()
-	client.rPeer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
-	client.peers.lock.Unlock()
+	lpeer.lock.Lock()
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
+	lpeer.lock.Unlock()
 	test(5)
 	// still expect all retrievals to pass, now data should be cached locally
-	client.peers.Unregister(client.rPeer.id)
+	peers.Unregister(lpeer.id)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	test(5)
 }

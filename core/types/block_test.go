@@ -21,10 +21,9 @@ import (
 	"testing"
 
 	"bytes"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"reflect"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // from bcValidBlockTest.json, "SimpleTx"
@@ -48,7 +47,7 @@ func TestBlockEncoding(t *testing.T) {
 	check("Root", block.Root().String(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017").String())
 	check("Hash", block.Hash().String(), common.HexToHash("e8d9d473fdeddd3079988fa7be58f582b7b2800e90917d4bb6f11155ce4dba30").String())
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
-	check("Time", block.Time(), uint64(1426516743))
+	check("Time", block.Time(), big.NewInt(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)

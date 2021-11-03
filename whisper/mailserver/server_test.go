@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 )
 
 const powRequirement = 0.00001
@@ -92,10 +92,7 @@ func TestMailServer(t *testing.T) {
 	shh = whisper.New(&whisper.DefaultConfig)
 	shh.RegisterServer(&server)
 
-	err = server.Init(shh, dir, password, powRequirement)
-	if err != nil {
-		t.Fatal(err)
-	}
+	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
 	keyID, err = shh.AddSymKeyFromPassword(password)

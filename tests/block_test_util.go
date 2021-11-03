@@ -22,20 +22,19 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -43,19 +42,17 @@ type BlockTest struct {
 	json btJSON
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface.
 func (t *BlockTest) UnmarshalJSON(in []byte) error {
 	return json.Unmarshal(in, &t.json)
 }
 
 type btJSON struct {
-	Blocks     []btBlock             `json:"blocks"`
-	Genesis    btHeader              `json:"genesisBlockHeader"`
-	Pre        core.GenesisAlloc     `json:"pre"`
-	Post       core.GenesisAlloc     `json:"postState"`
-	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
-	Network    string                `json:"network"`
-	SealEngine string                `json:"sealEngine"`
+	Blocks    []btBlock             `json:"blocks"`
+	Genesis   btHeader              `json:"genesisBlockHeader"`
+	Pre       core.GenesisAlloc     `json:"pre"`
+	Post      core.GenesisAlloc     `json:"postState"`
+	BestBlock common.UnprefixedHash `json:"lastblockhash"`
+	Network   string                `json:"network"`
 }
 
 type btBlock struct {
@@ -82,7 +79,7 @@ type btHeader struct {
 	Difficulty       *big.Int
 	GasLimit         uint64
 	GasUsed          uint64
-	Timestamp        uint64
+	Timestamp        *big.Int
 }
 
 type btHeaderMarshaling struct {
@@ -91,7 +88,7 @@ type btHeaderMarshaling struct {
 	Difficulty *math.HexOrDecimal256
 	GasLimit   math.HexOrDecimal64
 	GasUsed    math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
+	Timestamp  *math.HexOrDecimal256
 }
 
 func (t *BlockTest) Run() error {
@@ -101,24 +98,19 @@ func (t *BlockTest) Run() error {
 	}
 
 	// import pre accounts & construct test genesis block & state root
-	db := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	gblock, err := t.genesis(config).Commit(db)
 	if err != nil {
 		return err
 	}
 	if gblock.Hash() != t.json.Genesis.Hash {
-		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes(), t.json.Genesis.Hash)
+		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x\n", gblock.Hash().Bytes(), t.json.Genesis.Hash)
 	}
 	if gblock.Root() != t.json.Genesis.StateRoot {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes(), t.json.Genesis.StateRoot)
 	}
-	var engine consensus.Engine
-	if t.json.SealEngine == "NoProof" {
-		engine = ethash.NewFaker()
-	} else {
-		engine = ethash.NewShared()
-	}
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanLimit: 0}, config, engine, vm.Config{}, nil)
+
+	chain, err := core.NewBlockChain(db, nil, config, ethash.NewShared(), vm.Config{})
 	if err != nil {
 		return err
 	}
@@ -146,7 +138,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:     config,
 		Nonce:      t.json.Genesis.Nonce.Uint64(),
-		Timestamp:  t.json.Genesis.Timestamp,
+		Timestamp:  t.json.Genesis.Timestamp.Uint64(),
 		ParentHash: t.json.Genesis.ParentHash,
 		ExtraData:  t.json.Genesis.ExtraData,
 		GasLimit:   t.json.Genesis.GasLimit,
@@ -248,7 +240,7 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.GasUsed != h2.GasUsed {
 		return fmt.Errorf("GasUsed: want: %d have: %d", h.GasUsed, h2.GasUsed)
 	}
-	if h.Timestamp != h2.Time {
+	if h.Timestamp.Cmp(h2.Time) != 0 {
 		return fmt.Errorf("Timestamp: want: %v have: %v", h.Timestamp, h2.Time)
 	}
 	return nil

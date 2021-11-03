@@ -25,8 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/XinFinOrg/XDPoSChain/log"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"
@@ -94,12 +94,11 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 
 	methods, subscriptions := suitableCallbacks(rcvrVal, svc.typ)
 
-	if len(methods) == 0 && len(subscriptions) == 0 {
-		return fmt.Errorf("Service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
-	}
-
-	// already a previous service register under given name, merge methods/subscriptions
+	// already a previous service register under given sname, merge methods/subscriptions
 	if regsvc, present := s.services[name]; present {
+		if len(methods) == 0 && len(subscriptions) == 0 {
+			return fmt.Errorf("Service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
+		}
 		for _, m := range methods {
 			regsvc.callbacks[formatName(m.method.Name)] = m
 		}
@@ -112,6 +111,10 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 	svc.name = name
 	svc.callbacks, svc.subscriptions = methods, subscriptions
 
+	if len(svc.callbacks) == 0 && len(svc.subscriptions) == 0 {
+		return fmt.Errorf("Service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
+	}
+
 	s.services[svc.name] = svc
 	return nil
 }
@@ -122,7 +125,7 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 // If singleShot is true it will process a single request, otherwise it will handle
 // requests until the codec returns an error when reading a request (in most cases
 // an EOF). It executes requests in parallel when singleShot is false.
-func (s *Server) serveRequest(ctx context.Context, codec ServerCodec, singleShot bool, options CodecOption) error {
+func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecOption) error {
 	var pend sync.WaitGroup
 
 	defer func() {
@@ -137,12 +140,11 @@ func (s *Server) serveRequest(ctx context.Context, codec ServerCodec, singleShot
 		s.codecsMu.Unlock()
 	}()
 
-	//	ctx, cancel := context.WithCancel(context.Background())
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// if the codec supports notification include a notifier that callbacks can use
-	// to send notification to clients. It is tied to the codec/connection. If the
+	// to send notification to clients. It is thight to the codec/connection. If the
 	// connection is closed the notifier will stop and cancels all active subscriptions.
 	if options&OptionSubscriptions == OptionSubscriptions {
 		ctx = context.WithValue(ctx, notifierKey{}, newNotifier(codec))
@@ -187,18 +189,8 @@ func (s *Server) serveRequest(ctx context.Context, codec ServerCodec, singleShot
 		// If a single shot request is executing, run and return immediately
 		if singleShot {
 			if batch {
-				for _, req := range reqs {
-					if req.callb != nil && req.callb.method.Name == "EnabledSendTransaction" {
-						codec.Write(codec.CreateErrorResponse(&req.id, &invalidRequestError{message: "Only support send transaction with ipc"}))
-						return nil
-					}
-				}
 				s.execBatch(ctx, codec, reqs)
 			} else {
-				if reqs[0].callb != nil && reqs[0].callb.method.Name == "EnabledSendTransaction" {
-					codec.Write(codec.CreateErrorResponse(&reqs[0].id, &invalidRequestError{message: "Only support send transaction with ipc"}))
-					return nil
-				}
 				s.exec(ctx, codec, reqs[0])
 			}
 			return nil
@@ -223,14 +215,14 @@ func (s *Server) serveRequest(ctx context.Context, codec ServerCodec, singleShot
 // stopped. In either case the codec is closed.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer codec.Close()
-	s.serveRequest(context.Background(), codec, false, options)
+	s.serveRequest(codec, false, options)
 }
 
 // ServeSingleRequest reads and processes a single RPC request from the given codec. It will not
 // close the codec unless a non-recoverable error has occurred. Note, this method will return after
 // a single request has been processed!
-func (s *Server) ServeSingleRequest(ctx context.Context, codec ServerCodec, options CodecOption) {
-	s.serveRequest(ctx, codec, true, options)
+func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
+	s.serveRequest(codec, true, options)
 }
 
 // Stop will stop reading new requests, wait for stopPendingRequestTimeout to allow pending requests to finish,
@@ -320,6 +312,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 	if len(reply) == 0 {
 		return codec.CreateResponse(req.id, nil), nil
 	}
+
 	if req.callb.errPos >= 0 { // test if method returned an error
 		if !reply[req.callb.errPos].IsNil() {
 			e := reply[req.callb.errPos].Interface().(error)

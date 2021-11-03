@@ -242,7 +242,7 @@ func lexLabel(l *lexer) stateFn {
 }
 
 // lexInsideString lexes the inside of a string until
-// the state function finds the closing quote.
+// until the state function finds the closing quote.
 // It returns the lex text state function.
 func lexInsideString(l *lexer) stateFn {
 	if l.acceptRunUntil('"') {

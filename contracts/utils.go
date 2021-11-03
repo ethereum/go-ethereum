@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -30,21 +30,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
-	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner/contract"
+	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 const (
@@ -60,24 +62,33 @@ type rewardLog struct {
 var TxSignMu sync.RWMutex
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
 	if chainConfig.XDPoS != nil {
 		// Find active account.
 		account := accounts.Account{}
 		var wallet accounts.Wallet
+		etherbaseAccount := accounts.Account{
+			Address: eb,
+			URL:     accounts.URL{},
+		}
 		if wallets := manager.Wallets(); len(wallets) > 0 {
-			wallet = wallets[0]
-			if accts := wallets[0].Accounts(); len(accts) > 0 {
-				account = accts[0]
+			if w, err := manager.Find(etherbaseAccount); err == nil && w != nil {
+				wallet = w
+				account = etherbaseAccount
+			} else {
+				wallet = wallets[0]
+				if accts := wallets[0].Accounts(); len(accts) > 0 {
+					account = accts[0]
+				}
 			}
 		}
 
 		// Create and send tx to smart contract for sign validate block.
 		nonce := pool.State().GetNonce(account.Address)
 		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 		if err != nil {
 			log.Error("Fail to create tx sign", "error", err)
 			return err
@@ -106,7 +117,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
 			}
-			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx secret", "error", err)
 				return err
@@ -135,7 +146,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
 			}
-			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
+			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx opening", "error", err)
 				return err
@@ -199,8 +210,8 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(state *state.StateDB, block *types.Block) ([]common.Address, error) {
-	return GetSigners(state, block), nil
+func GetSignersFromContract(state *stateDatabase.StateDB, block *types.Block) ([]common.Address, error) {
+	return stateDatabase.GetSigners(state, block), nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -269,7 +280,7 @@ func BuildValidatorFromM2(listM2 []int64) []byte {
 	var validatorBytes []byte
 	for _, numberM2 := range listM2 {
 		// Convert number to byte.
-		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), XDPoS.M2ByteLength)
+		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), utils.M2ByteLength)
 		validatorBytes = append(validatorBytes, m2Byte...)
 	}
 
@@ -283,7 +294,7 @@ func DecodeValidatorsHexData(validatorsStr string) ([]int64, error) {
 		return nil, err
 	}
 
-	return XDPoS.ExtractValidatorsFromBytes(validatorsByte), nil
+	return utils.ExtractValidatorsFromBytes(validatorsByte), nil
 }
 
 // Decrypt randomize from secrets and opening.
@@ -321,16 +332,16 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
 		header = chain.GetHeader(header.ParentHash, i)
 		mapBlkHash[i] = header.Hash()
-		signData, ok := c.BlockSigners.Get(header.Hash())
+		signData, ok := c.GetCachedSigningTxs(header.Hash())
 		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
-				receipts := rawdb.ReadReceipts(c.GetDb(), header.Hash(), i)
-				signData = c.CacheData(header, txs, receipts)
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+				signData = c.CacheNoneTIPSigningTxs(header, txs, receipts)
 			} else {
-				signData = c.CacheSigner(header.Hash(), txs)
+				signData = c.CacheSigningTxs(header.Hash(), txs)
 			}
 		}
 		txs := signData.([]*types.Transaction)
@@ -341,7 +352,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
-	masternodes := XDPoS.GetMasternodesFromCheckpointHeader(header)
+	masternodes := utils.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
@@ -405,7 +416,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 // Get candidate owner by address.
 func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address) common.Address {
-	owner := GetCandidateOwner(state, signerAddr)
+	owner := stateDatabase.GetCandidateOwner(state, signerAddr)
 	return owner
 }
 
@@ -424,7 +435,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
-	voters := GetVoters(state, masterAddr)
+	voters := stateDatabase.GetVoters(state, masterAddr)
 
 	if len(voters) > 0 {
 		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
@@ -436,7 +447,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
 				continue
 			}
-			voterCap := GetVoterCap(state, masterAddr, voteAddr)
+			voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}

@@ -19,7 +19,6 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -29,11 +28,12 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethdb/leveldb"
+	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
@@ -43,7 +43,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	trie, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
+	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
 }
 
@@ -51,7 +51,7 @@ func TestEmptyTrie(t *testing.T) {
 	var trie Trie
 	res := trie.Hash()
 	exp := emptyRoot
-	if res != common.Hash(exp) {
+	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
 }
@@ -67,7 +67,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(ethdb.NewMemDatabase()))
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(memorydb.New()))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -80,7 +80,7 @@ func TestMissingNodeDisk(t *testing.T)    { testMissingNode(t, false) }
 func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
 func testMissingNode(t *testing.T, memonly bool) {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb := memorydb.New()
 	triedb := NewDatabase(diskdb)
 
 	trie, _ := New(common.Hash{}, triedb)
@@ -161,7 +161,7 @@ func TestInsert(t *testing.T) {
 	exp := common.HexToHash("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3")
 	root := trie.Hash()
 	if root != exp {
-		t.Errorf("exp %x got %x", exp, root)
+		t.Errorf("case 1: exp %x got %x", exp, root)
 	}
 
 	trie = newEmpty()
@@ -173,7 +173,7 @@ func TestInsert(t *testing.T) {
 		t.Fatalf("commit error: %v", err)
 	}
 	if root != exp {
-		t.Errorf("exp %x got %x", exp, root)
+		t.Errorf("case 2: exp %x got %x", exp, root)
 	}
 }
 
@@ -272,7 +272,7 @@ func TestReplication(t *testing.T) {
 	}
 
 	// create a new trie on top of the database and check that lookups work.
-	trie2, err := New(exp, trie.db)
+	trie2, err := New(exp, trie.Db)
 	if err != nil {
 		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
@@ -316,46 +316,38 @@ func TestLargeValue(t *testing.T) {
 	trie.Hash()
 }
 
-type countingDB struct {
-	ethdb.Database
-	gets map[string]int
-}
-
-func (db *countingDB) Get(key []byte) ([]byte, error) {
-	db.gets[string(key)]++
-	return db.Database.Get(key)
-}
-
-// TestCacheUnload checks that decoded nodes are unloaded after a
-// certain number of commit operations.
-func TestCacheUnload(t *testing.T) {
-	// Create test trie with two branches.
-	trie := newEmpty()
-	key1 := "---------------------------------"
-	key2 := "---some other branch"
-	updateString(trie, key1, "this is the branch of key1.")
-	updateString(trie, key2, "this is the branch of key2.")
-
-	root, _ := trie.Commit(nil)
-	trie.db.Commit(root, true)
-
-	// Commit the trie repeatedly and access key1.
-	// The branch containing it is loaded from DB exactly two times:
-	// in the 0th and 6th iteration.
-	diskdb := &countingDB{Database: trie.db.diskdb, gets: make(map[string]int)}
-	triedb := NewDatabase(diskdb)
-	trie, _ = New(root, triedb)
-	trie.SetCacheLimit(5)
-	for i := 0; i < 12; i++ {
-		getString(trie, key1)
-		trie.Commit(nil)
+// TestRandomCases tests som cases that were found via random fuzzing
+func TestRandomCases(t *testing.T) {
+	var rt []randTestStep = []randTestStep{
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 0
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 1
+		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000002")},           // step 2
+		{op: 2, key: common.Hex2Bytes("c2a38512b83107d665c65235b0250002882ac2022eb00711552354832c5f1d030d0e408e"), value: common.Hex2Bytes("")},                         // step 3
+		{op: 3, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 4
+		{op: 3, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 5
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 6
+		{op: 3, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 7
+		{op: 0, key: common.Hex2Bytes("c2a38512b83107d665c65235b0250002882ac2022eb00711552354832c5f1d030d0e408e"), value: common.Hex2Bytes("0000000000000008")},         // step 8
+		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000009")},           // step 9
+		{op: 2, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 10
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 11
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 12
+		{op: 0, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("000000000000000d")},                                                                               // step 13
+		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 14
+		{op: 1, key: common.Hex2Bytes("c2a38512b83107d665c65235b0250002882ac2022eb00711552354832c5f1d030d0e408e"), value: common.Hex2Bytes("")},                         // step 15
+		{op: 3, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 16
+		{op: 0, key: common.Hex2Bytes("c2a38512b83107d665c65235b0250002882ac2022eb00711552354832c5f1d030d0e408e"), value: common.Hex2Bytes("0000000000000011")},         // step 17
+		{op: 5, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 18
+		{op: 3, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 19
+		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000014")},           // step 20
+		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000015")},           // step 21
+		{op: 0, key: common.Hex2Bytes("c2a38512b83107d665c65235b0250002882ac2022eb00711552354832c5f1d030d0e408e"), value: common.Hex2Bytes("0000000000000016")},         // step 22
+		{op: 5, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 23
+		{op: 1, key: common.Hex2Bytes("980c393656413a15c8da01978ed9f89feb80b502f58f2d640e3a2f5f7a99a7018f1b573befd92053ac6f78fca4a87268"), value: common.Hex2Bytes("")}, // step 24
+		{op: 1, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 25
 	}
-	// Check that it got loaded two times.
-	for dbkey, count := range diskdb.gets {
-		if count != 2 {
-			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
-		}
-	}
+	runRandTest(rt)
+
 }
 
 // randTest performs random trie operations.
@@ -377,7 +369,6 @@ const (
 	opHash
 	opReset
 	opItercheckhash
-	opCheckCacheInvariant
 	opMax // boundary value, not an actual op
 )
 
@@ -412,12 +403,14 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	triedb := NewDatabase(ethdb.NewMemDatabase())
+	triedb := NewDatabase(memorydb.New())
 
 	tr, _ := New(common.Hash{}, triedb)
 	values := make(map[string]string) // tracks content of the trie
 
 	for i, step := range rt {
+		fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
+			step.op, step.key, step.value, i)
 		switch step.op {
 		case opUpdate:
 			tr.Update(step.key, step.value)
@@ -456,8 +449,6 @@ func runRandTest(rt randTest) bool {
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
 			}
-		case opCheckCacheInvariant:
-			rt[i].err = checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
 		}
 		// Abort the test on error.
 		if rt[i].err != nil {
@@ -465,40 +456,6 @@ func runRandTest(rt randTest) bool {
 		}
 	}
 	return true
-}
-
-func checkCacheInvariant(n, parent Node, parentCachegen uint16, parentDirty bool, depth int) error {
-	var children []Node
-	var flag nodeFlag
-	switch n := n.(type) {
-	case *ShortNode:
-		flag = n.flags
-		children = []Node{n.Val}
-	case *FullNode:
-		flag = n.flags
-		children = n.Children[:]
-	default:
-		return nil
-	}
-
-	errorf := func(format string, args ...interface{}) error {
-		msg := fmt.Sprintf(format, args...)
-		msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
-		return errors.New(msg)
-	}
-	if flag.gen > parentCachegen {
-		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-	}
-	if depth > 0 && !parentDirty && flag.dirty {
-		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-	}
-	for _, child := range children {
-		if err := checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func TestRandom(t *testing.T) {
@@ -540,7 +497,7 @@ func benchGet(b *testing.B, commit bool) {
 	b.StopTimer()
 
 	if commit {
-		ldb := trie.db.diskdb.(*ethdb.LDBDatabase)
+		ldb := trie.Db.diskdb.(*leveldb.Database)
 		ldb.Close()
 		os.RemoveAll(ldb.Path())
 	}
@@ -549,6 +506,7 @@ func benchGet(b *testing.B, commit bool) {
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := newEmpty()
 	k := make([]byte, 32)
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
 		trie.Update(k, k)
@@ -560,18 +518,135 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 // we cannot use b.N as the number of hashing rouns, since all rounds apart from
 // the first one will be NOOP. As such, we'll use b.N as the number of account to
 // insert into the trie before measuring the hashing.
+// BenchmarkHash-6   	  288680	      4561 ns/op	     682 B/op	       9 allocs/op
+// BenchmarkHash-6   	  275095	      4800 ns/op	     685 B/op	       9 allocs/op
+// pure hasher:
+// BenchmarkHash-6   	  319362	      4230 ns/op	     675 B/op	       9 allocs/op
+// BenchmarkHash-6   	  257460	      4674 ns/op	     689 B/op	       9 allocs/op
+// With hashing in-between and pure hasher:
+// BenchmarkHash-6   	  225417	      7150 ns/op	     982 B/op	      12 allocs/op
+// BenchmarkHash-6   	  220378	      6197 ns/op	     983 B/op	      12 allocs/op
+// same with old hasher
+// BenchmarkHash-6   	  229758	      6437 ns/op	     981 B/op	      12 allocs/op
+// BenchmarkHash-6   	  212610	      7137 ns/op	     986 B/op	      12 allocs/op
 func BenchmarkHash(b *testing.B) {
+	// Create a realistic account trie to hash. We're first adding and hashing N
+	// entries, then adding N more.
+	addresses, accounts := makeAccounts(2 * b.N)
+	// Insert the accounts into the trie and hash it
+	trie := newEmpty()
+	i := 0
+	for ; i < len(addresses)/2; i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	trie.Hash()
+	for ; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	//trie.hashRoot(nil, nil)
+	trie.Hash()
+}
+
+type account struct {
+	Nonce   uint64
+	Balance *big.Int
+	Root    common.Hash
+	Code    []byte
+}
+
+// Benchmarks the trie Commit following a Hash. Since the trie caches the result of any operation,
+// we cannot use b.N as the number of hashing rouns, since all rounds apart from
+// the first one will be NOOP. As such, we'll use b.N as the number of account to
+// insert into the trie before measuring the hashing.
+func BenchmarkCommitAfterHash(b *testing.B) {
+	b.Run("no-onleaf", func(b *testing.B) {
+		benchmarkCommitAfterHash(b, nil)
+	})
+	var a account
+	onleaf := func(leaf []byte, parent common.Hash) error {
+		rlp.DecodeBytes(leaf, &a)
+		return nil
+	}
+	b.Run("with-onleaf", func(b *testing.B) {
+		benchmarkCommitAfterHash(b, onleaf)
+	})
+}
+
+func benchmarkCommitAfterHash(b *testing.B, onleaf LeafCallback) {
+	// Make the random benchmark deterministic
+	addresses, accounts := makeAccounts(b.N)
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	// Insert the accounts into the trie and hash it
+	trie.Hash()
+	b.ResetTimer()
+	b.ReportAllocs()
+	trie.Commit(onleaf)
+}
+
+func TestTinyTrie(t *testing.T) {
+	// Create a realistic account trie to hash
+	_, accounts := makeAccounts(10000)
+	trie := newEmpty()
+	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
+	if exp, root := common.HexToHash("4fa6efd292cffa2db0083b8bedd23add2798ae73802442f52486e95c3df7111c"), trie.Hash(); exp != root {
+		t.Fatalf("1: got %x, exp %x", root, exp)
+	}
+	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
+	if exp, root := common.HexToHash("cb5fb1213826dad9e604f095f8ceb5258fe6b5c01805ce6ef019a50699d2d479"), trie.Hash(); exp != root {
+		t.Fatalf("2: got %x, exp %x", root, exp)
+	}
+	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
+	if exp, root := common.HexToHash("ed7e06b4010057d8703e7b9a160a6d42cf4021f9020da3c8891030349a646987"), trie.Hash(); exp != root {
+		t.Fatalf("3: got %x, exp %x", root, exp)
+	}
+
+	checktr, _ := New(common.Hash{}, trie.Db)
+	it := NewIterator(trie.NodeIterator(nil))
+	for it.Next() {
+		checktr.Update(it.Key, it.Value)
+	}
+	if troot, itroot := trie.Hash(), checktr.Hash(); troot != itroot {
+		t.Fatalf("hash mismatch in opItercheckhash, trie: %x, check: %x", troot, itroot)
+	}
+}
+
+func TestCommitAfterHash(t *testing.T) {
+	// Create a realistic account trie to hash
+	addresses, accounts := makeAccounts(1000)
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	// Insert the accounts into the trie and hash it
+	trie.Hash()
+	trie.Commit(nil)
+	root := trie.Hash()
+	exp := common.HexToHash("e5e9c29bb50446a4081e6d1d748d2892c6101c1e883a1f77cf21d4094b697822")
+	if exp != root {
+		t.Errorf("got %x, exp %x", root, exp)
+	}
+	root, _ = trie.Commit(nil)
+	if exp != root {
+		t.Errorf("got %x, exp %x", root, exp)
+	}
+}
+
+func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	// Make the random benchmark deterministic
 	random := rand.New(rand.NewSource(0))
-
 	// Create a realistic account trie to hash
-	addresses := make([][20]byte, b.N)
+	addresses = make([][20]byte, size)
 	for i := 0; i < len(addresses); i++ {
 		for j := 0; j < len(addresses[i]); j++ {
 			addresses[i][j] = byte(random.Intn(256))
 		}
 	}
-	accounts := make([][]byte, len(addresses))
+	accounts = make([][]byte, len(addresses))
 	for i := 0; i < len(accounts); i++ {
 		var (
 			nonce   = uint64(random.Int63())
@@ -579,16 +654,168 @@ func BenchmarkHash(b *testing.B) {
 			root    = emptyRoot
 			code    = crypto.Keccak256(nil)
 		)
-		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
 	}
-	// Insert the accounts into the trie and hash it
+	return addresses, accounts
+}
+
+// BenchmarkCommitAfterHashFixedSize benchmarks the Commit (after Hash) of a fixed number of updates to a trie.
+// This benchmark is meant to capture the difference on efficiency of small versus large changes. Typically,
+// storage tries are small (a couple of entries), whereas the full post-block account trie update is large (a couple
+// of thousand entries)
+func BenchmarkHashFixedSize(b *testing.B) {
+	b.Run("10", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(20)
+		for i := 0; i < b.N; i++ {
+			benchmarkHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100)
+		for i := 0; i < b.N; i++ {
+			benchmarkHashFixedSize(b, acc, add)
+		}
+	})
+
+	b.Run("1K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(1000)
+		for i := 0; i < b.N; i++ {
+			benchmarkHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("10K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(10000)
+		for i := 0; i < b.N; i++ {
+			benchmarkHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100000)
+		for i := 0; i < b.N; i++ {
+			benchmarkHashFixedSize(b, acc, add)
+		}
+	})
+}
+
+func benchmarkHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
+	b.ReportAllocs()
 	trie := newEmpty()
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
-	b.ResetTimer()
-	b.ReportAllocs()
+	// Insert the accounts into the trie and hash it
+	b.StartTimer()
 	trie.Hash()
+	b.StopTimer()
+}
+
+func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
+	b.Run("10", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(20)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+
+	b.Run("1K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(1000)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("10K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(10000)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100000)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+}
+
+func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
+	b.ReportAllocs()
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	// Insert the accounts into the trie and hash it
+	trie.Hash()
+	b.StartTimer()
+	trie.Commit(nil)
+	b.StopTimer()
+}
+
+func BenchmarkDerefRootFixedSize(b *testing.B) {
+	b.Run("10", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(20)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+
+	b.Run("1K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(1000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("10K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(10000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+}
+
+func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
+	b.ReportAllocs()
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	h := trie.Hash()
+	trie.Commit(nil)
+	b.StartTimer()
+	trie.Db.Dereference(h)
+	b.StopTimer()
 }
 
 func tempDB() (string, *Database) {
@@ -596,7 +823,7 @@ func tempDB() (string, *Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskdb, err := ethdb.NewLDBDatabase(dir, 256, 0)
+	diskdb, err := leveldb.New(dir, 256, 0, "")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}
@@ -624,6 +851,6 @@ func TestDecodeNode(t *testing.T) {
 	for i := 0; i < 5000000; i++ {
 		rand.Read(hash)
 		rand.Read(elems)
-		decodeNode(hash, elems, 1)
+		decodeNode(hash, elems)
 	}
 }

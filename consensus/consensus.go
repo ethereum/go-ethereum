@@ -20,11 +20,11 @@ package consensus
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -83,18 +83,12 @@ type Engine interface {
 	// and assembles the final block.
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+	Finalize(chain ChainReader, header *types.Header, state *state.StateDB, parentState *state.StateDB, txs []*types.Transaction,
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
-	// Seal generates a new sealing request for the given input block and pushes
-	// the result into the given channel.
-	//
-	// Note, the method returns immediately and will send the result async. More
-	// than one result may also be returned depending on the consensus algorithm.
-	Seal(chain ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
-
-	// SealHash returns the hash of a block prior to it being sealed.
-	SealHash(header *types.Header) common.Hash
+	// Seal generates a new block for the given input block with the local miner's
+	// seal place on top.
+	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error)
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
@@ -102,9 +96,6 @@ type Engine interface {
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
-
-	// Close terminates any background threads maintained by the consensus engine.
-	Close() error
 }
 
 // PoW is a consensus engine based on proof-of-work.
@@ -113,4 +104,20 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
+}
+
+// ChainContext supports retrieving headers and consensus parameters from the
+// current blockchain to be used during transaction processing.
+type ChainContext interface {
+	// Engine retrieves the chain's consensus engine.
+	Engine() Engine
+
+	// GetHeader returns the hash corresponding to their hash.
+	GetHeader(common.Hash, uint64) *types.Header
+
+	// CurrentHeader retrieves the current header from the local chain.
+	CurrentHeader() *types.Header
+
+	// Config retrieves the blockchain's chain configuration.
+	Config() *params.ChainConfig
 }

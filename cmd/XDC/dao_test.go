@@ -17,16 +17,15 @@
 package main
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
@@ -89,7 +88,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{"", params.MainnetChainConfig.DAOForkBlock, true},
+		// {"", params.XDCMainnetChainConfig.DAOForkBlock, false},
 		// test DAO Init Old Privnet
 		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet
@@ -121,7 +120,7 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	}
 	// Retrieve the DAO config flag from the database
 	path := filepath.Join(datadir, "XDC", "chaindata")
-	db, err := ethdb.NewLDBDatabase(path, 0, 0)
+	db, err := rawdb.NewLevelDBDatabase(path, 0, 0, "")
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
 	}
@@ -131,8 +130,8 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
-	config := rawdb.ReadChainConfig(db, genesisHash)
-	if config == nil {
+	config, err := core.GetChainConfig(db, genesisHash)
+	if err != nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
 		return // we want to return here, the other checks can't make it past this point (nil panic).
 	}

@@ -24,12 +24,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
+)
+
+const (
+	filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
 )
 
 // List of errors
@@ -102,12 +106,12 @@ func (api *PublicWhisperAPI) SetBloomFilter(ctx context.Context, bloom hexutil.B
 
 // MarkTrustedPeer marks a peer trusted, which will allow it to send historic (expired) messages.
 // Note: This function is not adding new nodes, the node needs to exists as a peer.
-func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, url string) (bool, error) {
-	n, err := enode.ParseV4(url)
+func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, enode string) (bool, error) {
+	n, err := discover.ParseNode(enode)
 	if err != nil {
 		return false, err
 	}
-	return true, api.w.AllowP2PMessagesFromPeer(n.ID().Bytes())
+	return true, api.w.AllowP2PMessagesFromPeer(n.ID[:])
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
@@ -195,14 +199,14 @@ func (api *PublicWhisperAPI) DeleteSymKey(ctx context.Context, id string) bool {
 // MakeLightClient turns the node into light client, which does not forward
 // any incoming messages, and sends only messages originated in this node.
 func (api *PublicWhisperAPI) MakeLightClient(ctx context.Context) bool {
-	api.w.SetLightClientMode(true)
-	return api.w.LightClientMode()
+	api.w.lightClient = true
+	return api.w.lightClient
 }
 
 // CancelLightClient cancels light client mode.
 func (api *PublicWhisperAPI) CancelLightClient(ctx context.Context) bool {
-	api.w.SetLightClientMode(false)
-	return !api.w.LightClientMode()
+	api.w.lightClient = false
+	return !api.w.lightClient
 }
 
 //go:generate gencodec -type NewMessage -field-override newMessageOverride -out gen_newmessage_json.go
@@ -227,9 +231,8 @@ type newMessageOverride struct {
 	Padding   hexutil.Bytes
 }
 
-// Post posts a message on the Whisper network.
-// returns the hash of the message in case of success.
-func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.Bytes, error) {
+// Post a message on the Whisper network.
+func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, error) {
 	var (
 		symKeyGiven = len(req.SymKeyID) > 0
 		pubKeyGiven = len(req.PublicKey) > 0
@@ -238,7 +241,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 
 	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
-		return nil, ErrSymAsym
+		return false, ErrSymAsym
 	}
 
 	params := &MessageParams{
@@ -253,67 +256,57 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 	// Set key that is used to sign the message
 	if len(req.Sig) > 0 {
 		if params.Src, err = api.w.GetPrivateKey(req.Sig); err != nil {
-			return nil, err
+			return false, err
 		}
 	}
 
 	// Set symmetric key that is used to encrypt the message
 	if symKeyGiven {
 		if params.Topic == (TopicType{}) { // topics are mandatory with symmetric encryption
-			return nil, ErrNoTopics
+			return false, ErrNoTopics
 		}
 		if params.KeySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
-			return nil, err
+			return false, err
 		}
 		if !validateDataIntegrity(params.KeySym, aesKeyLength) {
-			return nil, ErrInvalidSymmetricKey
+			return false, ErrInvalidSymmetricKey
 		}
 	}
 
 	// Set asymmetric key that is used to encrypt the message
 	if pubKeyGiven {
-		if params.Dst, err = crypto.UnmarshalPubkey(req.PublicKey); err != nil {
-			return nil, ErrInvalidPublicKey
+		params.Dst = crypto.ToECDSAPub(req.PublicKey)
+		if !ValidatePublicKey(params.Dst) {
+			return false, ErrInvalidPublicKey
 		}
 	}
 
 	// encrypt and sent message
 	whisperMsg, err := NewSentMessage(params)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
-	var result []byte
 	env, err := whisperMsg.Wrap(params)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
-		n, err := enode.ParseV4(req.TargetPeer)
+		n, err := discover.ParseNode(req.TargetPeer)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse target peer: %s", err)
+			return false, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		err = api.w.SendP2PMessage(n.ID().Bytes(), env)
-		if err == nil {
-			hash := env.Hash()
-			result = hash[:]
-		}
-		return result, err
+		return true, api.w.SendP2PMessage(n.ID[:], env)
 	}
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
 	if req.PowTarget < api.w.MinPow() {
-		return nil, ErrTooLowPoW
+		return false, ErrTooLowPoW
 	}
 
-	err = api.w.Send(env)
-	if err == nil {
-		hash := env.Hash()
-		result = hash[:]
-	}
-	return result, err
+	return true, api.w.Send(env)
 }
 
 //go:generate gencodec -type Criteria -field-override criteriaOverride -out gen_criteria_json.go
@@ -359,7 +352,8 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	}
 
 	if len(crit.Sig) > 0 {
-		if filter.Src, err = crypto.UnmarshalPubkey(crit.Sig); err != nil {
+		filter.Src = crypto.ToECDSAPub(crit.Sig)
+		if !ValidatePublicKey(filter.Src) {
 			return nil, ErrInvalidSigningPubKey
 		}
 	}
@@ -542,7 +536,8 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	}
 
 	if len(req.Sig) > 0 {
-		if src, err = crypto.UnmarshalPubkey(req.Sig); err != nil {
+		src = crypto.ToECDSAPub(req.Sig)
+		if !ValidatePublicKey(src) {
 			return "", ErrInvalidSigningPubKey
 		}
 	}

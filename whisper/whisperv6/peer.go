@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Peer represents a whisper protocol peer connection.
@@ -79,14 +79,11 @@ func (peer *Peer) stop() {
 func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
-	isLightNode := peer.host.LightClientMode()
-	isRestrictedLightNodeConnection := peer.host.LightClientModeConnectionRestricted()
 	go func() {
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
 		bloom := peer.host.BloomFilter()
-
-		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom, isLightNode)
+		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom)
 	}()
 
 	// Fetch the remote status packet and verify protocol match
@@ -128,11 +125,6 @@ func (peer *Peer) handshake() error {
 			}
 			peer.setBloomFilter(bloom)
 		}
-	}
-
-	isRemotePeerLightNode, err := s.Bool()
-	if isRemotePeerLightNode && isLightNode && isRestrictedLightNodeConnection {
-		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
 	}
 
 	if err := <-errc; err != nil {

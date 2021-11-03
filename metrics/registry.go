@@ -311,11 +311,7 @@ func (r *PrefixedRegistry) UnregisterAll() {
 	r.underlying.UnregisterAll()
 }
 
-var (
-	DefaultRegistry    = NewRegistry()
-	EphemeralRegistry  = NewRegistry()
-	AccountingRegistry = NewRegistry() // registry used in swarm
-)
+var DefaultRegistry Registry = NewRegistry()
 
 // Call the given function for each registered metric.
 func Each(f func(string, interface{})) {

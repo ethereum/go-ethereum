@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
 type bytesBacked interface {
@@ -113,7 +113,7 @@ func LogsBloom(logs []*Log) *big.Int {
 }
 
 func bloom9(b []byte) *big.Int {
-	b = crypto.Keccak256(b)
+	b = crypto.Keccak256(b[:])
 
 	r := new(big.Int)
 
@@ -130,7 +130,7 @@ var Bloom9 = bloom9
 
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	bloom := bin.Big()
-	cmp := bloom9(topic.Bytes())
+	cmp := bloom9(topic.Bytes()[:])
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }

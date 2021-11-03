@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -16,10 +16,13 @@
 package XDPoS
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
+	"math/big"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -28,9 +31,17 @@ type API struct {
 	chain consensus.ChainReader
 	XDPoS *XDPoS
 }
+type NetworkInformation struct {
+	NetworkId                  *big.Int
+	XDCValidatorAddress        common.Address
+	RelayerRegistrationAddress common.Address
+	XDCXListingAddress         common.Address
+	XDCZAddress                common.Address
+	LendingAddress             common.Address
+}
 
 // GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
+func (api *API) GetSnapshot(number *rpc.BlockNumber) (*utils.PublicApiSnapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
@@ -40,18 +51,18 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	}
 	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XDPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
+func (api *API) GetSnapshotAtHash(hash common.Hash) (*utils.PublicApiSnapshot, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XDPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -65,36 +76,35 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	}
 	// Ensure we have an actually valid block and return the signers from its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+
+	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
 // GetSignersAtHash retrieves the state snapshot at a given block.
 func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
-// Proposals returns the current proposals the node tries to uphold and vote on.
-func (api *API) Proposals() map[common.Address]bool {
-	api.XDPoS.lock.RLock()
-	defer api.XDPoS.lock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.XDPoS.proposals {
-		proposals[address] = auth
+func (api *API) NetworkInformation() NetworkInformation {
+	info := NetworkInformation{}
+	info.NetworkId = api.chain.Config().ChainId
+	info.XDCValidatorAddress = common.HexToAddress(common.MasternodeVotingSMC)
+	if common.IsTestnet {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMCTestnet)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMCTestnet)
+		info.XDCXListingAddress = common.XDCXListingSMCTestNet
+		info.XDCZAddress = common.TRC21IssuerSMCTestNet
+	} else {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMC)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMC)
+		info.XDCXListingAddress = common.XDCXListingSMC
+		info.XDCZAddress = common.TRC21IssuerSMC
 	}
-	return proposals
+	return info
 }

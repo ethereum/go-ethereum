@@ -24,18 +24,17 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/naoina/toml"
 
-	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
+	bzzapi "github.com/XinFinOrg/XDPoSChain/swarm/api"
 )
 
 var (
@@ -59,31 +58,19 @@ var (
 
 //constants for environment variables
 const (
-	SWARM_ENV_CHEQUEBOOK_ADDR         = "SWARM_CHEQUEBOOK_ADDR"
-	SWARM_ENV_ACCOUNT                 = "SWARM_ACCOUNT"
-	SWARM_ENV_LISTEN_ADDR             = "SWARM_LISTEN_ADDR"
-	SWARM_ENV_PORT                    = "SWARM_PORT"
-	SWARM_ENV_NETWORK_ID              = "SWARM_NETWORK_ID"
-	SWARM_ENV_SWAP_ENABLE             = "SWARM_SWAP_ENABLE"
-	SWARM_ENV_SWAP_API                = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_DISABLE            = "SWARM_SYNC_DISABLE"
-	SWARM_ENV_SYNC_UPDATE_DELAY       = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SWARM_ENV_MAX_STREAM_PEER_SERVERS = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
-	SWARM_ENV_LIGHT_NODE_ENABLE       = "SWARM_LIGHT_NODE_ENABLE"
-	SWARM_ENV_DELIVERY_SKIP_CHECK     = "SWARM_DELIVERY_SKIP_CHECK"
-	SWARM_ENV_ENS_API                 = "SWARM_ENS_API"
-	SWARM_ENV_ENS_ADDR                = "SWARM_ENS_ADDR"
-	SWARM_ENV_CORS                    = "SWARM_CORS"
-	SWARM_ENV_BOOTNODES               = "SWARM_BOOTNODES"
-	SWARM_ENV_PSS_ENABLE              = "SWARM_PSS_ENABLE"
-	SWARM_ENV_STORE_PATH              = "SWARM_STORE_PATH"
-	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
-	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
-	SWARM_ENV_BOOTNODE_MODE           = "SWARM_BOOTNODE_MODE"
-	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
-	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
-	SWARM_GLOBALSTORE_API             = "SWARM_GLOBALSTORE_API"
-	XDC_ENV_DATADIR                   = "XDC_DATADIR"
+	SWARM_ENV_CHEQUEBOOK_ADDR = "SWARM_CHEQUEBOOK_ADDR"
+	SWARM_ENV_ACCOUNT         = "SWARM_ACCOUNT"
+	SWARM_ENV_LISTEN_ADDR     = "SWARM_LISTEN_ADDR"
+	SWARM_ENV_PORT            = "SWARM_PORT"
+	SWARM_ENV_NETWORK_ID      = "SWARM_NETWORK_ID"
+	SWARM_ENV_SWAP_ENABLE     = "SWARM_SWAP_ENABLE"
+	SWARM_ENV_SWAP_API        = "SWARM_SWAP_API"
+	SWARM_ENV_SYNC_ENABLE     = "SWARM_SYNC_ENABLE"
+	SWARM_ENV_ENS_API         = "SWARM_ENS_API"
+	SWARM_ENV_ENS_ADDR        = "SWARM_ENS_ADDR"
+	SWARM_ENV_CORS            = "SWARM_CORS"
+	SWARM_ENV_BOOTNODES       = "SWARM_BOOTNODES"
+	XDC_ENV_DATADIR           = "XDC_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -97,7 +84,7 @@ var tomlSettings = toml.Config{
 	MissingField: func(rt reflect.Type, field string) error {
 		link := ""
 		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", check github.com/ethereum/go-ethereum/swarm/api/config.go for available fields")
+			link = fmt.Sprintf(", check github.com/XinFinOrg/XDPoSChain/swarm/api/config.go for available fields")
 		}
 		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
 	},
@@ -105,8 +92,10 @@ var tomlSettings = toml.Config{
 
 //before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
+	//check for deprecated flags
+	checkDeprecated(ctx)
 	//start by creating a default config
-	config = bzzapi.NewConfig()
+	config = bzzapi.NewDefaultConfig()
 	//first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
 	if err != nil {
@@ -128,7 +117,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
 	//set the resolved config path (XDC --datadir)
-	config.Path = expandPath(stack.InstanceDir())
+	config.Path = stack.InstanceDir()
 	//finally, initialize the configuration
 	config.Init(prvkey)
 	//configuration phase completed here
@@ -137,7 +126,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	log.Debug(printConfig(config))
 }
 
-//configFileOverride overrides the current config with the config file, if a config file has been provided
+//override the current config with whatever is in the config file, if a config file has been provided
 func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config, error) {
 	var err error
 
@@ -147,8 +136,7 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 		if filepath = ctx.GlobalString(SwarmTomlConfigPathFlag.Name); filepath == "" {
 			utils.Fatalf("Config file flag provided with invalid file path")
 		}
-		var f *os.File
-		f, err = os.Open(filepath)
+		f, err := os.Open(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -166,9 +154,10 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 	return config, err
 }
 
-// cmdLineOverride overrides the current config with whatever is provided through the command line
-// most values are not allowed a zero value (empty string), if not otherwise noted
+//override the current config with whatever is provided through the command line
+//most values are not allowed a zero value (empty string), if not otherwise noted
 func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Config {
+
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
@@ -178,18 +167,14 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
-		id, err := strconv.ParseUint(networkid, 10, 64)
-		if err != nil {
-			utils.Fatalf("invalid cli flag %s: %v", SwarmNetworkIdFlag.Name, err)
-		}
-		if id != 0 {
-			currentConfig.NetworkID = id
+		if id, _ := strconv.Atoi(networkid); id != 0 {
+			currentConfig.NetworkId = uint64(id)
 		}
 	}
 
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
-			currentConfig.Path = expandPath(datadir)
+			currentConfig.Path = datadir
 		}
 	}
 
@@ -206,27 +191,12 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SwapEnabled = true
 	}
 
-	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
-		currentConfig.SyncEnabled = false
+	if ctx.GlobalIsSet(SwarmSyncEnabledFlag.Name) {
+		currentConfig.SyncEnabled = true
 	}
 
-	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
-		currentConfig.SyncUpdateDelay = d
-	}
-
-	// any value including 0 is acceptable
-	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
-
-	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
-		currentConfig.LightNodeEnabled = true
-	}
-
-	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
-		currentConfig.DeliverySkipCheck = true
-	}
-
-	currentConfig.SwapAPI = ctx.GlobalString(SwarmSwapAPIFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
+	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -236,44 +206,29 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		if len(ensAPIs) == 1 && ensAPIs[0] == "" {
 			ensAPIs = nil
 		}
-		for i := range ensAPIs {
-			ensAPIs[i] = expandPath(ensAPIs[i])
-		}
-
 		currentConfig.EnsAPIs = ensAPIs
+	}
+
+	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
+		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
 	}
 
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
 
-	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
-		currentConfig.LocalStoreParams.ChunkDbPath = storePath
-	}
-
-	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
-		currentConfig.LocalStoreParams.DbCapacity = storeCapacity
-	}
-
-	if storeCacheCapacity := ctx.GlobalUint(SwarmStoreCacheCapacity.Name); storeCacheCapacity != 0 {
-		currentConfig.LocalStoreParams.CacheCapacity = storeCacheCapacity
-	}
-
-	if ctx.GlobalIsSet(SwarmBootnodeModeFlag.Name) {
-		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
-		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
+	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
+		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
 	}
 
 	return currentConfig
 
 }
 
-// envVarsOverride overrides the current config with whatver is provided in environment variables
-// most values are not allowed a zero value (empty string), if not otherwise noted
+//override the current config with whatver is provided in environment variables
+//most values are not allowed a zero value (empty string), if not otherwise noted
 func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
+
 	if keyid := os.Getenv(SWARM_ENV_ACCOUNT); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
@@ -283,17 +238,13 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
-		id, err := strconv.ParseUint(networkid, 10, 64)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_NETWORK_ID, err)
-		}
-		if id != 0 {
-			currentConfig.NetworkID = id
+		if id, _ := strconv.Atoi(networkid); id != 0 {
+			currentConfig.NetworkId = uint64(id)
 		}
 	}
 
 	if datadir := os.Getenv(XDC_ENV_DATADIR); datadir != "" {
-		currentConfig.Path = expandPath(datadir)
+		currentConfig.Path = datadir
 	}
 
 	bzzport := os.Getenv(SWARM_ENV_PORT)
@@ -306,57 +257,22 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if swapenable := os.Getenv(SWARM_ENV_SWAP_ENABLE); swapenable != "" {
-		swap, err := strconv.ParseBool(swapenable)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SWAP_ENABLE, err)
-		}
-		currentConfig.SwapEnabled = swap
-	}
-
-	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
-		sync, err := strconv.ParseBool(syncdisable)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_DISABLE, err)
-		}
-		currentConfig.SyncEnabled = !sync
-	}
-
-	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
-		skipCheck, err := strconv.ParseBool(v)
-		if err != nil {
-			currentConfig.DeliverySkipCheck = skipCheck
+		if swap, err := strconv.ParseBool(swapenable); err != nil {
+			currentConfig.SwapEnabled = swap
 		}
 	}
 
-	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_UPDATE_DELAY, err)
+	if syncenable := os.Getenv(SWARM_ENV_SYNC_ENABLE); syncenable != "" {
+		if sync, err := strconv.ParseBool(syncenable); err != nil {
+			currentConfig.SyncEnabled = sync
 		}
-		currentConfig.SyncUpdateDelay = d
-	}
-
-	if max := os.Getenv(SWARM_ENV_MAX_STREAM_PEER_SERVERS); max != "" {
-		m, err := strconv.Atoi(max)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_MAX_STREAM_PEER_SERVERS, err)
-		}
-		currentConfig.MaxStreamPeerServers = m
-	}
-
-	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
-		lightnode, err := strconv.ParseBool(lne)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_LIGHT_NODE_ENABLE, err)
-		}
-		currentConfig.LightNodeEnabled = lightnode
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {
-		currentConfig.SwapAPI = swapapi
+		currentConfig.SwapApi = swapapi
 	}
 
-	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
+	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -372,16 +288,8 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		currentConfig.Cors = cors
 	}
 
-	if bm := os.Getenv(SWARM_ENV_BOOTNODE_MODE); bm != "" {
-		bootnodeMode, err := strconv.ParseBool(bm)
-		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_BOOTNODE_MODE, err)
-		}
-		currentConfig.BootnodeMode = bootnodeMode
-	}
-
-	if api := os.Getenv(SWARM_GLOBALSTORE_API); api != "" {
-		currentConfig.GlobalStoreAPI = api
+	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
+		currentConfig.BootNodes = bootnodes
 	}
 
 	return currentConfig
@@ -402,6 +310,18 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
+}
+
+//deprecated flags checked here
+func checkDeprecated(ctx *cli.Context) {
+	// exit if the deprecated --ethapi flag is set
+	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
+		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
+	}
+	// warn if --ens-api flag is set
+	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
+		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
+	}
 }
 
 //validate configuration parameters

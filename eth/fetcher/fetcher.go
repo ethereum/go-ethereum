@@ -19,16 +19,15 @@ package fetcher
 
 import (
 	"errors"
+	"github.com/hashicorp/golang-lru"
 	"math/rand"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 const (
@@ -92,7 +91,7 @@ type headerFilterTask struct {
 	time    time.Time       // Arrival time of the headers
 }
 
-// bodyFilterTask represents a batch of block bodies (transactions and uncles)
+// headerFilterTask represents a batch of block bodies (transactions and uncles)
 // needing fetcher filtering.
 type bodyFilterTask struct {
 	peer         string                 // The source peer of block bodies
@@ -131,7 +130,7 @@ type Fetcher struct {
 	// Block cache
 	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
 	queues map[string]int          // Per peer block counts to prevent memory exhaustion
-	queued map[common.Hash]*inject // Set of already queued blocks (to dedupe imports)
+	queued map[common.Hash]*inject // Set of already queued blocks (to dedup imports)
 	knowns *lru.ARCCache
 	// Callbacks
 	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
@@ -167,7 +166,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBloc
 		fetching:       make(map[common.Hash]*announce),
 		fetched:        make(map[common.Hash][]*announce),
 		completing:     make(map[common.Hash]*announce),
-		queue:          prque.New(nil),
+		queue:          prque.New(),
 		queues:         make(map[string]int),
 		queued:         make(map[common.Hash]*inject),
 		knowns:         knownBlocks,
@@ -213,7 +212,7 @@ func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time
 	}
 }
 
-// Enqueue tries to fill gaps the fetcher's future import queue.
+// Enqueue tries to fill gaps the the fetcher's future import queue.
 func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 	op := &inject{
 		origin: peer,
@@ -301,20 +300,20 @@ func (f *Fetcher) loop() {
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*inject)
-			hash := op.block.Hash()
 			if f.queueChangeHook != nil {
-				f.queueChangeHook(hash, false)
+				f.queueChangeHook(op.block.Hash(), false)
 			}
 			// If too high up the chain or phase, continue later
 			number := op.block.NumberU64()
 			if number > height+1 {
-				f.queue.Push(op, -int64(number))
+				f.queue.Push(op, -float32(op.block.NumberU64()))
 				if f.queueChangeHook != nil {
-					f.queueChangeHook(hash, true)
+					f.queueChangeHook(op.block.Hash(), true)
 				}
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
+			hash := op.block.Hash()
 			if number+maxUncleDist < height || f.getBlock(hash) != nil {
 				f.forgetBlock(hash)
 				continue
@@ -637,7 +636,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 		f.queues[peer] = count
 		f.queued[hash] = op
 		f.knowns.Add(hash, true)
-		f.queue.Push(op, -int64(block.NumberU64()))
+		f.queue.Push(op, -float32(block.NumberU64()))
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(op.block.Hash(), true)
 		}
@@ -674,7 +673,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 				go f.broadcastBlock(block, true)
 			}
 		case consensus.ErrFutureBlock:
-			delay := time.Unix(int64(block.Time()), 0).Sub(time.Now()) // nolint: gosimple
+			delay := time.Unix(block.Time().Int64(), 0).Sub(time.Now()) // nolint: gosimple
 			log.Info("Receive future block", "number", block.NumberU64(), "hash", block.Hash().Hex(), "delay", delay)
 			time.Sleep(delay)
 			goto again

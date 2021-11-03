@@ -17,16 +17,23 @@
 package tests
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
 )
 
 func TestVM(t *testing.T) {
+	common.TIPXDCXCancellationFee = big.NewInt(100000000)
 	t.Parallel()
 	vmt := new(testMatcher)
-	vmt.slow("^vmPerformance")
 	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")
+
+	vmt.skipLoad(`^vmInputLimits(Light)?.json`) // log format broken
+
+	vmt.skipShortMode("^vmPerformanceTest.json")
+	vmt.skipShortMode("^vmInputLimits(Light)?.json")
 
 	vmt.walk(t, vmTestDir, func(t *testing.T, name string, test *VMTest) {
 		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {

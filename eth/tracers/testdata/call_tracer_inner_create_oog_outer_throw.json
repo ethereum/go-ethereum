@@ -34,7 +34,7 @@
       "chainId": 3,
       "daoForkSupport": true,
       "eip150Block": 0,
-      "eip150Hash": "0x62e0fde86e34c263e250fbcd5ca4598ba8ca10a1d166c8526bb127e10b313311",
+      "eip150Hash": "0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d",
       "eip155Block": 10,
       "eip158Block": 10,
       "ethash": {},
@@ -65,7 +65,7 @@
         "value": "0x0"
       }
     ],
-    "error": "invalid jump destination (PUSH1) 0",
+    "error": "invalid jump destination",
     "from": "0xe4a13bc304682a903e9472f469c33801dd18d9e8",
     "gas": "0x435c8",
     "gasUsed": "0x435c8",

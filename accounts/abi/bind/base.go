@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/XinFinOrg/XDPoSChain"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -36,10 +36,10 @@ type SignerFn func(types.Signer, common.Address, *types.Transaction) (*types.Tra
 
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
-	Pending     bool            // Whether to operate on the pending state or the last known one
-	From        common.Address  // Optional the sender address, otherwise the first account is used
-	BlockNumber *big.Int        // Optional the block number on which the call should be performed
-	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+	Pending bool           // Whether to operate on the pending state or the last known one
+	From    common.Address // Optional the sender address, otherwise the first account is used
+
+	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
 // TransactOpts is the collection of authorization data required to create a
@@ -128,7 +128,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
+		msg    = XDPoSChain.CallMsg{From: opts.From, To: &c.address, Data: input, GasPrice: common.MinGasPrice, Gas: uint64(4200000)}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
@@ -148,10 +148,10 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 			}
 		}
 	} else {
-		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
+		output, err = c.caller.CallContract(ctx, msg, nil)
 		if err == nil && len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
+			if code, err = c.caller.CodeAt(ctx, c.address, nil); err != nil {
 				return err
 			} else if len(code) == 0 {
 				return ErrNoCode
@@ -218,7 +218,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
+		msg := XDPoSChain.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
@@ -261,7 +261,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := ethereum.FilterQuery{
+	config := XDPoSChain.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 		FromBlock: new(big.Int).SetUint64(opts.Start),
@@ -310,7 +310,7 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 	// Start the background filtering
 	logs := make(chan types.Log, 128)
 
-	config := ethereum.FilterQuery{
+	config := XDPoSChain.FilterQuery{
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 	}

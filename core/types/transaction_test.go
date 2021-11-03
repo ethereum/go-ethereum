@@ -23,9 +23,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // The values in those tests are from the Transaction Tests
@@ -144,7 +144,7 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		}
 	}
 	// Sort the transactions and cross check the nonce ordering
-	txset, _ := NewTransactionsByPriceAndNonce(signer, groups, nil)
+	txset, _ := NewTransactionsByPriceAndNonce(signer, groups, nil, map[common.Address]*big.Int{})
 
 	txs := Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
@@ -165,13 +165,28 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
 			}
 		}
-
-		// If the next tx has different from account, the price must be lower than the current one
-		if i+1 < len(txs) {
-			next := txs[i+1]
-			fromNext, _ := Sender(signer, next)
-			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+		// Find the previous and next nonce of this account
+		prev, next := i-1, i+1
+		for j := i - 1; j >= 0; j-- {
+			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
+				prev = j
+				break
+			}
+		}
+		for j := i + 1; j < len(txs); j++ {
+			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
+				next = j
+				break
+			}
+		}
+		// Make sure that in between the neighbor nonces, the transaction is correctly positioned price wise
+		for j := prev + 1; j < next; j++ {
+			fromj, _ := Sender(signer, txs[j])
+			if j < i && txs[j].GasPrice().Cmp(txi.GasPrice()) < 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
+			}
+			if j > i && txs[j].GasPrice().Cmp(txi.GasPrice()) > 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) > tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
 			}
 		}
 	}
@@ -185,7 +200,6 @@ func TestTransactionJSON(t *testing.T) {
 	}
 	signer := NewEIP155Signer(common.Big1)
 
-	transactions := make([]*Transaction, 0, 50)
 	for i := uint64(0); i < 25; i++ {
 		var tx *Transaction
 		switch i % 2 {
@@ -194,25 +208,20 @@ func TestTransactionJSON(t *testing.T) {
 		case 1:
 			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
 		}
-		transactions = append(transactions, tx)
 
-		signedTx, err := SignTx(tx, signer, key)
+		tx, err := SignTx(tx, signer, key)
 		if err != nil {
 			t.Fatalf("could not sign transaction: %v", err)
 		}
 
-		transactions = append(transactions, signedTx)
-	}
-
-	for _, tx := range transactions {
 		data, err := json.Marshal(tx)
 		if err != nil {
-			t.Fatalf("json.Marshal failed: %v", err)
+			t.Errorf("json.Marshal failed: %v", err)
 		}
 
 		var parsedTx *Transaction
 		if err := json.Unmarshal(data, &parsedTx); err != nil {
-			t.Fatalf("json.Unmarshal failed: %v", err)
+			t.Errorf("json.Unmarshal failed: %v", err)
 		}
 
 		// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S

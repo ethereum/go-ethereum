@@ -16,12 +16,7 @@
 
 package api
 
-import (
-	"context"
-	"path"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
-)
+import "path"
 
 type Response struct {
 	MimeType string
@@ -35,10 +30,10 @@ type Response struct {
 //
 // DEPRECATED: Use the HTTP API instead
 type Storage struct {
-	api *API
+	api *Api
 }
 
-func NewStorage(api *API) *Storage {
+func NewStorage(api *Api) *Storage {
 	return &Storage{api}
 }
 
@@ -46,8 +41,12 @@ func NewStorage(api *API) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (storage.Address, func(context.Context) error, error) {
-	return s.api.Put(ctx, content, contentType, toEncrypt)
+func (self *Storage) Put(content, contentType string) (string, error) {
+	key, err := self.api.Put(content, contentType)
+	if err != nil {
+		return "", err
+	}
+	return key.String(), err
 }
 
 // Get retrieves the content from bzzpath and reads the response in full
@@ -58,21 +57,21 @@ func (s *Storage) Put(ctx context.Context, content string, contentType string, t
 // size is resp.Size
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
+func (self *Storage) Get(bzzpath string) (*Response, error) {
 	uri, err := Parse(path.Join("bzz:/", bzzpath))
 	if err != nil {
 		return nil, err
 	}
-	addr, err := s.api.Resolve(ctx, uri.Addr)
+	key, err := self.api.Resolve(uri)
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, _, err := s.api.Get(ctx, nil, addr, uri.Path)
+	reader, mimeType, status, err := self.api.Get(key, uri.Path)
 	if err != nil {
 		return nil, err
 	}
 	quitC := make(chan bool)
-	expsize, err := reader.Size(ctx, quitC)
+	expsize, err := reader.Size(quitC)
 	if err != nil {
 		return nil, err
 	}
@@ -82,4 +81,24 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 		err = nil
 	}
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
+}
+
+// Modify(rootHash, basePath, contentHash, contentType) takes th e manifest trie rooted in rootHash,
+// and merge on  to it. creating an entry w conentType (mime)
+//
+// DEPRECATED: Use the HTTP API instead
+func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
+	uri, err := Parse("bzz:/" + rootHash)
+	if err != nil {
+		return "", err
+	}
+	key, err := self.api.Resolve(uri)
+	if err != nil {
+		return "", err
+	}
+	key, err = self.api.Modify(key, path, contentHash, contentType)
+	if err != nil {
+		return "", err
+	}
+	return key.String(), nil
 }

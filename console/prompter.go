@@ -27,7 +27,7 @@ import (
 // Only this reader may be used for input because it keeps an internal buffer.
 var Stdin = newTerminalPrompter()
 
-// UserPrompter defines the methods needed by the console to prompt the user for
+// UserPrompter defines the methods needed by the console to promt the user for
 // various types of inputs.
 type UserPrompter interface {
 	// PromptInput displays the given prompt to the user and requests some textual
@@ -43,7 +43,7 @@ type UserPrompter interface {
 	// choice to be made, returning that choice.
 	PromptConfirm(prompt string) (bool, error)
 
-	// SetHistory sets the input scrollback history that the prompter will allow
+	// SetHistory sets the the input scrollback history that the prompter will allow
 	// the user to scroll back to.
 	SetHistory(history []string)
 
@@ -149,7 +149,7 @@ func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
 	return false, err
 }
 
-// SetHistory sets the input scrollback history that the prompter will allow
+// SetHistory sets the the input scrollback history that the prompter will allow
 // the user to scroll back to.
 func (p *terminalPrompter) SetHistory(history []string) {
 	p.State.ReadHistory(strings.NewReader(strings.Join(history, "\n")))

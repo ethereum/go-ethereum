@@ -27,13 +27,13 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/ecies"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
-// MessageParams specifies the exact way a message should be wrapped into an Envelope.
+// Options specifies the exact way a message should be wrapped into an Envelope.
 type MessageParams struct {
 	TTL      uint32
 	Src      *ecdsa.PrivateKey
@@ -86,7 +86,7 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 	return msg.Dst != nil
 }
 
-// NewSentMessage creates and initializes a non-signed, non-encrypted Whisper message.
+// NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewSentMessage(params *MessageParams) (*sentMessage, error) {
 	msg := sentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
@@ -330,7 +330,7 @@ func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 	return paddingSize, true
 }
 
-// SigToPubKey retrieves the public key of the message signer.
+// Recover retrieves the public key of the message signer.
 func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid signature
 

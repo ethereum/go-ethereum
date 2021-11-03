@@ -21,11 +21,11 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // Constants to match up protocol versions and messages
@@ -34,13 +34,13 @@ const (
 	eth63 = 63
 )
 
-// ProtocolName is the official short name of the protocol used during capability negotiation.
+// Official short name of the protocol used during capability negotiation.
 var ProtocolName = "eth"
 
-// ProtocolVersions are the supported versions of the eth protocol (first is primary).
+// Supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth63, eth62}
 
-// ProtocolLengths are the number of implemented message corresponding to different protocol versions.
+// Number of implemented message corresponding to different protocol versions.
 var ProtocolLengths = []uint64{17, 8}
 
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
@@ -56,7 +56,8 @@ const (
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
-
+	OrderTxMsg         = 0x08
+	LendingTxMsg       = 0x09
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
 	NodeDataMsg    = 0x0e
@@ -103,9 +104,35 @@ type txPool interface {
 	// The slice should be modifiable by the caller.
 	Pending() (map[common.Address]types.Transactions, error)
 
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+}
+
+type orderPool interface {
+	// AddRemotes should add the given transactions to the pool.
+	AddRemotes([]*types.OrderTransaction) []error
+
+	// Pending should return pending transactions.
+	// The slice should be modifiable by the caller.
+	Pending() (map[common.Address]types.OrderTransactions, error)
+
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.OrderTxPreEvent) event.Subscription
+}
+
+type lendingPool interface {
+	// AddRemotes should add the given transactions to the pool.
+	AddRemotes([]*types.LendingTransaction) []error
+
+	// Pending should return pending transactions.
+	// The slice should be modifiable by the caller.
+	Pending() (map[common.Address]types.LendingTransactions, error)
+
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.LendingTxPreEvent) event.Subscription
 }
 
 // statusData is the network packet for the status message.

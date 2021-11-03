@@ -6,12 +6,9 @@ package bn256
 
 import (
 	"crypto/rand"
-	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
-func TestExamplePair(t *testing.T) {
+func ExamplePair() {
 	// This implements the tripartite Diffie-Hellman algorithm from "A One
 	// Round Protocol for Tripartite Diffie-Hellman", A. Joux.
 	// http://www.springerlink.com/content/cddc57yyva0hburb/fulltext.pdf
@@ -43,9 +40,4 @@ func TestExamplePair(t *testing.T) {
 	k3.ScalarMult(k3, c)
 
 	// k1, k2 and k3 will all be equal.
-
-	require.Equal(t, k1, k2)
-	require.Equal(t, k1, k3)
-
-	require.Equal(t, len(np), 4) //Avoid gometalinter varcheck err on np
 }

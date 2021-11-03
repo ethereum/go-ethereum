@@ -19,19 +19,20 @@ package whisperv5
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 )
 
-var keys = []string{
+var keys []string = []string{
 	"d49dcf37238dc8a7aac57dc61b9fee68f0a97f062968978b9fafa7d1033d03a9",
 	"73fd6143c48e80ed3c56ea159fe7494a0b6b393a392227b422f4c3e8f1b54f98",
 	"119dd32adb1daa7a4c7bf77f847fb28730785aa92947edf42fdd997b54de40dc",
@@ -83,9 +84,9 @@ type TestNode struct {
 
 var result TestData
 var nodes [NumNodes]*TestNode
-var sharedKey = []byte("some arbitrary data here")
+var sharedKey []byte = []byte("some arbitrary data here")
 var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
-var expectedMessage = []byte("per rectum ad astra")
+var expectedMessage []byte = []byte("per rectum ad astra")
 
 // This test does the following:
 // 1. creates a chain of whisper nodes,
@@ -94,7 +95,7 @@ var expectedMessage = []byte("per rectum ad astra")
 // 4. first node sends one expected (decryptable) message,
 // 5. checks if each node have received and decrypted exactly one message.
 func TestSimulation(t *testing.T) {
-	t.Skip("Test no longer work for XDC")
+	t.Skip("TODO: PR-136 Broken test due to EVM upgrade!")
 	initialize(t)
 
 	for i := 0; i < NumNodes; i++ {
@@ -108,12 +109,20 @@ func TestSimulation(t *testing.T) {
 
 func initialize(t *testing.T) {
 	var err error
+	ip := net.IPv4(127, 0, 0, 1)
+	port0 := 30303
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
 		node.shh = New(&DefaultConfig)
-		node.shh.SetMinimumPoW(0.00000001)
-		node.shh.Start(nil)
+		err = node.shh.SetMinimumPoW(0.00000001)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = node.shh.Start(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey}
@@ -126,29 +135,35 @@ func initialize(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed convert the key: %s.", keys[i])
 		}
+		port := port0 + i
+		addr := fmt.Sprintf(":%d", port) // e.g. ":30303"
 		name := common.MakeName("whisper-go", "2.0")
+		var peers []*discover.Node
+		if i > 0 {
+			peerNodeId := nodes[i-1].id
+			peerPort := uint16(port - 1)
+			peerNode := discover.PubkeyID(&peerNodeId.PublicKey)
+			peer := discover.NewNode(peerNode, ip, peerPort, peerPort)
+			peers = append(peers, peer)
+		}
+
 		node.server = &p2p.Server{
 			Config: p2p.Config{
-				PrivateKey: node.id,
-				MaxPeers:   NumNodes/2 + 1,
-				Name:       name,
-				Protocols:  node.shh.Protocols(),
-				ListenAddr: "127.0.0.1:0",
-				NAT:        nat.Any(),
+				PrivateKey:     node.id,
+				MaxPeers:       NumNodes/2 + 1,
+				Name:           name,
+				Protocols:      node.shh.Protocols(),
+				ListenAddr:     addr,
+				NAT:            nat.Any(),
+				BootstrapNodes: peers,
+				StaticNodes:    peers,
+				TrustedNodes:   peers,
 			},
 		}
 
 		err = node.server.Start()
 		if err != nil {
-			t.Fatalf("failed to start server %d. err: %v", i, err)
-		}
-
-		for j := 0; j < i; j++ {
-			peerNodeId := nodes[j].id
-			address, _ := net.ResolveTCPAddr("tcp", nodes[j].server.ListenAddr)
-			peerPort := uint16(address.Port)
-			peer := enode.NewV4(&peerNodeId.PublicKey, address.IP, int(peerPort), int(peerPort))
-			node.server.AddPeer(peer)
+			t.Fatalf("failed to start server %d.", i)
 		}
 
 		nodes[i] = &node

@@ -25,10 +25,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/mclock"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 const (
@@ -304,8 +304,8 @@ func (s ticketRefByWaitTime) Len() int {
 	return len(s)
 }
 
-func (ref ticketRef) waitTime() mclock.AbsTime {
-	return ref.t.regTime[ref.idx] - ref.t.issueTime
+func (r ticketRef) waitTime() mclock.AbsTime {
+	return r.t.regTime[r.idx] - r.t.issueTime
 }
 
 // Less reports whether the element with

@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 func TestTransaction(t *testing.T) {
@@ -35,7 +35,7 @@ func TestTransaction(t *testing.T) {
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
-		ChainID:        big.NewInt(1),
+		ChainId:        big.NewInt(1),
 	})
 	txt.config(`^Byzantium/`, params.ChainConfig{
 		HomesteadBlock: big.NewInt(0),

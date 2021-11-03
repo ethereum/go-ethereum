@@ -1,19 +1,19 @@
-FROM golang:1.10-alpine as builder
+FROM golang:1.11-alpine as builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers
 
-ADD . /XDCchain
-RUN cd /XDCchain && make bootnode
+ADD . /XDPoSChain
+RUN cd /XDPoSChain && make bootnode
 
-RUN chmod +x /XDCchain/build/bin/bootnode
+RUN chmod +x /XDPoSChain/build/bin/bootnode
 
 FROM alpine:latest
 
-LABEL maintainer="anil@xinfin.org"
+LABEL maintainer="etienne@XDPoSChain.com"
 
-WORKDIR /XDCchain
+WORKDIR /XDPoSChain
 
-COPY --from=builder /XDCchain/build/bin/bootnode /usr/local/bin/bootnode
+COPY --from=builder /XDPoSChain/build/bin/bootnode /usr/local/bin/bootnode
 
 COPY docker/bootnode ./
 

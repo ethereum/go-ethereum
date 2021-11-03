@@ -18,34 +18,30 @@
 package les
 
 import (
+	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/les/flowcontrol"
+	"github.com/XinFinOrg/XDPoSChain/light"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 var (
-	errClosed             = errors.New("peer set is closed")
-	errAlreadyRegistered  = errors.New("peer is already registered")
-	errNotRegistered      = errors.New("peer is not registered")
-	errInvalidHelpTrieReq = errors.New("invalid help trie request")
+	errClosed            = errors.New("peer set is closed")
+	errAlreadyRegistered = errors.New("peer is already registered")
+	errNotRegistered     = errors.New("peer is not registered")
 )
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
-
-// if the total encoded size of a sent transaction batch is over txSizeCostLimit
-// per transaction then the request cost is calculated as proportional to the
-// encoded size instead of the transaction count
-const txSizeCostLimit = 0x4000
 
 const (
 	announceTypeNone = iota
@@ -55,6 +51,7 @@ const (
 
 type peer struct {
 	*p2p.Peer
+	pubKey *ecdsa.PublicKey
 
 	rw p2p.MsgReadWriter
 
@@ -72,7 +69,7 @@ type peer struct {
 	sendQueue   *execQueue
 
 	poolEntry      *poolEntry
-	hasBlock       func(common.Hash, uint64, bool) bool
+	hasBlock       func(common.Hash, uint64) bool
 	responseErrors int
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
@@ -83,9 +80,11 @@ type peer struct {
 
 func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
+	pubKey, _ := id.Pubkey()
 
 	return &peer{
 		Peer:        p,
+		pubKey:      pubKey,
 		rw:          rw,
 		version:     version,
 		network:     network,
@@ -168,41 +167,7 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	costs := p.fcCosts[msgcode]
-	if costs == nil {
-		return 0
-	}
-	cost := costs.baseCost + costs.reqCost*uint64(amount)
-	if cost > p.fcServerParams.BufLimit {
-		cost = p.fcServerParams.BufLimit
-	}
-	return cost
-}
-
-func (p *peer) GetTxRelayCost(amount, size int) uint64 {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	var msgcode uint64
-	switch p.version {
-	case lpv1:
-		msgcode = SendTxMsg
-	case lpv2:
-		msgcode = SendTxV2Msg
-	default:
-		panic(nil)
-	}
-
-	costs := p.fcCosts[msgcode]
-	if costs == nil {
-		return 0
-	}
-	cost := costs.baseCost + costs.reqCost*uint64(amount)
-	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
-	if sizeCost > cost {
-		cost = sizeCost
-	}
-
+	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
 	if cost > p.fcServerParams.BufLimit {
 		cost = p.fcServerParams.BufLimit
 	}
@@ -210,11 +175,11 @@ func (p *peer) GetTxRelayCost(amount, size int) uint64 {
 }
 
 // HasBlock checks if the peer has a given block
-func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
+func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
 	p.lock.RLock()
 	hasBlock := p.hasBlock
 	p.lock.RUnlock()
-	return hasBlock != nil && hasBlock(hash, number, hasState)
+	return hasBlock != nil && hasBlock(hash, number)
 }
 
 // SendAnnounce announces the availability of a number of blocks through
@@ -319,21 +284,21 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 }
 
 // RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
-func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, data interface{}) error {
+func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq) error {
+	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
 	switch p.version {
 	case lpv1:
-		reqs, ok := data.([]ChtReq)
-		if !ok {
-			return errInvalidHelpTrieReq
+		reqsV1 := make([]ChtReq, len(reqs))
+		for i, req := range reqs {
+			if req.Type != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
+				return fmt.Errorf("Request invalid in LES/1 mode")
+			}
+			blockNum := binary.BigEndian.Uint64(req.Key)
+			// convert HelperTrie request to old CHT request
+			reqsV1[i] = ChtReq{ChtNum: (req.TrieIdx + 1) * (light.CHTFrequencyClient / light.CHTFrequencyServer), BlockNum: blockNum, FromLevel: req.FromLevel}
 		}
-		p.Log().Debug("Fetching batch of header proofs", "count", len(reqs))
-		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
+		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqsV1)
 	case lpv2:
-		reqs, ok := data.([]HelperTrieReq)
-		if !ok {
-			return errInvalidHelpTrieReq
-		}
-		p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
 		return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
 	default:
 		panic(nil)
@@ -346,9 +311,9 @@ func (p *peer) RequestTxStatus(reqID, cost uint64, txHashes []common.Hash) error
 	return sendRequest(p.rw, GetTxStatusMsg, reqID, cost, txHashes)
 }
 
-// SendTxs sends a batch of transactions to be added to the remote transaction pool.
-func (p *peer) SendTxs(reqID, cost uint64, txs rlp.RawValue) error {
-	p.Log().Debug("Fetching batch of transactions", "size", len(txs))
+// SendTxStatus sends a batch of transactions to be added to the remote transaction pool.
+func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
+	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
 	switch p.version {
 	case lpv1:
 		return p2p.Send(p.rw, SendTxMsg, txs) // old message format does not include reqID
@@ -524,20 +489,6 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcServerParams = params
 		p.fcServer = flowcontrol.NewServerNode(params)
 		p.fcCosts = MRC.decode()
-		var checkList []uint64
-		switch p.version {
-		case lpv1:
-			checkList = reqListV1
-		case lpv2:
-			checkList = reqListV2
-		default:
-			panic(nil)
-		}
-		for _, msgCode := range checkList {
-			if p.fcCosts[msgCode] == nil {
-				return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
-			}
-		}
 	}
 
 	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
@@ -594,11 +545,9 @@ func (ps *peerSet) notify(n peerSetNotify) {
 func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
 	if ps.closed {
-		ps.lock.Unlock()
 		return errClosed
 	}
 	if _, ok := ps.peers[p.id]; ok {
-		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p

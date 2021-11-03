@@ -21,8 +21,8 @@ package geth
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
 )
 
 // EthereumClient provides access to the Ethereum APIs.
@@ -138,9 +138,7 @@ func (ec *EthereumClient) SubscribeNewHead(ctx *Context, handler NewHeadHandler,
 				handler.OnNewHead(&Header{header})
 
 			case err := <-rawSub.Err():
-				if err != nil {
-					handler.OnError(err.Error())
-				}
+				handler.OnError(err.Error())
 				return
 			}
 		}
@@ -229,9 +227,7 @@ func (ec *EthereumClient) SubscribeFilterLogs(ctx *Context, query *FilterQuery, 
 				handler.OnFilterLogs(&Log{&log})
 
 			case err := <-rawSub.Err():
-				if err != nil {
-					handler.OnError(err.Error())
-				}
+				handler.OnError(err.Error())
 				return
 			}
 		}

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event
@@ -33,15 +33,15 @@ type Event struct {
 	Inputs    Arguments
 }
 
-func (e Event) String() string {
-	inputs := make([]string, len(e.Inputs))
-	for i, input := range e.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
+func (event Event) String() string {
+	inputs := make([]string, len(event.Inputs))
+	for i, input := range event.Inputs {
+		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
 		if input.Indexed {
-			inputs[i] = fmt.Sprintf("%v indexed %v", input.Type, input.Name)
+			inputs[i] = fmt.Sprintf("%v indexed %v", input.Name, input.Type)
 		}
 	}
-	return fmt.Sprintf("event %v(%v)", e.Name, strings.Join(inputs, ", "))
+	return fmt.Sprintf("event %v(%v)", event.Name, strings.Join(inputs, ", "))
 }
 
 // Id returns the canonical representation of the event's signature used by the

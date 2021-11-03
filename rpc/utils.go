@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -102,6 +103,20 @@ func formatName(name string) string {
 		ret[0] = unicode.ToLower(ret[0])
 	}
 	return string(ret)
+}
+
+var bigIntType = reflect.TypeOf((*big.Int)(nil)).Elem()
+
+// Indication if this type should be serialized in hex
+func isHexNum(t reflect.Type) bool {
+	if t == nil {
+		return false
+	}
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	return t == bigIntType
 }
 
 // suitableCallbacks iterates over the methods of the given type. It will determine if a method satisfies the criteria

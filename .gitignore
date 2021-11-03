@@ -14,7 +14,7 @@
 */**/*tx_database*
 */**/*dapps*
 build/_vendor/pkg
-
+/devnet
 #*
 .#*
 *#
@@ -48,5 +48,5 @@ profile.cov
 /dashboard/assets/package-lock.json
 
 **/yarn-error.log
-
-/build/cache/
+coverage.txt
+go.sum

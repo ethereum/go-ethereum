@@ -17,13 +17,14 @@
 package asm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
 )
 
 // Compiler contains information about the parsed source
@@ -51,7 +52,7 @@ func NewCompiler(debug bool) *Compiler {
 // the compiler.
 //
 // feed is the first pass in the compile stage as it
-// collects the used labels in the program and keeps a
+// collect the used labels in the program and keeps a
 // program counter which is used to determine the locations
 // of the jump dests. The labels can than be used in the
 // second stage to push labels and determine the right
@@ -120,7 +121,7 @@ func (c *Compiler) next() token {
 	return token
 }
 
-// compileLine compiles a single line instruction e.g.
+// compile line compiles a single line instruction e.g.
 // "push 1", "jump @label".
 func (c *Compiler) compileLine() error {
 	n := c.next()
@@ -236,16 +237,19 @@ func (c *Compiler) pushBin(v interface{}) {
 // isPush returns whether the string op is either any of
 // push(N).
 func isPush(op string) bool {
-	return strings.ToUpper(op) == "PUSH"
+	return op == "push"
 }
 
 // isJump returns whether the string op is jump(i)
 func isJump(op string) bool {
-	return strings.ToUpper(op) == "JUMPI" || strings.ToUpper(op) == "JUMP"
+	return op == "jumpi" || op == "jump"
 }
 
 // toBinary converts text to a vm.OpCode
 func toBinary(text string) vm.OpCode {
+	if isPush(text) {
+		text = "push1"
+	}
 	return vm.StringToOp(strings.ToUpper(text))
 }
 
@@ -259,6 +263,11 @@ type compileError struct {
 func (err compileError) Error() string {
 	return fmt.Sprintf("%d syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
 }
+
+var (
+	errExpBol            = errors.New("expected beginning of line")
+	errExpElementOrLabel = errors.New("expected beginning of line")
+)
 
 func compileErr(c token, got, want string) error {
 	return compileError{

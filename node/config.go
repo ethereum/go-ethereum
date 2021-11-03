@@ -24,17 +24,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
+	"github.com/XinFinOrg/XDPoSChain/accounts/usbwallet"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 )
 
 const (
@@ -121,10 +119,6 @@ type Config struct {
 	// exposed.
 	HTTPModules []string `toml:",omitempty"`
 
-	// HTTPTimeouts allows for customization of the timeout values used by the HTTP RPC
-	// interface.
-	HTTPTimeouts rpc.HTTPTimeouts
-
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string `toml:",omitempty"`
@@ -153,10 +147,6 @@ type Config struct {
 
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
-
-	staticNodesWarning     bool
-	trustedNodesWarning    bool
-	oldGethResourceWarning bool
 
 	AnnounceTxs bool `toml:",omitempty"`
 }
@@ -191,7 +181,7 @@ func (c *Config) NodeDB() string {
 	if c.DataDir == "" {
 		return "" // ephemeral
 	}
-	return c.ResolvePath(datadirNodeDatabase)
+	return c.resolvePath(datadirNodeDatabase)
 }
 
 // DefaultIPCEndpoint returns the IPC path used by default.
@@ -221,7 +211,7 @@ func DefaultHTTPEndpoint() string {
 	return config.HTTPEndpoint()
 }
 
-// WSEndpoint resolves a websocket endpoint based on the configured host interface
+// WSEndpoint resolves an websocket endpoint based on the configured host interface
 // and port parameters.
 func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {
@@ -270,12 +260,12 @@ var isOldGethResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
-	"static-nodes.json":  false, // no warning for these because they have their
-	"trusted-nodes.json": false, // own separate warning.
+	"static-nodes.json":  true,
+	"trusted-nodes.json": true,
 }
 
-// ResolvePath resolves path in the instance directory.
-func (c *Config) ResolvePath(path string) string {
+// resolvePath resolves path in the instance directory.
+func (c *Config) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
@@ -284,15 +274,13 @@ func (c *Config) ResolvePath(path string) string {
 	}
 	// Backwards-compatibility: ensure that data directory files created
 	// by geth 1.4 are used if they exist.
-	if warn, isOld := isOldGethResource[path]; isOld {
+	if c.name() == "geth" && isOldGethResource[path] {
 		oldpath := ""
-		if c.name() == "geth" {
+		if c.Name == "geth" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
-			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
-			}
+			// TODO: print warning
 			return oldpath
 		}
 	}
@@ -323,7 +311,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		return key
 	}
 
-	keyfile := c.ResolvePath(datadirPrivateKey)
+	keyfile := c.resolvePath(datadirPrivateKey)
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
@@ -345,18 +333,18 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 }
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
-func (c *Config) StaticNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
+func (c *Config) StaticNodes() []*discover.Node {
+	return c.parsePersistentNodes(c.resolvePath(datadirStaticNodes))
 }
 
 // TrustedNodes returns a list of node enode URLs configured as trusted nodes.
-func (c *Config) TrustedNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
+func (c *Config) TrustedNodes() []*discover.Node {
+	return c.parsePersistentNodes(c.resolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
+func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
@@ -364,21 +352,19 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
-
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
+		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
-	var nodes []*enode.Node
+	var nodes []*discover.Node
 	for _, url := range nodelist {
 		if url == "" {
 			continue
 		}
-		node, err := enode.ParseV4(url)
+		node, err := discover.ParseNode(url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
@@ -450,21 +436,4 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		}
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
-}
-
-var warnLock sync.Mutex
-
-func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
-	warnLock.Lock()
-	defer warnLock.Unlock()
-
-	if *w {
-		return
-	}
-	l := c.Logger
-	if l == nil {
-		l = log.Root()
-	}
-	l.Warn(fmt.Sprintf(format, args...))
-	*w = true
 }

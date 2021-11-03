@@ -53,6 +53,17 @@ func (p *intPool) getZero() *big.Int {
 	return new(big.Int)
 }
 
+// putOne returns an allocated big int to the pool to be later reused by get calls.
+// Note, the values as saved as is; neither put nor get zeroes the ints out!
+// As opposed to 'put' with variadic args, this method becomes inlined by the
+// go compiler
+func (p *intPool) putOne(i *big.Int) {
+	if len(p.pool.data) > poolLimit {
+		return
+	}
+	p.pool.push(i)
+}
+
 // put returns an allocated big int to the pool to be later reused by get calls.
 // Note, the values as saved as is; neither put nor get zeroes the ints out!
 func (p *intPool) put(is ...*big.Int) {

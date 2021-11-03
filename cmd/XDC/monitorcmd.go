@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
+	"github.com/XinFinOrg/XDPoSChain/node"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/gizak/termui"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -185,12 +185,12 @@ func resolveMetric(metrics map[string]interface{}, pattern string, path string) 
 	parts := strings.SplitN(pattern, "/", 2)
 	if len(parts) > 1 {
 		for _, variation := range strings.Split(parts[0], ",") {
-			submetrics, ok := metrics[variation].(map[string]interface{})
-			if !ok {
+			if submetrics, ok := metrics[variation].(map[string]interface{}); !ok {
 				utils.Fatalf("Failed to retrieve system metrics: %s", path+variation)
 				return nil
+			} else {
+				results = append(results, resolveMetric(submetrics, parts[1], path+variation+"/")...)
 			}
-			results = append(results, resolveMetric(submetrics, parts[1], path+variation+"/")...)
 		}
 		return results
 	}

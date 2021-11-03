@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an
@@ -62,14 +62,14 @@ func (w *wizard) manageServers() {
 	}
 }
 
-// makeServer reads a single line from stdin and interprets it as
-// username:identity@hostname to connect to. It tries to establish a
-// new SSH session and also executing some baseline validations.
+// makeServer reads a single line from stdin and interprets it as a hostname to
+// connect to. It tries to establish a new SSH session and also executing some
+// baseline validations.
 //
 // If connection succeeds, the server is added to the wizards configs!
 func (w *wizard) makeServer() string {
 	fmt.Println()
-	fmt.Println("What is the remote server's address ([username[:identity]@]hostname[:port])?")
+	fmt.Println("Please enter remote server's address:")
 
 	// Read and dial the server to ensure docker is present
 	input := w.readString()
@@ -87,7 +87,7 @@ func (w *wizard) makeServer() string {
 	return input
 }
 
-// selectServer lists the user all the currently known servers to choose from,
+// selectServer lists the user all the currnetly known servers to choose from,
 // also granting the option to add a new one.
 func (w *wizard) selectServer() string {
 	// List the available server to the user and wait for a choice
@@ -115,7 +115,7 @@ func (w *wizard) selectServer() string {
 // manageComponents displays a list of network components the user can tear down
 // and an option
 func (w *wizard) manageComponents() {
-	// List all the components we can tear down, along with an entry to deploy a new one
+	// List all the componens we can tear down, along with an entry to deploy a new one
 	fmt.Println()
 
 	var serviceHosts, serviceNames []string
@@ -177,7 +177,6 @@ func (w *wizard) deployComponent() {
 	fmt.Println(" 4. Explorer  - Chain analysis webservice (ethash only)")
 	fmt.Println(" 5. Wallet    - Browser wallet for quick sends")
 	fmt.Println(" 6. Faucet    - Crypto faucet to give away funds")
-	fmt.Println(" 7. Dashboard - Website listing above web-services")
 
 	switch w.read() {
 	case "1":
@@ -192,8 +191,6 @@ func (w *wizard) deployComponent() {
 		w.deployWallet()
 	case "6":
 		w.deployFaucet()
-	case "7":
-		w.deployDashboard()
 	default:
 		log.Error("That's not something I can do")
 	}

@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
 func TestConfig(t *testing.T) {
@@ -33,10 +33,9 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("failed to load private key: %v", err)
 	}
 
-	one := NewConfig()
-	two := NewConfig()
+	one := NewDefaultConfig()
+	two := NewDefaultConfig()
 
-	one.LocalStoreParams = two.LocalStoreParams
 	if equal := reflect.DeepEqual(one, two); !equal {
 		t.Fatal("Two default configs are not equal")
 	}
@@ -50,10 +49,21 @@ func TestConfig(t *testing.T) {
 	if one.PublicKey == "" {
 		t.Fatal("Expected PublicKey to be set")
 	}
-	if one.Swap.PayProfile.Beneficiary == (common.Address{}) && one.SwapEnabled {
+
+	//the Init function should append subdirs to the given path
+	if one.Swap.PayProfile.Beneficiary == (common.Address{}) {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
-	if one.ChunkDbPath == one.Path {
+
+	if one.SyncParams.RequestDbPath == one.Path {
+		t.Fatal("Failed to correctly initialize SyncParams")
+	}
+
+	if one.HiveParams.KadDbPath == one.Path {
+		t.Fatal("Failed to correctly initialize HiveParams")
+	}
+
+	if one.StoreParams.ChunkDbPath == one.Path {
 		t.Fatal("Failed to correctly initialize StoreParams")
 	}
 }

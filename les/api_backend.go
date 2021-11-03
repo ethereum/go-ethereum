@@ -19,28 +19,33 @@ package les
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/light"
+	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 type LesApiBackend struct {
@@ -65,11 +70,8 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
-	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
-}
 
-func (b *LesApiBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return b.eth.blockchain.GetHeaderByHash(hash), nil
+	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
 }
 
 func (b *LesApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
@@ -92,32 +94,32 @@ func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*t
 	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
 }
 
-func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
-	}
-	return nil, nil
+func (b *LesApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
+	return light.GetBlockReceipts(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
 }
 
-func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
-	}
-	return nil, nil
+func (b *LesApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
+	return light.GetBlockLogs(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
 }
 
-func (b *LesApiBackend) GetTd(hash common.Hash) *big.Int {
-	return b.eth.blockchain.GetTdByHash(hash)
+func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
+	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
+func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
 	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, vmCfg), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.Add(ctx, signedTx)
+}
+func (b *LesApiBackend) SendOrderTx(ctx context.Context, signedTx *types.OrderTransaction) error {
+	return nil
+}
+func (b *LesApiBackend) SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error {
+	return nil
 }
 
 func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
@@ -144,8 +146,15 @@ func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.txPool.SubscribeNewTxsEvent(ch)
+func (b *LesApiBackend) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
+	return make(map[common.Address]types.OrderTransactions), make(map[common.Address]types.OrderTransactions)
+}
+func (b *LesApiBackend) OrderStats() (pending int, queued int) {
+	return 0, 0
+}
+
+func (b *LesApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+	return b.eth.txPool.SubscribeTxPreEvent(ch)
 }
 
 func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -192,16 +201,12 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
 
-func (b *LesApiBackend) RPCGasCap() *big.Int {
-	return b.eth.config.RPCGasCap
-}
-
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0
 	}
 	sections, _, _ := b.eth.bloomIndexer.Sections()
-	return params.BloomBitsBlocksClient, sections
+	return light.BloomTrieFrequency, sections
 }
 
 func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
@@ -210,19 +215,21 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
+// func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
+func (b *LesApiBackend) GetIPCClient() (bind.ContractBackend, error) {
+	// func (b *LesApiBackend) GetIPCClient() (bind.ContractBackend, error) {
 	return nil, nil
 }
 
 func (b *LesApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
 }
-func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
+func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {
 	header := s.eth.blockchain.GetHeaderByHash(hash)
 	if header != nil {
 		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
 		if err == nil {
-			rewards := make(map[string]interface{})
+			rewards := make(map[string]map[string]map[string]*big.Int)
 			err = json.Unmarshal(data, &rewards)
 			if err == nil {
 				return rewards
@@ -230,7 +237,7 @@ func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 		} else {
 			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
 			if err == nil {
-				rewards := make(map[string]interface{})
+				rewards := make(map[string]map[string]map[string]*big.Int)
 				err = json.Unmarshal(data, &rewards)
 				if err == nil {
 					return rewards
@@ -238,5 +245,45 @@ func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 			}
 		}
 	}
-	return make(map[string]interface{})
+	return make(map[string]map[string]map[string]*big.Int)
+}
+
+// GetVotersRewards return a map of voters of snapshot at given block hash
+func (b *LesApiBackend) GetVotersRewards(masternodeAddr common.Address) map[common.Address]*big.Int {
+	return map[common.Address]*big.Int{}
+}
+
+// GetVotersCap return all voters's capability at a checkpoint
+func (b *LesApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Address, voters []common.Address) map[common.Address]*big.Int {
+	return map[common.Address]*big.Int{}
+}
+
+func (b *LesApiBackend) GetEpochDuration() *big.Int {
+	return nil
+}
+
+// GetMasternodesCap return a cap of all masternode at a checkpoint
+func (b *LesApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
+	return nil
+}
+
+func (b *LesApiBackend) GetBlocksHashCache(blockNr uint64) []common.Hash {
+	return []common.Hash{}
+}
+
+func (b *LesApiBackend) AreTwoBlockSamePath(bh1 common.Hash, bh2 common.Hash) bool {
+	return true
+}
+
+// GetOrderNonce get order nonce
+func (b *LesApiBackend) GetOrderNonce(address common.Hash) (uint64, error) {
+	return 0, errors.New("cannot find XDCx service")
+}
+
+func (b *LesApiBackend) XDCxService() *XDCx.XDCX {
+	return nil
+}
+
+func (b *LesApiBackend) LendingService() *XDCxlending.Lending {
+	return nil
 }

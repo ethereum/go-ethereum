@@ -23,10 +23,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that
@@ -81,7 +80,7 @@ func (h *Header) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(h.header)
 }
 
-// NewHeaderFromJSON parses a header from a JSON data dump.
+// NewHeaderFromJSON parses a header from an JSON data dump.
 func NewHeaderFromJSON(data string) (*Header, error) {
 	h := &Header{
 		header: new(types.Header),
@@ -92,10 +91,16 @@ func NewHeaderFromJSON(data string) (*Header, error) {
 	return h, nil
 }
 
-// EncodeJSON encodes a header into a JSON data dump.
+// EncodeJSON encodes a header into an JSON data dump.
 func (h *Header) EncodeJSON() (string, error) {
 	data, err := json.Marshal(h.header)
 	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the header for debugging purposes.
+func (h *Header) String() string {
+	return h.header.String()
 }
 
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
@@ -109,7 +114,7 @@ func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
 func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
 func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
 func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
-func (h *Header) GetTime() int64         { return int64(h.header.Time) }
+func (h *Header) GetTime() int64         { return h.header.Time.Int64() }
 func (h *Header) GetExtra() []byte       { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
@@ -152,7 +157,7 @@ func (b *Block) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(b.block)
 }
 
-// NewBlockFromJSON parses a block from a JSON data dump.
+// NewBlockFromJSON parses a block from an JSON data dump.
 func NewBlockFromJSON(data string) (*Block, error) {
 	b := &Block{
 		block: new(types.Block),
@@ -163,28 +168,37 @@ func NewBlockFromJSON(data string) (*Block, error) {
 	return b, nil
 }
 
-// EncodeJSON encodes a block into a JSON data dump.
+// EncodeJSON encodes a block into an JSON data dump.
 func (b *Block) EncodeJSON() (string, error) {
 	data, err := json.Marshal(b.block)
 	return string(data), err
 }
 
-func (b *Block) GetParentHash() *Hash           { return &Hash{b.block.ParentHash()} }
-func (b *Block) GetUncleHash() *Hash            { return &Hash{b.block.UncleHash()} }
-func (b *Block) GetCoinbase() *Address          { return &Address{b.block.Coinbase()} }
-func (b *Block) GetRoot() *Hash                 { return &Hash{b.block.Root()} }
-func (b *Block) GetTxHash() *Hash               { return &Hash{b.block.TxHash()} }
-func (b *Block) GetReceiptHash() *Hash          { return &Hash{b.block.ReceiptHash()} }
-func (b *Block) GetBloom() *Bloom               { return &Bloom{b.block.Bloom()} }
-func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficulty()} }
-func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
-func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
-func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }
-func (b *Block) GetTime() int64                 { return int64(b.block.Time()) }
-func (b *Block) GetExtra() []byte               { return b.block.Extra() }
-func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
-func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
-func (b *Block) GetHash() *Hash                 { return &Hash{b.block.Hash()} }
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the block for debugging purposes.
+func (b *Block) String() string {
+	return b.block.String()
+}
+
+func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
+func (b *Block) GetUncleHash() *Hash    { return &Hash{b.block.UncleHash()} }
+func (b *Block) GetCoinbase() *Address  { return &Address{b.block.Coinbase()} }
+func (b *Block) GetRoot() *Hash         { return &Hash{b.block.Root()} }
+func (b *Block) GetTxHash() *Hash       { return &Hash{b.block.TxHash()} }
+func (b *Block) GetReceiptHash() *Hash  { return &Hash{b.block.ReceiptHash()} }
+func (b *Block) GetBloom() *Bloom       { return &Bloom{b.block.Bloom()} }
+func (b *Block) GetDifficulty() *BigInt { return &BigInt{b.block.Difficulty()} }
+func (b *Block) GetNumber() int64       { return b.block.Number().Int64() }
+func (b *Block) GetGasLimit() int64     { return int64(b.block.GasLimit()) }
+func (b *Block) GetGasUsed() int64      { return int64(b.block.GasUsed()) }
+func (b *Block) GetTime() int64         { return b.block.Time().Int64() }
+func (b *Block) GetExtra() []byte       { return b.block.Extra() }
+func (b *Block) GetMixDigest() *Hash    { return &Hash{b.block.MixDigest()} }
+func (b *Block) GetNonce() int64        { return int64(b.block.Nonce()) }
+
+func (b *Block) GetHash() *Hash        { return &Hash{b.block.Hash()} }
+func (b *Block) GetHashNoNonce() *Hash { return &Hash{b.block.HashNoNonce()} }
+
 func (b *Block) GetHeader() *Header             { return &Header{b.block.Header()} }
 func (b *Block) GetUncles() *Headers            { return &Headers{b.block.Uncles()} }
 func (b *Block) GetTransactions() *Transactions { return &Transactions{b.block.Transactions()} }
@@ -218,7 +232,7 @@ func (tx *Transaction) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(tx.tx)
 }
 
-// NewTransactionFromJSON parses a transaction from a JSON data dump.
+// NewTransactionFromJSON parses a transaction from an JSON data dump.
 func NewTransactionFromJSON(data string) (*Transaction, error) {
 	tx := &Transaction{
 		tx: new(types.Transaction),
@@ -229,10 +243,16 @@ func NewTransactionFromJSON(data string) (*Transaction, error) {
 	return tx, nil
 }
 
-// EncodeJSON encodes a transaction into a JSON data dump.
+// EncodeJSON encodes a transaction into an JSON data dump.
 func (tx *Transaction) EncodeJSON() (string, error) {
 	data, err := json.Marshal(tx.tx)
 	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the transaction for debugging purposes.
+func (tx *Transaction) String() string {
+	return tx.tx.String()
 }
 
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
@@ -310,7 +330,7 @@ func (r *Receipt) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(r.receipt)
 }
 
-// NewReceiptFromJSON parses a transaction receipt from a JSON data dump.
+// NewReceiptFromJSON parses a transaction receipt from an JSON data dump.
 func NewReceiptFromJSON(data string) (*Receipt, error) {
 	r := &Receipt{
 		receipt: new(types.Receipt),
@@ -321,13 +341,18 @@ func NewReceiptFromJSON(data string) (*Receipt, error) {
 	return r, nil
 }
 
-// EncodeJSON encodes a transaction receipt into a JSON data dump.
+// EncodeJSON encodes a transaction receipt into an JSON data dump.
 func (r *Receipt) EncodeJSON() (string, error) {
 	data, err := rlp.EncodeToBytes(r.receipt)
 	return string(data), err
 }
 
-func (r *Receipt) GetStatus() int               { return int(r.receipt.Status) }
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the transaction receipt for debugging purposes.
+func (r *Receipt) String() string {
+	return r.receipt.String()
+}
+
 func (r *Receipt) GetPostState() []byte         { return r.receipt.PostState }
 func (r *Receipt) GetCumulativeGasUsed() int64  { return int64(r.receipt.CumulativeGasUsed) }
 func (r *Receipt) GetBloom() *Bloom             { return &Bloom{r.receipt.Bloom} }
@@ -335,95 +360,3 @@ func (r *Receipt) GetLogs() *Logs               { return &Logs{r.receipt.Logs} }
 func (r *Receipt) GetTxHash() *Hash             { return &Hash{r.receipt.TxHash} }
 func (r *Receipt) GetContractAddress() *Address { return &Address{r.receipt.ContractAddress} }
 func (r *Receipt) GetGasUsed() int64            { return int64(r.receipt.GasUsed) }
-
-// Info represents a diagnostic information about the whisper node.
-type Info struct {
-	info *whisper.Info
-}
-
-// NewMessage represents a new whisper message that is posted through the RPC.
-type NewMessage struct {
-	newMessage *whisper.NewMessage
-}
-
-func NewNewMessage() *NewMessage {
-	nm := &NewMessage{
-		newMessage: new(whisper.NewMessage),
-	}
-	return nm
-}
-
-func (nm *NewMessage) GetSymKeyID() string         { return nm.newMessage.SymKeyID }
-func (nm *NewMessage) SetSymKeyID(symKeyID string) { nm.newMessage.SymKeyID = symKeyID }
-func (nm *NewMessage) GetPublicKey() []byte        { return nm.newMessage.PublicKey }
-func (nm *NewMessage) SetPublicKey(publicKey []byte) {
-	nm.newMessage.PublicKey = common.CopyBytes(publicKey)
-}
-func (nm *NewMessage) GetSig() string                  { return nm.newMessage.Sig }
-func (nm *NewMessage) SetSig(sig string)               { nm.newMessage.Sig = sig }
-func (nm *NewMessage) GetTTL() int64                   { return int64(nm.newMessage.TTL) }
-func (nm *NewMessage) SetTTL(ttl int64)                { nm.newMessage.TTL = uint32(ttl) }
-func (nm *NewMessage) GetPayload() []byte              { return nm.newMessage.Payload }
-func (nm *NewMessage) SetPayload(payload []byte)       { nm.newMessage.Payload = common.CopyBytes(payload) }
-func (nm *NewMessage) GetPowTime() int64               { return int64(nm.newMessage.PowTime) }
-func (nm *NewMessage) SetPowTime(powTime int64)        { nm.newMessage.PowTime = uint32(powTime) }
-func (nm *NewMessage) GetPowTarget() float64           { return nm.newMessage.PowTarget }
-func (nm *NewMessage) SetPowTarget(powTarget float64)  { nm.newMessage.PowTarget = powTarget }
-func (nm *NewMessage) GetTargetPeer() string           { return nm.newMessage.TargetPeer }
-func (nm *NewMessage) SetTargetPeer(targetPeer string) { nm.newMessage.TargetPeer = targetPeer }
-func (nm *NewMessage) GetTopic() []byte                { return nm.newMessage.Topic[:] }
-func (nm *NewMessage) SetTopic(topic []byte)           { nm.newMessage.Topic = whisper.BytesToTopic(topic) }
-
-// Message represents a whisper message.
-type Message struct {
-	message *whisper.Message
-}
-
-func (m *Message) GetSig() []byte      { return m.message.Sig }
-func (m *Message) GetTTL() int64       { return int64(m.message.TTL) }
-func (m *Message) GetTimestamp() int64 { return int64(m.message.Timestamp) }
-func (m *Message) GetPayload() []byte  { return m.message.Payload }
-func (m *Message) GetPoW() float64     { return m.message.PoW }
-func (m *Message) GetHash() []byte     { return m.message.Hash }
-func (m *Message) GetDst() []byte      { return m.message.Dst }
-
-// Messages represents an array of messages.
-type Messages struct {
-	messages []*whisper.Message
-}
-
-// Size returns the number of messages in the slice.
-func (m *Messages) Size() int {
-	return len(m.messages)
-}
-
-// Get returns the message at the given index from the slice.
-func (m *Messages) Get(index int) (message *Message, _ error) {
-	if index < 0 || index >= len(m.messages) {
-		return nil, errors.New("index out of bounds")
-	}
-	return &Message{m.messages[index]}, nil
-}
-
-// Criteria holds various filter options for inbound messages.
-type Criteria struct {
-	criteria *whisper.Criteria
-}
-
-func NewCriteria(topic []byte) *Criteria {
-	c := &Criteria{
-		criteria: new(whisper.Criteria),
-	}
-	encodedTopic := whisper.BytesToTopic(topic)
-	c.criteria.Topics = []whisper.TopicType{encodedTopic}
-	return c
-}
-
-func (c *Criteria) GetSymKeyID() string                 { return c.criteria.SymKeyID }
-func (c *Criteria) SetSymKeyID(symKeyID string)         { c.criteria.SymKeyID = symKeyID }
-func (c *Criteria) GetPrivateKeyID() string             { return c.criteria.PrivateKeyID }
-func (c *Criteria) SetPrivateKeyID(privateKeyID string) { c.criteria.PrivateKeyID = privateKeyID }
-func (c *Criteria) GetSig() []byte                      { return c.criteria.Sig }
-func (c *Criteria) SetSig(sig []byte)                   { c.criteria.Sig = common.CopyBytes(sig) }
-func (c *Criteria) GetMinPow() float64                  { return c.criteria.MinPow }
-func (c *Criteria) SetMinPow(pow float64)               { c.criteria.MinPow = pow }

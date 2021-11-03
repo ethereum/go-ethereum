@@ -26,11 +26,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
-// faucetDockerfile is the Dockerfile required to build a faucet container to
+// faucetDockerfile is the Dockerfile required to build an faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
 FROM ethereum/client-go:alltools-latest
@@ -56,10 +56,8 @@ services:
   faucet:
     build: .
     image: {{.Network}}/faucet
-    container_name: {{.Network}}_faucet_1
     ports:
-      - "{{.EthPort}}:{{.EthPort}}"
-      - "{{.EthPort}}:{{.EthPort}}/udp"{{if not .VHost}}
+      - "{{.EthPort}}:{{.EthPort}}"{{if not .VHost}}
       - "{{.ApiPort}}:8080"{{end}}
     volumes:
       - {{.Datadir}}:/root/.faucet
@@ -135,12 +133,12 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 
 	// Build and deploy the faucet service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
-// faucetInfos is returned from a faucet status check to allow reporting various
+// faucetInfos is returned from an faucet status check to allow reporting various
 // configuration parameters.
 type faucetInfos struct {
 	node          *nodeInfos
@@ -183,7 +181,7 @@ func (info *faucetInfos) Report() map[string]string {
 	return report
 }
 
-// checkFaucet does a health-check against a faucet server to verify whether
+// checkFaucet does a health-check against an faucet server to verify whether
 // it's running, and if yes, gathering a collection of useful infos about it.
 func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	// Inspect a possible faucet container on the host

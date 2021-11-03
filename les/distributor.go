@@ -20,9 +20,13 @@ package les
 
 import (
 	"container/list"
+	"errors"
 	"sync"
 	"time"
 )
+
+// ErrNoPeers is returned if no peers capable of serving a queued request are available
+var ErrNoPeers = errors.New("no suitable peers available")
 
 // requestDistributor implements a mechanism that distributes requests to
 // suitable peers, obeying flow control rules and prioritizing them in creation
@@ -114,9 +118,7 @@ func (d *requestDistributor) loop() {
 			d.lock.Lock()
 			elem := d.reqQueue.Front()
 			for elem != nil {
-				req := elem.Value.(*distReq)
-				close(req.sentChn)
-				req.sentChn = nil
+				close(elem.Value.(*distReq).sentChn)
 				elem = elem.Next()
 			}
 			d.lock.Unlock()
