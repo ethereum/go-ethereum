@@ -35,6 +35,10 @@ var (
 )
 
 var (
+	XDPoSV2Config = &ConsensusV2Config{
+		TimeoutWorkerDuration: 50000,
+	}
+
 	// XDPoSChain mainnet config
 	XDCMainnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(88),
@@ -51,6 +55,7 @@ var (
 			RewardCheckpoint:    900,
 			Gap:                 5,
 			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			ConsensusV2Config:   *XDPoSV2Config,
 		},
 	}
 
@@ -97,8 +102,9 @@ var (
 		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: nil,
 		XDPoS: &XDPoSConfig{
-			Period: 15,
-			Epoch:  30000,
+			Period:            15,
+			Epoch:             30000,
+			ConsensusV2Config: *XDPoSV2Config,
 		},
 	}
 
@@ -117,11 +123,11 @@ var (
 	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
-	TestXDPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 2, Epoch: 900, Reward: 250, RewardCheckpoint: 900, Gap: 890, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068")}}
+	TestXDPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 2, Epoch: 900, Reward: 250, RewardCheckpoint: 900, Gap: 890, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"), ConsensusV2Config: *XDPoSV2Config}}
 	// XDPoS config in use for v1 engine only
-	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true}}
+	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, ConsensusV2Config: *XDPoSV2Config}}
 	// XDPoS config with v2 engine after block 10
-	TestXDPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2ConsensusBlockNumber: big.NewInt(10)}}
+	TestXDPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2ConsensusBlockNumber: big.NewInt(10), ConsensusV2Config: *XDPoSV2Config}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -185,6 +191,11 @@ type XDPoSConfig struct {
 	FoudationWalletAddr    common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
 	SkipValidation         bool           //Skip Block Validation for testing purpose
 	V2ConsensusBlockNumber *big.Int
+	ConsensusV2Config      ConsensusV2Config
+}
+
+type ConsensusV2Config struct {
+	TimeoutWorkerDuration int64 `json:"TimeoutWorkerDuration"` // Duration in ms
 }
 
 // String implements the stringer interface, returning the consensus engine details.

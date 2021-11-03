@@ -22,8 +22,7 @@ type XDPoS_v2 struct {
 
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 	// Setup Timer
-	// TODO: (hashlab) Introduce consensus v2 engine specific config under the main config struct
-	duration := 50000 * time.Millisecond // Hardcoded value until we move it to a config (XIN-72)
+	duration := time.Duration(config.ConsensusV2Config.TimeoutWorkerDuration) * time.Millisecond
 	timer := countdown.NewCountDown(duration)
 
 	engine := &XDPoS_v2{
@@ -41,11 +40,15 @@ func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v2 {
 	var fakeEngine *XDPoS_v2
 	// Set any missing consensus parameters to their defaults
 	conf := config
+	// Setup Timer
+	duration := time.Duration(config.ConsensusV2Config.TimeoutWorkerDuration) * time.Millisecond
+	timer := countdown.NewCountDown(duration)
 
 	// Allocate the snapshot caches and create the engine
 	fakeEngine = &XDPoS_v2{
-		config: conf,
-		db:     db,
+		config:        conf,
+		db:            db,
+		timeoutWorker: timer,
 	}
 	return fakeEngine
 }
