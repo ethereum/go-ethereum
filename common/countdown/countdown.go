@@ -12,7 +12,7 @@ type CountdownTimer struct {
 	lock            sync.RWMutex // Protects the Initilised field
 	resetc          chan int
 	quitc           chan chan struct{}
-	Initilised      bool
+	initilised      bool
 	timeoutDuration time.Duration
 	// Triggered when the countdown timer timeout for the `timeoutDuration` period, it will pass current timestamp to the callback function
 	OnTimeoutFn func(time time.Time) error
@@ -22,7 +22,7 @@ func NewCountDown(duration time.Duration) *CountdownTimer {
 	return &CountdownTimer{
 		resetc:          make(chan int),
 		quitc:           make(chan chan struct{}),
-		Initilised:      false,
+		initilised:      false,
 		timeoutDuration: duration,
 	}
 }
@@ -73,11 +73,11 @@ func (t *CountdownTimer) startTimer() {
 func (t *CountdownTimer) setInitilised(value bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	t.Initilised = value
+	t.initilised = value
 }
 
 func (t *CountdownTimer) getInitilisedValue() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	return t.Initilised
+	return t.initilised
 }
