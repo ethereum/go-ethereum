@@ -26,10 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/internal/tracers"
 )
 
-// Tracer interface extends vm.Tracer and additionally
+// Tracer interface extends vm.EVMLogger and additionally
 // allows collecting the tracing result.
 type Tracer interface {
-	vm.Tracer
+	vm.EVMLogger
 	GetResult() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop(err error)
@@ -41,7 +41,7 @@ var (
 )
 
 // RegisterNativeTracer makes native tracers which adhere
-// to the `Tracer` interface available to the rest of the codebase.
+// to the `EVMLogger` interface available to the rest of the codebase.
 // It is typically invoked in the `init()` function, e.g. see the `native/call.go`.
 func RegisterNativeTracer(name string, ctor func() Tracer) {
 	nativeTracers[name] = ctor
