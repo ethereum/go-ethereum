@@ -166,7 +166,7 @@ func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
-func (*AccessListTracer) CaptureEnter(env *EVM, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (*AccessListTracer) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}

@@ -255,10 +255,8 @@ func TestEnterExit(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
-	vmctx := testCtx()
-	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
-	tracer.CaptureEnter(env, vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
+	tracer.CaptureEnter(vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
 	tracer.CaptureExit([]byte{}, 400, nil)
 
 	have, err := tracer.GetResult()

@@ -90,10 +90,10 @@ func (t *callTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 func (t *callTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
-func (t *callTracer) CaptureEnter(env *vm.EVM, typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
-		env.Cancel()
+		// TODO: env.Cancel()
 		return
 	}
 
