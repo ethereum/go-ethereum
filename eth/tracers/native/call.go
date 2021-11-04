@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	tracers.RegisterNativeTracer("callTracer", NewCallTracer)
+	register("callTracer", newCallTracer)
 }
 
 type callFrame struct {
@@ -53,9 +53,9 @@ type callTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
-// NewCallTracer returns a native go tracer which tracks
+// newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func NewCallTracer() tracers.Tracer {
+func newCallTracer() tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	t := &callTracer{callstack: make([]callFrame, 1)}
