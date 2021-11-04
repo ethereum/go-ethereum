@@ -21,9 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/protolambda/go-kzg/bls"
 
-	//"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gballet/go-verkle"
 )
 
@@ -133,13 +131,13 @@ func (it *verkleNodeIterator) Error() error {
 
 // Hash returns the hash of the current node.
 func (it *verkleNodeIterator) Hash() common.Hash {
-	return bls.FrTo32(it.current.ComputeCommitment())
+	return it.current.ComputeCommitment().Bytes()
 }
 
 // Parent returns the hash of the parent of the current node. The hash may be the one
 // grandparent if the immediate parent is an internal node with no hash.
 func (it *verkleNodeIterator) Parent() common.Hash {
-	return bls.FrTo32(it.stack[len(it.stack)-1].Node.ComputeCommitment())
+	return it.stack[len(it.stack)-1].Node.ComputeCommitment().Bytes()
 }
 
 // Path returns the hex-encoded path to the current node.

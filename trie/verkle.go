@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
-	"github.com/protolambda/go-kzg/bls"
 )
 
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
@@ -105,11 +104,11 @@ func (trie *VerkleTrie) TryDelete(key []byte) error {
 func (trie *VerkleTrie) Hash() common.Hash {
 	// TODO cache this value
 	rootC := trie.root.ComputeCommitment()
-	return bls.FrTo32(rootC)
+	return rootC.Bytes()
 }
 
 func nodeToDBKey(n verkle.VerkleNode) []byte {
-	ret := bls.FrTo32(n.ComputeCommitment())
+	ret := n.ComputeCommitment().Bytes()
 	return ret[:]
 }
 
@@ -172,23 +171,19 @@ type KeyValuePair struct {
 }
 
 type verkleproof struct {
-	D *bls.G1Point
-	Y *bls.Fr
-	Σ *bls.G1Point
+	Proof *verkle.Proof
 
-	Cis     []*bls.G1Point
-	Indices []uint
-	Yis     []*bls.Fr
+	Cis     []*verkle.Point
+	Indices []byte
+	Yis     []*verkle.Fr
 
 	Leaves []KeyValuePair
 }
 
 func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]byte) ([]byte, error) {
-	d, y, σ, cis, indices, yis := verkle.MakeVerkleMultiProof(trie.root, keys)
+	proof, cis, indices, yis := verkle.MakeVerkleMultiProof(trie.root, keys)
 	vp := verkleproof{
-		D:       d,
-		Y:       y,
-		Σ:       σ,
+		Proof:   proof,
 		Cis:     cis,
 		Indices: indices,
 		Yis:     yis,
@@ -204,29 +199,29 @@ func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]by
 	return rlp.EncodeToBytes(vp)
 }
 
-func DeserializeAndVerifyVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, map[common.Hash]common.Hash, error) {
-	d, y, σ, cis, indices, yis, leaves, err := deserializeVerkleProof(proof)
+func DeserializeAndVerifyVerkleProof(serialized []byte) (map[common.Hash]common.Hash, error) {
+	proof, cis, indices, yis, leaves, err := deserializeVerkleProof(serialized)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not deserialize proof: %w", err)
+		return nil, fmt.Errorf("could not deserialize proof: %w", err)
 	}
-	if !verkle.VerifyVerkleProof(d, σ, y, cis, indices, yis, verkle.GetKZGConfig()) {
-		return nil, nil, nil, nil, errInvalidProof
+	if !verkle.VerifyVerkleProof(proof, cis, indices, yis, verkle.GetConfig()) {
+		return nil, errInvalidProof
 	}
 
-	return d, y, σ, leaves, nil
+	return leaves, nil
 }
 
-func deserializeVerkleProof(proof []byte) (*bls.G1Point, *bls.Fr, *bls.G1Point, []*bls.G1Point, []uint, []*bls.Fr, map[common.Hash]common.Hash, error) {
+func deserializeVerkleProof(proof []byte) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, map[common.Hash]common.Hash, error) {
 	var vp verkleproof
 	err := rlp.DecodeBytes(proof, &vp)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
 	}
 	leaves := make(map[common.Hash]common.Hash, len(vp.Leaves))
 	for _, kvp := range vp.Leaves {
 		leaves[common.BytesToHash(kvp.Key)] = common.BytesToHash(kvp.Value)
 	}
-	return vp.D, vp.Y, vp.Σ, vp.Cis, vp.Indices, vp.Yis, leaves, nil
+	return vp.Proof, vp.Cis, vp.Indices, vp.Yis, leaves, nil
 }
 
 // Copy the values here so as to avoid an import cycle

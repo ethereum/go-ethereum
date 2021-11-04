@@ -1602,7 +1602,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
 		} else {
 			var leaves map[common.Hash]common.Hash
-			_, _, _, leaves, err = trie.DeserializeAndVerifyVerkleProof(block.Header().VerkleProof)
+			leaves, err = trie.DeserializeAndVerifyVerkleProof(block.Header().VerkleProof)
 			if err != nil {
 				return it.index, err
 			}
