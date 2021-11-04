@@ -41,7 +41,7 @@ var (
 )
 
 // RegisterNativeTracer makes native tracers which adhere
-// to the `EVMLogger` interface available to the rest of the codebase.
+// to the `Tracer` interface available to the rest of the codebase.
 // It is typically invoked in the `init()` function, e.g. see the `native/call.go`.
 func RegisterNativeTracer(name string, ctor func() Tracer) {
 	nativeTracers[name] = ctor
