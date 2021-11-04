@@ -120,36 +120,6 @@ jobs:
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
-    # This builder does the Linux Azure MIPS xgo uploads
-    - stage: build
-      if: type = push
-      os: linux
-      dist: bionic
-      services:
-        - docker
-      go: 1.17.x
-      env:
-        - azure-linux-mips
-        - GO111MODULE=on
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
-        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
-        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
-        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
-        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
     # This builder does the Android Maven and Azure uploads
     - stage: build
       if: type = push
@@ -263,3 +233,15 @@ jobs:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
+
+    # This builder executes race tests
+    - stage: build
+      if: type = cron
+      os: linux
+      dist: bionic
+      go: 1.17.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test  -race -coverage $TEST_PACKAGES
+

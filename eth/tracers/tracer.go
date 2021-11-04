@@ -549,17 +549,10 @@ func newJsTracer(code string, ctx *Context) (*jsTracer, error) {
 	tracer.vm.Pop()
 	hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
 	tracer.vm.Pop()
-
 	if hasEnter != hasExit {
 		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 	}
-	if !hasStep {
-		// If there's no step function, the enter and exit must be present
-		if !hasEnter {
-			return nil, fmt.Errorf("trace object must expose either step() or both enter() and exit()")
-		}
-	}
-	tracer.traceCallFrames = hasEnter
+	tracer.traceCallFrames = hasEnter && hasExit
 	tracer.traceSteps = hasStep
 
 	// Tracer is valid, inject the big int library to access large numbers

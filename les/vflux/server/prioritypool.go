@@ -128,7 +128,7 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, pp.setup.activeFlag.Or(pp.setup.inactiveFlag), 0)
 			if n, _ := pp.ns.GetField(node, pp.setup.queueField).(*ppNodeInfo); n != nil {
-				pp.disconnectedNode(n)
+				pp.disconnectNode(n)
 			}
 			ns.SetFieldSub(node, pp.setup.capacityField, nil)
 			ns.SetFieldSub(node, pp.setup.queueField, nil)
@@ -137,10 +137,10 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 	ns.SubscribeState(pp.setup.activeFlag.Or(pp.setup.inactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if c, _ := pp.ns.GetField(node, pp.setup.queueField).(*ppNodeInfo); c != nil {
 			if oldState.IsEmpty() {
-				pp.connectedNode(c)
+				pp.connectNode(c)
 			}
 			if newState.IsEmpty() {
-				pp.disconnectedNode(c)
+				pp.disconnectNode(c)
 			}
 		}
 	})
@@ -233,6 +233,14 @@ func (pp *priorityPool) Active() (uint64, uint64) {
 	return pp.activeCount, pp.activeCap
 }
 
+// Inactive returns the number of currently inactive nodes
+func (pp *priorityPool) Inactive() int {
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+
+	return pp.inactiveQueue.Size()
+}
+
 // Limits returns the maximum allowed number and total capacity of active nodes
 func (pp *priorityPool) Limits() (uint64, uint64) {
 	pp.lock.Lock()
@@ -285,9 +293,9 @@ func (pp *priorityPool) inactivePriority(p *ppNodeInfo) int64 {
 	return p.nodePriority.priority(pp.minCap)
 }
 
-// connectedNode is called when a new node has been added to the pool (inactiveFlag set)
+// connectNode is called when a new node has been added to the pool (inactiveFlag set)
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *priorityPool) connectedNode(c *ppNodeInfo) {
+func (pp *priorityPool) connectNode(c *ppNodeInfo) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	if c.connected {
@@ -301,10 +309,10 @@ func (pp *priorityPool) connectedNode(c *ppNodeInfo) {
 	pp.updateFlags(updates)
 }
 
-// disconnectedNode is called when a node has been removed from the pool (both inactiveFlag
+// disconnectNode is called when a node has been removed from the pool (both inactiveFlag
 // and activeFlag reset)
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *priorityPool) disconnectedNode(c *ppNodeInfo) {
+func (pp *priorityPool) disconnectNode(c *ppNodeInfo) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	if !c.connected {

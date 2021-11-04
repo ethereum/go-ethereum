@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 )
 
@@ -170,13 +171,45 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp2.json",
 		},
+		{ // Difficulty calculation - with uncles + Berlin
+			base: "./testdata/14",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.uncles.json", "Berlin", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_berlin.json",
+		},
+		{ // Difficulty calculation on arrow glacier
+			base: "./testdata/19",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "London", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_london.json",
+		},
+		{ // Difficulty calculation on arrow glacier
+			base: "./testdata/19",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "ArrowGlacier", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_arrowglacier.json",
+		},
 	} {
 
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
 		args = append(args, tc.input.get(tc.base)...)
+		var qArgs []string // quoted args for debugging purposes
+		for _, arg := range args {
+			if len(arg) == 0 {
+				qArgs = append(qArgs, `""`)
+			} else {
+				qArgs = append(qArgs, arg)
+			}
+		}
+		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
 		tt.Run("evm-test", args...)
-		tt.Logf("args: %v\n", strings.Join(args, " "))
 		// Compare the expected output, if provided
 		if tc.expOut != "" {
 			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
@@ -233,7 +266,7 @@ func TestT9n(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
-		{ // London txs on homestead
+		{ // London txs on London
 			base: "./testdata/15",
 			input: t9nInput{
 				inTxs:  "signed_txs.rlp",
@@ -248,6 +281,30 @@ func TestT9n(t *testing.T) {
 				stFork: "London",
 			},
 			expOut: "exp3.json",
+		},
+		{ // Transactions with too low gas
+			base: "./testdata/16",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "London",
+			},
+			expOut: "exp.json",
+		},
+		{ // Transactions with value exceeding 256 bits
+			base: "./testdata/17",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "London",
+			},
+			expOut: "exp.json",
+		},
+		{ // Invalid RLP
+			base: "./testdata/18",
+			input: t9nInput{
+				inTxs:  "invalid.rlp",
+				stFork: "London",
+			},
+			expExitCode: t8ntool.ErrorIO,
 		},
 	} {
 

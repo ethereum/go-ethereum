@@ -76,18 +76,27 @@ type AncientReader interface {
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
-	// ReadAncients retrieves multiple items in sequence, starting from the index 'start'.
+	// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 	// It will return
 	//  - at most 'count' items,
 	//  - at least 1 item (even if exceeding the maxBytes), but will otherwise
 	//   return as many items as fit into maxBytes.
-	ReadAncients(kind string, start, count, maxBytes uint64) ([][]byte, error)
+	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
+}
+
+// AncientBatchReader is the interface for 'batched' or 'atomic' reading.
+type AncientBatchReader interface {
+	AncientReader
+
+	// ReadAncients runs the given read operation while ensuring that no writes take place
+	// on the underlying freezer.
+	ReadAncients(fn func(AncientReader) error) (err error)
 }
 
 // AncientWriter contains the methods required to write to immutable ancient data.
@@ -117,7 +126,7 @@ type AncientWriteOp interface {
 // immutable ancient data.
 type Reader interface {
 	KeyValueReader
-	AncientReader
+	AncientBatchReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -130,7 +139,7 @@ type Writer interface {
 // AncientStore contains all the methods required to allow handling different
 // ancient data stores backing immutable chain data store.
 type AncientStore interface {
-	AncientReader
+	AncientBatchReader
 	AncientWriter
 	io.Closer
 }

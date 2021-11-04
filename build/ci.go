@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build none
 // +build none
 
 /*
@@ -32,7 +33,6 @@ Available commands are:
    nsis                                                                                        -- creates a Windows NSIS installer
    aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
    xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
-   xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
    purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -147,7 +147,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.17"
+	dlgoVersion = "1.17.2"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -187,8 +187,6 @@ func main() {
 		doAndroidArchive(os.Args[2:])
 	case "xcode":
 		doXCodeFramework(os.Args[2:])
-	case "xgo":
-		doXgo(os.Args[2:])
 	case "purge":
 		doPurge(os.Args[2:])
 	default:
@@ -259,6 +257,11 @@ func buildFlags(env build.Environment) (flags []string) {
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
+	// Enforce the stacksize to 8M, which is the case on most platforms apart from
+	// alpine Linux.
+	if runtime.GOOS == "linux" {
+		ld = append(ld, "-extldflags", "-Wl,-z,stack-size=0x800000")
+	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
@@ -276,6 +279,7 @@ func doTest(cmdline []string) {
 		cc       = flag.String("cc", "", "Sets C compiler binary")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 		verbose  = flag.Bool("v", false, "Whether to log verbosely")
+		race     = flag.Bool("race", false, "Execute the race detector")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -295,6 +299,9 @@ func doTest(cmdline []string) {
 	}
 	if *verbose {
 		gotest.Args = append(gotest.Args, "-v")
+	}
+	if *race {
+		gotest.Args = append(gotest.Args, "-race")
 	}
 
 	packages := []string{"./..."}
@@ -1197,48 +1204,6 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 		Commit:       env.Commit,
 		Contributors: contribs,
 	}
-}
-
-// Cross compilation
-
-func doXgo(cmdline []string) {
-	var (
-		alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
-	)
-	flag.CommandLine.Parse(cmdline)
-	env := build.Env()
-	var tc build.GoToolchain
-
-	// Make sure xgo is available for cross compilation
-	build.MustRun(tc.Install(GOBIN, "github.com/karalabe/xgo@latest"))
-
-	// If all tools building is requested, build everything the builder wants
-	args := append(buildFlags(env), flag.Args()...)
-
-	if *alltools {
-		args = append(args, []string{"--dest", GOBIN}...)
-		for _, res := range allToolsArchiveFiles {
-			if strings.HasPrefix(res, GOBIN) {
-				// Binary tool found, cross build it explicitly
-				args = append(args, "./"+filepath.Join("cmd", filepath.Base(res)))
-				build.MustRun(xgoTool(args))
-				args = args[:len(args)-1]
-			}
-		}
-		return
-	}
-
-	// Otherwise execute the explicit cross compilation
-	path := args[len(args)-1]
-	args = append(args[:len(args)-1], []string{"--dest", GOBIN, path}...)
-	build.MustRun(xgoTool(args))
-}
-
-func xgoTool(args []string) *exec.Cmd {
-	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, []string{"GOBIN=" + GOBIN}...)
-	return cmd
 }
 
 // Binary distribution cleanups
