@@ -99,8 +99,11 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
 				origin, _ = signer.Sender(tx)
-				txContext = vm.TxContext{origin, tx.GasPrice()}
-				context   = vm.BlockContext{
+				txContext = vm.TxContext{
+					Origin:   origin,
+					GasPrice: tx.GasPrice(),
+				}
+				context = vm.BlockContext{
 					CanTransfer: core.CanTransfer,
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
