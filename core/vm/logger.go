@@ -106,7 +106,7 @@ func (s *StructLog) ErrorString() string {
 type EVMLogger interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
-	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureEnter(env *EVM, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	CaptureExit(output []byte, gasUsed uint64, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
@@ -227,7 +227,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 }
 
-func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureEnter(env *EVM, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
@@ -350,7 +350,7 @@ func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, e
 		output, gasUsed, err)
 }
 
-func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureEnter(env *EVM, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
