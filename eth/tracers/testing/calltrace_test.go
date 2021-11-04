@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
+
 	// Force-load the native, to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
