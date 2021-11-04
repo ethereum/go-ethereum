@@ -129,3 +129,15 @@ func (aw *AccessWitness) Keys() [][]byte {
 func (aw *AccessWitness) KeyVals() map[common.Hash][]byte {
 	return aw.Chunks
 }
+
+func (aw *AccessWitness) Copy() *AccessWitness {
+	naw := &AccessWitness{
+		Branches:  make(map[[31]byte]struct{}),
+		Chunks:    make(map[common.Hash][]byte),
+		Undefined: make(map[common.Hash]struct{}),
+	}
+
+	naw.Merge(aw)
+
+	return naw
+}

@@ -17,7 +17,6 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -49,6 +48,4 @@ type Processor interface {
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
 	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, *types.AccessWitness, uint64, error)
-
-	ProcessStateless(block *types.Block, statedb *state.StateDB, cfg vm.Config, accesses map[common.Hash]common.Hash) (types.Receipts, []*types.Log, uint64, error)
 }

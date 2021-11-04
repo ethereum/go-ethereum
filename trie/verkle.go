@@ -135,6 +135,7 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 		}
 	}
 
+	// XXX onleaf hasn't been called
 	return trie.Hash(), commitCount, nil
 }
 
@@ -237,19 +238,19 @@ func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {
 		chunkCount++
 	}
 	chunks := make([][32]byte, chunkCount)
-	for i, chunk := range chunks {
+	for i := range chunks {
 		end := 31 * (i + 1)
 		if len(code) < end {
 			end = len(code)
 		}
-		copy(chunk[1:], code[31*i:end])
+		copy(chunks[i][1:], code[31*i:end])
 		for j := lastOffset; int(j) < len(code[31*i:end]); j++ {
 			if code[j] >= byte(PUSH1) && code[j] <= byte(PUSH32) {
 				j += code[j] - byte(PUSH1) + 1
 				lastOffset = (j + 1) % 31
 			}
 		}
-		chunk[0] = lastOffset
+		chunks[i][0] = lastOffset
 	}
 
 	return chunks, nil

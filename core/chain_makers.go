@@ -44,7 +44,6 @@ type BlockGen struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   []*types.Header
-	witness  *types.AccessWitness
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -110,10 +109,10 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		panic(err)
 	}
 	if accesses != nil {
-		if b.witness != nil {
-			b.witness.Merge(accesses)
+		if b.statedb.Witness() != nil {
+			b.statedb.Witness().Merge(accesses)
 		} else {
-			b.witness = accesses
+			b.statedb.SetWitness(accesses)
 		}
 	}
 	b.txs = append(b.txs, tx)
@@ -300,7 +299,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine, witness: types.NewAccessWitness()}
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
 		// Mutate the state and block according to any hard-fork specs
@@ -343,7 +342,8 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 				// before building the proof. Ultimately, node
 				// resolution can be done with a prefetcher or
 				// from GetCommitmentsAlongPath.
-				keys := b.witness.Keys()
+
+				keys := statedb.Witness().Keys()
 				for _, key := range keys {
 					out, err := vtr.TryGet(key)
 					if err != nil {
@@ -354,7 +354,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 					}
 				}
 				vtr.Hash()
-				_, err := vtr.ProveAndSerialize(keys, b.witness.KeyVals())
+				_, err := vtr.ProveAndSerialize(keys, statedb.Witness().KeyVals())
 				//block.SetVerkleProof(p)
 				if err != nil {
 					panic(err)

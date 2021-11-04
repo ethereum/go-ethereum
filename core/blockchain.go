@@ -1598,17 +1598,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			receipts types.Receipts
 			logs     []*types.Log
 		)
-		if len(block.Header().VerkleProof) == 0 {
-			receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
-		} else {
-			var leaves map[common.Hash]common.Hash
-			leaves, err = trie.DeserializeAndVerifyVerkleProof(block.Header().VerkleProof)
-			if err != nil {
-				return it.index, err
-			}
-			statedb.SetStateless(leaves)
-			receipts, logs, usedGas, err = bc.processor.ProcessStateless(block, statedb, bc.vmConfig, leaves)
-		}
+		receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
