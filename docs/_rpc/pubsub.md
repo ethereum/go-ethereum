@@ -130,7 +130,7 @@ In case of a chain reorganization previous sent logs that are on the old chain w
 
 Returns the hash for all transactions that are added to the pending state and are signed with a key that is available in the node.
 
-When a transaction that was previously part of the canonical chain isn't part of the new canonical chain after a reogranization its again emitted.
+When a transaction that was previously part of the canonical chain isn't part of the new canonical chain after a reorganization its again emitted.
 
 #### Parameters
 
