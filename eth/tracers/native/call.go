@@ -77,10 +77,14 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.callstack[0].Output = bytesToHex(output)
 	t.callstack[0].GasUsed = uintToHex(gasUsed)
 	if err != nil {
 		t.callstack[0].Error = err.Error()
+		if err.Error() == "execution reverted" && len(output) > 0 {
+			t.callstack[0].Output = bytesToHex(output)
+		}
+	} else {
+		t.callstack[0].Output = bytesToHex(output)
 	}
 }
 
