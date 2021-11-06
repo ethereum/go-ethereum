@@ -6,6 +6,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/countdown"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -77,7 +78,7 @@ func (consensus *XDPoS_v2) Dispatcher() error {
 	SyncInfo workflow
 */
 // Verify syncInfo and trigger trigger process QC or TC if successful
-func (consensus *XDPoS_v2) VerifySyncInfoMessage(header *types.Header) error {
+func (consensus *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
 	/*
 		1. Verify items including:
 				- verifyQC
@@ -98,7 +99,7 @@ func (consensus *XDPoS_v2) SyncInfoHandler(header *types.Header) error {
 /*
 	Vote workflow
 */
-func (consensus *XDPoS_v2) VerifyVoteMessage() error {
+func (consensus *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) error {
 	/*
 		  1. Check signature:
 					- Use ecRecover to get the public key
@@ -123,7 +124,7 @@ func (consensus *XDPoS_v2) VoteHandler() {
 	Timeout workflow
 */
 // Verify timeout message type from peers in bft.go
-func (consensus *XDPoS_v2) VerifyTimeoutMessage() error {
+func (consensus *XDPoS_v2) VerifyTimeoutMessage(utils.Timeout) error {
 	/*
 		  1. Check signature:
 					- Use ecRecover to get the public key
@@ -166,7 +167,7 @@ func (consensus *XDPoS_v2) generateBlockInfo() error {
 }
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
-func (consensus *XDPoS_v2) verifyBlockInfo(header *types.Header) error {
+func (consensus *XDPoS_v2) VerifyBlockInfo(blockInfo utils.BlockInfo) error {
 	return nil
 }
 

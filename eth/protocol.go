@@ -63,6 +63,11 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Protocol messages belonging to eth/100
+	VoteMsg     = 0xe0
+	TimeoutMsg  = 0xe1
+	SyncInfoMsg = 0xe2
 )
 
 type errCode int

@@ -61,6 +61,13 @@ type PublicApiSnapshot struct {
 // Round number type in XDPoS 2.0
 type Round uint64
 
+// Block Info struct in XDPoS 2.0, used for vote message, etc.
+type BlockInfo struct {
+	Hash   common.Hash
+	Round  Round
+	Number *big.Int
+}
+
 // Vote message in XDPoS 2.0
 type Vote struct {
 	ProposedBlockInfo BlockInfo
@@ -77,13 +84,6 @@ type Timeout struct {
 type SyncInfo struct {
 	HighestQuorumCert  QuorumCert
 	HighestTimeoutCert TimeoutCert
-}
-
-// Block Info struct in XDPoS 2.0, used for vote message, etc.
-type BlockInfo struct {
-	Hash   common.Hash
-	Round  Round
-	Number *big.Int
 }
 
 // Quorum Certificate struct in XDPoS 2.0
