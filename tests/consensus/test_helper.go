@@ -223,12 +223,19 @@ func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testi
 	return ms
 }
 
-func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block) {
+func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address) {
 	// Preparation
 	var err error
 	backend := getCommonBackend(t, chainConfig)
 	blockchain := backend.GetBlockChain()
 	blockchain.Client = backend
+
+	// Authorise
+	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
+	if err != nil {
+		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
+	}
+	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
 
 	currentBlock := blockchain.Genesis()
 
@@ -248,7 +255,7 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 		t.Fatal(err)
 	}
 
-	return blockchain, backend, currentBlock
+	return blockchain, backend, currentBlock, signer
 }
 
 // insert Block without transcation attached

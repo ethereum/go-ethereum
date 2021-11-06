@@ -38,6 +38,9 @@ var (
 	XDPoSV2Config = &V2{
 		TimeoutWorkerDuration: 50000,
 	}
+	TestXDPoSV2Config = &V2{
+		TimeoutWorkerDuration: 5000,
+	}
 
 	// XDPoSChain mainnet config
 	XDCMainnetChainConfig = &ChainConfig{
@@ -125,9 +128,9 @@ var (
 
 	TestXDPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 2, Epoch: 900, Reward: 250, RewardCheckpoint: 900, Gap: 890, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"), V2: *XDPoSV2Config}}
 	// XDPoS config in use for v1 engine only
-	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2: *XDPoSV2Config}}
+	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2: *TestXDPoSV2Config}}
 	// XDPoS config with v2 engine after block 10
-	TestXDPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, XDPoSV2Block: big.NewInt(10), V2: *XDPoSV2Config}}
+	TestXDPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, XDPoSV2Block: big.NewInt(10), V2: *TestXDPoSV2Config}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))

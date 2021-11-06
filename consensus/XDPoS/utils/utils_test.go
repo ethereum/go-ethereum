@@ -134,11 +134,11 @@ func TestHashAndSigHash(t *testing.T) {
 	if syncInfo1.Hash() == syncInfo2.Hash() {
 		t.Fatalf("Hash of two sync info shouldn't equal")
 	}
-	if VoteSigHash(&blockInfo1) == VoteSigHash(&blockInfo2) {
+	if VoteSigHash(blockInfo1) == VoteSigHash(blockInfo2) {
 		t.Fatalf("SigHash of two block info shouldn't equal")
 	}
 	round2 := Round(999)
-	if TimeoutSigHash(&round) == TimeoutSigHash(&round2) {
+	if TimeoutSigHash(round) == TimeoutSigHash(round2) {
 		t.Fatalf("SigHash of two round shouldn't equal")
 	}
 }

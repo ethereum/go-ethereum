@@ -210,6 +210,7 @@ func (x *XDPoS) CalcDifficulty(chain consensus.ChainReader, time uint64, parent 
 func (x *XDPoS) Authorize(signer common.Address, signFn clique.SignerFn) {
 	// Authorize each consensus individually
 	x.EngineV1.Authorize(signer, signFn)
+	x.EngineV2.Authorize(signer, signFn)
 }
 
 func (x *XDPoS) GetPeriod() uint64 {

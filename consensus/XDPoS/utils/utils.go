@@ -178,7 +178,10 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 
 func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
+	err := rlp.Encode(hw, x)
+	if err != nil {
+		log.Error("rlpHash failed", err)
+	}
 	hw.Sum(h[:0])
 	return h
 }
@@ -195,10 +198,10 @@ func (m *SyncInfo) Hash() common.Hash {
 	return rlpHash(m)
 }
 
-func VoteSigHash(m *BlockInfo) common.Hash {
+func VoteSigHash(m BlockInfo) common.Hash {
 	return rlpHash(m)
 }
 
-func TimeoutSigHash(m *Round) common.Hash {
+func TimeoutSigHash(m Round) common.Hash {
 	return rlpHash(m)
 }
