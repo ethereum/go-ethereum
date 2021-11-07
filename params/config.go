@@ -672,6 +672,7 @@ type Rules struct {
 
 // Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(num *big.Int) Rules {
+	// TODO (MariusVanDerWijden) replace isMerge after the merge once we know the merge block
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
