@@ -104,6 +104,7 @@ const (
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
 	BASEFEE     OpCode = 0x48
+	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
 )
 
 // 0x50 range - 'storage' and execution.
@@ -279,7 +280,7 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY",
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to RANDOM post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",

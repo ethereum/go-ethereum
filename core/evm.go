@@ -61,6 +61,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
+		Random:      header.MixDigest,
 	}
 }
 

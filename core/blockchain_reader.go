@@ -343,6 +343,12 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
+// SetVMConfig sets the vm config.
+// Warning: might not be threadsafe with other components
+func (bc *BlockChain) SetVMConfig(config vm.Config) {
+	bc.vmConfig = config
+}
+
 // SetTxLookupLimit is responsible for updating the txlookup limit to the
 // original one stored in db if the new mismatches with the old one.
 func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
