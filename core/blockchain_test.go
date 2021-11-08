@@ -18,12 +18,13 @@ package core
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -1323,7 +1324,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 }
 
 /*
-	Collection test for BlochsHashCache
+	Collection test for BlocksHashCache
 	cases
 		1. When init new chain
 		2. when insertChain
