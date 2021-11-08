@@ -388,7 +388,8 @@ func (r *frameResult) pushObject(vm *duktape.Context) {
 // jsTracer provides an implementation of Tracer that evaluates a Javascript
 // function for each VM execution step.
 type jsTracer struct {
-	vm *duktape.Context // Javascript VM instance
+	vm  *duktape.Context // Javascript VM instance
+	env *vm.EVM          // EVM instance executing the code being traced
 
 	tracerObject int // Stack index of the tracer JavaScript object
 	stateObject  int // Stack index of the global state to pull arguments from
@@ -680,6 +681,7 @@ func wrapError(context string, err error) error {
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	jst.env = env
 	jst.ctx["type"] = "CALL"
 	if create {
 		jst.ctx["type"] = "CREATE"
@@ -709,7 +711,7 @@ func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (jst *jsTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (jst *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	if !jst.traceSteps {
 		return
 	}
@@ -719,7 +721,7 @@ func (jst *jsTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 	// If tracing was interrupted, set the error and stop
 	if atomic.LoadUint32(&jst.interrupt) > 0 {
 		jst.err = jst.reason
-		env.Cancel()
+		jst.env.Cancel()
 		return
 	}
 	jst.opWrapper.op = op
@@ -731,7 +733,7 @@ func (jst *jsTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 	*jst.gasValue = uint(gas)
 	*jst.costValue = uint(cost)
 	*jst.depthValue = uint(depth)
-	*jst.refundValue = uint(env.StateDB.GetRefund())
+	*jst.refundValue = uint(jst.env.StateDB.GetRefund())
 
 	jst.errorValue = nil
 	if err != nil {
@@ -745,7 +747,7 @@ func (jst *jsTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (jst *jsTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (jst *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	if jst.err != nil {
 		return
 	}
