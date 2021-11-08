@@ -68,7 +68,9 @@ Example output of first stage of block downloading:
       startingBlock: 3809258
 }
 
-A response from `eth.syncing` of `false` means you are synced up.
+You will import up to the `highestBlock` and `knownStates`. Block importing will stop `~64` blocks behind head and finish importing states. 
+
+Once all `states` are downloaded, `geth` will switch into a full node and sync the remaining `~64` blocks fully, as well as new ones. In this context, `eth.syncing` returns false once synced.
 
 Now we're ready to start mining. In a new terminal session, run ethminer and connect it to geth:
 
