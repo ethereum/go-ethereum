@@ -157,7 +157,7 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 		// The maximum acceptable reorg depth can be limited by the
 		// finalised block somehow. TODO(rjl493456442) fix the hard-
 		// coded number here later.
-		state, err = api.eth.StateAtBlock(parent, 1000, nil, false)
+		state, err = api.eth.StateAtBlock(parent, 1000, nil, false, false)
 	}
 	if err != nil {
 		return nil, err

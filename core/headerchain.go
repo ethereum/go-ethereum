@@ -135,7 +135,7 @@ type headerWriteResult struct {
 // Reorg reorgs the local canonical chain into the specified chain. The reorg
 // can be classified into two cases: (a) extend the local chain (b) switch the
 // head to the given header.
-func (hc *HeaderChain) Reorg(headers []*types.Header, inserted []rawdb.NumberHash) error {
+func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 	// Short circuit if nothing to reorg.
 	if len(headers) == 0 {
 		return nil
@@ -179,10 +179,18 @@ func (hc *HeaderChain) Reorg(headers []*types.Header, inserted []rawdb.NumberHas
 		}
 	}
 	// Extend the canonical chain with the new headers
-	for _, hn := range inserted {
-		rawdb.WriteCanonicalHash(batch, hn.Hash, hn.Number)
-		rawdb.WriteHeadHeaderHash(batch, hn.Hash)
+	for i := 0; i < len(headers)-1; i++ {
+		hash := headers[i+1].ParentHash // Save some extra hashing
+		num := headers[i].Number.Uint64()
+		rawdb.WriteCanonicalHash(batch, hash, num)
+		rawdb.WriteHeadHeaderHash(batch, hash)
 	}
+	// Write the last header
+	hash := headers[len(headers)-1].Hash()
+	num := headers[len(headers)-1].Number.Uint64()
+	rawdb.WriteCanonicalHash(batch, hash, num)
+	rawdb.WriteHeadHeaderHash(batch, hash)
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
@@ -197,13 +205,13 @@ func (hc *HeaderChain) Reorg(headers []*types.Header, inserted []rawdb.NumberHas
 // parents are already known. The chain head header won't be updated in this
 // function, the additional setChainHead is expected in order to finish the entire
 // procedure.
-func (hc *HeaderChain) WriteHeaders(headers []*types.Header) ([]rawdb.NumberHash, error) {
+func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	if len(headers) == 0 {
-		return []rawdb.NumberHash{}, nil
+		return 0, nil
 	}
 	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
-		return []rawdb.NumberHash{}, consensus.ErrUnknownAncestor
+		return 0, consensus.ErrUnknownAncestor
 	}
 	var (
 		newTD       = new(big.Int).Set(ptd) // Total difficulty of inserted chain
@@ -242,13 +250,13 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) ([]rawdb.NumberHash
 	// Skip the slow disk write of all headers if interrupted.
 	if hc.procInterrupt() {
 		log.Debug("Premature abort during headers import")
-		return []rawdb.NumberHash{}, errors.New("aborted")
+		return 0, errors.New("aborted")
 	}
 	// Commit to disk!
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write headers", "error", err)
 	}
-	return inserted, nil
+	return len(inserted), nil
 }
 
 // writeHeadersAndSetHead writes a batch of block headers and applies the last
@@ -268,8 +276,8 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		lastHash   = headers[len(headers)-1].Hash()
 		result     = &headerWriteResult{
 			status:     NonStatTy,
-			ignored:    len(headers) - len(inserted),
-			imported:   len(inserted),
+			ignored:    len(headers) - inserted,
+			imported:   inserted,
 			lastHash:   lastHash,
 			lastHeader: lastHeader,
 		}
@@ -278,7 +286,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 	if reorg, err := forker.ReorgNeeded(hc.CurrentHeader(), lastHeader); err != nil {
 		return nil, err
 	} else if !reorg {
-		if len(inserted) != 0 {
+		if inserted != 0 {
 			result.status = SideStatTy
 		}
 		return result, nil
@@ -289,7 +297,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		return result, nil
 	}
 	// Apply the reorg operation
-	if err := hc.Reorg(headers, inserted); err != nil {
+	if err := hc.Reorg(headers); err != nil {
 		return nil, err
 	}
 	result.status = CanonStatTy
