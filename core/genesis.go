@@ -265,6 +265,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
+		statedb.SetAddr(addr) // (joonha)
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}

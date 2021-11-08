@@ -247,6 +247,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
 		statedb.SetBalance(addr, a.Balance)
+		statedb.SetAddr(addr, addr)// (joonha)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}

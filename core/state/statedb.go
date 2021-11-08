@@ -436,6 +436,14 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
+// (joonha)
+func (s *StateDB) SetAddr(addr common.Address) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetAddr(addr)
+	}
+}
+
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -1237,14 +1245,11 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		fmt.Println("insert -> key:", keyToInsert.Hex())
 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
+		} else {
+			// apply inactivation result to AddrToKey_Dirty (joonha)
+			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 		}
 	}
-	//
-	//
-	// TODO: apply this result to (ex. common.AddrToKey, AddrToKey_Dirty)
-	// (leaf node will contain addrHash, so we can adjust common.AddrToKey/AddrToKey_Dirty)
-	//
-	//
 
 	// print result
 	fmt.Println("inactivate", len(KeysToInactivate), "accounts")

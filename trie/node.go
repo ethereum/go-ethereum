@@ -247,7 +247,8 @@ func (n *shortNode) toString(ind string, db *Database) string {
 	// if n.Val is account, then this node is leaf node & n.Key is left address of the account (along the path)
 	hashnode, _ := n.cache()
 	hash := common.BytesToHash(hashnode)
-	return fmt.Sprintf("{shortNode hash: %s, key: %x - value: %v} ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db))
+	// return fmt.Sprintf("{shortNode hash: %s, key: %x - value: %v} ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db))
+	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey:\t\t%x \n\t\t%v ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db)) // cleaner printing (joonha)
 }
 func (n hashNode) toString(ind string, db *Database) string {
 	// resolve hashNode (get node from db)
@@ -265,10 +266,12 @@ type Account struct {
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+	Addr	 common.Address
 }
 func (n valueNode) toString(ind string, db *Database) string {
 	// decode data into account & print account
 	var acc Account
 	rlp.DecodeBytes([]byte(n), &acc)
-	return fmt.Sprintf("[ Nonce: %d / Balance: %s ]", acc.Nonce, acc.Balance.String())
+	// return fmt.Sprintf("[ Nonce: %d / Balance: %s ]", acc.Nonce, acc.Balance.String())
+	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr) // print (joonha)
 }

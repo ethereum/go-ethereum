@@ -34,6 +34,9 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
 
+	// should SetAddr be added here? (joonha)
+	// 높은 확률로 필요 없을 듯.
+
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)

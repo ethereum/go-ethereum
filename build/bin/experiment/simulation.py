@@ -16,7 +16,7 @@ PASSWORD = "1234"
 
 # Account number
 ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 200
+TX_PER_BLOCK = 5
 
 # multiprocessing
 THREAD_COUNT = 1

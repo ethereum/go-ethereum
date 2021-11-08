@@ -104,6 +104,7 @@ type Account struct {
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+	Addr	 common.Address // in compactTrie, addr should be a node instance (joonha)
 }
 
 // newObject creates a state object.
@@ -117,6 +118,8 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
 	}
+
+	data.Addr = address // (joonha)
 	
 	// set addrHash as a specific key value to implement compactTrie (jmlee)
 	addressHash, doExist := db.AddrToKeyDirty[address]
@@ -557,6 +560,18 @@ func (s *stateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
 }
 
+// (joonha)
+func (s *stateObject) SetAddr(addr common.Address) {
+	s.db.journal.append(addrChange{
+		account: &addr, // &s.address is ok
+	})
+	s.setAddr(addr)
+}
+// (joonha)
+func (s *stateObject) setAddr(addr common.Address) {
+	s.data.Addr = addr
+}
+
 func (s *stateObject) CodeHash() []byte {
 	return s.data.CodeHash
 }
@@ -584,6 +599,7 @@ func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
+	data.Addr = address // (joonha)
 	return &stateObject{
 		db:            db,
 		address:       address,

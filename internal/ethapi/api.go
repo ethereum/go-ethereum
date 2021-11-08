@@ -45,7 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	// "github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -668,14 +668,14 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 	} else if block != nil && err == nil {
 		fmt.Println("start inspecting state trie at block", block.NumberU64())
 
-		startTime := time.Now()
-		triedb := core.GlobalBC.StateCache().TrieDB()        // get leveldb (codes from eth/api.go L:501)
-		stateTrie, _ := trie.NewSecure(block.Root(), triedb) // get the state trie (triedb is same as stateTrie.db)
-		tir := stateTrie.InspectTrie()
-		elapsedTime := time.Since(startTime)
+		// startTime := time.Now()
+		// triedb := core.GlobalBC.StateCache().TrieDB()        // get leveldb (codes from eth/api.go L:501)
+		// stateTrie, _ := trie.NewSecure(block.Root(), triedb) // get the state trie (triedb is same as stateTrie.db)
+		// tir := stateTrie.InspectTrie()
+		// elapsedTime := time.Since(startTime)
 		// fmt.Println("\n\n\ntrie inspect result at block", block.NumberU64(), "(it took", int(elapsedTime.Seconds()), "seconds)")
-		tir.PrintTrieInspectResult(block.NumberU64(), int(elapsedTime.Seconds()))
-		fmt.Println("")
+		// tir.PrintTrieInspectResult(block.NumberU64(), int(elapsedTime.Seconds()))
+		// fmt.Println("")
 	}
 	if block != nil && err == nil {
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
@@ -851,6 +851,8 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		if account.Nonce != nil {
 			state.SetNonce(addr, uint64(*account.Nonce))
 		}
+		// should Overriding account address be needed? (joonha)
+		
 		// Override account(contract) code.
 		if account.Code != nil {
 			state.SetCode(addr, *account.Code)

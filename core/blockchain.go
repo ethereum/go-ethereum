@@ -1607,10 +1607,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
 
 		// print state trie (jmlee)
-		// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
-		// ldb := trie.NewDatabase(bc.db)
-		// stateTrie, _ := trie.NewSecure(bc.CurrentBlock().Root(), ldb)
-		// stateTrie.Print()
+		fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
+		ldb := trie.NewDatabase(bc.db)
+		stateTrie, _ := trie.NewSecure(bc.CurrentBlock().Root(), ldb)
+		stateTrie.Print()
 	}
 
 	// set common.DoDeleteLeafNode (jmlee)

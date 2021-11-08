@@ -116,6 +116,10 @@ type (
 		account            *common.Address
 		prevcode, prevhash []byte
 	}
+	// (joonha)
+	addrChange struct {
+		account	*common.Address
+	}
 
 	// Changes to other state values.
 	refundChange struct {
@@ -196,6 +200,16 @@ func (ch nonceChange) revert(s *StateDB) {
 func (ch nonceChange) dirtied() *common.Address {
 	return ch.account
 }
+
+// in case of revertion, addr should also be reverted (joonha)
+func (ch addrChange) revert(s *StateDB) {
+	s.getStateObject(*ch.account).setAddr(*ch.account) // *ch.account
+}
+// don't know the use of this function but following the convention (joonha)
+func (ch addrChange) dirtied() *common.Address {
+	return ch.account
+}
+
 
 func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
