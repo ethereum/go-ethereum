@@ -2428,26 +2428,21 @@ func (bc *BlockChain) UpdateM1() error {
 	}
 	opts := new(bind.CallOpts)
 
-	// var candidates []common.Address
-	// // get candidates from slot of stateDB
-	// // if can't get anything, request from contracts
-	// stateDB, err := bc.State()
-	// if err != nil {
-
-	// 	candidates, err = validator.GetCandidates(opts)
-	// 	if err != nil {
-
-	// 		return err
-	// 	}
-	// } else {
-
-	// 	candidates = state.GetCandidates(stateDB)
-
-	// }
-
-	candidates, err := validator.GetCandidates(opts)
+	var candidates []common.Address
+	// get candidates from slot of stateDB
+	// if can't get anything, request from contracts
+	stateDB, err := bc.State()
 	if err != nil {
-		return err
+
+		candidates, err = validator.GetCandidates(opts)
+		if err != nil {
+
+			return err
+		}
+	} else {
+
+		candidates = state.GetCandidates(stateDB)
+
 	}
 
 	var ms []utils.Masternode
@@ -2487,7 +2482,7 @@ func (bc *BlockChain) UpdateM1() error {
 			maxMasternodes = common.MaxMasternodes
 		}
 		if len(ms) > maxMasternodes {
-			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:common.MaxMasternodes])
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:maxMasternodes])
 		} else {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
 		}
