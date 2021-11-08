@@ -1863,3 +1863,124 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Errorf("Frozen block count mismatch: have %d, want %d", frozen, tt.expFrozen)
 	}
 }
+
+// TestIssue23496 tests scenario described in https://github.com/ethereum/go-ethereum/pull/23496#issuecomment-926393893
+// Credits to @zzyalbert for finding the issue.
+//
+// Local chain owns these blocks:
+// G  B1  B2  B3  B4
+// B1: state committed
+// B2: snapshot disk layer
+// B3: state committed
+// B4: head block
+//
+// Crash happens without fully persisting snapshot and in-memory states,
+// chain rewinds itself to the B1 (skip B3 in order to recover snapshot)
+// In this case the snapshot layer of B3 is not created because of existent
+// state.
+func TestIssue23496(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	// Create a temporary persistent database
+	datadir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("Failed to create temporary datadir: %v", err)
+	}
+	os.RemoveAll(datadir)
+
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	if err != nil {
+		t.Fatalf("Failed to create persistent database: %v", err)
+	}
+	defer db.Close() // Might double close, should be fine
+
+	// Initialize a fresh chain
+	var (
+		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		engine  = ethash.NewFullFaker()
+		config  = &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  256,
+			SnapshotWait:   true,
+		}
+	)
+	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create chain: %v", err)
+	}
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), 4, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{0x02})
+		b.SetDifficulty(big.NewInt(1000000))
+	})
+
+	// Insert block B1 and commit the state into disk
+	if _, err := chain.InsertChain(blocks[:1]); err != nil {
+		t.Fatalf("Failed to import canonical chain start: %v", err)
+	}
+	chain.stateCache.TrieDB().Commit(blocks[0].Root(), true, nil)
+
+	// Insert block B2 and commit the snapshot into disk
+	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
+		t.Fatalf("Failed to import canonical chain start: %v", err)
+	}
+	if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
+		t.Fatalf("Failed to flatten snapshots: %v", err)
+	}
+
+	// Insert block B3 and commit the state into disk
+	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
+		t.Fatalf("Failed to import canonical chain start: %v", err)
+	}
+	chain.stateCache.TrieDB().Commit(blocks[2].Root(), true, nil)
+
+	// Insert the remaining blocks
+	if _, err := chain.InsertChain(blocks[3:]); err != nil {
+		t.Fatalf("Failed to import canonical chain tail: %v", err)
+	}
+
+	// Pull the plug on the database, simulating a hard crash
+	db.Close()
+
+	// Start a new blockchain back up and see where the repair leads us
+	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	if err != nil {
+		t.Fatalf("Failed to reopen persistent database: %v", err)
+	}
+	defer db.Close()
+
+	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to recreate chain: %v", err)
+	}
+	defer chain.Stop()
+
+	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
+	}
+	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	}
+	if head := chain.CurrentBlock(); head.NumberU64() != uint64(1) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(1))
+	}
+
+	// Reinsert B2-B4
+	if _, err := chain.InsertChain(blocks[1:]); err != nil {
+		t.Fatalf("Failed to import canonical chain tail: %v", err)
+	}
+	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
+	}
+	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	}
+	if head := chain.CurrentBlock(); head.NumberU64() != uint64(4) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	}
+	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
+		t.Error("Failed to regenerate the snapshot of known state")
+	}
+}

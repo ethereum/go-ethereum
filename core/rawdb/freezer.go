@@ -80,8 +80,9 @@ type freezer struct {
 	frozen    uint64 // Number of blocks already frozen
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
-	// This lock synchronizes writers and the truncate operation.
-	writeLock  sync.Mutex
+	// This lock synchronizes writers and the truncate operation, as well as
+	// the "atomic" (batched) read operations.
+	writeLock  sync.RWMutex
 	writeBatch *freezerBatch
 
 	readonly     bool
@@ -201,12 +202,12 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errUnknownTable
 }
 
-// ReadAncients retrieves multiple items in sequence, starting from the index 'start'.
+// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
 //  - at most 'max' items,
 //  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
 //   return as many items as fit into maxByteSize.
-func (f *freezer) ReadAncients(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+func (f *freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
 	}
@@ -222,13 +223,21 @@ func (f *freezer) Ancients() (uint64, error) {
 func (f *freezer) AncientSize(kind string) (uint64, error) {
 	// This needs the write lock to avoid data races on table fields.
 	// Speed doesn't matter here, AncientSize is for debugging.
-	f.writeLock.Lock()
-	defer f.writeLock.Unlock()
+	f.writeLock.RLock()
+	defer f.writeLock.RUnlock()
 
 	if table := f.tables[kind]; table != nil {
 		return table.size()
 	}
 	return 0, errUnknownTable
+}
+
+// ReadAncients runs the given read operation while ensuring that no writes take place
+// on the underlying freezer.
+func (f *freezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+	f.writeLock.RLock()
+	defer f.writeLock.RUnlock()
+	return fn(f)
 }
 
 // ModifyAncients runs the given write operation.

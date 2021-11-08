@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // verifyImportEvent verifies that one single event arrive on an import channel.
@@ -247,7 +248,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	// Prepare announcement by latest header.
 	headerOne := s.backend.Blockchain().GetHeaderByNumber(1)
 	hash, number := headerOne.Hash(), headerOne.Number.Uint64()
-	td := big.NewInt(200) // bad td
+	td := big.NewInt(params.GenesisDifficulty.Int64() + 200) // bad td
 
 	// Sign the announcement if necessary.
 	announce := announceData{hash, number, td, 0, nil}
