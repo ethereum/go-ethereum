@@ -148,7 +148,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
 	// Create the tracer, the EVM environment and run it
-	tracer, err := New("callTracer", new(Context))
+	tracer, err := New("callTracerJs", new(Context))
 	if err != nil {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
