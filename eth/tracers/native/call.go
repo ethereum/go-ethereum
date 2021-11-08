@@ -62,6 +62,7 @@ func newCallTracer() tracers.Tracer {
 	return t
 }
 
+// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
@@ -76,6 +77,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 	}
 }
 
+// CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 	t.callstack[0].GasUsed = uintToHex(gasUsed)
 	if err != nil {
@@ -88,12 +90,15 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 	}
 }
 
+// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
+// CaptureFault implements the EVMLogger interface to trace an execution fault.
 func (t *callTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
+// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
@@ -112,6 +117,8 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 	t.callstack = append(t.callstack, call)
 }
 
+// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// execute any code.
 func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size := len(t.callstack)
 	if size <= 1 {
@@ -134,6 +141,8 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
+// GetResult returns the json-encoded nested list of call traces, and any
+// error arising from the encoding or forceful termination (via `Stop`).
 func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
@@ -145,6 +154,7 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(res), t.reason
 }
 
+// Stop terminates execution of the tracer at the first opportune moment.
 func (t *callTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
