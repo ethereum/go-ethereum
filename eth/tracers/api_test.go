@@ -325,7 +325,7 @@ func TestOverriddenTraceCall(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	}))
-	randomAccounts, tracer := newAccounts(3), "callTracer"
+	randomAccounts, tracer := newAccounts(3), "callTracerJs"
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
