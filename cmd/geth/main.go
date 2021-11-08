@@ -140,6 +140,7 @@ var (
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.RopstenFlag,
+		utils.SepoliaFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
 		utils.VMEnableDebugFlag,
