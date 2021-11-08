@@ -16,10 +16,11 @@
 package validator
 
 import (
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
-	"math/big"
 )
 
 type Validator struct {
@@ -51,8 +52,8 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	// Min Voter Cap 10 XDC
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
-	// Voter Delay Withdraw 2 days = 86400 blocks
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(150), big.NewInt(1296000), big.NewInt(86400))
+	// Voter Delay Withdraw 10 days = 432000 blocks
+	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(18), big.NewInt(1296000), big.NewInt(432000))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
