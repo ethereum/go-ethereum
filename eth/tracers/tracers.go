@@ -50,7 +50,7 @@ var (
 
 // RegisterLookup registers a method as a lookup for tracers, meaning that
 // users can invoke a named tracer through that lookup. If 'wildcard' is true,
-// then the lookup will be placed last (this is typically meant for interpreted
+// then the lookup will be placed last. This is typically meant for interpreted
 // engines (js) which can evaluate dynamic user-supplied code.
 func RegisterLookup(wildcard bool, lookup lookupFunc) {
 	if wildcard {

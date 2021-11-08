@@ -19,7 +19,7 @@ Package native is a collection of tracers written in go.
 
 In order to add a native tracer and have it compiled into the binary, a new
 file needs to be added to this folder, containing an implementation of the
-`eth.Tracer` interface.
+`eth.tracers.Tracer` interface.
 
 Aside from implementing the tracer, it also needs to register itself, using the
 `register` method -- and this needs to be done in the package initialization.
