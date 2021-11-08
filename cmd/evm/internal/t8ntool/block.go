@@ -19,21 +19,95 @@ package t8ntool
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
+//go:generate gencodec -type bbEnv -field-override bbEnvMarshaling -out gen_bbenv.go
+type bbEnv struct {
+	ParentHash  common.Hash      `json:"parentHash"`
+	UncleHash   common.Hash      `json:"sha3Uncles"`
+	Coinbase    common.Address   `json:"miner"            gencode:"required"`
+	Root        common.Hash      `json:"stateRoot"        gencodec:"required"`
+	TxHash      common.Hash      `json:"transactionsRoot"`
+	ReceiptHash common.Hash      `json:"receiptsRoot"`
+	Bloom       types.Bloom      `json:"logsBloom"`
+	Difficulty  *big.Int         `json:"difficulty"`
+	Number      *big.Int         `json:"number"           gencodec:"required"`
+	GasLimit    uint64           `json:"gasLimit"         gencodec:"required"`
+	GasUsed     uint64           `json:"gasUsed"`
+	Time        uint64           `json:"timestamp"        gencodec:"required"`
+	Extra       []byte           `json:"extraData"`
+	MixDigest   common.Hash      `json:"mixHash"`
+	Nonce       types.BlockNonce `json:"nonce"`
+	BaseFee     *big.Int         `json:"baseFeePerGas" rlp:"optional"`
+}
+
+type bbEnvMarshaling struct {
+	Difficulty *math.HexOrDecimal256
+	Number     *math.HexOrDecimal256
+	GasLimit   math.HexOrDecimal64
+	GasUsed    math.HexOrDecimal64
+	Time       math.HexOrDecimal64
+	Extra      hexutil.Bytes
+	BaseFee    *math.HexOrDecimal256
+}
+
 type blockInput struct {
-	Header *types.Header   `json:"header,omitempty"`
-	Uncles []*types.Header `json:"uncles,omitempty"`
-	TxRlp  string          `json:"txsRlp,omitempty"`
+	Env       *bbEnv   `json:"header,omitempty"`
+	UnclesRlp []string `json:"uncles,omitempty"`
+	TxRlp     string   `json:"txsRlp,omitempty"`
+
+	Uncles []*types.Header
 	Txs    []*types.Transaction
+}
+
+func (i *blockInput) toBlock() *types.Block {
+	header := &types.Header{
+		ParentHash:  i.Env.ParentHash,
+		UncleHash:   i.Env.UncleHash,
+		Coinbase:    i.Env.Coinbase,
+		Root:        i.Env.Root,
+		TxHash:      i.Env.TxHash,
+		ReceiptHash: i.Env.ReceiptHash,
+		Bloom:       i.Env.Bloom,
+		Difficulty:  i.Env.Difficulty,
+		Number:      i.Env.Number,
+		GasLimit:    i.Env.GasLimit,
+		GasUsed:     i.Env.GasUsed,
+		Time:        i.Env.Time,
+		Extra:       i.Env.Extra,
+		MixDigest:   i.Env.MixDigest,
+		Nonce:       i.Env.Nonce,
+		BaseFee:     i.Env.BaseFee,
+	}
+
+	none := common.Hash{}
+	if header.UncleHash == none {
+		header.UncleHash = types.EmptyUncleHash
+	}
+	if header.TxHash == none {
+		header.TxHash = types.EmptyRootHash
+	}
+	if header.ReceiptHash == none {
+		header.ReceiptHash = types.EmptyRootHash
+	}
+	if header.Difficulty == nil {
+		header.Difficulty = common.Big0
+	}
+
+	block := types.NewBlockWithHeader(header)
+	block.WithBody(i.Txs, i.Uncles)
+
+	return block
 }
 
 func BuildBlock(ctx *cli.Context) error {
@@ -49,14 +123,10 @@ func BuildBlock(ctx *cli.Context) error {
 
 	inputData, err := readInput(ctx)
 	if err != nil {
-		fmt.Println("bad error")
 		return err
 	}
 
-	block := types.NewBlockWithHeader(inputData.Header)
-	block.WithBody(inputData.Txs, inputData.Uncles)
-
-	return dispatchBlock(ctx, baseDir, block)
+	return dispatchBlock(ctx, baseDir, inputData.toBlock())
 }
 
 func readInput(ctx *cli.Context) (*blockInput, error) {
@@ -75,11 +145,11 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	}
 
 	if headerStr != stdinSelector {
-		header, err := readHeader(headerStr)
+		env, err := readEnv(headerStr)
 		if err != nil {
 			return nil, err
 		}
-		inputData.Header = header
+		inputData.Env = env
 	}
 
 	if unclesStr != stdinSelector {
@@ -87,7 +157,18 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		inputData.Uncles = uncles
+		inputData.UnclesRlp = uncles
+	}
+
+	uncles := []*types.Header{}
+	for _, str := range inputData.UnclesRlp {
+		var uncle *types.Header
+		raw := common.FromHex(str)
+		err := rlp.DecodeBytes(raw, &uncle)
+		if err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("unable to decode uncle from rlp data: %v", err))
+		}
+		uncles = append(uncles, uncle)
 	}
 
 	if txsStr != stdinSelector {
@@ -108,13 +189,13 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	return inputData, nil
 }
 
-func readHeader(path string) (*types.Header, error) {
-	header := &types.Header{}
+func readEnv(path string) (*bbEnv, error) {
+	env := &bbEnv{}
 
 	if path == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(header); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling header from stdin: %v", err))
+		if err := decoder.Decode(env); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling env from stdin: %v", err))
 		}
 	} else {
 		inFile, err := os.Open(path)
@@ -123,16 +204,16 @@ func readHeader(path string) (*types.Header, error) {
 		}
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&header); err != nil {
+		if err := decoder.Decode(&env); err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling header file: %v", err))
 		}
 	}
 
-	return header, nil
+	return env, nil
 }
 
-func readUncles(path string) ([]*types.Header, error) {
-	uncles := []*types.Header{}
+func readUncles(path string) ([]string, error) {
+	uncles := []string{}
 
 	if path == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
