@@ -45,8 +45,8 @@ var (
 	VALID          = GenericStringResponse{"VALID"}
 	INVALID        = GenericStringResponse{"INVALID"}
 	SYNCING        = GenericStringResponse{"SYNCING"}
-	UnknownHeader  = rpc.CustomError{Code: 4, Message: "unknown header"}
-	UnknownPayload = rpc.CustomError{Code: 5, Message: "unknown payload"}
+	UnknownHeader  = rpc.CustomError{Code: -32000, Message: "unknown header"}
+	UnknownPayload = rpc.CustomError{Code: -32001, Message: "unknown payload"}
 )
 
 // Register adds catalyst APIs to the full node.
