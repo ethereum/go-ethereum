@@ -1,0 +1,126 @@
+project_name: bor
+
+release:
+  disable: false
+  draft: true
+  prerelease: auto
+
+builds:
+  - id: darwin-amd64
+    main: ./cmd/geth
+    binary: bor
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags:
+      -s -w
+  
+  - id: darwin-arm64
+    main: ./cmd/geth
+    binary: bor
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    ldflags:
+      -s -w
+  
+  - id: linux-amd64
+    main: ./cmd/geth
+    binary: bor
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CC=gcc
+      - CXX=g++
+    ldflags:
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
+      -s -w -linkmode external -extldflags "-static"
+
+  - id: linux-arm64
+    main: ./cmd/geth
+    binary: bor
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    ldflags:
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
+      -s -w -linkmode external -extldflags "-static"
+
+nfpms:
+  - vendor: 0xPolygon
+    homepage: https://polygon.technology
+    maintainer: Polygon Team <team@polygon.technology>
+    description: Polygon Blockchain
+    license: GPLv3 LGPLv3
+
+    formats:
+      - apk
+      - deb
+      - rpm
+
+    contents:
+      - src: builder/files/bor.service
+        dst: /lib/systemd/system/bor.service
+        type: config
+
+    overrides:
+      rpm:
+        replacements:
+          amd64: x86_64
+
+snapshot:
+  name_template: "{{ .Tag }}.next"
+
+dockers:
+  - image_templates:
+      - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-amd64
+    dockerfile: Dockerfile.release
+    use: buildx
+    goarch: amd64
+    ids:
+      - linux-amd64
+    build_flag_templates:
+      - --platform=linux/amd64
+    skip_push: true
+  
+  - image_templates:
+      - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
+    dockerfile: Dockerfile.release
+    use: buildx
+    goarch: arm64
+    ids:
+      - linux-arm64
+    build_flag_templates:
+      - --platform=linux/arm64
+    skip_push: true
+
+docker_manifests:
+  - name_template: 0xpolygon/{{ .ProjectName }}:{{ .Version }}
+    image_templates:
+      - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-amd64
+      - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
+
+  - name_template: 0xpolygon/{{ .ProjectName }}:latest
+    image_templates:
+    - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-amd64
+    - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
+
+announce:
+  slack:
+    enabled: true
+    # The name of the channel that the user selected as a destination for webhook messages.
+    channel: '#code-releases'
