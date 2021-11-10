@@ -178,6 +178,9 @@ var blockBuilderCommand = cli.Command{
 		t8ntool.InputHeaderFlag,
 		t8ntool.InputUnclesFlag,
 		t8ntool.InputTxsRlpFlag,
+		t8ntool.InputCliqueFlag,
+		t8ntool.InputEthashFlag,
+		t8ntool.InputEthashDirFlag,
 		t8ntool.VerbosityFlag,
 	},
 }

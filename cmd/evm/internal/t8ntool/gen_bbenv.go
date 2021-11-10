@@ -19,11 +19,11 @@ var _ = (*bbEnvMarshaling)(nil)
 func (b bbEnv) MarshalJSON() ([]byte, error) {
 	type bbEnv struct {
 		ParentHash  common.Hash           `json:"parentHash"`
-		UncleHash   common.Hash           `json:"sha3Uncles"`
-		Coinbase    common.Address        `json:"miner"            gencode:"required"`
+		UncleHash   *common.Hash          `json:"sha3Uncles"`
+		Coinbase    *common.Address       `json:"miner"`
 		Root        common.Hash           `json:"stateRoot"        gencodec:"required"`
-		TxHash      common.Hash           `json:"transactionsRoot"`
-		ReceiptHash common.Hash           `json:"receiptsRoot"`
+		TxHash      *common.Hash          `json:"transactionsRoot"`
+		ReceiptHash *common.Hash          `json:"receiptsRoot"`
 		Bloom       types.Bloom           `json:"logsBloom"`
 		Difficulty  *math.HexOrDecimal256 `json:"difficulty"`
 		Number      *math.HexOrDecimal256 `json:"number"           gencodec:"required"`
@@ -32,8 +32,8 @@ func (b bbEnv) MarshalJSON() ([]byte, error) {
 		Time        math.HexOrDecimal64   `json:"timestamp"        gencodec:"required"`
 		Extra       hexutil.Bytes         `json:"extraData"`
 		MixDigest   common.Hash           `json:"mixHash"`
-		Nonce       types.BlockNonce      `json:"nonce"`
-		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas"`
+		Nonce       *types.BlockNonce     `json:"nonce"`
+		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 	}
 	var enc bbEnv
 	enc.ParentHash = b.ParentHash
@@ -60,7 +60,7 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 	type bbEnv struct {
 		ParentHash  *common.Hash          `json:"parentHash"`
 		UncleHash   *common.Hash          `json:"sha3Uncles"`
-		Coinbase    *common.Address       `json:"miner"            gencode:"required"`
+		Coinbase    *common.Address       `json:"miner"`
 		Root        *common.Hash          `json:"stateRoot"        gencodec:"required"`
 		TxHash      *common.Hash          `json:"transactionsRoot"`
 		ReceiptHash *common.Hash          `json:"receiptsRoot"`
@@ -73,7 +73,7 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 		Extra       *hexutil.Bytes        `json:"extraData"`
 		MixDigest   *common.Hash          `json:"mixHash"`
 		Nonce       *types.BlockNonce     `json:"nonce"`
-		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas"`
+		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 	}
 	var dec bbEnv
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -83,20 +83,20 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 		b.ParentHash = *dec.ParentHash
 	}
 	if dec.UncleHash != nil {
-		b.UncleHash = *dec.UncleHash
+		b.UncleHash = dec.UncleHash
 	}
 	if dec.Coinbase != nil {
-		b.Coinbase = *dec.Coinbase
+		b.Coinbase = dec.Coinbase
 	}
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for bbEnv")
 	}
 	b.Root = *dec.Root
 	if dec.TxHash != nil {
-		b.TxHash = *dec.TxHash
+		b.TxHash = dec.TxHash
 	}
 	if dec.ReceiptHash != nil {
-		b.ReceiptHash = *dec.ReceiptHash
+		b.ReceiptHash = dec.ReceiptHash
 	}
 	if dec.Bloom != nil {
 		b.Bloom = *dec.Bloom
@@ -126,7 +126,7 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 		b.MixDigest = *dec.MixDigest
 	}
 	if dec.Nonce != nil {
-		b.Nonce = *dec.Nonce
+		b.Nonce = dec.Nonce
 	}
 	if dec.BaseFee != nil {
 		b.BaseFee = (*big.Int)(dec.BaseFee)
