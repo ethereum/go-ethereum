@@ -9,9 +9,7 @@ RUN set -x \
 
 WORKDIR /bor
 COPY . .
-RUN make bor-all
-
-CMD ["/bin/bash"]
+RUN go build -o ./build/bin/bor ./command
 
 # Pull Bor into a second stage deploy alpine container
 FROM alpine:3.14
@@ -22,7 +20,6 @@ RUN set -x \
     && rm -rf /var/cache/apk/*
 
 COPY --from=builder /bor/build/bin/bor /usr/local/bin/
-COPY --from=builder /bor/build/bin/bootnode /usr/local/bin/
 
 EXPOSE 8545 8546 8547 30303 30303/udp
 
