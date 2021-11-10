@@ -102,13 +102,14 @@ func (t *fourByteTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 		t.env.Cancel()
 		return
 	}
+	if len(input) < 4 {
+		return
+	}	
 	// Skip any pre-compile invocations, those are just fancy opcodes
 	if t.isPrecompiled(to) {
 		return
 	}
-	if len(input) >= 4 {
-		t.store(input[0:4], len(input)-4)
-	}
+	t.store(input[0:4], len(input)-4)
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
