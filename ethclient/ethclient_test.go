@@ -40,20 +40,34 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Verify that Client implements the ethereum interfaces.
+// Verify that client implements the ethereum interfaces.
 var (
-	_ = ethereum.ChainReader(&Client{})
-	_ = ethereum.TransactionReader(&Client{})
-	_ = ethereum.ChainStateReader(&Client{})
-	_ = ethereum.ChainSyncReader(&Client{})
-	_ = ethereum.ContractCaller(&Client{})
-	_ = ethereum.GasEstimator(&Client{})
-	_ = ethereum.GasPricer(&Client{})
-	_ = ethereum.LogFilterer(&Client{})
-	_ = ethereum.PendingStateReader(&Client{})
-	// _ = ethereum.PendingStateEventer(&Client{})
-	_ = ethereum.PendingContractCaller(&Client{})
+	_ = ethereum.ChainReader(&client{})
+	_ = ethereum.TransactionReader(&client{})
+	_ = ethereum.ChainStateReader(&client{})
+	_ = ethereum.ChainSyncReader(&client{})
+	_ = ethereum.ContractCaller(&client{})
+	_ = ethereum.GasEstimator(&client{})
+	_ = ethereum.GasPricer(&client{})
+	_ = ethereum.LogFilterer(&client{})
+	_ = ethereum.PendingStateReader(&client{})
+	// _ = ethereum.PendingStateEventer(&client{})
+	_ = ethereum.PendingContractCaller(&client{})
+
+	_ Client = (*client)(nil)
 )
+
+// Verify there is a 1-to-1 relationship between Client interface and client struct
+func TestInterfaceStructOneToOne(t *testing.T) {
+	// checks struct provides at least the methods signatures in the interface
+	var _ Client = (*client)(nil)
+	// checks interface and struct have the same number of methods
+	clientType := reflect.TypeOf(&client{})
+	ClientType := reflect.TypeOf((*Client)(nil)).Elem()
+	if clientType.NumMethod() != ClientType.NumMethod() {
+		t.Fatalf("no 1 to 1 compliance between struct methods (%v) and interface methods (%v)", clientType.NumMethod(), ClientType.NumMethod())
+	}
+}
 
 func TestToFilterArg(t *testing.T) {
 	blockHashErr := fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock")
@@ -561,7 +575,7 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func sendTransaction(ec *Client) error {
+func sendTransaction(ec Client) error {
 	// Retrieve chainID
 	chainID, err := ec.ChainID(context.Background())
 	if err != nil {
