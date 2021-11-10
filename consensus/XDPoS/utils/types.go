@@ -11,6 +11,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -103,4 +105,41 @@ type TimeoutCert struct {
 type ExtraFields_v2 struct {
 	Round      Round
 	QuorumCert QuorumCert
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
+}
+
+func (m *Vote) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func (m *Timeout) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func (m *SyncInfo) Hash() common.Hash {
+	return rlpHash(m)
+}
+
+func VoteSigHash(m *BlockInfo) common.Hash {
+	return rlpHash(m)
+}
+
+func TimeoutSigHash(m *Round) common.Hash {
+	return rlpHash(m)
+}
+
+func (m *Vote) PoolKey() string {
+	// return the voted block hash
+	return m.ProposedBlockInfo.Hash.Hex()
+}
+
+func (m *Timeout) PoolKey() string {
+	// return a default pool key string
+	return "0"
 }

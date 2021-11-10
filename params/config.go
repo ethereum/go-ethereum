@@ -37,9 +37,11 @@ var (
 var (
 	XDPoSV2Config = &V2{
 		TimeoutWorkerDuration: 50000,
+		CertThreshold:         common.MaxMasternodesV2*2/3 + 1,
 	}
 	TestXDPoSV2Config = &V2{
 		TimeoutWorkerDuration: 5000,
+		CertThreshold:         2,
 	}
 
 	// XDPoSChain mainnet config
@@ -199,6 +201,7 @@ type XDPoSConfig struct {
 
 type V2 struct {
 	TimeoutWorkerDuration int64 `json:"TimeoutWorkerDuration"` // Duration in ms
+	CertThreshold         int   `json:"certificateThreshold"`  // Necessary number of messages from master nodes to form a certificate
 }
 
 // String implements the stringer interface, returning the consensus engine details.
