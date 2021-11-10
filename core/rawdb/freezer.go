@@ -568,6 +568,12 @@ type TransformerFn = func([]byte) ([]byte, bool, error)
 func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	// TODO: Do we need to recover anything after error?
 
+	if f.readonly {
+		return errReadOnly
+	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
 	table, ok := f.tables[kind]
 	if !ok {
 		return errUnknownTable
@@ -579,11 +585,14 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	}
 
 	ancientsPath := filepath.Dir(table.index.Name())
+	// Set up new dir for the migrated table which we'll at the end
+	// move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
 	newTable, err := NewFreezerTable(migrationPath, kind, FreezerNoSnappy[kind])
 	if err != nil {
 		return err
 	}
+	batch := newTable.newBatch()
 
 	var i uint64
 	var filenum uint32
@@ -597,12 +606,16 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			return err
 		}
 		if !stop {
-			newTable.Append(i, out)
+			// Entry is legacy, push transformed version
+			batch.AppendRaw(i, out)
 		} else {
-			_, _, filenum, err = table.getBounds(i)
+			// Reached the first up-to-date entry.
+			// Remember in which file the switch happens.
+			entry, err := table.getIndices(i, 0)
 			if err != nil {
 				return err
 			}
+			filenum = entry[0].filenum
 			break
 		}
 	}
@@ -627,7 +640,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		if err != nil {
 			return err
 		}
-		newTable.Append(i, blob)
+		batch.AppendRaw(i, blob)
 	}
 	log.Info("Finished copying leftovers", "i", i)
 

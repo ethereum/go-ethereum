@@ -779,6 +779,6 @@ func (t *freezerTable) writeEntry(idx indexEntry) error {
 	if t.index == nil {
 		return errClosed
 	}
-	_, err := t.index.Write(idx.marshallBinary())
+	_, err := t.index.Write(idx.append([]byte{}))
 	return err
 }
