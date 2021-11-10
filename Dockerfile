@@ -25,3 +25,5 @@ COPY --from=builder /bor/build/bin/bor /usr/local/bin/
 COPY --from=builder /bor/build/bin/bootnode /usr/local/bin/
 
 EXPOSE 8545 8546 8547 30303 30303/udp
+
+ENTRYPOINT ["bor"]
