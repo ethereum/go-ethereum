@@ -18,13 +18,14 @@ package native
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 func init() {
@@ -104,7 +105,7 @@ func (t *fourByteTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 	}
 	if len(input) < 4 {
 		return
-	}	
+	}
 	// Skip any pre-compile invocations, those are just fancy opcodes
 	if t.isPrecompiled(to) {
 		return
