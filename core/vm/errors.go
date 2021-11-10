@@ -34,6 +34,8 @@ var (
 	ErrWriteProtection          = errors.New("write protection")
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
+
+	ErrInvalidProof             = errors.New("invalid proof for restoring inactive account") // (joonha)
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

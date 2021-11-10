@@ -46,15 +46,29 @@ var (
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
-type proofList [][]byte
+// type proofList [][]byte // --> original code
+type ProofList [][]byte // for external use
 
-func (n *proofList) Put(key []byte, value []byte) error {
+
+func (n *ProofList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
 }
 
-func (n *proofList) Delete(key []byte) error {
+func (n *ProofList) Delete(key []byte) error {
 	panic("not supported")
+}
+
+// (joonha)
+func (n *ProofList) Has(key []byte) (bool, error) {
+	panic("not supported")
+}
+
+// (joonha)
+func (n *ProofList) Get(key []byte) ([]byte, error) {
+	x := (*n)[0]
+	*n = (*n)[1:]
+	return x, nil
 }
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -334,14 +348,14 @@ func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
 
 // GetProofByHash returns the Merkle proof for a given account.
 func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
-	var proof proofList
+	var proof ProofList
 	err := s.trie.Prove(addrHash[:], 0, &proof)
 	return proof, err
 }
 
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
-	var proof proofList
+	var proof ProofList
 	trie := s.StorageTrie(a)
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
@@ -352,7 +366,7 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 
 // GetStorageProofByHash returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProofByHash(a common.Address, key common.Hash) ([][]byte, error) {
-	var proof proofList
+	var proof ProofList
 	trie := s.StorageTrie(a)
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
@@ -569,6 +583,9 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	}
 }
 
+// restoration would affect this getStateObject or getDeletedStateObject function (joonha) (ethane)
+// getDeletedStateObject appeared not in eth4nos, but in eth4ne(main branch)!
+
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context. If you need
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
@@ -647,13 +664,36 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}
-		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie
+
+		// (joonha)
+		// addr로 TryGet을 하는 것이 맞는지.
+		// 아랫줄의 TryGet에서 addr을 (addrToKey) Key로 변환하여 파라미터로 그 키를 넘겨야 할 것 같다.
+		// 그런데 addr로 그냥 넘겼을 때 오류가 뜨지 않으니... 우선 addr로 넘기는 것이 맞다고 생각해보자.
+
+		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie //--> original code
+
+		// (joonha)
+		// key := common.AddrToKey[addr] // AddrToKey vs. AddrToKeyDirty ?
+		// enc, err := s.trie.TryGet(key.Bytes()) // get account from state trie
+		// 계정 대응이 안됨. insufficient funds가 뜸. 
+
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
 			return nil
 		}
+
+		// (joonha)
+		// enc에는 trie에서 가져온 account object가 저장됨.
+		// object를 어디로부터 가져왔는지를 여기서 확인하고 restoration 관련 코드를 추가하면 될 듯.
+		// Key가 어느 범위에 속하는지를 확인하면 될 듯함.
+
+
 		if len(enc) == 0 {
 			// fmt.Println("  cannot find the address outside of the snapshot")
+			
+			// (joonha)
+			// object를 트리에서 찾지 못한 경우임.
+
 			return nil
 		}
 		data = new(Account)
@@ -1246,8 +1286,26 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
 		} else {
-			// apply inactivation result to AddrToKey_Dirty (joonha)
-			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
+			// apply inactivation result to AddrToKey (joonha)
+			// Q. Should this be applied to AddrToKey_Dirty?
+			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
+			// Q. AddrToKey_inactive도 Dirty가 필요할까?
+			// save the inactive account key info for later restoration (joonha)
+
+			// len이 아니라 NoExistKey가 나오기 전까지 iterate 해야 할 듯.
+			lenATKI := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+			latest := 0
+			i := 0
+			for i <= lenATKI {
+				latest = i - 1
+				if int64(i) == common.HashToInt64(common.NoExistKey) {
+					break
+				}
+				i++
+			}
+
+			// latest := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])][latest] = keyToInsert
 		}
 	}
 
@@ -1257,4 +1315,9 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 	// return # of inactivated accounts
 	return int64(len(KeysToInactivate))
+}
+
+// GetAccount returns Account from stateObject (joonha)
+func (s *StateDB) GetAccount(addr common.Address) *Account {
+	return &s.getStateObject(addr).data
 }

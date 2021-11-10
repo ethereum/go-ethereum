@@ -53,8 +53,12 @@ var (
 	AddrToKeyMapMutex = sync.RWMutex{} // to avoid fatal error: "concurrent map read and map write"
 	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/) (const)
 
+	// map storing inactive accounts list (joonha)
+	AddrToKey_inactive = make(map[Address][]Hash)
+
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
 	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
+	// DeleteLeafNodeEpoch = big.NewInt(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
 	DoDeleteLeafNode bool // flag to determine whether to delete leaf nodes or not
 
 	InactiveBoundaryKey = int64(0) // inactive accounts have keys smaller than this key
