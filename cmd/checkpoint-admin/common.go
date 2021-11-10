@@ -32,7 +32,7 @@ import (
 )
 
 // newClient creates a client with specified remote URL.
-func newClient(ctx *cli.Context) *ethclient.Client {
+func newClient(ctx *cli.Context) ethclient.Client {
 	client, err := ethclient.Dial(ctx.GlobalString(nodeURLFlag.Name))
 	if err != nil {
 		utils.Fatalf("Failed to connect to Ethereum node: %v", err)

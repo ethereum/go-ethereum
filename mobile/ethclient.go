@@ -27,7 +27,7 @@ import (
 
 // EthereumClient provides access to the Ethereum APIs.
 type EthereumClient struct {
-	client *ethclient.Client
+	client ethclient.Client
 }
 
 // NewEthereumClient connects a client to the given URL.
