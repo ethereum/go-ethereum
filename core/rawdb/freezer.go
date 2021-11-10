@@ -65,6 +65,7 @@ const (
 
 	// freezerTableSize defines the maximum size of freezer data files.
 	freezerTableSize = 2 * 1000 * 1000 * 1000
+	//freezerTableSize = 2 * 1024 * 1024
 )
 
 // freezer is an memory mapped append-only database to store immutable chain data
@@ -633,7 +634,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			return err
 		}
 		if idx.filenum > filenum {
-			log.Info("Reached new file with updated receipts", "fn", fn, "i", i)
+			log.Info("Reached new file with updated receipts", "fn", filenum, "i", i)
 			break
 		}
 		blob, err := table.Retrieve(i)
@@ -663,6 +664,10 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			newTable.writeEntry(idx)
 		}
 		log.Info("Duplicated rest of index in new table", "i", i)
+	}
+
+	if err := batch.commit(); err != nil {
+		return err
 	}
 
 	if err := newTable.Close(); err != nil {
