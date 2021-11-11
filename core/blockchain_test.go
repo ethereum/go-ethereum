@@ -1968,8 +1968,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	}
 	// Activate the transition since genesis if required
 	if mergePoint == 0 {
-		merger.LeavePoW()
-		merger.EnterPoS()
+		merger.ReachTTD()
+		merger.FinalizePoS()
 
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
@@ -2001,8 +2001,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Activate the transition in the middle of the chain
 	if mergePoint == 1 {
-		merger.LeavePoW()
-		merger.EnterPoS()
+		merger.ReachTTD()
+		merger.FinalizePoS()
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
 	}
@@ -2229,7 +2229,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	)
 	applyMerge := func(engine *beacon.Beacon, height int) {
 		if engine != nil {
-			runMerger.EnterPoS()
+			runMerger.FinalizePoS()
 			// Set the terminal total difficulty in the config
 			chainConfig.TerminalTotalDifficulty = big.NewInt(int64(height))
 		}

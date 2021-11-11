@@ -193,7 +193,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	validator := func(header *types.Header) error {
 		// All the block fetcher activities should be disabled
 		// after the transition. Print the warning log.
-		if h.merger.EnteredPoS() {
+		if h.merger.PoSFinalized() {
 			log.Warn("Unexpected validation activity", "hash", header.Hash(), "number", header.Number)
 			return errors.New("unexpected behavior after transition")
 		}
@@ -214,7 +214,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	inserter := func(blocks types.Blocks) (int, error) {
 		// All the block fetcher activities should be disabled
 		// after the transition. Print the warning log.
-		if h.merger.EnteredPoS() {
+		if h.merger.PoSFinalized() {
 			var ctx []interface{}
 			ctx = append(ctx, "blocks", len(blocks))
 			if len(blocks) > 0 {
@@ -245,7 +245,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
-		if h.merger.LeftPoW() {
+		if h.merger.TDDReached() {
 			// The blocks from the p2p network is regarded as untrusted
 			// after the transition. In theory block gossip should be disabled
 			// entirely whenever the transition is started. But in order to
@@ -491,7 +491,7 @@ func (h *handler) Stop() {
 func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	// Disable the block propagation if the chain has already entered the PoS
 	// stage. The block propagation is delegated to the consensus layer.
-	if h.merger.EnteredPoS() {
+	if h.merger.PoSFinalized() {
 		return
 	}
 	// Disable the block propagation if it's the post-merge block.

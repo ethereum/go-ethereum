@@ -279,7 +279,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	defer beacon.lock.RUnlock()
 
 	// Transition isn't triggered yet, use the legacy rules for preparation.
-	if !beacon.merger.LeftPoW() {
+	if !beacon.merger.TDDReached() {
 		return beacon.ethone.Prepare(chain, header)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -354,7 +354,7 @@ func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 	defer beacon.lock.RUnlock()
 
 	// Transition isn't triggered yet, use the legacy rules for calculation
-	if !beacon.merger.LeftPoW() {
+	if !beacon.merger.TDDReached() {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
 	return beaconDifficulty

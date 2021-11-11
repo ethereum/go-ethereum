@@ -249,8 +249,8 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 		return INVALID, err
 	}
 	merger := api.merger()
-	if !merger.LeftPoW() {
-		merger.LeavePoW()
+	if !merger.TDDReached() {
+		merger.ReachTTD()
 	}
 	return VALID, nil
 }
@@ -439,7 +439,7 @@ func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// shortcut if we entered PoS already
-	if api.merger().EnteredPoS() {
+	if api.merger().PoSFinalized() {
 		return nil
 	}
 	// make sure the parent has enough terminal total difficulty
@@ -462,8 +462,8 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	// Trigger the transition if it's the first `NewHead` event.
 	merger := api.merger()
-	if !merger.EnteredPoS() {
-		merger.EnterPoS()
+	if !merger.PoSFinalized() {
+		merger.FinalizePoS()
 	}
 	log.Info("Setting head", "head", newHead)
 	if api.light {

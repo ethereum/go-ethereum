@@ -183,7 +183,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 	// Drop all incoming block announces from the p2p network if
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
-	if h.merger.EnteredPoS() {
+	if h.merger.PoSFinalized() {
 		return errors.New("unexpected block announces")
 	}
 	// Schedule all the unknown hashes for retrieval
@@ -209,7 +209,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// Drop all incoming block announces from the p2p network if
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
-	if h.merger.EnteredPoS() {
+	if h.merger.PoSFinalized() {
 		return errors.New("unexpected block announces")
 	}
 	// Schedule the block for import

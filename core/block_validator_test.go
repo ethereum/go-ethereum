@@ -127,8 +127,8 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
 			preBlocks[i] = block.WithSeal(header)
 		}
-		genMerger.LeavePoW()
-		genMerger.EnterPoS()
+		genMerger.ReachTTD()
+		genMerger.FinalizePoS()
 		postBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
 		chainConfig = params.AllCliqueProtocolChanges
 		runEngine = beacon.New(engine, merger)
@@ -139,8 +139,8 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		genEngine := beacon.New(ethash.NewFaker(), genMerger)
 
 		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
-		genMerger.LeavePoW()
-		genMerger.EnterPoS()
+		genMerger.ReachTTD()
+		genMerger.FinalizePoS()
 		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
 
 		chainConfig = params.TestChainConfig
@@ -188,8 +188,8 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	}
 
 	// Make the transition
-	merger.LeavePoW()
-	merger.EnterPoS()
+	merger.ReachTTD()
+	merger.FinalizePoS()
 
 	// Verify the blocks after the merging
 	for i := 0; i < len(postBlocks); i++ {

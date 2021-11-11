@@ -1040,7 +1040,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		return err
 	}
 
-	if w.isRunning() && !w.merger.LeftPoW() {
+	if w.isRunning() && !w.merger.TDDReached() {
 		if interval != nil {
 			interval()
 		}

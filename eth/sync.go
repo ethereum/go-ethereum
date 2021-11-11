@@ -146,7 +146,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil // Sync already running.
 	}
 	// Disable the td based sync trigger after the transition
-	if cs.handler.merger.LeftPoW() {
+	if cs.handler.merger.TDDReached() {
 		return nil
 	}
 	// Ensure we're at minimum peer count.
