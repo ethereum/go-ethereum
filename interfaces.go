@@ -19,11 +19,15 @@ package ethereum
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -136,8 +140,8 @@ type ContractCaller interface {
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
 	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
-	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
-	ToBlock   *big.Int         // end of the range, nil means latest block
+	FromBlock *big.Int         // beginning of the queried range, nil means genesis block, -1 means "latest", -2 means "pending"
+	ToBlock   *big.Int         // end of the range, nil and -1 mean latest block, -2 means pending block
 	Addresses []common.Address // restricts matches to events created by specific contracts
 
 	// The Topic list restricts matches to particular event topics. Each event has a list
@@ -212,4 +216,149 @@ type GasEstimator interface {
 // pending state.
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
+}
+
+// MarshalJSON implements the json.Marshaller interface.
+func (query FilterQuery) MarshalJSON() ([]byte, error) {
+	arg := map[string]interface{}{
+		"address": query.Addresses,
+		"topics":  query.Topics,
+	}
+	if query.BlockHash != nil {
+		arg["blockHash"] = *query.BlockHash
+		if query.FromBlock != nil || query.ToBlock != nil {
+			return nil, fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock")
+		}
+	} else {
+		if query.FromBlock != nil {
+			arg["fromBlock"] = rpc.BlockNumber(query.FromBlock.Int64())
+		}
+		if query.ToBlock != nil {
+			arg["toBlock"] = rpc.BlockNumber(query.ToBlock.Int64())
+		}
+	}
+	return json.Marshal(arg)
+}
+
+// UnmarshalJSON sets *query fields with given data.
+func (query *FilterQuery) UnmarshalJSON(data []byte) error {
+	type input struct {
+		BlockHash *common.Hash     `json:"blockHash"`
+		FromBlock *rpc.BlockNumber `json:"fromBlock"`
+		ToBlock   *rpc.BlockNumber `json:"toBlock"`
+		Addresses interface{}      `json:"address"`
+		Topics    []interface{}    `json:"topics"`
+	}
+
+	var raw input
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if raw.BlockHash != nil {
+		if raw.FromBlock != nil || raw.ToBlock != nil {
+			// BlockHash is mutually exclusive with FromBlock/ToBlock criteria
+			return fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
+		}
+		query.BlockHash = raw.BlockHash
+	} else {
+		if raw.FromBlock != nil {
+			query.FromBlock = big.NewInt(raw.FromBlock.Int64())
+		} else {
+			query.FromBlock = big.NewInt(rpc.EarliestBlockNumber.Int64())
+		}
+
+		if raw.ToBlock != nil {
+			query.ToBlock = big.NewInt(raw.ToBlock.Int64())
+		} else {
+			query.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
+		}
+	}
+
+	query.Addresses = []common.Address{}
+
+	if raw.Addresses != nil {
+		// raw.Address can contain a single address or an array of addresses
+		switch rawAddr := raw.Addresses.(type) {
+		case []interface{}:
+			for i, addr := range rawAddr {
+				if strAddr, ok := addr.(string); ok {
+					addr, err := decodeAddress(strAddr)
+					if err != nil {
+						return fmt.Errorf("invalid address at index %d: %v", i, err)
+					}
+					query.Addresses = append(query.Addresses, addr)
+				} else {
+					return fmt.Errorf("non-string address at index %d", i)
+				}
+			}
+		case string:
+			addr, err := decodeAddress(rawAddr)
+			if err != nil {
+				return fmt.Errorf("invalid address: %v", err)
+			}
+			query.Addresses = []common.Address{addr}
+		default:
+			return errors.New("invalid addresses in query")
+		}
+	}
+
+	// topics is an array consisting of strings and/or arrays of strings.
+	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
+	if len(raw.Topics) > 0 {
+		query.Topics = make([][]common.Hash, len(raw.Topics))
+		for i, t := range raw.Topics {
+			switch topic := t.(type) {
+			case nil:
+				// ignore topic when matching logs
+
+			case string:
+				// match specific topic
+				top, err := decodeTopic(topic)
+				if err != nil {
+					return fmt.Errorf("invalid topic at index %d: %v", i, err)
+				}
+				query.Topics[i] = []common.Hash{top}
+
+			case []interface{}:
+				// or case e.g. [null, "topic0", "topic1"]
+				for j, rawTopic := range topic {
+					if rawTopic == nil {
+						// null component, match all
+						query.Topics[i] = nil
+						break
+					}
+					if topic, ok := rawTopic.(string); ok {
+						parsed, err := decodeTopic(topic)
+						if err != nil {
+							return fmt.Errorf("invalid topic at index %d,%d: %v", i, j, err)
+						}
+						query.Topics[i] = append(query.Topics[i], parsed)
+					} else {
+						return fmt.Errorf("invalid topic(s) at index %d,%d", i, j)
+					}
+				}
+			default:
+				return fmt.Errorf("invalid topic(s) at index %d", i)
+			}
+		}
+	}
+
+	return nil
+}
+
+func decodeAddress(s string) (common.Address, error) {
+	b, err := hexutil.Decode(s)
+	if err == nil && len(b) != common.AddressLength {
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for address", len(b), common.AddressLength)
+	}
+	return common.BytesToAddress(b), err
+}
+
+func decodeTopic(s string) (common.Hash, error) {
+	b, err := hexutil.Decode(s)
+	if err == nil && len(b) != common.HashLength {
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
+	}
+	return common.BytesToHash(b), err
 }
