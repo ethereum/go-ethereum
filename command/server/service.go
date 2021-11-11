@@ -102,3 +102,8 @@ func peerInfoToPeer(info *p2p.PeerInfo) *proto.Peer {
 		Static:  info.Network.Static,
 	}
 }
+
+func (s *Server) ChainSetHead(ctx context.Context, req *proto.ChainSetHeadRequest) (*proto.ChainSetHeadResponse, error) {
+	s.backend.APIBackend.SetHead(req.Number)
+	return &proto.ChainSetHeadResponse{}, nil
+}

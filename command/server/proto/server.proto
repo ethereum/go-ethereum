@@ -14,6 +14,8 @@ service Bor {
     rpc PeersList(PeersListRequest) returns (PeersListResponse);
 
     rpc PeersStatus(PeersStatusRequest) returns (PeersStatusResponse);
+
+    rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
 }
 
 
@@ -56,6 +58,13 @@ message Peer {
     string name = 5;
     bool trusted = 6;
     bool static = 7;
+}
+
+message ChainSetHeadRequest {
+    uint64 number = 1;
+}
+
+message ChainSetHeadResponse {
 }
 
 message PprofRequest {

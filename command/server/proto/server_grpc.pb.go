@@ -23,6 +23,7 @@ type BorClient interface {
 	PeersRemove(ctx context.Context, in *PeersRemoveRequest, opts ...grpc.CallOption) (*PeersRemoveResponse, error)
 	PeersList(ctx context.Context, in *PeersListRequest, opts ...grpc.CallOption) (*PeersListResponse, error)
 	PeersStatus(ctx context.Context, in *PeersStatusRequest, opts ...grpc.CallOption) (*PeersStatusResponse, error)
+	ChainSetHead(ctx context.Context, in *ChainSetHeadRequest, opts ...grpc.CallOption) (*ChainSetHeadResponse, error)
 }
 
 type borClient struct {
@@ -78,6 +79,15 @@ func (c *borClient) PeersStatus(ctx context.Context, in *PeersStatusRequest, opt
 	return out, nil
 }
 
+func (c *borClient) ChainSetHead(ctx context.Context, in *ChainSetHeadRequest, opts ...grpc.CallOption) (*ChainSetHeadResponse, error) {
+	out := new(ChainSetHeadResponse)
+	err := c.cc.Invoke(ctx, "/proto.Bor/ChainSetHead", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BorServer is the server API for Bor service.
 // All implementations must embed UnimplementedBorServer
 // for forward compatibility
@@ -87,6 +97,7 @@ type BorServer interface {
 	PeersRemove(context.Context, *PeersRemoveRequest) (*PeersRemoveResponse, error)
 	PeersList(context.Context, *PeersListRequest) (*PeersListResponse, error)
 	PeersStatus(context.Context, *PeersStatusRequest) (*PeersStatusResponse, error)
+	ChainSetHead(context.Context, *ChainSetHeadRequest) (*ChainSetHeadResponse, error)
 	mustEmbedUnimplementedBorServer()
 }
 
@@ -108,6 +119,9 @@ func (UnimplementedBorServer) PeersList(context.Context, *PeersListRequest) (*Pe
 }
 func (UnimplementedBorServer) PeersStatus(context.Context, *PeersStatusRequest) (*PeersStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PeersStatus not implemented")
+}
+func (UnimplementedBorServer) ChainSetHead(context.Context, *ChainSetHeadRequest) (*ChainSetHeadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChainSetHead not implemented")
 }
 func (UnimplementedBorServer) mustEmbedUnimplementedBorServer() {}
 
@@ -212,6 +226,24 @@ func _Bor_PeersStatus_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Bor_ChainSetHead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChainSetHeadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BorServer).ChainSetHead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Bor/ChainSetHead",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BorServer).ChainSetHead(ctx, req.(*ChainSetHeadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Bor_ServiceDesc is the grpc.ServiceDesc for Bor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -238,6 +270,10 @@ var Bor_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PeersStatus",
 			Handler:    _Bor_PeersStatus_Handler,
+		},
+		{
+			MethodName: "ChainSetHead",
+			Handler:    _Bor_ChainSetHead_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
