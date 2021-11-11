@@ -154,6 +154,8 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Validate <256bit fields
 		switch {
+		case tx.Nonce()+1 < tx.Nonce():
+			r.Error = errors.New("nonce exceeds 2^64-1")
 		case tx.Value().BitLen() > 256:
 			r.Error = errors.New("value exceeds 256 bits")
 		case tx.GasPrice().BitLen() > 256:
