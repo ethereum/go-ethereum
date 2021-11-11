@@ -97,13 +97,18 @@ func (t *fourByteTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
 		t.env.Cancel()
 		return
 	}
 	if len(input) < 4 {
+		return
+	}
+	// primarily we want to avoid CREATE/CREATE2/SELFDESTRUCT
+	if op != vm.DELEGATECALL && op != vm.STATICCALL &&
+		op != vm.CALL && op != vm.CALLCODE {
 		return
 	}
 	// Skip any pre-compile invocations, those are just fancy opcodes
