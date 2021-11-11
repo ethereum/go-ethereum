@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -17,12 +18,16 @@ import (
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"google.golang.org/grpc"
 )
+
+var Memsize memsizeui.Handler
 
 type Server struct {
 	proto.UnimplementedBorServer
@@ -42,6 +47,11 @@ func NewServer(config *Config) (*Server, error) {
 
 	// load the chain genesis
 	if err := config.loadChain(); err != nil {
+		return nil, err
+	}
+
+	// start the Prometheus Server
+	if err := srv.StartPrometheus(config.Prometheus.address, config.Prometheus.Enabled); err != nil {
 		return nil, err
 	}
 
@@ -168,6 +178,26 @@ func (s *Server) setupGRPCServer(addr string) error {
 	}()
 
 	log.Info("GRPC Server started", "addr", addr)
+	return nil
+}
+
+func (s *Server) StartPrometheus(address string, enabled bool) error {
+	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
+	// from the registry into expvar, and execute regular expvar handler.
+	if enabled {
+		exp.Exp(metrics.DefaultRegistry)
+	}
+
+	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
+
+	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
+
+	go func() {
+		if err := http.ListenAndServe(address, nil); err != nil {
+			log.Error("Failure in running pprof server", "err", err)
+		}
+	}()
+
 	return nil
 }
 

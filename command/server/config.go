@@ -88,6 +88,9 @@ type Config struct {
 
 	// GRPC has the grpc server related settings
 	GRPC *GRPCConfig
+
+	// Prometheus Server
+	Prometheus *PrometheusConfig `hcl:"prometheus,optional"`
 }
 
 type P2PConfig struct {
@@ -234,6 +237,14 @@ type JsonRPCConfig struct {
 type GRPCConfig struct {
 	// Addr is the bind address for the grpc rpc server
 	Addr string
+}
+
+type PrometheusConfig struct {
+	// Enabled selects whether the api is enabled
+	Enabled bool `hcl:"enabled,optional"`
+
+	// Host is the address to bind the api
+	address string `hcl:"host,optional"`
 }
 
 type APIConfig struct {
