@@ -37,9 +37,14 @@
 		this.ids[key] = this.ids[key] + 1 || 1;
 	},
 
-	enter: function(frame) {
+	enter: function(frame, log) {
 		// Skip any pre-compile invocations, those are just fancy opcodes
 		if (isPrecompiled(frame.getTo())) {
+			return;
+		}
+		var type = frame.getType()
+		if (type !== "CALL" && type !== "STATICCALL" &&
+			type !== "DELEGATECALL" && type !== "CALLCODE"){
 			return;
 		}
 		var input = frame.getInput()
