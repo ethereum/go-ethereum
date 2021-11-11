@@ -104,7 +104,7 @@ var (
 		Value: "uncles.json",
 	}
 	InputTxsRlpFlag = cli.StringFlag{
-		Name:  "input.txsRlp",
+		Name:  "input.txs",
 		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
 		Value: "txs.rlp",
 	}

@@ -71,10 +71,10 @@ type blockInput struct {
 	UnclesRlp []string     `json:"uncles,omitempty"`
 	TxRlp     string       `json:"txsRlp,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
-	EthashDir string
 
-	Uncles []*types.Header
-	Txs    []*types.Transaction
+	EthashDir string
+	Uncles    []*types.Header
+	Txs       []*types.Transaction
 }
 
 type cliqueInput struct {

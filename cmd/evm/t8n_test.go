@@ -336,6 +336,93 @@ func TestT9n(t *testing.T) {
 	}
 }
 
+type b11rInput struct {
+	inEnv       string
+	inUnclesRlp string
+	inTxsRlp    string
+	inClique    string
+	ethash      bool
+	ethashDir   string
+}
+
+func (args *b11rInput) get(base string) []string {
+	var out []string
+	if opt := args.inEnv; opt != "" {
+		out = append(out, "--input.header")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inUnclesRlp; opt != "" {
+		out = append(out, "--input.uncles")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inTxsRlp; opt != "" {
+		out = append(out, "--input.txs")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inClique; opt != "" {
+		out = append(out, "--input.clique")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if args.ethash {
+		out = append(out, "--input.ethash")
+	}
+	if opt := args.ethashDir; opt != "" {
+		out = append(out, "--ethash.dir")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	out = append(out, "--output.block")
+	out = append(out, "stdout")
+	return out
+}
+
+func TestB11r(t *testing.T) {
+	tt := new(testT8n)
+	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	for i, tc := range []struct {
+		base        string
+		input       b11rInput
+		expExitCode int
+		expOut      string
+	}{
+		{ // TODO description
+			base: "./testdata/20",
+			input: b11rInput{
+				inEnv:       "header.json",
+				inUnclesRlp: "uncles.json",
+				inTxsRlp:    "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
+	} {
+
+		args := []string{"b11r"}
+		args = append(args, tc.input.get(tc.base)...)
+
+		tt.Run("evm-test", args...)
+		tt.Logf("args:\n go run . %v\n", strings.Join(args, " "))
+		// Compare the expected output, if provided
+		if tc.expOut != "" {
+			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
+			if err != nil {
+				t.Fatalf("test %d: could not read expected output: %v", i, err)
+			}
+			have := tt.Output()
+			ok, err := cmpJson(have, want)
+			switch {
+			case err != nil:
+				t.Logf(string(have))
+				t.Fatalf("test %d, json parsing failed: %v", i, err)
+			case !ok:
+				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
+			}
+		}
+		tt.WaitExit()
+		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
+			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
+		}
+	}
+}
+
 // cmpJson compares the JSON in two byte slices.
 func cmpJson(a, b []byte) (bool, error) {
 	var j, j2 interface{}
