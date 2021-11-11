@@ -262,7 +262,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 					log.Info("Filtered out non-termimal pow block", "number", block.NumberU64(), "hash", block.Hash())
 					return 0, nil
 				}
-				if err := h.chain.InsertBlock(block); err != nil {
+				if err := h.chain.InsertCatalystBlock(block); err != nil {
 					return i, err
 				}
 			}

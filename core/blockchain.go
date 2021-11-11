@@ -1366,7 +1366,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true)
+	return bc.insertChain(chain, true, false)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1377,7 +1377,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
@@ -1468,7 +1468,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
+	case !catalystMode && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
@@ -1621,15 +1621,24 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
 		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
 		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		status, err := bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
-		atomic.StoreUint32(&followupInterrupt, 1)
-		if err != nil {
-			return it.index, err
+		var status WriteStatus
+		if catalystMode {
+			// In catalyst mode we don't set the head, only insert the block
+			err := bc.writeBlockWithState(block, receipts, logs, statedb)
+			atomic.StoreUint32(&followupInterrupt, 1)
+			if err != nil {
+				return it.index, err
+			}
+		} else {
+			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
+			atomic.StoreUint32(&followupInterrupt, 1)
+			if err != nil {
+				return it.index, err
+			}
 		}
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
@@ -1638,6 +1647,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
+
+		if catalystMode {
+			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
+			return it.index, nil
+		}
 
 		switch status {
 		case CanonStatTy:
@@ -1801,7 +1815,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false); err != nil {
+			if _, err := bc.insertChain(blocks, false, false); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1815,52 +1829,9 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false)
+		return bc.insertChain(blocks, false, false)
 	}
 	return 0, nil
-}
-
-// recoverAncestors finds the closest ancestor with available state and re-execute
-// all the ancestor blocks since that.
-func (bc *BlockChain) recoverAncestors(block *types.Block) error {
-	// Gather all the sidechain hashes (full blocks may be memory heavy)
-	var (
-		hashes  []common.Hash
-		numbers []uint64
-		parent  = block
-	)
-	for parent != nil && !bc.HasState(parent.Root()) {
-		hashes = append(hashes, parent.Hash())
-		numbers = append(numbers, parent.NumberU64())
-		parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
-
-		// If the chain is terminating, stop iteration
-		if bc.insertStopped() {
-			log.Debug("Abort during blocks iteration")
-			return errInsertionInterrupted
-		}
-	}
-	if parent == nil {
-		return errors.New("missing parent")
-	}
-	// Import all the pruned blocks to make the state available
-	for i := len(hashes) - 1; i >= 0; i-- {
-		// If the chain is terminating, stop processing blocks
-		if bc.insertStopped() {
-			log.Debug("Abort during blocks processing")
-			return errInsertionInterrupted
-		}
-		var b *types.Block
-		if i == 0 {
-			b = block
-		} else {
-			b = bc.GetBlock(hashes[i], numbers[i])
-		}
-		if err := bc.insertBlock(b); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // collectLogs collects the logs that were generated or removed during
@@ -2045,111 +2016,19 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-// InsertBlock executes the block, runs the necessary verification
+// InsertCatalystBlock executes the block, runs the necessary verification
 // upon it and then persist the block and the associate state into the database.
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetChainHead call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlock(block *types.Block) error {
+func (bc *BlockChain) InsertCatalystBlock(block *types.Block) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	return bc.insertBlock(block)
-}
-
-// insertBlock is the inner version of InsertBlock without holding the lock.
-func (bc *BlockChain) insertBlock(block *types.Block) error {
-	// If the chain is terminating, don't even bother starting up
-	if bc.insertStopped() {
-		return errInsertionInterrupted
-	}
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig, block.Number()), []*types.Block{block})
-
-	// Verify the header with the given consensus engine.
-	if err := bc.engine.VerifyHeader(bc, block.Header(), true); err != nil {
-		return err
-	}
-	// Verify the block body then.
-	err := bc.validator.ValidateBody(block)
-	switch {
-	// The block is already known, return without any error
-	// but print a warning log. It's not expected behavior.
-	case errors.Is(err, ErrKnownBlock):
-		log.Warn("Received known block", "hash", block.Hash(), "number", block.NumberU64())
-		return nil
-
-	// The parent is pruned, try to recover the parent state
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
-		return bc.recoverAncestors(block)
-
-	// Some other error occurred(include the future block), abort
-	case err != nil:
-		return err
-	}
-	// If the header is a banned one, straight out abort
-	if BadHashes[block.Hash()] {
-		bc.reportBlock(block, nil, ErrBannedHash)
-		return ErrBannedHash
-	}
-	// Retrieve the parent block and it's state to execute on top
-	start := time.Now()
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-	if err != nil {
-		return err
-	}
-	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain")
-	defer statedb.StopPrefetcher()
-
-	// Process block using the parent state as reference point
-	substart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-	if err != nil {
-		bc.reportBlock(block, receipts, err)
-		return err
-	}
-	// Update the metrics touched during block processing
-	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-	// Validate the state using the default validator
-	substart = time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-		bc.reportBlock(block, receipts, err)
-		return err
-	}
-	// Update the metrics touched during block validation
-	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
-	// Write the block to the chain and get the status.
-	substart = time.Now()
-	if err := bc.writeBlockWithState(block, receipts, logs, statedb); err != nil {
-		return err
-	}
-	// Update the metrics touched during block commit
-	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-	blockInsertTimer.UpdateSince(start)
-	log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
+	_, err := bc.insertChain(types.Blocks{block}, true, true)
+	return err
 }
 
 // SetChainHead rewinds the chain to set the new head block as the specified
