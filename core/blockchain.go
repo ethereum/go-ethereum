@@ -1887,7 +1887,7 @@ func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
 }
 
 // mergeLogs returns a merged log slice with specified sort order.
-func (bc *BlockChain) mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
+func mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
 	var ret []*types.Log
 	if reverse {
 		for i := len(logs) - 1; i >= 0; i-- {
@@ -2032,10 +2032,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// ever happens if we're reorging empty blocks, which will only happen on idle
 	// networks where performance is not an issue either way.
 	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{bc.mergeLogs(deletedLogs, true)})
+		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
 	}
 	if len(rebirthLogs) > 0 {
-		bc.logsFeed.Send(bc.mergeLogs(rebirthLogs, false))
+		bc.logsFeed.Send(mergeLogs(rebirthLogs, false))
 	}
 	if len(oldChain) > 0 {
 		for i := len(oldChain) - 1; i >= 0; i-- {
