@@ -161,7 +161,7 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 	}
 
 	block := types.NewBlockWithHeader(header)
-	block.WithBody(i.Txs, i.Uncles)
+	block = block.WithBody(i.Txs, i.Uncles)
 
 	if i.EthashDir != "" {
 		if i.Env.Nonce != nil {
@@ -332,6 +332,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	if err != nil {
 		return nil, NewError(ErrorJson, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
 	}
+	inputData.Txs = txs
 
 	return inputData, nil
 }
@@ -387,7 +388,7 @@ func readTxsRlp(path string) (string, error) {
 
 	if path == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(txsRlp); err != nil {
+		if err := decoder.Decode(&txsRlp); err != nil {
 			return "", NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs from stdin: %v", err))
 		}
 	} else {
