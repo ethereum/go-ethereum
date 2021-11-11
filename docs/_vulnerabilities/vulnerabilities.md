@@ -107,7 +107,7 @@ vulnerability, with the following keys:
 ### What about Github security advisories
 
 We prefer to not rely on Github as the only/primary publishing protocol for security
-advisories, but we plan use the Github-advisory process as a second channel for
+advisories, but we plan to use the Github-advisory process as a second channel for
 disseminating vulnerability-information.
 
 Advisories published via Github can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
