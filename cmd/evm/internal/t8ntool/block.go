@@ -251,17 +251,16 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		headerStr = ctx.String(InputHeaderFlag.Name)
 		unclesStr = ctx.String(InputUnclesFlag.Name)
 		txsStr    = ctx.String(InputTxsRlpFlag.Name)
-		cliqueStr = ctx.String(InputCliqueFlag.Name)
-		ethash    = ctx.Bool(InputEthashFlag.Name)
-		ethashDir = ctx.String(InputEthashDirFlag.Name)
+		cliqueStr = ctx.String(SealerCliqueFlag.Name)
+		ethashDir = ctx.String(SealerEthashDirFlag.Name)
 		inputData = &blockInput{}
 	)
 
-	if ethash && cliqueStr != "" {
+	if ethashDir != "" && cliqueStr != "" {
 		return nil, NewError(ErrorJson, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
 	}
 
-	if ethash && ethashDir != "" {
+	if ethashDir != "" {
 		inputData.EthashDir = ethashDir
 	}
 

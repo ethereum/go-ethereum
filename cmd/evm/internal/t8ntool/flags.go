@@ -100,7 +100,7 @@ var (
 	}
 	InputUnclesFlag = cli.StringFlag{
 		Name:  "input.uncles",
-		Usage: "`stdin` or file name of where to find the uncle headers to use.",
+		Usage: "`stdin` or file name of where to find the list of uncle header RLPs to use.",
 		Value: "uncles.json",
 	}
 	InputTxsRlpFlag = cli.StringFlag{
@@ -108,18 +108,13 @@ var (
 		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
 		Value: "txs.rlp",
 	}
-	InputCliqueFlag = cli.StringFlag{
-		Name:  "input.clique",
-		Usage: "`stdin` or file name of where to find the Clique sealing data.",
+	SealerCliqueFlag = cli.StringFlag{
+		Name:  "sealer.clique",
+		Usage: "Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.",
 	}
-	InputEthashFlag = cli.BoolFlag{
-		Name:  "input.ethash",
-		Usage: "Flag denoting whether a proof-of-work seal should be mined.",
-	}
-	InputEthashDirFlag = cli.StringFlag{
-		Name:  "ethash.dir",
-		Usage: "Location of ethash DAG. If none exists at the destination, a new DAG will be generated.",
-		Value: "ethash",
+	SealerEthashDirFlag = cli.StringFlag{
+		Name:  "sealer.ethash",
+		Usage: "Seal block with ethash. Path to ethash DAG. If none exists, a new DAG will be generated.",
 	}
 	RewardFlag = cli.Int64Flag{
 		Name:  "state.reward",
