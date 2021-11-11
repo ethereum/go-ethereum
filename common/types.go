@@ -122,6 +122,10 @@ func (h *Hash) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash) UnmarshalJSON(input []byte) error {
+	// Ignore null, empty strings and empty hex strings
+	if string(input) == "null" || string(input) == `""` || string(input) == `"0x"` {
+		return nil
+	}
 	return hexutil.UnmarshalFixedJSON(hashT, input, h[:])
 }
 
@@ -318,6 +322,10 @@ func (a *Address) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (a *Address) UnmarshalJSON(input []byte) error {
+	// Ignore null, empty strings and empty hex strings
+	if string(input) == "null" || string(input) == `""` || string(input) == `"0x"` {
+		return nil
+	}
 	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
 }
 

@@ -21,7 +21,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -96,15 +95,16 @@ func TestAddressUnmarshalJSON(t *testing.T) {
 	var tests = []struct {
 		Input     string
 		ShouldErr bool
-		Output    *big.Int
+		Output    Address
 	}{
-		{"", true, nil},
-		{`""`, true, nil},
-		{`"0x"`, true, nil},
-		{`"0x00"`, true, nil},
-		{`"0xG000000000000000000000000000000000000000"`, true, nil},
-		{`"0x0000000000000000000000000000000000000000"`, false, big.NewInt(0)},
-		{`"0x0000000000000000000000000000000000000010"`, false, big.NewInt(16)},
+		{"", true, Address{}},
+		{"null", false, Address{}},
+		{`""`, false, Address{}},
+		{`"0x"`, false, Address{}},
+		{`"0x00"`, true, Address{}},
+		{`"0xG000000000000000000000000000000000000000"`, true, Address{}},
+		{`"0x0000000000000000000000000000000000000000"`, false, Address{}},
+		{`"0x0000000000000000000000000000000000000010"`, false, HexToAddress("0x0000000000000000000000000000000000000010")},
 	}
 	for i, test := range tests {
 		var v Address
@@ -116,8 +116,8 @@ func TestAddressUnmarshalJSON(t *testing.T) {
 			if test.ShouldErr {
 				t.Errorf("test #%d: expected error, got none", i)
 			}
-			if got := new(big.Int).SetBytes(v.Bytes()); got.Cmp(test.Output) != 0 {
-				t.Errorf("test #%d: address mismatch: have %v, want %v", i, got, test.Output)
+			if v != test.Output {
+				t.Errorf("test #%d: address mismatch: have %v, want %v", i, v, test.Output)
 			}
 		}
 	}
