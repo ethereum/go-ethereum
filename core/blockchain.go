@@ -519,6 +519,13 @@ func (bc *BlockChain) OrderStateAt(block *types.Block) (*tradingstate.TradingSta
 			} else {
 				return nil, err
 			}
+		} else {
+			XDCxState, err := XDCXService.GetEmptyTradingState()
+			if err == nil {
+				return XDCxState, nil
+			} else {
+				return nil, err
+			}
 		}
 	}
 	return nil, errors.New("Get XDCx state fail")

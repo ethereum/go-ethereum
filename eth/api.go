@@ -306,11 +306,7 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 // DumpBlock retrieves the entire state of the database at a given block.
 func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if blockNr == rpc.PendingBlockNumber {
-		// If we're dumping the pending state, we need to request
-		// both the pending block as well as the pending state from
-		// the miner and operate on those
-		_, stateDb := api.eth.miner.Pending()
-		return stateDb.RawDump(), nil
+		blockNr = rpc.LatestBlockNumber
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {

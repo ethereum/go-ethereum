@@ -572,6 +572,9 @@ func (XDCx *XDCX) GetTradingState(block *types.Block, author common.Address) (*t
 	}
 	return tradingstate.New(root, XDCx.StateCache)
 }
+func (XDCX *XDCX) GetEmptyTradingState() (*tradingstate.TradingStateDB, error) {
+	return tradingstate.New(tradingstate.EmptyRoot, XDCX.StateCache)
+}
 
 func (XDCx *XDCX) GetStateCache() tradingstate.Database {
 	return XDCx.StateCache
