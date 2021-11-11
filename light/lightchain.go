@@ -79,13 +79,6 @@ type LightChain struct {
 // available in the database. It initialises the default Ethereum header
 // validator.
 func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
-	return NewLightChainWithMerger(odr, config, engine, checkpoint, consensus.NewMerger(rawdb.NewMemoryDatabase()))
-}
-
-// NewLightChain returns a fully initialised light chain using information
-// available in the database. It initialises the default Ethereum header
-// validator.
-func NewLightChainWithMerger(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint, merger *consensus.Merger) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
