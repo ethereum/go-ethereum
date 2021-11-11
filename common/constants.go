@@ -24,8 +24,7 @@ const (
 	MergeSignRange             = 15
 	RangeReturnSigner          = 150
 	MinimunMinerBlockPerEpoch  = 1
-	IgnoreSignerCheckBlock     = uint64(27307800)
-	IgnoreSignerCheckBlock2     = uint64(28270800)
+
 	OneYear                    = uint64(365 * 86400)
 	LiquidateLendingTradeBlock = uint64(100)
 )
@@ -75,6 +74,13 @@ var BaseRecall = big.NewInt(100)
 var TIPTRC21Fee = big.NewInt(38888888)
 var TIPTRC21FeeTestnet = big.NewInt(38888888)
 var LimitTimeFinality = uint64(30) // limit in 30 block
+
+var IgnoreSignerCheckBlockArray = map[uint64]bool{
+	uint64(1032300):  true,
+	uint64(1033200):  true,
+	uint64(27307800): true,
+	uint64(28270800): true,
+}
 var Blacklist = map[Address]bool{
 	HexToAddress("0x5248bfb72fd4f234e062d3e9bb76f08643004fcd"): true,
 	HexToAddress("0x5ac26105b35ea8935be382863a70281ec7a985e9"): true,
