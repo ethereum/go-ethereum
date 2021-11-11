@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package logger
 
 import (
 	"math/big"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -50,11 +51,11 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{})
+		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{})
 		logger   = NewStructLogger(nil)
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
-		scope    = &ScopeContext{
-			Memory:   NewMemory(),
+		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
+		scope    = &vm.ScopeContext{
+			Memory:   vm.NewMemory(),
 			Stack:    newstack(),
 			Contract: contract,
 		}
@@ -63,7 +64,7 @@ func TestStoreCapture(t *testing.T) {
 	scope.Stack.push(new(uint256.Int))
 	var index common.Hash
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
-	logger.CaptureState(0, SSTORE, 0, 0, scope, nil, 0, nil)
+	logger.CaptureState(0, vm.SSTORE, 0, 0, scope, nil, 0, nil)
 	if len(logger.storage[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(),
 			len(logger.storage[contract.Address()]))
