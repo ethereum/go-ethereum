@@ -1942,8 +1942,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	chainConfig := *params.TestChainConfig
 	// Generate a canonical chain to act as the main dataset
 	var (
-		genEngine = beacon.New(ethash.NewFaker(), false)
-		runEngine = beacon.New(ethash.NewFaker(), false)
+		merger    = consensus.NewMerger(rawdb.NewMemoryDatabase())
+		genEngine = beacon.New(ethash.NewFaker(), merger)
+		runEngine = beacon.New(ethash.NewFaker(), merger)
 		db        = rawdb.NewMemoryDatabase()
 
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1967,8 +1968,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	}
 	// Activate the transition since genesis if required
 	if mergePoint == 0 {
-		genEngine.MarkTransitioned()
-		runEngine.MarkTransitioned()
+		merger.LeavePoW()
+		merger.EnterPoS()
 
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
@@ -2000,8 +2001,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Activate the transition in the middle of the chain
 	if mergePoint == 1 {
-		genEngine.MarkTransitioned()
-		runEngine.MarkTransitioned()
+		merger.LeavePoW()
+		merger.EnterPoS()
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
 	}
@@ -2222,12 +2223,13 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		genesis   = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: &chainConfig}).MustCommit(db)
-		runEngine = beacon.New(ethash.NewFaker(), false)
-		genEngine = beacon.New(ethash.NewFaker(), false)
+		runMerger = consensus.NewMerger(db)
+		runEngine = beacon.New(ethash.NewFaker(), runMerger)
+		genEngine = beacon.New(ethash.NewFaker(), runMerger)
 	)
 	applyMerge := func(engine *beacon.Beacon, height int) {
 		if engine != nil {
-			engine.MarkTransitioned()
+			runMerger.EnterPoS()
 			// Set the terminal total difficulty in the config
 			chainConfig.TerminalTotalDifficulty = big.NewInt(int64(height))
 		}

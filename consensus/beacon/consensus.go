@@ -59,21 +59,19 @@ var (
 type Beacon struct {
 	ethone consensus.Engine // Classic consensus engine used in eth1, e.g. ethash or clique
 
-	// transitioned is the flag whether the transition has been triggered.
-	// It's triggered by receiving the first "ENGINE_FORKCHOICEUPDATED" message
-	// from the external consensus engine.
-	transitioned bool
-	lock         sync.RWMutex
+	// merger allows us to query whether the transition has been triggered.
+	merger *consensus.Merger
+	lock   sync.RWMutex
 }
 
 // New creates a consensus engine with the given embedded eth1 engine.
-func New(ethone consensus.Engine, transitioned bool) *Beacon {
+func New(ethone consensus.Engine, merger *consensus.Merger) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")
 	}
 	return &Beacon{
-		ethone:       ethone,
-		transitioned: transitioned,
+		ethone: ethone,
+		merger: merger,
 	}
 }
 
@@ -281,7 +279,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	defer beacon.lock.RUnlock()
 
 	// Transition isn't triggered yet, use the legacy rules for preparation.
-	if !beacon.transitioned {
+	if !beacon.merger.LeftPoW() {
 		return beacon.ethone.Prepare(chain, header)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -356,7 +354,7 @@ func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 	defer beacon.lock.RUnlock()
 
 	// Transition isn't triggered yet, use the legacy rules for calculation
-	if !beacon.transitioned {
+	if !beacon.merger.LeftPoW() {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
 	return beaconDifficulty
@@ -380,14 +378,6 @@ func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 		return false // we should never enter here.
 	}
 	return header.Difficulty.Cmp(beaconDifficulty) == 0
-}
-
-// MarkTransitioned sets the transitioned flag.
-func (beacon *Beacon) MarkTransitioned() {
-	beacon.lock.Lock()
-	defer beacon.lock.Unlock()
-
-	beacon.transitioned = true
 }
 
 // InnerEngine returns the embedded eth1 consensus engine.

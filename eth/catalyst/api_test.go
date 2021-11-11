@@ -179,6 +179,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 func TestEth2NewBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().LeavePoW()
 	defer n.Close()
 
 	var (
@@ -345,6 +346,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().LeavePoW()
 	defer n.Close()
 	var (
 		api    = NewConsensusAPI(ethservice, nil)

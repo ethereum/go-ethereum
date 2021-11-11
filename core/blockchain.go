@@ -215,13 +215,6 @@ type BlockChain struct {
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
-	return NewBlockChainWithMerger(db, cacheConfig, chainConfig, engine, vmConfig, shouldPreserve, txLookupLimit, NewMerger(rawdb.NewMemoryDatabase()))
-}
-
-// NewBlockChainWithMerger returns a fully initialised block chain using information
-// available in the database. It initialises the default Ethereum Validator
-// and Processor.
-func NewBlockChainWithMerger(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, merger *Merger) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
