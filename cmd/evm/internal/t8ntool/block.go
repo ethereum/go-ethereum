@@ -73,8 +73,9 @@ type blockInput struct {
 	Clique    *cliqueInput `json:"clique,omitempty"`
 
 	EthashDir string
-	Uncles    []*types.Header
+	PowMode   ethash.Mode
 	Txs       []*types.Transaction
+	Uncles    []*types.Header
 }
 
 type cliqueInput struct {
@@ -167,7 +168,7 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 			return nil, NewError(ErrorJson, fmt.Errorf("Sealing with ethash will overwrite specified nonce"))
 		}
 		ethashConfig := ethash.Config{
-			PowMode:        ethash.ModeNormal,
+			PowMode:        i.PowMode,
 			DatasetDir:     i.EthashDir,
 			CacheDir:       i.EthashDir,
 			DatasetsInMem:  1,
@@ -248,20 +249,31 @@ func BuildBlock(ctx *cli.Context) error {
 
 func readInput(ctx *cli.Context) (*blockInput, error) {
 	var (
-		headerStr = ctx.String(InputHeaderFlag.Name)
-		unclesStr = ctx.String(InputUnclesFlag.Name)
-		txsStr    = ctx.String(InputTxsRlpFlag.Name)
-		cliqueStr = ctx.String(SealerCliqueFlag.Name)
-		ethashDir = ctx.String(SealerEthashDirFlag.Name)
-		inputData = &blockInput{}
+		headerStr  = ctx.String(InputHeaderFlag.Name)
+		unclesStr  = ctx.String(InputUnclesFlag.Name)
+		txsStr     = ctx.String(InputTxsRlpFlag.Name)
+		cliqueStr  = ctx.String(SealerCliqueFlag.Name)
+		ethashOn   = ctx.Bool(SealerEthashFlag.Name)
+		ethashDir  = ctx.String(SealerEthashDirFlag.Name)
+		ethashMode = ctx.String(SealerEthashModeFlag.Name)
+		inputData  = &blockInput{}
 	)
 
-	if ethashDir != "" && cliqueStr != "" {
+	if ethashOn && cliqueStr != "" {
 		return nil, NewError(ErrorJson, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
 	}
 
-	if ethashDir != "" {
+	if ethashOn {
 		inputData.EthashDir = ethashDir
+		switch ethashMode {
+		case "normal":
+			inputData.PowMode = ethash.ModeNormal
+		case "test":
+			inputData.PowMode = ethash.ModeTest
+		default:
+			return nil, NewError(ErrorJson, fmt.Errorf("unknown pow mode: %s", ethashMode))
+
+		}
 	}
 
 	if headerStr == stdinSelector || unclesStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {
