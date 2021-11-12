@@ -29,7 +29,7 @@ import (
 
 // timeoutGracePeriod is the amount of time to allow for a peer to deliver a
 // response to a locally already timed out request. Timeouts are not penalized
-// as a peer might be temporarilly overloaded, however, they still must reply
+// as a peer might be temporarily overloaded, however, they still must reply
 // to each request. Failing to do so is considered a protocol violation.
 var timeoutGracePeriod = 2 * time.Minute
 
@@ -81,12 +81,12 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	responses := make(chan *eth.Response)
 
 	// Track the currently active requests and their timeout order
-	requests := make(map[string]*eth.Request)
+	pending := make(map[string]*eth.Request)
 	defer func() {
-		// Abort all requests on sync cycle cancellation. The requests will still
+		// Abort all requests on sync cycle cancellation. The requests may still
 		// be fulfilled by the remote side, but the dispatcher will not wait to
 		// deliver them since nobody's going to be listening.
-		for _, req := range requests {
+		for _, req := range pending {
 			req.Close()
 		}
 	}()
@@ -101,13 +101,20 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	}
 	defer timeout.Stop()
 
-	// Track the peers with in-flight requests. We can't use the `requests` map
-	// as certain malicious (or faulty) peers sometimes flat out refuse to send
-	// any response back, forever stalling the pending request until the peer
-	// disconnects. By keeping the idle tracking separate, we can cleanly stop
-	// the fetchers even if a malicious peer is stalling.
-	flights := make(map[string]time.Time)
-
+	// Track the timed-out but not-yet-answered requests separately. We want to
+	// keep tracking which peers are busy (potentially overloaded), so removing
+	// all trace of a timed out request is not good. We also can't just cancel
+	// the pending request altogether as that would prevent a late response from
+	// being delivered, thus never unblocking the peer.
+	stales := make(map[string]*eth.Request)
+	defer func() {
+		// Abort all requests on sync cycle cancellation. The requests may still
+		// be fulfilled by the remote side, but the dispatcher will not wait to
+		// deliver them since nobody's going to be listening.
+		for _, req := range stales {
+			req.Close()
+		}
+	}()
 	// Subscribe to peer lifecycle events to schedule tasks to new joiners and
 	// reschedule tasks upon disconnections. We don't care which event happened
 	// for simplicity, so just use a single channel.
@@ -125,7 +132,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 		}
 		// If there's nothing more to fetch, wait or terminate
 		if queue.pending() == 0 {
-			if len(requests) == 0 && finished {
+			if len(pending) == 0 && finished {
 				return nil
 			}
 		} else {
@@ -135,15 +142,18 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				caps  []int
 			)
 			for _, peer := range d.peers.AllPeers() {
-				if sent, ok := flights[peer.id]; !ok {
+				pending, stale := pending[peer.id], stales[peer.id]
+				if pending == nil && stale == nil {
 					idles = append(idles, peer)
 					caps = append(caps, queue.capacity(peer, time.Second))
-				} else if waited := time.Since(sent); waited > timeoutGracePeriod {
-					// Request has been in flight longer than the grace period
-					// permitted it, consider the peer malicious attempting to
-					// stall the sync.
-					peer.log.Warn("Peer stalling, dropping", "waited", common.PrettyDuration(waited))
-					d.dropPeer(peer.id)
+				} else if stale != nil {
+					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
+						// Request has been in flight longer than the grace period
+						// permitted it, consider the peer malicious attempting to
+						// stall the sync.
+						peer.log.Warn("Peer stalling, dropping", "waited", common.PrettyDuration(waited))
+						d.dropPeer(peer.id)
+					}
 				}
 			}
 			sort.Sort(&peerCapacitySort{idles, caps})
@@ -187,8 +197,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					queue.unreserve(peer.id) // TODO(karalabe): This needs a non-expiration method
 					continue
 				}
-				requests[peer.id] = req
-				flights[peer.id] = time.Now()
+				pending[peer.id] = req
 
 				ttl := d.peers.rates.TargetTimeout()
 				ordering[req] = timeouts.Size()
@@ -200,7 +209,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !progressed && !throttled && len(requests) == 0 && len(idles) == d.peers.Len() && queued > 0 {
+			if !progressed && !throttled && len(pending) == 0 && len(idles) == d.peers.Len() && queued > 0 {
 				return errPeersUnavailable
 			}
 		}
@@ -219,17 +228,20 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 
 			if event.join {
 				// Sanity check the internal state; this can be dropped later
-				if _, ok := requests[peerid]; ok {
+				if _, ok := pending[peerid]; ok {
 					event.peer.log.Error("Pending request exists for joining peer")
+				}
+				if _, ok := stales[peerid]; ok {
+					event.peer.log.Error("Stale request exists for joining peer")
 				}
 				// Loop back to the entry point for task assignment
 				continue
 			}
 			// A peer left, any existing requests need to be untracked, pending
 			// tasks returned and possible reassignment checked
-			if req, ok := requests[peerid]; ok {
+			if req, ok := pending[peerid]; ok {
 				queue.unreserve(peerid) // TODO(karalabe): This needs a non-expiration method
-				delete(requests, peerid)
+				delete(pending, peerid)
 				req.Close()
 
 				if index, live := ordering[req]; live {
@@ -246,7 +258,10 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					delete(ordering, req)
 				}
 			}
-			delete(flights, peerid)
+			if req, ok := stales[peerid]; ok {
+				delete(stales, peerid)
+				req.Close()
+			}
 
 		case <-timeout.C:
 			// Retrieve the next request which should have timed out. The check
@@ -265,9 +280,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// cancel it, so it's not considered in-flight anymore, but keep
 			// the peer marked busy to prevent assigning a second request and
 			// overloading it further.
-			delete(requests, req.Peer)
+			delete(pending, req.Peer)
+			stales[req.Peer] = req
 			delete(ordering, req)
-			req.Close()
 
 			timeouts.Pop()
 			if timeouts.Size() > 0 {
@@ -332,8 +347,8 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				delete(ordering, res.Req)
 			}
 			// Delete the pending request (if it still exists) and mark the peer idle
-			delete(requests, res.Req.Peer)
-			delete(flights, res.Req.Peer)
+			delete(pending, res.Req.Peer)
+			delete(stales, res.Req.Peer)
 
 			// Signal the dispatcher that the round trip is done. We'll drop the
 			// peer if the data turns out to be junk.

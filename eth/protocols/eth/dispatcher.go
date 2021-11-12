@@ -41,8 +41,8 @@ var (
 // Request is a pending request to allow tracking it and delivering a response
 // back to the requester on their chosen channel.
 type Request struct {
-	id   uint64    // Request ID to match up replies to
-	sent time.Time // Timestamp when the request was sent
+	peer *Peer  // Peer to which this request belogs for untracking
+	id   uint64 // Request ID to match up replies to
 
 	sink   chan *Response // Channel to deliver the response on
 	cancel chan struct{}  // Channel to cancel requests ahead of time
@@ -51,15 +51,30 @@ type Request struct {
 	want uint64      // Message code of the response packet
 	data interface{} // Data content of the request packet
 
-	Peer string // Demultiplexer if cross-peer requests are batched together
+	Peer string    // Demultiplexer if cross-peer requests are batched together
+	Sent time.Time // Timestamp when the request was sent
 }
 
 // Close aborts an in-flight request. Although there's no way to notify the
 // remote peer about the cancellation, this method notifies the dispatcher to
 // discard any late responses.
-func (r *Request) Close() {
-	if r.cancel != nil { // Nil only in external packet tests
+func (r *Request) Close() error {
+	if r.peer == nil { // Tests mock out the dispatcher, skip internal cancellation
+		return nil
+	}
+	cancelOp := &cancel{
+		id:   r.id,
+		fail: make(chan error),
+	}
+	select {
+	case r.peer.reqCancel <- cancelOp:
+		if err := <-cancelOp.fail; err != nil {
+			return err
+		}
 		close(r.cancel)
+		return nil
+	case <-r.peer.term:
+		return errDisconnected
 	}
 }
 
@@ -67,6 +82,13 @@ func (r *Request) Close() {
 // signal on if sending the request already failed on a network level.
 type request struct {
 	req  *Request
+	fail chan error
+}
+
+// cancel is a maintenance type on the dispatcher to stop tracking a pending
+// request.
+type cancel struct {
+	id   uint64 // Request ID to stop tracking
 	fail chan error
 }
 
@@ -102,6 +124,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 		fail: make(chan error),
 	}
 	req.cancel = make(chan struct{})
+	req.peer = p
 	req.Peer = p.id
 
 	select {
@@ -153,17 +176,17 @@ func (p *Peer) dispatchResponse(res *Response) error {
 	}
 }
 
-// dispatchRequests is a loop that accepts requests from higher layer packages,
-// pushes it to the network and tracks and dispatches the responses back to the
-// original requester.
-func (p *Peer) dispatchRequests() {
+// dispatcher is a loop that accepts requests from higher layer packages, pushes
+// it to the network and tracks and dispatches the responses back to the original
+// requester.
+func (p *Peer) dispatcher() {
 	pending := make(map[uint64]*Request)
 
 	for {
 		select {
 		case reqOp := <-p.reqDispatch:
 			req := reqOp.req
-			req.sent = time.Now()
+			req.Sent = time.Now()
 
 			requestTracker.Track(p.id, p.version, req.code, req.want, req.id)
 			err := p2p.Send(p.rw, req.code, req.data)
@@ -173,10 +196,24 @@ func (p *Peer) dispatchRequests() {
 				pending[req.id] = req
 			}
 
+		case cancelOp := <-p.reqCancel:
+			// Retrieve the pendign request to cancel and short circuit if it
+			// has already been serviced and is not available anymore
+			req := pending[cancelOp.id]
+			if req == nil {
+				cancelOp.fail <- nil
+				continue
+			}
+			// Stop tracking the request
+			delete(pending, cancelOp.id)
+			cancelOp.fail <- nil
+
 		case resOp := <-p.resDispatch:
 			res := resOp.res
 			res.Req = pending[res.id]
-			res.Time = res.recv.Sub(res.Req.sent)
+
+			// Independent if the request exists or not, track this packet
+			requestTracker.Fulfil(p.id, p.version, res.code, res.id)
 
 			switch {
 			case res.Req == nil:
@@ -196,10 +233,10 @@ func (p *Peer) dispatchRequests() {
 				// All dispatcher checks passed and the response was initialized
 				// with the matching request. Signal to the delivery routine that
 				// it can wait for a handler response and dispatch the data.
+				res.Time = res.recv.Sub(res.Req.Sent)
 				resOp.fail <- nil
 
 				// Stop tracking the request, the response dispatcher will deliver
-				requestTracker.Fulfil(p.id, p.version, res.code, res.id)
 				delete(pending, res.id)
 			}
 

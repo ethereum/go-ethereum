@@ -85,6 +85,7 @@ type Peer struct {
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfilment
+	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	term chan struct{} // Termination channel to stop the broadcasters
@@ -106,6 +107,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		txBroadcast:     make(chan []common.Hash),
 		txAnnounce:      make(chan []common.Hash),
 		reqDispatch:     make(chan *request),
+		reqCancel:       make(chan *cancel),
 		resDispatch:     make(chan *response),
 		txpool:          txpool,
 		term:            make(chan struct{}),
@@ -114,7 +116,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 	go peer.broadcastBlocks()
 	go peer.broadcastTransactions()
 	go peer.announceTransactions()
-	go peer.dispatchRequests()
+	go peer.dispatcher()
 
 	return peer
 }
