@@ -21,13 +21,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"google.golang.org/grpc"
 )
-
-var Memsize memsizeui.Handler
 
 type Server struct {
 	proto.UnimplementedBorServer
@@ -154,17 +151,9 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
-	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
-	// from the registry into expvar, and execute regular expvar handler.
-
 	if config.PrometheusAddr != "" {
 
 		prometheusMux := http.NewServeMux()
-
-		// this would cause a panic:
-		// panic: http: multiple registrations for /debug/vars
-		// http.HandleFunc("/debug/vars", e.expHandler)
-		// haven't found an elegant way, so just use a different endpoint
 
 		prometheusMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			prometheus.Handler(metrics.DefaultRegistry)
