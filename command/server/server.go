@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
@@ -158,7 +157,7 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
 	// from the registry into expvar, and execute regular expvar handler.
 
-	if len(config.PrometheusAddr) != 0 {
+	if config.PrometheusAddr != "" {
 
 		prometheusMux := http.NewServeMux()
 
@@ -167,20 +166,13 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 		// http.HandleFunc("/debug/vars", e.expHandler)
 		// haven't found an elegant way, so just use a different endpoint
 
-		prometheusMux.HandleFunc("/debug/metrics", func(w http.ResponseWriter, r *http.Request) {
-			exp.ExpHandler(metrics.DefaultRegistry)
-		})
-
-		prometheusMux.HandleFunc("/debug/metrics/prometheus", func(w http.ResponseWriter, r *http.Request) {
+		prometheusMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			prometheus.Handler(metrics.DefaultRegistry)
 		})
 
 		promServer := &http.Server{
-			Addr:           config.PrometheusAddr,
-			Handler:        prometheusMux,
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			MaxHeaderBytes: 1 << 20,
+			Addr:    config.PrometheusAddr,
+			Handler: prometheusMux,
 		}
 
 		go func() {
