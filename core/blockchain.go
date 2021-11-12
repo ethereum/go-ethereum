@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -2264,6 +2265,16 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
+	}
+	if eng, ok := bc.engine.(*beacon.Beacon); ok {
+		if eng.IsPoSHeader(block.Header()) {
+			fmt.Println("PoSHeader")
+		}
+		if reached, err := beacon.IsTTDReached(bc, block.ParentHash(), block.NumberU64()-1); reached {
+			fmt.Println("TTDD reached")
+		} else if err != nil {
+			fmt.Printf("TTDReached error: %v\n", err)
+		}
 	}
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########

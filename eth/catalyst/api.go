@@ -260,13 +260,17 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 		}
 		return ExecutePayloadResponse{Status: VALID.Status, LatestValidHash: block.Hash()}, nil
 	}
+	if api.eth.BlockChain().GetBlockByHash(params.BlockHash) != nil {
+		log.Info("Ignoring already processed block", "number", params.Number, "hash", params.BlockHash)
+		return ExecutePayloadResponse{Status: VALID.Status, LatestValidHash: block.Hash()}, nil
+	}
 	if !api.eth.BlockChain().HasBlock(block.ParentHash(), block.NumberU64()-1) {
-		/*
-			TODO (MariusVanDerWijden) reenable once sync is merged
-			if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
-				return SYNCING, err
-			}
-		*/
+
+		//TODO (MariusVanDerWijden) reenable once sync is merged
+		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
+			return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, err
+		}
+
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
 		return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 	}
@@ -437,6 +441,8 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
+		log.Warn("Invalid Payload", "ParentHash", header.ParentHash, "UncleHash", header.UncleHash, "Coinbase", header.Coinbase, "Root", header.Root, "TxHash", header.TxHash, "ReceiptHash", header.ReceiptHash, "Bloom", header.Bloom, "Difficulty", header.Difficulty, "Number", header.Number, "GasLimit", header.GasLimit, "GasUsed", header.GasUsed, "Time", header.Time, "BaseFee", header.BaseFee, "Extra", header.Extra, "MixDigest", header.MixDigest)
+		log.Warn("PayloadParams", "ParentHash", params.ParentHash, "Coinbase", params.FeeRecipient, "Root", params.StateRoot, "ReceiptHash", params.ReceiptsRoot, "Bloom", params.LogsBloom, "Number", params.Number, "GasLimit", params.GasLimit, "GasUsed", params.GasUsed, "Time", params.Timestamp, "BaseFee", params.BaseFeePerGas, "Extra", params.ExtraData, "MixDigest", params.Random)
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
 	return block, nil

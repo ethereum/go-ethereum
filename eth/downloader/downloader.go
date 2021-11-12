@@ -557,7 +557,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	var headerFetcher func() error
 	if !beaconMode {
 		// In legacy mode, headers are retrieved from the network
-		headerFetcher = func() error { return d.fetchHeaders(p, origin+1) }
+		headerFetcher = func() error { return d.fetchHeaders(p, origin+1, latest.Number.Uint64()) }
 	} else {
 		// In beacon mode, headers are served by the skeleton syncer
 		headerFetcher = func() error { return d.fetchBeaconHeaders(origin + 1) }
