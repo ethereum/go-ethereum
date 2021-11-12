@@ -396,6 +396,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
 		Value: &c.cliConfig.Telemetry.InfluxDB.Tags,
 	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "metrics.prometheus-addr",
+		Usage: "Address for Prometheus Server",
+		Value: &c.cliConfig.Telemetry.PrometheusAddr,
+	})
 	// influx db v2
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics.influxdbv2",

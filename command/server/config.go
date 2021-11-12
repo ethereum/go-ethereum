@@ -441,8 +441,9 @@ func DefaultConfig() *Config {
 		},
 		Ethstats: "",
 		Telemetry: &TelemetryConfig{
-			Enabled:   false,
-			Expensive: false,
+			Enabled:        false,
+			Expensive:      false,
+			PrometheusAddr: "",
 			InfluxDB: &InfluxDBConfig{
 				V1Enabled:    false,
 				Endpoint:     "",
