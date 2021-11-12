@@ -196,7 +196,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 				panic("cancun block must be 0")
 			}
 
-			trieCfg = &trie.Config{UseVerkle: storedcfg.IsCancun(big.NewInt(int64(header.Number.Int64())))}
+			trieCfg = &trie.Config{UseVerkle: storedcfg.IsCancun(big.NewInt(header.Number.Int64()))}
 		}
 	}
 
