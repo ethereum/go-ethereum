@@ -72,6 +72,7 @@ type blockInput struct {
 	TxRlp     string       `json:"txsRlp,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
 
+	Ethash    bool
 	EthashDir string
 	PowMode   ethash.Mode
 	Txs       []*types.Transaction
@@ -81,7 +82,7 @@ type blockInput struct {
 type cliqueInput struct {
 	Key        *ecdsa.PrivateKey
 	Voted      *common.Address
-	Authorized bool
+	Authorized *bool
 	Vanity     common.Hash
 }
 
@@ -107,7 +108,7 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	// Now, read the rest of object
 	type others struct {
 		Voted      *common.Address `json:"voted"`
-		Authorized bool            `json:"authorized"`
+		Authorized *bool           `json:"authorized"`
 		Vanity     common.Hash     `json:"vanity"`
 	}
 	var x others
@@ -163,7 +164,7 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 	block := types.NewBlockWithHeader(header)
 	block = block.WithBody(i.Txs, i.Uncles)
 
-	if i.EthashDir != "" {
+	if i.Ethash {
 		if i.Env.Nonce != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("Sealing with ethash will overwrite specified nonce"))
 		}
@@ -197,15 +198,18 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 			if i.Env.Coinbase != nil {
 				return nil, NewError(ErrorJson, fmt.Errorf("Sealing with clique and voting will overwrite specified coinbase"))
 			}
+			header.Coinbase = *i.Clique.Voted
+		}
+
+		if i.Clique.Authorized != nil {
 			if i.Env.Nonce != nil {
 				return nil, NewError(ErrorJson, fmt.Errorf("Sealing with clique and voting will overwrite specified nonce"))
 			}
 
-			header.Coinbase = *i.Clique.Voted
-			if i.Clique.Authorized {
-				header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-			} else {
+			if *i.Clique.Authorized {
 				header.Nonce = [8]byte{}
+			} else {
+				header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 			}
 		}
 
@@ -264,6 +268,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	}
 
 	if ethashOn {
+		inputData.Ethash = ethashOn
 		inputData.EthashDir = ethashDir
 		switch ethashMode {
 		case "normal":

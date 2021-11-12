@@ -342,6 +342,7 @@ type b11rInput struct {
 	inTxsRlp    string
 	inClique    string
 	ethash      bool
+	ethashMode  string
 	ethashDir   string
 }
 
@@ -360,14 +361,18 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.inClique; opt != "" {
-		out = append(out, "--input.clique")
+		out = append(out, "--sealer.clique")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if args.ethash {
-		out = append(out, "--input.ethash")
+		out = append(out, "--sealer.ethash")
+	}
+	if opt := args.ethashMode; opt != "" {
+		out = append(out, "--sealer.ethash.mode")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.ethashDir; opt != "" {
-		out = append(out, "--ethash.dir")
+		out = append(out, "--sealer.ethash.dir")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	out = append(out, "--output.block")
@@ -384,7 +389,7 @@ func TestB11r(t *testing.T) {
 		expExitCode int
 		expOut      string
 	}{
-		{ // TODO description
+		{ // unsealed block
 			base: "./testdata/20",
 			input: b11rInput{
 				inEnv:       "header.json",
@@ -392,6 +397,25 @@ func TestB11r(t *testing.T) {
 				inTxsRlp:    "txs.rlp",
 			},
 			expOut: "exp.json",
+		},
+		{ // ethash test seal
+			base: "./testdata/21",
+			input: b11rInput{
+				inEnv:       "header.json",
+				inUnclesRlp: "uncles.json",
+				inTxsRlp:    "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
+		{ // clique test seal
+			base: "./testdata/21",
+			input: b11rInput{
+				inEnv:       "header.json",
+				inUnclesRlp: "uncles.json",
+				inTxsRlp:    "txs.rlp",
+				inClique:    "clique.json",
+			},
+			expOut: "exp-clique.json",
 		},
 	} {
 
