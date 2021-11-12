@@ -357,7 +357,7 @@ func TestProcessStateless(t *testing.T) {
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			Ethash:              new(params.EthashConfig),
-			UseVerkle:           true,
+			CancunBlock:         big.NewInt(0),
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

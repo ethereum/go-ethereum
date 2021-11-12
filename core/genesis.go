@@ -162,6 +162,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
+
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
@@ -177,17 +178,29 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
+
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	var cfg *trie.Config = nil
-	if genesis.Config.UseVerkle {
-		cfg = &trie.Config{UseVerkle: true}
-	}
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, cfg), nil); err != nil {
-		if genesis == nil {
-			genesis = DefaultGenesisBlock()
+
+	var trieCfg *trie.Config
+
+	if genesis == nil {
+		storedcfg := rawdb.ReadChainConfig(db, stored)
+		if storedcfg == nil {
+			panic("this should never be reached: if genesis is nil, the config is already present or 'geth init' is being called which created it (in the code above, which means genesis != nil)")
 		}
+
+		if storedcfg.CancunBlock != nil {
+			if storedcfg.CancunBlock.Cmp(big.NewInt(0)) != 0 {
+				panic("cancun block must be 0")
+			}
+
+			trieCfg = &trie.Config{UseVerkle: storedcfg.IsCancun(big.NewInt(int64(header.Number.Int64())))}
+		}
+	}
+
+	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, trieCfg), nil); err != nil {
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
@@ -270,7 +283,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	var trieCfg *trie.Config
 	if g.Config != nil {
-		trieCfg = &trie.Config{UseVerkle: g.Config.UseVerkle}
+		trieCfg = &trie.Config{UseVerkle: g.Config.IsCancun(big.NewInt(int64(g.Number)))}
 	}
 	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	if err != nil {
