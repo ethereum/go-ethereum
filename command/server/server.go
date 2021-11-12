@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
@@ -47,11 +48,6 @@ func NewServer(config *Config) (*Server, error) {
 
 	// load the chain genesis
 	if err := config.loadChain(); err != nil {
-		return nil, err
-	}
-
-	// start the Prometheus Server
-	if err := srv.StartPrometheus(config.Prometheus.address, config.Prometheus.Enabled); err != nil {
 		return nil, err
 	}
 
@@ -159,6 +155,42 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
+	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
+	// from the registry into expvar, and execute regular expvar handler.
+
+	if len(config.PrometheusAddr) != 0 {
+
+		prometheusMux := http.NewServeMux()
+
+		// this would cause a panic:
+		// panic: http: multiple registrations for /debug/vars
+		// http.HandleFunc("/debug/vars", e.expHandler)
+		// haven't found an elegant way, so just use a different endpoint
+
+		prometheusMux.HandleFunc("/debug/metrics", func(w http.ResponseWriter, r *http.Request) {
+			exp.ExpHandler(metrics.DefaultRegistry)
+		})
+
+		prometheusMux.HandleFunc("/debug/metrics/prometheus", func(w http.ResponseWriter, r *http.Request) {
+			prometheus.Handler(metrics.DefaultRegistry)
+		})
+
+		promServer := &http.Server{
+			Addr:           config.PrometheusAddr,
+			Handler:        prometheusMux,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+
+		go func() {
+			if err := promServer.ListenAndServe(); err != nil {
+				log.Error("Failure in running Prometheus server", "err", err)
+			}
+		}()
+
+	}
+
 	return nil
 }
 
@@ -182,21 +214,6 @@ func (s *Server) setupGRPCServer(addr string) error {
 }
 
 func (s *Server) StartPrometheus(address string, enabled bool) error {
-	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
-	// from the registry into expvar, and execute regular expvar handler.
-	if enabled {
-		exp.Exp(metrics.DefaultRegistry)
-	}
-
-	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
-
-	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
-
-	go func() {
-		if err := http.ListenAndServe(address, nil); err != nil {
-			log.Error("Failure in running pprof server", "err", err)
-		}
-	}()
 
 	return nil
 }

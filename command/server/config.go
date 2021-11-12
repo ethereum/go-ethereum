@@ -88,9 +88,6 @@ type Config struct {
 
 	// GRPC has the grpc server related settings
 	GRPC *GRPCConfig
-
-	// Prometheus Server
-	Prometheus *PrometheusConfig `hcl:"prometheus,optional"`
 }
 
 type P2PConfig struct {
@@ -239,14 +236,6 @@ type GRPCConfig struct {
 	Addr string
 }
 
-type PrometheusConfig struct {
-	// Enabled selects whether the api is enabled
-	Enabled bool `hcl:"enabled,optional"`
-
-	// Host is the address to bind the api
-	address string `hcl:"host,optional"`
-}
-
 type APIConfig struct {
 	// Enabled selects whether the api is enabled
 	Enabled bool `hcl:"enabled,optional"`
@@ -286,6 +275,9 @@ type TelemetryConfig struct {
 
 	// InfluxDB has the influxdb related settings
 	InfluxDB *InfluxDBConfig `hcl:"influx,block"`
+
+	// Prometheus Address
+	PrometheusAddr string `hcl:"prometheus-addr,optional"`
 }
 
 type InfluxDBConfig struct {
