@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/olekukonko/tablewriter"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -69,6 +70,7 @@ Remove blockchain and state databases`,
 			dbDumpFreezerIndex,
 			dbImportCmd,
 			dbExportCmd,
+			dbMetadataCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -231,6 +233,20 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.GoerliFlag,
 		},
 		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
+	}
+	dbMetadataCmd = cli.Command{
+		Action: utils.MigrateFlags(showMetaData),
+		Name:   "metadata",
+		Usage:  "Shows metadata about the chain status.",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "Shows metadata about the chain status.",
 	}
 )
 
@@ -683,4 +699,49 @@ func exportChaindata(ctx *cli.Context) error {
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
+}
+
+func showMetaData(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	ancients, err := db.Ancients()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
+	}
+	pp := func(val *uint64) string {
+		if val == nil {
+			return "<nil>"
+		}
+		return fmt.Sprintf("%d (0x%x)", *val, *val)
+	}
+	data := [][]string{
+		{"databaseVersion", pp(rawdb.ReadDatabaseVersion(db))},
+		{"headBlockHash", fmt.Sprintf("%v", rawdb.ReadHeadBlockHash(db))},
+		{"headFastBlockHash", fmt.Sprintf("%v", rawdb.ReadHeadFastBlockHash(db))},
+		{"headHeaderHash", fmt.Sprintf("%v", rawdb.ReadHeadHeaderHash(db))}}
+	if b := rawdb.ReadHeadBlock(db); b != nil {
+		data = append(data, []string{"headBlock.Hash", fmt.Sprintf("%v", b.Hash())})
+		data = append(data, []string{"headBlock.Root", fmt.Sprintf("%v", b.Root())})
+		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (0x%x)", b.Number(), b.Number())})
+	}
+	if h := rawdb.ReadHeadHeader(db); h != nil {
+		data = append(data, []string{"headHeader.Hash", fmt.Sprintf("%v", h.Hash())})
+		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
+		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (0x%x)", h.Number, h.Number)})
+	}
+	data = append(data, [][]string{{"frozen", fmt.Sprintf("%v", ancients)},
+		{"lastPivotNumber", pp(rawdb.ReadLastPivotNumber(db))},
+		{"snapshotSyncStatus", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotSyncStatus(db)))},
+		{"snapshotGenerator", fmt.Sprintf("%x", rawdb.ReadSnapshotGenerator(db))},
+		{"snapshotDisabled", fmt.Sprintf("%v", rawdb.ReadSnapshotDisabled(db))},
+		{"snapshotJournal", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotJournal(db)))},
+		{"snapshotRecoveryNumber", pp(rawdb.ReadSnapshotRecoveryNumber(db))},
+		{"snapshotRoot", fmt.Sprintf("%v", rawdb.ReadSnapshotRoot(db))},
+	}...)
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Field", "Value"})
+	table.AppendBulk(data)
+	table.Render()
+	return nil
 }
