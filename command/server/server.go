@@ -213,11 +213,6 @@ func (s *Server) setupGRPCServer(addr string) error {
 	return nil
 }
 
-func (s *Server) StartPrometheus(address string, enabled bool) error {
-
-	return nil
-}
-
 func (s *Server) withLoggingUnaryInterceptor() grpc.ServerOption {
 	return grpc.UnaryInterceptor(s.loggingServerInterceptor)
 }
