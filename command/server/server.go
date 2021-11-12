@@ -29,6 +29,7 @@ import (
 type Server struct {
 	proto.UnimplementedBorServer
 	node       *node.Node
+	backend    *eth.Ethereum
 	grpcServer *grpc.Server
 }
 
@@ -67,6 +68,7 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	srv.backend = backend
 
 	// debug tracing is enabled by default
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))

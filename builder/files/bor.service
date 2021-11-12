@@ -1,0 +1,18 @@
+[Unit]
+  Description=bor
+  StartLimitIntervalSec=500
+  StartLimitBurst=5
+
+[Service]
+  Restart=on-failure
+  RestartSec=5s
+  WorkingDirectory=$NODE_DIR
+  EnvironmentFile=/etc/matic/metadata
+  ExecStart=/usr/local/bin/bor $VALIDATOR_ADDRESS
+  Type=simple
+  User=$USER
+  KillSignal=SIGINT
+  TimeoutStopSec=120
+
+[Install]
+  WantedBy=multi-user.target

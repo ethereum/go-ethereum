@@ -64,6 +64,16 @@ func commands() map[string]cli.CommandFactory {
 				Meta2: meta2,
 			}, nil
 		},
+		"chain": func() (cli.Command, error) {
+			return &ChainCommand{
+				UI: ui,
+			}, nil
+		},
+		"chain sethead": func() (cli.Command, error) {
+			return &ChainSetHeadCommand{
+				Meta2: meta2,
+			}, nil
+		},
 		"account": func() (cli.Command, error) {
 			return &Account{
 				UI: ui,
