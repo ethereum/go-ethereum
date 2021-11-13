@@ -275,6 +275,9 @@ type TelemetryConfig struct {
 
 	// InfluxDB has the influxdb related settings
 	InfluxDB *InfluxDBConfig `hcl:"influx,block"`
+
+	// Prometheus Address
+	PrometheusAddr string `hcl:"prometheus-addr,optional"`
 }
 
 type InfluxDBConfig struct {
@@ -438,8 +441,9 @@ func DefaultConfig() *Config {
 		},
 		Ethstats: "",
 		Telemetry: &TelemetryConfig{
-			Enabled:   false,
-			Expensive: false,
+			Enabled:        false,
+			Expensive:      false,
+			PrometheusAddr: "",
 			InfluxDB: &InfluxDBConfig{
 				V1Enabled:    false,
 				Endpoint:     "",
