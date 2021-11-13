@@ -196,10 +196,8 @@ func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
 		if err := engine.Seal(nil, block, results, nil); err != nil {
 			panic(fmt.Sprintf("failed to seal block: %v", err))
 		}
-		select {
-		case found := <-results:
-			block.WithSeal(found.Header())
-		}
+		found := <-results
+		block.WithSeal(found.Header())
 	} else if i.Clique != nil {
 		header := block.Header()
 
@@ -227,8 +225,8 @@ func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
 
 		header.Extra = make([]byte, 97)
 		copy(header.Extra[0:32], i.Clique.Vanity.Bytes()[:])
-		h := clique.SealHash(header)
 
+		h := clique.SealHash(header)
 		sighash, err := crypto.Sign(h[:], i.Clique.Key)
 		if err != nil {
 			return nil, err
