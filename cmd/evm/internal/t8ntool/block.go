@@ -256,10 +256,10 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		headerStr  = ctx.String(InputHeaderFlag.Name)
 		unclesStr  = ctx.String(InputUnclesFlag.Name)
 		txsStr     = ctx.String(InputTxsRlpFlag.Name)
-		cliqueStr  = ctx.String(SealerCliqueFlag.Name)
-		ethashOn   = ctx.Bool(SealerEthashFlag.Name)
-		ethashDir  = ctx.String(SealerEthashDirFlag.Name)
-		ethashMode = ctx.String(SealerEthashModeFlag.Name)
+		cliqueStr  = ctx.String(SealCliqueFlag.Name)
+		ethashOn   = ctx.Bool(SealEthashFlag.Name)
+		ethashDir  = ctx.String(SealEthashDirFlag.Name)
+		ethashMode = ctx.String(SealEthashModeFlag.Name)
 		inputData  = &blockInput{}
 	)
 

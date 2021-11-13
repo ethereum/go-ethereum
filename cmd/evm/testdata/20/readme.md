@@ -2,7 +2,6 @@
 
 This test shows how `b11r` can be used to assemble an unsealed block.
 
-
 ```console
 $ go run . b11r --input.header=testdata/20/header.json --input.txs=testdata/20/txs.rlp --input.uncles=testdata/20/uncles.json --output.block=stdout
 {
