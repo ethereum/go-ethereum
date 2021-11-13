@@ -19,7 +19,7 @@ var _ = (*bbEnvMarshaling)(nil)
 func (b bbEnv) MarshalJSON() ([]byte, error) {
 	type bbEnv struct {
 		ParentHash  common.Hash           `json:"parentHash"`
-		UncleHash   *common.Hash          `json:"sha3Uncles"`
+		OmmerHash   *common.Hash          `json:"sha3Ommers"`
 		Coinbase    *common.Address       `json:"miner"`
 		Root        common.Hash           `json:"stateRoot"        gencodec:"required"`
 		TxHash      *common.Hash          `json:"transactionsRoot"`
@@ -37,7 +37,7 @@ func (b bbEnv) MarshalJSON() ([]byte, error) {
 	}
 	var enc bbEnv
 	enc.ParentHash = b.ParentHash
-	enc.UncleHash = b.UncleHash
+	enc.OmmerHash = b.OmmerHash
 	enc.Coinbase = b.Coinbase
 	enc.Root = b.Root
 	enc.TxHash = b.TxHash
@@ -59,7 +59,7 @@ func (b bbEnv) MarshalJSON() ([]byte, error) {
 func (b *bbEnv) UnmarshalJSON(input []byte) error {
 	type bbEnv struct {
 		ParentHash  *common.Hash          `json:"parentHash"`
-		UncleHash   *common.Hash          `json:"sha3Uncles"`
+		OmmerHash   *common.Hash          `json:"sha3Ommers"`
 		Coinbase    *common.Address       `json:"miner"`
 		Root        *common.Hash          `json:"stateRoot"        gencodec:"required"`
 		TxHash      *common.Hash          `json:"transactionsRoot"`
@@ -82,8 +82,8 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 	if dec.ParentHash != nil {
 		b.ParentHash = *dec.ParentHash
 	}
-	if dec.UncleHash != nil {
-		b.UncleHash = dec.UncleHash
+	if dec.OmmerHash != nil {
+		b.OmmerHash = dec.OmmerHash
 	}
 	if dec.Coinbase != nil {
 		b.Coinbase = dec.Coinbase

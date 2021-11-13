@@ -40,7 +40,7 @@ import (
 //go:generate gencodec -type bbEnv -field-override bbEnvMarshaling -out gen_bbenv.go
 type bbEnv struct {
 	ParentHash  common.Hash       `json:"parentHash"`
-	UncleHash   *common.Hash      `json:"sha3Uncles"`
+	OmmerHash   *common.Hash      `json:"sha3Ommers"`
 	Coinbase    *common.Address   `json:"miner"`
 	Root        common.Hash       `json:"stateRoot"        gencodec:"required"`
 	TxHash      *common.Hash      `json:"transactionsRoot"`
@@ -69,7 +69,7 @@ type bbEnvMarshaling struct {
 
 type blockInput struct {
 	Env       *bbEnv       `json:"header,omitempty"`
-	UnclesRlp []string     `json:"uncles,omitempty"`
+	OmmersRlp []string     `json:"ommers,omitempty"`
 	TxRlp     string       `json:"txsRlp,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
 
@@ -77,7 +77,7 @@ type blockInput struct {
 	EthashDir string
 	PowMode   ethash.Mode
 	Txs       []*types.Transaction
-	Uncles    []*types.Header
+	Ommers    []*types.Header
 }
 
 type cliqueInput struct {
@@ -143,12 +143,12 @@ func (i *blockInput) ToBlock() *types.Block {
 	}
 
 	// Fill optional values.
-	if i.Env.UncleHash != nil {
-		header.UncleHash = *i.Env.UncleHash
-	} else if len(i.Uncles) != 0 {
+	if i.Env.OmmerHash != nil {
+		header.UncleHash = *i.Env.OmmerHash
+	} else if len(i.Ommers) != 0 {
 		// Calculate the ommer hash if none is provided and there are ommers to hash
 		sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
-		rlp.Encode(sha, i.Uncles)
+		rlp.Encode(sha, i.Ommers)
 		h := make([]byte, 32)
 		sha.Read(h[:])
 		header.UncleHash = common.BytesToHash(h)
@@ -170,7 +170,7 @@ func (i *blockInput) ToBlock() *types.Block {
 	}
 
 	block := types.NewBlockWithHeader(header)
-	block = block.WithBody(i.Txs, i.Uncles)
+	block = block.WithBody(i.Txs, i.Ommers)
 
 	return block
 }
@@ -267,7 +267,7 @@ func BuildBlock(ctx *cli.Context) error {
 func readInput(ctx *cli.Context) (*blockInput, error) {
 	var (
 		headerStr  = ctx.String(InputHeaderFlag.Name)
-		unclesStr  = ctx.String(InputUnclesFlag.Name)
+		ommersStr  = ctx.String(InputOmmersFlag.Name)
 		txsStr     = ctx.String(InputTxsRlpFlag.Name)
 		cliqueStr  = ctx.String(SealCliqueFlag.Name)
 		ethashOn   = ctx.Bool(SealEthashFlag.Name)
@@ -294,7 +294,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		}
 	}
 
-	if headerStr == stdinSelector || unclesStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {
+	if headerStr == stdinSelector || ommersStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
@@ -317,30 +317,30 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		inputData.Env = env
 	}
 
-	if unclesStr != stdinSelector {
-		uncles, err := readUncles(unclesStr)
+	if ommersStr != stdinSelector {
+		ommers, err := readOmmers(ommersStr)
 		if err != nil {
 			return nil, err
 		}
-		inputData.UnclesRlp = uncles
+		inputData.OmmersRlp = ommers
 	}
 
-	uncles := []*types.Header{}
-	for _, str := range inputData.UnclesRlp {
+	ommers := []*types.Header{}
+	for _, str := range inputData.OmmersRlp {
 		type extblock struct {
 			Header *types.Header
 			Txs    []*types.Transaction
-			Uncles []*types.Header
+			Ommers []*types.Header
 		}
-		var uncle *extblock
+		var ommer *extblock
 		raw := common.FromHex(str)
-		err := rlp.DecodeBytes(raw, &uncle)
+		err := rlp.DecodeBytes(raw, &ommer)
 		if err != nil {
-			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode uncle from rlp data: %v", err))
+			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode ommer from rlp data: %v", err))
 		}
-		uncles = append(uncles, uncle.Header)
+		ommers = append(ommers, ommer.Header)
 	}
-	inputData.Uncles = uncles
+	inputData.Ommers = ommers
 
 	if txsStr != stdinSelector {
 		txs, err := readTxsRlp(txsStr)
@@ -384,27 +384,27 @@ func readEnv(path string) (*bbEnv, error) {
 	return env, nil
 }
 
-func readUncles(path string) ([]string, error) {
-	uncles := []string{}
+func readOmmers(path string) ([]string, error) {
+	ommers := []string{}
 
 	if path == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&uncles); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling uncles from stdin: %v", err))
+		if err := decoder.Decode(&ommers); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling ommers from stdin: %v", err))
 		}
 	} else {
 		inFile, err := os.Open(path)
 		if err != nil {
-			return nil, NewError(ErrorIO, fmt.Errorf("failed reading uncles file: %v", err))
+			return nil, NewError(ErrorIO, fmt.Errorf("failed reading ommers file: %v", err))
 		}
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&uncles); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling uncles file: %v", err))
+		if err := decoder.Decode(&ommers); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling ommers file: %v", err))
 		}
 	}
 
-	return uncles, nil
+	return ommers, nil
 }
 
 func readTxsRlp(path string) (string, error) {

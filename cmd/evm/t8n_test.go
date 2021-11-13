@@ -131,7 +131,7 @@ func TestT8n(t *testing.T) {
 			output:      t8nOutput{alloc: true, result: true},
 			expExitCode: 4,
 		},
-		{ // Ommer test
+		{ // Uncle test
 			base: "./testdata/5",
 			input: t8nInput{
 				"alloc.json", "txs.json", "env.json", "Byzantium", "0x80",
@@ -171,7 +171,7 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp2.json",
 		},
-		{ // Difficulty calculation - with uncles + Berlin
+		{ // Difficulty calculation - with ommers + Berlin
 			base: "./testdata/14",
 			input: t8nInput{
 				"alloc.json", "txs.json", "env.uncles.json", "Berlin", "",
@@ -338,7 +338,7 @@ func TestT9n(t *testing.T) {
 
 type b11rInput struct {
 	inEnv       string
-	inUnclesRlp string
+	inOmmersRlp string
 	inTxsRlp    string
 	inClique    string
 	ethash      bool
@@ -352,8 +352,8 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, "--input.header")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
-	if opt := args.inUnclesRlp; opt != "" {
-		out = append(out, "--input.uncles")
+	if opt := args.inOmmersRlp; opt != "" {
+		out = append(out, "--input.ommers")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.inTxsRlp; opt != "" {
@@ -393,7 +393,7 @@ func TestB11r(t *testing.T) {
 			base: "./testdata/20",
 			input: b11rInput{
 				inEnv:       "header.json",
-				inUnclesRlp: "uncles.json",
+				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
 			},
 			expOut: "exp.json",
@@ -402,7 +402,7 @@ func TestB11r(t *testing.T) {
 			base: "./testdata/21",
 			input: b11rInput{
 				inEnv:       "header.json",
-				inUnclesRlp: "uncles.json",
+				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
 			},
 			expOut: "exp.json",
@@ -411,7 +411,7 @@ func TestB11r(t *testing.T) {
 			base: "./testdata/21",
 			input: b11rInput{
 				inEnv:       "header.json",
-				inUnclesRlp: "uncles.json",
+				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
 				inClique:    "clique.json",
 			},
@@ -421,7 +421,7 @@ func TestB11r(t *testing.T) {
 			base: "./testdata/22",
 			input: b11rInput{
 				inEnv:       "header.json",
-				inUnclesRlp: "uncles.json",
+				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
 			},
 			expOut: "exp.json",

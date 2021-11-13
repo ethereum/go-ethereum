@@ -98,10 +98,10 @@ var (
 		Usage: "`stdin` or file name of where to find the block header to use.",
 		Value: "header.json",
 	}
-	InputUnclesFlag = cli.StringFlag{
-		Name:  "input.uncles",
-		Usage: "`stdin` or file name of where to find the list of uncle header RLPs to use.",
-		Value: "uncles.json",
+	InputOmmersFlag = cli.StringFlag{
+		Name:  "input.ommers",
+		Usage: "`stdin` or file name of where to find the list of ommer header RLPs to use.",
+		Value: "ommers.json",
 	}
 	InputTxsRlpFlag = cli.StringFlag{
 		Name:  "input.txs",
