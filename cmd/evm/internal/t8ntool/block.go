@@ -166,7 +166,7 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 
 	if i.Ethash {
 		if i.Env.Nonce != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("Sealing with ethash will overwrite specified nonce"))
+			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
 		}
 		ethashConfig := ethash.Config{
 			PowMode:        i.PowMode,
@@ -192,18 +192,18 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 		header = block.Header()
 
 		if i.Env.Extra != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("Sealing with clique will overwrite specified extra data"))
+			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
 		}
 		if i.Clique.Voted != nil {
 			if i.Env.Coinbase != nil {
-				return nil, NewError(ErrorJson, fmt.Errorf("Sealing with clique and voting will overwrite specified coinbase"))
+				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
 			}
 			header.Coinbase = *i.Clique.Voted
 		}
 
 		if i.Clique.Authorized != nil {
 			if i.Env.Nonce != nil {
-				return nil, NewError(ErrorJson, fmt.Errorf("Sealing with clique and voting will overwrite specified nonce"))
+				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
 			}
 
 			if *i.Clique.Authorized {
@@ -264,7 +264,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	)
 
 	if ethashOn && cliqueStr != "" {
-		return nil, NewError(ErrorJson, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
+		return nil, NewError(ErrorConfig, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
 	}
 
 	if ethashOn {
@@ -276,7 +276,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		case "test":
 			inputData.PowMode = ethash.ModeTest
 		default:
-			return nil, NewError(ErrorJson, fmt.Errorf("unknown pow mode: %s", ethashMode))
+			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s", ethashMode))
 
 		}
 	}
@@ -318,7 +318,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		raw := common.FromHex(str)
 		err := rlp.DecodeBytes(raw, &uncle)
 		if err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("unable to decode uncle from rlp data: %v", err))
+			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode uncle from rlp data: %v", err))
 		}
 		uncles = append(uncles, uncle)
 	}
@@ -335,7 +335,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	raw := common.FromHex(inputData.TxRlp)
 	err := rlp.DecodeBytes(raw, &txs)
 	if err != nil {
-		return nil, NewError(ErrorJson, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
+		return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
 	}
 	inputData.Txs = txs
 

@@ -43,11 +43,12 @@ import (
 
 const (
 	ErrorEVM              = 2
-	ErrorVMConfig         = 3
+	ErrorConfig           = 3
 	ErrorMissingBlockhash = 4
 
 	ErrorJson = 10
 	ErrorIO   = 11
+	ErrorRlp  = 12
 
 	stdinSelector = "stdin"
 )
@@ -183,7 +184,7 @@ func Transition(ctx *cli.Context) error {
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
-		return NewError(ErrorVMConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
+		return NewError(ErrorConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
 	} else {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
@@ -247,18 +248,18 @@ func Transition(ctx *cli.Context) error {
 	// Sanity check, to not `panic` in state_transition
 	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
 		if prestate.Env.BaseFee == nil {
-			return NewError(ErrorVMConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
+			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
 	if env := prestate.Env; env.Difficulty == nil {
 		// If difficulty was not provided by caller, we need to calculate it.
 		switch {
 		case env.ParentDifficulty == nil:
-			return NewError(ErrorVMConfig, errors.New("currentDifficulty was not provided, and cannot be calculated due to missing parentDifficulty"))
+			return NewError(ErrorConfig, errors.New("currentDifficulty was not provided, and cannot be calculated due to missing parentDifficulty"))
 		case env.Number == 0:
-			return NewError(ErrorVMConfig, errors.New("currentDifficulty needs to be provided for block number 0"))
+			return NewError(ErrorConfig, errors.New("currentDifficulty needs to be provided for block number 0"))
 		case env.Timestamp <= env.ParentTimestamp:
-			return NewError(ErrorVMConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
+			return NewError(ErrorConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
 				env.Timestamp, env.ParentTimestamp))
 		}
 		prestate.Env.Difficulty = calcDifficulty(chainConfig, env.Number, env.Timestamp,
