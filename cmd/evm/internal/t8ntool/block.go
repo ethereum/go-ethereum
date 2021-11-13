@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -122,7 +123,7 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (i *blockInput) toBlock() (*types.Block, error) {
+func (i *blockInput) ToBlock() *types.Block {
 	header := &types.Header{
 		ParentHash:  i.Env.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
@@ -141,9 +142,16 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 		BaseFee:     i.Env.BaseFee,
 	}
 
-	// Set optional values to specified values.
+	// Fill optional values.
 	if i.Env.UncleHash != nil {
 		header.UncleHash = *i.Env.UncleHash
+	} else if len(i.Uncles) != 0 {
+		// Calculate the ommer hash if none is provided and there are ommers to hash
+		sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		rlp.Encode(sha, i.Uncles)
+		h := make([]byte, 32)
+		sha.Read(h[:])
+		header.UncleHash = common.BytesToHash(h)
 	}
 	if i.Env.Coinbase != nil {
 		header.Coinbase = *i.Env.Coinbase
@@ -164,6 +172,10 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 	block := types.NewBlockWithHeader(header)
 	block = block.WithBody(i.Txs, i.Uncles)
 
+	return block
+}
+
+func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
 	if i.Ethash {
 		if i.Env.Nonce != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
@@ -189,7 +201,7 @@ func (i *blockInput) toBlock() (*types.Block, error) {
 			block.WithSeal(found.Header())
 		}
 	} else if i.Clique != nil {
-		header = block.Header()
+		header := block.Header()
 
 		if i.Env.Extra != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
@@ -243,7 +255,8 @@ func BuildBlock(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	block, err := inputData.toBlock()
+	block := inputData.ToBlock()
+	block, err = inputData.SealBlock(block)
 	if err != nil {
 		return err
 	}
@@ -314,14 +327,20 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 
 	uncles := []*types.Header{}
 	for _, str := range inputData.UnclesRlp {
-		var uncle *types.Header
+		type extblock struct {
+			Header *types.Header
+			Txs    []*types.Transaction
+			Uncles []*types.Header
+		}
+		var uncle *extblock
 		raw := common.FromHex(str)
 		err := rlp.DecodeBytes(raw, &uncle)
 		if err != nil {
 			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode uncle from rlp data: %v", err))
 		}
-		uncles = append(uncles, uncle)
+		uncles = append(uncles, uncle.Header)
 	}
+	inputData.Uncles = uncles
 
 	if txsStr != stdinSelector {
 		txs, err := readTxsRlp(txsStr)
@@ -370,7 +389,7 @@ func readUncles(path string) ([]string, error) {
 
 	if path == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(uncles); err != nil {
+		if err := decoder.Decode(&uncles); err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling uncles from stdin: %v", err))
 		}
 	} else {

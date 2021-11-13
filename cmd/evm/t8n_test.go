@@ -417,6 +417,15 @@ func TestB11r(t *testing.T) {
 			},
 			expOut: "exp-clique.json",
 		},
+		{ // block with ommers
+			base: "./testdata/22",
+			input: b11rInput{
+				inEnv:       "header.json",
+				inUnclesRlp: "uncles.json",
+				inTxsRlp:    "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
 	} {
 
 		args := []string{"b11r"}
