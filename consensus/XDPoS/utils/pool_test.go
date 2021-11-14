@@ -11,7 +11,7 @@ import (
 func TestPoolWithTimeout(t *testing.T) {
 	assert := assert.New(t)
 	var ret int
-	onThresholdFn := func(po map[common.Hash]PoolObj) error {
+	onThresholdFn := func(po map[common.Hash]PoolObj, currentPoolObj PoolObj) error {
 		for _, m := range po {
 			if _, ok := m.(*Timeout); ok {
 				ret += 1
@@ -49,7 +49,7 @@ func TestPoolWithTimeout(t *testing.T) {
 func TestPoolWithVote(t *testing.T) {
 	assert := assert.New(t)
 	var ret int
-	onThresholdFn := func(po map[common.Hash]PoolObj) error {
+	onThresholdFn := func(po map[common.Hash]PoolObj, currentPoolObj PoolObj) error {
 		for _, m := range po {
 			if _, ok := m.(*Vote); ok {
 				ret += 1

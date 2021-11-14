@@ -41,7 +41,7 @@ var (
 	}
 	TestXDPoSV2Config = &V2{
 		TimeoutWorkerDuration: 5000,
-		CertThreshold:         2,
+		CertThreshold:         3,
 	}
 
 	// XDPoSChain mainnet config

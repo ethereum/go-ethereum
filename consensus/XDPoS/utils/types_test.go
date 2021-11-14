@@ -12,7 +12,7 @@ func toyExtraFields() *ExtraFields_v2 {
 	round := Round(307)
 	blockInfo := BlockInfo{Hash: common.BigToHash(big.NewInt(2047)), Round: round - 1, Number: big.NewInt(1)}
 	signature := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	signatures := [][]byte{signature}
+	signatures := []Signature{signature}
 	quorumCert := QuorumCert{ProposedBlockInfo: blockInfo, Signatures: signatures}
 	e := &ExtraFields_v2{Round: round, QuorumCert: quorumCert}
 	return e
@@ -39,9 +39,9 @@ func TestHashAndSigHash(t *testing.T) {
 	blockInfo2 := BlockInfo{Hash: common.BigToHash(big.NewInt(4095)), Round: round - 1, Number: big.NewInt(1)}
 	signature1 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	signature2 := []byte{1, 2, 3, 4, 5, 6, 7, 7}
-	signatures1 := [][]byte{signature1}
+	signatures1 := []Signature{signature1}
 	quorumCert1 := QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures1}
-	signatures2 := [][]byte{signature2}
+	signatures2 := []Signature{signature2}
 	quorumCert2 := QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures2}
 	vote1 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature1}
 	vote2 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature2}

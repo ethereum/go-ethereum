@@ -100,7 +100,7 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.NewFaker(db, conf),
-		EngineV2:        engine_v2.NewFaker(db, conf),
+		EngineV2:        engine_v2.New(conf, db),
 	}
 	return fakeEngine
 }

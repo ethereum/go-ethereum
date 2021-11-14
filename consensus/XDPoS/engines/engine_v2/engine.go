@@ -22,18 +22,19 @@ type XDPoS_v2 struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
-	signer common.Address  // Ethereum address of the signing key
-	signFn clique.SignerFn // Signer function to authorize hashes with
-	lock   sync.RWMutex    // Protects the signer fields
+	signer   common.Address  // Ethereum address of the signing key
+	signFn   clique.SignerFn // Signer function to authorize hashes with
+	signLock sync.RWMutex    // Protects the signer fields
 
 	BroadcastCh   chan interface{}
-	BFTQueue      chan interface{}
 	timeoutWorker *countdown.CountdownTimer // Timer to generate broadcast timeout msg if threashold reached
 
-	timeoutPool        *utils.Pool
-	currentRound       utils.Round
-	highestVotedRound  utils.Round
-	highestQuorumCert  *utils.QuorumCert
+	lock              sync.RWMutex // Protects the currentRound fields etc
+	timeoutPool       *utils.Pool
+	votePool          *utils.Pool
+	currentRound      utils.Round
+	highestVotedRound utils.Round
+	highestQuorumCert *utils.QuorumCert
 	// LockQC in XDPoS Consensus 2.0, used in voting rule
 	lockQuorumCert     *utils.QuorumCert
 	highestTimeoutCert *utils.TimeoutCert
@@ -45,16 +46,22 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Millisecond
 	timer := countdown.NewCountDown(duration)
 	timeoutPool := utils.NewPool(config.V2.CertThreshold)
+	votePool := utils.NewPool(config.V2.CertThreshold)
 	engine := &XDPoS_v2{
-		config:        config,
-		db:            db,
-		timeoutWorker: timer,
-		BroadcastCh:   make(chan interface{}),
-		BFTQueue:      make(chan interface{}),
-		timeoutPool:   timeoutPool,
+		config:             config,
+		db:                 db,
+		timeoutWorker:      timer,
+		BroadcastCh:        make(chan interface{}),
+		timeoutPool:        timeoutPool,
+		votePool:           votePool,
+		highestTimeoutCert: &utils.TimeoutCert{},
+		highestQuorumCert:  &utils.QuorumCert{},
 	}
 	// Add callback to the timer
 	timer.OnTimeoutFn = engine.onCountdownTimeout
+	// Attach vote & timeout pool callback function when it reached threshold
+	votePool.SetOnThresholdFn(engine.onVotePoolThresholdReached)
+	timeoutPool.SetOnThresholdFn(engine.onTimeoutPoolThresholdReached)
 
 	return engine
 }
@@ -62,41 +69,23 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 /*
 	Testing tools
 */
-// Test only. Never to be used for mainnet implementation
-func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v2 {
-	var fakeEngine *XDPoS_v2
-	// Set any missing consensus parameters to their defaults
-	conf := config
-	// Setup Timer
-	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Millisecond
-	timer := countdown.NewCountDown(duration)
-	timeoutPool := utils.NewPool(2)
-
-	// Allocate the snapshot caches and create the engine
-	fakeEngine = &XDPoS_v2{
-		config:        conf,
-		db:            db,
-		timeoutWorker: timer,
-		BroadcastCh:   make(chan interface{}),
-		BFTQueue:      make(chan interface{}),
-		timeoutPool:   timeoutPool,
+func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
+	// Reset a bunch of things
+	if resetTimer {
+		x.timeoutWorker.Reset()
 	}
-	// Add callback to the timer
-	timer.OnTimeoutFn = fakeEngine.onCountdownTimeout
-	return fakeEngine
+	x.currentRound = newRound
 }
 
-// Test only.
-func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round) {
-	// Reset a bunch of things
-	x.timeoutWorker.Reset()
-	x.currentRound = newRound
+// Utils for test to check currentRound value
+func (x *XDPoS_v2) GetCurrentRound() utils.Round {
+	return x.currentRound
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks with.
 func (x *XDPoS_v2) Authorize(signer common.Address, signFn clique.SignerFn) {
-	x.lock.Lock()
-	defer x.lock.Unlock()
+	x.signLock.Lock()
+	defer x.signLock.Unlock()
 
 	x.signer = signer
 	x.signFn = signFn
@@ -110,22 +99,10 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 	return nil
 }
 
-// Push mesages(i.e vote, sync info & timeout) into BFTQueue. This funciton shall be called by BFT protocal manager
-func (x *XDPoS_v2) Enqueue() error {
-	return nil
-}
-
-// Main function for the v2 consensus.
-func (x *XDPoS_v2) Dispatcher() error {
-	// 1. Pull message from the BFTQueue and call the relevant handler by message type, such as vote, timeout or syncInfo
-	// 2. Only 1 message processing at the time
-	return nil
-}
-
 /*
 	SyncInfo workflow
 */
-// Verify syncInfo and trigger trigger process QC or TC if successful
+// Verify syncInfo and trigger process QC or TC if successful
 func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
 	/*
 		1. Verify items including:
@@ -133,6 +110,16 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
 				- verifyTC
 		2. Broadcast(Not part of consensus)
 	*/
+	err := x.verifyQC(&syncInfo.HighestQuorumCert)
+	if err != nil {
+		log.Warn("SyncInfo message verification failed due to QC", err)
+		return err
+	}
+	err = x.verifyTC(&syncInfo.HighestTimeoutCert)
+	if err != nil {
+		log.Warn("SyncInfo message verification failed due to TC", err)
+		return err
+	}
 	return nil
 }
 
@@ -147,7 +134,7 @@ func (x *XDPoS_v2) SyncInfoHandler(header *types.Header) error {
 /*
 	Vote workflow
 */
-func (x *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) error {
+func (x *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) (bool, error) {
 	/*
 		  1. Check signature:
 					- Use ecRecover to get the public key
@@ -156,16 +143,51 @@ func (x *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) error {
 			2. Verify blockInfo
 			3. Broadcast(Not part of consensus)
 	*/
+	return x.verifyMsgSignature(utils.VoteSigHash(&vote.ProposedBlockInfo), vote.Signature)
+}
+
+// Consensus entry point for processing vote message to produce QC
+func (x *XDPoS_v2) VoteHandler(voteMsg utils.Vote) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	// 1. checkRoundNumber
+	if voteMsg.ProposedBlockInfo.Round != x.currentRound {
+		return fmt.Errorf("Vote message round number: %v does not match currentRound: %v", voteMsg.ProposedBlockInfo.Round, x.currentRound)
+	}
+
+	// Collect vote
+	thresholdReached, numberOfVotesInPool, hookError := x.votePool.Add(&voteMsg)
+	if hookError != nil {
+		log.Error("Error while adding vote message to the pool, ", hookError)
+		return hookError
+	}
+
+	log.Debug("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool)
 	return nil
 }
 
-func (x *XDPoS_v2) VoteHandler() {
-	/*
-		1. checkRoundNumber
-		3. Collect vote (TODO)
-		4. Genrate QC (TODO)
-		5. processQC
-	*/
+/*
+	Function that will be called by votePool when it reached threshold.
+	In the engine v2, we will need to generate and process QC
+*/
+func (x *XDPoS_v2) onVotePoolThresholdReached(pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj) error {
+	signatures := []utils.Signature{}
+	for _, v := range pooledVotes {
+		signatures = append(signatures, v.(*utils.Vote).Signature)
+	}
+	// Genrate QC
+	quorumCert := &utils.QuorumCert{
+		ProposedBlockInfo: currentVoteMsg.(*utils.Vote).ProposedBlockInfo,
+		Signatures:        signatures,
+	}
+	err := x.processQC(quorumCert)
+	if err != nil {
+		log.Error("Error while processing QC in the Vote handler after reaching pool threshold, ", err)
+		return err
+	}
+	log.Info("🗳 Successfully processed the vote and produced QC!")
+	return nil
 }
 
 /*
@@ -180,37 +202,62 @@ func (x *XDPoS_v2) VoteHandler() {
 		2. Broadcast(Not part of consensus)
 */
 func (x *XDPoS_v2) VerifyTimeoutMessage(timeoutMsg utils.Timeout) (bool, error) {
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(utils.TimeoutSigHash(&timeoutMsg.Round).Bytes(), timeoutMsg.Signature)
-	if err != nil {
-		return false, fmt.Errorf("Error while verifying time out message: %v", err)
-	}
-	var signerAddress common.Address
-	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])
-	masternodes := x.getCurrentRoundMasterNodes()
-	for _, mn := range masternodes {
-		if mn == signerAddress {
-			return true, nil
-		}
-	}
-
-	return false, fmt.Errorf("Masternodes does not contain signer address. Master node list %v, Signer address: %v", masternodes, signerAddress)
+	return x.verifyMsgSignature(utils.TimeoutSigHash(&timeoutMsg.Round), timeoutMsg.Signature)
 }
 
 /*
+	Entry point for handling timeout message to process below:
 	1. checkRoundNumber()
-	2. Collect timeout (TODO)
-	3. Genrate TC (TODO)
-	4. processTC()
-	5. generateSyncInfo()
+	2. Collect timeout
+	Once timeout pool reached threshold, it will trigger the call to the hook function "onTimeoutPoolThresholdReached"
 */
-func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) {
-	// Collect timeout, generate TC
-	timeoutCert := x.timeoutPool.Add(timeout)
-	// If TC is generated
-	if timeoutCert != nil {
-		//TODO: processTC(),generateSyncInfo()
+func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
+	// 1. checkRoundNumber
+	if timeout.Round != x.currentRound {
+		return fmt.Errorf("Timeout message round number: %v does not match currentRound: %v", timeout.Round, x.currentRound)
 	}
+	// Collect timeout, generate TC
+	isThresholdReached, numberOfTimeoutsInPool, hookError := x.timeoutPool.Add(timeout)
+	if hookError != nil {
+		log.Error("Error adding timeout to the pool, ", hookError.Error())
+		return hookError
+	}
+	log.Debug("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool)
+	return nil
+}
+
+/*
+	Function that will be called by timeoutPool when it reached threshold.
+	In the engine v2, we will need to:
+		1. Genrate TC
+		2. processTC()
+		3. generateSyncInfo()
+*/
+func (x *XDPoS_v2) onTimeoutPoolThresholdReached(pooledTimeouts map[common.Hash]utils.PoolObj, currentTimeoutMsg utils.PoolObj) error {
+	signatures := []utils.Signature{}
+	for _, v := range pooledTimeouts {
+		signatures = append(signatures, v.(*utils.Timeout).Signature)
+	}
+	// Genrate TC
+	timeoutCert := &utils.TimeoutCert{
+		Round:      currentTimeoutMsg.(*utils.Timeout).Round,
+		Signatures: signatures,
+	}
+	// Process TC
+	err := x.processTC(timeoutCert)
+	if err != nil {
+		log.Error("Error while processing TC in the Timeout handler after reaching pool threshold, ", err.Error())
+		return err
+	}
+	// Generate and broadcast syncInfo
+	syncInfo := x.getSyncInfo()
+	x.broadcastToBftChannel(syncInfo)
+
+	log.Info("⏰ Successfully processed the timeout message and produced TC & SyncInfo!")
+	return nil
 }
 
 /*
@@ -239,7 +286,7 @@ func (x *XDPoS_v2) VerifyBlockInfo(blockInfo utils.BlockInfo) error {
 	return nil
 }
 
-func (x *XDPoS_v2) verifyQC(header *types.Header) error {
+func (x *XDPoS_v2) verifyQC(quorumCert *utils.QuorumCert) error {
 	/*
 		1. Verify signer signatures: (List of signatures)
 					- Use ecRecover to get the public key
@@ -250,7 +297,7 @@ func (x *XDPoS_v2) verifyQC(header *types.Header) error {
 	return nil
 }
 
-func (x *XDPoS_v2) verifyTC(header *types.Header) error {
+func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 	/*
 		1. Verify signer signature: (List of signatures)
 					- Use ecRecover to get the public key
@@ -289,7 +336,10 @@ func (x *XDPoS_v2) processTC(timeoutCert *utils.TimeoutCert) error {
 		x.highestTimeoutCert = timeoutCert
 	}
 	if timeoutCert.Round >= x.currentRound {
-		x.setNewRound(timeoutCert.Round + 1)
+		err := x.setNewRound(timeoutCert.Round + 1)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -302,14 +352,9 @@ func (x *XDPoS_v2) processTC(timeoutCert *utils.TimeoutCert) error {
 func (x *XDPoS_v2) setNewRound(round utils.Round) error {
 	x.currentRound = round
 	//TODO: tell miner now it's a new round and start mine if it's leader
-	//TODO: reset timer
+	x.timeoutWorker.Reset()
 	//TODO: vote pools
 	x.timeoutPool.Clear()
-	return nil
-}
-
-// Verify round number against node's local round number(Should be equal)
-func (x *XDPoS_v2) checkRoundNumber(header *types.Header) error {
 	return nil
 }
 
@@ -326,10 +371,19 @@ func (x *XDPoS_v2) verifyVotingRule(header *types.Header) error {
 }
 
 // Once Hot stuff voting rule has verified, this node can then send vote
-func (x *XDPoS_v2) sendVote(header *types.Header) error {
+func (x *XDPoS_v2) sendVote(blockInfo utils.BlockInfo) error {
 	// First step: Generate the signature by using node's private key(The signature is the blockInfo signature)
 	// Second step: Construct the vote struct with the above signature & blockinfo struct
 	// Third step: Send the vote to broadcast channel
+	signedHash, err := x.signSignature(utils.VoteSigHash(&blockInfo))
+	if err != nil {
+		return err
+	}
+	voteMsg := &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+	}
+	x.broadcastToBftChannel(voteMsg)
 	return nil
 }
 
@@ -340,14 +394,9 @@ func (x *XDPoS_v2) sendVote(header *types.Header) error {
 	3. send to broadcast channel
 */
 func (x *XDPoS_v2) sendTimeout() error {
-	// Don't hold the signer fields for the entire sealing procedure
-	x.lock.RLock()
-	signer, signFn := x.signer, x.signFn
-	x.lock.RUnlock()
-
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&x.currentRound).Bytes())
+	signedHash, err := x.signSignature(utils.TimeoutSigHash(&x.currentRound))
 	if err != nil {
-		return fmt.Errorf("Error while signing for timeout message")
+		return err
 	}
 	timeoutMsg := &utils.Timeout{
 		Round:     x.currentRound,
@@ -362,11 +411,45 @@ func (x *XDPoS_v2) sendSyncInfo() error {
 	return nil
 }
 
+func (x *XDPoS_v2) signSignature(signingHash common.Hash) (utils.Signature, error) {
+	// Don't hold the signFn for the whole signing operation
+	x.signLock.RLock()
+	signer, signFn := x.signer, x.signFn
+	x.signLock.RUnlock()
+
+	signedHash, err := signFn(accounts.Account{Address: signer}, signingHash.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("Error while signing hash")
+	}
+	return signedHash, nil
+}
+
+func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature utils.Signature) (bool, error) {
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)
+	if err != nil {
+		return false, fmt.Errorf("Error while verifying message: %v", err)
+	}
+	var signerAddress common.Address
+	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])
+	masternodes := x.getCurrentRoundMasterNodes()
+	for _, mn := range masternodes {
+		if mn == signerAddress {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("Masternodes does not contain signer address. Master node list %v, Signer address: %v", masternodes, signerAddress)
+}
+
 /*
 	Function that will be called by timer when countdown reaches its threshold.
 	In the engine v2, we would need to broadcast timeout messages to other peers
 */
 func (x *XDPoS_v2) onCountdownTimeout(time time.Time) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
 	err := x.sendTimeout()
 	if err != nil {
 		log.Error("Error while sending out timeout message at time: ", time)
@@ -376,9 +459,18 @@ func (x *XDPoS_v2) onCountdownTimeout(time time.Time) error {
 }
 
 func (x *XDPoS_v2) broadcastToBftChannel(msg interface{}) {
-	x.BroadcastCh <- msg
+	go func() {
+		x.BroadcastCh <- msg
+	}()
 }
 
 func (x *XDPoS_v2) getCurrentRoundMasterNodes() []common.Address {
 	return []common.Address{}
+}
+
+func (x *XDPoS_v2) getSyncInfo() utils.SyncInfo {
+	return utils.SyncInfo{
+		HighestQuorumCert:  *x.highestQuorumCert,
+		HighestTimeoutCert: *x.highestTimeoutCert,
+	}
 }

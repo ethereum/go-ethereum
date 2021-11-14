@@ -62,6 +62,7 @@ type PublicApiSnapshot struct {
 
 // Round number type in XDPoS 2.0
 type Round uint64
+type Signature []byte
 
 // Block Info struct in XDPoS 2.0, used for vote message, etc.
 type BlockInfo struct {
@@ -73,13 +74,13 @@ type BlockInfo struct {
 // Vote message in XDPoS 2.0
 type Vote struct {
 	ProposedBlockInfo BlockInfo
-	Signature         []byte
+	Signature         Signature
 }
 
 // Timeout message in XDPoS 2.0
 type Timeout struct {
 	Round     Round
-	Signature []byte
+	Signature Signature
 }
 
 // BFT Sync Info message in XDPoS 2.0
@@ -91,13 +92,13 @@ type SyncInfo struct {
 // Quorum Certificate struct in XDPoS 2.0
 type QuorumCert struct {
 	ProposedBlockInfo BlockInfo
-	Signatures        [][]byte
+	Signatures        []Signature
 }
 
 // Timeout Certificate struct in XDPoS 2.0
 type TimeoutCert struct {
 	Round      Round
-	Signatures [][]byte
+	Signatures []Signature
 }
 
 // The parsed extra fields in block header in XDPoS 2.0 (excluding the version byte)
