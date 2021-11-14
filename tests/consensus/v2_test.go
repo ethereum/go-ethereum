@@ -100,7 +100,7 @@ func TestThrowErrorIfTimeoutMsgRoundLessThanCurrentRound(t *testing.T) {
 }
 
 // VoteHandler
-func TestVoteMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
+func TestVoteMessageHandlerSuccessfullyGeneratedQC(t *testing.T) {
 	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -129,7 +129,7 @@ func TestVoteMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 
-	// Create a vote message that should trigger vite pool hook
+	// Create a vote message that should trigger vote pool hook
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: *blockInfo,
 		Signature:         []byte{3},
@@ -202,7 +202,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 
-	// Create a vote message that should trigger vite pool hook
+	// Create a vote message that should trigger vote pool hook
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: *blockInfo,
 		Signature:         []byte{3},

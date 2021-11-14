@@ -28,22 +28,36 @@ func TestPoolWithTimeout(t *testing.T) {
 	timeout1 := Timeout{Round: 1, Signature: []byte{1}}
 	timeout2 := Timeout{Round: 1, Signature: []byte{2}}
 	timeout3 := Timeout{Round: 1, Signature: []byte{3}}
-	assert.Nil(pool.Add(&timeout1))
-	assert.Nil(pool.Add(&timeout1))
-	assert.Equal(ret, 0)
-	assert.Nil(pool.Add(&timeout2))
-	assert.Equal(ret, 2)
-	assert.Nil(pool.Add(&timeout3))
-	assert.Equal(ret, 2)
+	_, numOfItems, err := pool.Add(&timeout1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+	_, numOfItems, err = pool.Add(&timeout1)
+	assert.Nil(err)
+	// Duplicates should not be added
+	assert.Equal(1, numOfItems)
+	assert.Equal(0, ret)
+	_, numOfItems, err = pool.Add(&timeout2)
+	assert.Nil(err)
+	assert.Equal(2, ret)
+
+	_, numOfItems, err = pool.Add(&timeout3)
+	assert.Nil(err)
+	assert.Equal(2, ret)
 	pool = NewPool(3) // 3 is the cert size
 	ret = 0
 	pool.SetOnThresholdFn(onThresholdFn)
-	assert.Nil(pool.Add(&timeout1))
-	assert.Nil(pool.Add(&timeout2))
+	_, numOfItems, err = pool.Add(&timeout1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+	_, numOfItems, err = pool.Add(&timeout2)
+	assert.Nil(err)
+	assert.Equal(2, numOfItems)
 	assert.Equal(ret, 0)
 	pool.Clear()
-	assert.Nil(pool.Add(&timeout3))
-	assert.Equal(ret, 0)
+	_, numOfItems, err = pool.Add(&timeout3)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+	assert.Equal(0, ret)
 }
 
 func TestPoolWithVote(t *testing.T) {
@@ -68,29 +82,63 @@ func TestPoolWithVote(t *testing.T) {
 	vote1 := Vote{ProposedBlockInfo: blockInfo1, Signature: []byte{1}}
 	vote2 := Vote{ProposedBlockInfo: blockInfo2, Signature: []byte{2}}
 	vote3 := Vote{ProposedBlockInfo: blockInfo1, Signature: []byte{3}}
-	assert.Nil(pool.Add(&vote1))
-	assert.Nil(pool.Add(&vote1))
+	_, numOfItems, err := pool.Add(&vote1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+	// Duplicates should not be added
+	_, numOfItems, err = pool.Add(&vote1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
 	assert.Equal(ret, 0)
-	assert.Nil(pool.Add(&vote2))
-	assert.Equal(ret, 0)
-	assert.Nil(pool.Add(&vote3))
-	assert.Equal(ret, 2)
+
+	_, numOfItems, err = pool.Add(&vote2)
+	assert.Nil(err)
+	// vote2 is on a different blockInfo to vote1
+	assert.Equal(1, numOfItems)
+	assert.Equal(0, ret)
+
+	_, numOfItems, err = pool.Add(&vote3)
+	assert.Nil(err)
+	assert.Equal(2, numOfItems)
+
+	assert.Equal(2, ret)
 	pool = NewPool(3) // 3 is the cert size
 	ret = 0
 	pool.SetOnThresholdFn(onThresholdFn)
-	assert.Nil(pool.Add(&vote1))
-	assert.Nil(pool.Add(&vote2))
-	assert.Nil(pool.Add(&vote3))
-	assert.Equal(ret, 0)
+
+	_, numOfItems, err = pool.Add(&vote1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+
+	// vote2 is on a different blockInfo to vote1
+	_, numOfItems, err = pool.Add(&vote2)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+
+	_, numOfItems, err = pool.Add(&vote3)
+	assert.Nil(err)
+	assert.Equal(2, numOfItems)
+
+	assert.Equal(0, ret)
 	pool.Clear()
 	assert.Empty(pool.objList)
 	pool = NewPool(2) // 2 is the cert size
 	ret = 0
 	pool.SetOnThresholdFn(onThresholdFn)
-	assert.Nil(pool.Add(&vote1))
-	assert.Nil(pool.Add(&vote2))
-	assert.Nil(pool.Add(&vote3))
-	assert.Equal(len(pool.objList), 1) //vote for one hash is cleared, but another remains
+
+	_, numOfItems, err = pool.Add(&vote1)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+
+	// vote2 is on a different blockInfo to vote1
+	_, numOfItems, err = pool.Add(&vote2)
+	assert.Nil(err)
+	assert.Equal(1, numOfItems)
+
+	_, numOfItems, err = pool.Add(&vote3)
+	assert.Nil(err)
+	assert.Equal(2, numOfItems)
+	assert.Equal(1, len(pool.objList)) //vote for one hash is cleared, but another remains
 	pool.Clear()
 	assert.Empty(pool.objList)
 }

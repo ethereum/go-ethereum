@@ -371,16 +371,16 @@ func (x *XDPoS_v2) verifyVotingRule(header *types.Header) error {
 }
 
 // Once Hot stuff voting rule has verified, this node can then send vote
-func (x *XDPoS_v2) sendVote(blockInfo utils.BlockInfo) error {
+func (x *XDPoS_v2) sendVote(blockInfo *utils.BlockInfo) error {
 	// First step: Generate the signature by using node's private key(The signature is the blockInfo signature)
 	// Second step: Construct the vote struct with the above signature & blockinfo struct
 	// Third step: Send the vote to broadcast channel
-	signedHash, err := x.signSignature(utils.VoteSigHash(&blockInfo))
+	signedHash, err := x.signSignature(utils.VoteSigHash(blockInfo))
 	if err != nil {
 		return err
 	}
 	voteMsg := &utils.Vote{
-		ProposedBlockInfo: blockInfo,
+		ProposedBlockInfo: *blockInfo,
 		Signature:         signedHash,
 	}
 	x.broadcastToBftChannel(voteMsg)
