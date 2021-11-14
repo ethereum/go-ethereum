@@ -18,8 +18,10 @@
 package ethash
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"math"
 	"math/big"
 	"math/rand"
@@ -44,6 +46,14 @@ import (
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
 
 var (
+	// errInvalidCacheFileChecksum is returned if a cache file checksum
+	// doesn't match the calculated checksum for that file
+	errInvalidCacheFileChecksum = errors.New("invalid cache file checksum")
+
+	// errMalformedCacheFile is returned if a cache file is malformed,
+	// i.e. it's size is less than minimal possible valid size
+	errMalformedCacheFile = errors.New("malformed cache file")
+
 	// two256 is a big integer representing 2^256
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
@@ -55,6 +65,16 @@ var (
 
 	// dumpMagic is a dataset dump header to sanity check a data dump.
 	dumpMagic = []uint32{0xbaddcafe, 0xfee1dead}
+
+	// dataOffsetForU32 is the total offset, which includes:
+	// - crc32 checksum
+	// - dumpMagic items
+	// This offset should be used only for u32 arrays and not for raw byte arrays.
+	dataOffsetForU32 = 1 + len(dumpMagic)
+
+	// systemByteOrder specifies how to convert byte sequences into unsigned integers.
+	// LittleEndian vs BigEndian
+	systemByteOrder binary.ByteOrder
 )
 
 func init() {
@@ -64,6 +84,11 @@ func init() {
 		DatasetsInMem: 1,
 	}
 	sharedEthash = New(sharedConfig, nil, false)
+	if isLittleEndian() {
+		systemByteOrder = binary.LittleEndian
+	} else {
+		systemByteOrder = binary.BigEndian
+	}
 }
 
 // isLittleEndian returns whether the local system is running in little or big
@@ -84,21 +109,35 @@ func memoryMap(path string, lock bool) (*os.File, mmap.MMap, []uint32, error) {
 		file.Close()
 		return nil, nil, nil, err
 	}
+
+	failWithError := func(reason error) (*os.File, mmap.MMap, []uint32, error) {
+		mem.Unmap()
+		file.Close()
+		return nil, nil, nil, reason
+	}
+
+	if len(buffer) <= dataOffsetForU32 {
+		return failWithError(errMalformedCacheFile)
+	}
+
+	storedChecksum := systemByteOrder.Uint32(mem[:crc32.Size])
+	actualChecksum := calculateChecksum(mem[crc32.Size:])
+	if storedChecksum != actualChecksum {
+		return failWithError(errInvalidCacheFileChecksum)
+	}
+
 	for i, magic := range dumpMagic {
-		if buffer[i] != magic {
-			mem.Unmap()
-			file.Close()
-			return nil, nil, nil, ErrInvalidDumpMagic
+		// first element in buffer is a checksum, so it should be skipped
+		if buffer[i+1] != magic {
+			return failWithError(ErrInvalidDumpMagic)
 		}
 	}
 	if lock {
 		if err := mem.Lock(); err != nil {
-			mem.Unmap()
-			file.Close()
-			return nil, nil, nil, err
+			return failWithError(err)
 		}
 	}
-	return file, mem, buffer[len(dumpMagic):], err
+	return file, mem, buffer[dataOffsetForU32:], err
 }
 
 // memoryMapFile tries to memory map an already opened file descriptor.
@@ -136,7 +175,9 @@ func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(bu
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = ensureSize(dump, int64(len(dumpMagic))*4+int64(size)); err != nil {
+
+	totalFileSize := crc32.Size + int64(len(dumpMagic))*4 + int64(size)
+	if err = ensureSize(dump, totalFileSize); err != nil {
 		dump.Close()
 		os.Remove(temp)
 		return nil, nil, nil, err
@@ -148,10 +189,14 @@ func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(bu
 		os.Remove(temp)
 		return nil, nil, nil, err
 	}
-	copy(buffer, dumpMagic)
+	// First element is reserved for a checksum.
+	// It will be filled in after the data generation step
+	copy(buffer[1:], dumpMagic)
 
-	data := buffer[len(dumpMagic):]
+	data := buffer[dataOffsetForU32:]
 	generator(data)
+
+	buffer[0] = calculateChecksum(mem[crc32.Size:])
 
 	if err := mem.Unmap(); err != nil {
 		return nil, nil, nil, err
@@ -163,6 +208,10 @@ func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(bu
 		return nil, nil, nil, err
 	}
 	return memoryMap(path, lock)
+}
+
+func calculateChecksum(data []byte) uint32 {
+	return crc32.ChecksumIEEE(data)
 }
 
 // lru tracks caches or datasets by their last use time, keeping at most N of them.

@@ -17,10 +17,14 @@
 package ethash
 
 import (
+	"encoding/binary"
+	"fmt"
+	"hash/crc32"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/assert"
 )
 
 // Tests that ethash works correctly in test mode.
@@ -173,4 +178,224 @@ func TestClosedRemoteSealer(t *testing.T) {
 	if res := api.SubmitHashrate(hexutil.Uint64(100), common.HexToHash("a")); res {
 		t.Error("expect to return false when submit hashrate to a stopped ethash")
 	}
+}
+
+func TestMemoryMap(t *testing.T) {
+	dummyData := []uint32{9343423, 3723123, 885, 4314324, 482853252}
+
+	tests := map[string]struct {
+		storedChecksum  uint32
+		storedDumpMagic []uint32
+		storedData      []uint32
+		expectedErr     error
+	}{
+		"checksum mismatches": {
+			storedChecksum:  123,
+			storedDumpMagic: dumpMagic,
+			storedData:      dummyData,
+			expectedErr:     errInvalidCacheFileChecksum,
+		},
+		"invalid dumpMagic": {
+			storedChecksum:  crc32.ChecksumIEEE(uintsToBytes([]uint32{99, 98}, dummyData)),
+			storedDumpMagic: []uint32{99, 98},
+			storedData:      dummyData,
+			expectedErr:     ErrInvalidDumpMagic,
+		},
+		"valid checksum and dumpMagic": {
+			storedChecksum:  crc32.ChecksumIEEE(uintsToBytes(dumpMagic, dummyData)),
+			storedDumpMagic: dumpMagic,
+			storedData:      dummyData,
+			expectedErr:     nil,
+		},
+		"malformed small file": {
+			storedChecksum:  0,
+			storedDumpMagic: []uint32{},
+			storedData:      []uint32{},
+			expectedErr:     errMalformedCacheFile,
+		},
+	}
+
+	for ttName, tt := range tests {
+		t.Run(ttName, func(t *testing.T) {
+			cacheFile, err := ioutil.TempFile("", "ethash-test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(cacheFile.Name())
+
+			binary.Write(cacheFile, systemByteOrder, tt.storedChecksum)
+			binary.Write(cacheFile, systemByteOrder, tt.storedDumpMagic)
+			binary.Write(cacheFile, systemByteOrder, tt.storedData)
+			cacheFile.Close()
+
+			_, mmap, data, err := memoryMap(cacheFile.Name(), false)
+			assert.Equal(t, tt.expectedErr, err)
+			if tt.expectedErr == nil {
+				expectedMMap := uintsToBytes(
+					[]uint32{tt.storedChecksum},
+					tt.storedDumpMagic,
+					tt.storedData,
+				)
+				assert.EqualValues(t, expectedMMap, mmap)
+				assert.Equal(t, tt.storedData, data)
+			} else {
+				assert.Nil(t, mmap)
+				assert.Nil(t, data)
+			}
+		})
+	}
+}
+
+func uintsToBytes(input ...[]uint32) []byte {
+	flattenInput := make([]uint32, 0)
+	for _, arr := range input {
+		flattenInput = append(flattenInput, arr...)
+	}
+	res := make([]byte, len(flattenInput)*4)
+	for i, el := range flattenInput {
+		systemByteOrder.PutUint32(res[i*4:], el)
+	}
+	return res
+}
+
+func TestMemoryMapAndGenerate(t *testing.T) {
+	t.Run("it puts checksum to the cache file itself", func(t *testing.T) {
+		tmpdir, err := ioutil.TempDir("", "ethash-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpdir)
+
+		rand.Seed(time.Now().UnixNano())
+		fakeData := make([]uint32, 20)
+		for i := range fakeData {
+			fakeData[i] = rand.Uint32()
+		}
+		targetPath := filepath.Join(tmpdir, fmt.Sprintf("generate-test-%d", time.Now().UnixNano()))
+		generator := func(buffer []uint32) {
+			copy(buffer, fakeData)
+		}
+		dataSizeInBytes := uint64(len(fakeData) * 4)
+
+		actualFile, mmap, data, err := memoryMapAndGenerate(targetPath, dataSizeInBytes, true, generator)
+		assert.Nil(t, err)
+		defer actualFile.Close()
+
+		assert.Equal(t, fakeData, data)
+		expectedChecksum := crc32.ChecksumIEEE(uintsToBytes(dumpMagic, fakeData))
+		expectedMMap := uintsToBytes(
+			[]uint32{expectedChecksum},
+			dumpMagic,
+			fakeData,
+		)
+		assert.EqualValues(t, expectedMMap, mmap)
+
+		fileContent, err := ioutil.ReadAll(actualFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, fileContent, expectedMMap)
+	})
+}
+
+func TestCachedFilesChecksums(t *testing.T) {
+	var endian string
+	if !isLittleEndian() {
+		endian = ".be"
+	}
+	// hardcoded test settings in ethash.go
+	csize := 1024
+	dsize := 32 * 1024
+
+	t.Run("dataset ignores files with invalid checksums and generates new data", func(t *testing.T) {
+		tmpdir, err := ioutil.TempDir("", "ethash-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpdir)
+
+		epoch := uint64(2)
+		seed := seedHash(epoch*epochLength + 1)
+
+		expectedCache := make([]uint32, csize/4)
+		generateCache(expectedCache, epoch, seed)
+		expectedDataset := make([]uint32, dsize/4)
+		generateDataset(expectedDataset, epoch, expectedCache)
+		expectedChecksum := crc32.ChecksumIEEE(uintsToBytes(dumpMagic, expectedDataset))
+
+		targetFilepath := filepath.Join(tmpdir, fmt.Sprintf("full-R%d-%x%s", algorithmRevision, seed[:8], endian))
+		defer os.Remove(targetFilepath)
+		file, err := os.Create(targetFilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		binary.Write(file, systemByteOrder, expectedChecksum)
+		binary.Write(file, systemByteOrder, dumpMagic)
+		// data loss
+		binary.Write(file, systemByteOrder, expectedDataset[:len(expectedDataset)-2])
+		file.Close()
+
+		testDataset := newDataset(epoch).(*dataset)
+		testDataset.generate(tmpdir, 5, true, true)
+
+		assert.Equal(t, expectedDataset, testDataset.dataset)
+		expectedRawData := uintsToBytes(
+			[]uint32{expectedChecksum},
+			dumpMagic,
+			expectedDataset,
+		)
+		assert.EqualValues(t, expectedRawData, testDataset.mmap)
+
+		fileData, err := ioutil.ReadFile(targetFilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, expectedRawData, fileData)
+	})
+
+	t.Run("cache ignores files with invalid checksums and generates new data", func(t *testing.T) {
+		tmpdir, err := ioutil.TempDir("", "ethash-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpdir)
+
+		epoch := uint64(2)
+		seed := seedHash(epoch*epochLength + 1)
+
+		expectedCache := make([]uint32, csize/4)
+		generateCache(expectedCache, epoch, seed)
+		expectedChecksum := crc32.ChecksumIEEE(uintsToBytes(dumpMagic, expectedCache))
+
+		targetFilepath := filepath.Join(tmpdir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
+		defer os.Remove(targetFilepath)
+		file, err := os.Create(targetFilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		binary.Write(file, systemByteOrder, expectedChecksum)
+		binary.Write(file, systemByteOrder, dumpMagic)
+		// data loss
+		binary.Write(file, systemByteOrder, expectedCache[:len(expectedCache)-2])
+		file.Close()
+
+		testCache := newCache(epoch).(*cache)
+		testCache.generate(tmpdir, 5, true, true)
+
+		assert.Equal(t, expectedCache, testCache.cache)
+		expectedRawData := uintsToBytes(
+			[]uint32{expectedChecksum},
+			dumpMagic,
+			expectedCache,
+		)
+		assert.EqualValues(t, expectedRawData, testCache.mmap)
+
+		fileData, err := ioutil.ReadFile(targetFilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, expectedRawData, fileData)
+	})
 }
