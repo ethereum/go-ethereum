@@ -596,7 +596,10 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	batch := newTable.newBatch()
 
 	var i uint64
+	// Number of the file in which the first up-to-date receipt appers
 	var filenum uint32
+	// Iterate through entries and transform them
+	// until reaching first non-legacy one.
 	for i = 0; i < numAncients; i++ {
 		blob, err := table.Retrieve(i)
 		if err != nil {
@@ -612,6 +615,8 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		} else {
 			// Reached the first up-to-date entry.
 			// Remember in which file the switch happens.
+			// TODO: what if it coincidentally starts in a new file?
+			// we won't need to copy-over that file
 			entry, err := table.getIndices(i, 0)
 			if err != nil {
 				return err
@@ -645,6 +650,11 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	}
 	log.Info("Finished copying leftovers", "i", i)
 
+	if err := batch.commit(); err != nil {
+		return err
+	}
+	log.Info("Committed write batch", "newHeadId", newTable.headId, "headbytes", newTable.headBytes, "items", newTable.items)
+
 	// 3. need to copy rest of old index and repair the filenum in the entries
 	if i < numAncients {
 		idx, err := table.readEntry(i)
@@ -652,8 +662,10 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			return err
 		}
 
-		lastFilenum := atomic.LoadUint32(&newTable.headId)
-		diff := int32(lastFilenum) - int32(idx.filenum)
+		lastFilenum := newTable.headId
+		// idx.filenum is always >=1
+		diff := int32(lastFilenum) - int32(idx.filenum-1)
+		log.Info("Starting duplication", "i", i, "oldFn", idx.filenum, "offset", idx.offset, "newHeadId", lastFilenum)
 		for ; i < numAncients; i++ {
 			idx, err := table.readEntry(i)
 			if err != nil {
@@ -666,13 +678,11 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		log.Info("Duplicated rest of index in new table", "i", i)
 	}
 
-	if err := batch.commit(); err != nil {
-		return err
-	}
-
 	if err := newTable.Close(); err != nil {
 		return err
 	}
+
+	// Delete old table index & files up to cross-over point
 
 	// Move new table files to ancients dir
 	files, err := ioutil.ReadDir(migrationPath)
