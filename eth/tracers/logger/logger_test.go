@@ -18,13 +18,9 @@ package logger
 
 import (
 	"math/big"
-	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
@@ -49,7 +45,7 @@ type dummyStatedb struct {
 
 func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
-func TestStoreCapture(t *testing.T) {
+/*func TestStoreCapture(t *testing.T) {
 	var (
 		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{})
 		logger   = NewStructLogger(nil)
@@ -73,4 +69,4 @@ func TestStoreCapture(t *testing.T) {
 	if logger.storage[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
 	}
-}
+}*/
