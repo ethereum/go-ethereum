@@ -17,12 +17,16 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -63,6 +67,8 @@ Remove blockchain and state databases`,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
+			dbImportCmd,
+			dbExportCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -74,6 +80,7 @@ Remove blockchain and state databases`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -89,6 +96,7 @@ Remove blockchain and state databases`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -102,6 +110,7 @@ Remove blockchain and state databases`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.CacheFlag,
@@ -121,6 +130,7 @@ corruption if it is aborted during execution'!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -136,6 +146,7 @@ corruption if it is aborted during execution'!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -152,6 +163,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -168,6 +180,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -183,10 +196,41 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
 		Description: "This command displays information about the freezer index.",
+	}
+	dbImportCmd = cli.Command{
+		Action:    utils.MigrateFlags(importLDBdata),
+		Name:      "import",
+		Usage:     "Imports leveldb-data from an exported RLP dump.",
+		ArgsUsage: "<dumpfile> <start (optional)",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "The import command imports the specific chain data from an RLP encoded stream.",
+	}
+	dbExportCmd = cli.Command{
+		Action:    utils.MigrateFlags(exportChaindata),
+		Name:      "export",
+		Usage:     "Exports the chain data into an RLP dump. If the <dumpfile> has .gz suffix, gzip compression will be used.",
+		ArgsUsage: "<type> <dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
 	}
 )
 
@@ -509,4 +553,134 @@ func parseHexOrString(str string) ([]byte, error) {
 		return []byte(str), nil
 	}
 	return b, err
+}
+
+func importLDBdata(ctx *cli.Context) error {
+	start := 0
+	switch ctx.NArg() {
+	case 1:
+		break
+	case 2:
+		s, err := strconv.Atoi(ctx.Args().Get(1))
+		if err != nil {
+			return fmt.Errorf("second arg must be an integer: %v", err)
+		}
+		start = s
+	default:
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	var (
+		fName     = ctx.Args().Get(0)
+		stack, _  = makeConfigNode(ctx)
+		interrupt = make(chan os.Signal, 1)
+		stop      = make(chan struct{})
+	)
+	defer stack.Close()
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
+	go func() {
+		if _, ok := <-interrupt; ok {
+			log.Info("Interrupted during ldb import, stopping at next batch")
+		}
+		close(stop)
+	}()
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	return utils.ImportLDBData(db, fName, int64(start), stop)
+}
+
+type preimageIterator struct {
+	iter ethdb.Iterator
+}
+
+func (iter *preimageIterator) Next() (byte, []byte, []byte, bool) {
+	for iter.iter.Next() {
+		key := iter.iter.Key()
+		if bytes.HasPrefix(key, rawdb.PreimagePrefix) && len(key) == (len(rawdb.PreimagePrefix)+common.HashLength) {
+			return utils.OpBatchAdd, key, iter.iter.Value(), true
+		}
+	}
+	return 0, nil, nil, false
+}
+
+func (iter *preimageIterator) Release() {
+	iter.iter.Release()
+}
+
+type snapshotIterator struct {
+	init    bool
+	account ethdb.Iterator
+	storage ethdb.Iterator
+}
+
+func (iter *snapshotIterator) Next() (byte, []byte, []byte, bool) {
+	if !iter.init {
+		iter.init = true
+		return utils.OpBatchDel, rawdb.SnapshotRootKey, nil, true
+	}
+	for iter.account.Next() {
+		key := iter.account.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == (len(rawdb.SnapshotAccountPrefix)+common.HashLength) {
+			return utils.OpBatchAdd, key, iter.account.Value(), true
+		}
+	}
+	for iter.storage.Next() {
+		key := iter.storage.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == (len(rawdb.SnapshotStoragePrefix)+2*common.HashLength) {
+			return utils.OpBatchAdd, key, iter.storage.Value(), true
+		}
+	}
+	return 0, nil, nil, false
+}
+
+func (iter *snapshotIterator) Release() {
+	iter.account.Release()
+	iter.storage.Release()
+}
+
+// chainExporters defines the export scheme for all exportable chain data.
+var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
+	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
+		iter := db.NewIterator(rawdb.PreimagePrefix, nil)
+		return &preimageIterator{iter: iter}
+	},
+	"snapshot": func(db ethdb.Database) utils.ChainDataIterator {
+		account := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+		storage := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+		return &snapshotIterator{account: account, storage: storage}
+	},
+}
+
+func exportChaindata(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	// Parse the required chain data type, make sure it's supported.
+	kind := ctx.Args().Get(0)
+	kind = strings.ToLower(strings.Trim(kind, " "))
+	exporter, ok := chainExporters[kind]
+	if !ok {
+		var kinds []string
+		for kind := range chainExporters {
+			kinds = append(kinds, kind)
+		}
+		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
+	}
+	var (
+		stack, _  = makeConfigNode(ctx)
+		interrupt = make(chan os.Signal, 1)
+		stop      = make(chan struct{})
+	)
+	defer stack.Close()
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
+	go func() {
+		if _, ok := <-interrupt; ok {
+			log.Info("Interrupted during db export, stopping at next batch")
+		}
+		close(stop)
+	}()
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
 }
