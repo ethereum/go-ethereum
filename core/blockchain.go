@@ -1462,10 +1462,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 		// Falls through to the block import
 	}
 	switch {
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
-	case errors.Is(err, consensus.ErrPrunedAncestor):
+	// We're in catalyst mode and the parent is pruned, try to recover the parent state
+	case catalystMode && errors.Is(err, consensus.ErrPrunedAncestor):
+		log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
+		return it.index, bc.recoverAncestors(block)
+
+		// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	case !catalystMode && errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
-		return bc.insertSideChain(block, it)
+		return bc.insertSideChain(block, it, catalystMode)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case !catalystMode && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
@@ -1711,7 +1716,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
+func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, catalystMode bool) (int, error) {
 	var (
 		externTd  *big.Int
 		lastBlock = block
@@ -1815,7 +1820,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false, false); err != nil {
+			if _, err := bc.insertChain(blocks, false, catalystMode); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1829,9 +1834,53 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false, false)
+		return bc.insertChain(blocks, false, catalystMode)
 	}
 	return 0, nil
+}
+
+// recoverAncestors finds the closest ancestor with available state and re-execute
+// all the ancestor blocks since that.
+// recoverAncestors is only used in catalyst mode.
+func (bc *BlockChain) recoverAncestors(block *types.Block) error {
+	// Gather all the sidechain hashes (full blocks may be memory heavy)
+	var (
+		hashes  []common.Hash
+		numbers []uint64
+		parent  = block
+	)
+	for parent != nil && !bc.HasState(parent.Root()) {
+		hashes = append(hashes, parent.Hash())
+		numbers = append(numbers, parent.NumberU64())
+		parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+
+		// If the chain is terminating, stop iteration
+		if bc.insertStopped() {
+			log.Debug("Abort during blocks iteration")
+			return errInsertionInterrupted
+		}
+	}
+	if parent == nil {
+		return errors.New("missing parent")
+	}
+	// Import all the pruned blocks to make the state available
+	for i := len(hashes) - 1; i >= 0; i-- {
+		// If the chain is terminating, stop processing blocks
+		if bc.insertStopped() {
+			log.Debug("Abort during blocks processing")
+			return errInsertionInterrupted
+		}
+		var b *types.Block
+		if i == 0 {
+			b = block
+		} else {
+			b = bc.GetBlock(hashes[i], numbers[i])
+		}
+		if _, err := bc.insertChain(types.Blocks{b}, false, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // collectLogs collects the logs that were generated or removed during
