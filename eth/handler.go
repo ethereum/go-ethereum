@@ -346,7 +346,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.peerWG.Done()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
+		peer.Log().Warn("Snapshot extension registration failed", "addr", peer.RemoteAddr(), "type", peer.Name(), "err", err)
 		return err
 	}
 	return handler(peer)
