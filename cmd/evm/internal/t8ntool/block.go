@@ -191,7 +191,6 @@ func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 		}
 		engine := ethash.New(ethashConfig, nil, false)
 		defer engine.Close()
-
 		results := make(chan *types.Block)
 		if err := engine.Seal(nil, block, results, nil); err != nil {
 			panic(fmt.Sprintf("failed to seal block: %v", err))
@@ -199,11 +198,12 @@ func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 		found := <-results
 		block.WithSeal(found.Header())
 	} else if i.Clique != nil {
-		header := block.Header()
-
+		// If any clique value overwrites an explicit header value, fail
+		// to avoid silently building a block with unexpected values.
 		if i.Header.Extra != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
 		}
+		header := block.Header()
 		if i.Clique.Voted != nil {
 			if i.Header.Coinbase != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
@@ -214,17 +214,17 @@ func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 			if i.Header.Nonce != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
 			}
-
 			if *i.Clique.Authorized {
 				header.Nonce = [8]byte{}
 			} else {
 				header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 			}
 		}
-
-		header.Extra = make([]byte, 97)
+		// Extra is fixed 32 byte vanity and 65 byte signature
+		header.Extra = make([]byte, 32+65)
 		copy(header.Extra[0:32], i.Clique.Vanity.Bytes()[:])
 
+		// Sign the seal hash and fill in the rest of the extra data
 		h := clique.SealHash(header)
 		sighash, err := crypto.Sign(h[:], i.Clique.Key)
 		if err != nil {
@@ -252,6 +252,7 @@ func BuildBlock(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	block := inputData.ToBlock()
 	block, err = inputData.SealBlock(block)
 	if err != nil {
@@ -297,7 +298,6 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
 		}
 	}
-
 	if cliqueStr != stdinSelector && cliqueStr != "" {
 		var clique cliqueInput
 		err := readFile(cliqueStr, "clique", &clique)
@@ -306,7 +306,6 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		}
 		inputData.Clique = &clique
 	}
-
 	if headerStr != stdinSelector {
 		var env header
 		err := readFile(headerStr, "header", &env)
@@ -315,7 +314,6 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		}
 		inputData.Header = &env
 	}
-
 	if ommersStr != stdinSelector && ommersStr != "" {
 		var ommers []string
 		err := readFile(ommersStr, "ommers", &ommers)
@@ -324,24 +322,6 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		}
 		inputData.OmmersRlp = ommers
 	}
-
-	ommers := []*types.Header{}
-	for _, str := range inputData.OmmersRlp {
-		type extblock struct {
-			Header *types.Header
-			Txs    []*types.Transaction
-			Ommers []*types.Header
-		}
-		var ommer *extblock
-		raw := common.FromHex(str)
-		err := rlp.DecodeBytes(raw, &ommer)
-		if err != nil {
-			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode ommer from rlp data: %v", err))
-		}
-		ommers = append(ommers, ommer.Header)
-	}
-	inputData.Ommers = ommers
-
 	if txsStr != stdinSelector {
 		var txs string
 		err := readFile(txsStr, "txs", &txs)
@@ -351,13 +331,30 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		inputData.TxRlp = txs
 	}
 
-	txs := []*types.Transaction{}
-	raw := common.FromHex(inputData.TxRlp)
-	err := rlp.DecodeBytes(raw, &txs)
-	if err != nil {
+	// Deserialize rlp txs and ommers
+	var (
+		ommers = []*types.Header{}
+		txs    = []*types.Transaction{}
+	)
+
+	if err := rlp.DecodeBytes(common.FromHex(inputData.TxRlp), &txs); err != nil {
 		return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
 	}
 	inputData.Txs = txs
+
+	for _, str := range inputData.OmmersRlp {
+		type extblock struct {
+			Header *types.Header
+			Txs    []*types.Transaction
+			Ommers []*types.Header
+		}
+		var ommer *extblock
+		if err := rlp.DecodeBytes(common.FromHex(str), &ommer); err != nil {
+			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode ommer from rlp data: %v", err))
+		}
+		ommers = append(ommers, ommer.Header)
+	}
+	inputData.Ommers = ommers
 
 	return inputData, nil
 }
@@ -382,12 +379,12 @@ func readFile(path, desc string, dest interface{}) error {
 func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 	raw, _ := rlp.EncodeToBytes(block)
 
-	type BlockInfo struct {
+	type blockInfo struct {
 		Rlp  hexutil.Bytes `json:"rlp"`
 		Hash common.Hash   `json:"hash"`
 	}
 
-	var enc BlockInfo
+	var enc blockInfo
 	enc.Rlp = raw
 	enc.Hash = block.Hash()
 
