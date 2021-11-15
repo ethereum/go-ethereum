@@ -101,7 +101,6 @@ var (
 	InputOmmersFlag = cli.StringFlag{
 		Name:  "input.ommers",
 		Usage: "`stdin` or file name of where to find the list of ommer header RLPs to use.",
-		Value: "ommers.json",
 	}
 	InputTxsRlpFlag = cli.StringFlag{
 		Name:  "input.txs",

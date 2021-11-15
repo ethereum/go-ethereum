@@ -210,7 +210,6 @@ func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
 			}
 			header.Coinbase = *i.Clique.Voted
 		}
-
 		if i.Clique.Authorized != nil {
 			if i.Env.Nonce != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
@@ -317,7 +316,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		inputData.Env = &env
 	}
 
-	if ommersStr != stdinSelector {
+	if ommersStr != stdinSelector && ommersStr != "" {
 		var ommers []string
 		err := readFile(ommersStr, "ommers", &ommers)
 		if err != nil {
