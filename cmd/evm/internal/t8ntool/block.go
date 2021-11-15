@@ -70,14 +70,14 @@ type headerMarshaling struct {
 type bbInput struct {
 	Header    *header      `json:"header,omitempty"`
 	OmmersRlp []string     `json:"ommers,omitempty"`
-	TxRlp     string       `json:"txsRlp,omitempty"`
+	TxRlp     string       `json:"txs,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
 
-	Ethash    bool
-	EthashDir string
-	PowMode   ethash.Mode
-	Txs       []*types.Transaction
-	Ommers    []*types.Header
+	Ethash    bool                 `json:"-"`
+	EthashDir string               `json:"-"`
+	PowMode   ethash.Mode          `json:"-"`
+	Txs       []*types.Transaction `json:"-"`
+	Ommers    []*types.Header      `json:"-"`
 }
 
 type cliqueInput struct {
@@ -337,10 +337,12 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		txs    = []*types.Transaction{}
 	)
 
-	if err := rlp.DecodeBytes(common.FromHex(inputData.TxRlp), &txs); err != nil {
-		return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
+	if inputData.TxRlp != "" {
+		if err := rlp.DecodeBytes(common.FromHex(inputData.TxRlp), &txs); err != nil {
+			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
+		}
+		inputData.Txs = txs
 	}
-	inputData.Txs = txs
 
 	for _, str := range inputData.OmmersRlp {
 		type extblock struct {
