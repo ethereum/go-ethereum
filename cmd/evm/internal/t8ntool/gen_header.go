@@ -13,11 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-var _ = (*bbEnvMarshaling)(nil)
+var _ = (*headerMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (b bbEnv) MarshalJSON() ([]byte, error) {
-	type bbEnv struct {
+func (h header) MarshalJSON() ([]byte, error) {
+	type header struct {
 		ParentHash  common.Hash           `json:"parentHash"`
 		OmmerHash   *common.Hash          `json:"sha3Ommers"`
 		Coinbase    *common.Address       `json:"miner"`
@@ -35,29 +35,29 @@ func (b bbEnv) MarshalJSON() ([]byte, error) {
 		Nonce       *types.BlockNonce     `json:"nonce"`
 		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 	}
-	var enc bbEnv
-	enc.ParentHash = b.ParentHash
-	enc.OmmerHash = b.OmmerHash
-	enc.Coinbase = b.Coinbase
-	enc.Root = b.Root
-	enc.TxHash = b.TxHash
-	enc.ReceiptHash = b.ReceiptHash
-	enc.Bloom = b.Bloom
-	enc.Difficulty = (*math.HexOrDecimal256)(b.Difficulty)
-	enc.Number = (*math.HexOrDecimal256)(b.Number)
-	enc.GasLimit = math.HexOrDecimal64(b.GasLimit)
-	enc.GasUsed = math.HexOrDecimal64(b.GasUsed)
-	enc.Time = math.HexOrDecimal64(b.Time)
-	enc.Extra = b.Extra
-	enc.MixDigest = b.MixDigest
-	enc.Nonce = b.Nonce
-	enc.BaseFee = (*math.HexOrDecimal256)(b.BaseFee)
+	var enc header
+	enc.ParentHash = h.ParentHash
+	enc.OmmerHash = h.OmmerHash
+	enc.Coinbase = h.Coinbase
+	enc.Root = h.Root
+	enc.TxHash = h.TxHash
+	enc.ReceiptHash = h.ReceiptHash
+	enc.Bloom = h.Bloom
+	enc.Difficulty = (*math.HexOrDecimal256)(h.Difficulty)
+	enc.Number = (*math.HexOrDecimal256)(h.Number)
+	enc.GasLimit = math.HexOrDecimal64(h.GasLimit)
+	enc.GasUsed = math.HexOrDecimal64(h.GasUsed)
+	enc.Time = math.HexOrDecimal64(h.Time)
+	enc.Extra = h.Extra
+	enc.MixDigest = h.MixDigest
+	enc.Nonce = h.Nonce
+	enc.BaseFee = (*math.HexOrDecimal256)(h.BaseFee)
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (b *bbEnv) UnmarshalJSON(input []byte) error {
-	type bbEnv struct {
+func (h *header) UnmarshalJSON(input []byte) error {
+	type header struct {
 		ParentHash  *common.Hash          `json:"parentHash"`
 		OmmerHash   *common.Hash          `json:"sha3Ommers"`
 		Coinbase    *common.Address       `json:"miner"`
@@ -75,61 +75,61 @@ func (b *bbEnv) UnmarshalJSON(input []byte) error {
 		Nonce       *types.BlockNonce     `json:"nonce"`
 		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 	}
-	var dec bbEnv
+	var dec header
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	if dec.ParentHash != nil {
-		b.ParentHash = *dec.ParentHash
+		h.ParentHash = *dec.ParentHash
 	}
 	if dec.OmmerHash != nil {
-		b.OmmerHash = dec.OmmerHash
+		h.OmmerHash = dec.OmmerHash
 	}
 	if dec.Coinbase != nil {
-		b.Coinbase = dec.Coinbase
+		h.Coinbase = dec.Coinbase
 	}
 	if dec.Root == nil {
-		return errors.New("missing required field 'stateRoot' for bbEnv")
+		return errors.New("missing required field 'stateRoot' for header")
 	}
-	b.Root = *dec.Root
+	h.Root = *dec.Root
 	if dec.TxHash != nil {
-		b.TxHash = dec.TxHash
+		h.TxHash = dec.TxHash
 	}
 	if dec.ReceiptHash != nil {
-		b.ReceiptHash = dec.ReceiptHash
+		h.ReceiptHash = dec.ReceiptHash
 	}
 	if dec.Bloom != nil {
-		b.Bloom = *dec.Bloom
+		h.Bloom = *dec.Bloom
 	}
 	if dec.Difficulty != nil {
-		b.Difficulty = (*big.Int)(dec.Difficulty)
+		h.Difficulty = (*big.Int)(dec.Difficulty)
 	}
 	if dec.Number == nil {
-		return errors.New("missing required field 'number' for bbEnv")
+		return errors.New("missing required field 'number' for header")
 	}
-	b.Number = (*big.Int)(dec.Number)
+	h.Number = (*big.Int)(dec.Number)
 	if dec.GasLimit == nil {
-		return errors.New("missing required field 'gasLimit' for bbEnv")
+		return errors.New("missing required field 'gasLimit' for header")
 	}
-	b.GasLimit = uint64(*dec.GasLimit)
+	h.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed != nil {
-		b.GasUsed = uint64(*dec.GasUsed)
+		h.GasUsed = uint64(*dec.GasUsed)
 	}
 	if dec.Time == nil {
-		return errors.New("missing required field 'timestamp' for bbEnv")
+		return errors.New("missing required field 'timestamp' for header")
 	}
-	b.Time = uint64(*dec.Time)
+	h.Time = uint64(*dec.Time)
 	if dec.Extra != nil {
-		b.Extra = *dec.Extra
+		h.Extra = *dec.Extra
 	}
 	if dec.MixDigest != nil {
-		b.MixDigest = *dec.MixDigest
+		h.MixDigest = *dec.MixDigest
 	}
 	if dec.Nonce != nil {
-		b.Nonce = dec.Nonce
+		h.Nonce = dec.Nonce
 	}
 	if dec.BaseFee != nil {
-		b.BaseFee = (*big.Int)(dec.BaseFee)
+		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}
 	return nil
 }

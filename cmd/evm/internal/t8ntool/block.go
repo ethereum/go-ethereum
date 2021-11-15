@@ -37,8 +37,8 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-//go:generate gencodec -type bbEnv -field-override bbEnvMarshaling -out gen_bbenv.go
-type bbEnv struct {
+//go:generate gencodec -type header -field-override headerMarshaling -out gen_header.go
+type header struct {
 	ParentHash  common.Hash       `json:"parentHash"`
 	OmmerHash   *common.Hash      `json:"sha3Ommers"`
 	Coinbase    *common.Address   `json:"miner"`
@@ -57,7 +57,7 @@ type bbEnv struct {
 	BaseFee     *big.Int          `json:"baseFeePerGas" rlp:"optional"`
 }
 
-type bbEnvMarshaling struct {
+type headerMarshaling struct {
 	Difficulty *math.HexOrDecimal256
 	Number     *math.HexOrDecimal256
 	GasLimit   math.HexOrDecimal64
@@ -67,8 +67,8 @@ type bbEnvMarshaling struct {
 	BaseFee    *math.HexOrDecimal256
 }
 
-type blockInput struct {
-	Env       *bbEnv       `json:"header,omitempty"`
+type bbInput struct {
+	Header    *header      `json:"header,omitempty"`
 	OmmersRlp []string     `json:"ommers,omitempty"`
 	TxRlp     string       `json:"txsRlp,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
@@ -123,28 +123,28 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (i *blockInput) ToBlock() *types.Block {
+func (i *bbInput) ToBlock() *types.Block {
 	header := &types.Header{
-		ParentHash:  i.Env.ParentHash,
+		ParentHash:  i.Header.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
 		Coinbase:    common.Address{},
-		Root:        i.Env.Root,
+		Root:        i.Header.Root,
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
-		Bloom:       i.Env.Bloom,
+		Bloom:       i.Header.Bloom,
 		Difficulty:  common.Big0,
-		Number:      i.Env.Number,
-		GasLimit:    i.Env.GasLimit,
-		GasUsed:     i.Env.GasUsed,
-		Time:        i.Env.Time,
-		Extra:       i.Env.Extra,
-		MixDigest:   i.Env.MixDigest,
-		BaseFee:     i.Env.BaseFee,
+		Number:      i.Header.Number,
+		GasLimit:    i.Header.GasLimit,
+		GasUsed:     i.Header.GasUsed,
+		Time:        i.Header.Time,
+		Extra:       i.Header.Extra,
+		MixDigest:   i.Header.MixDigest,
+		BaseFee:     i.Header.BaseFee,
 	}
 
 	// Fill optional values.
-	if i.Env.OmmerHash != nil {
-		header.UncleHash = *i.Env.OmmerHash
+	if i.Header.OmmerHash != nil {
+		header.UncleHash = *i.Header.OmmerHash
 	} else if len(i.Ommers) != 0 {
 		// Calculate the ommer hash if none is provided and there are ommers to hash
 		sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
@@ -153,20 +153,20 @@ func (i *blockInput) ToBlock() *types.Block {
 		sha.Read(h[:])
 		header.UncleHash = common.BytesToHash(h)
 	}
-	if i.Env.Coinbase != nil {
-		header.Coinbase = *i.Env.Coinbase
+	if i.Header.Coinbase != nil {
+		header.Coinbase = *i.Header.Coinbase
 	}
-	if i.Env.TxHash != nil {
-		header.TxHash = *i.Env.TxHash
+	if i.Header.TxHash != nil {
+		header.TxHash = *i.Header.TxHash
 	}
-	if i.Env.ReceiptHash != nil {
-		header.ReceiptHash = *i.Env.ReceiptHash
+	if i.Header.ReceiptHash != nil {
+		header.ReceiptHash = *i.Header.ReceiptHash
 	}
-	if i.Env.Nonce != nil {
-		header.Nonce = *i.Env.Nonce
+	if i.Header.Nonce != nil {
+		header.Nonce = *i.Header.Nonce
 	}
 	if header.Difficulty != nil {
-		header.Difficulty = i.Env.Difficulty
+		header.Difficulty = i.Header.Difficulty
 	}
 
 	block := types.NewBlockWithHeader(header)
@@ -175,9 +175,9 @@ func (i *blockInput) ToBlock() *types.Block {
 	return block
 }
 
-func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
+func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 	if i.Ethash {
-		if i.Env.Nonce != nil {
+		if i.Header.Nonce != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
 		}
 		ethashConfig := ethash.Config{
@@ -201,17 +201,17 @@ func (i *blockInput) SealBlock(block *types.Block) (*types.Block, error) {
 	} else if i.Clique != nil {
 		header := block.Header()
 
-		if i.Env.Extra != nil {
+		if i.Header.Extra != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
 		}
 		if i.Clique.Voted != nil {
-			if i.Env.Coinbase != nil {
+			if i.Header.Coinbase != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
 			}
 			header.Coinbase = *i.Clique.Voted
 		}
 		if i.Clique.Authorized != nil {
-			if i.Env.Nonce != nil {
+			if i.Header.Nonce != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
 			}
 
@@ -261,7 +261,7 @@ func BuildBlock(ctx *cli.Context) error {
 	return dispatchBlock(ctx, baseDir, block)
 }
 
-func readInput(ctx *cli.Context) (*blockInput, error) {
+func readInput(ctx *cli.Context) (*bbInput, error) {
 	var (
 		headerStr  = ctx.String(InputHeaderFlag.Name)
 		ommersStr  = ctx.String(InputOmmersFlag.Name)
@@ -270,7 +270,7 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 		ethashOn   = ctx.Bool(SealEthashFlag.Name)
 		ethashDir  = ctx.String(SealEthashDirFlag.Name)
 		ethashMode = ctx.String(SealEthashModeFlag.Name)
-		inputData  = &blockInput{}
+		inputData  = &bbInput{}
 	)
 
 	if ethashOn && cliqueStr != "" {
@@ -308,12 +308,12 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	}
 
 	if headerStr != stdinSelector {
-		var env bbEnv
+		var env header
 		err := readFile(headerStr, "header", &env)
 		if err != nil {
 			return nil, err
 		}
-		inputData.Env = &env
+		inputData.Header = &env
 	}
 
 	if ommersStr != stdinSelector && ommersStr != "" {
