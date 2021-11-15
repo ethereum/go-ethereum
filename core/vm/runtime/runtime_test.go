@@ -327,7 +327,7 @@ func TestBlockhash(t *testing.T) {
 }
 
 type stepCounter struct {
-	inner *vm.JSONLogger
+	inner *logger.JSONLogger
 	steps int
 }
 
@@ -537,7 +537,7 @@ func TestEip2929Cases(t *testing.T) {
 		Execute(code, nil, &Config{
 			EVMConfig: vm.Config{
 				Debug:     true,
-				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				Tracer:    logger.NewMarkdownLogger(nil, os.Stdout),
 				ExtraEips: []int{2929},
 			},
 		})
