@@ -300,23 +300,26 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	}
 
 	if cliqueStr != stdinSelector && cliqueStr != "" {
-		clique, err := readClique(cliqueStr)
+		var clique cliqueInput
+		err := readFile(cliqueStr, "clique", &clique)
 		if err != nil {
 			return nil, err
 		}
-		inputData.Clique = clique
+		inputData.Clique = &clique
 	}
 
 	if headerStr != stdinSelector {
-		env, err := readEnv(headerStr)
+		var env bbEnv
+		err := readFile(headerStr, "header", &env)
 		if err != nil {
 			return nil, err
 		}
-		inputData.Env = env
+		inputData.Env = &env
 	}
 
 	if ommersStr != stdinSelector {
-		ommers, err := readOmmers(ommersStr)
+		var ommers []string
+		err := readFile(ommersStr, "ommers", &ommers)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +344,8 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	inputData.Ommers = ommers
 
 	if txsStr != stdinSelector {
-		txs, err := readTxsRlp(txsStr)
+		var txs string
+		err := readFile(txsStr, "txs", &txs)
 		if err != nil {
 			return nil, err
 		}
@@ -359,96 +363,19 @@ func readInput(ctx *cli.Context) (*blockInput, error) {
 	return inputData, nil
 }
 
-func readEnv(path string) (*bbEnv, error) {
-	env := &bbEnv{}
+func readFile(path, desc string, dest interface{}) error {
+	inFile, err := os.Open(path)
+	if err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed reading %s file: %v", desc, err))
+	}
+	defer inFile.Close()
 
-	if path == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(env); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling env from stdin: %v", err))
-		}
-	} else {
-		inFile, err := os.Open(path)
-		if err != nil {
-			return nil, NewError(ErrorIO, fmt.Errorf("failed reading header file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&env); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling header file: %v", err))
-		}
+	decoder := json.NewDecoder(inFile)
+	if err := decoder.Decode(dest); err != nil {
+		return NewError(ErrorJson, fmt.Errorf("failed unmarshaling %s file: %v", desc, err))
 	}
 
-	return env, nil
-}
-
-func readOmmers(path string) ([]string, error) {
-	ommers := []string{}
-
-	if path == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&ommers); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling ommers from stdin: %v", err))
-		}
-	} else {
-		inFile, err := os.Open(path)
-		if err != nil {
-			return nil, NewError(ErrorIO, fmt.Errorf("failed reading ommers file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&ommers); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling ommers file: %v", err))
-		}
-	}
-
-	return ommers, nil
-}
-
-func readTxsRlp(path string) (string, error) {
-	txsRlp := ""
-
-	if path == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&txsRlp); err != nil {
-			return "", NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs from stdin: %v", err))
-		}
-	} else {
-		inFile, err := os.Open(path)
-		if err != nil {
-			return "", NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&txsRlp); err != nil {
-			return "", NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs file: %v", err))
-		}
-	}
-
-	return txsRlp, nil
-}
-
-func readClique(path string) (*cliqueInput, error) {
-	clique := &cliqueInput{}
-
-	if path == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(clique); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling env from stdin: %v", err))
-		}
-	} else {
-		inFile, err := os.Open(path)
-		if err != nil {
-			return nil, NewError(ErrorIO, fmt.Errorf("failed reading clique file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&clique); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling clique file: %v", err))
-		}
-	}
-
-	return clique, nil
+	return nil
 }
 
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
