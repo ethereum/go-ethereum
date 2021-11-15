@@ -1470,7 +1470,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 		// First block is pruned, insert as sidechain and reorg only if TD grows enough
 	case !catalystMode && errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
-		return bc.insertSideChain(block, it, catalystMode)
+		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case !catalystMode && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
@@ -1716,7 +1716,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, catalystMode bool) (int, error) {
+// insertSideChain is only used in non-catalyst mode.
+func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
 		externTd  *big.Int
 		lastBlock = block
@@ -1820,7 +1821,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ca
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false, catalystMode); err != nil {
+			if _, err := bc.insertChain(blocks, false, false); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1834,7 +1835,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ca
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false, catalystMode)
+		return bc.insertChain(blocks, false, false)
 	}
 	return 0, nil
 }
