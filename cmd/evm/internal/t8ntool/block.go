@@ -39,7 +39,7 @@ import (
 //go:generate gencodec -type header -field-override headerMarshaling -out gen_header.go
 type header struct {
 	ParentHash  common.Hash       `json:"parentHash"`
-	OmmerHash   *common.Hash      `json:"sha3Ommers"`
+	OmmerHash   *common.Hash      `json:"sha3Uncles"`
 	Coinbase    *common.Address   `json:"miner"`
 	Root        common.Hash       `json:"stateRoot"        gencodec:"required"`
 	TxHash      *common.Hash      `json:"transactionsRoot"`
