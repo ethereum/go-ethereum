@@ -366,7 +366,7 @@ func (beacon *Beacon) SetThreads(threads int) {
 	}
 }
 
-// IsTTDReached checks if the TotalTerminalDifficulty has been reached.
+// IsTTDReached checks if the TotalTerminalDifficulty has been surpassed on the `parentHash` block.
 // It depends on the parentHash already being stored in the database.
 func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, number uint64) (bool, error) {
 	if chain.Config().TerminalTotalDifficulty == nil {
