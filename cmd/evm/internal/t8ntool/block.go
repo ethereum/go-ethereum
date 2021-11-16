@@ -87,38 +87,26 @@ type cliqueInput struct {
 }
 
 func (c *cliqueInput) UnmarshalJSON(input []byte) error {
-	// Read the secretKey, if present
-	type sKey struct {
-		Key *common.Hash `json:"secretKey"`
-	}
-	var key sKey
-	if err := json.Unmarshal(input, &key); err != nil {
-		return err
-	}
-	if key.Key == nil {
-		return errors.New("missing required field 'secretKey' for cliqueInput")
-	}
-	k := key.Key.Hex()[2:]
-	if ecdsaKey, err := crypto.HexToECDSA(k); err != nil {
-		return err
-	} else {
-		c.Key = ecdsaKey
-	}
-
-	// Now, read the rest of object
-	type others struct {
+	var x struct {
+		Key        *common.Hash    `json:"secretKey"`
 		Voted      *common.Address `json:"voted"`
 		Authorized *bool           `json:"authorized"`
 		Vanity     common.Hash     `json:"vanity"`
 	}
-	var x others
 	if err := json.Unmarshal(input, &x); err != nil {
 		return err
+	}
+	if x.Key == nil {
+		return errors.New("missing required field 'secretKey' for cliqueInput")
+	}
+	if ecdsaKey, err := crypto.ToECDSA(x.Key[:]); err != nil {
+		return err
+	} else {
+		c.Key = ecdsaKey
 	}
 	c.Voted = x.Voted
 	c.Authorized = x.Authorized
 	c.Vanity = x.Vanity
-
 	return nil
 }
 
