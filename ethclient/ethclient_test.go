@@ -488,7 +488,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected networkID: %v", networkID)
 	}
 
-	// SuggestGasPrice (should suggest 1 Gwei)
+	// SuggestGasPrice
 	gasPrice, err := ec.SuggestGasPrice(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -497,7 +497,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected gas price: %v", gasPrice)
 	}
 
-	// SuggestGasTipCap (should suggest 1 Gwei)
+	// SuggestGasTipCap
 	gasTipCap, err := ec.SuggestGasTipCap(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
