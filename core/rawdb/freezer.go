@@ -621,17 +621,17 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			// Remember in which file the switch happens.
 			// TODO: what if it coincidentally starts in a new file?
 			// we won't need to copy-over that file
-			entry, err := table.getIndices(i, 0)
+			indices, err := table.getIndices(i, 1)
 			if err != nil {
 				return err
 			}
 			// First non-legacy entry coincidentally is located in a new
 			// file and we have a clean switch-over boundary. No need to
 			// copy over further elements.
-			if entry[0].filenum != entry[1].filenum {
+			if indices[0].filenum != indices[1].filenum {
 				copyOver = false
 			}
-			filenum = entry[1].filenum
+			filenum = indices[1].filenum
 			break
 		}
 	}
@@ -641,15 +641,11 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		// 1. loop getBounds until filenum exceeds threshold filenum
 		// 2. copy verbatim to new table
 		for ; i < numAncients; i++ {
-			/*_, _, fn, err := table.getBounds(i)
-			if err != nil {
-				return err
-			}*/
-			idx, err := table.readEntry(i)
+			indices, err := table.getIndices(i, 1)
 			if err != nil {
 				return err
 			}
-			if idx.filenum > filenum {
+			if indices[1].filenum > filenum {
 				log.Info("Reached new file with updated receipts", "fn", filenum, "i", i)
 				break
 			}
@@ -669,23 +665,26 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 
 	// 3. need to copy rest of old index and repair the filenum in the entries
 	if i < numAncients {
-		idx, err := table.readEntry(i)
+		indices, err := table.getIndices(i, 1)
 		if err != nil {
 			return err
 		}
 
 		lastFilenum := newTable.headId
 		// idx.filenum is always >=1
-		diff := int32(lastFilenum) - int32(idx.filenum-1)
-		log.Info("Starting duplication", "i", i, "oldFn", idx.filenum, "offset", idx.offset, "newHeadId", lastFilenum)
+		diff := int32(lastFilenum) - int32(indices[1].filenum-1)
+		//log.Info("Starting duplication", "i", i, "oldFn", idx.filenum, "offset", idx.offset, "newHeadId", lastFilenum)
 		for ; i < numAncients; i++ {
-			idx, err := table.readEntry(i)
+			indices, err := table.getIndices(i, 1)
 			if err != nil {
 				return err
 			}
+			idx := indexEntry{
+				// (idx.filenum + diff) is always > 0
+				filenum: uint32(int32(indices[1].filenum) + diff),
+				offset:  indices[1].offset,
+			}
 			//log.Info("read entry", "i", i, "fn", idx.filenum, "offset", idx.offset)
-			// (idx.filenum + diff) is always > 0
-			idx.filenum = uint32(int32(idx.filenum) + diff)
 			newTable.writeEntry(idx)
 		}
 		log.Info("Duplicated rest of index in new table", "i", i)
