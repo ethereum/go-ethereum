@@ -195,7 +195,6 @@ func (i *bbInput) sealEthash(block *types.Block) (*types.Block, error) {
 
 // sealClique seals the given block using clique.
 func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
-
 	// If any clique value overwrites an explicit header value, fail
 	// to avoid silently building a block with unexpected values.
 	if i.Header.Extra != nil {
@@ -243,18 +242,15 @@ func BuildBlock(ctx *cli.Context) error {
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
-
 	inputData, err := readInput(ctx)
 	if err != nil {
 		return err
 	}
-
 	block := inputData.ToBlock()
 	block, err = inputData.SealBlock(block)
 	if err != nil {
 		return err
 	}
-
 	return dispatchBlock(ctx, baseDir, block)
 }
 
@@ -269,11 +265,9 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		ethashMode = ctx.String(SealEthashModeFlag.Name)
 		inputData  = &bbInput{}
 	)
-
 	if ethashOn && cliqueStr != "" {
 		return nil, NewError(ErrorConfig, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
 	}
-
 	if ethashOn {
 		inputData.Ethash = ethashOn
 		inputData.EthashDir = ethashDir
@@ -285,10 +279,9 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		case "fake":
 			inputData.PowMode = ethash.ModeFake
 		default:
-			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, normal", ethashMode))
+			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, fake, normal", ethashMode))
 		}
 	}
-
 	if headerStr == stdinSelector || ommersStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
@@ -328,14 +321,12 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		ommers = []*types.Header{}
 		txs    = []*types.Transaction{}
 	)
-
 	if inputData.TxRlp != "" {
 		if err := rlp.DecodeBytes(common.FromHex(inputData.TxRlp), &txs); err != nil {
 			return nil, NewError(ErrorRlp, fmt.Errorf("unable to decode transaction from rlp data: %v", err))
 		}
 		inputData.Txs = txs
 	}
-
 	for _, str := range inputData.OmmersRlp {
 		type extblock struct {
 			Header *types.Header
