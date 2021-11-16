@@ -724,6 +724,8 @@ func freezerMigrate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	// TODO: this won't work if first blocks are empty like in mainnet
+	// Need to find first non-empty block and check that
 	isFirstLegacy, err := types.IsLegacyStoredReceipts(first)
 	if err != nil {
 		return err

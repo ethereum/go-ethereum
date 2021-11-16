@@ -431,19 +431,25 @@ func (t *freezerTable) Close() error {
 func (t *freezerTable) openFile(num uint32, opener func(string) (*os.File, error)) (f *os.File, err error) {
 	var exist bool
 	if f, exist = t.files[num]; !exist {
-		var name string
-		if t.noCompression {
-			name = fmt.Sprintf("%s.%04d.rdat", t.name, num)
-		} else {
-			name = fmt.Sprintf("%s.%04d.cdat", t.name, num)
-		}
-		f, err = opener(filepath.Join(t.path, name))
+		path := t.tableFilePath(num)
+		f, err = opener(path)
 		if err != nil {
 			return nil, err
 		}
 		t.files[num] = f
 	}
 	return f, err
+}
+
+// tableFileName returns path to a table file of a given index.
+func (t *freezerTable) tableFilePath(num uint32) string {
+	var name string
+	if t.noCompression {
+		name = fmt.Sprintf("%s.%04d.rdat", t.name, num)
+	} else {
+		name = fmt.Sprintf("%s.%04d.cdat", t.name, num)
+	}
+	return filepath.Join(t.path, name)
 }
 
 // releaseFile closes a file, and removes it from the open file cache.
@@ -761,16 +767,6 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 		}
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
-}
-
-func (t *freezerTable) readEntry(item uint64) (indexEntry, error) {
-	buffer := make([]byte, indexEntrySize)
-	var idx indexEntry
-	if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
-		return idx, err
-	}
-	idx.unmarshalBinary(buffer)
-	return idx, nil
 }
 
 // low-level, doesnt increase counters, assumes lock
