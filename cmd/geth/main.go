@@ -140,6 +140,7 @@ var (
 		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
+		utils.DeveloperGasLimitFlag,
 		utils.RopstenFlag,
 		utils.SepoliaFlag,
 		utils.RinkebyFlag,
