@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -147,11 +146,7 @@ func (i *bbInput) ToBlock() *types.Block {
 		header.UncleHash = *i.Header.OmmerHash
 	} else if len(i.Ommers) != 0 {
 		// Calculate the ommer hash if none is provided and there are ommers to hash
-		sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
-		rlp.Encode(sha, i.Ommers)
-		h := make([]byte, 32)
-		sha.Read(h[:])
-		header.UncleHash = common.BytesToHash(h)
+		header.UncleHash = types.CalcUncleHash(i.Ommers)
 	}
 	if i.Header.Coinbase != nil {
 		header.Coinbase = *i.Header.Coinbase
