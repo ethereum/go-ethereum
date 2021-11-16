@@ -564,6 +564,9 @@ func (f *freezer) DropTable(kind string) error {
 	return nil
 }
 
+// TransformerFn takes a freezer entry in an older format and returns
+// the same in a new format. The second return argument determines
+// if the entry is already of the new format.
 type TransformerFn = func([]byte) ([]byte, bool, error)
 
 func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
@@ -598,6 +601,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	var i uint64
 	// Number of the file in which the first up-to-date receipt appers
 	var filenum uint32
+	copyOver := true
 	// Iterate through entries and transform them
 	// until reaching first non-legacy one.
 	for i = 0; i < numAncients; i++ {
@@ -621,34 +625,42 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			if err != nil {
 				return err
 			}
-			filenum = entry[0].filenum
+			// First non-legacy entry coincidentally is located in a new
+			// file and we have a clean switch-over boundary. No need to
+			// copy over further elements.
+			if entry[0].filenum != entry[1].filenum {
+				copyOver = false
+			}
+			filenum = entry[1].filenum
 			break
 		}
 	}
 	log.Info("Copying over leftover receipts", "i", i, "filenum", filenum)
-	// Copy over left-over receipts in the file with last legacy receipt:
-	// 1. loop getBounds until filenum exceeds threshold filenum
-	// 2. copy verbatim to new table
-	for ; i < numAncients; i++ {
-		/*_, _, fn, err := table.getBounds(i)
-		if err != nil {
-			return err
-		}*/
-		idx, err := table.readEntry(i)
-		if err != nil {
-			return err
+	if copyOver {
+		// Copy over left-over receipts in the file with last legacy receipt:
+		// 1. loop getBounds until filenum exceeds threshold filenum
+		// 2. copy verbatim to new table
+		for ; i < numAncients; i++ {
+			/*_, _, fn, err := table.getBounds(i)
+			if err != nil {
+				return err
+			}*/
+			idx, err := table.readEntry(i)
+			if err != nil {
+				return err
+			}
+			if idx.filenum > filenum {
+				log.Info("Reached new file with updated receipts", "fn", filenum, "i", i)
+				break
+			}
+			blob, err := table.Retrieve(i)
+			if err != nil {
+				return err
+			}
+			batch.AppendRaw(i, blob)
 		}
-		if idx.filenum > filenum {
-			log.Info("Reached new file with updated receipts", "fn", filenum, "i", i)
-			break
-		}
-		blob, err := table.Retrieve(i)
-		if err != nil {
-			return err
-		}
-		batch.AppendRaw(i, blob)
+		log.Info("Finished copying leftovers", "i", i)
 	}
-	log.Info("Finished copying leftovers", "i", i)
 
 	if err := batch.commit(); err != nil {
 		return err
@@ -671,6 +683,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			if err != nil {
 				return err
 			}
+			//log.Info("read entry", "i", i, "fn", idx.filenum, "offset", idx.offset)
 			// (idx.filenum + diff) is always > 0
 			idx.filenum = uint32(int32(idx.filenum) + diff)
 			newTable.writeEntry(idx)
