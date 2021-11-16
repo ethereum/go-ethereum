@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -243,6 +244,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 		},
@@ -730,14 +732,16 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (0x%x)", h.Number, h.Number)})
 	}
-	data = append(data, [][]string{{"frozen", fmt.Sprintf("%v", ancients)},
+	data = append(data, [][]string{{"frozen", fmt.Sprintf("%d items", ancients)},
 		{"lastPivotNumber", pp(rawdb.ReadLastPivotNumber(db))},
 		{"snapshotSyncStatus", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotSyncStatus(db)))},
-		{"snapshotGenerator", fmt.Sprintf("%x", rawdb.ReadSnapshotGenerator(db))},
+		{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))},
 		{"snapshotDisabled", fmt.Sprintf("%v", rawdb.ReadSnapshotDisabled(db))},
 		{"snapshotJournal", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotJournal(db)))},
 		{"snapshotRecoveryNumber", pp(rawdb.ReadSnapshotRecoveryNumber(db))},
 		{"snapshotRoot", fmt.Sprintf("%v", rawdb.ReadSnapshotRoot(db))},
+		{"txIndexTail", pp(rawdb.ReadTxIndexTail(db))},
+		{"fastTxLookupLimit", pp(rawdb.ReadFastTxLookupLimit(db))},
 	}...)
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Field", "Value"})
