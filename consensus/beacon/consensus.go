@@ -209,7 +209,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
+	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(common.Big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the header's EIP-1559 attributes.
@@ -366,14 +366,16 @@ func (beacon *Beacon) SetThreads(threads int) {
 	}
 }
 
-func IsTTDReached(chain consensus.ChainHeaderReader, header common.Hash, number uint64) (bool, error) {
+// IsTTDReached checks if the TotalTerminalDifficulty has been reached.
+// It depends on the parentHash already being stored in the database.
+func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, number uint64) (bool, error) {
 	if chain.Config().TerminalTotalDifficulty == nil {
 		return false, nil
 	}
-	td := chain.GetTd(header, number)
+	td := chain.GetTd(parentHash, number)
 	if td == nil {
 		return false, errors.New("TD not found")
 	}
 	// We only care about if the new block is > TTD not if the parent was < TTD
-	return chain.Config().IsTerminalPoWBlock(big.NewInt(0), td), nil
+	return chain.Config().IsTerminalPoWBlock(common.Big0, td), nil
 }
