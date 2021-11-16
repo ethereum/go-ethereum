@@ -409,11 +409,6 @@ func DeveloperGenesisBlock(period uint64, gasLimit uint64, faucet common.Address
 		Epoch:  config.Clique.Epoch,
 	}
 
-	// Set default gas limit if 0 or user did not specify
-	if gasLimit == 0 {
-		gasLimit = 11500000
-	}
-
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
 		Config:     &config,
