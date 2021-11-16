@@ -761,9 +761,9 @@ func freezerMigrate(ctx *cli.Context) error {
 	}
 
 	log.Info("Before closing db")
-	if err := db.Close(); err != nil {
+	/*if err := db.Close(); err != nil {
 		return err
-	}
+	}*/
 	log.Info("Migration finished", "duration", time.Since(start))
 
 	return nil

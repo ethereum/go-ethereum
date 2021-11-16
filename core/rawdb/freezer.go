@@ -663,6 +663,9 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	}
 	log.Info("Committed write batch", "newHeadId", newTable.headId, "headbytes", newTable.headBytes, "items", newTable.items)
 
+	var diff int32
+	toRename := make(map[uint32]struct{})
+
 	// 3. need to copy rest of old index and repair the filenum in the entries
 	if i < numAncients {
 		indices, err := table.getIndices(i, 1)
@@ -672,7 +675,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 
 		lastFilenum := newTable.headId
 		// idx.filenum is always >=1
-		diff := int32(lastFilenum) - int32(indices[1].filenum-1)
+		diff = int32(lastFilenum) - int32(indices[1].filenum-1)
 		//log.Info("Starting duplication", "i", i, "oldFn", idx.filenum, "offset", idx.offset, "newHeadId", lastFilenum)
 		for ; i < numAncients; i++ {
 			indices, err := table.getIndices(i, 1)
@@ -686,15 +689,25 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			}
 			//log.Info("read entry", "i", i, "fn", idx.filenum, "offset", idx.offset)
 			newTable.writeEntry(idx)
+			toRename[indices[1].filenum] = struct{}{}
 		}
 		log.Info("Duplicated rest of index in new table", "i", i)
 	}
 
+	// TODO: close table here or in cmd?
+	if err := table.Close(); err != nil {
+		return err
+	}
 	if err := newTable.Close(); err != nil {
 		return err
 	}
 
-	// Delete old table index & files up to cross-over point
+	// Rename table files after the switchover point
+	for k := range toRename {
+		if err := os.Rename(table.tableFilePath(k), newTable.tableFilePath(uint32(int32(k)+diff))); err != nil {
+			return err
+		}
+	}
 
 	// Move new table files to ancients dir
 	files, err := ioutil.ReadDir(migrationPath)
@@ -702,6 +715,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		return err
 	}
 	for _, f := range files {
+		// This will replace the index + table files up to and including the switchover file
 		if err := os.Rename(filepath.Join(migrationPath, f.Name()), filepath.Join(ancientsPath, f.Name())); err != nil {
 			return err
 		}
