@@ -29,7 +29,7 @@ import (
 )
 
 func init() {
-	register("4byte", newFourByteTracer)
+	register("4byteTracer", newFourByteTracer)
 }
 
 // fourByteTracer searches for 4byte-identifiers, and collects them for post-processing.
@@ -37,7 +37,7 @@ func init() {
 // a reversed signature can be matched against the size of the data.
 //
 // Example:
-//   > debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byte"})
+//   > debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
 //   {
 //     0x27dc297e-128: 1,
 //     0x38cc4831-0: 2,
