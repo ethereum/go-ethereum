@@ -1943,8 +1943,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate a canonical chain to act as the main dataset
 	var (
 		merger    = consensus.NewMerger(rawdb.NewMemoryDatabase())
-		genEngine = beacon.New(ethash.NewFaker(), merger)
-		runEngine = beacon.New(ethash.NewFaker(), merger)
+		genEngine = beacon.New(ethash.NewFaker())
+		runEngine = beacon.New(ethash.NewFaker())
 		db        = rawdb.NewMemoryDatabase()
 
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -2224,8 +2224,8 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		db        = rawdb.NewMemoryDatabase()
 		genesis   = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: &chainConfig}).MustCommit(db)
 		runMerger = consensus.NewMerger(db)
-		runEngine = beacon.New(ethash.NewFaker(), runMerger)
-		genEngine = beacon.New(ethash.NewFaker(), runMerger)
+		runEngine = beacon.New(ethash.NewFaker())
+		genEngine = beacon.New(ethash.NewFaker())
 	)
 	applyMerge := func(engine *beacon.Beacon, height int) {
 		if engine != nil {

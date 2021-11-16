@@ -211,7 +211,7 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, merger *consensus.Merger) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if chainConfig.Clique != nil {
@@ -239,9 +239,5 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
-	if merger == nil {
-		return engine
-	}
-	engine = beacon.New(engine, merger)
-	return engine
+	return beacon.New(engine)
 }

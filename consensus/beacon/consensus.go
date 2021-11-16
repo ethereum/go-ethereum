@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -48,7 +47,7 @@ var (
 	errInvalidUncleHash = errors.New("invalid uncle hash")
 )
 
-// Beacon is a consensus engine combines the eth1 consensus and proof-of-stake
+// Beacon is a consensus engine that combines the eth1 consensus and proof-of-stake
 // algorithm. There is a special flag inside to decide whether to use legacy consensus
 // rules or new rules. The transition rule is described in the eth1/2 merge spec.
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md
@@ -57,22 +56,15 @@ var (
 // is only used for necessary consensus checks. The legacy consensus engine can be any
 // engine implements the consensus interface (except the beacon itself).
 type Beacon struct {
-	ethone consensus.Engine // Classic consensus engine used in eth1, e.g. ethash or clique
-
-	// merger allows us to query whether the transition has been triggered.
-	merger *consensus.Merger
-	lock   sync.RWMutex
+	ethone consensus.Engine // Original consensus engine used in eth1, e.g. ethash or clique
 }
 
 // New creates a consensus engine with the given embedded eth1 engine.
-func New(ethone consensus.Engine, merger *consensus.Merger) *Beacon {
+func New(ethone consensus.Engine) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")
 	}
-	return &Beacon{
-		ethone: ethone,
-		merger: merger,
-	}
+	return &Beacon{ethone: ethone}
 }
 
 // Author implements consensus.Engine, returning the verified author of the block.
@@ -86,7 +78,8 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	if !beacon.IsPoSHeader(header) {
+	reached, _ := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	if !reached {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
 	// Short circuit if the header is known, or its parent not
@@ -166,7 +159,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Ethereum consensus engine.
+// rules of the Ethereum consensus engine.
 func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	if !beacon.IsPoSHeader(block.Header()) {
 		return beacon.ethone.VerifyUncles(chain, block)
@@ -180,7 +173,10 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 
 // verifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine. The difference between the beacon and classic is
-// (a) the difficulty, mixhash, nonce and unclehash are expected
+// (a) The following fields are expected to be constants:
+//     - difficulty is expected to be 0
+// 	   - nonce is expected to be 0
+//     - unclehash is expected to be Hash(emptyHeader)
 //     to be the desired constants
 // (b) the timestamp is not verified anymore
 // (c) the extradata is limited to 32 bytes
@@ -216,20 +212,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify that the gas limit remains within allowed bounds
-	if !chain.Config().IsLondon(header.Number) {
-		// Verify BaseFee not present before EIP-1559 fork.
-		if header.BaseFee != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
-		}
-		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
-			return err
-		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
-		// Verify the header's EIP-1559 attributes.
-		return err
-	}
-	return nil
+	// Verify the header's EIP-1559 attributes.
+	return misc.VerifyEip1559Header(chain.Config(), parent, header)
 }
 
 // verifyHeaders is similar to verifyHeader, but verifies a batch of headers
@@ -275,16 +259,14 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the beacon protocol. The changes are done inline.
 func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	beacon.lock.RLock()
-	defer beacon.lock.RUnlock()
 
 	// Transition isn't triggered yet, use the legacy rules for preparation.
-	if !beacon.merger.TDDReached() {
-		return beacon.ethone.Prepare(chain, header)
-	}
-	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-	if parent == nil {
+	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	if err != nil {
 		return consensus.ErrUnknownAncestor
+	}
+	if !reached {
+		return beacon.ethone.Prepare(chain, header)
 	}
 	header.Difficulty = beaconDifficulty
 	return nil
@@ -292,9 +274,6 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 
 // Finalize implements consensus.Engine, setting the final state on the header
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	beacon.lock.RLock()
-	defer beacon.lock.RUnlock()
-
 	// Finalize is different with Prepare, it can be used in both block generation
 	// and verification. So determine the consensus rules by header type.
 	if !beacon.IsPoSHeader(header) {
@@ -303,15 +282,12 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(true)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
 func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	beacon.lock.RLock()
-	defer beacon.lock.RUnlock()
-
 	// FinalizeAndAssemble is different with Prepare, it can be used in both block
 	// generation and verification. So determine the consensus rules by header type.
 	if !beacon.IsPoSHeader(header) {
@@ -328,9 +304,6 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 // Note, the method returns immediately and will send the result async. More
 // than one result may also be returned depending on the consensus algorithm.
 func (beacon *Beacon) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	beacon.lock.RLock()
-	defer beacon.lock.RUnlock()
-
 	if !beacon.IsPoSHeader(block.Header()) {
 		return beacon.ethone.Seal(chain, block, results, stop)
 	}
@@ -350,11 +323,8 @@ func (beacon *Beacon) SealHash(header *types.Header) common.Hash {
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	beacon.lock.RLock()
-	defer beacon.lock.RUnlock()
-
 	// Transition isn't triggered yet, use the legacy rules for calculation
-	if !beacon.merger.TDDReached() {
+	if reached, _ := IsTTDReached(chain, parent.Hash(), parent.Number.Uint64()); !reached {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
 	return beaconDifficulty
@@ -394,4 +364,16 @@ func (beacon *Beacon) SetThreads(threads int) {
 	if th, ok := beacon.ethone.(threaded); ok {
 		th.SetThreads(threads)
 	}
+}
+
+func IsTTDReached(chain consensus.ChainHeaderReader, header common.Hash, number uint64) (bool, error) {
+	if chain.Config().TerminalTotalDifficulty == nil {
+		return false, nil
+	}
+	td := chain.GetTd(header, number)
+	if td == nil {
+		return false, errors.New("TD not found")
+	}
+	// We only care about if the new block is > TTD not if the parent was < TTD
+	return chain.Config().IsTerminalPoWBlock(big.NewInt(0), td), nil
 }

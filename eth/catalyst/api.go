@@ -92,18 +92,18 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 			panic("Catalyst started without valid total difficulty")
 		}
 		if b, ok := les.Engine().(*beacon.Beacon); ok {
-			engine = beacon.New(b.InnerEngine(), les.Merger())
+			engine = beacon.New(b.InnerEngine())
 		} else {
-			engine = beacon.New(les.Engine(), les.Merger())
+			engine = beacon.New(les.Engine())
 		}
 	} else {
 		if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 			panic("Catalyst started without valid total difficulty")
 		}
 		if b, ok := eth.Engine().(*beacon.Beacon); ok {
-			engine = beacon.New(b.InnerEngine(), eth.Merger())
+			engine = beacon.New(b.InnerEngine())
 		} else {
-			engine = beacon.New(eth.Engine(), eth.Merger())
+			engine = beacon.New(eth.Engine())
 		}
 	}
 	return &ConsensusAPI{

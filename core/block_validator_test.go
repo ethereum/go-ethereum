@@ -112,9 +112,9 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		copy(genspec.ExtraData[32:], addr[:])
 		genesis := genspec.MustCommit(testdb)
 
-		genMerger := consensus.NewMerger(rawdb.NewMemoryDatabase())
-		genEngine := beacon.New(engine, genMerger)
+		genEngine := beacon.New(engine)
 		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, testdb, 8, nil)
+		td := 0
 		for i, block := range preBlocks {
 			header := block.Header()
 			if i > 0 {
@@ -126,25 +126,31 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			sig, _ := crypto.Sign(genEngine.SealHash(header).Bytes(), key)
 			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
 			preBlocks[i] = block.WithSeal(header)
+			// calculate td
+			td += int(block.Difficulty().Uint64())
 		}
-		genMerger.ReachTTD()
-		genMerger.FinalizePoS()
-		postBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
-		chainConfig = params.AllCliqueProtocolChanges
-		runEngine = beacon.New(engine, merger)
+		config := *params.AllCliqueProtocolChanges
+		config.TerminalTotalDifficulty = big.NewInt(int64(td))
+		postBlocks, _ = GenerateChain(&config, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
+		chainConfig = &config
+		runEngine = beacon.New(engine)
 	} else {
 		gspec := &Genesis{Config: params.TestChainConfig}
 		genesis := gspec.MustCommit(testdb)
-		genMerger := consensus.NewMerger(rawdb.NewMemoryDatabase())
-		genEngine := beacon.New(ethash.NewFaker(), genMerger)
+		genEngine := beacon.New(ethash.NewFaker())
 
 		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
-		genMerger.ReachTTD()
-		genMerger.FinalizePoS()
+		td := 0
+		for _, block := range preBlocks {
+			// calculate td
+			td += int(block.Difficulty().Uint64())
+		}
+		config := *params.TestChainConfig
+		config.TerminalTotalDifficulty = big.NewInt(int64(td))
 		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
 
-		chainConfig = params.TestChainConfig
-		runEngine = beacon.New(ethash.NewFaker(), merger)
+		chainConfig = &config
+		runEngine = beacon.New(ethash.NewFaker())
 	}
 
 	preHeaders := make([]*types.Header, len(preBlocks))
@@ -161,7 +167,6 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		blob, _ := json.Marshal(block.Header())
 		t.Logf("Log header after the merging %d: %v", block.NumberU64(), string(blob))
 	}
-
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
 	chain, _ := NewBlockChain(testdb, nil, chainConfig, runEngine, vm.Config{}, nil, nil)
 	defer chain.Stop()
@@ -209,7 +214,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			t.Fatalf("test %d: unexpected result returned: %v", i, result)
 		case <-time.After(25 * time.Millisecond):
 		}
-		chain.InsertChain(postBlocks[i : i+1])
+		chain.InsertCatalystBlock(postBlocks[i])
 	}
 
 	// Verify the blocks with pre-merge blocks and post-merge blocks
