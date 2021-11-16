@@ -274,8 +274,8 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 
 func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header *types.Header, signers []common.Address) error {
 	number := header.Number.Uint64()
-	// ignore signerCheck at checkpoint block 14458500 due to wrong snapshot at gap 14458495
-	if number == common.IgnoreSignerCheckBlock {
+	// ignore signerCheck at checkpoint block.
+	if common.IgnoreSignerCheckBlockArray[number] {
 		return nil
 	}
 	penPenalties := []common.Address{}

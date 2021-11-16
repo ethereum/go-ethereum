@@ -22,6 +22,7 @@ type Masternode struct {
 type TradingService interface {
 	GetTradingStateRoot(block *types.Block, author common.Address) (common.Hash, error)
 	GetTradingState(block *types.Block, author common.Address) (*tradingstate.TradingStateDB, error)
+	GetEmptyTradingState() (*tradingstate.TradingStateDB, error)
 	HasTradingState(block *types.Block, author common.Address) bool
 	GetStateCache() tradingstate.Database
 	GetTriegc() *prque.Prque
