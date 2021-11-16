@@ -149,29 +149,17 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	if allocStr != stdinSelector {
-		inFile, err := os.Open(allocStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed reading alloc file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&inputData.Alloc); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling alloc-file: %v", err))
+		if err := readFile(allocStr, "alloc", &inputData.Alloc); err != nil {
+			return err
 		}
 	}
 	prestate.Pre = inputData.Alloc
 
 	// Set the block environment
 	if envStr != stdinSelector {
-		inFile, err := os.Open(envStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed reading env file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
 		var env stEnv
-		if err := decoder.Decode(&env); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling env-file: %v", err))
+		if err := readFile(envStr, "env", &env); err != nil {
+			return err
 		}
 		inputData.Env = &env
 	}
@@ -424,19 +412,4 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stderr.WriteString("\n")
 	}
 	return nil
-}
-
-// If user specified a basedir, make sure it exists
-func createBasedir(ctx *cli.Context) (string, error) {
-	baseDir := ""
-	if ctx.IsSet(OutputBasedir.Name) {
-		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
-			err := os.MkdirAll(base, 0755) // //rw-r--r--
-			if err != nil {
-				return "", err
-			}
-			baseDir = base
-		}
-	}
-	return baseDir, nil
 }

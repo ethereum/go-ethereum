@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -168,72 +168,85 @@ func (i *bbInput) ToBlock() *types.Block {
 	if header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
-
-	block := types.NewBlockWithHeader(header)
-	block = block.WithBody(i.Txs, i.Ommers)
-
-	return block
+	return types.NewBlockWithHeader(header).WithBody(i.Txs, i.Ommers)
 }
 
+// SealBlock seals the given block using the configured engine.
 func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
-	if i.Ethash {
-		if i.Header.Nonce != nil {
-			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
-		}
-		ethashConfig := ethash.Config{
-			PowMode:        i.PowMode,
-			DatasetDir:     i.EthashDir,
-			CacheDir:       i.EthashDir,
-			DatasetsInMem:  1,
-			DatasetsOnDisk: 2,
-			CachesInMem:    2,
-			CachesOnDisk:   3,
-		}
-		engine := ethash.New(ethashConfig, nil, false)
-		defer engine.Close()
-		results := make(chan *types.Block)
-		if err := engine.Seal(nil, block, results, nil); err != nil {
-			panic(fmt.Sprintf("failed to seal block: %v", err))
-		}
-		found := <-results
-		block.WithSeal(found.Header())
-	} else if i.Clique != nil {
-		// If any clique value overwrites an explicit header value, fail
-		// to avoid silently building a block with unexpected values.
-		if i.Header.Extra != nil {
-			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
-		}
-		header := block.Header()
-		if i.Clique.Voted != nil {
-			if i.Header.Coinbase != nil {
-				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
-			}
-			header.Coinbase = *i.Clique.Voted
-		}
-		if i.Clique.Authorized != nil {
-			if i.Header.Nonce != nil {
-				return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
-			}
-			if *i.Clique.Authorized {
-				header.Nonce = [8]byte{}
-			} else {
-				header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-			}
-		}
-		// Extra is fixed 32 byte vanity and 65 byte signature
-		header.Extra = make([]byte, 32+65)
-		copy(header.Extra[0:32], i.Clique.Vanity.Bytes()[:])
-
-		// Sign the seal hash and fill in the rest of the extra data
-		h := clique.SealHash(header)
-		sighash, err := crypto.Sign(h[:], i.Clique.Key)
-		if err != nil {
-			return nil, err
-		}
-		copy(header.Extra[32:], sighash)
-		block = block.WithSeal(header)
+	switch {
+	case i.Ethash:
+		return i.sealEthash(block)
+	case i.Clique != nil:
+		return i.sealClique(block)
+	default:
+		return block, nil
 	}
+}
 
+// sealEthash seals the given block using ethash.
+func (i *bbInput) sealEthash(block *types.Block) (*types.Block, error) {
+	if i.Header.Nonce != nil {
+		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
+	}
+	ethashConfig := ethash.Config{
+		PowMode:        i.PowMode,
+		DatasetDir:     i.EthashDir,
+		CacheDir:       i.EthashDir,
+		DatasetsInMem:  1,
+		DatasetsOnDisk: 2,
+		CachesInMem:    2,
+		CachesOnDisk:   3,
+	}
+	engine := ethash.New(ethashConfig, nil, true)
+	defer engine.Close()
+	// Use a buffered chan for results.
+	// If the testmode is used, the sealer will return quickly, and complain
+	// "Sealing result is not read by miner" if it cannot write the result.
+	results := make(chan *types.Block, 1)
+	if err := engine.Seal(nil, block, results, nil); err != nil {
+		panic(fmt.Sprintf("failed to seal block: %v", err))
+	}
+	found := <-results
+	return block.WithSeal(found.Header()), nil
+}
+
+// sealClique seals the given block using clique.
+func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
+
+	// If any clique value overwrites an explicit header value, fail
+	// to avoid silently building a block with unexpected values.
+	if i.Header.Extra != nil {
+		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
+	}
+	header := block.Header()
+	if i.Clique.Voted != nil {
+		if i.Header.Coinbase != nil {
+			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
+		}
+		header.Coinbase = *i.Clique.Voted
+	}
+	if i.Clique.Authorized != nil {
+		if i.Header.Nonce != nil {
+			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
+		}
+		if *i.Clique.Authorized {
+			header.Nonce = [8]byte{}
+		} else {
+			header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+		}
+	}
+	// Extra is fixed 32 byte vanity and 65 byte signature
+	header.Extra = make([]byte, 32+65)
+	copy(header.Extra[0:32], i.Clique.Vanity.Bytes()[:])
+
+	// Sign the seal hash and fill in the rest of the extra data
+	h := clique.SealHash(header)
+	sighash, err := crypto.Sign(h[:], i.Clique.Key)
+	if err != nil {
+		return nil, err
+	}
+	copy(header.Extra[32:], sighash)
+	block = block.WithSeal(header)
 	return block, nil
 }
 
@@ -286,9 +299,10 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 			inputData.PowMode = ethash.ModeNormal
 		case "test":
 			inputData.PowMode = ethash.ModeTest
+		case "fake":
+			inputData.PowMode = ethash.ModeFake
 		default:
-			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s", ethashMode))
-
+			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, normal", ethashMode))
 		}
 	}
 
@@ -300,37 +314,32 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 	}
 	if cliqueStr != stdinSelector && cliqueStr != "" {
 		var clique cliqueInput
-		err := readFile(cliqueStr, "clique", &clique)
-		if err != nil {
+		if err := readFile(cliqueStr, "clique", &clique); err != nil {
 			return nil, err
 		}
 		inputData.Clique = &clique
 	}
 	if headerStr != stdinSelector {
 		var env header
-		err := readFile(headerStr, "header", &env)
-		if err != nil {
+		if err := readFile(headerStr, "header", &env); err != nil {
 			return nil, err
 		}
 		inputData.Header = &env
 	}
 	if ommersStr != stdinSelector && ommersStr != "" {
 		var ommers []string
-		err := readFile(ommersStr, "ommers", &ommers)
-		if err != nil {
+		if err := readFile(ommersStr, "ommers", &ommers); err != nil {
 			return nil, err
 		}
 		inputData.OmmersRlp = ommers
 	}
 	if txsStr != stdinSelector {
 		var txs string
-		err := readFile(txsStr, "txs", &txs)
-		if err != nil {
+		if err := readFile(txsStr, "txs", &txs); err != nil {
 			return nil, err
 		}
 		inputData.TxRlp = txs
 	}
-
 	// Deserialize rlp txs and ommers
 	var (
 		ommers = []*types.Header{}
@@ -361,21 +370,6 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 	return inputData, nil
 }
 
-func readFile(path, desc string, dest interface{}) error {
-	inFile, err := os.Open(path)
-	if err != nil {
-		return NewError(ErrorIO, fmt.Errorf("failed reading %s file: %v", desc, err))
-	}
-	defer inFile.Close()
-
-	decoder := json.NewDecoder(inFile)
-	if err := decoder.Decode(dest); err != nil {
-		return NewError(ErrorJson, fmt.Errorf("failed unmarshaling %s file: %v", desc, err))
-	}
-
-	return nil
-}
-
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files
 func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
@@ -394,19 +388,17 @@ func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
-
-	dest := ctx.String(OutputBlockFlag.Name)
-	if dest == "stdout" {
+	switch dest := ctx.String(OutputBlockFlag.Name); dest {
+	case "stdout":
 		os.Stdout.Write(b)
 		os.Stdout.WriteString("\n")
-	} else if dest == "stderr" {
+	case "stderr":
 		os.Stderr.Write(b)
 		os.Stderr.WriteString("\n")
-	} else {
+	default:
 		if err := saveFile(baseDir, dest, enc); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
