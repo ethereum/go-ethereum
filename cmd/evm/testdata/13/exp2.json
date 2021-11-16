@@ -33,6 +33,7 @@
         "transactionIndex": "0x1"
       }
     ],
-    "currentDifficulty": "0x20000"
+    "currentDifficulty": "0x20000",
+    "gasUsed": "0x109a0"
   }
 }
