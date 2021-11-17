@@ -554,9 +554,9 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 // if the entry is already of the new format.
 type TransformerFn = func([]byte) ([]byte, bool, error)
 
-// TransformTable processes the entries in a given table in sequence
+// MigrateTable processes the entries in a given table in sequence
 // converting them to a new format if they're of an old format.
-func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
+func (f *freezer) MigrateTable(kind string, start uint64, fn TransformerFn) error {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -581,13 +581,16 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	if err != nil {
 		return err
 	}
-	var i uint64
+	if start >= numAncients {
+		return errors.New("not enough elements in freezer")
+	}
+	i := start
 	// Number of the file in which the first up-to-date receipt appers
 	var filenum uint32
 	copyOver := true
 	// Iterate through entries and transform them
 	// until reaching first non-legacy one.
-	for i = 0; i < numAncients; i++ {
+	for ; i < numAncients; i++ {
 		if i%500000 == 0 {
 			log.Info("Processing legacy elements", "number", i)
 		}

@@ -720,9 +720,9 @@ func freezerMigrate(ctx *cli.Context) error {
 	}
 
 	// Find first block with non-empty receipt
-	i := uint64(0)
+	firstIdx := uint64(0)
 	emptyRLPList := []byte{192}
-	for ; i < numAncients; i++ {
+	for i := uint64(0); i < numAncients; i++ {
 		r, err := db.Ancient("receipts", i)
 		if err != nil {
 			return err
@@ -731,11 +731,12 @@ func freezerMigrate(ctx *cli.Context) error {
 			continue
 		}
 		if !bytes.Equal(r, emptyRLPList) {
+			firstIdx = i
 			break
 		}
 	}
 	// Is first non-empty receipt legacy?
-	first, err := db.Ancient("receipts", i)
+	first, err := db.Ancient("receipts", firstIdx)
 	if err != nil {
 		return err
 	}
@@ -744,10 +745,10 @@ func freezerMigrate(ctx *cli.Context) error {
 		return err
 	}
 	if !isFirstLegacy {
-		log.Info("No legacy receipts to migrate", "number", i)
+		log.Info("No legacy receipts to migrate", "number", firstIdx)
 		return nil
 	}
-	log.Info("First legacy receipt", "number", i)
+	log.Info("First legacy receipt", "number", firstIdx)
 
 	transformer := func(blob []byte) ([]byte, bool, error) {
 		// Stop when first v5 receipt is spotted.
@@ -770,7 +771,7 @@ func freezerMigrate(ctx *cli.Context) error {
 
 	log.Info("Starting migration", "ancients", numAncients)
 	start := time.Now()
-	if err := db.TransformTable("receipts", transformer); err != nil {
+	if err := db.MigrateTable("receipts", firstIdx, transformer); err != nil {
 		return err
 	}
 

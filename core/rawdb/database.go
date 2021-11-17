@@ -135,7 +135,7 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (e
 	return fn(db)
 }
 
-func (db *nofreezedb) TransformTable(_ string, _ TransformerFn) error {
+func (db *nofreezedb) MigrateTable(_ string, _ uint64, _ TransformerFn) error {
 	return errNotSupported
 }
 
