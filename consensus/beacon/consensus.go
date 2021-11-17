@@ -82,12 +82,8 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	if !reached {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
-	// Short circuit if the header is known, or its parent not
-	number := header.Number.Uint64()
-	if chain.GetHeader(header.Hash(), number) != nil {
-		return nil
-	}
-	parent := chain.GetHeader(header.ParentHash, number-1)
+	// Short circuit if the parent is not known
+	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
