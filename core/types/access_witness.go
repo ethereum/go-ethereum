@@ -96,9 +96,10 @@ func (aw *AccessWitness) TouchAddressAndChargeGas(addr, value []byte) uint64 {
 // of a tx, with the accumulation of witnesses that were generated during the
 // execution of all the txs preceding this one in a given block.
 func (aw *AccessWitness) Merge(other *AccessWitness) {
-	// catch unresolved touched addresses
-	if len(other.Undefined) != 0 {
-		panic("undefined value in witness")
+	for k := range other.Undefined {
+		if _, ok := aw.Undefined[k]; !ok {
+			aw.Undefined[k] = struct{}{}
+		}
 	}
 
 	for k := range other.Branches {
