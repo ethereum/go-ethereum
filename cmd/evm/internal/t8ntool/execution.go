@@ -49,7 +49,7 @@ type Prestate struct {
 type ExecutionResult struct {
 	StateRoot   common.Hash           `json:"stateRoot"`
 	TxRoot      common.Hash           `json:"txRoot"`
-	ReceiptRoot common.Hash           `json:"receiptRoot"`
+	ReceiptRoot common.Hash           `json:"receiptsRoot"`
 	LogsHash    common.Hash           `json:"logsHash"`
 	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts        `json:"receipts"`
