@@ -554,9 +554,9 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 // if the entry is already of the new format.
 type TransformerFn = func([]byte) ([]byte, bool, error)
 
+// TransformTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
 func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
-	// TODO: Do we need to recover anything after error?
-
 	if f.readonly {
 		return errReadOnly
 	}
@@ -567,15 +567,9 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	if !ok {
 		return errUnknownTable
 	}
-
-	numAncients, err := f.Ancients()
-	if err != nil {
-		return err
-	}
-
 	ancientsPath := filepath.Dir(table.index.Name())
-	// Set up new dir for the migrated table which we'll at the end
-	// move over to the ancients dir.
+	// Set up new dir for the migrated table, the content of which
+	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
 	newTable, err := NewFreezerTable(migrationPath, kind, FreezerNoSnappy[kind])
 	if err != nil {
@@ -583,6 +577,10 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	}
 	batch := newTable.newBatch()
 
+	numAncients, err := f.Ancients()
+	if err != nil {
+		return err
+	}
 	var i uint64
 	// Number of the file in which the first up-to-date receipt appers
 	var filenum uint32
@@ -590,6 +588,9 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	// Iterate through entries and transform them
 	// until reaching first non-legacy one.
 	for i = 0; i < numAncients; i++ {
+		if i%500000 == 0 {
+			log.Info("Processing legacy elements", "number", i)
+		}
 		blob, err := table.Retrieve(i)
 		if err != nil {
 			return err
@@ -604,8 +605,6 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		} else {
 			// Reached the first up-to-date entry.
 			// Remember in which file the switch happens.
-			// TODO: what if it coincidentally starts in a new file?
-			// we won't need to copy-over that file
 			indices, err := table.getIndices(i, 1)
 			if err != nil {
 				return err
@@ -617,10 +616,10 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 				copyOver = false
 			}
 			filenum = indices[1].filenum
+			log.Info("Found first non-legacy element", "number", i, "filenum", filenum, "copyOver", copyOver)
 			break
 		}
 	}
-	log.Info("Copying over leftover receipts", "i", i, "filenum", filenum)
 	if copyOver {
 		// Copy over left-over receipts in the file with last legacy receipt:
 		// 1. loop getBounds until filenum exceeds threshold filenum
@@ -631,7 +630,7 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 				return err
 			}
 			if indices[1].filenum > filenum {
-				log.Info("Reached new file with updated receipts", "fn", filenum, "i", i)
+				log.Info("Copied over rest of switch-over file", "number", i, "nextFile", indices[1].filenum)
 				break
 			}
 			blob, err := table.Retrieve(i)
@@ -640,15 +639,13 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			}
 			batch.AppendRaw(i, blob)
 		}
-		log.Info("Finished copying leftovers", "i", i)
 	}
 
 	if err := batch.commit(); err != nil {
 		return err
 	}
-	log.Info("Committed write batch", "newHeadId", newTable.headId, "headbytes", newTable.headBytes, "items", newTable.items)
 
-	var diff int32
+	var fileCountDiff int32
 	toRename := make(map[uint32]struct{})
 
 	// 3. need to copy rest of old index and repair the filenum in the entries
@@ -658,31 +655,30 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 			return err
 		}
 
-		lastFilenum := newTable.headId
-		// idx.filenum is always >=1
-		diff = int32(lastFilenum) - int32(indices[1].filenum-1)
+		log.Info("Duplicating rest of index", "fromFile", indices[1].filenum, "toFile", newTable.headId+1)
+		fileCountDiff = int32(newTable.headId+1) - int32(indices[1].filenum)
 		for ; i < numAncients; i++ {
 			indices, err := table.getIndices(i, 1)
 			if err != nil {
 				return err
 			}
 			idx := indexEntry{
-				// (idx.filenum + diff) is always > 0
-				filenum: uint32(int32(indices[1].filenum) + diff),
+				// (idx.filenum + fileCountDiff) is always > 0
+				filenum: uint32(int32(indices[1].filenum) + fileCountDiff),
 				offset:  indices[1].offset,
 			}
 			newTable.writeEntry(idx)
 			toRename[indices[1].filenum] = struct{}{}
 		}
-		log.Info("Duplicated rest of index in new table", "i", i)
 	}
 
+	log.Info("Replacing table files")
 	// Warning: file juggling to follow.
 	// First release open table files because we need to move some of them.
 	table.releaseFilesAfter(0, false)
 	// Move table files after the switchover point to migration dir.
 	for k := range toRename {
-		if err := os.Rename(table.tableFilePath(k), newTable.tableFilePath(uint32(int32(k)+diff))); err != nil {
+		if err := os.Rename(table.tableFilePath(k), newTable.tableFilePath(uint32(int32(k)+fileCountDiff))); err != nil {
 			return err
 		}
 	}
@@ -691,7 +687,6 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 	if err := table.deleteFiles(); err != nil {
 		return err
 	}
-	log.Info("Deleted old table files")
 
 	// Move migrated files to ancients dir.
 	if err := newTable.Close(); err != nil {
