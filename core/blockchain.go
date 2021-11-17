@@ -1717,7 +1717,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-// insertSideChain is only used in non-catalyst mode.
+// insertSideChain is only used pre-merge.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
 		externTd  *big.Int
@@ -1843,7 +1843,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 
 // recoverAncestors finds the closest ancestor with available state and re-execute
 // all the ancestor blocks since that.
-// recoverAncestors is only used in catalyst mode.
+// recoverAncestors is only used post-merge.
 func (bc *BlockChain) recoverAncestors(block *types.Block) error {
 	// Gather all the sidechain hashes (full blocks may be memory heavy)
 	var (
