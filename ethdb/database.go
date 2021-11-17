@@ -112,6 +112,7 @@ type AncientWriter interface {
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
 
+	// Processes and migrates entries in a table to a new format according to a transformer function.
 	TransformTable(string, func([]byte) ([]byte, bool, error)) error
 }
 
