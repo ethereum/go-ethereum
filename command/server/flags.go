@@ -401,6 +401,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Address for Prometheus Server",
 		Value: &c.cliConfig.Telemetry.PrometheusAddr,
 	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:  "metrics.opencollector-endpoint",
+		Usage: "OpenCollector Endpoint (host:port)",
+		Value: &c.cliConfig.Telemetry.OpenCollectorEndpoint,
+	})
 	// influx db v2
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "metrics.influxdbv2",

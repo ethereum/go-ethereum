@@ -23,6 +23,12 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
 )
 
@@ -31,6 +37,7 @@ type Server struct {
 	node       *node.Node
 	backend    *eth.Ethereum
 	grpcServer *grpc.Server
+	tracer     *sdktrace.TracerProvider
 }
 
 func NewServer(config *Config) (*Server, error) {
@@ -117,6 +124,13 @@ func NewServer(config *Config) (*Server, error) {
 
 func (s *Server) Stop() {
 	s.node.Close()
+
+	// shutdown the tracer
+	if s.tracer != nil {
+		if err := s.tracer.Shutdown(context.Background()); err != nil {
+			log.Error("Failed to shutdown open telemetry tracer")
+		}
+	}
 }
 
 func (s *Server) setupMetrics(config *TelemetryConfig) error {
@@ -172,6 +186,47 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 			}
 		}()
 
+	}
+
+	if config.OpenCollectorEndpoint != "" {
+		// setup open collector tracer
+		ctx := context.Background()
+
+		res, err := resource.New(ctx,
+			resource.WithAttributes(
+				// the service name used to display traces in backends
+				semconv.ServiceNameKey.String("bor"), // TODO: use the service name from the config
+			),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create open telemetry resource for service: %v", err)
+		}
+
+		// Set up a trace exporter
+		traceExporter, err := otlptracegrpc.New(
+			ctx,
+			otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(config.OpenCollectorEndpoint),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create open telemetry tracer exporter for service: %v", err)
+		}
+
+		// Register the trace exporter with a TracerProvider, using a batch
+		// span processor to aggregate spans before export.
+		bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
+		tracerProvider := sdktrace.NewTracerProvider(
+			sdktrace.WithSampler(sdktrace.AlwaysSample()),
+			sdktrace.WithResource(res),
+			sdktrace.WithSpanProcessor(bsp),
+		)
+		otel.SetTracerProvider(tracerProvider)
+
+		// set global propagator to tracecontext (the default is no-op).
+		otel.SetTextMapPropagator(propagation.TraceContext{})
+
+		// set the tracer
+		s.tracer = tracerProvider
 	}
 
 	return nil
