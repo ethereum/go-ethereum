@@ -17,6 +17,7 @@
 package consensus
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -38,9 +39,10 @@ type transitionStatus struct {
 type Merger struct {
 	db     ethdb.KeyValueStore
 	status transitionStatus
-	lock   sync.Mutex
+	mu     sync.RWMutex
 }
 
+// NewMerger creates a new Merger which stores its transition status in the provided db.
 func NewMerger(db ethdb.KeyValueStore) *Merger {
 	var status transitionStatus
 	blob := rawdb.ReadTransitionStatus(db)
@@ -52,15 +54,14 @@ func NewMerger(db ethdb.KeyValueStore) *Merger {
 	return &Merger{
 		db:     db,
 		status: status,
-		lock:   sync.Mutex{},
 	}
 }
 
 // ReachTTD is called whenever the first NewHead message received
 // from the consensus-layer.
 func (m *Merger) ReachTTD() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if m.status.LeftPoW {
 		return
@@ -68,7 +69,7 @@ func (m *Merger) ReachTTD() {
 	m.status = transitionStatus{LeftPoW: true}
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
-		log.Crit("Failed to encode the transition status", "err", err)
+		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Left PoW stage")
@@ -77,8 +78,8 @@ func (m *Merger) ReachTTD() {
 // FinalizePoS is called whenever the first FinalisedBlock message received
 // from the consensus-layer.
 func (m *Merger) FinalizePoS() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if m.status.EnteredPoS {
 		return
@@ -86,7 +87,7 @@ func (m *Merger) FinalizePoS() {
 	m.status = transitionStatus{LeftPoW: true, EnteredPoS: true}
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
-		log.Crit("Failed to encode the transition status", "err", err)
+		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Entered PoS stage")
@@ -94,16 +95,16 @@ func (m *Merger) FinalizePoS() {
 
 // TDDReached reports whether the chain has left the PoW stage.
 func (m *Merger) TDDReached() bool {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	return m.status.LeftPoW
 }
 
 // PoSFinalized reports whether the chain has entered the PoS stage.
 func (m *Merger) PoSFinalized() bool {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	return m.status.EnteredPoS
 }

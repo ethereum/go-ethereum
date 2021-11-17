@@ -245,7 +245,7 @@ func (api *ConsensusAPI) ExecutePayload(params ExecutableData) (GenericStringRes
 	if td.Cmp(ttd) < 0 {
 		return INVALID, fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
-	if err := api.eth.BlockChain().InsertCatalystBlock(block); err != nil {
+	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		return INVALID, err
 	}
 	merger := api.merger()

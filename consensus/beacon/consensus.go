@@ -259,11 +259,10 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the beacon protocol. The changes are done inline.
 func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-
 	// Transition isn't triggered yet, use the legacy rules for preparation.
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
-		return consensus.ErrUnknownAncestor
+		return err
 	}
 	if !reached {
 		return beacon.ethone.Prepare(chain, header)
@@ -345,7 +344,7 @@ func (beacon *Beacon) Close() error {
 // because the header difficulty is not set yet.
 func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 	if header.Difficulty == nil {
-		return false // we should never enter here.
+		panic("IsPoSHeader called with invalid difficulty")
 	}
 	return header.Difficulty.Cmp(beaconDifficulty) == 0
 }
@@ -368,13 +367,14 @@ func (beacon *Beacon) SetThreads(threads int) {
 
 // IsTTDReached checks if the TotalTerminalDifficulty has been surpassed on the `parentHash` block.
 // It depends on the parentHash already being stored in the database.
+// If the parentHash is not stored in the database a UnknownAncestor error is returned.
 func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, number uint64) (bool, error) {
 	if chain.Config().TerminalTotalDifficulty == nil {
 		return false, nil
 	}
 	td := chain.GetTd(parentHash, number)
 	if td == nil {
-		return false, errors.New("TD not found")
+		return false, consensus.ErrUnknownAncestor
 	}
 	// We only care about if the new block is > TTD not if the parent was < TTD
 	return chain.Config().IsTerminalPoWBlock(common.Big0, td), nil

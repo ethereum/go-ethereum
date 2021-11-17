@@ -1366,7 +1366,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true, false)
+	return bc.insertChain(chain, true, true)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1377,7 +1377,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode bool) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
@@ -1462,18 +1462,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 		// Falls through to the block import
 	}
 	switch {
-	// We're in catalyst mode and the parent is pruned, try to recover the parent state
-	case catalystMode && errors.Is(err, consensus.ErrPrunedAncestor):
+	// We're post-merge and the parent is pruned, try to recover the parent state
+	case !setHead && errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
 		return it.index, bc.recoverAncestors(block)
 
-		// First block is pruned, insert as sidechain and reorg only if TD grows enough
-	case !catalystMode && errors.Is(err, consensus.ErrPrunedAncestor):
+	// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	case setHead && errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case !catalystMode && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
+	case setHead && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
@@ -1631,8 +1631,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		var status WriteStatus
-		if catalystMode {
-			// In catalyst mode we don't set the head, only insert the block
+		if !setHead {
+			// Don't set the head, only insert the block
 			err := bc.writeBlockWithState(block, receipts, logs, statedb)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			if err != nil {
@@ -1653,7 +1653,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, catalystMode 
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		if catalystMode {
+		if !setHead {
+			// We did not setHead, so we don't have any stats to update
 			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
 			return it.index, nil
 		}
@@ -1821,7 +1822,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false, false); err != nil {
+			if _, err := bc.insertChain(blocks, false, true); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1835,7 +1836,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false, false)
+		return bc.insertChain(blocks, false, true)
 	}
 	return 0, nil
 }
@@ -1877,7 +1878,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) error {
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, err := bc.insertChain(types.Blocks{b}, false, true); err != nil {
+		if _, err := bc.insertChain(types.Blocks{b}, false, false); err != nil {
 			return err
 		}
 	}
@@ -2066,18 +2067,18 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-// InsertCatalystBlock executes the block, runs the necessary verification
+// InsertBlockWithoutSetHead executes the block, runs the necessary verification
 // upon it and then persist the block and the associate state into the database.
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetChainHead call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertCatalystBlock(block *types.Block) error {
+func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	_, err := bc.insertChain(types.Blocks{block}, true, true)
+	_, err := bc.insertChain(types.Blocks{block}, true, false)
 	return err
 }
 
