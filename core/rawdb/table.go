@@ -101,10 +101,6 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
-func (t *table) DropTable(kind string) error {
-	return t.db.DropTable(kind)
-}
-
 func (t *table) TransformTable(kind string, fn TransformerFn) error {
 	return t.db.TransformTable(kind, fn)
 }

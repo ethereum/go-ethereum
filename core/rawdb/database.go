@@ -135,10 +135,6 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (e
 	return fn(db)
 }
 
-func (db *nofreezedb) DropTable(_ string) error {
-	return errNotSupported
-}
-
 func (db *nofreezedb) TransformTable(_ string, _ TransformerFn) error {
 	return errNotSupported
 }

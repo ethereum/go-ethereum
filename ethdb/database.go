@@ -112,9 +112,6 @@ type AncientWriter interface {
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
 
-	// TODO: tmp, to delete table files
-	DropTable(string) error
-
 	TransformTable(string, func([]byte) ([]byte, bool, error)) error
 }
 
