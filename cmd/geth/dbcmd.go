@@ -718,22 +718,36 @@ func freezerMigrate(ctx *cli.Context) error {
 		log.Info("No blocks in freezer to migrate")
 		return nil
 	}
-	// TODO: check genesis or block 1?
-	// devnets might have an empty genesis
-	first, err := db.Ancient("receipts", 1)
+
+	// Find first block with non-empty receipt
+	i := uint64(0)
+	emptyRLPList := []byte{192}
+	for ; i < numAncients; i++ {
+		r, err := db.Ancient("receipts", i)
+		if err != nil {
+			return err
+		}
+		if len(r) == 0 {
+			continue
+		}
+		if !bytes.Equal(r, emptyRLPList) {
+			break
+		}
+	}
+	// Is first non-empty receipt legacy?
+	first, err := db.Ancient("receipts", i)
 	if err != nil {
 		return err
 	}
-	// TODO: this won't work if first blocks are empty like in mainnet
-	// Need to find first non-empty block and check that
 	isFirstLegacy, err := types.IsLegacyStoredReceipts(first)
 	if err != nil {
 		return err
 	}
 	if !isFirstLegacy {
-		log.Info("No legacy receipts to migrate")
+		log.Info("No legacy receipts to migrate", "number", i)
 		return nil
 	}
+	log.Info("First legacy receipt", "number", i)
 
 	transformer := func(blob []byte) ([]byte, bool, error) {
 		// Stop when first v5 receipt is spotted.
@@ -760,10 +774,9 @@ func freezerMigrate(ctx *cli.Context) error {
 		return err
 	}
 
-	log.Info("Before closing db")
-	/*if err := db.Close(); err != nil {
+	if err := db.Close(); err != nil {
 		return err
-	}*/
+	}
 	log.Info("Migration finished", "duration", time.Since(start))
 
 	return nil
