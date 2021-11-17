@@ -111,7 +111,7 @@ func NewServer(config *Config) (*Server, error) {
 		}
 	}
 
-	if err := srv.setupMetrics(config.Telemetry); err != nil {
+	if err := srv.setupMetrics(config.Telemetry, config.Name); err != nil {
 		return nil, err
 	}
 
@@ -133,7 +133,7 @@ func (s *Server) Stop() {
 	}
 }
 
-func (s *Server) setupMetrics(config *TelemetryConfig) error {
+func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
 	metrics.Enabled = config.Enabled
 	metrics.EnabledExpensive = config.Expensive
 
@@ -195,7 +195,7 @@ func (s *Server) setupMetrics(config *TelemetryConfig) error {
 		res, err := resource.New(ctx,
 			resource.WithAttributes(
 				// the service name used to display traces in backends
-				semconv.ServiceNameKey.String("bor"), // TODO: use the service name from the config
+				semconv.ServiceNameKey.String(serviceName),
 			),
 		)
 		if err != nil {

@@ -38,6 +38,9 @@ type Config struct {
 	// Chain is the chain to sync with
 	Chain string `hcl:"chain,optional"`
 
+	// Name, or identity of the node
+	Name string `hcl:"name,optional"`
+
 	// Whitelist is a list of required (block number, hash) pairs to accept
 	Whitelist map[string]string `hcl:"whitelist,optional"`
 
@@ -365,6 +368,7 @@ type AccountsConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:     "mainnet",
+		Name:      Hostname(),
 		Whitelist: map[string]string{},
 		LogLevel:  "INFO",
 		DataDir:   defaultDataDir(),
@@ -884,4 +888,12 @@ func defaultDataDir() string {
 	default:
 		return filepath.Join(home, ".bor")
 	}
+}
+
+func Hostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "bor"
+	}
+	return hostname
 }
