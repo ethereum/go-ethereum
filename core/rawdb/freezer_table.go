@@ -474,6 +474,20 @@ func (t *freezerTable) releaseFilesAfter(num uint32, remove bool) {
 	}
 }
 
+// deleteFiles deletes table files based on tail and head
+// indices, and assumes these files are not open.
+func (t *freezerTable) deleteFiles() error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	for i := t.tailId; i < t.headId; i++ {
+		path := t.tableFilePath(i)
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // getIndices returns the index entries for the given from-item, covering 'count' items.
 // N.B: The actual number of returned indices for N items will always be N+1 (unless an
 // error is returned).
@@ -508,28 +522,6 @@ func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 		indices[0].filenum = indices[1].filenum
 	}
 	return indices, nil
-}
-
-// drop deletes the index file and all the open files.
-// TODO(sina): make sure to delete non-open files
-func (t *freezerTable) drop() error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	if err := t.index.Close(); err != nil {
-		log.Warn("failed to close index", "error", err, "index", t.index)
-		return err
-	}
-	log.Info("before os removing index", "name", t.index.Name())
-	if err := os.Remove(t.index.Name()); err != nil {
-		return err
-	}
-	t.index = nil
-
-	t.releaseFilesAfter(0, true)
-	t.head = nil
-
-	return nil
 }
 
 // Retrieve looks up the data offset of an item with the given number and retrieves

@@ -676,7 +676,6 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 		lastFilenum := newTable.headId
 		// idx.filenum is always >=1
 		diff = int32(lastFilenum) - int32(indices[1].filenum-1)
-		//log.Info("Starting duplication", "i", i, "oldFn", idx.filenum, "offset", idx.offset, "newHeadId", lastFilenum)
 		for ; i < numAncients; i++ {
 			indices, err := table.getIndices(i, 1)
 			if err != nil {
@@ -687,43 +686,46 @@ func (f *freezer) TransformTable(kind string, fn TransformerFn) error {
 				filenum: uint32(int32(indices[1].filenum) + diff),
 				offset:  indices[1].offset,
 			}
-			//log.Info("read entry", "i", i, "fn", idx.filenum, "offset", idx.offset)
 			newTable.writeEntry(idx)
 			toRename[indices[1].filenum] = struct{}{}
 		}
 		log.Info("Duplicated rest of index in new table", "i", i)
 	}
 
-	// TODO: close table here or in cmd?
-	if err := table.Close(); err != nil {
-		return err
-	}
-	if err := newTable.Close(); err != nil {
-		return err
-	}
-
-	// Rename table files after the switchover point
+	// Warning: file juggling to follow.
+	// First release open table files because we need to move some of them.
+	table.releaseFilesAfter(0, false)
+	// Move table files after the switchover point to migration dir.
 	for k := range toRename {
 		if err := os.Rename(table.tableFilePath(k), newTable.tableFilePath(uint32(int32(k)+diff))); err != nil {
 			return err
 		}
 	}
 
-	// Move new table files to ancients dir
+	// Now we can delete all the rest.
+	if err := table.deleteFiles(); err != nil {
+		return err
+	}
+	log.Info("Deleted old table files")
+
+	// Move migrated files to ancients dir.
+	if err := newTable.Close(); err != nil {
+		return err
+	}
 	files, err := ioutil.ReadDir(migrationPath)
 	if err != nil {
 		return err
 	}
 	for _, f := range files {
-		// This will replace the index + table files up to and including the switchover file
+		// This will replace the index + table files up to and including the switchover file.
 		if err := os.Rename(filepath.Join(migrationPath, f.Name()), filepath.Join(ancientsPath, f.Name())); err != nil {
 			return err
 		}
 	}
-
-	/*if err := table.drop(); err != nil {
+	// Delete by now empty dir.
+	if err := os.Remove(migrationPath); err != nil {
 		return err
-	}*/
-	log.Info("Dropped old table files")
+	}
+
 	return nil
 }
