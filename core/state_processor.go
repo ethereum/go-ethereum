@@ -66,6 +66,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
+	vm.BlockDumpLogger(block, 10000, 100)
+
 	parityLogContext := vm.ParityLogContext{
 		BlockHash:   block.Hash(),
 		BlockNumber: block.NumberU64(),
@@ -77,6 +79,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	defer tracer.Close()
 	cfg.Debug = true
 	cfg.Tracer = tracer
+
+	txLogger, err := vm.NewTxLogger(
+		types.MakeSigner(p.config, header.Number),
+		p.config.IsLondon(blockNumber),
+		header.BaseFee,
+		block.Hash(),
+		block.NumberU64(), 10000, 100)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("create tx logger failed: %w", err)
+	}
+	defer txLogger.Close()
 
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -97,6 +110,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+		if err := txLogger.Dump(i, tx, receipt); err != nil {
+			return nil, nil, 0, fmt.Errorf("could not dump tx %d [%v] logger: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
