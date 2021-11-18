@@ -771,7 +771,7 @@ func freezerMigrate(ctx *cli.Context) error {
 
 	log.Info("Starting migration", "ancients", numAncients)
 	start := time.Now()
-	if err := db.MigrateTable("receipts", firstIdx, transformer); err != nil {
+	if err := db.MigrateTable("receipts", transformer); err != nil {
 		return err
 	}
 

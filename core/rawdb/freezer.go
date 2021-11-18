@@ -556,7 +556,7 @@ type TransformerFn = func([]byte) ([]byte, bool, error)
 
 // MigrateTable processes the entries in a given table in sequence
 // converting them to a new format if they're of an old format.
-func (f *freezer) MigrateTable(kind string, start uint64, fn TransformerFn) error {
+func (f *freezer) MigrateTable(kind string, fn TransformerFn) error {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -581,10 +581,7 @@ func (f *freezer) MigrateTable(kind string, start uint64, fn TransformerFn) erro
 	if err != nil {
 		return err
 	}
-	if start >= numAncients {
-		return errors.New("not enough elements in freezer")
-	}
-	i := start
+	i := uint64(0)
 	// Number of the file in which the first up-to-date receipt appers
 	var filenum uint32
 	copyOver := true

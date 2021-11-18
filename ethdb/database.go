@@ -113,7 +113,7 @@ type AncientWriter interface {
 	Sync() error
 
 	// MigrateTable Processes and migrates entries in a table to a new format.
-	MigrateTable(string, uint64, func([]byte) ([]byte, bool, error)) error
+	MigrateTable(string, func([]byte) ([]byte, bool, error)) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

@@ -101,8 +101,8 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
-func (t *table) MigrateTable(kind string, start uint64, fn TransformerFn) error {
-	return t.db.MigrateTable(kind, start, fn)
+func (t *table) MigrateTable(kind string, fn TransformerFn) error {
+	return t.db.MigrateTable(kind, fn)
 }
 
 // Put inserts the given value into the database at a prefixed version of the
