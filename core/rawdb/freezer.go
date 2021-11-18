@@ -604,7 +604,9 @@ func (f *freezer) MigrateTable(kind string, start uint64, fn TransformerFn) erro
 		}
 		if !stop {
 			// Entry is legacy, push transformed version
-			batch.AppendRaw(i, out)
+			if err := batch.AppendRaw(i, out); err != nil {
+				return err
+			}
 		} else {
 			// Reached the first up-to-date entry.
 			// Remember in which file the switch happens.
@@ -640,7 +642,9 @@ func (f *freezer) MigrateTable(kind string, start uint64, fn TransformerFn) erro
 			if err != nil {
 				return err
 			}
-			batch.AppendRaw(i, blob)
+			if err := batch.AppendRaw(i, blob); err != nil {
+				return err
+			}
 		}
 	}
 
