@@ -267,6 +267,10 @@ func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 
 // GasPrice returns the gas price of the transaction.
+//
+// Note: for transaction type 2 (EIP-1559), this method returns the maximum
+// gas price, and not the effective price. Please use EffectiveGasTip to get
+// the effective gas price.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 // GasTipCap returns the gasTipCap per gas of the transaction.
