@@ -1330,6 +1330,10 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
+	if block.Difficulty().Cmp(common.Big0) == 0 {
+		// Never add PoS blocks into the future queue
+		return nil
+	}
 	bc.futureBlocks.Add(block.Hash(), block)
 	return nil
 }
@@ -1474,7 +1478,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			return it.index, bc.recoverAncestors(block)
 		}
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case setHead && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
+	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
