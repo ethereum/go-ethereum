@@ -19,6 +19,7 @@ package memorydb
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -121,6 +122,31 @@ func (db *Database) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+//
+// It is safe to modify the contents of the arguments after DeleteRange
+// returns.
+func (db *Database) DeleteRange(start, end []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	if db.db == nil {
+		return errMemorydbClosed
+	}
+	return db.delRange(start, end)
+}
+
+func (db *Database) delRange(start, end []byte) error {
+	sStart, sEnd := string(start), string(end)
+	for key := range db.db {
+		if key < sStart || key >= sEnd {
+			continue
+		}
+		delete(db.db, string(key))
+	}
+	return nil
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
@@ -185,12 +211,18 @@ func (db *Database) Len() int {
 	return len(db.db)
 }
 
+const (
+	opPut int = iota
+	opDelete
+	opDeleteRange
+)
+
 // keyvalue is a key-value tuple tagged with a deletion field to allow creating
 // memory-database write batches.
 type keyvalue struct {
-	key    []byte
-	value  []byte
-	delete bool
+	key   []byte
+	value []byte
+	kind  int
 }
 
 // batch is a write-only memory batch that commits changes to its host
@@ -203,15 +235,26 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), opPut})
 	b.size += len(key) + len(value)
 	return nil
 }
 
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
+	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, opDelete})
 	b.size += len(key)
+	return nil
+}
+
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+//
+// It is safe to modify the contents of the arguments after DeleteRange
+// returns.
+func (b *batch) DeleteRange(start, end []byte) error {
+	b.writes = append(b.writes, keyvalue{common.CopyBytes(start), common.CopyBytes(end), opDeleteRange})
+	b.size += len(start) + len(end)
 	return nil
 }
 
@@ -226,11 +269,16 @@ func (b *batch) Write() error {
 	defer b.db.lock.Unlock()
 
 	for _, keyvalue := range b.writes {
-		if keyvalue.delete {
+		switch keyvalue.kind {
+		case opPut:
+			b.db.db[string(keyvalue.key)] = keyvalue.value
+		case opDelete:
 			delete(b.db.db, string(keyvalue.key))
-			continue
+		case opDeleteRange:
+			b.db.delRange(keyvalue.key, keyvalue.value)
+		default:
+			panic(fmt.Sprintf("undefined op %d", keyvalue.kind))
 		}
-		b.db.db[string(keyvalue.key)] = keyvalue.value
 	}
 	return nil
 }
@@ -244,14 +292,21 @@ func (b *batch) Reset() {
 // Replay replays the batch contents.
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for _, keyvalue := range b.writes {
-		if keyvalue.delete {
+		switch keyvalue.kind {
+		case opDelete:
 			if err := w.Delete(keyvalue.key); err != nil {
 				return err
 			}
-			continue
-		}
-		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
-			return err
+		case opPut:
+			if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
+				return err
+			}
+		case opDeleteRange:
+			if err := w.DeleteRange(keyvalue.key, keyvalue.value); err != nil {
+				return err
+			}
+		default:
+			panic(fmt.Sprintf("undefined op %d", keyvalue.kind))
 		}
 	}
 	return nil
