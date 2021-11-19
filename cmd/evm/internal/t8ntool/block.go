@@ -80,19 +80,19 @@ type bbInput struct {
 }
 
 type cliqueInput struct {
-	Key        *ecdsa.PrivateKey
-	Voted      *common.Address
-	Authorized *bool
-	Vanity     common.Hash
+	Key       *ecdsa.PrivateKey
+	Voted     *common.Address
+	Authorize *bool
+	Vanity    common.Hash
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
 func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	var x struct {
-		Key        *common.Hash    `json:"secretKey"`
-		Voted      *common.Address `json:"voted"`
-		Authorized *bool           `json:"authorized"`
-		Vanity     common.Hash     `json:"vanity"`
+		Key       *common.Hash    `json:"secretKey"`
+		Voted     *common.Address `json:"voted"`
+		Authorize *bool           `json:"authorize"`
+		Vanity    common.Hash     `json:"vanity"`
 	}
 	if err := json.Unmarshal(input, &x); err != nil {
 		return err
@@ -106,7 +106,7 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 		c.Key = ecdsaKey
 	}
 	c.Voted = x.Voted
-	c.Authorized = x.Authorized
+	c.Authorize = x.Authorize
 	c.Vanity = x.Vanity
 	return nil
 }
@@ -209,11 +209,11 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 		}
 		header.Coinbase = *i.Clique.Voted
 	}
-	if i.Clique.Authorized != nil {
+	if i.Clique.Authorize != nil {
 		if i.Header.Nonce != nil {
 			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
 		}
-		if *i.Clique.Authorized {
+		if *i.Clique.Authorize {
 			header.Nonce = [8]byte{}
 		} else {
 			header.Nonce = [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
