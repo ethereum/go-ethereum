@@ -30,17 +30,17 @@ var (
 		Name:  "trace",
 		Usage: "Output full trace logs to files <txhash>.jsonl",
 	}
-	TraceDisableMemoryFlag = cli.BoolTFlag{
-		Name:  "trace.nomemory",
-		Usage: "Disable full memory dump in traces",
+	TraceEnableMemoryFlag = cli.BoolFlag{
+		Name:  "trace.memory",
+		Usage: "Enable full memory dump in traces",
 	}
 	TraceDisableStackFlag = cli.BoolFlag{
 		Name:  "trace.nostack",
 		Usage: "Disable stack output in traces",
 	}
-	TraceDisableReturnDataFlag = cli.BoolTFlag{
-		Name:  "trace.noreturndata",
-		Usage: "Disable return data output in traces",
+	TraceEnableReturnDataFlag = cli.BoolFlag{
+		Name:  "trace.returndata",
+		Usage: "Enable return data output in traces",
 	}
 	OutputBasedir = cli.StringFlag{
 		Name:  "output.basedir",
