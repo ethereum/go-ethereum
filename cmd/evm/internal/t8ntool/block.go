@@ -86,6 +86,7 @@ type cliqueInput struct {
 	Vanity     common.Hash
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface.
 func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	var x struct {
 		Key        *common.Hash    `json:"secretKey"`
@@ -110,6 +111,7 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+// ToBlock converts i into a *types.Block
 func (i *bbInput) ToBlock() *types.Block {
 	header := &types.Header{
 		ParentHash:  i.Header.ParentHash,
@@ -232,6 +234,7 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 	return block, nil
 }
 
+// BuildBlock constructs a block from the given inputs.
 func BuildBlock(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
@@ -353,7 +356,6 @@ func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 		Rlp  hexutil.Bytes `json:"rlp"`
 		Hash common.Hash   `json:"hash"`
 	}
-
 	var enc blockInfo
 	enc.Rlp = raw
 	enc.Hash = block.Hash()
