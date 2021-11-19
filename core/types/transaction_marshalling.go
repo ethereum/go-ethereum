@@ -232,6 +232,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
 		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		if dec.GasPrice != nil {
+			itx.ActualGasPrice = (*big.Int)(dec.GasPrice)
+		}
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}
