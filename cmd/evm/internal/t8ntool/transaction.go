@@ -48,7 +48,7 @@ func (r *result) MarshalJSON() ([]byte, error) {
 		Error        string          `json:"error,omitempty"`
 		Address      *common.Address `json:"address,omitempty"`
 		Hash         *common.Hash    `json:"hash,omitempty"`
-		IntrinsicGas uint64          `json:"intrinsicGas,omitempty"`
+		IntrinsicGas hexutil.Uint64  `json:"intrinsicGas,omitempty"`
 	}
 	var out xx
 	if r.Error != nil {
@@ -60,7 +60,7 @@ func (r *result) MarshalJSON() ([]byte, error) {
 	if r.Hash != (common.Hash{}) {
 		out.Hash = &r.Hash
 	}
-	out.IntrinsicGas = r.IntrinsicGas
+	out.IntrinsicGas = hexutil.Uint64(r.IntrinsicGas)
 	return json.Marshal(out)
 }
 
