@@ -1462,16 +1462,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		// Falls through to the block import
 	}
 	switch {
-	// We're post-merge and the parent is pruned, try to recover the parent state
-	case !setHead && errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
-		return it.index, bc.recoverAncestors(block)
-
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
-	case setHead && errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
-		return bc.insertSideChain(block, it)
-
+	// First block is pruned
+	case errors.Is(err, consensus.ErrPrunedAncestor):
+		if setHead {
+			// First block is pruned, insert as sidechain and reorg only if TD grows enough
+			log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
+			return bc.insertSideChain(block, it)
+		} else {
+			// We're post-merge and the parent is pruned, try to recover the parent state
+			log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
+			return it.index, bc.recoverAncestors(block)
+		}
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case setHead && (errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash()))):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
@@ -1633,17 +1634,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		var status WriteStatus
 		if !setHead {
 			// Don't set the head, only insert the block
-			err := bc.writeBlockWithState(block, receipts, logs, statedb)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			if err != nil {
-				return it.index, err
-			}
+			err = bc.writeBlockWithState(block, receipts, logs, statedb)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			if err != nil {
-				return it.index, err
-			}
+		}
+		atomic.StoreUint32(&followupInterrupt, 1)
+		if err != nil {
+			return it.index, err
 		}
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
