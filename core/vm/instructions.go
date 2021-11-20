@@ -971,7 +971,11 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			for ; count < 31 && !scope.Contract.IsCode(chunk*31+count); count++ {
 			}
 			value[0] = byte(count)
-			copy(value[1:], scope.Contract.Code[chunk*31:(chunk+1)*31])
+			end := (chunk + 1) * 31
+			if end > uint64(len(scope.Contract.Code)) {
+				end = uint64(len(scope.Contract.Code))
+			}
+			copy(value[1:], scope.Contract.Code[chunk*31:end])
 			index := trieUtils.GetTreeKeyCodeChunk(scope.Contract.Address().Bytes(), uint256.NewInt(chunk))
 			interpreter.evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
 
