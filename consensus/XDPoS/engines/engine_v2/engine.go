@@ -110,12 +110,12 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
 				- verifyTC
 		2. Broadcast(Not part of consensus)
 	*/
-	err := x.verifyQC(&syncInfo.HighestQuorumCert)
+	err := x.verifyQC(syncInfo.HighestQuorumCert)
 	if err != nil {
 		log.Warn("SyncInfo message verification failed due to QC", err)
 		return err
 	}
-	err = x.verifyTC(&syncInfo.HighestTimeoutCert)
+	err = x.verifyTC(syncInfo.HighestTimeoutCert)
 	if err != nil {
 		log.Warn("SyncInfo message verification failed due to TC", err)
 		return err
@@ -470,7 +470,7 @@ func (x *XDPoS_v2) getCurrentRoundMasterNodes() []common.Address {
 
 func (x *XDPoS_v2) getSyncInfo() utils.SyncInfo {
 	return utils.SyncInfo{
-		HighestQuorumCert:  *x.highestQuorumCert,
-		HighestTimeoutCert: *x.highestTimeoutCert,
+		HighestQuorumCert:  x.highestQuorumCert,
+		HighestTimeoutCert: x.highestTimeoutCert,
 	}
 }

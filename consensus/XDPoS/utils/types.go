@@ -85,8 +85,8 @@ type Timeout struct {
 
 // BFT Sync Info message in XDPoS 2.0
 type SyncInfo struct {
-	HighestQuorumCert  QuorumCert
-	HighestTimeoutCert TimeoutCert
+	HighestQuorumCert  *QuorumCert
+	HighestTimeoutCert *TimeoutCert
 }
 
 // Quorum Certificate struct in XDPoS 2.0

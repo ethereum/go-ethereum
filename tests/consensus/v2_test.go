@@ -74,13 +74,12 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	assert.Equal(t, utils.Round(2), engineV2.GetCurrentRound())
 }
 
-func TestThrowErrorIfTimeoutMsgRoundLessThanCurrentRound(t *testing.T) {
+func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 3
 	engineV2.SetNewRoundFaker(utils.Round(3), false)
-	// Create two timeout message which will not reach timeout pool threshold
 	timeoutMsg := &utils.Timeout{
 		Round:     utils.Round(2),
 		Signature: []byte{1},
@@ -141,7 +140,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedQC(t *testing.T) {
 	assert.Equal(t, utils.Round(2), engineV2.GetCurrentRound())
 }
 
-func TestThrowErrorIfVoteMsgRoundLessThanCurrentRound(t *testing.T) {
+func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -153,7 +152,6 @@ func TestThrowErrorIfVoteMsgRoundLessThanCurrentRound(t *testing.T) {
 
 	// Set round to 3
 	engineV2.SetNewRoundFaker(utils.Round(3), false)
-	// Create two timeout message which will not reach timeout pool threshold
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: *blockInfo,
 		Signature:         []byte{1},

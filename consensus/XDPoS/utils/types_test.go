@@ -53,8 +53,8 @@ func TestHashAndSigHash(t *testing.T) {
 	if timeout1.Hash() == timeout2.Hash() {
 		t.Fatalf("Hash of two timeouts shouldn't equal")
 	}
-	syncInfo1 := SyncInfo{HighestQuorumCert: quorumCert1}
-	syncInfo2 := SyncInfo{HighestQuorumCert: quorumCert2}
+	syncInfo1 := SyncInfo{HighestQuorumCert: &quorumCert1}
+	syncInfo2 := SyncInfo{HighestQuorumCert: &quorumCert2}
 	if syncInfo1.Hash() == syncInfo2.Hash() {
 		t.Fatalf("Hash of two sync info shouldn't equal")
 	}
