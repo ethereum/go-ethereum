@@ -77,6 +77,7 @@ Remove blockchain and state databases`,
 		ArgsUsage: "<prefix> <start>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.AncientFlag,
 			utils.SyncModeFlag,
 			utils.MainnetFlag,
 			utils.RopstenFlag,
