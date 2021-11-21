@@ -389,12 +389,13 @@ func touchEachChunks(start, end uint64, code []byte, contract *Contract, evm *EV
 	for chunk := start / 31; chunk <= end/31 && chunk <= uint64(len(code))/31; chunk++ {
 		index := trieUtils.GetTreeKeyCodeChunk(contract.Address().Bytes(), uint256.NewInt(chunk))
 		count := uint64(0)
+		end := (chunk + 1) * 31
+
 		// Look for the first code byte (i.e. no pushdata)
-		for ; count < 31 && !contract.IsCode(chunk*31+count); count++ {
+		for ; count < 31 && end+count < uint64(len(contract.Code)) && !contract.IsCode(chunk*31+count); count++ {
 		}
 		var value [32]byte
 		value[0] = byte(count)
-		end := (chunk + 1) * 31
 		if end > uint64(len(code)) {
 			end = uint64(len(code))
 		}
