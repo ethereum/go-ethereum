@@ -43,11 +43,12 @@ import (
 
 const (
 	ErrorEVM              = 2
-	ErrorVMConfig         = 3
+	ErrorConfig           = 3
 	ErrorMissingBlockhash = 4
 
 	ErrorJson = 10
 	ErrorIO   = 11
+	ErrorRlp  = 12
 
 	stdinSelector = "stdin"
 )
@@ -88,21 +89,14 @@ func Transition(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 
 	var (
-		err     error
-		tracer  vm.EVMLogger
-		baseDir = ""
+		err    error
+		tracer vm.EVMLogger
 	)
 	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
 
-	// If user specified a basedir, make sure it exists
-	if ctx.IsSet(OutputBasedir.Name) {
-		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
-			err := os.MkdirAll(base, 0755) // //rw-r--r--
-			if err != nil {
-				return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
-			}
-			baseDir = base
-		}
+	baseDir, err := createBasedir(ctx)
+	if err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
 	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
@@ -155,29 +149,17 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	if allocStr != stdinSelector {
-		inFile, err := os.Open(allocStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed reading alloc file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if err := decoder.Decode(&inputData.Alloc); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling alloc-file: %v", err))
+		if err := readFile(allocStr, "alloc", &inputData.Alloc); err != nil {
+			return err
 		}
 	}
 	prestate.Pre = inputData.Alloc
 
 	// Set the block environment
 	if envStr != stdinSelector {
-		inFile, err := os.Open(envStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed reading env file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
 		var env stEnv
-		if err := decoder.Decode(&env); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling env-file: %v", err))
+		if err := readFile(envStr, "env", &env); err != nil {
+			return err
 		}
 		inputData.Env = &env
 	}
@@ -190,7 +172,7 @@ func Transition(ctx *cli.Context) error {
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
-		return NewError(ErrorVMConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
+		return NewError(ErrorConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
 	} else {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
@@ -254,18 +236,18 @@ func Transition(ctx *cli.Context) error {
 	// Sanity check, to not `panic` in state_transition
 	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
 		if prestate.Env.BaseFee == nil {
-			return NewError(ErrorVMConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
+			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
 	if env := prestate.Env; env.Difficulty == nil {
 		// If difficulty was not provided by caller, we need to calculate it.
 		switch {
 		case env.ParentDifficulty == nil:
-			return NewError(ErrorVMConfig, errors.New("currentDifficulty was not provided, and cannot be calculated due to missing parentDifficulty"))
+			return NewError(ErrorConfig, errors.New("currentDifficulty was not provided, and cannot be calculated due to missing parentDifficulty"))
 		case env.Number == 0:
-			return NewError(ErrorVMConfig, errors.New("currentDifficulty needs to be provided for block number 0"))
+			return NewError(ErrorConfig, errors.New("currentDifficulty needs to be provided for block number 0"))
 		case env.Timestamp <= env.ParentTimestamp:
-			return NewError(ErrorVMConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
+			return NewError(ErrorConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
 				env.Timestamp, env.ParentTimestamp))
 		}
 		prestate.Env.Difficulty = calcDifficulty(chainConfig, env.Number, env.Timestamp,
