@@ -964,8 +964,10 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		interpreter.evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
 
 		// in the case of PUSH32, the end data might be two chunks away,
-		// so also get the middle chunk.
-		if pushByteSize == 32 {
+		// so also get the middle chunk. There is a boundary condition
+		// check (endMin > 2) in the case the code is a single PUSH32
+		// insctruction, whose immediate are just 0s.
+		if pushByteSize == 32 && endMin > 2 {
 			chunk = uint64(endMin-2) / 31
 			count = uint64(0)
 			// Look for the first code byte (i.e. no pushdata)
