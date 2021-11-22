@@ -238,5 +238,11 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // ebnable3860 enables "EIP-3860: Limit and meter initcode"
 // https://eips.ethereum.org/EIPS/eip-3860
 func enable3860(jt *JumpTable) {
-	// Do nothing.
+	createOp := *jt[CREATE]
+	createOp.dynamicGas = gasCreateEip3860
+	jt[CREATE] = &createOp
+
+	create2Op := *jt[CREATE2]
+	create2Op.dynamicGas = gasCreate2Eip3860
+	jt[CREATE2] = &create2Op
 }
