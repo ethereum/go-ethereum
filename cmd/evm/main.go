@@ -138,8 +138,10 @@ var stateTransitionCommand = cli.Command{
 	Action:  t8ntool.Transition,
 	Flags: []cli.Flag{
 		t8ntool.TraceFlag,
+		t8ntool.TraceDisableMemoryFlag,
 		t8ntool.TraceEnableMemoryFlag,
 		t8ntool.TraceDisableStackFlag,
+		t8ntool.TraceDisableReturnDataFlag,
 		t8ntool.TraceEnableReturnDataFlag,
 		t8ntool.OutputBasedir,
 		t8ntool.OutputAllocFlag,
