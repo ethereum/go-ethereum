@@ -296,7 +296,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if diskRoot != (common.Hash{}) {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash(), "snaproot", diskRoot)
 
-			snapDisk, err := bc.SetHeadBeyondRoot(head.NumberU64(), diskRoot)
+			snapDisk, err := bc.setHeadBeyondRoot(head.NumberU64(), diskRoot, true)
 			if err != nil {
 				return nil, err
 			}
@@ -306,7 +306,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		} else {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
-			if err := bc.SetHead(head.NumberU64()); err != nil {
+			if _, err := bc.setHeadBeyondRoot(head.NumberU64(), common.Hash{}, true); err != nil {
 				return nil, err
 			}
 		}
@@ -482,11 +482,11 @@ func (bc *BlockChain) loadLastState() error {
 // was fast synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
 func (bc *BlockChain) SetHead(head uint64) error {
-	_, err := bc.SetHeadBeyondRoot(head, common.Hash{})
+	_, err := bc.setHeadBeyondRoot(head, common.Hash{}, false)
 	return err
 }
 
-// SetHeadBeyondRoot rewinds the local chain to a new head with the extra condition
+// setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. This method is meant to be
 // used when rewinding with snapshots enabled to ensure that we go back further than
 // persistent disk layer. Depending on whether the node was fast synced or full, and
@@ -494,7 +494,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 // retaining chain consistency.
 //
 // The method returns the block number where the requested root cap was found.
-func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
+func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bool) (uint64, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
@@ -509,7 +509,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	frozen, _ := bc.db.Ancients()
 
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (uint64, bool) {
-		// Rewind the block chain, ensuring we don't end up with a stateless head
+		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.NumberU64() {
@@ -610,8 +610,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
-	if block := bc.CurrentBlock(); block.NumberU64() == head {
-		if target, force := updateFn(bc.db, block.Header()); force {
+	if repair {
+		if target, force := updateFn(bc.db, bc.CurrentBlock().Header()); force {
 			bc.hc.SetHead(target, updateFn, delFn)
 		}
 	} else {
