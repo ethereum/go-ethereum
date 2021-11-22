@@ -18,9 +18,13 @@ package logger
 
 import (
 	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
@@ -43,24 +47,29 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64 { return 1337 }
+func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
+func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 
-/*func TestStoreCapture(t *testing.T) {
+func TestStoreCapture(t *testing.T) {
+	logger := NewStructLogger(nil)
 	var (
-		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{})
-		logger   = NewStructLogger(nil)
-		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
-		scope    = &vm.ScopeContext{
-			Memory:   vm.NewMemory(),
-			Stack:    newstack(),
-			Contract: contract,
-		}
+		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger})
+		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
-	scope.Stack.push(uint256.NewInt(1))
-	scope.Stack.push(new(uint256.Int))
+	contract.Code = []byte{byte(vm.PUSH32)}
+	one := uint256.NewInt(1).Bytes32()
+	zero := new(uint256.Int).Bytes32()
+	contract.Code = append(contract.Code, one[:]...)
+	contract.Code = append(contract.Code, byte(vm.PUSH32))
+	contract.Code = append(contract.Code, zero[:]...)
+	contract.Code = append(contract.Code, byte(vm.SSTORE))
 	var index common.Hash
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
-	logger.CaptureState(0, vm.SSTORE, 0, 0, scope, nil, 0, nil)
+	_, err := env.Interpreter().Run(contract, []byte{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(logger.storage[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(),
 			len(logger.storage[contract.Address()]))
@@ -69,4 +78,4 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 	if logger.storage[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
 	}
-}*/
+}
