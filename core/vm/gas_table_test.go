@@ -105,3 +105,50 @@ func TestEIP2200(t *testing.T) {
 		}
 	}
 }
+
+var createGasTests = []struct {
+	code    string
+	eip3860 bool
+	gasUsed uint64
+}{
+	// create(0, 0, 0xc000)
+	{"0x61C00060006000f0", false, 41225},
+	// create(0, 0, 0xc000)
+	{"0x61C00060006000f0", true, 44297},
+	// create2(0, 0, 0xc000, 0)
+	{"0x600061C00060006000f5", false, 50444},
+	// create2(0, 0, 0xc000, 0)
+	{"0x600061C00060006000f5", true, 53516},
+}
+
+func TestCreateGas(t *testing.T) {
+	for i, tt := range createGasTests {
+		address := common.BytesToAddress([]byte("contract"))
+
+		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb.CreateAccount(address)
+		statedb.SetCode(address, hexutil.MustDecode(tt.code))
+		statedb.Finalise(true)
+
+		vmctx := BlockContext{
+			CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
+			Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
+			BlockNumber: big.NewInt(0),
+		}
+		config := Config{}
+		if tt.eip3860 {
+			config.ExtraEips = []int{3860}
+		}
+
+		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
+
+		var startGas uint64 = math.MaxUint64
+		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
+		if err != nil {
+			t.Errorf("test %d execution failed: %v", i, err)
+		}
+		if gasUsed := startGas - gas; gasUsed != tt.gasUsed {
+			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, gasUsed, tt.gasUsed)
+		}
+	}
+}
