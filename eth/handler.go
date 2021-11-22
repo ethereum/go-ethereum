@@ -227,7 +227,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		Timeout:  manager.BroadcastTimeout,
 		SyncInfo: manager.BroadcastSyncInfo,
 	}
-	manager.bfter = bfter.New(broadcasts)
+	manager.bfter = bfter.New(broadcasts, blockchain)
 	if blockchain.Config().XDPoS != nil {
 		manager.bfter.SetConsensusFuns(engine)
 	}

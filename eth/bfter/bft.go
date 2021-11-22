@@ -4,6 +4,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -18,10 +19,11 @@ type broadcastTimeoutFn func(*utils.Timeout)
 type broadcastSyncInfoFn func(*utils.SyncInfo)
 
 type Bfter struct {
-	broadcastCh chan interface{}
-	quit        chan struct{}
-	consensus   ConsensusFns
-	broadcast   BroadcastFns
+	blockCahinReader *core.BlockChain
+	broadcastCh      chan interface{}
+	quit             chan struct{}
+	consensus        ConsensusFns
+	broadcast        BroadcastFns
 
 	// Message Cache
 	knownVotes     *lru.ARCCache
@@ -46,17 +48,18 @@ type BroadcastFns struct {
 	SyncInfo broadcastSyncInfoFn
 }
 
-func New(broadcasts BroadcastFns) *Bfter {
+func New(broadcasts BroadcastFns, blockCahinReader *core.BlockChain) *Bfter {
 	knownVotes, _ := lru.NewARC(messageLimit)
 	knownSyncInfos, _ := lru.NewARC(messageLimit)
 	knownTimeouts, _ := lru.NewARC(messageLimit)
 	return &Bfter{
-		quit:           make(chan struct{}),
-		broadcastCh:    make(chan interface{}),
-		broadcast:      broadcasts,
-		knownVotes:     knownVotes,
-		knownSyncInfos: knownSyncInfos,
-		knownTimeouts:  knownTimeouts,
+		quit:             make(chan struct{}),
+		broadcastCh:      make(chan interface{}),
+		broadcast:        broadcasts,
+		knownVotes:       knownVotes,
+		knownSyncInfos:   knownSyncInfos,
+		knownTimeouts:    knownTimeouts,
+		blockCahinReader: blockCahinReader,
 	}
 }
 

@@ -35,7 +35,7 @@ type XDPoS_v2 struct {
 	currentRound      utils.Round
 	highestVotedRound utils.Round
 	highestQuorumCert *utils.QuorumCert
-	// LockQC in XDPoS Consensus 2.0, used in voting rule
+	// lockQuorumCert in XDPoS Consensus 2.0, used in voting rule
 	lockQuorumCert     *utils.QuorumCert
 	highestTimeoutCert *utils.TimeoutCert
 	highestCommitBlock *utils.BlockInfo
@@ -79,6 +79,8 @@ func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
 
 // Utils for test to check currentRound value
 func (x *XDPoS_v2) GetCurrentRound() utils.Round {
+	x.lock.Lock()
+	defer x.lock.Unlock()
 	return x.currentRound
 }
 
@@ -307,22 +309,27 @@ func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 	return nil
 }
 
-// Update local QC variables including highestQC & lockQC, as well as update commit blockInfo before call
-/*
-	1. Update HighestQC and LockQC
-	2. Update commit block info (TODO)
-	3. Check QC round >= node's currentRound. If yes, call setNewRound
-*/
-func (x *XDPoS_v2) processQC(quorumCert *utils.QuorumCert) error {
+// Update local QC variables including highestQC & lockQuorumCert, as well as update commit blockInfo before call
+func (x *XDPoS_v2) processQC(blockCahinReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
+	// 1. Update HighestQC
 	if x.highestQuorumCert == nil || quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
-		x.highestQuorumCert = quorumCert
 		//TODO: do I need a clone?
+		x.highestQuorumCert = quorumCert
 	}
-	//TODO: x.blockchain.getBlock(quorumCert.ProposedBlockInfo.Hash) then get the QC inside that block header
-	//TODO: update lockQC
+	// 2. Get QC from header and update lockQuorumCert
+	proposedBlockHeader := blockCahinReader.GetHeaderByHash(quorumCert.ProposedBlockInfo.Hash)
+	var decodedExtraField utils.ExtraFields_v2
+	utils.DecodeBytesExtraFields(proposedBlockHeader.Extra, &decodedExtraField)
+	x.lockQuorumCert = &decodedExtraField.QuorumCert
+
+	// 3. Update commit block info
 	//TODO: find parent and grandparent and grandgrandparent block, check round number, if so, commit grandgrandparent
+
 	if quorumCert.ProposedBlockInfo.Round >= x.currentRound {
-		x.setNewRound(quorumCert.ProposedBlockInfo.Round + 1)
+		err := x.setNewRound(quorumCert.ProposedBlockInfo.Round + 1)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -364,8 +371,8 @@ func (x *XDPoS_v2) verifyVotingRule(header *types.Header) error {
 		Make sure this node has not voted for this round. We can have a variable highestVotedRound, and check currentRound > highestVotedRound.
 		HotStuff Voting rule:
 		header's round == local current round, AND (one of the following two:)
-		header's block extends LockQC's ProposedBlockInfo (we need a isExtending(block_a, block_b) function), OR
-		header's QC's ProposedBlockInfo.Round > LockQC's ProposedBlockInfo.Round
+		header's block extends lockQuorumCert's ProposedBlockInfo (we need a isExtending(block_a, block_b) function), OR
+		header's QC's ProposedBlockInfo.Round > lockQuorumCert's ProposedBlockInfo.Round
 	*/
 	return nil
 }
