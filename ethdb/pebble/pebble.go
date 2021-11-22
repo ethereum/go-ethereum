@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,35 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !js
-// +build !js
-
-// Package leveldb implements the key-value database layer based on LevelDB.
-package leveldb
+// Package pebble implements the key-value database layer based on pebble.
+package pebble
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+	"errors"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/filter"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
-	// degradationWarnInterval specifies how often warning should be printed if the
-	// leveldb database cannot keep up with requested writes.
-	degradationWarnInterval = time.Minute
-
 	// minCache is the minimum amount of memory in megabytes to allocate to leveldb
 	// read and write caching, split half and half.
 	minCache = 16
@@ -56,12 +46,12 @@ const (
 	metricsGatheringInterval = 3 * time.Second
 )
 
-// Database is a persistent key-value store. Apart from basic data storage
-// functionality it also supports batch writes and iterating over the keyspace in
-// binary-alphabetical order.
+// Database is a persistent key-value store based on the pebble storage engine.
+// Apart from basic data storage functionality it also supports batch writes and
+// iterating over the keyspace in binary-alphabetical order.
 type Database struct {
-	fn string      // filename for reporting
-	db *leveldb.DB // LevelDB instance
+	fn string     // filename for reporting
+	db *pebble.DB // Underlying pebble storage engine
 
 	compTimeMeter      metrics.Meter // Meter for measuring the total time spent in database compaction
 	compReadMeter      metrics.Meter // Meter for measuring the data read during compaction
@@ -85,42 +75,43 @@ type Database struct {
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
-	return NewCustom(file, namespace, func(options *opt.Options) {
-		// Ensure we have some minimal caching and file guarantees
-		if cache < minCache {
-			cache = minCache
-		}
-		if handles < minHandles {
-			handles = minHandles
-		}
-		// Set default options
-		options.OpenFilesCacheCapacity = handles
-		options.BlockCacheCapacity = cache / 2 * opt.MiB
-		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
-		if readonly {
-			options.ReadOnly = true
-		}
-	})
-}
-
-// NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
-// metrics reporting should use for surfacing internal stats.
-// The customize function allows the caller to modify the leveldb options.
-func NewCustom(file string, namespace string, customize func(options *opt.Options)) (*Database, error) {
-	options := configureOptions(customize)
-	logger := log.New("database", file)
-	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
-	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
-	if options.ReadOnly {
-		logCtx = append(logCtx, "readonly", "true")
+	// Ensure we have some minimal caching and file guarantees
+	if cache < minCache {
+		cache = minCache
 	}
-	logger.Info("Allocated cache and file handles", logCtx...)
+	if handles < minHandles {
+		handles = minHandles
+	}
+	logger := log.New("database", file)
+	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
 	// Open the db and recover any potential corruptions
-	db, err := leveldb.OpenFile(file, options)
-	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
-		db, err = leveldb.RecoverFile(file, nil)
-	}
+	db, err := pebble.Open(file, &pebble.Options{
+		// Pebble has a single combined cache area and the write
+		// buffers are taken from this too. Assign all available
+		// memory allowance for cache.
+		Cache:        pebble.NewCache(int64(cache * 1024 * 1024)),
+		MaxOpenFiles: handles,
+		// The size of memory table(as well as the write buffer).
+		// Note, there may have more than two memory tables in the system.
+		// MemTableStopWritesThreshold can be configured to avoid the memory abuse.
+		MemTableSize: cache * 1024 * 1024 / 4,
+		// The default compaction concurrency(1 thread),
+		// Here use all available CPUs for faster compaction.
+		MaxConcurrentCompactions: runtime.NumCPU(),
+		// Per-level options. Options for at least one level must be specified. The
+		// options for the last level are used for all subsequent levels.
+		Levels: []pebble.LevelOptions{
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+		},
+		ReadOnly: readonly,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -149,20 +140,6 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	return ldb, nil
 }
 
-// configureOptions sets some default options, then runs the provided setter.
-func configureOptions(customizeFn func(*opt.Options)) *opt.Options {
-	// Set default options
-	options := &opt.Options{
-		Filter:                 filter.NewBloomFilter(10),
-		DisableSeeksCompaction: true,
-	}
-	// Allow caller to make custom modifications to the options
-	if customizeFn != nil {
-		customizeFn(options)
-	}
-	return options
-}
-
 // Close stops the metrics collection, flushes any pending data to disk and closes
 // all io accesses to the underlying key-value store.
 func (db *Database) Close() error {
@@ -182,21 +159,31 @@ func (db *Database) Close() error {
 
 // Has retrieves if a key is present in the key-value store.
 func (db *Database) Has(key []byte) (bool, error) {
-	return db.db.Has(key, nil)
+	_, closer, err := db.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	closer.Close()
+	return true, nil
 }
 
 // Get retrieves the given key if it's present in the key-value store.
 func (db *Database) Get(key []byte) ([]byte, error) {
-	dat, err := db.db.Get(key, nil)
+	dat, closer, err := db.db.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	return dat, nil
+	ret := make([]byte, len(dat))
+	copy(ret, dat)
+	closer.Close()
+	return ret, nil
 }
 
 // Put inserts the given value into the key-value store.
 func (db *Database) Put(key []byte, value []byte) error {
-	return db.db.Put(key, value, nil)
+	return db.db.Set(key, value, pebble.NoSync)
 }
 
 // Delete removes the key from the key-value store.
@@ -204,17 +191,20 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+//
+// It is safe to modify the contents of the arguments after DeleteRange
+// returns.
 func (db *Database) DeleteRange(start, end []byte) error {
-	panic("leveldb doesn't support DeleteRange")
+	return db.db.DeleteRange(start, end, nil)
 }
-
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		db: db.db,
-		b:  new(leveldb.Batch),
+		b: db.db.NewBatch(),
 	}
 }
 
@@ -222,12 +212,18 @@ func (db *Database) NewBatch() ethdb.Batch {
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
 func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return db.db.NewIterator(bytesPrefixRange(prefix, start), nil)
+	iterRange := bytesPrefixRange(prefix, start)
+	iter := db.db.NewIter(&pebble.IterOptions{
+		LowerBound: iterRange.Start,
+		UpperBound: iterRange.Limit,
+	})
+	iter.First()
+	return &pebbleIterator{iter: iter, moved: true}
 }
 
 // Stat returns a particular internal stat of the database.
 func (db *Database) Stat(property string) (string, error) {
-	return db.db.GetProperty(property)
+	return "", nil // TODO implement this
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
@@ -238,7 +234,7 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	return db.db.CompactRange(util.Range{Start: start, Limit: limit})
+	return db.db.Compact(start, limit)
 }
 
 // Path returns the path to the database directory.
@@ -264,174 +260,17 @@ func (db *Database) Path() string {
 // This is how the iostats look like (currently):
 // Read(MB):3895.04860 Write(MB):3654.64712
 func (db *Database) meter(refresh time.Duration) {
-	// Create the counters to store current and previous compaction values
-	compactions := make([][]float64, 2)
-	for i := 0; i < 2; i++ {
-		compactions[i] = make([]float64, 4)
-	}
-	// Create storage for iostats.
-	var iostats [2]float64
-
-	// Create storage and warning log tracer for write delay.
-	var (
-		delaystats      [2]int64
-		lastWritePaused time.Time
-	)
-
-	var (
-		errc chan error
-		merr error
-	)
-
+	var errc chan error
 	timer := time.NewTimer(refresh)
 	defer timer.Stop()
 
 	// Iterate ad infinitum and collect the stats
-	for i := 1; errc == nil && merr == nil; i++ {
-		// Retrieve the database stats
-		stats, err := db.db.GetProperty("leveldb.stats")
-		if err != nil {
-			db.log.Error("Failed to read database stats", "err", err)
-			merr = err
-			continue
-		}
-		// Find the compaction table, skip the header
-		lines := strings.Split(stats, "\n")
-		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
-			lines = lines[1:]
-		}
-		if len(lines) <= 3 {
-			db.log.Error("Compaction leveldbTable not found")
-			merr = errors.New("compaction leveldbTable not found")
-			continue
-		}
-		lines = lines[3:]
-
-		// Iterate over all the leveldbTable rows, and accumulate the entries
-		for j := 0; j < len(compactions[i%2]); j++ {
-			compactions[i%2][j] = 0
-		}
-		for _, line := range lines {
-			parts := strings.Split(line, "|")
-			if len(parts) != 6 {
-				break
-			}
-			for idx, counter := range parts[2:] {
-				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
-				if err != nil {
-					db.log.Error("Compaction entry parsing failed", "err", err)
-					merr = err
-					continue
-				}
-				compactions[i%2][idx] += value
-			}
-		}
-		// Update all the requested meters
-		if db.diskSizeGauge != nil {
-			db.diskSizeGauge.Update(int64(compactions[i%2][0] * 1024 * 1024))
-		}
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1000 * 1000 * 1000))
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((compactions[i%2][3] - compactions[(i-1)%2][3]) * 1024 * 1024))
-		}
-		// Retrieve the write delay statistic
-		writedelay, err := db.db.GetProperty("leveldb.writedelay")
-		if err != nil {
-			db.log.Error("Failed to read database write delay statistic", "err", err)
-			merr = err
-			continue
-		}
-		var (
-			delayN        int64
-			delayDuration string
-			duration      time.Duration
-			paused        bool
-		)
-		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
-			db.log.Error("Write delay statistic not found")
-			merr = err
-			continue
-		}
-		duration, err = time.ParseDuration(delayDuration)
-		if err != nil {
-			db.log.Error("Failed to parse delay duration", "err", err)
-			merr = err
-			continue
-		}
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
-		// If a warning that db is performing compaction has been displayed, any subsequent
-		// warnings will be withheld for one minute not to overwhelm the user.
-		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(degradationWarnInterval)) {
-			db.log.Warn("Database compacting, degraded performance")
-			lastWritePaused = time.Now()
-		}
-		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
-
-		// Retrieve the database iostats.
-		ioStats, err := db.db.GetProperty("leveldb.iostats")
-		if err != nil {
-			db.log.Error("Failed to read database iostats", "err", err)
-			merr = err
-			continue
-		}
-		var nRead, nWrite float64
-		parts := strings.Split(ioStats, " ")
-		if len(parts) < 2 {
-			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
-			merr = fmt.Errorf("bad syntax of ioStats %s", ioStats)
-			continue
-		}
-		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
-			db.log.Error("Bad syntax of read entry", "entry", parts[0])
-			merr = err
-			continue
-		}
-		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
-			db.log.Error("Bad syntax of write entry", "entry", parts[1])
-			merr = err
-			continue
-		}
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
-		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
-		}
-		iostats[0], iostats[1] = nRead, nWrite
-
-		compCount, err := db.db.GetProperty("leveldb.compcount")
-		if err != nil {
-			db.log.Error("Failed to read database iostats", "err", err)
-			merr = err
-			continue
-		}
-
-		var (
-			memComp       uint32
-			level0Comp    uint32
-			nonLevel0Comp uint32
-			seekComp      uint32
-		)
-		if n, err := fmt.Sscanf(compCount, "MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", &memComp, &level0Comp, &nonLevel0Comp, &seekComp); n != 4 || err != nil {
-			db.log.Error("Compaction count statistic not found")
-			merr = err
-			continue
-		}
-		db.memCompGauge.Update(int64(memComp))
-		db.level0CompGauge.Update(int64(level0Comp))
-		db.nonlevel0CompGauge.Update(int64(nonLevel0Comp))
-		db.seekCompGauge.Update(int64(seekComp))
+	for errc == nil {
+		metrics := db.db.Metrics()
+		db.memCompGauge.Update(metrics.Flush.Count)
+		db.level0CompGauge.Update(0) // todo FIX ME
+		db.nonlevel0CompGauge.Update(metrics.Compact.Count)
+		db.seekCompGauge.Update(0) // todo FIX ME
 
 		// Sleep a bit, then repeat the stats collection
 		select {
@@ -442,32 +281,27 @@ func (db *Database) meter(refresh time.Duration) {
 			// Timeout, gather a new set of stats
 		}
 	}
-
-	if errc == nil {
-		errc = <-db.quitChan
-	}
-	errc <- merr
+	errc <- nil
 }
 
 // batch is a write-only leveldb batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	db   *leveldb.DB
-	b    *leveldb.Batch
+	b    *pebble.Batch
 	size int
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.b.Put(key, value)
-	b.size += len(key) + len(value)
+	b.b.Set(key, value, nil)
+	b.size += len(value)
 	return nil
 }
 
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	b.b.Delete(key)
-	b.size += len(key)
+	b.b.Delete(key, nil)
+	b.size++
 	return nil
 }
 
@@ -477,7 +311,7 @@ func (b *batch) Delete(key []byte) error {
 // It is safe to modify the contents of the arguments after DeleteRange
 // returns.
 func (b *batch) DeleteRange(start, end []byte) error {
-	panic("leveldb batches doesn't support DeleteRange")
+	return b.b.DeleteRange(start, end, nil)
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -487,7 +321,7 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
-	return b.db.Write(b.b, nil)
+	return b.b.Commit(pebble.NoSync)
 }
 
 // Reset resets the batch for reuse.
@@ -498,32 +332,65 @@ func (b *batch) Reset() {
 
 // Replay replays the batch contents.
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
-	return b.b.Replay(&replayer{writer: w})
-}
-
-// replayer is a small wrapper to implement the correct replay methods.
-type replayer struct {
-	writer  ethdb.KeyValueWriter
-	failure error
-}
-
-// Put inserts the given value into the key-value data store.
-func (r *replayer) Put(key, value []byte) {
-	// If the replay already failed, stop executing ops
-	if r.failure != nil {
-		return
+	reader := b.b.Reader()
+	for {
+		kind, k, v, ok := reader.Next()
+		if !ok {
+			break
+		}
+		// I have no idea whether the iterated key and value
+		// are safe to use, deep copy them temporarily.
+		if kind == pebble.InternalKeyKindSet {
+			w.Put(common.CopyBytes(k), common.CopyBytes(v))
+		} else if kind == pebble.InternalKeyKindDelete {
+			w.Delete(common.CopyBytes(k))
+		} else {
+			return errors.New("invalid operation") // todo FIX IT
+		}
 	}
-	r.failure = r.writer.Put(key, value)
+	return nil
 }
 
-// Delete removes the key from the key-value data store.
-func (r *replayer) Delete(key []byte) {
-	// If the replay already failed, stop executing ops
-	if r.failure != nil {
-		return
-	}
-	r.failure = r.writer.Delete(key)
+// pebbleIterator is a wrapper of underlying iterator in storage engine.
+// The purpose of this structure is to implement the missing APIs.
+type pebbleIterator struct {
+	iter  *pebble.Iterator
+	moved bool
 }
+
+// Next moves the iterator to the next key/value pair. It returns whether the
+// iterator is exhausted.
+func (iter *pebbleIterator) Next() bool {
+	if iter.moved {
+		iter.moved = false
+		return iter.iter.Valid()
+	}
+	return iter.iter.Next()
+}
+
+// Error returns any accumulated error. Exhausting all the key/value pairs
+// is not considered to be an error.
+func (iter *pebbleIterator) Error() error {
+	return iter.iter.Error()
+}
+
+// Key returns the key of the current key/value pair, or nil if done. The caller
+// should not modify the contents of the returned slice, and its contents may
+// change on the next call to Next.
+func (iter *pebbleIterator) Key() []byte {
+	return iter.iter.Key()
+}
+
+// Value returns the value of the current key/value pair, or nil if done. The
+// caller should not modify the contents of the returned slice, and its contents
+// may change on the next call to Next.
+func (iter *pebbleIterator) Value() []byte {
+	return iter.iter.Value()
+}
+
+// Release releases associated resources. Release should always succeed and can
+// be called multiple times without causing error.
+func (iter *pebbleIterator) Release() { iter.iter.Close() }
 
 // bytesPrefixRange returns key range that satisfy
 // - the given prefix, and
