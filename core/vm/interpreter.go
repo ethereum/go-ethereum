@@ -268,9 +268,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if err != nil {
 			break
 		}
-		if !operation.jumps {
-			pc++
-		}
+		pc++
 	}
 
 	if err == errStopToken {

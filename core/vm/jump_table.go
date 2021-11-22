@@ -41,7 +41,6 @@ type operation struct {
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
 
-	jumps   bool // indicates whether the program counter should not increment
 	writes  bool // determines whether this a state modifying operation
 	returns bool // determines whether the operations sets the return data content
 }
@@ -524,14 +523,12 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: GasMidStep,
 			minStack:    minStack(1, 0),
 			maxStack:    maxStack(1, 0),
-			jumps:       true,
 		},
 		JUMPI: {
 			execute:     opJumpi,
 			constantGas: GasSlowStep,
 			minStack:    minStack(2, 0),
 			maxStack:    maxStack(2, 0),
-			jumps:       true,
 		},
 		PC: {
 			execute:     opPc,
