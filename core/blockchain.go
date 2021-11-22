@@ -380,7 +380,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// Start future block processor.
 	bc.wg.Add(1)
-	go bc.update()
+	go bc.updateFutureBlocks()
 
 	// Start tx indexer/unindexer.
 	if txLookupLimit != nil {
@@ -750,7 +750,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 		rawdb.WriteHeadHeaderHash(batch, block.Hash())
 		rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	}
-
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
@@ -2112,7 +2111,7 @@ func (bc *BlockChain) SetChainHead(newBlock *types.Block) error {
 	return nil
 }
 
-func (bc *BlockChain) update() {
+func (bc *BlockChain) updateFutureBlocks() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
 	defer bc.wg.Done()
