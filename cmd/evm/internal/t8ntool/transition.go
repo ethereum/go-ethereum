@@ -348,17 +348,11 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 			)
 			if txWithKey.protected {
 				signed, err = types.SignTx(tx, signer, key)
-				if err != nil {
-					return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
-				}
 			} else {
-				unprotectedSigner := types.FrontierSigner{}
-				h := unprotectedSigner.Hash(tx)
-				sig, err := crypto.Sign(h[:], key)
-				if err != nil {
-					return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
-				}
-				signed, _ = tx.WithSignature(unprotectedSigner, sig)
+				signed, err = types.SignTx(tx, types.FrontierSigner{}, key)
+			}
+			if err != nil {
+				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
 			}
 			signedTxs = append(signedTxs, signed)
 		} else {
