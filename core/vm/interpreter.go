@@ -268,13 +268,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if err != nil {
 			break
 		}
-
-		switch {
-		case operation.halts:
-			return res, nil
-		case !operation.jumps:
+		if !operation.jumps {
 			pc++
 		}
+	}
+
+	if err == errStopToken {
+		err = nil // clear stop token error
 	}
 
 	return res, err

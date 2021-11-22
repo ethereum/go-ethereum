@@ -41,7 +41,6 @@ type operation struct {
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
 
-	halts   bool // indicates whether the operation should halt further execution
 	jumps   bool // indicates whether the program counter should not increment
 	writes  bool // determines whether this a state modifying operation
 	returns bool // determines whether the operations sets the return data content
@@ -216,7 +215,6 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: 0,
 			minStack:    minStack(0, 0),
 			maxStack:    maxStack(0, 0),
-			halts:       true,
 		},
 		ADD: {
 			execute:     opAdd,
@@ -1017,14 +1015,12 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
-			halts:      true,
 		},
 		SELFDESTRUCT: {
 			execute:    opSuicide,
 			dynamicGas: gasSelfdestruct,
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
-			halts:      true,
 			writes:     true,
 		},
 	}
