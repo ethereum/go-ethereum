@@ -290,7 +290,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 		}()
 	}
 	// Start a goroutine to feed all the blocks into the tracers
-	begin := time.Now()
+	var (
+		begin     = time.Now()
+		derefTodo []common.Hash // list of hashes to dereference from the db
+		derefsMu  sync.Mutex    // mutex for the derefs
+	)
 
 	go func() {
 		var (
@@ -324,6 +328,14 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				return
 			default:
 			}
+			// clean out any derefs
+			derefsMu.Lock()
+			for _, h := range derefTodo {
+				statedb.Database().TrieDB().Dereference(h)
+			}
+			derefTodo = derefTodo[:0]
+			derefsMu.Unlock()
+
 			// Print progress logs if long enough time elapsed
 			if time.Since(logged) > 8*time.Second {
 				logged = time.Now()
@@ -382,12 +394,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				Hash:   res.block.Hash(),
 				Traces: res.results,
 			}
+			// Schedule any parent tries held in memory by this task for dereferencing
 			done[uint64(result.Block)] = result
-
-			// Dereference any parent tries held in memory by this task
-			if res.statedb.Database().TrieDB() != nil {
-				res.statedb.Database().TrieDB().Dereference(res.rootref)
-			}
+			derefsMu.Lock()
+			derefTodo = append(derefTodo, res.rootref)
+			derefsMu.Unlock()
 			// Stream completed traces to the user, aborting on the first error
 			for result, ok := done[next]; ok; result, ok = done[next] {
 				if len(result.Traces) > 0 || next == end.NumberU64() {
@@ -445,12 +456,11 @@ func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *Tra
 // EVM against a block pulled from the pool of bad ones and returns them as a JSON
 // object.
 func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
-	for _, block := range rawdb.ReadAllBadBlocks(api.backend.ChainDb()) {
-		if block.Hash() == hash {
-			return api.traceBlock(ctx, block, config)
-		}
+	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
+	if block == nil {
+		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
-	return nil, fmt.Errorf("bad block %#x not found", hash)
+	return api.traceBlock(ctx, block, config)
 }
 
 // StandardTraceBlockToFile dumps the structured logs created during the
@@ -464,16 +474,72 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
+// IntermediateRoots executes a block (bad- or canon- or side-), and returns a list
+// of intermediate roots: the stateroot after each transaction.
+func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
+	block, _ := api.blockByHash(ctx, hash)
+	if block == nil {
+		// Check in the bad blocks
+		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
+	}
+	if block == nil {
+		return nil, fmt.Errorf("block %#x not found", hash)
+	}
+	if block.NumberU64() == 0 {
+		return nil, errors.New("genesis is not traceable")
+	}
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	if err != nil {
+		return nil, err
+	}
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		roots              []common.Hash
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		chainConfig        = api.backend.ChainConfig()
+		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
+	)
+	for i, tx := range block.Transactions() {
+		var (
+			msg, _    = tx.AsMessage(signer, block.BaseFee())
+			txContext = core.NewEVMTxContext(msg)
+			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
+		)
+		statedb.Prepare(tx.Hash(), i)
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
+			// We intentionally don't return the error here: if we do, then the RPC server will not
+			// return the roots. Most likely, the caller already knows that a certain transaction fails to
+			// be included, but still want the intermediate roots that led to that point.
+			// It may happen the tx_N causes an erroneous state, which in turn causes tx_N+M to not be
+			// executable.
+			// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
+			return roots, nil
+		}
+		// calling IntermediateRoot will internally call Finalize on the state
+		// so any modifications are written to the trie
+		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
+	}
+	return roots, nil
+}
+
 // StandardTraceBadBlockToFile dumps the structured logs created during the
 // execution of EVM against a block pulled from the pool of bad ones to the
 // local file system and returns a list of files to the caller.
 func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	for _, block := range rawdb.ReadAllBadBlocks(api.backend.ChainDb()) {
-		if block.Hash() == hash {
-			return api.standardTraceBlockToFile(ctx, block, config)
-		}
+	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
+	if block == nil {
+		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
-	return nil, fmt.Errorf("bad block %#x not found", hash)
+	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and

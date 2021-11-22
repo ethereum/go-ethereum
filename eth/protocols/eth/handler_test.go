@@ -126,6 +126,12 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 	for i := range unknown {
 		unknown[i] = byte(i)
 	}
+	getHashes := func(from, limit uint64) (hashes []common.Hash) {
+		for i := uint64(0); i < limit; i++ {
+			hashes = append(hashes, backend.chain.GetCanonicalHash(from-1-i))
+		}
+		return hashes
+	}
 	// Create a batch of tests for various scenarios
 	limit := uint64(maxHeadersServe)
 	tests := []struct {
@@ -183,7 +189,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		// Ensure protocol limits are honored
 		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			backend.chain.GetBlockHashesFromHash(backend.chain.CurrentBlock().Hash(), limit),
+			getHashes(backend.chain.CurrentBlock().NumberU64(), limit),
 		},
 		// Check that requesting more than available is handled gracefully
 		{
@@ -379,7 +385,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
 
 	signer := types.HomesteadSigner{}
-	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
+	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_makers_test)
 	generator := func(i int, block *core.BlockGen) {
 		switch i {
 		case 0:
@@ -414,9 +420,8 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	peer, _ := newTestPeer("peer", protocol, backend)
 	defer peer.close()
 
-	// Fetch for now the entire chain db
+	// Collect all state tree hashes.
 	var hashes []common.Hash
-
 	it := backend.db.NewIterator(nil, nil)
 	for it.Next() {
 		if key := it.Key(); len(key) == common.HashLength {
@@ -425,6 +430,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	}
 	it.Release()
 
+	// Request all hashes.
 	p2p.Send(peer.app, GetNodeDataMsg, GetNodeDataPacket66{
 		RequestId:         123,
 		GetNodeDataPacket: hashes,
@@ -436,38 +442,40 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	if msg.Code != NodeDataMsg {
 		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, NodeDataMsg)
 	}
-	var (
-		data [][]byte
-		res  NodeDataPacket66
-	)
+	var res NodeDataPacket66
 	if err := msg.Decode(&res); err != nil {
 		t.Fatalf("failed to decode response node data: %v", err)
 	}
-	data = res.NodeDataPacket
-	// Verify that all hashes correspond to the requested data, and reconstruct a state tree
+
+	// Verify that all hashes correspond to the requested data.
+	data := res.NodeDataPacket
 	for i, want := range hashes {
 		if hash := crypto.Keccak256Hash(data[i]); hash != want {
 			t.Errorf("data hash mismatch: have %x, want %x", hash, want)
 		}
 	}
-	statedb := rawdb.NewMemoryDatabase()
+
+	// Reconstruct state tree from the received data.
+	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		statedb.Put(hashes[i].Bytes(), data[i])
+		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
 	}
+
+	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
-		trie, _ := state.New(backend.chain.GetBlockByNumber(i).Root(), state.NewDatabase(statedb), nil)
-
+		root := backend.chain.GetBlockByNumber(i).Root()
+		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
 		for j, acc := range accounts {
-			state, _ := backend.chain.State()
+			state, _ := backend.chain.StateAt(root)
 			bw := state.GetBalance(acc)
-			bh := trie.GetBalance(acc)
+			bh := reconstructed.GetBalance(acc)
 
-			if (bw != nil && bh == nil) || (bw == nil && bh != nil) {
-				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
+			if (bw == nil) != (bh == nil) {
+				t.Errorf("block %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
-			if bw != nil && bh != nil && bw.Cmp(bw) != 0 {
-				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
+			if bw != nil && bh != nil && bw.Cmp(bh) != 0 {
+				t.Errorf("block %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
 		}
 	}
