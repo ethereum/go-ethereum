@@ -236,6 +236,8 @@ type TxPool struct {
 	chain        blockChain
 	gasPrice     *big.Int
 	txFeed       event.Feed
+	queuedTxFeed event.Feed
+	recentlyQueued map[common.Hash]*types.Transaction
 	dropTxFeed   event.Feed
 	rejectTxFeed event.Feed
 	scope        event.SubscriptionScope
@@ -300,6 +302,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		recentlyQueued:  make(map[common.Hash]*types.Transaction),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -441,6 +444,11 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeDropTxsEvent(ch chan<- DropTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.dropTxFeed.Subscribe(ch))
+}
+// SubscribeQueuedTxsEvent registers a subscription of Transaction and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeQueuedTxsEvent(ch chan<- *types.Transaction) event.Subscription {
+	return pool.scope.Track(pool.queuedTxFeed.Subscribe(ch))
 }
 
 // SubscribeRejectedTxEvent registers a subscription of RejectedTxEvent and
@@ -797,6 +805,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		queuedDiscardMeter.Mark(1)
 		return false, ErrReplaceUnderpriced
 	}
+	pool.recentlyQueued[hash] = tx
 	// Discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
@@ -1251,6 +1260,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			events[addr] = newTxSortedMap()
 		}
 		events[addr].Put(tx)
+		delete(pool.recentlyQueued, tx.Hash())
 	}
 	if len(events) > 0 {
 		var txs []*types.Transaction
@@ -1258,6 +1268,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			txs = append(txs, set.Flatten()...)
 		}
 		pool.txFeed.Send(NewTxsEvent{txs})
+	}
+	for hash, tx := range pool.recentlyQueued {
+		pool.queuedTxFeed.Send(tx)
+		delete(pool.recentlyQueued, hash)
 	}
 }
 

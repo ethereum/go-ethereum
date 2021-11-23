@@ -16,6 +16,10 @@ func (fb *filterBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) even
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeQueuedTxsEvent(ch chan<- *types.Transaction) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription {
 	return nullSubscription()
 }
