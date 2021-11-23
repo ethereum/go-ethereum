@@ -113,6 +113,12 @@ them using your favourite package manager. Once the dependencies are installed, 
 <hr style="margin-top: 3em; margin-bottom: 3em;">
 
 
+Build the beta client:
+
+```shell
+go build -o bor-beta command/*.go
+```
+
 ## License
 
 The go-ethereum library (i.e. all code outside of the `cmd` directory) is licensed under the

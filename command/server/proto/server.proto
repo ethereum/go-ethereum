@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "/command/server/proto";
+
+service Bor {
+    rpc Pprof(PprofRequest) returns (PprofResponse);
+
+    rpc PeersAdd(PeersAddRequest) returns (PeersAddResponse);
+
+    rpc PeersRemove(PeersRemoveRequest) returns (PeersRemoveResponse);
+
+    rpc PeersList(PeersListRequest) returns (PeersListResponse);
+
+    rpc PeersStatus(PeersStatusRequest) returns (PeersStatusResponse);
+
+    rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
+}
+
+
+message PeersAddRequest {
+    string enode = 1;
+    bool trusted = 2;
+}
+
+message PeersAddResponse {
+}
+
+message PeersRemoveRequest {
+    string enode = 1;
+    bool trusted = 2;
+}
+
+message PeersRemoveResponse {
+}
+
+message PeersListRequest {
+}
+
+message PeersListResponse {
+    repeated Peer peers = 1;
+}
+
+message PeersStatusRequest {
+    string enode = 1;
+}
+
+message PeersStatusResponse {
+    Peer peer = 1;
+}
+
+message Peer {
+    string id = 1;
+    string enode = 2;
+    string enr = 3;
+    repeated string caps = 4;
+    string name = 5;
+    bool trusted = 6;
+    bool static = 7;
+}
+
+message ChainSetHeadRequest {
+    uint64 number = 1;
+}
+
+message ChainSetHeadResponse {
+}
+
+message PprofRequest {
+    Type type = 1;
+
+    string profile = 2;
+
+    int64 seconds = 3;
+
+    enum Type {
+        LOOKUP = 0;
+        CPU = 1;
+        TRACE = 2;
+    }
+}
+
+message PprofResponse {
+    string payload = 1;
+    map<string, string> headers = 2;
+}
