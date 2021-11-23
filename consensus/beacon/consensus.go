@@ -372,5 +372,5 @@ func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, num
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor
 	}
-	return td.Cmp(chain.Config().TerminalTotalDifficulty) > 0, nil
+	return td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0, nil
 }
