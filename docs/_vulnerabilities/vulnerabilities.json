@@ -134,13 +134,14 @@
     "check": "(Geth\\/v1\\.10\\.(0|1|2|3|4|5|6|7)-.*)$"
   },
   {
-    "name": "DoS via maliciously crafted p2p message",
+    "name": "DoS via malicious `snap/1` request ",
     "uid": "GETH-2021-03",
-    "summary": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer.",
-    "description": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer.\nFurther details will be released at a later point in time, in accordance with our official disclosure policy.",
+    "summary": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer, via the snap/1 protocol. The crash can be triggered by sending a malicious snap/1 GetTrieNodes package.",
+    "description": "The `snap/1` protocol handler contains two vulnerabilities related to the `GetTrieNodes` packet, which can be exploited to crash the node. Full details are available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v",
-      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities"
+      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities",
+      "https://github.com/ethereum/go-ethereum/pull/23657"
     ],
     "introduced": "v1.10.0",
     "fixed": "v1.10.9",
