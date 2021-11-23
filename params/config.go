@@ -346,7 +346,7 @@ type ChainConfig struct {
 	BerlinBlock         *big.Int `json:"berlinBlock,omitempty"`         // Berlin switch block (nil = no fork, 0 = already on berlin)
 	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	CalldataBlock       *big.Int `json:"calldataBlock,omitempty"`       // Eip-XXXX (calldata price decrease) switch block (nil = no fork, 0 = already activated)
+	CalldataForkBlock   *big.Int `json:"calldataForkBlock,omitempty"`   // Eip-XXXX (calldata price decrease) switch block (nil = no fork, 0 = already activated)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -403,7 +403,7 @@ func (c *ChainConfig) String() string {
 		c.BerlinBlock,
 		c.LondonBlock,
 		c.ArrowGlacierBlock,
-		c.CalldataBlock,
+		c.CalldataForkBlock,
 		engine,
 	)
 }
@@ -475,9 +475,9 @@ func (c *ChainConfig) IsArrowGlacier(num *big.Int) bool {
 	return isForked(c.ArrowGlacierBlock, num)
 }
 
-// IsCalldata returns whether num is either equal to the Calldata (EIP-XXXX) fork block or greater.
-func (c *ChainConfig) IsCalldata(num *big.Int) bool {
-	return isForked(c.CalldataBlock, num)
+// IsCalldataFork returns whether num is either equal to the Calldata (EIP-XXXX) fork block or greater.
+func (c *ChainConfig) IsCalldataFork(num *big.Int) bool {
+	return isForked(c.CalldataForkBlock, num)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -529,7 +529,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
-		{name: "arrowGlacierBlock", block: c.CalldataBlock},
+		{name: "calldataForkBlock", block: c.CalldataForkBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -602,8 +602,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock, head) {
 		return newCompatError("Arrow Glacier fork block", c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock)
 	}
-	if isForkIncompatible(c.CalldataBlock, newcfg.CalldataBlock, head) {
-		return newCompatError("Calldata fork block", c.CalldataBlock, newcfg.CalldataBlock)
+	if isForkIncompatible(c.CalldataForkBlock, newcfg.CalldataForkBlock, head) {
+		return newCompatError("Calldata fork block", c.CalldataForkBlock, newcfg.CalldataForkBlock)
 	}
 	return nil
 }
