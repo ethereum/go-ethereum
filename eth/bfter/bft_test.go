@@ -43,25 +43,33 @@ func newTester() *bfterTester {
 func TestSequentialVotes(t *testing.T) {
 	tester := newTester()
 	verifyCounter := uint32(0)
+	handlerCounter := uint32(0)
 	broadcastCounter := uint32(0)
 	targetVotes := 10
 
-	tester.bfter.consensus.verifyVote = func(vote utils.Vote) error {
+	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
 		atomic.AddUint32(&verifyCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.Vote = func(utils.Vote) {
+
+	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+
+	tester.bfter.broadcast.Vote = func(*utils.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
 	votes := makeVotes(targetVotes)
 	for _, vote := range votes {
-		tester.bfter.Vote(vote)
+		tester.bfter.Vote(&vote)
 	}
 
-	time.Sleep(50 * time.Millisecond)
-	if int(verifyCounter) != targetVotes || int(broadcastCounter) != targetVotes {
-		t.Fatalf("count mismatch: have %v on verify and have %v on broadcast, want %v", verifyCounter, broadcastCounter, targetVotes)
+	time.Sleep(100 * time.Millisecond)
+
+	if int(verifyCounter) != targetVotes || int(handlerCounter) != targetVotes || int(broadcastCounter) != targetVotes {
+		t.Fatalf("count mismatch: have %v on verify, %v on handler, %v on broadcast, want %v", verifyCounter, handlerCounter, broadcastCounter, targetVotes)
 	}
 }
 
@@ -69,48 +77,61 @@ func TestSequentialVotes(t *testing.T) {
 func TestDuplicateVotes(t *testing.T) {
 	tester := newTester()
 	verifyCounter := uint32(0)
+	handlerCounter := uint32(0)
 	broadcastCounter := uint32(0)
 	targetVotes := 1
 
-	tester.bfter.consensus.verifyVote = func(vote utils.Vote) error {
+	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
 		atomic.AddUint32(&verifyCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.Vote = func(utils.Vote) {
+
+	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+
+	tester.bfter.broadcast.Vote = func(*utils.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
 	vote := utils.Vote{}
 
 	// send twice
-	tester.bfter.Vote(vote)
-	tester.bfter.Vote(vote)
+	tester.bfter.Vote(&vote)
+	tester.bfter.Vote(&vote)
 
 	time.Sleep(50 * time.Millisecond)
-	if int(verifyCounter) != targetVotes || int(broadcastCounter) != targetVotes {
-		t.Fatalf("count mismatch: have %v on verify and have %v on broadcast, want %v", verifyCounter, broadcastCounter, targetVotes)
+	if int(verifyCounter) != targetVotes || int(handlerCounter) != targetVotes || int(broadcastCounter) != targetVotes {
+		t.Fatalf("count mismatch: have %v on verify, %v on handler,  %v on broadcast, want %v", verifyCounter, handlerCounter, broadcastCounter, targetVotes)
 	}
 }
 
 // Test that avoid boardcast if there is bad vote
 func TestNotBoardcastInvalidVote(t *testing.T) {
 	tester := newTester()
+	handlerCounter := uint32(0)
 	broadcastCounter := uint32(0)
 	targetVotes := 0
 
-	tester.bfter.consensus.verifyVote = func(vote utils.Vote) error {
+	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
 		return fmt.Errorf("This is invalid vote")
 	}
-	tester.bfter.broadcast.Vote = func(utils.Vote) {
+
+	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+	tester.bfter.broadcast.Vote = func(*utils.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
 	vote := utils.Vote{}
-	tester.bfter.Vote(vote)
+	tester.bfter.Vote(&vote)
 
 	time.Sleep(50 * time.Millisecond)
-	if int(broadcastCounter) != targetVotes {
-		t.Fatalf("count mismatch: have %v on broadcast, want %v", broadcastCounter, targetVotes)
+	if int(handlerCounter) != targetVotes || int(broadcastCounter) != targetVotes {
+		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetVotes)
 	}
 }
 

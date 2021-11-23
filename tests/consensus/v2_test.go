@@ -20,7 +20,7 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	timeoutMsg := <-engineV2.BroadcastCh
 	assert.NotNil(t, timeoutMsg)
 
-	valid, err := engineV2.VerifyTimeoutMessage(*timeoutMsg.(*utils.Timeout))
+	valid, err := engineV2.VerifyTimeoutMessage(timeoutMsg.(*utils.Timeout))
 	// We can only test valid = false for now as the implementation for getCurrentRoundMasterNodes is not complete
 	assert.False(t, valid)
 	// This shows we are able to decode the timeout message, which is what this test is all about
@@ -117,14 +117,14 @@ func TestVoteMessageHandlerSuccessfullyGeneratedQC(t *testing.T) {
 		Signature:         []byte{1},
 	}
 
-	err := engineV2.VoteHandler(*voteMsg)
+	err := engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: *blockInfo,
 		Signature:         []byte{2},
 	}
-	err = engineV2.VoteHandler(*voteMsg)
+	err = engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 
@@ -134,7 +134,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedQC(t *testing.T) {
 		Signature:         []byte{3},
 	}
 
-	err = engineV2.VoteHandler(*voteMsg)
+	err = engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	// Check round has now changed from 1 to 2
 	assert.Equal(t, utils.Round(2), engineV2.GetCurrentRound())
@@ -158,13 +158,13 @@ func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	}
 
 	// voteRound > currentRound
-	err := engineV2.VoteHandler(*voteMsg)
+	err := engineV2.VoteHandler(voteMsg)
 	assert.NotNil(t, err)
 	assert.Equal(t, "Vote message round number: 2 does not match currentRound: 3", err.Error())
 
 	// Set round to 1
 	engineV2.SetNewRoundFaker(utils.Round(1), false)
-	err = engineV2.VoteHandler(*voteMsg)
+	err = engineV2.VoteHandler(voteMsg)
 	assert.NotNil(t, err)
 	// voteRound < currentRound
 	assert.Equal(t, "Vote message round number: 2 does not match currentRound: 1", err.Error())
@@ -189,14 +189,14 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Signature:         []byte{1},
 	}
 
-	err := engineV2.VoteHandler(*voteMsg)
+	err := engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: *blockInfo,
 		Signature:         []byte{2},
 	}
-	err = engineV2.VoteHandler(*voteMsg)
+	err = engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	assert.Equal(t, utils.Round(1), engineV2.GetCurrentRound())
 
@@ -206,7 +206,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Signature:         []byte{3},
 	}
 
-	err = engineV2.VoteHandler(*voteMsg)
+	err = engineV2.VoteHandler(voteMsg)
 	assert.Nil(t, err)
 	// Check round has now changed from 1 to 2
 	assert.Equal(t, utils.Round(2), engineV2.GetCurrentRound())

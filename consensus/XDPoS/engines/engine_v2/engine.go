@@ -103,7 +103,7 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 	SyncInfo workflow
 */
 // Verify syncInfo and trigger process QC or TC if successful
-func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
+func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo *utils.SyncInfo) error {
 	/*
 		1. Verify items including:
 				- verifyQC
@@ -123,7 +123,7 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo utils.SyncInfo) error {
 	return nil
 }
 
-func (x *XDPoS_v2) SyncInfoHandler(header *types.Header) error {
+func (x *XDPoS_v2) SyncInfoHandler(syncInfo *utils.SyncInfo) error {
 	/*
 		1. processQC
 		2. processTC
@@ -134,7 +134,7 @@ func (x *XDPoS_v2) SyncInfoHandler(header *types.Header) error {
 /*
 	Vote workflow
 */
-func (x *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) (bool, error) {
+func (x *XDPoS_v2) VerifyVoteMessage(vote *utils.Vote) (bool, error) {
 	/*
 		  1. Check signature:
 					- Use ecRecover to get the public key
@@ -147,7 +147,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(vote utils.Vote) (bool, error) {
 }
 
 // Consensus entry point for processing vote message to produce QC
-func (x *XDPoS_v2) VoteHandler(voteMsg utils.Vote) error {
+func (x *XDPoS_v2) VoteHandler(voteMsg *utils.Vote) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
 
@@ -157,7 +157,7 @@ func (x *XDPoS_v2) VoteHandler(voteMsg utils.Vote) error {
 	}
 
 	// Collect vote
-	thresholdReached, numberOfVotesInPool, hookError := x.votePool.Add(&voteMsg)
+	thresholdReached, numberOfVotesInPool, hookError := x.votePool.Add(voteMsg)
 	if hookError != nil {
 		log.Error("Error while adding vote message to the pool, ", hookError)
 		return hookError
@@ -201,7 +201,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(pooledVotes map[common.Hash]utils.
 				- Use the above xdc address to check against the master node(For the running epoch)
 		2. Broadcast(Not part of consensus)
 */
-func (x *XDPoS_v2) VerifyTimeoutMessage(timeoutMsg utils.Timeout) (bool, error) {
+func (x *XDPoS_v2) VerifyTimeoutMessage(timeoutMsg *utils.Timeout) (bool, error) {
 	return x.verifyMsgSignature(utils.TimeoutSigHash(&timeoutMsg.Round), timeoutMsg.Signature)
 }
 
@@ -282,7 +282,7 @@ func (x *XDPoS_v2) generateBlockInfo() error {
 }
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
-func (x *XDPoS_v2) VerifyBlockInfo(blockInfo utils.BlockInfo) error {
+func (x *XDPoS_v2) VerifyBlockInfo(blockInfo *utils.BlockInfo) error {
 	return nil
 }
 

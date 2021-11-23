@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -92,6 +93,10 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		knownBlocks:     mapset.NewSet(),
 		knownOrderTxs:   mapset.NewSet(),
 		knownLendingTxs: mapset.NewSet(),
+
+		knownVote:     mapset.NewSet(),
+		knownTimeout:  mapset.NewSet(),
+		knownSyncInfo: mapset.NewSet(),
 	}
 }
 
@@ -167,7 +172,7 @@ func (p *peer) MarkLendingTransaction(hash common.Hash) {
 
 // MarkVote marks a vote as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
-func (p *peer) MarkVote(hash interface{}) {
+func (p *peer) MarkVote(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
 	for p.knownVote.Cardinality() >= maxKnownVote {
 		p.knownVote.Pop()
@@ -177,7 +182,7 @@ func (p *peer) MarkVote(hash interface{}) {
 
 // MarkTimeout marks a timeout as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
-func (p *peer) MarkTimeout(hash interface{}) {
+func (p *peer) MarkTimeout(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
 	for p.knownTimeout.Cardinality() >= maxKnownTimeout {
 		p.knownTimeout.Pop()
@@ -187,7 +192,7 @@ func (p *peer) MarkTimeout(hash interface{}) {
 
 // MarkSyncInfo marks a syncInfo as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
-func (p *peer) MarkSyncInfo(hash interface{}) {
+func (p *peer) MarkSyncInfo(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
 	for p.knownSyncInfo.Cardinality() >= maxKnownSyncInfo {
 		p.knownSyncInfo.Pop()
@@ -294,8 +299,8 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	}
 }
 
-func (p *peer) SendVote(vote interface{}) error {
-	p.knownVote.Add(vote)
+func (p *peer) SendVote(vote *utils.Vote) error {
+	p.knownVote.Add(vote.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, VoteMsg, vote)
 	} else {
@@ -308,8 +313,8 @@ func (p *peer) AsyncSendVote() {
 
 }
 */
-func (p *peer) SendTimeout(timeout interface{}) error {
-	p.knownTimeout.Add(timeout)
+func (p *peer) SendTimeout(timeout *utils.Timeout) error {
+	p.knownTimeout.Add(timeout.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, TimeoutMsg, timeout)
 	} else {
@@ -322,8 +327,8 @@ func (p *peer) AsyncSendTimeout() {
 
 }
 */
-func (p *peer) SendSyncInfo(syncInfo interface{}) error {
-	p.knownSyncInfo.Add(syncInfo)
+func (p *peer) SendSyncInfo(syncInfo *utils.SyncInfo) error {
+	p.knownSyncInfo.Add(syncInfo.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, SyncInfoMsg, syncInfo)
 	} else {
