@@ -67,8 +67,9 @@ type TxPool struct {
 	mined        map[common.Hash][]*types.Transaction // mined transactions by block hash
 	clearIdx     uint64                               // earliest block nr that can contain mined tx info
 
-	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
+	istanbul     bool // Fork indicator whether we are in the istanbul stage.
+	calldataFork bool // Fork indicator whether we are in the calldata fork stage.
+	eip2718      bool // Fork indicator whether we are in the eip2718 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -314,6 +315,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	// Update fork indicator by next pending block number
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.istanbul = pool.config.IsIstanbul(next)
+	pool.calldataFork = pool.config.IsCalldataFork(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
 }
 
@@ -382,7 +384,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.calldataFork)
 	if err != nil {
 		return err
 	}
