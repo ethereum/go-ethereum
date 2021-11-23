@@ -36,7 +36,7 @@ var (
 	CodeOffset          = uint256.NewInt(128)
 	MainStorageOffset   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
 	VerkleNodeWidth     = uint256.NewInt(8)
-	codeStorageDelta    = uint256.NewInt(0).Sub(HeaderStorageOffset, CodeOffset)
+	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 )
 
 func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
@@ -94,10 +94,14 @@ func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
 		treeIndex.Add(MainStorageOffset, storageKey)
 	}
 	treeIndex.Div(treeIndex, VerkleNodeWidth)
-	subIndexMod := new(uint256.Int).Mod(treeIndex, VerkleNodeWidth).Bytes()
+
+	// calculate the sub_index, i.e. the index in the stem tree.
+	// Because the modulus is 256, it's the last byte of treeIndex
+	subIndexMod := treeIndex.Bytes()
 	var subIndex byte
 	if len(subIndexMod) != 0 {
-		subIndex = subIndexMod[0]
+		// Get the last byte, as uint256.Int is big-endian
+		subIndex = subIndexMod[len(subIndexMod)-1]
 	}
 	return GetTreeKey(address, treeIndex, subIndex)
 }
