@@ -105,6 +105,12 @@ func Transition(ctx *cli.Context) error {
 		if ctx.IsSet(TraceDisableReturnDataFlag.Name) && ctx.IsSet(TraceEnableReturnDataFlag.Name) {
 			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
 		}
+		if ctx.IsSet(TraceDisableMemoryFlag.Name) {
+			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
+		}
+		if ctx.IsSet(TraceDisableReturnDataFlag.Name) {
+			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
+		}
 		// Configure the EVM logger
 		logConfig := &vm.LogConfig{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
