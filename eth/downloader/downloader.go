@@ -526,9 +526,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		d.syncInitHook(origin, height)
 	}
 	fetchers := []func() error{
-		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and snap sync
-		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during snap sync
+		func() error { return d.fetchHeaders(p, origin+1, latest.Number.Uint64()) }, // Headers are always retrieved
+		func() error { return d.fetchBodies(origin + 1) },                           // Bodies are retrieved during normal and snap sync
+		func() error { return d.fetchReceipts(origin + 1) },                         // Receipts are retrieved during snap sync
 		func() error { return d.processHeaders(origin+1, td) },
 	}
 	if mode == SnapSync {
@@ -905,7 +905,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
-func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
+func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
 
@@ -1005,6 +1005,12 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 		}
 		// If the skeleton's finished, pull any remaining head headers directly from the origin
 		if skeleton && len(headers) == 0 {
+			// A malicious node might withhold advertised headers indefinitely
+			if from+uint64(MaxHeaderFetch)-1 <= head {
+				p.log.Warn("Peer withheld skeleton headers", "advertised", head, "withheld", from+uint64(MaxHeaderFetch)-1)
+				return fmt.Errorf("%w: withheld skeleton headers: advertised %d, withheld #%d", errStallingPeer, head, from+uint64(MaxHeaderFetch)-1)
+			}
+			p.log.Debug("No skeleton, fetching headers directly")
 			skeleton = false
 			continue
 		}
@@ -1041,6 +1047,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			progressed = proced > 0
 			from += uint64(proced)
 		} else {
+			// A malicious node might withhold advertised headers indefinitely
+			if n := len(headers); n < MaxHeaderFetch && headers[n-1].Number.Uint64() < head {
+				p.log.Warn("Peer withheld headers", "advertised", head, "delivered", headers[n-1].Number.Uint64())
+				return fmt.Errorf("%w: withheld headers: advertised %d, delivered %d", errStallingPeer, head, headers[n-1].Number.Uint64())
+			}
 			// If we're closing in on the chain head, but haven't yet reached it, delay
 			// the last few headers so mini reorgs on the head don't cause invalid hash
 			// chain errors.
