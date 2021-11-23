@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -203,8 +204,8 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 		t.Fatalf("Failed to open index file: %v", err)
 	}
 	// Remove everything but the first item, and leave data unaligned
-	// 0-indexEntry, 1-indexEntry, corrupt-indexEntry
-	idxFile.Truncate(indexEntrySize + indexEntrySize + indexEntrySize/2)
+	// metadata, 1-indexEntry, corrupt-indexEntry
+	idxFile.Truncate(metaLength + indexEntrySize + indexEntrySize/2)
 	idxFile.Close()
 
 	// Now open it again
@@ -387,7 +388,7 @@ func TestFreezerTruncate(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close()
-		f.truncate(10) // 150 bytes
+		f.truncateHead(10) // 150 bytes
 		if f.items != 10 {
 			t.Fatalf("expected %d items, got %d", 10, f.items)
 		}
@@ -504,7 +505,7 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		}
 
 		// Now, truncate back to zero
-		f.truncate(0)
+		f.truncateHead(0)
 
 		// Write the data again
 		batch := f.newBatch()
@@ -559,26 +560,23 @@ func TestFreezerOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		indexBuf := make([]byte, 7*indexEntrySize)
+		indexBuf := make([]byte, 6*indexEntrySize+metaLength)
 		indexFile.Read(indexBuf)
 
 		// Update the index file, so that we store
-		// [ file = 2, offset = 4 ] at index zero
-
-		tailId := uint32(2)     // First file is 2
-		itemOffset := uint32(4) // We have removed four items
-		zeroIndex := indexEntry{
-			filenum: tailId,
-			offset:  itemOffset,
+		// [ file = 2, deleted = 4, hidden = 0 ] as meta
+		blob, err := encodeMetadata(newMetadata(2, 4, 0))
+		if err != nil {
+			t.Fatal(err)
 		}
-		buf := zeroIndex.append(nil)
-		// Overwrite index zero
-		copy(indexBuf, buf)
+		copy(indexBuf, blob)
+
 		// Remove the four next indices by overwriting
-		copy(indexBuf[indexEntrySize:], indexBuf[indexEntrySize*5:])
+		copy(indexBuf[metaLength:], indexBuf[metaLength+indexEntrySize*4:])
 		indexFile.WriteAt(indexBuf, 0)
+
 		// Need to truncate the moved index items
-		indexFile.Truncate(indexEntrySize * (1 + 2))
+		indexFile.Truncate(indexEntrySize*2 + metaLength)
 		indexFile.Close()
 	}
 
@@ -617,22 +615,22 @@ func TestFreezerOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		indexBuf := make([]byte, 3*indexEntrySize)
+		indexBuf := make([]byte, 2*indexEntrySize+metaLength)
 		indexFile.Read(indexBuf)
 
 		// Update the index file, so that we store
-		// [ file = 2, offset = 1M ] at index zero
-
-		tailId := uint32(2)           // First file is 2
-		itemOffset := uint32(1000000) // We have removed 1M items
-		zeroIndex := indexEntry{
-			offset:  itemOffset,
-			filenum: tailId,
+		// [ file = 2, deleted = 1M, hidden = 0 ] as meta
+		blob, err := encodeMetadata(newMetadata(2, 1000000, 0))
+		if err != nil {
+			t.Fatal(err)
 		}
-		buf := zeroIndex.append(nil)
-		// Overwrite index zero
-		copy(indexBuf, buf)
+		copy(indexBuf, blob)
+
+		// Remove the four 2 indices by overwriting
+		copy(indexBuf[metaLength:], indexBuf[metaLength+indexEntrySize*2:])
 		indexFile.WriteAt(indexBuf, 0)
+
+		indexFile.Truncate(indexEntrySize*2 + metaLength)
 		indexFile.Close()
 	}
 
@@ -656,6 +654,214 @@ func TestFreezerOffset(t *testing.T) {
 			1000000: getChunk(20, 0xbb),
 			1000001: getChunk(20, 0xaa),
 		})
+	}
+}
+
+func TestTruncateTail(t *testing.T) {
+	t.Parallel()
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("truncate-tail-%d", rand.Uint64())
+
+	// Fill table
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write 7 x 20 bytes, splitting out into four files
+	batch := f.newBatch()
+	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
+	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
+	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
+	require.NoError(t, batch.AppendRaw(3, getChunk(20, 0xcc)))
+	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
+	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
+	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
+	require.NoError(t, batch.commit())
+
+	// nothing to do, all the items should still be there.
+	f.truncateTail(0)
+	fmt.Println(f.dumpIndexString(0, 1000))
+	checkRetrieve(t, f, map[uint64][]byte{
+		0: getChunk(20, 0xFF),
+		1: getChunk(20, 0xEE),
+		2: getChunk(20, 0xdd),
+		3: getChunk(20, 0xcc),
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	// truncate single element( item 0 ), deletion is only supported at file level
+	f.truncateTail(1)
+	fmt.Println(f.dumpIndexString(0, 1000))
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		1: getChunk(20, 0xEE),
+		2: getChunk(20, 0xdd),
+		3: getChunk(20, 0xcc),
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	// Reopen the table, the deletion information should be persisted as well
+	f.Close()
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		1: getChunk(20, 0xEE),
+		2: getChunk(20, 0xdd),
+		3: getChunk(20, 0xcc),
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
+	f.truncateTail(2)
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+		1: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		2: getChunk(20, 0xdd),
+		3: getChunk(20, 0xcc),
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	// Reopen the table, the above testing should still pass
+	f.Close()
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+		1: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		2: getChunk(20, 0xdd),
+		3: getChunk(20, 0xcc),
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	// truncate all, the entire freezer should be deleted
+	f.truncateTail(6)
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+		1: errOutOfBounds,
+		2: errOutOfBounds,
+		3: errOutOfBounds,
+		4: errOutOfBounds,
+		5: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		6: getChunk(20, 0x11),
+	})
+}
+
+func TestTruncateHeadBelowTail(t *testing.T) {
+	t.Parallel()
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("truncate-head-blow-tail-%d", rand.Uint64())
+
+	// Fill table
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write 7 x 20 bytes, splitting out into four files
+	batch := f.newBatch()
+	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
+	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
+	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
+	require.NoError(t, batch.AppendRaw(3, getChunk(20, 0xcc)))
+	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
+	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
+	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
+	require.NoError(t, batch.commit())
+
+	f.truncateTail(4) // Tail = 4
+
+	// NewHead is required to be 3, the entire table should be truncated
+	f.truncateHead(4)
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds, // Deleted by tail
+		1: errOutOfBounds, // Deleted by tail
+		2: errOutOfBounds, // Deleted by tail
+		3: errOutOfBounds, // Deleted by tail
+		4: errOutOfBounds, // Deleted by Head
+		5: errOutOfBounds, // Deleted by Head
+		6: errOutOfBounds, // Deleted by Head
+	})
+
+	// Append new items
+	batch = f.newBatch()
+	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
+	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
+	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
+	require.NoError(t, batch.commit())
+
+	checkRetrieve(t, f, map[uint64][]byte{
+		4: getChunk(20, 0xbb),
+		5: getChunk(20, 0xaa),
+		6: getChunk(20, 0x11),
+	})
+
+	f.truncateTail(5) // Lazy deleted the item-4, it's hidden
+	f.truncateHead(5) // New head is reset to item-4
+	checkRetrieveError(t, f, map[uint64]error{
+		4: errOutOfBounds, // Hidden item
+	})
+}
+
+func TestUpgradeLegacyFreezerTable(t *testing.T) {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	index := &indexEntry{
+		filenum: 100,
+		offset:  200,
+	}
+	encoded := index.append(nil)
+	f.Write(encoded)
+
+	newf, meta, err := repairTableIndex(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newf.Name() != f.Name() {
+		t.Fatal("Unexpected file name")
+	}
+	if meta.tailId != 100 {
+		t.Fatal("Unexpected tail file")
+	}
+	if meta.deleted != 200 {
+		t.Fatal("Unexpected deleted items")
+	}
+	if meta.hidden != 0 {
+		t.Fatal("Unexpected hidden items")
+	}
+	if meta.version != freezerVersion {
+		t.Fatal("Unexpected freezer version")
 	}
 }
 
