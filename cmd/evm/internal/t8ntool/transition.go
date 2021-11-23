@@ -268,26 +268,33 @@ func Transition(ctx *cli.Context) error {
 // txWithKey is a helper-struct, to allow us to use the types.Transaction along with
 // a `secretKey`-field, for input
 type txWithKey struct {
-	key *ecdsa.PrivateKey
-	tx  *types.Transaction
+	key       *ecdsa.PrivateKey
+	tx        *types.Transaction
+	protected bool
 }
 
 func (t *txWithKey) UnmarshalJSON(input []byte) error {
-	// Read the secretKey, if present
-	type sKey struct {
-		Key *common.Hash `json:"secretKey"`
+	// Read the metadata, if present
+	type txMetadata struct {
+		Key       *common.Hash `json:"secretKey"`
+		Protected *bool        `json:"protected"`
 	}
-	var key sKey
-	if err := json.Unmarshal(input, &key); err != nil {
+	var data txMetadata
+	if err := json.Unmarshal(input, &data); err != nil {
 		return err
 	}
-	if key.Key != nil {
-		k := key.Key.Hex()[2:]
+	if data.Key != nil {
+		k := data.Key.Hex()[2:]
 		if ecdsaKey, err := crypto.HexToECDSA(k); err != nil {
 			return err
 		} else {
 			t.key = ecdsaKey
 		}
+	}
+	if data.Protected != nil {
+		t.protected = *data.Protected
+	} else {
+		t.protected = true
 	}
 	// Now, read the transaction itself
 	var tx types.Transaction
@@ -317,7 +324,15 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 		v, r, s := tx.RawSignatureValues()
 		if key != nil && v.BitLen()+r.BitLen()+s.BitLen() == 0 {
 			// This transaction needs to be signed
-			signed, err := types.SignTx(tx, signer, key)
+			var (
+				signed *types.Transaction
+				err    error
+			)
+			if txWithKey.protected {
+				signed, err = types.SignTx(tx, signer, key)
+			} else {
+				signed, err = types.SignTx(tx, types.FrontierSigner{}, key)
+			}
 			if err != nil {
 				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
 			}
