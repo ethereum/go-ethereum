@@ -35,7 +35,7 @@ type call struct {
 }
 
 type TracerResult interface {
-	vm.Tracer
+	vm.EVMLogger
 	GetResult() (interface{}, error)
 }
 

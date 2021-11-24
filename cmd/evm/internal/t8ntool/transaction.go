@@ -121,6 +121,9 @@ func Transaction(ctx *cli.Context) error {
 	}
 	var results []result
 	for it.Next() {
+		if err := it.Err(); err != nil {
+			return NewError(ErrorIO, err)
+		}
 		var tx types.Transaction
 		err := rlp.DecodeBytes(it.Value(), &tx)
 		if err != nil {

@@ -214,6 +214,9 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address,
 		} else if number, ok := blockNrOrHash.Number(); ok {
 			header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 		}
+		if header == nil {
+			return common.Address{}, fmt.Errorf("missing block %v", blockNrOrHash.String())
+		}
 		return api.clique.Author(header)
 	}
 	block := new(types.Block)
