@@ -84,7 +84,6 @@ type Backend interface {
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeRejectedTxEvent(chan<- core.RejectedTxEvent) event.Subscription
 	SubscribeDropTxsEvent(chan<- core.DropTxsEvent) event.Subscription
-	SubscribeQueuedTxsEvent(chan<- *types.Transaction) event.Subscription
 
 	// Filter API
 	BloomStatus() (uint64, uint64)
