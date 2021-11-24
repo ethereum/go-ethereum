@@ -33,6 +33,8 @@ var (
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
+
+	ErrTxDataAboveCap = errors.New("block transactions calldata above calldata cap")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

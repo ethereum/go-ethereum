@@ -71,6 +71,12 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		return consensus.ErrPrunedAncestor
 	}
+	// if EIP-XXXX, check if calldata size is below cap
+	if v.config.IsCalldataFork(block.Number()) {
+		if err := VerifyCalldataCap(block); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -126,4 +132,18 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		}
 	}
 	return limit
+}
+
+// VerifyCalldataCap calculates the total calldata size of the block's transactions and
+// verifies that it is below the cap introduced by EIP-XXXX
+func VerifyCalldataCap(block *types.Block) error {
+	calldataCap := params.TxDataBaseBlockCap + uint64(len(block.Transactions()))*params.TxDataCapStipend
+	for _, tx := range block.Transactions() {
+		l := uint64(len(tx.Data()))
+		if calldataCap < l {
+			return ErrTxDataAboveCap
+		}
+		calldataCap -= l
+	}
+	return nil
 }
