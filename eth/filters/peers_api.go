@@ -134,7 +134,7 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		headers := make(chan *types.Header, 1024)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
 		for {
@@ -173,33 +173,13 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		headers := make(chan *types.Header, 1024)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribeNewHeads(headers)
-		reorgs := make(chan *core.Reorg, 1024)
-		reorgSub := core.SubscribeReorgs(reorgs)
-		defer headersSub.Unsubscribe()
-		defer reorgSub.Unsubscribe()
 
 		for {
-			var hashes []common.Hash
 			select {
-			case r := <-reorgs:
-				// Reverse the added blocks in the reorgs, excluding the latest block
-				// as it will be emitted on the newHeads channels.
-				hashes = make([]common.Hash, 0, len(r.Added) - 1)
-				for i := len(r.Added) - 1; i > 0; i-- {
-					hashes = append(hashes, r.Added[i])
-				}
 			case h := <-headers:
-				hashes = []common.Hash{h.Hash()}
-			case <-rpcSub.Err():
-				return
-			case <-reorgSub.Err():
-				return
-			case <-notifier.Closed():
-				return
-			}
-			for _, hash := range hashes {
+				hash := h.Hash()
 				peerid, _ := blockPeerMap.Get(hash)
 
 				block, err := api.backend.BlockByHash(ctx, hash)
@@ -241,6 +221,12 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewFullBlocksWithPeers", "hash", hash, "peer", peerid, "peer", peer)
 				notifier.Notify(rpcSub.ID, withPeer{Value: marshalBlock, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts} )
+			case <-rpcSub.Err():
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
 			}
 		}
 	}()
@@ -302,7 +288,7 @@ func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Su
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		headers := make(chan *types.Header, 1024)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
 		for {
@@ -317,36 +303,6 @@ func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Su
 				return
 			case <-notifier.Closed():
 				headersSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
-// ReorgFeed
-func (api *PublicFilterAPI) ReorgFeed(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		ch := make(chan *core.Reorg, 1024)
-		sub := core.SubscribeReorgs(ch)
-
-		for {
-			select {
-			case r := <-ch:
-				notifier.Notify(rpcSub.ID, r)
-			case <-rpcSub.Err():
-				sub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				sub.Unsubscribe()
 				return
 			}
 		}
