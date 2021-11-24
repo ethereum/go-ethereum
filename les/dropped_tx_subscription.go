@@ -10,7 +10,6 @@ package les
 import (
 	"errors"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -21,10 +20,6 @@ func (s *unimplementedSubscription) Err() <-chan error {
 	ch := make(chan error, 1)
 	ch <- errors.New("Subscription type not implemented")
 	return ch
-}
-
-func (b *LesApiBackend) SubscribeQueuedTxsEvent(ch chan<- *types.Transaction) event.Subscription {
-	return &unimplementedSubscription{}
 }
 
 func (b *LesApiBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription {

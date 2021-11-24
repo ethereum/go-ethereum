@@ -41,7 +41,6 @@ type Backend interface {
 
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription
-	SubscribeQueuedTxsEvent(ch chan<- *types.Transaction) event.Subscription
 	SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
