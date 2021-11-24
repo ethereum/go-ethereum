@@ -229,7 +229,7 @@ func PingPastExpiration(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatal("Expected no reply, got", reply)
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -247,7 +247,7 @@ func WrongPacketType(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatal("Expected no reply, got", reply)
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -282,9 +282,16 @@ func FindnodeWithoutEndpointProof(t *utesting.T) {
 	rand.Read(req.Target[:])
 	te.send(te.l1, &req)
 
-	reply, _, _ := te.read(te.l1)
-	if reply != nil {
-		t.Fatal("Expected no response, got", reply)
+	for {
+		reply, _, _ := te.read(te.l1)
+		if reply == nil {
+			// No response, all good
+			break
+		}
+		if reply.Kind() == v4wire.PingPacket {
+			continue // A ping is ok, just ignore it
+		}
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -304,7 +311,7 @@ func BasicFindnode(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatal("Expected neighbors, got", reply.Name())
+		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -341,7 +348,7 @@ func UnsolicitedNeighbors(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatal("Expected neighbors, got", reply.Name())
+		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
 	nodes := reply.(*v4wire.Neighbors).Nodes
 	if contains(nodes, encFakeKey) {
