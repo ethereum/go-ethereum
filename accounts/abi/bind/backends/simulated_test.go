@@ -916,8 +916,8 @@ func TestSuggestGasPrice(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get gas price: %v", err)
 	}
-	if gasPrice.Uint64() != uint64(1) {
-		t.Errorf("gas price was not expected value of 1. actual: %v", gasPrice.Uint64())
+	if gasPrice.Uint64() != sim.pendingBlock.Header().BaseFee.Uint64() {
+		t.Errorf("gas price was not expected value of %v. actual: %v", sim.pendingBlock.Header().BaseFee.Uint64(), gasPrice.Uint64())
 	}
 }
 
