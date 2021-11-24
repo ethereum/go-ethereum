@@ -40,7 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 
-	// Force-load the native, to trigger registration
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
 	"gopkg.in/urfave/cli.v1"
@@ -139,6 +140,7 @@ var (
 		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
+		utils.DeveloperGasLimitFlag,
 		utils.RopstenFlag,
 		utils.SepoliaFlag,
 		utils.RinkebyFlag,

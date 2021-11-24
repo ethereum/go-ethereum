@@ -246,7 +246,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if truncateErr != nil {
 			t.Fatal("concurrent truncate failed:", err)
 		}
-		if !(modifyErr == nil || modifyErr == errOutOrderInsertion) {
+		if !(errors.Is(modifyErr, nil) || errors.Is(modifyErr, errOutOrderInsertion)) {
 			t.Fatal("wrong error from concurrent modify:", modifyErr)
 		}
 		checkAncientCount(t, f, "test", 10)
