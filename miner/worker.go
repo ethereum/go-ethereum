@@ -795,6 +795,11 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 	var coalescedLogs []*types.Log
 
+	var (
+		isCalldataFork      = w.chainConfig.IsCalldataFork(w.current.header.Number)
+		remainingTxDataSize = params.TxDataBaseBlockCap + params.TxDataCapStipend
+	)
+
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -839,6 +844,14 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			txs.Pop()
 			continue
 		}
+
+		if isCalldataFork && remainingTxDataSize < uint64(len(tx.Data())) {
+			// Skip account if transaction calldata would exceed cap
+			log.Trace("Skipping account with calldata exceeding the cap", "sender", from)
+			txs.Pop()
+			continue
+		}
+
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
@@ -864,6 +877,10 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			coalescedLogs = append(coalescedLogs, logs...)
 			w.current.tcount++
 			txs.Shift()
+
+			if isCalldataFork {
+				remainingTxDataSize = remainingTxDataSize - uint64(len(tx.Data())) + params.TxDataCapStipend
+			}
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
