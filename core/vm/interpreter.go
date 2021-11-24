@@ -124,6 +124,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
 	if readOnly && !in.readOnly {
+		if !in.evm.chainRules.IsByzantium {
+			panic("readOnly execution requested on wrong chainRules")
+		}
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
@@ -203,17 +206,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
-		}
-		// If the operation is valid, enforce write restrictions
-		if in.readOnly && in.evm.chainRules.IsByzantium {
-			// If the interpreter is operating in readonly mode, make sure no
-			// state-modifying operation is performed. The 3rd stack item
-			// for a call operation is the value. Transferring value from one
-			// account to the others means the state is modified and should also
-			// return with an error.
-			if operation.writes || (op == CALL && stack.Back(2).Sign() != 0) {
-				return nil, ErrWriteProtection
-			}
 		}
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
