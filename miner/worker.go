@@ -770,18 +770,18 @@ func (w *worker) updateSnapshot() {
 	w.snapshotState = w.current.state.Copy()
 }
 
-func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, *types.AccessWitness, error) {
+func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, accesses, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
-		return nil, accesses, err
+		return nil, err
 	}
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
 
-	return receipt.Logs, accesses, nil
+	return receipt.Logs, nil
 }
 
 func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
@@ -844,12 +844,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
-		logs, accs, err := w.commitTransaction(tx, coinbase)
-		if w.current.state.Witness() == nil {
-			w.current.state.SetWitness(accs)
-		} else {
-			w.current.state.Witness().Merge(accs)
-		}
+		logs, err := w.commitTransaction(tx, coinbase)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account

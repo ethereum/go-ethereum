@@ -131,7 +131,7 @@ type blockExecutionEnv struct {
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	vmconfig := *env.chain.GetVMConfig()
 	snap := env.state.Snapshot()
-	receipt, _, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
+	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err

@@ -80,13 +80,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, accesses, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, acc, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, accesses, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-		accesses.Merge(acc)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
@@ -94,7 +93,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, accesses, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *types.AccessWitness, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -102,7 +101,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, txContext.Accesses, err
+		return nil, err
 	}
 
 	// Update the state with pending changes.
@@ -130,23 +129,25 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
+	statedb.Witness().Merge(txContext.Accesses)
+
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, txContext.Accesses, err
+	return receipt, err
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *types.AccessWitness, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
