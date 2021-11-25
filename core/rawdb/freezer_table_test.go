@@ -502,10 +502,10 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		for y := byte(0); y < 30; y++ {
 			f.Retrieve(uint64(y))
 		}
-
 		// Now, truncate back to zero
-		f.truncate(0)
-
+		if err := f.truncate(0); err != nil{
+			t.Fatal(err)
+		}
 		// Write the data again
 		batch := f.newBatch()
 		for x := 0; x < 30; x++ {
@@ -829,3 +829,35 @@ func TestSequentialReadByteLimit(t *testing.T) {
 		}
 	}
 }
+/*
+func TestFreezerTailTruncate(t *testing.T){
+	t.Parallel()
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("trailtruncate-%d", rand.Uint64())
+	// Fill table
+	{
+		// Table size is 40 bytes per file. We write 7 bytes per item, so it doesn't
+		// line up exactly
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 100 x 7 bytes
+		batch := f.newBatch()
+		for i := 0; i < 100; i++{
+			require.NoError(t, batch.AppendRaw(i, getChunk(7, byte(i))))
+		}
+		f.Close()
+	}
+	// Now tail-truncate item by item
+	{ // Open it, iterate, verify iteration
+		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 5; i < 6; i++ {
+			f.tailTruncate(i)
+		}
+	}
+}
+*/
