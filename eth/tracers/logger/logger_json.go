@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package logger
 
 import (
 	"encoding/json"
@@ -24,32 +24,33 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type JSONLogger struct {
 	encoder *json.Encoder
-	cfg     *LogConfig
-	env     *EVM
+	cfg     *Config
+	env     *vm.EVM
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *LogConfig, writer io.Writer) *JSONLogger {
+func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	l := &JSONLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
-		l.cfg = &LogConfig{}
+		l.cfg = &Config{}
 	}
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	l.env = env
 }
 
-func (l *JSONLogger) CaptureFault(uint64, OpCode, uint64, uint64, *ScopeContext, int, error) {}
+func (l *JSONLogger) CaptureFault(uint64, vm.OpCode, uint64, uint64, *vm.ScopeContext, int, error) {}
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	memory := scope.Memory
 	stack := scope.Stack
 
@@ -67,7 +68,7 @@ func (l *JSONLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scope 
 		log.Memory = memory.Data()
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = stack.data
+		log.Stack = stack.Data()
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
@@ -90,7 +91,7 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
