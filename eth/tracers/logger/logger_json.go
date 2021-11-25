@@ -29,16 +29,16 @@ import (
 
 type JSONLogger struct {
 	encoder *json.Encoder
-	cfg     *LogConfig
+	cfg     *Config
 	env     *vm.EVM
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *LogConfig, writer io.Writer) *JSONLogger {
+func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	l := &JSONLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
-		l.cfg = &LogConfig{}
+		l.cfg = &Config{}
 	}
 	return l
 }

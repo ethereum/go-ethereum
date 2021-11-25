@@ -45,8 +45,8 @@ func (s Storage) Copy() Storage {
 	return cpy
 }
 
-// LogConfig are the configuration options for structured logger the EVM
-type LogConfig struct {
+// Config are the configuration options for structured logger the EVM
+type Config struct {
 	EnableMemory     bool // enable memory capture
 	DisableStack     bool // disable stack capture
 	DisableStorage   bool // disable storage capture
@@ -105,7 +105,7 @@ func (s *StructLog) ErrorString() string {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
-	cfg LogConfig
+	cfg Config
 	env *vm.EVM
 
 	storage map[common.Address]Storage
@@ -115,7 +115,7 @@ type StructLogger struct {
 }
 
 // NewStructLogger returns a new logger
-func NewStructLogger(cfg *LogConfig) *StructLogger {
+func NewStructLogger(cfg *Config) *StructLogger {
 	logger := &StructLogger{
 		storage: make(map[common.Address]Storage),
 	}
@@ -281,16 +281,16 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 
 type mdLogger struct {
 	out io.Writer
-	cfg *LogConfig
+	cfg *Config
 	env *vm.EVM
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
 // for human readability, and is also a valid markdown table
-func NewMarkdownLogger(cfg *LogConfig, writer io.Writer) *mdLogger {
+func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	l := &mdLogger{out: writer, cfg: cfg}
 	if l.cfg == nil {
-		l.cfg = &LogConfig{}
+		l.cfg = &Config{}
 	}
 	return l
 }

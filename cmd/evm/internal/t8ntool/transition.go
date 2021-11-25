@@ -107,7 +107,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
-		logConfig := &logger.LogConfig{
+		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
 			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
