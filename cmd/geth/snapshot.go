@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -297,7 +298,7 @@ func traverseState(ctx *cli.Context) error {
 	accIter := trie.NewIterator(t.NodeIterator(nil))
 	for accIter.Next() {
 		accounts += 1
-		var acc state.Account
+		var acc types.StateAccount
 		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
@@ -403,7 +404,7 @@ func traverseRawState(ctx *cli.Context) error {
 		// dig into the storage trie further.
 		if accIter.Leaf() {
 			accounts += 1
-			var acc state.Account
+			var acc types.StateAccount
 			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")

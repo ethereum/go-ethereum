@@ -72,7 +72,7 @@ const schema string = `
     #EIP-2718 
     type AccessTuple{
         address: Address!
-        storageKeys : [Bytes32!]
+        storageKeys : [Bytes32!]!
     }
 
     # Transaction is an Ethereum transaction.
