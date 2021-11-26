@@ -1599,7 +1599,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			receipts types.Receipts
 			logs     []*types.Log
 		)
-		receipts, logs, _, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
