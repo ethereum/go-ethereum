@@ -123,10 +123,9 @@ func (st *StackTrie) UnmarshalBinary(data []byte) error {
 
 func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 	var dec struct {
-		Nodetype  uint8
-		Val       []byte
-		Key       []byte
-		KeyOffset uint8
+		Nodetype uint8
+		Val      []byte
+		Key      []byte
 	}
 	gob.NewDecoder(r).Decode(&dec)
 	st.nodeType = dec.Nodetype
