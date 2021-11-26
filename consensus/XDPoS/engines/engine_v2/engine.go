@@ -59,9 +59,6 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 	}
 	// Add callback to the timer
 	timer.OnTimeoutFn = engine.onCountdownTimeout
-	// Attach vote & timeout pool callback function when it reached threshold
-	votePool.SetOnThresholdFn(engine.onVotePoolThresholdReached)
-	timeoutPool.SetOnThresholdFn(engine.onTimeoutPoolThresholdReached)
 
 	return engine
 }
@@ -70,6 +67,8 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 	Testing tools
 */
 func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
 	// Reset a bunch of things
 	if resetTimer {
 		x.timeoutWorker.Reset()
@@ -78,10 +77,10 @@ func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
 }
 
 // Utils for test to check currentRound value
-func (x *XDPoS_v2) GetCurrentRound() utils.Round {
+func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert) {
 	x.lock.Lock()
 	defer x.lock.Unlock()
-	return x.currentRound
+	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks with.
@@ -149,7 +148,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(vote *utils.Vote) (bool, error) {
 }
 
 // Consensus entry point for processing vote message to produce QC
-func (x *XDPoS_v2) VoteHandler(voteMsg *utils.Vote) error {
+func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *utils.Vote) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
 
@@ -159,13 +158,15 @@ func (x *XDPoS_v2) VoteHandler(voteMsg *utils.Vote) error {
 	}
 
 	// Collect vote
-	thresholdReached, numberOfVotesInPool, hookError := x.votePool.Add(voteMsg)
-	if hookError != nil {
-		log.Error("Error while adding vote message to the pool, ", hookError)
-		return hookError
+	thresholdReached, numberOfVotesInPool, pooledVotes := x.votePool.Add(voteMsg)
+	if thresholdReached {
+		log.Debug("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool)
+		err := x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg)
+		if err != nil {
+			return nil
+		}
 	}
 
-	log.Debug("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool)
 	return nil
 }
 
@@ -173,7 +174,7 @@ func (x *XDPoS_v2) VoteHandler(voteMsg *utils.Vote) error {
 	Function that will be called by votePool when it reached threshold.
 	In the engine v2, we will need to generate and process QC
 */
-func (x *XDPoS_v2) onVotePoolThresholdReached(pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj) error {
+func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj) error {
 	signatures := []utils.Signature{}
 	for _, v := range pooledVotes {
 		signatures = append(signatures, v.(*utils.Vote).Signature)
@@ -183,7 +184,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(pooledVotes map[common.Hash]utils.
 		ProposedBlockInfo: currentVoteMsg.(*utils.Vote).ProposedBlockInfo,
 		Signatures:        signatures,
 	}
-	err := x.processQC(quorumCert)
+	err := x.processQC(chain, quorumCert)
 	if err != nil {
 		log.Error("Error while processing QC in the Vote handler after reaching pool threshold, ", err)
 		return err
@@ -211,7 +212,7 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(timeoutMsg *utils.Timeout) (bool, error)
 	Entry point for handling timeout message to process below:
 	1. checkRoundNumber()
 	2. Collect timeout
-	Once timeout pool reached threshold, it will trigger the call to the hook function "onTimeoutPoolThresholdReached"
+	3. Once timeout pool reached threshold, it will trigger the call to the function "onTimeoutPoolThresholdReached"
 */
 func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
 	x.lock.Lock()
@@ -222,12 +223,15 @@ func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
 		return fmt.Errorf("Timeout message round number: %v does not match currentRound: %v", timeout.Round, x.currentRound)
 	}
 	// Collect timeout, generate TC
-	isThresholdReached, numberOfTimeoutsInPool, hookError := x.timeoutPool.Add(timeout)
-	if hookError != nil {
-		log.Error("Error adding timeout to the pool, ", hookError.Error())
-		return hookError
+	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
+	// Threshold reached
+	if isThresholdReached {
+		log.Debug("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool)
+		err := x.onTimeoutPoolThresholdReached(pooledTimeouts, timeout)
+		if err != nil {
+			return err
+		}
 	}
-	log.Debug("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool)
 	return nil
 }
 
@@ -309,22 +313,28 @@ func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 	return nil
 }
 
-// Update local QC variables including highestQC & lockQuorumCert, as well as update commit blockInfo before call
+// Update local QC variables including highestQC & lockQuorumCert, as well as commit the blocks that satisfy the algorithm requirements
 func (x *XDPoS_v2) processQC(blockCahinReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
 	// 1. Update HighestQC
-	if x.highestQuorumCert == nil || quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
+	if x.highestQuorumCert == nil || (quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round) {
 		//TODO: do I need a clone?
 		x.highestQuorumCert = quorumCert
 	}
-	// 2. Get QC from header and update lockQuorumCert
+	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
 	proposedBlockHeader := blockCahinReader.GetHeaderByHash(quorumCert.ProposedBlockInfo.Hash)
 	var decodedExtraField utils.ExtraFields_v2
-	utils.DecodeBytesExtraFields(proposedBlockHeader.Extra, &decodedExtraField)
+	err := utils.DecodeBytesExtraFields(proposedBlockHeader.Extra, &decodedExtraField)
+	if err != nil {
+		return err
+	}
 	x.lockQuorumCert = &decodedExtraField.QuorumCert
 
+	proposedBlockRound := &decodedExtraField.Round
 	// 3. Update commit block info
-	//TODO: find parent and grandparent and grandgrandparent block, check round number, if so, commit grandgrandparent
-
+	_, err = x.commitBlocks(blockCahinReader, proposedBlockHeader, proposedBlockRound)
+	if err != nil {
+		return err
+	}
 	if quorumCert.ProposedBlockInfo.Round >= x.currentRound {
 		err := x.setNewRound(quorumCert.ProposedBlockInfo.Round + 1)
 		if err != nil {
@@ -480,4 +490,32 @@ func (x *XDPoS_v2) getSyncInfo() utils.SyncInfo {
 		HighestQuorumCert:  x.highestQuorumCert,
 		HighestTimeoutCert: x.highestTimeoutCert,
 	}
+}
+
+//TODO: find parent and grandparent and grandgrandparent block, check round number, if so, commit grandgrandparent
+func (x *XDPoS_v2) commitBlocks(blockCahinReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round) (bool, error) {
+	// Find the last two parent block and check their rounds are the continous
+	parentBlock := blockCahinReader.GetHeaderByHash(proposedBlockHeader.ParentHash)
+
+	var decodedExtraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(parentBlock.Extra, &decodedExtraField)
+	if err != nil {
+		return false, err
+	}
+	if *proposedBlockRound-1 != decodedExtraField.Round {
+		return false, nil
+	}
+
+	// If parent round is continous, we check grandparent
+	grandParentBlock := blockCahinReader.GetHeaderByHash(parentBlock.ParentHash)
+	err = utils.DecodeBytesExtraFields(grandParentBlock.Extra, &decodedExtraField)
+	if err != nil {
+		return false, err
+	}
+	if *proposedBlockRound-2 != decodedExtraField.Round {
+		return false, nil
+	}
+	// TODO: Commit the grandParent block
+
+	return true, nil
 }

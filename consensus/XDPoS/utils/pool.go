@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"fmt"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
@@ -11,9 +9,8 @@ type PoolObj interface {
 	PoolKey() string
 }
 type Pool struct {
-	objList       map[string]map[common.Hash]PoolObj
-	threshold     int
-	onThresholdFn func(objsInPool map[common.Hash]PoolObj, currentObj PoolObj) error
+	objList   map[string]map[common.Hash]PoolObj
+	threshold int
 }
 
 func NewPool(threshold int) *Pool {
@@ -23,8 +20,8 @@ func NewPool(threshold int) *Pool {
 	}
 }
 
-// call the hook function onThresholdFn if reached threshold and return boolean to indicate whether pool has reached threshold
-func (p *Pool) Add(obj PoolObj) (bool, int, error) {
+// return true if it has reached threshold
+func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
 	poolKey := obj.PoolKey()
 	objListKeyed, ok := p.objList[poolKey]
 	if !ok {
@@ -35,13 +32,9 @@ func (p *Pool) Add(obj PoolObj) (bool, int, error) {
 	numOfItems := len(objListKeyed)
 	if numOfItems >= p.threshold {
 		delete(p.objList, poolKey)
-		if p.onThresholdFn != nil {
-			return true, numOfItems, p.onThresholdFn(objListKeyed, obj)
-		} else {
-			return true, numOfItems, fmt.Errorf("no call back function for pool")
-		}
+		return true, numOfItems, objListKeyed
 	}
-	return false, numOfItems, nil
+	return false, numOfItems, objListKeyed
 }
 
 func (p *Pool) Clear() {
@@ -50,8 +43,4 @@ func (p *Pool) Clear() {
 
 func (p *Pool) SetThreshold(t int) {
 	p.threshold = t
-}
-
-func (p *Pool) SetOnThresholdFn(f func(objsInPool map[common.Hash]PoolObj, currentObj PoolObj) error) {
-	p.onThresholdFn = f
 }

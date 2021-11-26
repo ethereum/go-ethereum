@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v2"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core"
 )
 
 // make different votes based on Signatures
@@ -29,9 +31,10 @@ type bfterTester struct {
 func newTester() *bfterTester {
 	testConsensus := &XDPoS.XDPoS{EngineV2: &engine_v2.XDPoS_v2{}}
 	broadcasts := BroadcastFns{}
+	blockChain := &core.BlockChain{}
 
 	tester := &bfterTester{}
-	tester.bfter = New(broadcasts)
+	tester.bfter = New(broadcasts, blockChain)
 	tester.bfter.SetConsensusFuns(testConsensus)
 	tester.bfter.broadcastCh = make(chan interface{})
 	tester.bfter.Start()
@@ -52,7 +55,7 @@ func TestSequentialVotes(t *testing.T) {
 		return nil
 	}
 
-	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
@@ -63,7 +66,10 @@ func TestSequentialVotes(t *testing.T) {
 
 	votes := makeVotes(targetVotes)
 	for _, vote := range votes {
-		tester.bfter.Vote(&vote)
+		err := tester.bfter.Vote(&vote)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -86,7 +92,7 @@ func TestDuplicateVotes(t *testing.T) {
 		return nil
 	}
 
-	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
@@ -118,7 +124,7 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 		return fmt.Errorf("This is invalid vote")
 	}
 
-	tester.bfter.consensus.voteHandler = func(vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}

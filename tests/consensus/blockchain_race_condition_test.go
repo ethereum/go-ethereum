@@ -11,7 +11,7 @@ import (
 // Snapshot try to read before blockchain is written
 func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 
-	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)
+	blockchain, backend, parentBlock, _ := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)
 
 	state, err := blockchain.State()
 	if err != nil {
@@ -104,7 +104,7 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, 3)
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, nil, 3)
 
 	if err != nil {
 		t.Fatal(err)
