@@ -29,7 +29,6 @@ func TestJumpDestAnalysis(t *testing.T) {
 		exp   byte
 		which int
 	}{
-		{[]byte{byte(PUSH0), byte(PUSH1), 0x01}, 0x20, 0},
 		{[]byte{byte(PUSH1), 0x01, 0x01, 0x01}, 0b0000_0010, 0},
 		{[]byte{byte(PUSH1), byte(PUSH1), byte(PUSH1), byte(PUSH1)}, 0b0000_1010, 0},
 		{[]byte{0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1)}, 0b0101_0100, 0},
