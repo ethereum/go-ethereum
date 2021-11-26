@@ -205,6 +205,18 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
+		// Set the difficulty for clique block. The chain maker doesn't have access
+		// to a chain, so the difficulty will be left unset (nil). Set it here to the
+		// correct value.
+		if b.header.Difficulty == nil {
+			if config.TerminalTotalDifficulty == nil {
+				// Clique chain
+				b.header.Difficulty = big.NewInt(2)
+			} else {
+				// Post-merge chain
+				b.header.Difficulty = big.NewInt(0)
+			}
+		}
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
@@ -313,3 +325,4 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
+func (cr *fakeChainReader) GetTd(hash common.Hash, number uint64) *big.Int          { return nil }

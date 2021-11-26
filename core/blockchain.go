@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	mrand "math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -208,15 +207,14 @@ type BlockChain struct {
 	validator  Validator // Block and state validator interface
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
+	forker     *ForkChoice
 	vmConfig   vm.Config
-
-	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
-// available in the database. It initialises the default Ethereum Validator and
-// Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
+// available in the database. It initialises the default Ethereum Validator
+// and Processor.
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -237,18 +235,18 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:           make(chan struct{}),
-		chainmu:        syncx.NewClosableMutex(),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		quit:          make(chan struct{}),
+		chainmu:       syncx.NewClosableMutex(),
+		bodyCache:     bodyCache,
+		bodyRLPCache:  bodyRLPCache,
+		receiptsCache: receiptsCache,
+		blockCache:    blockCache,
+		txLookupCache: txLookupCache,
+		futureBlocks:  futureBlocks,
+		engine:        engine,
+		vmConfig:      vmConfig,
 	}
+	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
@@ -382,7 +380,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// Start future block processor.
 	bc.wg.Add(1)
-	go bc.futureBlocksLoop()
+	go bc.updateFutureBlocks()
 
 	// Start tx indexer/unindexer.
 	if txLookupLimit != nil {
@@ -877,12 +875,6 @@ const (
 	SideStatTy
 )
 
-// numberHash is just a container for a number and a hash, to represent a block
-type numberHash struct {
-	number uint64
-	hash   common.Hash
-}
-
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
@@ -928,13 +920,17 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number.Cmp(head.Number()) >= 0 {
-			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
-			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
-				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
-				bc.currentFastBlock.Store(head)
-				headFastBlockGauge.Update(int64(head.NumberU64()))
-				return true
+			reorg, err := bc.forker.ReorgNeeded(bc.CurrentFastBlock().Header(), head.Header())
+			if err != nil {
+				log.Warn("Reorg failed", "err", err)
+				return false
+			} else if !reorg {
+				return false
 			}
+			rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
+			bc.currentFastBlock.Store(head)
+			headFastBlockGauge.Update(int64(head.NumberU64()))
+			return true
 		}
 		return false
 	}
@@ -1181,30 +1177,15 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-// WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if !bc.chainmu.TryLock() {
-		return NonStatTy, errInsertionInterrupted
-	}
-	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
-}
-
-// writeBlockWithState writes the block and all associated state to the database,
-// but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if bc.insertStopped() {
-		return NonStatTy, errInsertionInterrupted
-	}
-
+// writeBlockWithState writes block, metadata and corresponding state data to the
+// database.
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
-		return NonStatTy, consensus.ErrUnknownAncestor
+		return consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
-	currentBlock := bc.CurrentBlock()
-	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	// Irrelevant of the canonical status, write the block itself to the database.
@@ -1222,15 +1203,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Commit all cached state changes into underlying memory database.
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
-		return NonStatTy, err
+		return err
 	}
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
-		if err := triedb.Commit(root, false, nil); err != nil {
-			return NonStatTy, err
-		}
+		return triedb.Commit(root, false, nil)
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
@@ -1278,23 +1257,30 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
-	// If the total difficulty is higher than our known, add it to the canonical chain
-	// Second clause in the if statement reduces the vulnerability to selfish mining.
-	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
-	currentBlock = bc.CurrentBlock()
-	if !reorg && externTd.Cmp(localTd) == 0 {
-		// Split same-difficulty blocks by number, then preferentially select
-		// the block generated by the local miner as the canonical block.
-		if block.NumberU64() < currentBlock.NumberU64() {
-			reorg = true
-		} else if block.NumberU64() == currentBlock.NumberU64() {
-			var currentPreserve, blockPreserve bool
-			if bc.shouldPreserve != nil {
-				currentPreserve, blockPreserve = bc.shouldPreserve(currentBlock), bc.shouldPreserve(block)
-			}
-			reorg = !currentPreserve && (blockPreserve || mrand.Float64() < 0.5)
-		}
+	return nil
+}
+
+// WriteBlockWithState writes the block and all associated state to the database.
+func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	if !bc.chainmu.TryLock() {
+		return NonStatTy, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	return bc.writeBlockAndSetHead(block, receipts, logs, state, emitHeadEvent)
+}
+
+// writeBlockAndSetHead writes the block and all associated state to the database,
+// and also it applies the given block as the new chain head. This function expects
+// the chain mutex to be held.
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	if err := bc.writeBlockWithState(block, receipts, logs, state); err != nil {
+		return NonStatTy, err
+	}
+	currentBlock := bc.CurrentBlock()
+	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+	if err != nil {
+		return NonStatTy, err
 	}
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
@@ -1320,7 +1306,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		// In theory we should fire a ChainHeadEvent when we inject
 		// a canonical block, but sometimes we can insert a batch of
-		// canonicial blocks. Avoid firing too much ChainHeadEvents,
+		// canonicial blocks. Avoid firing too many ChainHeadEvents,
 		// we will fire an accumulated ChainHeadEvent and disable fire
 		// event here.
 		if emitHeadEvent {
@@ -1335,10 +1321,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
+//
+// TODO after the transition, the future block shouldn't be kept. Because
+// it's not checked in the Geth side anymore.
 func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
+	}
+	if block.Difficulty().Cmp(common.Big0) == 0 {
+		// Never add PoS blocks into the future queue
+		return nil
 	}
 	bc.futureBlocks.Add(block.Hash(), block)
 	return nil
@@ -1347,15 +1340,12 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
-// wrong.
-//
-// After insertion is done, all accumulated events will be fired.
+// wrong. After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil
 	}
-
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
@@ -1374,26 +1364,12 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				prev.Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
-
-	// Pre-check passed, start the full block imports.
+	// Pre-checks passed, start the full block imports
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true)
-}
-
-// InsertChainWithoutSealVerification works exactly the same
-// except for seal verification, seal verification is omitted
-func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
-	bc.blockProcFeed.Send(true)
-	defer bc.blockProcFeed.Send(false)
-
-	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
-	}
-	defer bc.chainmu.Unlock()
-	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
+	return bc.insertChain(chain, true, true)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1404,7 +1380,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
@@ -1446,14 +1422,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		//      from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us.
 		var (
-			current  = bc.CurrentBlock()
-			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
-			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
+			reorg   bool
+			current = bc.CurrentBlock()
 		)
 		for block != nil && bc.skipBlock(err, it) {
-			externTd = new(big.Int).Add(externTd, block.Difficulty())
-			if localTd.Cmp(externTd) < 0 {
-				break
+			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
+			if err != nil {
+				return it.index, err
+			}
+			if reorg {
+				// Switch to import mode if the forker says the reorg is necessary
+				// and also the block is not on the canonical chain.
+				// In eth2 the forker always returns true for reorg decision (blindly trusting
+				// the external consensus engine), but in order to prevent the unnecessary
+				// reorgs when importing known blocks, the special case is handled here.
+				if block.NumberU64() > current.NumberU64() || bc.GetCanonicalHash(block.NumberU64()) != block.Hash() {
+					break
+				}
 			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
@@ -1480,11 +1465,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Falls through to the block import
 	}
 	switch {
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	// First block is pruned
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
-		return bc.insertSideChain(block, it)
-
+		if setHead {
+			// First block is pruned, insert as sidechain and reorg only if TD grows enough
+			log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
+			return bc.insertSideChain(block, it)
+		} else {
+			// We're post-merge and the parent is pruned, try to recover the parent state
+			log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
+			return it.index, bc.recoverAncestors(block)
+		}
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
@@ -1639,12 +1630,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
 		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
 		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
+		var status WriteStatus
+		if !setHead {
+			// Don't set the head, only insert the block
+			err = bc.writeBlockWithState(block, receipts, logs, statedb)
+		} else {
+			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
+		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
@@ -1656,6 +1652,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
+
+		if !setHead {
+			// We did not setHead, so we don't have any stats to update
+			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
+			return it.index, nil
+		}
 
 		switch status {
 		case CanonStatTy:
@@ -1715,10 +1717,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
+// insertSideChain is only used pre-merge.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
-		externTd *big.Int
-		current  = bc.CurrentBlock()
+		externTd  *big.Int
+		lastBlock = block
+		current   = bc.CurrentBlock()
 	)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
@@ -1769,6 +1773,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
+		lastBlock = block
 	}
 	// At this point, we've written all sidechain blocks to database. Loop ended
 	// either on some other error or all were processed. If there was some other
@@ -1776,8 +1781,12 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
-	localTd := bc.GetTd(current.Hash(), current.NumberU64())
-	if localTd.Cmp(externTd) > 0 {
+	reorg, err := bc.forker.ReorgNeeded(current.Header(), lastBlock.Header())
+	if err != nil {
+		return it.index, err
+	}
+	if !reorg {
+		localTd := bc.GetTd(current.Hash(), current.NumberU64())
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
 		return it.index, err
 	}
@@ -1813,7 +1822,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false); err != nil {
+			if _, err := bc.insertChain(blocks, false, true); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1827,14 +1836,98 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false)
+		return bc.insertChain(blocks, false, true)
 	}
 	return 0, nil
+}
+
+// recoverAncestors finds the closest ancestor with available state and re-execute
+// all the ancestor blocks since that.
+// recoverAncestors is only used post-merge.
+func (bc *BlockChain) recoverAncestors(block *types.Block) error {
+	// Gather all the sidechain hashes (full blocks may be memory heavy)
+	var (
+		hashes  []common.Hash
+		numbers []uint64
+		parent  = block
+	)
+	for parent != nil && !bc.HasState(parent.Root()) {
+		hashes = append(hashes, parent.Hash())
+		numbers = append(numbers, parent.NumberU64())
+		parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+
+		// If the chain is terminating, stop iteration
+		if bc.insertStopped() {
+			log.Debug("Abort during blocks iteration")
+			return errInsertionInterrupted
+		}
+	}
+	if parent == nil {
+		return errors.New("missing parent")
+	}
+	// Import all the pruned blocks to make the state available
+	for i := len(hashes) - 1; i >= 0; i-- {
+		// If the chain is terminating, stop processing blocks
+		if bc.insertStopped() {
+			log.Debug("Abort during blocks processing")
+			return errInsertionInterrupted
+		}
+		var b *types.Block
+		if i == 0 {
+			b = block
+		} else {
+			b = bc.GetBlock(hashes[i], numbers[i])
+		}
+		if _, err := bc.insertChain(types.Blocks{b}, false, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// collectLogs collects the logs that were generated or removed during
+// the processing of the block that corresponds with the given hash.
+// These logs are later announced as deleted or reborn.
+func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
+	number := bc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
+
+	var logs []*types.Log
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			l := *log
+			if removed {
+				l.Removed = true
+			}
+			logs = append(logs, &l)
+		}
+	}
+	return logs
+}
+
+// mergeLogs returns a merged log slice with specified sort order.
+func mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
+	var ret []*types.Log
+	if reverse {
+		for i := len(logs) - 1; i >= 0; i-- {
+			ret = append(ret, logs[i]...)
+		}
+	} else {
+		for i := 0; i < len(logs); i++ {
+			ret = append(ret, logs[i]...)
+		}
+	}
+	return ret
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
+// Note the new head block won't be processed here, callers need to handle it
+// externally.
 func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	var (
 		newChain    types.Blocks
@@ -1846,49 +1939,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		deletedLogs [][]*types.Log
 		rebirthLogs [][]*types.Log
-
-		// collectLogs collects the logs that were generated or removed during
-		// the processing of the block that corresponds with the given hash.
-		// These logs are later announced as deleted or reborn
-		collectLogs = func(hash common.Hash, removed bool) {
-			number := bc.hc.GetBlockNumber(hash)
-			if number == nil {
-				return
-			}
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
-
-			var logs []*types.Log
-			for _, receipt := range receipts {
-				for _, log := range receipt.Logs {
-					l := *log
-					if removed {
-						l.Removed = true
-					}
-					logs = append(logs, &l)
-				}
-			}
-			if len(logs) > 0 {
-				if removed {
-					deletedLogs = append(deletedLogs, logs)
-				} else {
-					rebirthLogs = append(rebirthLogs, logs)
-				}
-			}
-		}
-		// mergeLogs returns a merged log slice with specified sort order.
-		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
-			var ret []*types.Log
-			if reverse {
-				for i := len(logs) - 1; i >= 0; i-- {
-					ret = append(ret, logs[i]...)
-				}
-			} else {
-				for i := 0; i < len(logs); i++ {
-					ret = append(ret, logs[i]...)
-				}
-			}
-			return ret
-		}
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
@@ -1896,7 +1946,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-			collectLogs(oldBlock.Hash(), true)
+
+			// Collect deleted logs for notification
+			logs := bc.collectLogs(oldBlock.Hash(), true)
+			if len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs)
+			}
 		}
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
@@ -1921,8 +1976,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Remove an old block as well as stash away a new block
 		oldChain = append(oldChain, oldBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-		collectLogs(oldBlock.Hash(), true)
 
+		// Collect deleted logs for notification
+		logs := bc.collectLogs(oldBlock.Hash(), true)
+		if len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs)
+		}
 		newChain = append(newChain, newBlock)
 
 		// Step back with both chains
@@ -1948,8 +2007,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 		blockReorgDropMeter.Mark(int64(len(oldChain)))
 		blockReorgMeter.Mark(1)
+	} else if len(newChain) > 0 {
+		// Special case happens in the post merge stage that current head is
+		// the ancestor of new head while these two blocks are not consecutive
+		log.Info("Extend chain", "add", len(newChain), "number", newChain[0].NumberU64(), "hash", newChain[0].Hash())
+		blockReorgAddMeter.Mark(int64(len(newChain)))
 	} else {
-		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
+		// len(newChain) == 0 && len(oldChain) > 0
+		// rewind the canonical chain to a lower point.
+		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.
@@ -1958,8 +2024,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.writeHeadBlock(newChain[i])
 
 		// Collect reborn logs due to chain reorg
-		collectLogs(newChain[i].Hash(), false)
-
+		logs := bc.collectLogs(newChain[i].Hash(), false)
+		if len(logs) > 0 {
+			rebirthLogs = append(rebirthLogs, logs)
+		}
 		// Collect the new added transactions.
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
 	}
@@ -1999,12 +2067,54 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-// futureBlocksLoop processes the 'future block' queue.
-func (bc *BlockChain) futureBlocksLoop() {
-	defer bc.wg.Done()
+// InsertBlockWithoutSetHead executes the block, runs the necessary verification
+// upon it and then persist the block and the associate state into the database.
+// The key difference between the InsertChain is it won't do the canonical chain
+// updating. It relies on the additional SetChainHead call to finalize the entire
+// procedure.
+func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
 
+	_, err := bc.insertChain(types.Blocks{block}, true, false)
+	return err
+}
+
+// SetChainHead rewinds the chain to set the new head block as the specified
+// block. It's possible that after the reorg the relevant state of head
+// is missing. It can be fixed by inserting a new block which triggers
+// the re-execution.
+func (bc *BlockChain) SetChainHead(newBlock *types.Block) error {
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	// Run the reorg if necessary and set the given block as new head.
+	if newBlock.ParentHash() != bc.CurrentBlock().Hash() {
+		if err := bc.reorg(bc.CurrentBlock(), newBlock); err != nil {
+			return err
+		}
+	}
+	bc.writeHeadBlock(newBlock)
+
+	// Emit events
+	logs := bc.collectLogs(newBlock.Hash(), false)
+	bc.chainFeed.Send(ChainEvent{Block: newBlock, Hash: newBlock.Hash(), Logs: logs})
+	if len(logs) > 0 {
+		bc.logsFeed.Send(logs)
+	}
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newBlock})
+	log.Info("Set the chain head", "number", newBlock.Number(), "hash", newBlock.Hash())
+	return nil
+}
+
+func (bc *BlockChain) updateFutureBlocks() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
+	defer bc.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
@@ -2185,6 +2295,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	_, err := bc.hc.InsertHeaderChain(chain, start)
+	_, err := bc.hc.InsertHeaderChain(chain, start, bc.forker)
 	return 0, err
 }

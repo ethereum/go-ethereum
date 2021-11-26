@@ -13,34 +13,48 @@ import (
 var _ = (*assembleBlockParamsMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (a assembleBlockParams) MarshalJSON() ([]byte, error) {
-	type assembleBlockParams struct {
-		ParentHash common.Hash    `json:"parentHash"    gencodec:"required"`
-		Timestamp  hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+func (a AssembleBlockParams) MarshalJSON() ([]byte, error) {
+	type AssembleBlockParams struct {
+		ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
+		Timestamp    hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random       common.Hash    `json:"random"        gencodec:"required"`
+		FeeRecipient common.Address `json:"feeRecipient"  gencodec:"required"`
 	}
-	var enc assembleBlockParams
+	var enc AssembleBlockParams
 	enc.ParentHash = a.ParentHash
 	enc.Timestamp = hexutil.Uint64(a.Timestamp)
+	enc.Random = a.Random
+	enc.FeeRecipient = a.FeeRecipient
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (a *assembleBlockParams) UnmarshalJSON(input []byte) error {
-	type assembleBlockParams struct {
-		ParentHash *common.Hash    `json:"parentHash"    gencodec:"required"`
-		Timestamp  *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+func (a *AssembleBlockParams) UnmarshalJSON(input []byte) error {
+	type AssembleBlockParams struct {
+		ParentHash   *common.Hash    `json:"parentHash"    gencodec:"required"`
+		Timestamp    *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random       *common.Hash    `json:"random"        gencodec:"required"`
+		FeeRecipient *common.Address `json:"feeRecipient"  gencodec:"required"`
 	}
-	var dec assembleBlockParams
+	var dec AssembleBlockParams
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	if dec.ParentHash == nil {
-		return errors.New("missing required field 'parentHash' for assembleBlockParams")
+		return errors.New("missing required field 'parentHash' for AssembleBlockParams")
 	}
 	a.ParentHash = *dec.ParentHash
 	if dec.Timestamp == nil {
-		return errors.New("missing required field 'timestamp' for assembleBlockParams")
+		return errors.New("missing required field 'timestamp' for AssembleBlockParams")
 	}
 	a.Timestamp = uint64(*dec.Timestamp)
+	if dec.Random == nil {
+		return errors.New("missing required field 'random' for AssembleBlockParams")
+	}
+	a.Random = *dec.Random
+	if dec.FeeRecipient == nil {
+		return errors.New("missing required field 'feeRecipient' for AssembleBlockParams")
+	}
+	a.FeeRecipient = *dec.FeeRecipient
 	return nil
 }

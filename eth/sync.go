@@ -145,7 +145,10 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
 		return nil // Sync already running.
 	}
-
+	// Disable the td based sync trigger after the transition
+	if cs.handler.merger.TDDReached() {
+		return nil
+	}
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
 	if cs.forced {

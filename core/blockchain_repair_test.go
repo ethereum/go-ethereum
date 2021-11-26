@@ -1829,7 +1829,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
 
-	// Start a new blockchain back up and see where the repait leads us
+	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
