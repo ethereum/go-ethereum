@@ -210,10 +210,12 @@ func (st *StackTrie) Reset() {
 // at which the chunk pointed by st.keyOffset is different from
 // the same chunk in the full key.
 func (st *StackTrie) getDiffIndex(key []byte) int {
-	diffindex := 0
-	for ; diffindex < len(st.key) && st.key[diffindex] == key[diffindex]; diffindex++ {
+	for idx, nibble := range st.key {
+		if nibble != key[idx] {
+			return idx
+		}
 	}
-	return diffindex
+	return len(st.key)
 }
 
 // Helper function to that inserts a (key, value) pair into
