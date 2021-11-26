@@ -131,11 +131,21 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 	}
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
-		"startingBlock": hexutil.Uint64(progress.StartingBlock),
-		"currentBlock":  hexutil.Uint64(progress.CurrentBlock),
-		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
-		"pulledStates":  hexutil.Uint64(progress.PulledStates),
-		"knownStates":   hexutil.Uint64(progress.KnownStates),
+		"startingBlock":       hexutil.Uint64(progress.StartingBlock),
+		"currentBlock":        hexutil.Uint64(progress.CurrentBlock),
+		"highestBlock":        hexutil.Uint64(progress.HighestBlock),
+		"syncedAccounts":      hexutil.Uint64(progress.SyncedAccounts),
+		"syncedAccountBytes":  hexutil.Uint64(progress.SyncedAccountBytes),
+		"syncedBytecodes":     hexutil.Uint64(progress.SyncedBytecodes),
+		"syncedBytecodeBytes": hexutil.Uint64(progress.SyncedBytecodeBytes),
+		"syncedStorage":       hexutil.Uint64(progress.SyncedStorage),
+		"syncedStorageBytes":  hexutil.Uint64(progress.SyncedStorageBytes),
+		"healedTrienodes":     hexutil.Uint64(progress.HealedTrienodes),
+		"healedTrienodeBytes": hexutil.Uint64(progress.HealedTrienodeBytes),
+		"healedBytecodes":     hexutil.Uint64(progress.HealedBytecodes),
+		"healedBytecodeBytes": hexutil.Uint64(progress.HealedBytecodeBytes),
+		"healingTrienodes":    hexutil.Uint64(progress.HealingTrienodes),
+		"healingBytecode":     hexutil.Uint64(progress.HealingBytecode),
 	}, nil
 }
 

@@ -2637,7 +2637,7 @@ func TestTransactionIndices(t *testing.T) {
 	}
 }
 
-func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
+func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
 		gendb   = rawdb.NewMemoryDatabase()

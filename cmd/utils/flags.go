@@ -215,7 +215,7 @@ var (
 	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
-		Usage: `Blockchain sync mode ("fast", "full", "snap" or "light")`,
+		Usage: `Blockchain sync mode ("snap", "full" or "light")`,
 		Value: &defaultSyncMode,
 	}
 	GCModeFlag = cli.StringFlag{

@@ -1220,32 +1220,66 @@ type SyncState struct {
 func (s *SyncState) StartingBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StartingBlock)
 }
-
 func (s *SyncState) CurrentBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.CurrentBlock)
 }
-
 func (s *SyncState) HighestBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HighestBlock)
 }
-
-func (s *SyncState) PulledStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.PulledStates)
-	return &ret
+func (s *SyncState) SyncedAccounts() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccounts)
 }
-
-func (s *SyncState) KnownStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.KnownStates)
-	return &ret
+func (s *SyncState) SyncedAccountBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccountBytes)
+}
+func (s *SyncState) SyncedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodes)
+}
+func (s *SyncState) SyncedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodeBytes)
+}
+func (s *SyncState) SyncedStorage() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorage)
+}
+func (s *SyncState) SyncedStorageBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorageBytes)
+}
+func (s *SyncState) HealedTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodes)
+}
+func (s *SyncState) HealedTrienodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodeBytes)
+}
+func (s *SyncState) HealedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodes)
+}
+func (s *SyncState) HealedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodeBytes)
+}
+func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingTrienodes)
+}
+func (s *SyncState) HealingBytecode() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingBytecode)
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock: block number this node started to synchronise from
-// - currentBlock:  block number this node is currently importing
-// - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
+// - startingBlock:       block number this node started to synchronise from
+// - currentBlock:        block number this node is currently importing
+// - highestBlock:        block number of the highest block header this node has received from peers
+// - syncedAccounts:      number of accounts downloaded
+// - syncedAccountBytes:  number of account trie bytes persisted to disk
+// - syncedBytecodes:     number of bytecodes downloaded
+// - syncedBytecodeBytes: number of bytecode bytes downloaded
+// - syncedStorage:       number of storage slots downloaded
+// - syncedStorageBytes:  number of storage trie bytes persisted to disk
+// - healedTrienodes:     number of state trie nodes downloaded
+// - healedTrienodeBytes: number of state trie bytes persisted to disk
+// - healedBytecodes:     number of bytecodes downloaded
+// - healedBytecodeBytes: number of bytecodes persisted to disk
+// - healingTrienodes:    number of state trie nodes pending
+// - healingBytecode:     number of bytecodes pending
 func (r *Resolver) Syncing() (*SyncState, error) {
 	progress := r.backend.SyncProgress()
 
