@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/asm"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var disasmCommand = cli.Command{
@@ -46,7 +46,7 @@ func disasmCmd(ctx *cli.Context) error {
 	case ctx.GlobalIsSet(InputFlag.Name):
 		in = ctx.GlobalString(InputFlag.Name)
 	default:
-		return errors.New("Missing filename or --input value")
+		return errors.New("missing filename or --input value")
 	}
 
 	code := strings.TrimSpace(in)

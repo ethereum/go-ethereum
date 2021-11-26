@@ -22,43 +22,75 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-func TestFastSyncDisabling63(t *testing.T) { testFastSyncDisabling(t, 63) }
-func TestFastSyncDisabling64(t *testing.T) { testFastSyncDisabling(t, 64) }
-func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, 65) }
+// Tests that snap sync is disabled after a successful sync cycle.
+func TestSnapSyncDisabling66(t *testing.T) { testSnapSyncDisabling(t, eth.ETH66, snap.SNAP1) }
 
-// Tests that fast sync gets disabled as soon as a real block is successfully
+// Tests that snap sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
-func testFastSyncDisabling(t *testing.T, protocol int) {
+func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	t.Parallel()
 
-	// Create a pristine protocol manager, check that fast sync is left enabled
-	pmEmpty, _ := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
-	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
-		t.Fatalf("fast sync disabled on pristine blockchain")
+	// Create an empty handler and ensure it's in snap sync mode
+	empty := newTestHandler()
+	if atomic.LoadUint32(&empty.handler.snapSync) == 0 {
+		t.Fatalf("snap sync disabled on pristine blockchain")
 	}
-	// Create a full protocol manager, check that fast sync gets disabled
-	pmFull, _ := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
-	if atomic.LoadUint32(&pmFull.fastSync) == 1 {
-		t.Fatalf("fast sync not disabled on non-empty blockchain")
+	defer empty.close()
+
+	// Create a full handler and ensure snap sync ends up disabled
+	full := newTestHandlerWithBlocks(1024)
+	if atomic.LoadUint32(&full.handler.snapSync) == 1 {
+		t.Fatalf("snap sync not disabled on non-empty blockchain")
 	}
+	defer full.close()
 
-	// Sync up the two peers
-	io1, io2 := p2p.MsgPipe()
-	go pmFull.handle(pmFull.newPeer(protocol, p2p.NewPeer(enode.ID{}, "empty", nil), io2, pmFull.txpool.Get))
-	go pmEmpty.handle(pmEmpty.newPeer(protocol, p2p.NewPeer(enode.ID{}, "full", nil), io1, pmEmpty.txpool.Get))
+	// Sync up the two handlers via both `eth` and `snap`
+	caps := []p2p.Cap{{Name: "eth", Version: ethVer}, {Name: "snap", Version: snapVer}}
 
+	emptyPipeEth, fullPipeEth := p2p.MsgPipe()
+	defer emptyPipeEth.Close()
+	defer fullPipeEth.Close()
+
+	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool)
+	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool)
+	defer emptyPeerEth.Close()
+	defer fullPeerEth.Close()
+
+	go empty.handler.runEthPeer(emptyPeerEth, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(empty.handler), peer)
+	})
+	go full.handler.runEthPeer(fullPeerEth, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(full.handler), peer)
+	})
+
+	emptyPipeSnap, fullPipeSnap := p2p.MsgPipe()
+	defer emptyPipeSnap.Close()
+	defer fullPipeSnap.Close()
+
+	emptyPeerSnap := snap.NewPeer(snapVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeSnap)
+	fullPeerSnap := snap.NewPeer(snapVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeSnap)
+
+	go empty.handler.runSnapExtension(emptyPeerSnap, func(peer *snap.Peer) error {
+		return snap.Handle((*snapHandler)(empty.handler), peer)
+	})
+	go full.handler.runSnapExtension(fullPeerSnap, func(peer *snap.Peer) error {
+		return snap.Handle((*snapHandler)(full.handler), peer)
+	})
+	// Wait a bit for the above handlers to start
 	time.Sleep(250 * time.Millisecond)
-	op := peerToSyncOp(downloader.FastSync, pmEmpty.peers.BestPeer())
-	if err := pmEmpty.doSync(op); err != nil {
+
+	// Check that snap sync was disabled
+	op := peerToSyncOp(downloader.SnapSync, empty.handler.peers.peerWithHighestTD())
+	if err := empty.handler.doSync(op); err != nil {
 		t.Fatal("sync failed:", err)
 	}
-
-	// Check that fast sync was disabled
-	if atomic.LoadUint32(&pmEmpty.fastSync) == 1 {
-		t.Fatalf("fast sync not disabled after successful synchronisation")
+	if atomic.LoadUint32(&empty.handler.snapSync) == 1 {
+		t.Fatalf("snap sync not disabled after successful synchronisation")
 	}
 }

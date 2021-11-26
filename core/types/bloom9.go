@@ -17,6 +17,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -57,28 +58,36 @@ func (b *Bloom) SetBytes(d []byte) {
 }
 
 // Add adds d to the filter. Future calls of Test(d) will return true.
-func (b *Bloom) Add(d *big.Int) {
-	bin := new(big.Int).SetBytes(b[:])
-	bin.Or(bin, bloom9(d.Bytes()))
-	b.SetBytes(bin.Bytes())
+func (b *Bloom) Add(d []byte) {
+	b.add(d, make([]byte, 6))
+}
+
+// add is internal version of Add, which takes a scratch buffer for reuse (needs to be at least 6 bytes)
+func (b *Bloom) add(d []byte, buf []byte) {
+	i1, v1, i2, v2, i3, v3 := bloomValues(d, buf)
+	b[i1] |= v1
+	b[i2] |= v2
+	b[i3] |= v3
 }
 
 // Big converts b to a big integer.
+// Note: Converting a bloom filter to a big.Int and then calling GetBytes
+// does not return the same bytes, since big.Int will trim leading zeroes
 func (b Bloom) Big() *big.Int {
 	return new(big.Int).SetBytes(b[:])
 }
 
+// Bytes returns the backing byte slice of the bloom
 func (b Bloom) Bytes() []byte {
 	return b[:]
 }
 
-func (b Bloom) Test(test *big.Int) bool {
-	return BloomLookup(b, test)
-}
-
-func (b Bloom) TestBytes(test []byte) bool {
-	return b.Test(new(big.Int).SetBytes(test))
-
+// Test checks if the given topic is present in the bloom filter
+func (b Bloom) Test(topic []byte) bool {
+	i1, v1, i2, v2, i3, v3 := bloomValues(topic, make([]byte, 6))
+	return v1 == v1&b[i1] &&
+		v2 == v2&b[i2] &&
+		v3 == v3&b[i3]
 }
 
 // MarshalText encodes b as a hex string with 0x prefix.
@@ -91,46 +100,61 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Bloom", input, b[:])
 }
 
+// CreateBloom creates a bloom filter out of the give Receipts (+Logs)
 func CreateBloom(receipts Receipts) Bloom {
-	bin := new(big.Int)
+	buf := make([]byte, 6)
+	var bin Bloom
 	for _, receipt := range receipts {
-		bin.Or(bin, LogsBloom(receipt.Logs))
-	}
-
-	return BytesToBloom(bin.Bytes())
-}
-
-func LogsBloom(logs []*Log) *big.Int {
-	bin := new(big.Int)
-	for _, log := range logs {
-		bin.Or(bin, bloom9(log.Address.Bytes()))
-		for _, b := range log.Topics {
-			bin.Or(bin, bloom9(b[:]))
+		for _, log := range receipt.Logs {
+			bin.add(log.Address.Bytes(), buf)
+			for _, b := range log.Topics {
+				bin.add(b[:], buf)
+			}
 		}
 	}
-
 	return bin
 }
 
-func bloom9(b []byte) *big.Int {
-	b = crypto.Keccak256(b)
-
-	r := new(big.Int)
-
-	for i := 0; i < 6; i += 2 {
-		t := big.NewInt(1)
-		b := (uint(b[i+1]) + (uint(b[i]) << 8)) & 2047
-		r.Or(r, t.Lsh(t, b))
+// LogsBloom returns the bloom bytes for the given logs
+func LogsBloom(logs []*Log) []byte {
+	buf := make([]byte, 6)
+	var bin Bloom
+	for _, log := range logs {
+		bin.add(log.Address.Bytes(), buf)
+		for _, b := range log.Topics {
+			bin.add(b[:], buf)
+		}
 	}
-
-	return r
+	return bin[:]
 }
 
-var Bloom9 = bloom9
+// Bloom9 returns the bloom filter for the given data
+func Bloom9(data []byte) []byte {
+	var b Bloom
+	b.SetBytes(data)
+	return b.Bytes()
+}
 
+// bloomValues returns the bytes (index-value pairs) to set for the given data
+func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byte) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	sha.Reset()
+	sha.Write(data)
+	sha.Read(hashbuf)
+	hasherPool.Put(sha)
+	// The actual bits to flip
+	v1 := byte(1 << (hashbuf[1] & 0x7))
+	v2 := byte(1 << (hashbuf[3] & 0x7))
+	v3 := byte(1 << (hashbuf[5] & 0x7))
+	// The indices for the bytes to OR in
+	i1 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf)&0x7ff)>>3) - 1
+	i2 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf[2:])&0x7ff)>>3) - 1
+	i3 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf[4:])&0x7ff)>>3) - 1
+
+	return i1, v1, i2, v2, i3, v3
+}
+
+// BloomLookup is a convenience-method to check presence int he bloom filter
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
-	bloom := bin.Big()
-	cmp := bloom9(topic.Bytes())
-
-	return bloom.And(bloom, cmp).Cmp(cmp) == 0
+	return bin.Test(topic.Bytes())
 }

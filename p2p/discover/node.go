@@ -46,7 +46,10 @@ func encodePubkey(key *ecdsa.PublicKey) encPubkey {
 	return e
 }
 
-func decodePubkey(curve elliptic.Curve, e encPubkey) (*ecdsa.PublicKey, error) {
+func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
+	if len(e) != len(encPubkey{}) {
+		return nil, errors.New("wrong size public key data")
+	}
 	p := &ecdsa.PublicKey{Curve: curve, X: new(big.Int), Y: new(big.Int)}
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])

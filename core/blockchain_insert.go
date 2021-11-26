@@ -43,7 +43,7 @@ func (st *insertStats) report(chain []*types.Block, index int, dirty common.Stor
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
-		elapsed = time.Duration(now) - time.Duration(st.startTime)
+		elapsed = now.Sub(st.startTime)
 	)
 	// If we're at the last block of the batch or report period reached, log
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
@@ -148,6 +148,14 @@ func (it *insertIterator) previous() *types.Header {
 		return nil
 	}
 	return it.chain[it.index-1].Header()
+}
+
+// current returns the current header that is being processed, or nil.
+func (it *insertIterator) current() *types.Header {
+	if it.index == -1 || it.index >= len(it.chain) {
+		return nil
+	}
+	return it.chain[it.index].Header()
 }
 
 // first returns the first block in the it.

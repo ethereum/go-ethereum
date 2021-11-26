@@ -75,7 +75,7 @@ type fastIterator struct {
 	fail      error
 }
 
-// newFastIterator creates a new hierarhical account or storage iterator with one
+// newFastIterator creates a new hierarchical account or storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
 func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash, accountIterator bool) (*fastIterator, error) {
@@ -335,14 +335,14 @@ func (fi *fastIterator) Debug() {
 	fmt.Println()
 }
 
-// newFastAccountIterator creates a new hierarhical account iterator with one
+// newFastAccountIterator creates a new hierarchical account iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
 func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (AccountIterator, error) {
 	return newFastIterator(tree, root, common.Hash{}, seek, true)
 }
 
-// newFastStorageIterator creates a new hierarhical storage iterator with one
+// newFastStorageIterator creates a new hierarchical storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
 func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {

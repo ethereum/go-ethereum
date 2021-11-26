@@ -23,6 +23,7 @@ type listIterator struct {
 }
 
 // NewListIterator creates an iterator for the (list) represented by data
+// TODO: Consider removing this implementation, as it is no longer used.
 func NewListIterator(data RawValue) (*listIterator, error) {
 	k, t, c, err := readKind(data)
 	if err != nil {

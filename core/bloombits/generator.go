@@ -65,18 +65,23 @@ func (b *Generator) AddBloom(index uint, bloom types.Bloom) error {
 	}
 	// Rotate the bloom and insert into our collection
 	byteIndex := b.nextSec / 8
-	bitMask := byte(1) << byte(7-b.nextSec%8)
-
-	for i := 0; i < types.BloomBitLength; i++ {
-		bloomByteIndex := types.BloomByteLength - 1 - i/8
-		bloomBitMask := byte(1) << byte(i%8)
-
-		if (bloom[bloomByteIndex] & bloomBitMask) != 0 {
-			b.blooms[i][byteIndex] |= bitMask
+	bitIndex := byte(7 - b.nextSec%8)
+	for byt := 0; byt < types.BloomByteLength; byt++ {
+		bloomByte := bloom[types.BloomByteLength-1-byt]
+		if bloomByte == 0 {
+			continue
 		}
+		base := 8 * byt
+		b.blooms[base+7][byteIndex] |= ((bloomByte >> 7) & 1) << bitIndex
+		b.blooms[base+6][byteIndex] |= ((bloomByte >> 6) & 1) << bitIndex
+		b.blooms[base+5][byteIndex] |= ((bloomByte >> 5) & 1) << bitIndex
+		b.blooms[base+4][byteIndex] |= ((bloomByte >> 4) & 1) << bitIndex
+		b.blooms[base+3][byteIndex] |= ((bloomByte >> 3) & 1) << bitIndex
+		b.blooms[base+2][byteIndex] |= ((bloomByte >> 2) & 1) << bitIndex
+		b.blooms[base+1][byteIndex] |= ((bloomByte >> 1) & 1) << bitIndex
+		b.blooms[base][byteIndex] |= (bloomByte & 1) << bitIndex
 	}
 	b.nextSec++
-
 	return nil
 }
 

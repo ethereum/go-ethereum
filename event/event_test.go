@@ -29,7 +29,7 @@ func TestSubCloseUnsub(t *testing.T) {
 	// the point of this test is **not** to panic
 	var mux TypeMux
 	mux.Stop()
-	sub := mux.Subscribe(int(0))
+	sub := mux.Subscribe(0)
 	sub.Unsubscribe()
 }
 

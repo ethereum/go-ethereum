@@ -115,7 +115,6 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.EnableMsgEvents = config.EnableMsgEvents
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
-	conf.Stack.NoUSB = true
 
 	// Listen on a localhost port, which we set when we
 	// initialise NodeConfig (usually a random port)
@@ -184,7 +183,19 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	if err != nil {
 		return fmt.Errorf("error generating node config: %s", err)
 	}
-
+	// expose the admin namespace via websocket if it's not enabled
+	exposed := confCopy.Stack.WSExposeAll
+	if !exposed {
+		for _, api := range confCopy.Stack.WSModules {
+			if api == "admin" {
+				exposed = true
+				break
+			}
+		}
+	}
+	if !exposed {
+		confCopy.Stack.WSModules = append(confCopy.Stack.WSModules, "admin")
+	}
 	// start the one-shot server that waits for startup information
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -362,13 +373,44 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
+func initLogging() {
+	// Initialize the logging by default first.
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
+	glogger.Verbosity(log.LvlInfo)
+	log.Root().SetHandler(glogger)
+
+	confEnv := os.Getenv(envNodeConfig)
+	if confEnv == "" {
+		return
+	}
+	var conf execNodeConfig
+	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
+		return
+	}
+	var writer = os.Stderr
+	if conf.Node.LogFile != "" {
+		logWriter, err := os.Create(conf.Node.LogFile)
+		if err != nil {
+			return
+		}
+		writer = logWriter
+	}
+	var verbosity = log.LvlInfo
+	if conf.Node.LogVerbosity <= log.LvlTrace && conf.Node.LogVerbosity >= log.LvlCrit {
+		verbosity = conf.Node.LogVerbosity
+	}
+	// Reinitialize the logger
+	glogger = log.NewGlogHandler(log.StreamHandler(writer, log.TerminalFormat(true)))
+	glogger.Verbosity(verbosity)
+	log.Root().SetHandler(glogger)
+}
+
 // execP2PNode starts a simulation node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
 // and the node config from an environment variable.
 func execP2PNode() {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	initLogging()
+
 	statusURL := os.Getenv(envStatusURL)
 	if statusURL == "" {
 		log.Crit("missing " + envStatusURL)
@@ -380,7 +422,7 @@ func execP2PNode() {
 	if stackErr != nil {
 		status.Err = stackErr.Error()
 	} else {
-		status.WSEndpoint = "ws://" + stack.WSEndpoint()
+		status.WSEndpoint = stack.WSEndpoint()
 		status.NodeInfo = stack.Server().NodeInfo()
 	}
 
@@ -454,7 +496,6 @@ func startExecNodeStack() (*node.Node, error) {
 			return nil, err
 		}
 		services[name] = service
-		stack.RegisterLifecycle(service)
 	}
 
 	// Add the snapshot API.

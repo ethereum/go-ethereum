@@ -144,15 +144,14 @@ func (b *bridge) OpenWallet(call jsre.Call) (goja.Value, error) {
 		if val, err = openWallet(goja.Null(), wallet, passwd); err != nil {
 			if !strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()) {
 				return nil, err
-			} else {
-				// PIN input requested, fetch from the user and call open again
-				input, err := b.prompter.PromptPassword("Please enter current PIN: ")
-				if err != nil {
-					return nil, err
-				}
-				if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
-					return nil, err
-				}
+			}
+			// PIN input requested, fetch from the user and call open again
+			input, err := b.prompter.PromptPassword("Please enter current PIN: ")
+			if err != nil {
+				return nil, err
+			}
+			if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
+				return nil, err
 			}
 		}
 
@@ -353,14 +352,14 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Poll the current block number until either it or a timeout is reached.
-	var (
-		deadline   = time.Now().Add(time.Duration(sleep) * time.Second)
-		lastNumber = ^hexutil.Uint64(0)
-	)
+	deadline := time.Now().Add(time.Duration(sleep) * time.Second)
+	var lastNumber hexutil.Uint64
+	if err := b.client.Call(&lastNumber, "eth_blockNumber"); err != nil {
+		return nil, err
+	}
 	for time.Now().Before(deadline) {
 		var number hexutil.Uint64
-		err := b.client.Call(&number, "eth_blockNumber")
-		if err != nil {
+		if err := b.client.Call(&number, "eth_blockNumber"); err != nil {
 			return nil, err
 		}
 		if number != lastNumber {

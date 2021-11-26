@@ -113,11 +113,28 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	} else {
 		fmt.Printf("to:    <contact creation>\n")
 	}
-	fmt.Printf("from:     %v\n", request.Transaction.From.String())
-	fmt.Printf("value:    %v wei\n", weival)
-	fmt.Printf("gas:      %v (%v)\n", request.Transaction.Gas, uint64(request.Transaction.Gas))
-	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
+	fmt.Printf("from:               %v\n", request.Transaction.From.String())
+	fmt.Printf("value:              %v wei\n", weival)
+	fmt.Printf("gas:                %v (%v)\n", request.Transaction.Gas, uint64(request.Transaction.Gas))
+	if request.Transaction.MaxFeePerGas != nil {
+		fmt.Printf("maxFeePerGas:          %v wei\n", request.Transaction.MaxFeePerGas.ToInt())
+		fmt.Printf("maxPriorityFeePerGas:  %v wei\n", request.Transaction.MaxPriorityFeePerGas.ToInt())
+	} else {
+		fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
+	}
 	fmt.Printf("nonce:    %v (%v)\n", request.Transaction.Nonce, uint64(request.Transaction.Nonce))
+	if chainId := request.Transaction.ChainID; chainId != nil {
+		fmt.Printf("chainid:  %v\n", chainId)
+	}
+	if list := request.Transaction.AccessList; list != nil {
+		fmt.Printf("Accesslist\n")
+		for i, el := range *list {
+			fmt.Printf(" %d. %v\n", i, el.Address)
+			for j, slot := range el.StorageKeys {
+				fmt.Printf("   %d. %v\n", j, slot)
+			}
+		}
+	}
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
@@ -148,6 +165,13 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
+	if len(request.Callinfo) != 0 {
+		fmt.Printf("\nValidation messages:\n")
+		for _, m := range request.Callinfo {
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
+		}
+		fmt.Println()
+	}
 	fmt.Printf("messages:\n")
 	for _, nvt := range request.Messages {
 		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))

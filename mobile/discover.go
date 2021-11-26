@@ -22,12 +22,12 @@ package geth
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Enode represents a host on the network.
 type Enode struct {
-	node *discv5.Node
+	node *enode.Node
 }
 
 // NewEnode parses a node designator.
@@ -53,8 +53,8 @@ type Enode struct {
 // and UDP discovery port 30301.
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
-func NewEnode(rawurl string) (enode *Enode, _ error) {
-	node, err := discv5.ParseNode(rawurl)
+func NewEnode(rawurl string) (*Enode, error) {
+	node, err := enode.Parse(enode.ValidSchemes, rawurl)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +62,12 @@ func NewEnode(rawurl string) (enode *Enode, _ error) {
 }
 
 // Enodes represents a slice of accounts.
-type Enodes struct{ nodes []*discv5.Node }
+type Enodes struct{ nodes []*enode.Node }
 
 // NewEnodes creates a slice of uninitialized enodes.
 func NewEnodes(size int) *Enodes {
 	return &Enodes{
-		nodes: make([]*discv5.Node, size),
+		nodes: make([]*enode.Node, size),
 	}
 }
 

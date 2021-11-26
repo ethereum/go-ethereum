@@ -31,22 +31,24 @@ type SetIndexCallback func(data interface{}, index int)
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
 type sstack struct {
-	setIndex SetIndexCallback
-	size     int
-	capacity int
-	offset   int
+	setIndex   SetIndexCallback
+	size       int
+	capacity   int
+	offset     int
+	wrapAround bool
 
 	blocks [][]*item
 	active []*item
 }
 
 // Creates a new, empty stack.
-func newSstack(setIndex SetIndexCallback) *sstack {
+func newSstack(setIndex SetIndexCallback, wrapAround bool) *sstack {
 	result := new(sstack)
 	result.setIndex = setIndex
 	result.active = make([]*item, blockSize)
 	result.blocks = [][]*item{result.active}
 	result.capacity = blockSize
+	result.wrapAround = wrapAround
 	return result
 }
 
@@ -94,7 +96,11 @@ func (s *sstack) Len() int {
 // Compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
 func (s *sstack) Less(i, j int) bool {
-	return (s.blocks[i/blockSize][i%blockSize].priority - s.blocks[j/blockSize][j%blockSize].priority) > 0
+	a, b := s.blocks[i/blockSize][i%blockSize].priority, s.blocks[j/blockSize][j%blockSize].priority
+	if s.wrapAround {
+		return a-b > 0
+	}
+	return a > b
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.
@@ -110,5 +116,5 @@ func (s *sstack) Swap(i, j int) {
 
 // Resets the stack, effectively clearing its contents.
 func (s *sstack) Reset() {
-	*s = *newSstack(s.setIndex)
+	*s = *newSstack(s.setIndex, false)
 }

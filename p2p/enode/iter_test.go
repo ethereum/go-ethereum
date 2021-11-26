@@ -268,7 +268,7 @@ func (s *genIter) Node() *Node {
 }
 
 func (s *genIter) Close() {
-	s.index = ^uint32(0)
+	atomic.StoreUint32(&s.index, ^uint32(0))
 }
 
 func testNode(id, seq uint64) *Node {

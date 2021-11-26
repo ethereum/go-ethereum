@@ -88,7 +88,7 @@ func TestUnmarshalBytes(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
-		if !bytes.Equal(test.want.([]byte), []byte(v)) {
+		if !bytes.Equal(test.want.([]byte), v) {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, &v, test.want)
 			continue
 		}

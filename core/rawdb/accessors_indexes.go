@@ -53,25 +53,29 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	return &entry.BlockIndex
 }
 
-// WriteTxLookupEntries stores a positional metadata for every transaction from
-// a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
-	number := block.Number().Bytes()
-	for _, tx := range block.Transactions() {
-		if err := db.Put(txLookupKey(tx.Hash()), number); err != nil {
-			log.Crit("Failed to store transaction lookup entry", "err", err)
-		}
+// writeTxLookupEntry stores a positional metadata for a transaction,
+// enabling hash based transaction and receipt lookups.
+func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, numberBytes []byte) {
+	if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
+		log.Crit("Failed to store transaction lookup entry", "err", err)
 	}
 }
 
-// WriteTxLookupEntriesByHash is identical to WriteTxLookupEntries, but does not
-// require a full types.Block as input.
-func WriteTxLookupEntriesByHash(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
+// WriteTxLookupEntries is identical to WriteTxLookupEntry, but it works on
+// a list of hashes
+func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
 	numberBytes := new(big.Int).SetUint64(number).Bytes()
 	for _, hash := range hashes {
-		if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
-			log.Crit("Failed to store transaction lookup entry", "err", err)
-		}
+		writeTxLookupEntry(db, hash, numberBytes)
+	}
+}
+
+// WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
+// a block, enabling hash based transaction and receipt lookups.
+func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
+	numberBytes := block.Number().Bytes()
+	for _, tx := range block.Transactions() {
+		writeTxLookupEntry(db, tx.Hash(), numberBytes)
 	}
 }
 
@@ -83,11 +87,9 @@ func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // DeleteTxLookupEntries removes all transaction lookups for a given block.
-func DeleteTxLookupEntriesByHash(db ethdb.KeyValueWriter, hashes []common.Hash) {
+func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	for _, hash := range hashes {
-		if err := db.Delete(txLookupKey(hash)); err != nil {
-			log.Crit("Failed to delete transaction lookup entry", "err", err)
-		}
+		DeleteTxLookupEntry(db, hash)
 	}
 }
 
@@ -104,7 +106,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	}
 	body := ReadBody(db, blockHash, *blockNumber)
 	if body == nil {
-		log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash)
+		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
 	for txIndex, tx := range body.Transactions {
@@ -112,7 +114,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
-	log.Error("Transaction not found", "number", blockNumber, "hash", blockHash, "txhash", hash)
+	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
 }
 
@@ -135,7 +137,7 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
 		}
 	}
-	log.Error("Receipt not found", "number", blockNumber, "hash", blockHash, "txhash", hash)
+	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
 }
 

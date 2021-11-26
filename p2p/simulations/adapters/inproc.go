@@ -99,8 +99,8 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			Dialer:          s,
 			EnableMsgEvents: config.EnableMsgEvents,
 		},
-		NoUSB:  true,
-		Logger: log.New("node.id", id.String()),
+		ExternalSigner: config.ExternalSigner,
+		Logger:         log.New("node.id", id.String()),
 	})
 	if err != nil {
 		return nil, err
@@ -263,7 +263,6 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 				continue
 			}
 			sn.running[name] = service
-			sn.node.RegisterLifecycle(service)
 		}
 	})
 	if regErr != nil {

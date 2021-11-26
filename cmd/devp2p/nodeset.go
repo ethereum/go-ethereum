@@ -71,6 +71,7 @@ func writeNodesJSON(file string, nodes nodeSet) {
 	}
 }
 
+// nodes returns the node records contained in the set.
 func (ns nodeSet) nodes() []*enode.Node {
 	result := make([]*enode.Node, 0, len(ns))
 	for _, n := range ns {
@@ -83,12 +84,37 @@ func (ns nodeSet) nodes() []*enode.Node {
 	return result
 }
 
+// add ensures the given nodes are present in the set.
 func (ns nodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
-		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n}
+		v := ns[n.ID()]
+		v.N = n
+		v.Seq = n.Seq()
+		ns[n.ID()] = v
 	}
 }
 
+// topN returns the top n nodes by score as a new set.
+func (ns nodeSet) topN(n int) nodeSet {
+	if n >= len(ns) {
+		return ns
+	}
+
+	byscore := make([]nodeJSON, 0, len(ns))
+	for _, v := range ns {
+		byscore = append(byscore, v)
+	}
+	sort.Slice(byscore, func(i, j int) bool {
+		return byscore[i].Score >= byscore[j].Score
+	})
+	result := make(nodeSet, n)
+	for _, v := range byscore[:n] {
+		result[v.N.ID()] = v
+	}
+	return result
+}
+
+// verify performs integrity checks on the node set.
 func (ns nodeSet) verify() error {
 	for id, n := range ns {
 		if n.N.ID() != id {

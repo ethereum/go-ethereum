@@ -34,7 +34,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	test := newUDPTest(t)
 
 	// Lookup on empty table returns no nodes.
-	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target)
+	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target[:])
 	if results := test.udp.LookupPubkey(targetKey); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
@@ -279,17 +279,21 @@ func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
 	return result
 }
 
-func (tn *preminedTestnet) neighborsAtDistance(base *enode.Node, distance uint, elems int) []*enode.Node {
-	nodes := nodesByDistance{target: base.ID()}
+func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []uint, elems int) []*enode.Node {
+	var result []*enode.Node
 	for d := range lookupTestnet.dists {
 		for i := range lookupTestnet.dists[d] {
 			n := lookupTestnet.node(d, i)
-			if uint(enode.LogDist(n.ID(), base.ID())) == distance {
-				nodes.push(wrapNode(n), elems)
+			d := enode.LogDist(base.ID(), n.ID())
+			if containsUint(uint(d), distances) {
+				result = append(result, n)
+				if len(result) >= elems {
+					return result
+				}
 			}
 		}
 	}
-	return unwrapNodes(nodes.entries)
+	return result
 }
 
 func (tn *preminedTestnet) closest(n int) (nodes []*enode.Node) {

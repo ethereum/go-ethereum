@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"gopkg.in/urfave/cli.v1"
@@ -33,6 +34,7 @@ var (
 			discv5PingCommand,
 			discv5ResolveCommand,
 			discv5CrawlCommand,
+			discv5TestCommand,
 			discv5ListenCommand,
 		},
 	}
@@ -52,6 +54,17 @@ var (
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv5Crawl,
 		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
+	}
+	discv5TestCommand = cli.Command{
+		Name:   "test",
+		Usage:  "Runs protocol tests against a node",
+		Action: discv5Test,
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+			testListen1Flag,
+			testListen2Flag,
+		},
 	}
 	discv5ListenCommand = cli.Command{
 		Name:   "listen",
@@ -101,6 +114,16 @@ func discv5Crawl(ctx *cli.Context) error {
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name))
 	writeNodesJSON(nodesFile, output)
 	return nil
+}
+
+// discv5Test runs the protocol test suite.
+func discv5Test(ctx *cli.Context) error {
+	suite := &v5test.Suite{
+		Dest:    getNodeArg(ctx),
+		Listen1: ctx.String(testListen1Flag.Name),
+		Listen2: ctx.String(testListen2Flag.Name),
+	}
+	return runTests(ctx, suite.AllTests())
 }
 
 func discv5Listen(ctx *cli.Context) error {

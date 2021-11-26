@@ -5,7 +5,7 @@ import (
 	"math/big"
 )
 
-var fuz int = 10
+var fuz = 10
 
 func randScalar(max *big.Int) *big.Int {
 	a, _ := rand.Int(rand.Reader, max)

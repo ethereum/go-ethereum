@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -95,24 +100,61 @@ func (g *gethrpc) waitSynced() {
 	}
 }
 
-func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
-	g := &gethrpc{name: name}
-	args = append([]string{"--networkid=42", "--port=0", "--nousb"}, args...)
-	t.Logf("Starting %v with rpc: %v", name, args)
-	g.geth = runGeth(t, args...)
-	// wait before we can attach to it. TODO: probe for it properly
-	time.Sleep(1 * time.Second)
-	var err error
-	ipcpath := filepath.Join(g.geth.Datadir, "geth.ipc")
-	g.rpc, err = rpc.Dial(ipcpath)
-	if err != nil {
-		t.Fatalf("%v rpc connect: %v", name, err)
+// ipcEndpoint resolves an IPC endpoint based on a configured value, taking into
+// account the set data folders as well as the designated platform we're currently
+// running on.
+func ipcEndpoint(ipcPath, datadir string) string {
+	// On windows we can only use plain top-level pipes
+	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(ipcPath, `\\.\pipe\`) {
+			return ipcPath
+		}
+		return `\\.\pipe\` + ipcPath
 	}
-	return g
+	// Resolve names into the data directory full paths otherwise
+	if filepath.Base(ipcPath) == ipcPath {
+		if datadir == "" {
+			return filepath.Join(os.TempDir(), ipcPath)
+		}
+		return filepath.Join(datadir, ipcPath)
+	}
+	return ipcPath
+}
+
+// nextIPC ensures that each ipc pipe gets a unique name.
+// On linux, it works well to use ipc pipes all over the filesystem (in datadirs),
+// but windows require pipes to sit in "\\.\pipe\". Therefore, to run several
+// nodes simultaneously, we need to distinguish between them, which we do by
+// the pipe filename instead of folder.
+var nextIPC = uint32(0)
+
+func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
+	ipcName := fmt.Sprintf("geth-%d.ipc", atomic.AddUint32(&nextIPC, 1))
+	args = append([]string{"--networkid=42", "--port=0", "--ipcpath", ipcName}, args...)
+	t.Logf("Starting %v with rpc: %v", name, args)
+
+	g := &gethrpc{
+		name: name,
+		geth: runGeth(t, args...),
+	}
+	ipcpath := ipcEndpoint(ipcName, g.geth.Datadir)
+	// We can't know exactly how long geth will take to start, so we try 10
+	// times over a 5 second period.
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
+			return g
+		}
+	}
+	t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+	return nil
 }
 
 func initGeth(t *testing.T) string {
-	g := runGeth(t, "--nousb", "--networkid=42", "init", "./testdata/clique.json")
+	args := []string{"--networkid=42", "init", "./testdata/clique.json"}
+	t.Logf("Initializing geth: %v ", args)
+	g := runGeth(t, args...)
 	datadir := g.Datadir
 	g.WaitExit()
 	return datadir
@@ -120,15 +162,16 @@ func initGeth(t *testing.T) string {
 
 func startLightServer(t *testing.T) *gethrpc {
 	datadir := initGeth(t)
-	runGeth(t, "--nousb", "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv").WaitExit()
+	t.Logf("Importing keys to geth")
+	runGeth(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv", "--lightkdf").WaitExit()
 	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
-	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
 	return server
 }
 
 func startClient(t *testing.T, name string) *gethrpc {
 	datadir := initGeth(t)
-	return startGethWithIpc(t, name, "--datadir", datadir, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1")
+	return startGethWithIpc(t, name, "--datadir", datadir, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1", "--verbosity=4")
 }
 
 func TestPriorityClient(t *testing.T) {
@@ -151,8 +194,8 @@ func TestPriorityClient(t *testing.T) {
 	prioCli := startClient(t, "prioCli")
 	defer prioCli.killAndWait()
 	// 3_000_000_000 once we move to Go 1.13
-	tokens := 3000000000
-	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens, "foobar")
+	tokens := uint64(3000000000)
+	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens)
 	prioCli.addPeer(lightServer)
 
 	// Check if priority client is actually syncing and the regular client got kicked out

@@ -31,12 +31,16 @@
   Write down the URL (`keycard://044def09` in this example). Then ask `geth` to open the wallet:
 
   ```
-  > personal.openWallet("keycard://044def09")
-  Please enter the pairing password:
+  > personal.openWallet("keycard://044def09", "pairing password")
   ```
 
-  Enter the pairing password that you have received during card initialization. Same with the PIN that you will subsequently be
-  asked for.
+  The pairing password has been generated during the card initialization process.
+  
+  The process needs to be repeated once more with the PIN:
+
+  ```
+  > personal.openWallet("keycard://044def09", "PIN number")
+  ```
   
   If everything goes well, you should see your new account when typing `personal` on the console:
 

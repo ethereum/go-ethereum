@@ -77,3 +77,11 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	}
 	txn.nonces[addr] = nonce
 }
+
+// setAll sets the nonces for all accounts to the given map.
+func (txn *txNoncer) setAll(all map[common.Address]uint64) {
+	txn.lock.Lock()
+	defer txn.lock.Unlock()
+
+	txn.nonces = all
+}

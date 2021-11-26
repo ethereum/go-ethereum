@@ -33,9 +33,14 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const journalVersion uint64 = 0
+
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
-	Wiping   bool // Whether the database was in progress of being wiped
+	// Indicator that whether the database was in progress of being wiped.
+	// It's deprecated but keep it here for background compatibility.
+	Wiping bool
+
 	Done     bool // Whether the generator finished creating the snapshot
 	Marker   []byte
 	Accounts uint64
@@ -61,13 +66,77 @@ type journalStorage struct {
 	Vals [][]byte
 }
 
+// loadAndParseJournal tries to parse the snapshot journal in latest format.
+func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
+	// Retrieve the disk layer generator. It must exist, no matter the
+	// snapshot is fully generated or not. Otherwise the entire disk
+	// layer is invalid.
+	generatorBlob := rawdb.ReadSnapshotGenerator(db)
+	if len(generatorBlob) == 0 {
+		return nil, journalGenerator{}, errors.New("missing snapshot generator")
+	}
+	var generator journalGenerator
+	if err := rlp.DecodeBytes(generatorBlob, &generator); err != nil {
+		return nil, journalGenerator{}, fmt.Errorf("failed to decode snapshot generator: %v", err)
+	}
+	// Retrieve the diff layer journal. It's possible that the journal is
+	// not existent, e.g. the disk layer is generating while that the Geth
+	// crashes without persisting the diff journal.
+	// So if there is no journal, or the journal is invalid(e.g. the journal
+	// is not matched with disk layer; or the it's the legacy-format journal,
+	// etc.), we just discard all diffs and try to recover them later.
+	journal := rawdb.ReadSnapshotJournal(db)
+	if len(journal) == 0 {
+		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
+		return base, generator, nil
+	}
+	r := rlp.NewStream(bytes.NewReader(journal), 0)
+
+	// Firstly, resolve the first element as the journal version
+	version, err := r.Uint()
+	if err != nil {
+		log.Warn("Failed to resolve the journal version", "error", err)
+		return base, generator, nil
+	}
+	if version != journalVersion {
+		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
+		return base, generator, nil
+	}
+	// Secondly, resolve the disk layer root, ensure it's continuous
+	// with disk layer. Note now we can ensure it's the snapshot journal
+	// correct version, so we expect everything can be resolved properly.
+	var root common.Hash
+	if err := r.Decode(&root); err != nil {
+		return nil, journalGenerator{}, errors.New("missing disk layer root")
+	}
+	// The diff journal is not matched with disk, discard them.
+	// It can happen that Geth crashes without persisting the latest
+	// diff journal.
+	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
+		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "unmatched")
+		return base, generator, nil
+	}
+	// Load all the snapshot diffs from the journal
+	snapshot, err := loadDiffLayer(base, r)
+	if err != nil {
+		return nil, journalGenerator{}, err
+	}
+	log.Debug("Loaded snapshot journal", "diskroot", base.root, "diffhead", snapshot.Root())
+	return snapshot, generator, nil
+}
+
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) (snapshot, error) {
+func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, recovery bool) (snapshot, bool, error) {
+	// If snapshotting is disabled (initial sync in progress), don't do anything,
+	// wait for the chain to permit us to do something meaningful
+	if rawdb.ReadSnapshotDisabled(diskdb) {
+		return nil, true, nil
+	}
 	// Retrieve the block number and hash of the snapshot, failing if no snapshot
 	// is present in the database (or crashed mid-update).
 	baseRoot := rawdb.ReadSnapshotRoot(diskdb)
 	if baseRoot == (common.Hash{}) {
-		return nil, errors.New("missing or corrupted snapshot")
+		return nil, false, errors.New("missing or corrupted snapshot")
 	}
 	base := &diskLayer{
 		diskdb: diskdb,
@@ -75,39 +144,34 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
-	// Retrieve the journal, it must exist since even for 0 layer it stores whether
-	// we've already generated the snapshot or are in progress only
-	journal := rawdb.ReadSnapshotJournal(diskdb)
-	if len(journal) == 0 {
-		return nil, errors.New("missing or corrupted snapshot journal")
-	}
-	r := rlp.NewStream(bytes.NewReader(journal), 0)
-
-	// Read the snapshot generation progress for the disk layer
-	var generator journalGenerator
-	if err := r.Decode(&generator); err != nil {
-		return nil, fmt.Errorf("failed to load snapshot progress marker: %v", err)
-	}
-	// Load all the snapshot diffs from the journal
-	snapshot, err := loadDiffLayer(base, r)
+	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		return nil, err
+		log.Warn("Failed to load new-format journal", "error", err)
+		return nil, false, err
 	}
-	// Entire snapshot journal loaded, sanity check the head and return
-	// Journal doesn't exist, don't worry if it's not supposed to
+	// Entire snapshot journal loaded, sanity check the head. If the loaded
+	// snapshot is not matched with current state root, print a warning log
+	// or discard the entire snapshot it's legacy snapshot.
+	//
+	// Possible scenario: Geth was crashed without persisting journal and then
+	// restart, the head is rewound to the point with available state(trie)
+	// which is below the snapshot. In this case the snapshot can be recovered
+	// by re-executing blocks but right now it's unavailable.
 	if head := snapshot.Root(); head != root {
-		return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
+		// If it's legacy snapshot, or it's new-format snapshot but
+		// it's not in recovery mode, returns the error here for
+		// rebuilding the entire snapshot forcibly.
+		if !recovery {
+			return nil, false, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
+		}
+		// It's in snapshot recovery, the assumption is held that
+		// the disk layer is always higher than chain head. It can
+		// be eventually recovered when the chain head beyonds the
+		// disk layer.
+		log.Warn("Snapshot is not continuous with chain", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations
 	if !generator.Done {
-		// If the generator was still wiping, restart one from scratch (fine for
-		// now as it's rare and the wiper deletes the stuff it touches anyway, so
-		// restarting won't incur a lot of extra database hops.
-		var wiper chan struct{}
-		if generator.Wiping {
-			log.Info("Resuming previous snapshot wipe")
-			wiper = wipeSnapshot(diskdb, false)
-		}
 		// Whether or not wiping was in progress, load any generator progress too
 		base.genMarker = generator.Marker
 		if base.genMarker == nil {
@@ -121,7 +185,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
 		go base.generate(&generatorStats{
-			wiping:   wiper,
 			origin:   origin,
 			start:    time.Now(),
 			accounts: generator.Accounts,
@@ -129,7 +192,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 			storage:  common.StorageSize(generator.Storage),
 		})
 	}
-	return snapshot, nil
+	return snapshot, false, nil
 }
 
 // loadDiffLayer reads the next sections of a snapshot journal, reconstructing a new
@@ -183,8 +246,8 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	return loadDiffLayer(newDiffLayer(parent, root, destructSet, accountData, storageData), r)
 }
 
-// Journal writes the persistent layer generator stats into a buffer to be stored
-// in the database as the snapshot journal.
+// Journal terminates any in-progress snapshot generation, also implicitly pushing
+// the progress into the database.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// If the snapshot is currently being generated, abort it
 	var stats *generatorStats
@@ -203,20 +266,10 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if dl.stale {
 		return common.Hash{}, ErrSnapshotStale
 	}
-	// Write out the generator marker
-	entry := journalGenerator{
-		Done:   dl.genMarker == nil,
-		Marker: dl.genMarker,
-	}
-	if stats != nil {
-		entry.Wiping = (stats.wiping != nil)
-		entry.Accounts = stats.accounts
-		entry.Slots = stats.slots
-		entry.Storage = uint64(stats.storage)
-	}
-	if err := rlp.Encode(buffer, entry); err != nil {
-		return common.Hash{}, err
-	}
+	// Ensure the generator stats is written even if none was ran this cycle
+	journalProgress(dl.diskdb, dl.genMarker, stats)
+
+	log.Debug("Journalled disk layer", "root", dl.root)
 	return dl.root, nil
 }
 
@@ -266,5 +319,6 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
+	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }

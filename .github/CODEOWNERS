@@ -9,6 +9,7 @@ cmd/puppeth                     @karalabe
 consensus                       @karalabe
 core/                           @karalabe @holiman @rjl493456442
 eth/                            @karalabe @holiman @rjl493456442
+eth/catalyst/                   @gballet
 graphql/                        @gballet
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442
@@ -20,4 +21,3 @@ p2p/simulations                 @fjl
 p2p/protocols                   @fjl
 p2p/testing                     @fjl
 signer/                         @holiman
-whisper/                        @gballet

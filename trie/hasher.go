@@ -66,11 +66,11 @@ func returnHasherToPool(h *hasher) {
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
-	// We're not storing the node, just hashing, use available cached data
+	// Return the cached hash if it's available
 	if hash, _ := n.cache(); hash != nil {
 		return hash, n
 	}
-	// Trie not processed yet or needs storage, walk the children
+	// Trie not processed yet, walk the children
 	switch n := n.(type) {
 	case *shortNode:
 		collapsed, cached := h.hashShortNodeChildren(n)

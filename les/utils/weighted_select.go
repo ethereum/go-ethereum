@@ -17,7 +17,10 @@
 package utils
 
 import (
+	"math"
 	"math/rand"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type (
@@ -49,11 +52,19 @@ func (w *WeightedRandomSelect) Remove(item WrsItem) {
 
 // IsEmpty returns true if the set is empty
 func (w *WeightedRandomSelect) IsEmpty() bool {
-	return w.root.sumWeight == 0
+	return w.root.sumCost == 0
 }
 
 // setWeight sets an item's weight to a specific value (removes it if zero)
 func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
+	if weight > math.MaxInt64-w.root.sumCost {
+		// old weight is still included in sumCost, remove and check again
+		w.setWeight(item, 0)
+		if weight > math.MaxInt64-w.root.sumCost {
+			log.Error("WeightedRandomSelect overflow", "sumCost", w.root.sumCost, "new weight", weight)
+			weight = math.MaxInt64 - w.root.sumCost
+		}
+	}
 	idx, ok := w.idx[item]
 	if ok {
 		w.root.setWeight(idx, weight)
@@ -64,9 +75,9 @@ func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
 		if weight != 0 {
 			if w.root.itemCnt == w.root.maxItems {
 				// add a new level
-				newRoot := &wrsNode{sumWeight: w.root.sumWeight, itemCnt: w.root.itemCnt, level: w.root.level + 1, maxItems: w.root.maxItems * wrsBranches}
+				newRoot := &wrsNode{sumCost: w.root.sumCost, itemCnt: w.root.itemCnt, level: w.root.level + 1, maxItems: w.root.maxItems * wrsBranches}
 				newRoot.items[0] = w.root
-				newRoot.weights[0] = w.root.sumWeight
+				newRoot.weights[0] = w.root.sumCost
 				w.root = newRoot
 			}
 			w.idx[item] = w.root.insert(item, weight)
@@ -80,10 +91,10 @@ func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
 // updates its weight and selects another one
 func (w *WeightedRandomSelect) Choose() WrsItem {
 	for {
-		if w.root.sumWeight == 0 {
+		if w.root.sumCost == 0 {
 			return nil
 		}
-		val := uint64(rand.Int63n(int64(w.root.sumWeight)))
+		val := uint64(rand.Int63n(int64(w.root.sumCost)))
 		choice, lastWeight := w.root.choose(val)
 		weight := w.wfn(choice)
 		if weight != lastWeight {
@@ -101,7 +112,7 @@ const wrsBranches = 8 // max number of branches in the wrsNode tree
 type wrsNode struct {
 	items                    [wrsBranches]interface{}
 	weights                  [wrsBranches]uint64
-	sumWeight                uint64
+	sumCost                  uint64
 	level, itemCnt, maxItems int
 }
 
@@ -115,7 +126,7 @@ func (n *wrsNode) insert(item WrsItem, weight uint64) int {
 		}
 	}
 	n.itemCnt++
-	n.sumWeight += weight
+	n.sumCost += weight
 	n.weights[branch] += weight
 	if n.level == 0 {
 		n.items[branch] = item
@@ -139,7 +150,7 @@ func (n *wrsNode) setWeight(idx int, weight uint64) uint64 {
 		oldWeight := n.weights[idx]
 		n.weights[idx] = weight
 		diff := weight - oldWeight
-		n.sumWeight += diff
+		n.sumCost += diff
 		if weight == 0 {
 			n.items[idx] = nil
 			n.itemCnt--
@@ -150,7 +161,7 @@ func (n *wrsNode) setWeight(idx int, weight uint64) uint64 {
 	branch := idx / branchItems
 	diff := n.items[branch].(*wrsNode).setWeight(idx-branch*branchItems, weight)
 	n.weights[branch] += diff
-	n.sumWeight += diff
+	n.sumCost += diff
 	if weight == 0 {
 		n.itemCnt--
 	}

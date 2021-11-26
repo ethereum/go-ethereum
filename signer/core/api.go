@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
@@ -41,7 +41,7 @@ const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
-	ExternalAPIVersion = "6.0.0"
+	ExternalAPIVersion = "6.1.0"
 	// InternalAPIVersion -- see intapi_changelog.md
 	InternalAPIVersion = "7.0.1"
 )
@@ -53,7 +53,7 @@ type ExternalAPI interface {
 	// New request to create a new account
 	New(ctx context.Context) (common.Address, error)
 	// SignTransaction request to sign the specified transaction
-	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
+	SignTransaction(ctx context.Context, args apitypes.SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// SignData - request to sign the given data (plus prefix)
 	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error)
 	// SignTypedData - request to sign the given structured data (plus prefix)
@@ -62,6 +62,8 @@ type ExternalAPI interface {
 	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
+	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
+	SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -103,7 +105,7 @@ type Validator interface {
 	// ValidateTransaction does a number of checks on the supplied transaction, and
 	// returns either a list of warnings, or an error (indicating that the transaction
 	// should be immediately rejected).
-	ValidateTransaction(selector *string, tx *SendTxArgs) (*ValidationMessages, error)
+	ValidateTransaction(selector *string, tx *apitypes.SendTxArgs) (*apitypes.ValidationMessages, error)
 }
 
 // SignerAPI defines the actual implementation of ExternalAPI
@@ -219,23 +221,24 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction SendTxArgs       `json:"transaction"`
-		Callinfo    []ValidationInfo `json:"call_info"`
-		Meta        Metadata         `json:"meta"`
+		Transaction apitypes.SendTxArgs       `json:"transaction"`
+		Callinfo    []apitypes.ValidationInfo `json:"call_info"`
+		Meta        Metadata                  `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		Transaction SendTxArgs `json:"transaction"`
-		Approved    bool       `json:"approved"`
+		Transaction apitypes.SendTxArgs `json:"transaction"`
+		Approved    bool                `json:"approved"`
 	}
 	SignDataRequest struct {
-		ContentType string                  `json:"content_type"`
-		Address     common.MixedcaseAddress `json:"address"`
-		Rawdata     []byte                  `json:"raw_data"`
-		Messages    []*NameValueType        `json:"messages"`
-		Hash        hexutil.Bytes           `json:"hash"`
-		Meta        Metadata                `json:"meta"`
+		ContentType string                    `json:"content_type"`
+		Address     common.MixedcaseAddress   `json:"address"`
+		Rawdata     []byte                    `json:"raw_data"`
+		Messages    []*NameValueType          `json:"messages"`
+		Callinfo    []apitypes.ValidationInfo `json:"call_info"`
+		Hash        hexutil.Bytes             `json:"hash"`
+		Meta        Metadata                  `json:"meta"`
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
@@ -319,59 +322,73 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
 func (api *SignerAPI) startUSBListener() {
-	events := make(chan accounts.WalletEvent, 16)
+	eventCh := make(chan accounts.WalletEvent, 16)
 	am := api.am
-	am.Subscribe(events)
-	go func() {
+	am.Subscribe(eventCh)
+	// Open any wallets already attached
+	for _, wallet := range am.Wallets() {
+		if err := wallet.Open(""); err != nil {
+			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+			if err == usbwallet.ErrTrezorPINNeeded {
+				go api.openTrezor(wallet.URL())
+			}
+		}
+	}
+	go api.derivationLoop(eventCh)
+}
 
-		// Open any wallets already attached
-		for _, wallet := range am.Wallets() {
-			if err := wallet.Open(""); err != nil {
-				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+// derivationLoop listens for wallet events
+func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
+	// Listen for wallet event till termination
+	for event := range events {
+		switch event.Kind {
+		case accounts.WalletArrived:
+			if err := event.Wallet.Open(""); err != nil {
+				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
 				if err == usbwallet.ErrTrezorPINNeeded {
-					go api.openTrezor(wallet.URL())
+					go api.openTrezor(event.Wallet.URL())
 				}
 			}
-		}
-		// Listen for wallet event till termination
-		for event := range events {
-			switch event.Kind {
-			case accounts.WalletArrived:
-				if err := event.Wallet.Open(""); err != nil {
-					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
-					if err == usbwallet.ErrTrezorPINNeeded {
-						go api.openTrezor(event.Wallet.URL())
-					}
-				}
-			case accounts.WalletOpened:
-				status, _ := event.Wallet.Status()
-				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
-
+		case accounts.WalletOpened:
+			status, _ := event.Wallet.Status()
+			log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+			var derive = func(limit int, next func() accounts.DerivationPath) {
 				// Derive first N accounts, hardcoded for now
-				var nextPath = make(accounts.DerivationPath, len(accounts.DefaultBaseDerivationPath))
-				copy(nextPath[:], accounts.DefaultBaseDerivationPath[:])
-
-				for i := 0; i < numberOfAccountsToDerive; i++ {
-					acc, err := event.Wallet.Derive(nextPath, true)
-					if err != nil {
-						log.Warn("account derivation failed", "error", err)
+				for i := 0; i < limit; i++ {
+					path := next()
+					if acc, err := event.Wallet.Derive(path, true); err != nil {
+						log.Warn("Account derivation failed", "error", err)
 					} else {
-						log.Info("derived account", "address", acc.Address)
+						log.Info("Derived account", "address", acc.Address, "path", path)
 					}
-					nextPath[len(nextPath)-1]++
 				}
-			case accounts.WalletDropped:
-				log.Info("Old wallet dropped", "url", event.Wallet.URL())
-				event.Wallet.Close()
 			}
+			log.Info("Deriving default paths")
+			derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.DefaultBaseDerivationPath))
+			if event.Wallet.URL().Scheme == "ledger" {
+				log.Info("Deriving ledger legacy paths")
+				derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.LegacyLedgerBaseDerivationPath))
+				log.Info("Deriving ledger live paths")
+				// For ledger live, since it's based off the same (DefaultBaseDerivationPath)
+				// as one we've already used, we need to step it forward one step to avoid
+				// hitting the same path again
+				nextFn := accounts.LedgerLiveIterator(accounts.DefaultBaseDerivationPath)
+				nextFn()
+				derive(numberOfAccountsToDerive, nextFn)
+			}
+		case accounts.WalletDropped:
+			log.Info("Old wallet dropped", "url", event.Wallet.URL())
+			event.Wallet.Close()
 		}
-	}()
+	}
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
-	var accs []accounts.Account
+	var accs = make([]accounts.Account, 0)
+	// accs is initialized as empty list, not nil. We use 'nil' to signal
+	// rejection, as opposed to an empty list.
 	for _, wallet := range api.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
@@ -381,13 +398,11 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	}
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
-
 	}
 	addresses := make([]common.Address, 0)
 	for _, acc := range result.Accounts {
 		addresses = append(addresses, acc.Address)
 	}
-
 	return addresses, nil
 }
 
@@ -424,7 +439,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			continue
 		}
 		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
-			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
+			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
 			// No error
 			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
@@ -442,6 +457,16 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 // it also returns 'true' if the transaction was modified, to make it possible to configure the signer not to allow
 // UI-modifications to requests
 func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
+	var intPtrModified = func(a, b *hexutil.Big) bool {
+		aBig := (*big.Int)(a)
+		bBig := (*big.Int)(b)
+		if aBig != nil && bBig != nil {
+			return aBig.Cmp(bBig) != 0
+		}
+		// One or both of them are nil
+		return a != b
+	}
+
 	modified := false
 	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
@@ -455,9 +480,17 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
-	if g0, g1 := big.Int(original.Transaction.GasPrice), big.Int(new.Transaction.GasPrice); g0.Cmp(&g1) != 0 {
+	if a, b := original.Transaction.GasPrice, new.Transaction.GasPrice; intPtrModified(a, b) {
+		log.Info("GasPrice changed by UI", "was", a, "is", b)
 		modified = true
-		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
+	}
+	if a, b := original.Transaction.MaxPriorityFeePerGas, new.Transaction.MaxPriorityFeePerGas; intPtrModified(a, b) {
+		log.Info("maxPriorityFeePerGas changed by UI", "was", a, "is", b)
+		modified = true
+	}
+	if a, b := original.Transaction.MaxFeePerGas, new.Transaction.MaxFeePerGas; intPtrModified(a, b) {
+		log.Info("maxFeePerGas changed by UI", "was", a, "is", b)
+		modified = true
 	}
 	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
 		modified = true
@@ -505,7 +538,7 @@ func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, promp
 }
 
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
-func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	var (
 		err    error
 		result SignTxResponse
@@ -516,8 +549,16 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		if err := msgs.getWarnings(); err != nil {
+		if err := msgs.GetWarnings(); err != nil {
 			return nil, err
+		}
+	}
+	if args.ChainID != nil {
+		requestedChainId := (*big.Int)(args.ChainID)
+		if api.chainID.Cmp(requestedChainId) != 0 {
+			log.Error("Signing request with wrong chain id", "requested", requestedChainId, "configured", api.chainID)
+			return nil, fmt.Errorf("requested chainid %d does not match the configuration of the signer",
+				requestedChainId)
 		}
 	}
 	req := SignTxRequest{
@@ -545,7 +586,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		return nil, err
 	}
 	// Convert fields into a real transaction
-	var unsignedTx = result.Transaction.toTransaction()
+	var unsignedTx = result.Transaction.ToTransaction()
 	// Get the password for the transaction
 	pw, err := api.lookupOrQueryPassword(acc.Address, "Account password",
 		fmt.Sprintf("Please enter the password for account %s", acc.Address.String()))
@@ -559,17 +600,44 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		return nil, err
 	}
 
-	rlpdata, err := rlp.EncodeToBytes(signedTx)
+	data, err := signedTx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	response := ethapi.SignTransactionResult{Raw: rlpdata, Tx: signedTx}
+	response := ethapi.SignTransactionResult{Raw: data, Tx: signedTx}
 
 	// Finally, send the signed tx to the UI
 	api.UI.OnApprovedTx(response)
 	// ...and to the external caller
 	return &response, nil
 
+}
+
+func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
+	// Do the usual validations, but on the last-stage transaction
+	args := gnosisTx.ArgsForValidation()
+	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
+	if err != nil {
+		return nil, err
+	}
+	// If we are in 'rejectMode', then reject rather than show the user warnings
+	if api.rejectMode {
+		if err := msgs.GetWarnings(); err != nil {
+			return nil, err
+		}
+	}
+	typedData := gnosisTx.ToTypedData()
+	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
+	if err != nil {
+		return nil, err
+	}
+	checkSummedSender, _ := common.NewMixedcaseAddressFromString(signerAddress.Address().Hex())
+
+	gnosisTx.Signature = signature
+	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
+	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
+
+	return &gnosisTx, nil
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are
