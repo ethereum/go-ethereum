@@ -158,7 +158,7 @@ func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
 func newLeaf(key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = leafNode
-	st.key = key
+	st.key = append(st.key, key...)
 	st.val = val
 	return st
 }
@@ -166,7 +166,7 @@ func newLeaf(key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
 func newExt(key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = extNode
-	st.key = key
+	st.key = append(st.key, key...)
 	st.children[0] = child
 	return st
 }
