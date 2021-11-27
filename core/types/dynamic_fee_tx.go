@@ -38,7 +38,7 @@ type DynamicFeeTx struct {
 	R *big.Int `json:"r" gencodec:"required"`
 	S *big.Int `json:"s" gencodec:"required"`
 
-	ActualGasPrice *big.Int `rlp:"optional"`
+	ActualGasPrice *big.Int `rlp:"-"`
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
