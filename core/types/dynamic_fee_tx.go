@@ -33,12 +33,12 @@ type DynamicFeeTx struct {
 	Data       []byte
 	AccessList AccessList
 
-	ActualGasPrice *big.Int
-
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
 	R *big.Int `json:"r" gencodec:"required"`
 	S *big.Int `json:"s" gencodec:"required"`
+
+	ActualGasPrice *big.Int `rlp:"optional"`
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -70,6 +70,10 @@ func (tx *DynamicFeeTx) copy() TxData {
 	}
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
+	}
+	if tx.ActualGasPrice != nil {
+		cpy.ActualGasPrice = new(big.Int)
+		cpy.ActualGasPrice.Set(tx.ActualGasPrice)
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
