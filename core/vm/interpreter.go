@@ -124,9 +124,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
 	if readOnly && !in.readOnly {
-		if !in.evm.chainRules.IsByzantium {
-			panic("readOnly execution requested on wrong chainRules")
-		}
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
