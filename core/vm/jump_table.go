@@ -995,6 +995,12 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
 		},
+		INVALID: {
+			execute:     opInvalid,
+			constantGas: 0,
+			minStack:    minStack(0, 0),
+			maxStack:    maxStack(0, 0),
+		},
 		SELFDESTRUCT: {
 			execute:    opSelfdestruct,
 			dynamicGas: gasSelfdestruct,
