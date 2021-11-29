@@ -273,24 +273,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
-		// if the operation clears the return data (e.g. it has returning data)
-		// set the last return to the result of the operation.
-		if operation.returns {
-			in.returnData = res
+		if err != nil {
+			break
 		}
-		switch {
-		case err != nil:
-			return nil, err
-		case operation.reverts:
-			log.Debug("ErrExecutionReverted", "pc", pc, "reverts", operation.reverts, "err", err)
-			return res, ErrExecutionReverted
-		case operation.halts:
-			return res, nil
-		case !operation.jumps:
-			pc++
-		}
+		pc++
 	}
-	return nil, nil
+	
+	if err == errStopToken {
+		err = nil // clear stop token error
+	}
+
+	return res, err
 }
 
 // CanRun tells if the contract, passed as an argument, can be
