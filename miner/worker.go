@@ -1041,7 +1041,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	}
 
 	// If we're post merge, just ignore
-	if td, ttd := w.chain.GetTd(block.ParentHash(), block.NumberU64()-1), w.chain.Config().TerminalTotalDifficulty; td != nil && ttd != nil && td.Cmp(ttd) >= 0 {
+	td, ttd := w.chain.GetTd(block.ParentHash(), block.NumberU64()-1), w.chain.Config().TerminalTotalDifficulty
+	if td != nil && ttd != nil && td.Cmp(ttd) >= 0 {
 		return nil
 	}
 
