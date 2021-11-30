@@ -32,7 +32,7 @@ type Config struct {
 	NoRecursion             bool   // Disables call, callcode, delegate call and create
 	EnablePreimageRecording bool   // Enables recording of SHA3/keccak preimages
 
-	JumpTable JumpTable // EVM instruction table, automatically populated if unset
+	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
 
 	EWASMInterpreter string // External EWASM interpreter options
 	EVMInterpreter   string // External EVM interpreter options
@@ -92,35 +92,33 @@ type EVMInterpreter struct {
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
 func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
-	// We use the STOP instruction whether to see
-	// the jump table was initialised. If it was not
-	// we'll set the default jump table.
-	if cfg.JumpTable[STOP] == nil {
-		var jt JumpTable
+	// If jump table was not initialised we set the default one.
+	if cfg.JumpTable == nil {
 		switch {
 		case evm.chainRules.IsIstanbul:
-			jt = istanbulInstructionSet
+			cfg.JumpTable = &istanbulInstructionSet
 		case evm.chainRules.IsConstantinople:
-			jt = constantinopleInstructionSet
+			cfg.JumpTable = &constantinopleInstructionSet
 		case evm.chainRules.IsByzantium:
-			jt = byzantiumInstructionSet
+			cfg.JumpTable = &byzantiumInstructionSet
 		case evm.chainRules.IsEIP158:
-			jt = spuriousDragonInstructionSet
+			cfg.JumpTable = &spuriousDragonInstructionSet
 		case evm.chainRules.IsEIP150:
-			jt = tangerineWhistleInstructionSet
+			cfg.JumpTable = &tangerineWhistleInstructionSet
 		case evm.chainRules.IsHomestead:
-			jt = homesteadInstructionSet
+			cfg.JumpTable = &homesteadInstructionSet
 		default:
-			jt = frontierInstructionSet
+			cfg.JumpTable = &frontierInstructionSet
 		}
 		for i, eip := range cfg.ExtraEips {
-			if err := EnableEIP(eip, &jt); err != nil {
+			copy := *cfg.JumpTable
+			if err := EnableEIP(eip, &copy); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
 				log.Error("EIP activation failed", "eip", eip, "error", err)
 			}
+			cfg.JumpTable = &copy
 		}
-		cfg.JumpTable = jt
 	}
 
 	return &EVMInterpreter{
