@@ -1,9 +1,6 @@
 FROM alpine:3.14
 
-RUN set -x \
-    && apk add --update --no-cache \
-       ca-certificates \
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache ca-certificates
 COPY bor /usr/local/bin/
 
 EXPOSE 8545 8546 8547 30303 30303/udp

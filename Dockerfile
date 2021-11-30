@@ -4,7 +4,7 @@ ARG BOR_DIR=/bor
 ENV BOR_DIR=$BOR_DIR
 
 RUN apt-get update -y && apt-get upgrade -y \
-    && apt install build-essential git tini -y \
+    && apt install build-essential git -y \
     && mkdir -p /bor
 
 WORKDIR ${BOR_DIR}
