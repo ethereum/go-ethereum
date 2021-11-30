@@ -231,7 +231,7 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 	return nil, nil
 }
 
-func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opKeccak256(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	offset, size := callContext.stack.pop(), callContext.stack.peek()
 	data := callContext.memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 

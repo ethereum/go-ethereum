@@ -41,8 +41,8 @@ const (
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
 	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
 
-	Sha3Gas          uint64 = 30    // Once per SHA3 operation.
-	Sha3WordGas      uint64 = 6     // Once per word of the SHA3 operation's data.
+	Keccak256Gas     uint64 = 30    // Once per KECCAK256 operation.
+	Keccak256WordGas uint64 = 6     // Once per word of the KECCAK256 operation's data.
 	SstoreResetGas   uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
 	SstoreClearGas   uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
 	SstoreRefundGas  uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
