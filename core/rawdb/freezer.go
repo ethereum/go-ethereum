@@ -551,7 +551,8 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 
 // TransformerFn takes a freezer entry in an older format and returns
 // the same in a new format. The second return argument determines
-// if the entry is already of the new format.
+// if the entry is not in the legacy format. Note that empty items can
+// be considered both legacy and non-legacy.
 type TransformerFn = func([]byte) ([]byte, bool, error)
 
 // MigrateTable processes the entries in a given table in sequence

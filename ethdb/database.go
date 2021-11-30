@@ -113,6 +113,10 @@ type AncientWriter interface {
 	Sync() error
 
 	// MigrateTable Processes and migrates entries in a table to a new format.
+	// The function takes a freezer entry in an older format and returns
+	// the same in a new format. The second return argument determines
+	// if the entry is not in the legacy format. Note that empty items can
+	// be considered both legacy and non-legacy.
 	MigrateTable(string, func([]byte) ([]byte, bool, error)) error
 }
 

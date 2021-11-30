@@ -101,6 +101,8 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
 func (t *table) MigrateTable(kind string, fn TransformerFn) error {
 	return t.db.MigrateTable(kind, fn)
 }
