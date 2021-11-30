@@ -1633,10 +1633,23 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			for _, data := range bc.stateSyncData {
 				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 			}
+
+			// ...
+			// bc.chain2HeadFeed.Send(ChainHeadEvent2{
+			//  Type: "head",
+			//	NewChain: []{block}
+			// })
+
 			// BOR
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+
+		// ...
+		// bc.chain2HeadFeed.Send(ChainHeadEvent2{
+		//  Type: "fork",
+		//	NewChain: []{block}
+		// })
 	}
 	return status, nil
 }
@@ -2257,6 +2270,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
+
+		// ...
+		// bc.chain2HeadFeed.Send(ChainHeadEvent2{
+		//  Type: "reorg",
+		//	NewChain: newChain,
+		//  OldChain: oldChain,
+		// })
+
 		logFn := log.Info
 		msg := "Chain reorg detected"
 		if len(oldChain) > 63 {
