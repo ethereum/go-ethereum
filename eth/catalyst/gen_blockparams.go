@@ -15,23 +15,23 @@ var _ = (*payloadAttributesMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (p PayloadAttributesV1) MarshalJSON() ([]byte, error) {
 	type PayloadAttributesV1 struct {
-		Timestamp    hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		Random       common.Hash    `json:"random"        gencodec:"required"`
-		FeeRecipient common.Address `json:"feeRecipient"  gencodec:"required"`
+		Timestamp             hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random                common.Hash    `json:"random"        gencodec:"required"`
+		SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
 	var enc PayloadAttributesV1
 	enc.Timestamp = hexutil.Uint64(p.Timestamp)
 	enc.Random = p.Random
-	enc.FeeRecipient = p.FeeRecipient
+	enc.SuggestedFeeRecipient = p.SuggestedFeeRecipient
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 	type PayloadAttributesV1 struct {
-		Timestamp    *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		Random       *common.Hash    `json:"random"        gencodec:"required"`
-		FeeRecipient *common.Address `json:"feeRecipient"  gencodec:"required"`
+		Timestamp             *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random                *common.Hash    `json:"random"        gencodec:"required"`
+		SuggestedFeeRecipient *common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
 	var dec PayloadAttributesV1
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -45,9 +45,9 @@ func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'random' for PayloadAttributesV1")
 	}
 	p.Random = *dec.Random
-	if dec.FeeRecipient == nil {
-		return errors.New("missing required field 'feeRecipient' for PayloadAttributesV1")
+	if dec.SuggestedFeeRecipient == nil {
+		return errors.New("missing required field 'suggestedFeeRecipient' for PayloadAttributesV1")
 	}
-	p.FeeRecipient = *dec.FeeRecipient
+	p.SuggestedFeeRecipient = *dec.SuggestedFeeRecipient
 	return nil
 }

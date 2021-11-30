@@ -374,9 +374,9 @@ func TestFullAPI(t *testing.T) {
 		ethservice.TxPool().AddLocal(tx)
 
 		params := PayloadAttributesV1{
-			Timestamp:    parent.Time() + 1,
-			Random:       crypto.Keccak256Hash([]byte{byte(i)}),
-			FeeRecipient: parent.Coinbase(),
+			Timestamp:             parent.Time() + 1,
+			Random:                crypto.Keccak256Hash([]byte{byte(i)}),
+			SuggestedFeeRecipient: parent.Coinbase(),
 		}
 		fcState := ForkchoiceStateV1{
 			HeadBlockHash:      parent.Hash(),

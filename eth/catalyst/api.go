@@ -47,9 +47,10 @@ var (
 	SUCCESS          = GenericStringResponse{"SUCCESS"}
 	INVALID          = ForkChoiceResponse{Status: "INVALID", PayloadID: nil}
 	SYNCING          = ForkChoiceResponse{Status: "INVALID", PayloadID: nil}
-	UnknownHeader    = rpc.CustomError{Code: -32000, Message: "unknown header"}
-	UnknownPayload   = rpc.CustomError{Code: -32001, Message: "unknown payload"}
-	InvalidPayloadID = rpc.CustomError{Code: 1, Message: "invalid payload id"}
+	UnknownHeader    = rpc.CustomError{Code: -32000, ValidationError: "unknown header"}
+	UnknownPayload   = rpc.CustomError{Code: -32001, ValidationError: "unknown payload"}
+	TTDNotReached    = rpc.CustomError{Code: -32002, ValidationError: "TTD not reached yet"}
+	InvalidPayloadID = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
 )
 
 // Register adds catalyst APIs to the full node.
@@ -232,7 +233,7 @@ func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) []
 	hasher.Write(headBlockHash[:])
 	binary.Write(hasher, binary.BigEndian, params.Timestamp)
 	hasher.Write(params.Random[:])
-	hasher.Write(params.FeeRecipient[:])
+	hasher.Write(params.SuggestedFeeRecipient[:])
 	return hasher.Sum([]byte{})[:8]
 }
 
@@ -308,7 +309,7 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 		log.Warn("Producing block too far in the future", "diff", common.PrettyDuration(diff))
 	}
 	pending := api.eth.TxPool().Pending(true)
-	coinbase := params.FeeRecipient
+	coinbase := params.SuggestedFeeRecipient
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
@@ -419,10 +420,10 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.Coinbase,
+		Coinbase:    params.FeeRecipient,
 		Root:        params.StateRoot,
 		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptRoot,
+		ReceiptHash: params.ReceiptsRoot,
 		Bloom:       types.BytesToBloom(params.LogsBloom),
 		Difficulty:  common.Big0,
 		Number:      number,
@@ -444,14 +445,14 @@ func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableDa
 	return &ExecutableDataV1{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
-		Coinbase:      block.Coinbase(),
+		FeeRecipient:  block.Coinbase(),
 		StateRoot:     block.Root(),
 		Number:        block.NumberU64(),
 		GasLimit:      block.GasLimit(),
 		GasUsed:       block.GasUsed(),
 		BaseFeePerGas: block.BaseFee(),
 		Timestamp:     block.Time(),
-		ReceiptRoot:   block.ReceiptHash(),
+		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
 		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        random,
@@ -479,7 +480,7 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	}
 	td := api.eth.BlockChain().GetTd(newHeadBlock.Hash(), newHeadBlock.NumberU64())
 	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
-		return errors.New("total difficulty not reached yet")
+		return &TTDNotReached
 	}
 	return nil
 }
