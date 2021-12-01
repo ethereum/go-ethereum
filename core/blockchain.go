@@ -175,15 +175,16 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc             *HeaderChain
+	rmLogsFeed     event.Feed
+	chainFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	chain2HeadFeed event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -1641,22 +1642,20 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 			}
 
-			// ...
-			// bc.chain2HeadFeed.Send(ChainHeadEvent2{
-			//  Type: "head",
-			//	NewChain: []{block}
-			// })
+			bc.chain2HeadFeed.Send(Chain2HeadEvent{
+				Type:     "head",
+				NewChain: []*types.Block{block},
+			})
 
 			// BOR
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
-		// ...
-		// bc.chain2HeadFeed.Send(ChainHeadEvent2{
-		//  Type: "fork",
-		//	NewChain: []{block}
-		// })
+		bc.chain2HeadFeed.Send(Chain2HeadEvent{
+			Type:     "fork",
+			NewChain: []*types.Block{block},
+		})
 	}
 	return status, nil
 }
@@ -2276,12 +2275,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
 
-		// ...
-		// bc.chain2HeadFeed.Send(ChainHeadEvent2{
-		//  Type: "reorg",
-		//	NewChain: newChain,
-		//  OldChain: oldChain,
-		// })
+		bc.chain2HeadFeed.Send(Chain2HeadEvent{
+			Type:     "reorg",
+			NewChain: newChain,
+			OldChain: oldChain,
+		})
 
 		logFn := log.Info
 		msg := "Chain reorg detected"
@@ -2589,6 +2587,11 @@ func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscripti
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChain2HeadEvent registers a subscription of ChainHeadEvent. ()
+func (bc *BlockChain) SubscribeChain2HeadEvent(ch chan<- Chain2HeadEvent) event.Subscription {
+	return bc.scope.Track(bc.chain2HeadFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

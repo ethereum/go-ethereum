@@ -27,6 +27,7 @@ message ChainWatchRequest {
 message ChainWatchResponse {
     repeated BlockStub oldchain = 1;
     repeated BlockStub newchain = 2;
+    string type = 3;
 }
 
 message BlockStub {
