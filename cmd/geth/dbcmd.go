@@ -734,7 +734,7 @@ func showMetaData(ctx *cli.Context) error {
 	}
 	data = append(data, [][]string{{"frozen", fmt.Sprintf("%d items", ancients)},
 		{"lastPivotNumber", pp(rawdb.ReadLastPivotNumber(db))},
-		{"snapshotSyncStatus", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotSyncStatus(db)))},
+		{"len(snapshotSyncStatus)", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotSyncStatus(db)))},
 		{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))},
 		{"snapshotDisabled", fmt.Sprintf("%v", rawdb.ReadSnapshotDisabled(db))},
 		{"snapshotJournal", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotJournal(db)))},
