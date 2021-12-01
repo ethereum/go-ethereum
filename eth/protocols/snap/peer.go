@@ -46,6 +46,16 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 }
 
+// NewFakePeer create a fake snap peer without a backing p2p peer, for testing purposes.
+func NewFakePeer(version uint, id string, rw p2p.MsgReadWriter) *Peer {
+	return &Peer{
+		id:      id,
+		rw:      rw,
+		version: version,
+		logger:  log.New("peer", id[:8]),
+	}
+}
+
 // ID retrieves the peer's unique identifier.
 func (p *Peer) ID() string {
 	return p.id
