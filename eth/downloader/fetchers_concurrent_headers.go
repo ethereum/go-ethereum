@@ -19,6 +19,7 @@ package downloader
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -81,8 +82,9 @@ func (q *headerQueue) request(peer *peerConnection, req *fetchRequest, resCh cha
 // fetcher, unpacking the header data and delivering it to the downloader's queue.
 func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
 	headers := *packet.Res.(*eth.BlockHeadersPacket)
+	hashes := packet.Meta.([]common.Hash)
 
-	accepted, err := q.queue.DeliverHeaders(peer.id, headers, q.headerProcCh)
+	accepted, err := q.queue.DeliverHeaders(peer.id, headers, hashes, q.headerProcCh)
 	switch {
 	case err == nil && len(headers) == 0:
 		peer.log.Trace("Requested headers delivered")

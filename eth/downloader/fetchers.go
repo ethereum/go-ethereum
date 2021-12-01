@@ -27,14 +27,14 @@ import (
 // fetchHeadersByHash is a blocking version of Peer.RequestHeadersByHash which
 // handles all the cancellation, interruption and timeout mechanisms of a data
 // retrieval to allow blocking API calls.
-func (d *Downloader) fetchHeadersByHash(p *peerConnection, hash common.Hash, amount int, skip int, reverse bool) ([]*types.Header, error) {
+func (d *Downloader) fetchHeadersByHash(p *peerConnection, hash common.Hash, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
 	// Create the response sink and send the network request
 	start := time.Now()
 	resCh := make(chan *eth.Response)
 
 	req, err := p.peer.RequestHeadersByHash(hash, amount, skip, reverse, resCh)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer req.Close()
 
@@ -46,14 +46,14 @@ func (d *Downloader) fetchHeadersByHash(p *peerConnection, hash common.Hash, amo
 
 	select {
 	case <-d.cancelCh:
-		return nil, errCanceled
+		return nil, nil, errCanceled
 
 	case <-timeoutTimer.C:
 		// Header retrieval timed out, update the metrics
 		p.log.Debug("Header request timed out", "elapsed", ttl)
 		headerTimeoutMeter.Mark(1)
 
-		return nil, errTimeout
+		return nil, nil, errTimeout
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
@@ -65,21 +65,21 @@ func (d *Downloader) fetchHeadersByHash(p *peerConnection, hash common.Hash, amo
 		// be processed by the caller
 		res.Done <- nil
 
-		return *res.Res.(*eth.BlockHeadersPacket), nil
+		return *res.Res.(*eth.BlockHeadersPacket), res.Meta.([]common.Hash), nil
 	}
 }
 
 // fetchHeadersByNumber is a blocking version of Peer.RequestHeadersByNumber which
 // handles all the cancellation, interruption and timeout mechanisms of a data
 // retrieval to allow blocking API calls.
-func (d *Downloader) fetchHeadersByNumber(p *peerConnection, number uint64, amount int, skip int, reverse bool) ([]*types.Header, error) {
+func (d *Downloader) fetchHeadersByNumber(p *peerConnection, number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
 	// Create the response sink and send the network request
 	start := time.Now()
 	resCh := make(chan *eth.Response)
 
 	req, err := p.peer.RequestHeadersByNumber(number, amount, skip, reverse, resCh)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer req.Close()
 
@@ -91,14 +91,14 @@ func (d *Downloader) fetchHeadersByNumber(p *peerConnection, number uint64, amou
 
 	select {
 	case <-d.cancelCh:
-		return nil, errCanceled
+		return nil, nil, errCanceled
 
 	case <-timeoutTimer.C:
 		// Header retrieval timed out, update the metrics
 		p.log.Debug("Header request timed out", "elapsed", ttl)
 		headerTimeoutMeter.Mark(1)
 
-		return nil, errTimeout
+		return nil, nil, errTimeout
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
@@ -110,6 +110,6 @@ func (d *Downloader) fetchHeadersByNumber(p *peerConnection, number uint64, amou
 		// be processed by the caller
 		res.Done <- nil
 
-		return *res.Res.(*eth.BlockHeadersPacket), nil
+		return *res.Res.(*eth.BlockHeadersPacket), res.Meta.([]common.Hash), nil
 	}
 }
