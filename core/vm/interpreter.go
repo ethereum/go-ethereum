@@ -256,5 +256,5 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		panic(fmt.Errorf("wrong: res %x, returndata %x", res, in.returnData))
 	}
 
-	return res, err
+	return in.returnData, err
 }
