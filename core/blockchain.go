@@ -1222,14 +1222,14 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 
 		// BOR: Retrieve all the bor receipts.
-		borReceipts := types.Receipts{}
+		borReceipts := []types.Receipts{}
 		for _, block := range blockChain {
-			borReceipts = append(borReceipts, bc.GetBorReceiptByHash(block.Hash()))
+			borReceipts = append(borReceipts, []*types.Receipt{bc.GetBorReceiptByHash(block.Hash())})
 		}
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, []types.Receipts{borReceipts}, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, borReceipts, td)
 		size += writeSize
 		if err != nil {
 			log.Error("Error importing chain data to ancients", "err", err)
