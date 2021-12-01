@@ -39,7 +39,7 @@ type ConsensusFns struct {
 	timeoutHandler func(*utils.Timeout) error
 
 	verifySyncInfo  func(*utils.SyncInfo) error
-	syncInfoHandler func(*utils.SyncInfo) error
+	syncInfoHandler func(consensus.ChainReader, *utils.SyncInfo) error
 }
 
 type BroadcastFns struct {
@@ -136,7 +136,7 @@ func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 	b.knownSyncInfos.Add(syncInfo.Hash(), true)
 	b.broadcastCh <- syncInfo
 
-	err = b.consensus.syncInfoHandler(syncInfo)
+	err = b.consensus.syncInfoHandler(b.blockCahinReader, syncInfo)
 	if err != nil {
 		log.Error("handle BFT SyncInfo", "error", err)
 		return err

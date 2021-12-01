@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -56,6 +57,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 		votePool:           votePool,
 		highestTimeoutCert: &utils.TimeoutCert{},
 		highestQuorumCert:  &utils.QuorumCert{},
+		highestVotedRound:  utils.Round(0),
 	}
 	// Add callback to the timer
 	timer.OnTimeoutFn = engine.onCountdownTimeout
@@ -124,12 +126,16 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo *utils.SyncInfo) error {
 	return nil
 }
 
-func (x *XDPoS_v2) SyncInfoHandler(syncInfo *utils.SyncInfo) error {
+func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *utils.SyncInfo) error {
 	/*
 		1. processQC
 		2. processTC
 	*/
-	return nil
+	err := x.processQC(chain, syncInfo.HighestQuorumCert)
+	if err != nil {
+		return nil
+	}
+	return x.processTC(syncInfo.HighestTimeoutCert)
 }
 
 /*
@@ -267,25 +273,37 @@ func (x *XDPoS_v2) onTimeoutPoolThresholdReached(pooledTimeouts map[common.Hash]
 }
 
 /*
-	Process Block workflow
+	Proposed Block workflow
 */
-func (x *XDPoS_v2) ProcessBlockHandler() {
+func (x *XDPoS_v2) ProposedBlockHandler(blockCahinReader consensus.ChainReader, blockInfo *utils.BlockInfo, quorumCert *utils.QuorumCert) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
 	/*
 		1. processQC()
 		2. verifyVotingRule()
 		3. sendVote()
-
 	*/
+	err := x.processQC(blockCahinReader, quorumCert)
+	if err != nil {
+		return err
+	}
+	verified, err := x.verifyVotingRule(blockCahinReader, blockInfo, quorumCert)
+	if err != nil {
+		return err
+	}
+	if verified {
+		return x.sendVote(blockInfo)
+	} else {
+		log.Info("Failed to pass the voting rule verification", "ProposeBlockHash", blockInfo.Hash)
+	}
+
+	return nil
 }
 
 /*
 	QC & TC Utils
 */
-
-// Genrate blockInfo which contains Hash, round and blockNumber and send to queue
-func (x *XDPoS_v2) generateBlockInfo() error {
-	return nil
-}
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
 func (x *XDPoS_v2) VerifyBlockInfo(blockInfo *utils.BlockInfo) error {
@@ -317,7 +335,6 @@ func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 func (x *XDPoS_v2) processQC(blockCahinReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
 	// 1. Update HighestQC
 	if x.highestQuorumCert == nil || (quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round) {
-		//TODO: do I need a clone?
 		x.highestQuorumCert = quorumCert
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
@@ -376,15 +393,29 @@ func (x *XDPoS_v2) setNewRound(round utils.Round) error {
 }
 
 // Hot stuff rule to decide whether this node is eligible to vote for the received block
-func (x *XDPoS_v2) verifyVotingRule(header *types.Header) error {
+func (x *XDPoS_v2) verifyVotingRule(blockCahinReader consensus.ChainReader, blockInfo *utils.BlockInfo, quorumCert *utils.QuorumCert) (bool, error) {
+	// Make sure this node has not voted for this round. We can have a variable highestVotedRound, and check currentRound > highestVotedRound.
+	if x.currentRound <= x.highestVotedRound {
+		return false, nil
+	}
 	/*
-		Make sure this node has not voted for this round. We can have a variable highestVotedRound, and check currentRound > highestVotedRound.
 		HotStuff Voting rule:
 		header's round == local current round, AND (one of the following two:)
 		header's block extends lockQuorumCert's ProposedBlockInfo (we need a isExtending(block_a, block_b) function), OR
 		header's QC's ProposedBlockInfo.Round > lockQuorumCert's ProposedBlockInfo.Round
 	*/
-	return nil
+	if blockInfo.Round != x.currentRound {
+		return false, nil
+	}
+	isExtended, err := x.isExtendingFromAncestor(blockCahinReader, blockInfo, &x.lockQuorumCert.ProposedBlockInfo)
+	if err != nil {
+		return false, err
+	}
+	if isExtended || (quorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // Once Hot stuff voting rule has verified, this node can then send vote
@@ -392,6 +423,7 @@ func (x *XDPoS_v2) sendVote(blockInfo *utils.BlockInfo) error {
 	// First step: Generate the signature by using node's private key(The signature is the blockInfo signature)
 	// Second step: Construct the vote struct with the above signature & blockinfo struct
 	// Third step: Send the vote to broadcast channel
+	// Forth step: Update the highest Voted round
 	signedHash, err := x.signSignature(utils.VoteSigHash(blockInfo))
 	if err != nil {
 		return err
@@ -401,6 +433,7 @@ func (x *XDPoS_v2) sendVote(blockInfo *utils.BlockInfo) error {
 		Signature:         signedHash,
 	}
 	x.broadcastToBftChannel(voteMsg)
+	x.highestVotedRound = x.currentRound
 	return nil
 }
 
@@ -518,4 +551,23 @@ func (x *XDPoS_v2) commitBlocks(blockCahinReader consensus.ChainReader, proposed
 	// TODO: Commit the grandParent block
 
 	return true, nil
+}
+
+func (x *XDPoS_v2) isExtendingFromAncestor(blockCahinReader consensus.ChainReader, currentBlock *utils.BlockInfo, ancestorBlock *utils.BlockInfo) (bool, error) {
+	blockNumDiff := int(big.NewInt(0).Sub(currentBlock.Number, ancestorBlock.Number).Int64())
+
+	nextBlockHash := currentBlock.Hash
+	for i := 0; i < blockNumDiff; i++ {
+		parentBlock := blockCahinReader.GetHeaderByHash(nextBlockHash)
+		if parentBlock == nil {
+			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v is extending from the ancestorBlock %v", currentBlock.Number, ancestorBlock.Number)
+		} else {
+			nextBlockHash = parentBlock.ParentHash
+		}
+	}
+
+	if nextBlockHash == ancestorBlock.Hash {
+		return true, nil
+	}
+	return false, nil
 }
