@@ -113,6 +113,12 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (t *table) MigrateTable(kind string, convert convertLegacyFn) error {
+	return t.db.MigrateTable(kind, convert)
+}
+
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {
