@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/command/server/pprof"
 	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -106,4 +107,19 @@ func peerInfoToPeer(info *p2p.PeerInfo) *proto.Peer {
 func (s *Server) ChainSetHead(ctx context.Context, req *proto.ChainSetHeadRequest) (*proto.ChainSetHeadResponse, error) {
 	s.backend.APIBackend.SetHead(req.Number)
 	return &proto.ChainSetHeadResponse{}, nil
+}
+
+func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainWatchServer) error {
+	// 1. start the feed to the blcokchain events
+	// 2. for each event send a proto.ChainWatchResponse
+
+	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
+	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
+
+	for {
+		msg := <-chainHeadCh
+		reply.Send(&proto.ChainWatchResponse{})
+	}
+
+	return nil
 }

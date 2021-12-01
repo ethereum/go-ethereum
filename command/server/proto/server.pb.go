@@ -71,7 +71,155 @@ func (x PprofRequest_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PprofRequest_Type.Descriptor instead.
 func (PprofRequest_Type) EnumDescriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11, 0}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{14, 0}
+}
+
+type ChainWatchRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ChainWatchRequest) Reset() {
+	*x = ChainWatchRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_command_server_proto_server_proto_msgTypes[0]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ChainWatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChainWatchRequest) ProtoMessage() {}
+
+func (x *ChainWatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_command_server_proto_server_proto_msgTypes[0]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChainWatchRequest.ProtoReflect.Descriptor instead.
+func (*ChainWatchRequest) Descriptor() ([]byte, []int) {
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{0}
+}
+
+type ChainWatchResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Oldchain []*BlockStub `protobuf:"bytes,1,rep,name=oldchain,proto3" json:"oldchain,omitempty"`
+	Newchain []*BlockStub `protobuf:"bytes,2,rep,name=newchain,proto3" json:"newchain,omitempty"`
+}
+
+func (x *ChainWatchResponse) Reset() {
+	*x = ChainWatchResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_command_server_proto_server_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ChainWatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChainWatchResponse) ProtoMessage() {}
+
+func (x *ChainWatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_command_server_proto_server_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChainWatchResponse.ProtoReflect.Descriptor instead.
+func (*ChainWatchResponse) Descriptor() ([]byte, []int) {
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ChainWatchResponse) GetOldchain() []*BlockStub {
+	if x != nil {
+		return x.Oldchain
+	}
+	return nil
+}
+
+func (x *ChainWatchResponse) GetNewchain() []*BlockStub {
+	if x != nil {
+		return x.Newchain
+	}
+	return nil
+}
+
+type BlockStub struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Hash   string `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
+	Number uint64 `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+}
+
+func (x *BlockStub) Reset() {
+	*x = BlockStub{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_command_server_proto_server_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *BlockStub) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockStub) ProtoMessage() {}
+
+func (x *BlockStub) ProtoReflect() protoreflect.Message {
+	mi := &file_command_server_proto_server_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockStub.ProtoReflect.Descriptor instead.
+func (*BlockStub) Descriptor() ([]byte, []int) {
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BlockStub) GetHash() string {
+	if x != nil {
+		return x.Hash
+	}
+	return ""
+}
+
+func (x *BlockStub) GetNumber() uint64 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
 }
 
 type PeersAddRequest struct {
@@ -86,7 +234,7 @@ type PeersAddRequest struct {
 func (x *PeersAddRequest) Reset() {
 	*x = PeersAddRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[0]
+		mi := &file_command_server_proto_server_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -99,7 +247,7 @@ func (x *PeersAddRequest) String() string {
 func (*PeersAddRequest) ProtoMessage() {}
 
 func (x *PeersAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[0]
+	mi := &file_command_server_proto_server_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -112,7 +260,7 @@ func (x *PeersAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersAddRequest.ProtoReflect.Descriptor instead.
 func (*PeersAddRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{0}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PeersAddRequest) GetEnode() string {
@@ -138,7 +286,7 @@ type PeersAddResponse struct {
 func (x *PeersAddResponse) Reset() {
 	*x = PeersAddResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[1]
+		mi := &file_command_server_proto_server_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -151,7 +299,7 @@ func (x *PeersAddResponse) String() string {
 func (*PeersAddResponse) ProtoMessage() {}
 
 func (x *PeersAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[1]
+	mi := &file_command_server_proto_server_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -164,7 +312,7 @@ func (x *PeersAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersAddResponse.ProtoReflect.Descriptor instead.
 func (*PeersAddResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{1}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{4}
 }
 
 type PeersRemoveRequest struct {
@@ -179,7 +327,7 @@ type PeersRemoveRequest struct {
 func (x *PeersRemoveRequest) Reset() {
 	*x = PeersRemoveRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[2]
+		mi := &file_command_server_proto_server_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -192,7 +340,7 @@ func (x *PeersRemoveRequest) String() string {
 func (*PeersRemoveRequest) ProtoMessage() {}
 
 func (x *PeersRemoveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[2]
+	mi := &file_command_server_proto_server_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -205,7 +353,7 @@ func (x *PeersRemoveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersRemoveRequest.ProtoReflect.Descriptor instead.
 func (*PeersRemoveRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{2}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PeersRemoveRequest) GetEnode() string {
@@ -231,7 +379,7 @@ type PeersRemoveResponse struct {
 func (x *PeersRemoveResponse) Reset() {
 	*x = PeersRemoveResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[3]
+		mi := &file_command_server_proto_server_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -244,7 +392,7 @@ func (x *PeersRemoveResponse) String() string {
 func (*PeersRemoveResponse) ProtoMessage() {}
 
 func (x *PeersRemoveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[3]
+	mi := &file_command_server_proto_server_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -257,7 +405,7 @@ func (x *PeersRemoveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersRemoveResponse.ProtoReflect.Descriptor instead.
 func (*PeersRemoveResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{3}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{6}
 }
 
 type PeersListRequest struct {
@@ -269,7 +417,7 @@ type PeersListRequest struct {
 func (x *PeersListRequest) Reset() {
 	*x = PeersListRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[4]
+		mi := &file_command_server_proto_server_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -282,7 +430,7 @@ func (x *PeersListRequest) String() string {
 func (*PeersListRequest) ProtoMessage() {}
 
 func (x *PeersListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[4]
+	mi := &file_command_server_proto_server_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -295,7 +443,7 @@ func (x *PeersListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersListRequest.ProtoReflect.Descriptor instead.
 func (*PeersListRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{4}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{7}
 }
 
 type PeersListResponse struct {
@@ -309,7 +457,7 @@ type PeersListResponse struct {
 func (x *PeersListResponse) Reset() {
 	*x = PeersListResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[5]
+		mi := &file_command_server_proto_server_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -322,7 +470,7 @@ func (x *PeersListResponse) String() string {
 func (*PeersListResponse) ProtoMessage() {}
 
 func (x *PeersListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[5]
+	mi := &file_command_server_proto_server_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -335,7 +483,7 @@ func (x *PeersListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersListResponse.ProtoReflect.Descriptor instead.
 func (*PeersListResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{5}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PeersListResponse) GetPeers() []*Peer {
@@ -356,7 +504,7 @@ type PeersStatusRequest struct {
 func (x *PeersStatusRequest) Reset() {
 	*x = PeersStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[6]
+		mi := &file_command_server_proto_server_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -369,7 +517,7 @@ func (x *PeersStatusRequest) String() string {
 func (*PeersStatusRequest) ProtoMessage() {}
 
 func (x *PeersStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[6]
+	mi := &file_command_server_proto_server_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +530,7 @@ func (x *PeersStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersStatusRequest.ProtoReflect.Descriptor instead.
 func (*PeersStatusRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{6}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PeersStatusRequest) GetEnode() string {
@@ -403,7 +551,7 @@ type PeersStatusResponse struct {
 func (x *PeersStatusResponse) Reset() {
 	*x = PeersStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[7]
+		mi := &file_command_server_proto_server_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -416,7 +564,7 @@ func (x *PeersStatusResponse) String() string {
 func (*PeersStatusResponse) ProtoMessage() {}
 
 func (x *PeersStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[7]
+	mi := &file_command_server_proto_server_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +577,7 @@ func (x *PeersStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersStatusResponse.ProtoReflect.Descriptor instead.
 func (*PeersStatusResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{7}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PeersStatusResponse) GetPeer() *Peer {
@@ -456,7 +604,7 @@ type Peer struct {
 func (x *Peer) Reset() {
 	*x = Peer{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[8]
+		mi := &file_command_server_proto_server_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -469,7 +617,7 @@ func (x *Peer) String() string {
 func (*Peer) ProtoMessage() {}
 
 func (x *Peer) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[8]
+	mi := &file_command_server_proto_server_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -482,7 +630,7 @@ func (x *Peer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Peer.ProtoReflect.Descriptor instead.
 func (*Peer) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{8}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Peer) GetId() string {
@@ -545,7 +693,7 @@ type ChainSetHeadRequest struct {
 func (x *ChainSetHeadRequest) Reset() {
 	*x = ChainSetHeadRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[9]
+		mi := &file_command_server_proto_server_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -558,7 +706,7 @@ func (x *ChainSetHeadRequest) String() string {
 func (*ChainSetHeadRequest) ProtoMessage() {}
 
 func (x *ChainSetHeadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[9]
+	mi := &file_command_server_proto_server_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +719,7 @@ func (x *ChainSetHeadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChainSetHeadRequest.ProtoReflect.Descriptor instead.
 func (*ChainSetHeadRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{9}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ChainSetHeadRequest) GetNumber() uint64 {
@@ -590,7 +738,7 @@ type ChainSetHeadResponse struct {
 func (x *ChainSetHeadResponse) Reset() {
 	*x = ChainSetHeadResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[10]
+		mi := &file_command_server_proto_server_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -603,7 +751,7 @@ func (x *ChainSetHeadResponse) String() string {
 func (*ChainSetHeadResponse) ProtoMessage() {}
 
 func (x *ChainSetHeadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[10]
+	mi := &file_command_server_proto_server_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -616,7 +764,7 @@ func (x *ChainSetHeadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChainSetHeadResponse.ProtoReflect.Descriptor instead.
 func (*ChainSetHeadResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{10}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{13}
 }
 
 type PprofRequest struct {
@@ -632,7 +780,7 @@ type PprofRequest struct {
 func (x *PprofRequest) Reset() {
 	*x = PprofRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[11]
+		mi := &file_command_server_proto_server_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -645,7 +793,7 @@ func (x *PprofRequest) String() string {
 func (*PprofRequest) ProtoMessage() {}
 
 func (x *PprofRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[11]
+	mi := &file_command_server_proto_server_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -658,7 +806,7 @@ func (x *PprofRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PprofRequest.ProtoReflect.Descriptor instead.
 func (*PprofRequest) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PprofRequest) GetType() PprofRequest_Type {
@@ -694,7 +842,7 @@ type PprofResponse struct {
 func (x *PprofResponse) Reset() {
 	*x = PprofResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[12]
+		mi := &file_command_server_proto_server_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -707,7 +855,7 @@ func (x *PprofResponse) String() string {
 func (*PprofResponse) ProtoMessage() {}
 
 func (x *PprofResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[12]
+	mi := &file_command_server_proto_server_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,7 +868,7 @@ func (x *PprofResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PprofResponse.ProtoReflect.Descriptor instead.
 func (*PprofResponse) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{12}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PprofResponse) GetPayload() string {
@@ -742,7 +890,19 @@ var File_command_server_proto_server_proto protoreflect.FileDescriptor
 var file_command_server_proto_server_proto_rawDesc = []byte{
 	0x0a, 0x21, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
 	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x12, 0x05, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x41, 0x0a, 0x0f, 0x50, 0x65,
+	0x6f, 0x74, 0x6f, 0x12, 0x05, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x13, 0x0a, 0x11, 0x43, 0x68,
+	0x61, 0x69, 0x6e, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
+	0x70, 0x0a, 0x12, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2c, 0x0a, 0x08, 0x6f, 0x6c, 0x64, 0x63, 0x68, 0x61, 0x69,
+	0x6e, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x53, 0x74, 0x75, 0x62, 0x52, 0x08, 0x6f, 0x6c, 0x64, 0x63, 0x68,
+	0x61, 0x69, 0x6e, 0x12, 0x2c, 0x0a, 0x08, 0x6e, 0x65, 0x77, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x18,
+	0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x42, 0x6c,
+	0x6f, 0x63, 0x6b, 0x53, 0x74, 0x75, 0x62, 0x52, 0x08, 0x6e, 0x65, 0x77, 0x63, 0x68, 0x61, 0x69,
+	0x6e, 0x22, 0x37, 0x0a, 0x09, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x53, 0x74, 0x75, 0x62, 0x12, 0x12,
+	0x0a, 0x04, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x68, 0x61,
+	0x73, 0x68, 0x12, 0x16, 0x0a, 0x06, 0x6e, 0x75, 0x6d, 0x62, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x06, 0x6e, 0x75, 0x6d, 0x62, 0x65, 0x72, 0x22, 0x41, 0x0a, 0x0f, 0x50, 0x65,
 	0x65, 0x72, 0x73, 0x41, 0x64, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a,
 	0x05, 0x65, 0x6e, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x6e,
 	0x6f, 0x64, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x74, 0x72, 0x75, 0x73, 0x74, 0x65, 0x64, 0x18, 0x02,
@@ -799,7 +959,7 @@ var file_command_server_proto_server_proto_rawDesc = []byte{
 	0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01,
-	0x32, 0x8b, 0x03, 0x0a, 0x03, 0x42, 0x6f, 0x72, 0x12, 0x32, 0x0a, 0x05, 0x50, 0x70, 0x72, 0x6f,
+	0x32, 0xd0, 0x03, 0x0a, 0x03, 0x42, 0x6f, 0x72, 0x12, 0x32, 0x0a, 0x05, 0x50, 0x70, 0x72, 0x6f,
 	0x66, 0x12, 0x13, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50, 0x70, 0x72, 0x6f, 0x66, 0x52,
 	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50,
 	0x70, 0x72, 0x6f, 0x66, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3b, 0x0a, 0x08,
@@ -823,9 +983,14 @@ var file_command_server_proto_server_proto_rawDesc = []byte{
 	0x74, 0x48, 0x65, 0x61, 0x64, 0x12, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x68,
 	0x61, 0x69, 0x6e, 0x53, 0x65, 0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
 	0x74, 0x1a, 0x1b, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x53,
-	0x65, 0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x17,
-	0x5a, 0x15, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65,
-	0x72, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x43,
+	0x0a, 0x0a, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x57, 0x61, 0x74, 0x63, 0x68, 0x12, 0x18, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43,
+	0x68, 0x61, 0x69, 0x6e, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x30, 0x01, 0x42, 0x17, 0x5a, 0x15, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x2f,
+	0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -841,46 +1006,53 @@ func file_command_server_proto_server_proto_rawDescGZIP() []byte {
 }
 
 var file_command_server_proto_server_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_command_server_proto_server_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_command_server_proto_server_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_command_server_proto_server_proto_goTypes = []interface{}{
 	(PprofRequest_Type)(0),       // 0: proto.PprofRequest.Type
-	(*PeersAddRequest)(nil),      // 1: proto.PeersAddRequest
-	(*PeersAddResponse)(nil),     // 2: proto.PeersAddResponse
-	(*PeersRemoveRequest)(nil),   // 3: proto.PeersRemoveRequest
-	(*PeersRemoveResponse)(nil),  // 4: proto.PeersRemoveResponse
-	(*PeersListRequest)(nil),     // 5: proto.PeersListRequest
-	(*PeersListResponse)(nil),    // 6: proto.PeersListResponse
-	(*PeersStatusRequest)(nil),   // 7: proto.PeersStatusRequest
-	(*PeersStatusResponse)(nil),  // 8: proto.PeersStatusResponse
-	(*Peer)(nil),                 // 9: proto.Peer
-	(*ChainSetHeadRequest)(nil),  // 10: proto.ChainSetHeadRequest
-	(*ChainSetHeadResponse)(nil), // 11: proto.ChainSetHeadResponse
-	(*PprofRequest)(nil),         // 12: proto.PprofRequest
-	(*PprofResponse)(nil),        // 13: proto.PprofResponse
-	nil,                          // 14: proto.PprofResponse.HeadersEntry
+	(*ChainWatchRequest)(nil),    // 1: proto.ChainWatchRequest
+	(*ChainWatchResponse)(nil),   // 2: proto.ChainWatchResponse
+	(*BlockStub)(nil),            // 3: proto.BlockStub
+	(*PeersAddRequest)(nil),      // 4: proto.PeersAddRequest
+	(*PeersAddResponse)(nil),     // 5: proto.PeersAddResponse
+	(*PeersRemoveRequest)(nil),   // 6: proto.PeersRemoveRequest
+	(*PeersRemoveResponse)(nil),  // 7: proto.PeersRemoveResponse
+	(*PeersListRequest)(nil),     // 8: proto.PeersListRequest
+	(*PeersListResponse)(nil),    // 9: proto.PeersListResponse
+	(*PeersStatusRequest)(nil),   // 10: proto.PeersStatusRequest
+	(*PeersStatusResponse)(nil),  // 11: proto.PeersStatusResponse
+	(*Peer)(nil),                 // 12: proto.Peer
+	(*ChainSetHeadRequest)(nil),  // 13: proto.ChainSetHeadRequest
+	(*ChainSetHeadResponse)(nil), // 14: proto.ChainSetHeadResponse
+	(*PprofRequest)(nil),         // 15: proto.PprofRequest
+	(*PprofResponse)(nil),        // 16: proto.PprofResponse
+	nil,                          // 17: proto.PprofResponse.HeadersEntry
 }
 var file_command_server_proto_server_proto_depIdxs = []int32{
-	9,  // 0: proto.PeersListResponse.peers:type_name -> proto.Peer
-	9,  // 1: proto.PeersStatusResponse.peer:type_name -> proto.Peer
-	0,  // 2: proto.PprofRequest.type:type_name -> proto.PprofRequest.Type
-	14, // 3: proto.PprofResponse.headers:type_name -> proto.PprofResponse.HeadersEntry
-	12, // 4: proto.Bor.Pprof:input_type -> proto.PprofRequest
-	1,  // 5: proto.Bor.PeersAdd:input_type -> proto.PeersAddRequest
-	3,  // 6: proto.Bor.PeersRemove:input_type -> proto.PeersRemoveRequest
-	5,  // 7: proto.Bor.PeersList:input_type -> proto.PeersListRequest
-	7,  // 8: proto.Bor.PeersStatus:input_type -> proto.PeersStatusRequest
-	10, // 9: proto.Bor.ChainSetHead:input_type -> proto.ChainSetHeadRequest
-	13, // 10: proto.Bor.Pprof:output_type -> proto.PprofResponse
-	2,  // 11: proto.Bor.PeersAdd:output_type -> proto.PeersAddResponse
-	4,  // 12: proto.Bor.PeersRemove:output_type -> proto.PeersRemoveResponse
-	6,  // 13: proto.Bor.PeersList:output_type -> proto.PeersListResponse
-	8,  // 14: proto.Bor.PeersStatus:output_type -> proto.PeersStatusResponse
-	11, // 15: proto.Bor.ChainSetHead:output_type -> proto.ChainSetHeadResponse
-	10, // [10:16] is the sub-list for method output_type
-	4,  // [4:10] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	3,  // 0: proto.ChainWatchResponse.oldchain:type_name -> proto.BlockStub
+	3,  // 1: proto.ChainWatchResponse.newchain:type_name -> proto.BlockStub
+	12, // 2: proto.PeersListResponse.peers:type_name -> proto.Peer
+	12, // 3: proto.PeersStatusResponse.peer:type_name -> proto.Peer
+	0,  // 4: proto.PprofRequest.type:type_name -> proto.PprofRequest.Type
+	17, // 5: proto.PprofResponse.headers:type_name -> proto.PprofResponse.HeadersEntry
+	15, // 6: proto.Bor.Pprof:input_type -> proto.PprofRequest
+	4,  // 7: proto.Bor.PeersAdd:input_type -> proto.PeersAddRequest
+	6,  // 8: proto.Bor.PeersRemove:input_type -> proto.PeersRemoveRequest
+	8,  // 9: proto.Bor.PeersList:input_type -> proto.PeersListRequest
+	10, // 10: proto.Bor.PeersStatus:input_type -> proto.PeersStatusRequest
+	13, // 11: proto.Bor.ChainSetHead:input_type -> proto.ChainSetHeadRequest
+	1,  // 12: proto.Bor.ChainWatch:input_type -> proto.ChainWatchRequest
+	16, // 13: proto.Bor.Pprof:output_type -> proto.PprofResponse
+	5,  // 14: proto.Bor.PeersAdd:output_type -> proto.PeersAddResponse
+	7,  // 15: proto.Bor.PeersRemove:output_type -> proto.PeersRemoveResponse
+	9,  // 16: proto.Bor.PeersList:output_type -> proto.PeersListResponse
+	11, // 17: proto.Bor.PeersStatus:output_type -> proto.PeersStatusResponse
+	14, // 18: proto.Bor.ChainSetHead:output_type -> proto.ChainSetHeadResponse
+	2,  // 19: proto.Bor.ChainWatch:output_type -> proto.ChainWatchResponse
+	13, // [13:20] is the sub-list for method output_type
+	6,  // [6:13] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_command_server_proto_server_proto_init() }
@@ -890,7 +1062,7 @@ func file_command_server_proto_server_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_command_server_proto_server_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersAddRequest); i {
+			switch v := v.(*ChainWatchRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -902,7 +1074,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersAddResponse); i {
+			switch v := v.(*ChainWatchResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -914,7 +1086,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersRemoveRequest); i {
+			switch v := v.(*BlockStub); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -926,7 +1098,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersRemoveResponse); i {
+			switch v := v.(*PeersAddRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -938,7 +1110,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersListRequest); i {
+			switch v := v.(*PeersAddResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -950,7 +1122,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersListResponse); i {
+			switch v := v.(*PeersRemoveRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -962,7 +1134,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersStatusRequest); i {
+			switch v := v.(*PeersRemoveResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -974,7 +1146,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeersStatusResponse); i {
+			switch v := v.(*PeersListRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -986,7 +1158,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Peer); i {
+			switch v := v.(*PeersListResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -998,7 +1170,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ChainSetHeadRequest); i {
+			switch v := v.(*PeersStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1010,7 +1182,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ChainSetHeadResponse); i {
+			switch v := v.(*PeersStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1022,7 +1194,7 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PprofRequest); i {
+			switch v := v.(*Peer); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1034,6 +1206,42 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ChainSetHeadRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_command_server_proto_server_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ChainSetHeadResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_command_server_proto_server_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PprofRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_command_server_proto_server_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PprofResponse); i {
 			case 0:
 				return &v.state
@@ -1052,7 +1260,7 @@ func file_command_server_proto_server_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_command_server_proto_server_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
