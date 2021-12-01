@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"bytes"
-	"fmt"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -154,7 +152,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pcCopy  uint64 // needed for the deferred EVMLogger
 		gasCopy uint64 // for EVMLogger to log gas remaining before execution
 		logged  bool   // deferred EVMLogger should ignore already logged steps
-		res     []byte // result of the opcode execution function
+		//res     []byte // result of the opcode execution function
 	)
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -237,7 +235,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged = true
 		}
 		// execute the operation
-		res, err = operation.execute(&pc, in, callContext)
+		_, err = operation.execute(&pc, in, callContext)
 		if err != nil {
 			break
 		}
@@ -252,9 +250,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		in.returnData = nil
 	}
 
-	if bytes.Compare(res, in.returnData) != 0 {
-		panic(fmt.Errorf("wrong: res %x, returndata %x", res, in.returnData))
-	}
+	//if bytes.Compare(res, in.returnData) != 0 {
+	//	panic(fmt.Errorf("wrong: res %x, returndata %x", res, in.returnData))
+	//}
 
 	return in.returnData, err
 }
