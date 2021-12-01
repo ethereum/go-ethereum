@@ -74,7 +74,7 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 
 // CaptureFault outputs state information on the logger.
 func (l *JSONLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
-	return nil
+	return l.CaptureState(env, pc, op, gas, cost, memory, stack, contract, depth, err)
 }
 
 // CaptureEnd is triggered at end of execution.
