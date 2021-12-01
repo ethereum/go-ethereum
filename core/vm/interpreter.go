@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"bytes"
+	"fmt"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -244,6 +246,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	if err == errStopToken {
 		err = nil // clear stop token error
+	}
+
+	if err != nil && err != ErrExecutionReverted {
+		in.returnData = nil
+	}
+
+	if bytes.Compare(res, in.returnData) != 0 {
+		panic(fmt.Errorf("wrong: res %x, returndata %x", res, in.returnData))
 	}
 
 	return res, err
