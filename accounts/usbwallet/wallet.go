@@ -20,6 +20,7 @@ package usbwallet
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"io"
 	"math/big"
 	"sync"
@@ -528,7 +529,7 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 
 	// Unless we are doing 712 signing, simply dispatch to signHash
-	if !(mimeType == accounts.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
+	if !(mimeType == apitypes.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
 		return w.signHash(account, crypto.Keccak256(data))
 	}
 
