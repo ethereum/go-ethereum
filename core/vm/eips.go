@@ -79,10 +79,10 @@ func enable1884(jt *JumpTable) {
 	}
 }
 
-func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) error {
 	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(scope.Contract.Address()))
 	scope.Stack.push(balance)
-	return nil, nil
+	return nil
 }
 
 // enable1344 applies EIP-1344 (ChainID Opcode)
@@ -98,10 +98,10 @@ func enable1344(jt *JumpTable) {
 }
 
 // opChainID implements CHAINID opcode
-func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) error {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
-	return nil, nil
+	return nil
 }
 
 // enable2200 applies EIP-2200 (Rebalance net-metered SSTORE)
@@ -170,10 +170,10 @@ func enable3198(jt *JumpTable) {
 }
 
 // opBaseFee implements BASEFEE opcode
-func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) error {
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
-	return nil, nil
+	return nil
 }
 
 // enable3855 applies EIP-3855 (PUSH0 opcode)
@@ -188,7 +188,7 @@ func enable3855(jt *JumpTable) {
 }
 
 // opPush0 implements the PUSH0 opcode
-func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) error {
 	scope.Stack.push(new(uint256.Int))
-	return nil, nil
+	return nil
 }
