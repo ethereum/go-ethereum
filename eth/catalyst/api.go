@@ -227,12 +227,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAtt
 }
 
 func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) []byte {
-	time := make([]byte, 8)
-	binary.BigEndian.PutUint64(time, params.Timestamp)
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(headBlockHash[:])
-	hasher.Write(time)
+	binary.Write(hasher, binary.BigEndian, uint64(params.Timestamp))
 	hasher.Write(params.Random[:])
 	hasher.Write(params.FeeRecipient[:])
 	return hasher.Sum([]byte{})[:8]
@@ -280,8 +278,8 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		return api.invalid(), err
 	}
-	merger := api.merger()
-	if !merger.TDDReached() {
+
+	if merger := api.merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
 	return ExecutePayloadResponse{Status: VALID.Status, LatestValidHash: block.Hash()}, nil
@@ -511,8 +509,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	headBlock := api.eth.BlockChain().CurrentBlock()
 	if headBlock.Hash() == newHead {
 		// Trigger the transition if it's the first `NewHead` event.
-		merger := api.merger()
-		if !merger.PoSFinalized() {
+		if merger := api.merger(); !merger.PoSFinalized() {
 			merger.FinalizePoS()
 		}
 		return nil
@@ -525,8 +522,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
-	merger := api.merger()
-	if !merger.PoSFinalized() {
+	if merger := api.merger(); !merger.PoSFinalized() {
 		merger.FinalizePoS()
 	}
 	// TODO (MariusVanDerWijden) are we really synced now?
