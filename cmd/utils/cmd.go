@@ -87,17 +87,33 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024)
 		}
 
-		<-sigc
-		log.Info("Got interrupt, shutting down...")
-		go stack.Close()
-		for i := 10; i > 0; i-- {
-			<-sigc
-			if i > 1 {
-				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+		shutdown := func() {
+			log.Info("Got interrupt, shutting down...")
+			go stack.Close()
+			for i := 10; i > 0; i-- {
+				<-sigc
+				if i > 1 {
+					log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+				}
 			}
+			debug.Exit() // ensure trace and CPU profile data is flushed.
+			debug.LoudPanic("boom")
 		}
-		debug.Exit() // ensure trace and CPU profile data is flushed.
-		debug.LoudPanic("boom")
+		// Special case local console mode
+		if ctx.Command.Name == "console" {
+			for {
+				sig := <-sigc
+				// Ignore SIGINT. That's handled by the console to
+				// abort long-running evaluations.
+				if sig == syscall.SIGTERM {
+					shutdown()
+					return
+				}
+			}
+		} else {
+			<-sigc
+			shutdown()
+		}
 	}()
 }
 
