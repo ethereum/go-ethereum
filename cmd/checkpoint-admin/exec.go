@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -36,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -217,7 +217,7 @@ func sign(ctx *cli.Context) error {
 	p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
 
 	fmt.Println("Sending signing request to Clef...")
-	if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
+	if err := clef.Call(&signature, "account_signData", apitypes.MimetypeDataWithValidator, signer, p); err != nil {
 		utils.Fatalf("Failed to sign checkpoint, err %v", err)
 	}
 	fmt.Printf("Signer     => %s\n", signer)

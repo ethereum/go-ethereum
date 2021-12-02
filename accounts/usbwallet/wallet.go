@@ -20,7 +20,6 @@ package usbwallet
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"io"
 	"math/big"
 	"sync"
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/karalabe/usb"
 )
 
