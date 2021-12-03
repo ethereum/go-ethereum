@@ -1749,6 +1749,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
+
+			bc.chain2HeadFeed.Send(Chain2HeadEvent{
+				Type:     "head",
+				NewChain: []*types.Block{lastCanon},
+			})
 		}
 	}()
 	// Start the parallel header verifier
