@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"math/big"
 	"strings"
 	"time"
@@ -1959,7 +1958,7 @@ func (api *PublicDebugAPI) TestSignCliqueBlock(ctx context.Context, address comm
 		return common.Address{}, err
 	}
 
-	signature, err := wallet.SignData(account, apitypes.MimetypeClique, encoded)
+	signature, err := wallet.SignData(account, accounts.MimetypeClique, encoded)
 	if err != nil {
 		return common.Address{}, err
 	}

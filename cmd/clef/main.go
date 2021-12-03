@@ -889,7 +889,7 @@ func testExternalUI(api *core.SignerAPI) {
 			utils.Fatalf("Should not error: %v", err)
 		}
 		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err = api.SignData(ctx, apitypes.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
+		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
 		expectApprove("signdata - clique header", err)
 	}
 	{ // Sign data test - typed data
@@ -907,14 +907,14 @@ func testExternalUI(api *core.SignerAPI) {
 		api.UI.ShowInfo("Please approve the next request for signing text")
 		time.Sleep(delay)
 		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err := api.SignData(ctx, apitypes.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
+		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
 		expectApprove("signdata - text", err)
 	}
 	{ // Sign data test - plain text reject
 		api.UI.ShowInfo("Please deny the next request for signing text")
 		time.Sleep(delay)
 		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err := api.SignData(ctx, apitypes.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
+		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
 		expectDeny("signdata - text", err)
 	}
 	{ // Sign transaction
@@ -1025,12 +1025,12 @@ func GenDoc(ctx *cli.Context) {
 			"of the work in canonicalizing and making sense of the data, and it's up to the UI to present" +
 			"the user with the contents of the `message`"
 		sighash, msg := accounts.TextAndHash([]byte("hello world"))
-		messages := []*apitypes.NameValueType{{Name: "message", Value: msg, Typ: apitypes.MimetypeTextPlain}}
+		messages := []*apitypes.NameValueType{{Name: "message", Value: msg, Typ: accounts.MimetypeTextPlain}}
 
 		add("SignDataRequest", desc, &core.SignDataRequest{
 			Address:     common.NewMixedcaseAddress(a),
 			Meta:        meta,
-			ContentType: apitypes.MimetypeTextPlain,
+			ContentType: accounts.MimetypeTextPlain,
 			Rawdata:     []byte(msg),
 			Messages:    messages,
 			Hash:        sighash})

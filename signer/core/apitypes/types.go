@@ -30,18 +30,12 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-)
-
-const (
-	MimetypeDataWithValidator = "data/validator"
-	MimetypeTypedData         = "data/typed"
-	MimetypeClique            = "application/x-clique-header"
-	MimetypeTextPlain         = "text/plain"
 )
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
@@ -181,19 +175,19 @@ type SigFormat struct {
 
 var (
 	IntendedValidator = SigFormat{
-		MimetypeDataWithValidator,
+		accounts.MimetypeDataWithValidator,
 		0x00,
 	}
 	DataTyped = SigFormat{
-		MimetypeTypedData,
+		accounts.MimetypeTypedData,
 		0x01,
 	}
 	ApplicationClique = SigFormat{
-		MimetypeClique,
+		accounts.MimetypeClique,
 		0x02,
 	}
 	TextPlain = SigFormat{
-		MimetypeTextPlain,
+		accounts.MimetypeTextPlain,
 		0x45,
 	}
 )

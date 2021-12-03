@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/karalabe/usb"
 )
 
@@ -529,7 +528,7 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 
 	// Unless we are doing 712 signing, simply dispatch to signHash
-	if !(mimeType == apitypes.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
+	if !(mimeType == accounts.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
 		return w.signHash(account, crypto.Keccak256(data))
 	}
 

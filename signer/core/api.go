@@ -235,7 +235,7 @@ type (
 		ContentType string                    `json:"content_type"`
 		Address     common.MixedcaseAddress   `json:"address"`
 		Rawdata     []byte                    `json:"raw_data"`
-		Messages    []*apitypes.NameValueType          `json:"messages"`
+		Messages    []*apitypes.NameValueType `json:"messages"`
 		Callinfo    []apitypes.ValidationInfo `json:"call_info"`
 		Hash        hexutil.Bytes             `json:"hash"`
 		Meta        Metadata                  `json:"meta"`
