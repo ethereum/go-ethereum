@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"sync/atomic"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -525,6 +527,9 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 }
 
 func opJump(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	if atomic.LoadInt32(&interpreter.evm.abort) != 0 {
+		return nil, errStopToken
+	}
 	pos := callContext.stack.pop()
 	if !callContext.contract.validJumpdest(&pos) {
 		return nil, ErrInvalidJump
@@ -534,6 +539,9 @@ func opJump(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 }
 
 func opJumpi(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	if atomic.LoadInt32(&interpreter.evm.abort) != 0 {
+		return nil, errStopToken
+	}
 	pos, cond := callContext.stack.pop(), callContext.stack.pop()
 	if !cond.IsZero() {
 		if !callContext.contract.validJumpdest(&pos) {
