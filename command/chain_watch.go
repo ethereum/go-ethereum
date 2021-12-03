@@ -54,8 +54,17 @@ func (c *ChainWatchCommand) Run(args []string) int {
 			// if err == EOF if finished on the other side
 			panic(err)
 		}
-		fmt.Println("message received")
-		fmt.Println(msg)
+		if msg.Type == "head" {
+			fmt.Println("Block Added : ", msg.Newchain)
+		} else if msg.Type == "fork" {
+			fmt.Println("New Fork Block :", msg.Newchain)
+		} else if msg.Type == "reorg" {
+			fmt.Println("Reorg Detected")
+			fmt.Println("Added :", msg.Newchain)
+			fmt.Println("Removed :", msg.Oldchain)
+		}
+
+		// fmt.Println(msg)
 	}
 
 	return 0

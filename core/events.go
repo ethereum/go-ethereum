@@ -41,9 +41,3 @@ type ChainSideEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
-
-type Chain2HeadEvent struct {
-	NewChain []*types.Block
-	OldChain []*types.Block
-	Type     string
-}

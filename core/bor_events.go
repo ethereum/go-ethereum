@@ -8,3 +8,10 @@ import (
 type StateSyncEvent struct {
 	Data *types.StateSyncData
 }
+
+// For tracking reorgs related information
+type Chain2HeadEvent struct {
+	NewChain []*types.Block
+	OldChain []*types.Block
+	Type     string
+}

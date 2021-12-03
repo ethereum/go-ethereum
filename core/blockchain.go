@@ -175,16 +175,15 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc             *HeaderChain
-	rmLogsFeed     event.Feed
-	chainFeed      event.Feed
-	chainSideFeed  event.Feed
-	chainHeadFeed  event.Feed
-	chain2HeadFeed event.Feed
-	logsFeed       event.Feed
-	blockProcFeed  event.Feed
-	scope          event.SubscriptionScope
-	genesisBlock   *types.Block
+	hc            *HeaderChain
+	rmLogsFeed    event.Feed
+	chainFeed     event.Feed
+	chainSideFeed event.Feed
+	chainHeadFeed event.Feed
+	logsFeed      event.Feed
+	blockProcFeed event.Feed
+	scope         event.SubscriptionScope
+	genesisBlock  *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -218,6 +217,7 @@ type BlockChain struct {
 	borReceiptsCache *lru.Cache             // Cache for the most recent bor receipt receipts per block
 	stateSyncData    []*types.StateSyncData // State sync data
 	stateSyncFeed    event.Feed             // State sync feed
+	chain2HeadFeed   event.Feed             // Reorg/NewHead/Fork data feed
 }
 
 // NewBlockChain returns a fully initialised block chain using information
