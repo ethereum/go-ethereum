@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -57,13 +59,31 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
+func validate(jt JumpTable) JumpTable {
+	for i, op := range jt {
+		if op == nil {
+			panic(fmt.Sprintf("op 0x%x is not set", i))
+		}
+		// The interpreter has an assumption that if the memorySize function is
+		// set, then the dynamicGas function is also set. This is a somewhat
+		// arbitrary assumption, and can be removed if we need to -- but it
+		// allows us to avoid a condition check. As long as we have that assumption
+		// in there, this little sanity check prevents us from merging in a
+		// change which violates it.
+		if op.memorySize != nil && op.dynamicGas == nil {
+			panic(fmt.Sprintf("op %v has dynamic memory but not dynamic gas", OpCode(i).String()))
+		}
+	}
+	return jt
+}
+
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg, berlin and london instructions.
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
@@ -71,7 +91,7 @@ func newLondonInstructionSet() JumpTable {
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
@@ -83,7 +103,7 @@ func newIstanbulInstructionSet() JumpTable {
 	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
 	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
 
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
@@ -122,7 +142,7 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(4, 1),
 		memorySize:  memoryCreate2,
 	}
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newByzantiumInstructionSet returns the frontier, homestead and
@@ -158,14 +178,14 @@ func newByzantiumInstructionSet() JumpTable {
 		maxStack:   maxStack(2, 0),
 		memorySize: memoryRevert,
 	}
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
-	return instructionSet
+	return validate(instructionSet)
 
 }
 
@@ -179,7 +199,7 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet[CALL].constantGas = params.CallGasEIP150
 	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
 	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newHomesteadInstructionSet returns the frontier and homestead
@@ -194,7 +214,7 @@ func newHomesteadInstructionSet() JumpTable {
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryDelegateCall,
 	}
-	return instructionSet
+	return validate(instructionSet)
 }
 
 // newFrontierInstructionSet returns the frontier instructions
@@ -1010,5 +1030,5 @@ func newFrontierInstructionSet() JumpTable {
 		}
 	}
 
-	return tbl
+	return validate(tbl)
 }
