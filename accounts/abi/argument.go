@@ -137,7 +137,7 @@ func (arguments Arguments) copyAtomic(v interface{}, marshalledValues interface{
 	dst := reflect.ValueOf(v).Elem()
 	src := reflect.ValueOf(marshalledValues)
 
-	if dst.Kind() == reflect.Struct && src.Kind() != reflect.Struct {
+	if dst.Kind() == reflect.Struct {
 		return set(dst.Field(0), src)
 	}
 	return set(dst, src)
