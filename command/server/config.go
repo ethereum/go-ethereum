@@ -393,7 +393,7 @@ func DefaultConfig() *Config {
 			URL:     "http://localhost:1317",
 			Without: false,
 		},
-		SyncMode: "fast",
+		SyncMode: "full",
 		GcMode:   "full",
 		Snapshot: true,
 		TxPool: &TxPoolConfig{
