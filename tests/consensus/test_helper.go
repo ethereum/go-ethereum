@@ -285,8 +285,8 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 		// Build engine v2 compatible extra data field
 		proposedBlockInfo := utils.BlockInfo{
 			Hash:   currentBlock.Hash(),
-			Round:  utils.Round(i),
-			Number: big.NewInt(int64(i)),
+			Round:  utils.Round(i - 1),
+			Number: big.NewInt(int64(i - 1)),
 		}
 		// Genrate QC
 		signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(&proposedBlockInfo).Bytes())

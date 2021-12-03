@@ -60,7 +60,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert = engineV2.GetProperties()
 	// The lockQC shall be the parent's QC round number
-	assert.Equal(t, utils.Round(11), lockQuorumCert.ProposedBlockInfo.Round)
+	assert.Equal(t, utils.Round(10), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
 	// Check round has now changed from 11 to 12
@@ -144,7 +144,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	// Check round has now changed from 11 to 12
 	currentRound, lockQuorumCert, highestQuorumCert = engineV2.GetProperties()
 	// The lockQC shall be the parent's QC round number
-	assert.Equal(t, utils.Round(11), lockQuorumCert.ProposedBlockInfo.Round)
+	assert.Equal(t, utils.Round(10), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
 

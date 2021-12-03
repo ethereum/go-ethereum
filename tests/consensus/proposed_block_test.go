@@ -26,8 +26,8 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 
 	proposedBlockInfo := &utils.BlockInfo{
 		Hash:   currentBlock.Hash(),
-		Round:  utils.Round(12),
-		Number: big.NewInt(12),
+		Round:  utils.Round(11),
+		Number: big.NewInt(11),
 	}
 
 	err = engineV2.ProposedBlockHandler(blockchain, proposedBlockInfo, &extraField.QuorumCert)
@@ -40,6 +40,7 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 	assert.Equal(t, proposedBlockInfo.Hash, voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
 	round, _, highestQC := engineV2.GetProperties()
-	assert.Equal(t, utils.Round(12), round)
+	// Shoud not trigger setNewRound
+	assert.Equal(t, utils.Round(11), round)
 	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
 }
