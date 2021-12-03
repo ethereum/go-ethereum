@@ -2209,7 +2209,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 				// to new head to avoid reading non-existent block bodies.
 				end := *tail
 				if end > head+1 {
-					end = head+1
+					end = head + 1
 				}
 				rawdb.IndexTransactions(bc.db, 0, end, bc.quit)
 			}
