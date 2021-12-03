@@ -245,6 +245,7 @@ var (
 			BackupMultiplier:      2,
 			ValidatorContract:     "0x0000000000000000000000000000000000001000",
 			StateReceiverContract: "0x0000000000000000000000000000000000001001",
+			BlockAlloc:            map[string]interface{}{},
 		},
 	}
 
@@ -281,6 +282,7 @@ var (
 				"14953792": 0,
 				"14953856": 0,
 			},
+			BlockAlloc: map[string]interface{}{},
 		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -415,7 +417,8 @@ type BorConfig struct {
 	ValidatorContract     string `json:"validatorContract"`     // Validator set contract
 	StateReceiverContract string `json:"stateReceiverContract"` // State receiver contract
 
-	OverrideStateSyncRecords map[string]int `json:"overrideStateSyncRecords"` // override state records count
+	OverrideStateSyncRecords map[string]int         `json:"overrideStateSyncRecords"` // override state records count
+	BlockAlloc               map[string]interface{} `json:"blockAlloc"`
 }
 
 // String implements the stringer interface, returning the consensus engine details.
