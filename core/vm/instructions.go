@@ -779,6 +779,10 @@ func opRevert(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	return ret, ErrExecutionReverted
 }
 
+func opUndefined(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	return nil, &ErrInvalidOpCode{opcode: OpCode(callContext.contract.Code[*pc])}
+}
+
 func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	return nil, errStopToken
 }
