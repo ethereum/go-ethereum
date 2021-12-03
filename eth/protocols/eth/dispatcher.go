@@ -102,6 +102,7 @@ type Response struct {
 
 	Req  *Request      // Original request to cross-reference with
 	Res  interface{}   // Remote response for the request query
+	Meta interface{}   // Metadata generated locally on the receiver thread
 	Time time.Duration // Time it took for the request to be served
 	Done chan error    // Channel to signal message handling to the reader
 }
@@ -137,7 +138,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 
 // dispatchRequest fulfils a pending request and delivers it to the requested
 // sink.
-func (p *Peer) dispatchResponse(res *Response) error {
+func (p *Peer) dispatchResponse(res *Response, metadata func() interface{}) error {
 	resOp := &response{
 		res:  res,
 		fail: make(chan error),
@@ -150,6 +151,11 @@ func (p *Peer) dispatchResponse(res *Response) error {
 		// Ensure the response is accepted by the dispatcher
 		if err := <-resOp.fail; err != nil {
 			return nil
+		}
+		// Request was accepted, run any postprocessing step to generate metadata
+		// on the receiver thread, not the sink thread
+		if metadata != nil {
+			res.Meta = metadata()
 		}
 		// Deliver the filled out response and wait until it's handled. This
 		// path is a bit funky as Go's select has no order, so if a response
