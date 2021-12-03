@@ -23,26 +23,24 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-//go:generate go run github.com/fjl/gencodec -type AssembleBlockParams -field-override assembleBlockParamsMarshaling -out gen_blockparams.go
+//go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
 // Structure described at https://github.com/ethereum/execution-apis/pull/74
-type AssembleBlockParams struct {
-	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
+type PayloadAttributesV1 struct {
 	Timestamp    uint64         `json:"timestamp"     gencodec:"required"`
 	Random       common.Hash    `json:"random"        gencodec:"required"`
 	FeeRecipient common.Address `json:"feeRecipient"  gencodec:"required"`
 }
 
-// JSON type overrides for assembleBlockParams.
-type assembleBlockParamsMarshaling struct {
+// JSON type overrides for PayloadAttributesV1.
+type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
+//go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
 
-// Structure described at https://github.com/ethereum/execution-apis/pull/74/files
-type ExecutableData struct {
-	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
+// Structure described at https://github.com/ethereum/execution-apis/src/engine/specification.md
+type ExecutableDataV1 struct {
 	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
 	Coinbase      common.Address `json:"coinbase"      gencodec:"required"`
 	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
@@ -55,6 +53,7 @@ type ExecutableData struct {
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
 	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
 	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }
 
@@ -93,12 +92,23 @@ type GenericStringResponse struct {
 	Status string `json:"status"`
 }
 
+type ExecutePayloadResponse struct {
+	Status          string      `json:"status"`
+	LatestValidHash common.Hash `json:"latestValidHash"`
+}
+
 type ConsensusValidatedParams struct {
 	BlockHash common.Hash `json:"blockHash"`
 	Status    string      `json:"status"`
 }
 
-type ForkChoiceParams struct {
+type ForkChoiceResponse struct {
+	Status    string         `json:"status"`
+	PayloadID *hexutil.Bytes `json:"payloadId"`
+}
+
+type ForkchoiceStateV1 struct {
 	HeadBlockHash      common.Hash `json:"headBlockHash"`
+	SafeBlockHash      common.Hash `json:"safeBlockHash"`
 	FinalizedBlockHash common.Hash `json:"finalizedBlockHash"`
 }
