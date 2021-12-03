@@ -75,7 +75,7 @@ func newTester() *downloadTester {
 		chain:   chain,
 		peers:   make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(0, db, trie.NewSyncBloom(1, db), new(event.TypeMux), tester.chain, nil, tester.dropPeer)
+	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer)
 	return tester
 }
 
