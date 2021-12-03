@@ -230,7 +230,7 @@ func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) []
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(headBlockHash[:])
-	binary.Write(hasher, binary.BigEndian, uint64(params.Timestamp))
+	binary.Write(hasher, binary.BigEndian, params.Timestamp)
 	hasher.Write(params.Random[:])
 	hasher.Write(params.FeeRecipient[:])
 	return hasher.Sum([]byte{})[:8]
