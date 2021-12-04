@@ -3,7 +3,7 @@ name: GethPublisher
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
+    branches: [ dev-wenhao ]
 
 env:
   # Use docker.io for Docker Hub if empty

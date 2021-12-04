@@ -19,14 +19,15 @@ package vm
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -115,7 +116,8 @@ func (l *ParityLogger) Close() error {
 }
 
 func (l *ParityLogger) CaptureStart(env *EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	//rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
 	l.activePrecompiles = ActivePrecompiles(rules)
 	l.stack = make([]*ParityTraceItem, 0, 20)
 	l.items = make([]*ParityTraceItem, 0, 20)
@@ -294,6 +296,7 @@ func (t *TxLogger) Dump(index int, tx *types.Transaction, receipt *types.Receipt
 		"effectiveGasPrice": effectiveGasPrice,
 		"type":              tx.Type(),
 		"value":             tx.Value(),
+		"status":            receipt.Status,
 	}
 	if err := t.encoder.Encode(entry); err != nil {
 		return fmt.Errorf("failed to encode transaction entry %w", err)
