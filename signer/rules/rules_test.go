@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
@@ -180,7 +181,7 @@ func TestSignTxRequest(t *testing.T) {
 	}
 	t.Logf("to %v", to.Address().String())
 	resp, err := r.ApproveTx(&core.SignTxRequest{
-		Transaction: core.SendTxArgs{
+		Transaction: apitypes.SendTxArgs{
 			From: *from,
 			To:   to},
 		Callinfo: nil,
@@ -432,7 +433,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
 	return &core.SignTxRequest{
-		Transaction: core.SendTxArgs{
+		Transaction: apitypes.SendTxArgs{
 			From:     *from,
 			To:       to,
 			Value:    value,
@@ -440,7 +441,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			GasPrice: &gasPrice,
 			Gas:      gas,
 		},
-		Callinfo: []core.ValidationInfo{
+		Callinfo: []apitypes.ValidationInfo{
 			{Typ: "Warning", Message: "All your base are bellong to us"},
 		},
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
@@ -604,7 +605,7 @@ function ApproveSignData(r){
 
 	t.Logf("address %v %v\n", addr.String(), addr.Original())
 
-	nvt := []*core.NameValueType{
+	nvt := []*apitypes.NameValueType{
 		{
 			Name:  "message",
 			Typ:   "text/plain",

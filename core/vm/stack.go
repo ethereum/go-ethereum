@@ -54,10 +54,6 @@ func (st *Stack) push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	st.data = append(st.data, *d)
 }
-func (st *Stack) pushN(ds ...uint256.Int) {
-	// FIXME: Is there a way to pass args by pointers.
-	st.data = append(st.data, ds...)
-}
 
 func (st *Stack) pop() (ret uint256.Int) {
 	ret = st.data[len(st.data)-1]
@@ -91,7 +87,7 @@ func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
 		for i, val := range st.data {
-			fmt.Printf("%-3d  %v\n", i, val)
+			fmt.Printf("%-3d  %s\n", i, val.String())
 		}
 	} else {
 		fmt.Println("-- empty --")

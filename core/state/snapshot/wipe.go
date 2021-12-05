@@ -21,66 +21,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
-
-// wipeSnapshot starts a goroutine to iterate over the entire key-value database
-// and delete all the data associated with the snapshot (accounts, storage,
-// metadata). After all is done, the snapshot range of the database is compacted
-// to free up unused data blocks.
-func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
-	// Wipe the snapshot root marker synchronously
-	if full {
-		rawdb.DeleteSnapshotRoot(db)
-	}
-	// Wipe everything else asynchronously
-	wiper := make(chan struct{}, 1)
-	go func() {
-		if err := wipeContent(db); err != nil {
-			log.Error("Failed to wipe state snapshot", "err", err) // Database close will trigger this
-			return
-		}
-		close(wiper)
-	}()
-	return wiper
-}
-
-// wipeContent iterates over the entire key-value database and deletes all the
-// data associated with the snapshot (accounts, storage), but not the root hash
-// as the wiper is meant to run on a background thread but the root needs to be
-// removed in sync to avoid data races. After all is done, the snapshot range of
-// the database is compacted to free up unused data blocks.
-func wipeContent(db ethdb.KeyValueStore) error {
-	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, nil, nil, len(rawdb.SnapshotAccountPrefix)+common.HashLength, snapWipedAccountMeter, true); err != nil {
-		return err
-	}
-	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, nil, nil, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength, snapWipedStorageMeter, true); err != nil {
-		return err
-	}
-	// Compact the snapshot section of the database to get rid of unused space
-	start := time.Now()
-
-	log.Info("Compacting snapshot account area ")
-	end := common.CopyBytes(rawdb.SnapshotAccountPrefix)
-	end[len(end)-1]++
-
-	if err := db.Compact(rawdb.SnapshotAccountPrefix, end); err != nil {
-		return err
-	}
-	log.Info("Compacting snapshot storage area ")
-	end = common.CopyBytes(rawdb.SnapshotStoragePrefix)
-	end[len(end)-1]++
-
-	if err := db.Compact(rawdb.SnapshotStoragePrefix, end); err != nil {
-		return err
-	}
-	log.Info("Compacted snapshot area in database", "elapsed", common.PrettyDuration(time.Since(start)))
-
-	return nil
-}
 
 // wipeKeyRange deletes a range of keys from the database starting with prefix
 // and having a specific total key length. The start and limit is optional for

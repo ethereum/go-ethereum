@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 // GnosisSafeTx is a type to parse the safe-tx returned by the relayer,
@@ -33,15 +34,15 @@ type GnosisSafeTx struct {
 }
 
 // ToTypedData converts the tx to a EIP-712 Typed Data structure for signing
-func (tx *GnosisSafeTx) ToTypedData() TypedData {
+func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 	var data hexutil.Bytes
 	if tx.Data != nil {
 		data = *tx.Data
 	}
-	gnosisTypedData := TypedData{
-		Types: Types{
-			"EIP712Domain": []Type{{Name: "verifyingContract", Type: "address"}},
-			"SafeTx": []Type{
+	gnosisTypedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"EIP712Domain": []apitypes.Type{{Name: "verifyingContract", Type: "address"}},
+			"SafeTx": []apitypes.Type{
 				{Name: "to", Type: "address"},
 				{Name: "value", Type: "uint256"},
 				{Name: "data", Type: "bytes"},
@@ -54,11 +55,11 @@ func (tx *GnosisSafeTx) ToTypedData() TypedData {
 				{Name: "nonce", Type: "uint256"},
 			},
 		},
-		Domain: TypedDataDomain{
+		Domain: apitypes.TypedDataDomain{
 			VerifyingContract: tx.Safe.Address().Hex(),
 		},
 		PrimaryType: "SafeTx",
-		Message: TypedDataMessage{
+		Message: apitypes.TypedDataMessage{
 			"to":             tx.To.Address().Hex(),
 			"value":          tx.Value.String(),
 			"data":           data,
@@ -76,9 +77,9 @@ func (tx *GnosisSafeTx) ToTypedData() TypedData {
 
 // ArgsForValidation returns a SendTxArgs struct, which can be used for the
 // common validations, e.g. look up 4byte destinations
-func (tx *GnosisSafeTx) ArgsForValidation() *SendTxArgs {
+func (tx *GnosisSafeTx) ArgsForValidation() *apitypes.SendTxArgs {
 	gp := hexutil.Big(tx.GasPrice)
-	args := &SendTxArgs{
+	args := &apitypes.SendTxArgs{
 		From:     tx.Safe,
 		To:       &tx.To,
 		Gas:      hexutil.Uint64(tx.SafeTxGas.Uint64()),

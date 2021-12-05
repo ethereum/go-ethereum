@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/fetcher"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -71,8 +71,8 @@ type fetcherPeer struct {
 	// These following two fields can track the latest announces
 	// from the peer with limited size for caching. We hold the
 	// assumption that all enqueued announces are td-monotonic.
-	announces     map[common.Hash]*announce // Announcement map
-	announcesList []common.Hash             // FIFO announces list
+	announces map[common.Hash]*announce // Announcement map
+	fifo      []common.Hash             // FIFO announces list
 }
 
 // addAnno enqueues an new trusted announcement. If the queued announces overflow,
@@ -87,15 +87,15 @@ func (fp *fetcherPeer) addAnno(anno *announce) {
 		return
 	}
 	fp.announces[hash] = anno
-	fp.announcesList = append(fp.announcesList, hash)
+	fp.fifo = append(fp.fifo, hash)
 
 	// Evict oldest if the announces are oversized.
-	if len(fp.announcesList)-cachedAnnosThreshold > 0 {
-		for i := 0; i < len(fp.announcesList)-cachedAnnosThreshold; i++ {
-			delete(fp.announces, fp.announcesList[i])
+	if len(fp.fifo)-cachedAnnosThreshold > 0 {
+		for i := 0; i < len(fp.fifo)-cachedAnnosThreshold; i++ {
+			delete(fp.announces, fp.fifo[i])
 		}
-		copy(fp.announcesList, fp.announcesList[len(fp.announcesList)-cachedAnnosThreshold:])
-		fp.announcesList = fp.announcesList[:cachedAnnosThreshold]
+		copy(fp.fifo, fp.fifo[len(fp.fifo)-cachedAnnosThreshold:])
+		fp.fifo = fp.fifo[:cachedAnnosThreshold]
 	}
 }
 
@@ -106,8 +106,8 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 		cutset  int
 		evicted []*announce
 	)
-	for ; cutset < len(fp.announcesList); cutset++ {
-		anno := fp.announces[fp.announcesList[cutset]]
+	for ; cutset < len(fp.fifo); cutset++ {
+		anno := fp.announces[fp.fifo[cutset]]
 		if anno == nil {
 			continue // In theory it should never ever happen
 		}
@@ -118,8 +118,8 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 		delete(fp.announces, anno.data.Hash)
 	}
 	if cutset > 0 {
-		copy(fp.announcesList, fp.announcesList[cutset:])
-		fp.announcesList = fp.announcesList[:len(fp.announcesList)-cutset]
+		copy(fp.fifo, fp.fifo[cutset:])
+		fp.fifo = fp.fifo[:len(fp.fifo)-cutset]
 	}
 	return evicted
 }
@@ -153,9 +153,7 @@ type lightFetcher struct {
 	synchronise func(peer *serverPeer)
 
 	// Test fields or hooks
-	noAnnounce  bool
 	newHeadHook func(*types.Header)
-	newAnnounce func(*serverPeer, *announceData)
 }
 
 // newLightFetcher creates a light fetcher instance.
@@ -474,12 +472,6 @@ func (f *lightFetcher) mainloop() {
 
 // announce processes a new announcement message received from a peer.
 func (f *lightFetcher) announce(p *serverPeer, head *announceData) {
-	if f.newAnnounce != nil {
-		f.newAnnounce(p, head)
-	}
-	if f.noAnnounce {
-		return
-	}
 	select {
 	case f.announceCh <- &announce{peerid: p.ID(), trust: p.trusted, data: head}:
 	case <-f.closeCh:

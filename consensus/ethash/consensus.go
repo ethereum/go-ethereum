@@ -45,6 +45,11 @@ var (
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
 
+	// calcDifficultyEip4345 is the difficulty adjustment algorithm as specified by EIP 4345.
+	// It offsets the bomb a total of 10.7M blocks.
+	// Specification EIP-4345: https://eips.ethereum.org/EIPS/eip-4345
+	calcDifficultyEip4345 = makeDifficultyCalculator(big.NewInt(10_700_000))
+
 	// calcDifficultyEip3554 is the difficulty adjustment algorithm as specified by EIP 3554.
 	// It offsets the bomb a total of 9.7M blocks.
 	// Specification EIP-3554: https://eips.ethereum.org/EIPS/eip-3554
@@ -215,7 +220,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		ancestors[parent] = ancestorHeader
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash != types.EmptyUncleHash {
-			// Need to add those uncles to the blacklist too
+			// Need to add those uncles to the banned list too
 			ancestor := chain.GetBlock(parent, number)
 			if ancestor == nil {
 				break
@@ -330,8 +335,8 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsCatalyst(next):
-		return big.NewInt(1)
+	case config.IsArrowGlacier(next):
+		return calcDifficultyEip4345(time, parent)
 	case config.IsLondon(next):
 		return calcDifficultyEip3554(time, parent)
 	case config.IsMuirGlacier(next):
@@ -639,10 +644,6 @@ var (
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Skip block reward in catalyst mode
-	if config.IsCatalyst(header.Number) {
-		return
-	}
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -169,7 +170,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 		last = &head
 	}
 	if _, err := os.Stat(file); err == nil {
-		// File already exists. Allowing overwrite could be a DoS vecotor,
+		// File already exists. Allowing overwrite could be a DoS vector,
 		// since the 'file' may point to arbitrary paths on the drive
 		return false, errors.New("location would overwrite an existing file")
 	}
@@ -342,7 +343,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		} else {
 			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
 		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true); err != nil {
+		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
 		results = append(results, &BadBlockArgs{
@@ -544,4 +545,65 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
 	return dirty, nil
+}
+
+// GetAccessibleState returns the first number where the node has accessible
+// state on disk. Note this being the post-state of that block and the pre-state
+// of the next block.
+// The (from, to) parameters are the sequence of blocks to search, which can go
+// either forwards or backwards
+func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
+	db := api.eth.ChainDb()
+	var pivot uint64
+	if p := rawdb.ReadLastPivotNumber(db); p != nil {
+		pivot = *p
+		log.Info("Found fast-sync pivot marker", "number", pivot)
+	}
+	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
+		// We don't have state for pending (-2), so treat it as latest
+		if num.Int64() < 0 {
+			block := api.eth.blockchain.CurrentBlock()
+			if block == nil {
+				return 0, fmt.Errorf("current block missing")
+			}
+			return block.NumberU64(), nil
+		}
+		return uint64(num.Int64()), nil
+	}
+	var (
+		start   uint64
+		end     uint64
+		delta   = int64(1)
+		lastLog time.Time
+		err     error
+	)
+	if start, err = resolveNum(from); err != nil {
+		return 0, err
+	}
+	if end, err = resolveNum(to); err != nil {
+		return 0, err
+	}
+	if start == end {
+		return 0, fmt.Errorf("from and to needs to be different")
+	}
+	if start > end {
+		delta = -1
+	}
+	for i := int64(start); i != int64(end); i += delta {
+		if time.Since(lastLog) > 8*time.Second {
+			log.Info("Finding roots", "from", start, "to", end, "at", i)
+			lastLog = time.Now()
+		}
+		if i < int64(pivot) {
+			continue
+		}
+		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
+		if h == nil {
+			return 0, fmt.Errorf("missing header %d", i)
+		}
+		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
+			return uint64(i), nil
+		}
+	}
+	return 0, fmt.Errorf("No state found")
 }

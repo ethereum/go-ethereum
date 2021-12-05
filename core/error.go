@@ -26,11 +26,13 @@ var (
 	// ErrKnownBlock is returned when a block to import is already known locally.
 	ErrKnownBlock = errors.New("block already known")
 
-	// ErrBlacklistedHash is returned if a block to import is on the blacklist.
-	ErrBlacklistedHash = errors.New("blacklisted hash")
+	// ErrBannedHash is returned if a block to import is on the banned list.
+	ErrBannedHash = errors.New("banned hash")
 
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
+
+	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
@@ -48,6 +50,10 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
+
+	// ErrNonceMax is returned if the nonce of a transaction sender account has
+	// maximum allowed value and would become invalid if incremented.
+	ErrNonceMax = errors.New("nonce has max value")
 
 	// ErrGasLimitReached is returned by the gas pool if the amount of gas required
 	// by a transaction is higher than what's left in the block.
@@ -87,4 +93,7 @@ var (
 	// ErrFeeCapTooLow is returned if the transaction fee cap is less than the
 	// the base fee of the block.
 	ErrFeeCapTooLow = errors.New("max fee per gas less than block base fee")
+
+	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
+	ErrSenderNoEOA = errors.New("sender not an eoa")
 )

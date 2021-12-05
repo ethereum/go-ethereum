@@ -17,14 +17,21 @@
 package core
 
 import (
+	"encoding/json"
+	"math/big"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -73,6 +80,172 @@ func TestHeaderVerification(t *testing.T) {
 			}
 		}
 		chain.InsertChain(blocks[i : i+1])
+	}
+}
+
+func TestHeaderVerificationForMergingClique(t *testing.T) { testHeaderVerificationForMerging(t, true) }
+func TestHeaderVerificationForMergingEthash(t *testing.T) { testHeaderVerificationForMerging(t, false) }
+
+// Tests the verification for eth1/2 merging, including pre-merge and post-merge
+func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
+	var (
+		testdb      = rawdb.NewMemoryDatabase()
+		preBlocks   []*types.Block
+		postBlocks  []*types.Block
+		runEngine   consensus.Engine
+		chainConfig *params.ChainConfig
+		merger      = consensus.NewMerger(rawdb.NewMemoryDatabase())
+	)
+	if isClique {
+		var (
+			key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+			addr   = crypto.PubkeyToAddress(key.PublicKey)
+			engine = clique.New(params.AllCliqueProtocolChanges.Clique, testdb)
+		)
+		genspec := &Genesis{
+			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
+			Alloc: map[common.Address]GenesisAccount{
+				addr: {Balance: big.NewInt(1)},
+			},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		copy(genspec.ExtraData[32:], addr[:])
+		genesis := genspec.MustCommit(testdb)
+
+		genEngine := beacon.New(engine)
+		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, testdb, 8, nil)
+		td := 0
+		for i, block := range preBlocks {
+			header := block.Header()
+			if i > 0 {
+				header.ParentHash = preBlocks[i-1].Hash()
+			}
+			header.Extra = make([]byte, 32+crypto.SignatureLength)
+			header.Difficulty = big.NewInt(2)
+
+			sig, _ := crypto.Sign(genEngine.SealHash(header).Bytes(), key)
+			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
+			preBlocks[i] = block.WithSeal(header)
+			// calculate td
+			td += int(block.Difficulty().Uint64())
+		}
+		config := *params.AllCliqueProtocolChanges
+		config.TerminalTotalDifficulty = big.NewInt(int64(td))
+		postBlocks, _ = GenerateChain(&config, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
+		chainConfig = &config
+		runEngine = beacon.New(engine)
+	} else {
+		gspec := &Genesis{Config: params.TestChainConfig}
+		genesis := gspec.MustCommit(testdb)
+		genEngine := beacon.New(ethash.NewFaker())
+
+		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
+		td := 0
+		for _, block := range preBlocks {
+			// calculate td
+			td += int(block.Difficulty().Uint64())
+		}
+		config := *params.TestChainConfig
+		config.TerminalTotalDifficulty = big.NewInt(int64(td))
+		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
+
+		chainConfig = &config
+		runEngine = beacon.New(ethash.NewFaker())
+	}
+
+	preHeaders := make([]*types.Header, len(preBlocks))
+	for i, block := range preBlocks {
+		preHeaders[i] = block.Header()
+
+		blob, _ := json.Marshal(block.Header())
+		t.Logf("Log header before the merging %d: %v", block.NumberU64(), string(blob))
+	}
+	postHeaders := make([]*types.Header, len(postBlocks))
+	for i, block := range postBlocks {
+		postHeaders[i] = block.Header()
+
+		blob, _ := json.Marshal(block.Header())
+		t.Logf("Log header after the merging %d: %v", block.NumberU64(), string(blob))
+	}
+	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
+	chain, _ := NewBlockChain(testdb, nil, chainConfig, runEngine, vm.Config{}, nil, nil)
+	defer chain.Stop()
+
+	// Verify the blocks before the merging
+	for i := 0; i < len(preBlocks); i++ {
+		_, results := runEngine.VerifyHeaders(chain, []*types.Header{preHeaders[i]}, []bool{true})
+		// Wait for the verification result
+		select {
+		case result := <-results:
+			if result != nil {
+				t.Errorf("test %d: verification failed %v", i, result)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("test %d: verification timeout", i)
+		}
+		// Make sure no more data is returned
+		select {
+		case result := <-results:
+			t.Fatalf("test %d: unexpected result returned: %v", i, result)
+		case <-time.After(25 * time.Millisecond):
+		}
+		chain.InsertChain(preBlocks[i : i+1])
+	}
+
+	// Make the transition
+	merger.ReachTTD()
+	merger.FinalizePoS()
+
+	// Verify the blocks after the merging
+	for i := 0; i < len(postBlocks); i++ {
+		_, results := runEngine.VerifyHeaders(chain, []*types.Header{postHeaders[i]}, []bool{true})
+		// Wait for the verification result
+		select {
+		case result := <-results:
+			if result != nil {
+				t.Errorf("test %d: verification failed %v", i, result)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("test %d: verification timeout", i)
+		}
+		// Make sure no more data is returned
+		select {
+		case result := <-results:
+			t.Fatalf("test %d: unexpected result returned: %v", i, result)
+		case <-time.After(25 * time.Millisecond):
+		}
+		chain.InsertBlockWithoutSetHead(postBlocks[i])
+	}
+
+	// Verify the blocks with pre-merge blocks and post-merge blocks
+	var (
+		headers []*types.Header
+		seals   []bool
+	)
+	for _, block := range preBlocks {
+		headers = append(headers, block.Header())
+		seals = append(seals, true)
+	}
+	for _, block := range postBlocks {
+		headers = append(headers, block.Header())
+		seals = append(seals, true)
+	}
+	_, results := runEngine.VerifyHeaders(chain, headers, seals)
+	for i := 0; i < len(headers); i++ {
+		select {
+		case result := <-results:
+			if result != nil {
+				t.Errorf("test %d: verification failed %v", i, result)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("test %d: verification timeout", i)
+		}
+	}
+	// Make sure no more data is returned
+	select {
+	case result := <-results:
+		t.Fatalf("unexpected result returned: %v", result)
+	case <-time.After(25 * time.Millisecond):
 	}
 }
 
@@ -198,8 +371,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	}
 }
 
-func TestCalcGasLimit1559(t *testing.T) {
-
+func TestCalcGasLimit(t *testing.T) {
 	for i, tc := range []struct {
 		pGasLimit uint64
 		max       uint64
@@ -209,23 +381,23 @@ func TestCalcGasLimit1559(t *testing.T) {
 		{40000000, 40039061, 39960939},
 	} {
 		// Increase
-		if have, want := CalcGasLimit1559(tc.pGasLimit, 2*tc.pGasLimit), tc.max; have != want {
+		if have, want := CalcGasLimit(tc.pGasLimit, 2*tc.pGasLimit), tc.max; have != want {
 			t.Errorf("test %d: have %d want <%d", i, have, want)
 		}
 		// Decrease
-		if have, want := CalcGasLimit1559(tc.pGasLimit, 0), tc.min; have != want {
+		if have, want := CalcGasLimit(tc.pGasLimit, 0), tc.min; have != want {
 			t.Errorf("test %d: have %d want >%d", i, have, want)
 		}
 		// Small decrease
-		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit-1), tc.pGasLimit-1; have != want {
+		if have, want := CalcGasLimit(tc.pGasLimit, tc.pGasLimit-1), tc.pGasLimit-1; have != want {
 			t.Errorf("test %d: have %d want %d", i, have, want)
 		}
 		// Small increase
-		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit+1), tc.pGasLimit+1; have != want {
+		if have, want := CalcGasLimit(tc.pGasLimit, tc.pGasLimit+1), tc.pGasLimit+1; have != want {
 			t.Errorf("test %d: have %d want %d", i, have, want)
 		}
 		// No change
-		if have, want := CalcGasLimit1559(tc.pGasLimit, tc.pGasLimit), tc.pGasLimit; have != want {
+		if have, want := CalcGasLimit(tc.pGasLimit, tc.pGasLimit), tc.pGasLimit; have != want {
 			t.Errorf("test %d: have %d want %d", i, have, want)
 		}
 	}

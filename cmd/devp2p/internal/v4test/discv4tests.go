@@ -79,14 +79,44 @@ func BasicPing(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// checkPong verifies that reply is a valid PONG matching the given ping hash.
+// checkPingPong verifies that the remote side sends both a PONG with the
+// correct hash, and a PING.
+// The two packets do not have to be in any particular order.
+func (te *testenv) checkPingPong(pingHash []byte) error {
+	var (
+		pings int
+		pongs int
+	)
+	for i := 0; i < 2; i++ {
+		reply, _, err := te.read(te.l1)
+		if err != nil {
+			return err
+		}
+		switch reply.Kind() {
+		case v4wire.PongPacket:
+			if err := te.checkPong(reply, pingHash); err != nil {
+				return err
+			}
+			pongs++
+		case v4wire.PingPacket:
+			pings++
+		default:
+			return fmt.Errorf("expected PING or PONG, got %v %v", reply.Name(), reply)
+		}
+	}
+	if pongs == 1 && pings == 1 {
+		return nil
+	}
+	return fmt.Errorf("expected 1 PING  (got %d) and 1 PONG (got %d)", pings, pongs)
+}
+
+// checkPong verifies that reply is a valid PONG matching the given ping hash,
+// and a PING. The two packets do not have to be in any particular order.
 func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 	if reply == nil {
 		return fmt.Errorf("expected PONG reply, got nil")
@@ -119,9 +149,7 @@ func PingWrongTo(t *utesting.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -139,8 +167,7 @@ func PingWrongFrom(t *utesting.T) {
 		Expiration: futureExpiration(),
 	})
 
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -161,8 +188,7 @@ func PingExtraData(t *utesting.T) {
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	})
 
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -183,8 +209,7 @@ func PingExtraDataWrongFrom(t *utesting.T) {
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
 	pingHash := te.send(te.l1, &req)
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -204,7 +229,7 @@ func PingPastExpiration(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatal("Expected no reply, got", reply)
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -222,7 +247,7 @@ func WrongPacketType(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatal("Expected no reply, got", reply)
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -240,9 +265,9 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-
-	reply, _, _ := te.read(te.l1)
-	if err := te.checkPong(reply, pingHash); err != nil {
+	if reply, _, err := te.read(te.l1); err != nil {
+		t.Fatal(err)
+	} else if err := te.checkPong(reply, pingHash); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -257,9 +282,16 @@ func FindnodeWithoutEndpointProof(t *utesting.T) {
 	rand.Read(req.Target[:])
 	te.send(te.l1, &req)
 
-	reply, _, _ := te.read(te.l1)
-	if reply != nil {
-		t.Fatal("Expected no response, got", reply)
+	for {
+		reply, _, _ := te.read(te.l1)
+		if reply == nil {
+			// No response, all good
+			break
+		}
+		if reply.Kind() == v4wire.PingPacket {
+			continue // A ping is ok, just ignore it
+		}
+		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -279,7 +311,7 @@ func BasicFindnode(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatal("Expected neighbors, got", reply.Name())
+		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
 }
 
@@ -316,7 +348,7 @@ func UnsolicitedNeighbors(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatal("Expected neighbors, got", reply.Name())
+		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
 	nodes := reply.(*v4wire.Neighbors).Nodes
 	if contains(nodes, encFakeKey) {

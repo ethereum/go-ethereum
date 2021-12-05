@@ -4,15 +4,15 @@ The `evm t8n` tool is a stateless state transition utility. It is a utility
 which can
 
 1. Take a prestate, including
-  - Accounts,
-  - Block context information,
-  - Previous blockshashes (*optional)
+- Accounts,
+- Block context information,
+- Previous blockshashes (*optional)
 2. Apply a set of transactions,
 3. Apply a mining-reward (*optional),
 4. And generate a post-state, including
-  - State root, transaction root, receipt root,
-  - Information about rejected transactions,
-  - Optionally: a full or partial post-state dump
+- State root, transaction root, receipt root,
+- Information about rejected transactions,
+- Optionally: a full or partial post-state dump
 
 ## Specification
 
@@ -37,6 +37,8 @@ Command line params that has to be supported are
    --output.result result             Determines where to put the result (stateroot, txroot etc) of the post-state.
                                       `stdout` - into the stdout output
                                       `stderr` - into the stderr output
+   --output.body value                If set, the RLP of the transactions (block body) will be written to this file.
+   --input.txs stdin                  stdin or file name of where to find the transactions to apply. If the file prefix is '.rlp', then the data is interpreted as an RLP list of signed transactions.The '.rlp' format is identical to the output.body format. (default: "txs.json")
    --state.fork value                 Name of ruleset to use.
    --state.chainid value              ChainID to use (default: 1)
    --state.reward value               Mining reward. Set to -1 to disable (default: 0)
@@ -110,7 +112,10 @@ Two resulting files:
   }
  ],
  "rejected": [
-  1
+  {
+   "index": 1,
+   "error": "nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+  }
  ]
 }
 ```
@@ -156,7 +161,10 @@ Output:
    }
   ],
   "rejected": [
-   1
+   {
+    "index": 1,
+    "error": "nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+   }
   ]
  }
 }
@@ -168,9 +176,9 @@ Mining rewards and ommer rewards might need to be added. This is how those are a
 
 - `block_reward` is the block mining reward for the miner (`0xaa`), of a block at height `N`.
 - For each ommer (mined by `0xbb`), with blocknumber `N-delta`
-   - (where `delta` is the difference between the current block and the ommer)
-   - The account `0xbb` (ommer miner) is awarded `(8-delta)/ 8 * block_reward`
-   - The account `0xaa` (block miner) is awarded `block_reward / 32`
+  - (where `delta` is the difference between the current block and the ommer)
+  - The account `0xbb` (ommer miner) is awarded `(8-delta)/ 8 * block_reward`
+  - The account `0xaa` (block miner) is awarded `block_reward / 32`
 
 To make `state_t8n` apply these, the following inputs are required:
 
@@ -200,7 +208,7 @@ Example:
   ]
 }
 ```
-When applying this, using a reward of `0x08`
+When applying this, using a reward of `0x80`
 Output:
 ```json
 {
@@ -220,7 +228,7 @@ Output:
 ### Future EIPS
 
 It is also possible to experiment with future eips that are not yet defined in a hard fork.
-Example, putting EIP-1344 into Frontier: 
+Example, putting EIP-1344 into Frontier:
 ```
 ./evm t8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json
 ```
@@ -229,41 +237,102 @@ Example, putting EIP-1344 into Frontier:
 
 The `BLOCKHASH` opcode requires blockhashes to be provided by the caller, inside the `env`.
 If a required blockhash is not provided, the exit code should be `4`:
-Example where blockhashes are provided: 
+Example where blockhashes are provided:
 ```
-./evm t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json --trace
+./evm --verbosity=1 t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace
+INFO [07-27|11:53:40.960] Trie dumping started                     root=b7341d..857ea1
+INFO [07-27|11:53:40.960] Trie dumping complete                    accounts=3 elapsed="103.298µs"
+INFO [07-27|11:53:40.960] Wrote file                               file=alloc.json
+INFO [07-27|11:53:40.960] Wrote file                               file=result.json
+
 ```
+
 ```
 cat trace-0-0x72fadbef39cd251a437eea619cfeda752271a5faaaa2147df012e112159ffb81.jsonl | grep BLOCKHASH -C2
 ```
 ```
-{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnStack":[],"returnData":"0x","depth":1,"refund":0,"opName":"PUSH1","error":""}
-{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnStack":[],"returnData":"0x","depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
-{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnStack":[],"returnData":"0x","depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":142709}
+{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnData":"0x","depth":1,"refund":0,"opName":"PUSH1","error":""}
+{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnData":"0x","depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
+{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnData":"0x","depth":1,"refund":0,"opName":"STOP","error":""}
+{"output":"","gasUsed":"0x17","time":156276}
 ```
 
 In this example, the caller has not provided the required blockhash:
 ```
 ./evm t8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json --trace
-```
-```
 ERROR(4): getHash(3) invoked, blockhash for that block not provided
 ```
 Error code: 4
+
 ### Chaining
 
 Another thing that can be done, is to chain invocations:
 ```
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [01-21|22:41:22.963] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [01-21|22:41:22.966] rejected tx                              index=0 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
-INFO [01-21|22:41:22.967] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.049] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.050] Trie dumping started                     root=84208a..ae4e13
+INFO [07-27|11:53:41.050] Trie dumping complete                    accounts=3 elapsed="59.412µs"
+INFO [07-27|11:53:41.050] Wrote file                               file=result.json
+INFO [07-27|11:53:41.051] rejected tx                              index=0 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.051] rejected tx                              index=1 hash=0557ba..18d673 from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low: address 0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192, tx: 0 state: 1"
+INFO [07-27|11:53:41.052] Trie dumping started                     root=84208a..ae4e13
+INFO [07-27|11:53:41.052] Trie dumping complete                    accounts=3 elapsed="45.734µs"
+INFO [07-27|11:53:41.052] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.052] Wrote file                               file=result.json
 
 ```
-What happened here, is that we first applied two identical transactions, so the second one was rejected. 
+What happened here, is that we first applied two identical transactions, so the second one was rejected.
 Then, taking the poststate alloc as the input for the next state, we tried again to include
 the same two transactions: this time, both failed due to too low nonce.
 
 In order to meaningfully chain invocations, one would need to provide meaningful new `env`, otherwise the
 actual blocknumber (exposed to the EVM) would not increase.
+
+### Transactions in RLP form
+
+It is possible to provide already-signed transactions as input to, using an `input.txs` which ends with the `rlp` suffix.
+The input format for RLP-form transactions is _identical_ to the _output_ format for block bodies. Therefore, it's fully possible
+to use the evm to go from `json` input to `rlp` input.
+
+The following command takes **json** the transactions in `./testdata/13/txs.json` and signs them. After execution, they are output to `signed_txs.rlp`.:
+```
+./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./testdata/13/txs.json --input.env=./testdata/13/env.json --output.result=alloc_jsontx.json --output.body=signed_txs.rlp
+INFO [07-27|11:53:41.124] Trie dumping started                     root=e4b924..6aef61
+INFO [07-27|11:53:41.124] Trie dumping complete                    accounts=3 elapsed="94.284µs"
+INFO [07-27|11:53:41.125] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.125] Wrote file                               file=alloc_jsontx.json
+INFO [07-27|11:53:41.125] Wrote file                               file=signed_txs.rlp
+
+```
+
+The `output.body` is the rlp-list of transactions, encoded in hex and placed in a string a'la `json` encoding rules:
+```
+cat signed_txs.rlp
+"0xf8d2b86702f864010180820fa08284d09411111111111111111111111111111111111111118080c001a0b7dfab36232379bb3d1497a4f91c1966b1f932eae3ade107bf5d723b9cb474e0a06261c359a10f2132f126d250485b90cf20f30340801244a08ef6142ab33d1904b86702f864010280820fa08284d09411111111111111111111111111111111111111118080c080a0d4ec563b6568cd42d998fc4134b36933c6568d01533b5adf08769270243c6c7fa072bf7c21eac6bbeae5143371eef26d5e279637f3bd73482b55979d76d935b1e9"
+```
+
+We can use `rlpdump` to check what the contents are:
+```
+rlpdump -hex $(cat signed_txs.rlp | jq -r )
+[
+  02f864010180820fa08284d09411111111111111111111111111111111111111118080c001a0b7dfab36232379bb3d1497a4f91c1966b1f932eae3ade107bf5d723b9cb474e0a06261c359a10f2132f126d250485b90cf20f30340801244a08ef6142ab33d1904,
+  02f864010280820fa08284d09411111111111111111111111111111111111111118080c080a0d4ec563b6568cd42d998fc4134b36933c6568d01533b5adf08769270243c6c7fa072bf7c21eac6bbeae5143371eef26d5e279637f3bd73482b55979d76d935b1e9,
+]
+```
+Now, we can now use those (or any other already signed transactions), as input, like so:
+```
+./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./signed_txs.rlp --input.env=./testdata/13/env.json --output.result=alloc_rlptx.json
+INFO [07-27|11:53:41.253] Trie dumping started                     root=e4b924..6aef61
+INFO [07-27|11:53:41.253] Trie dumping complete                    accounts=3 elapsed="128.445µs"
+INFO [07-27|11:53:41.253] Wrote file                               file=alloc.json
+INFO [07-27|11:53:41.255] Wrote file                               file=alloc_rlptx.json
+
+```
+
+You might have noticed that the results from these two invocations were stored in two separate files.
+And we can now finally check that they match.
+```
+cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot
+"0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
+"0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
+```
