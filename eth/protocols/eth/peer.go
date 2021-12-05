@@ -84,6 +84,10 @@ type Peer struct {
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
+	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfilment
+	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
+	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
+
 	term chan struct{} // Termination channel to stop the broadcasters
 	lock sync.RWMutex  // Mutex protecting the internal fields
 }
@@ -102,6 +106,9 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
 		txBroadcast:     make(chan []common.Hash),
 		txAnnounce:      make(chan []common.Hash),
+		reqDispatch:     make(chan *request),
+		reqCancel:       make(chan *cancel),
+		resDispatch:     make(chan *response),
 		txpool:          txpool,
 		term:            make(chan struct{}),
 	}
@@ -109,6 +116,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 	go peer.broadcastBlocks()
 	go peer.broadcastTransactions()
 	go peer.announceTransactions()
+	go peer.dispatcher()
 
 	return peer
 }
@@ -323,94 +331,148 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
-func (p *Peer) RequestOneHeader(hash common.Hash) error {
+func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching single header", "hash", hash)
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-		RequestId: id,
-		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  HashOrNumber{Hash: hash},
-			Amount:  uint64(1),
-			Skip:    uint64(0),
-			Reverse: false,
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetBlockHeadersMsg,
+		want: BlockHeadersMsg,
+		data: &GetBlockHeadersPacket66{
+			RequestId: id,
+			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+				Origin:  HashOrNumber{Hash: hash},
+				Amount:  uint64(1),
+				Skip:    uint64(0),
+				Reverse: false,
+			},
 		},
-	})
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-		RequestId: id,
-		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  HashOrNumber{Hash: origin},
-			Amount:  uint64(amount),
-			Skip:    uint64(skip),
-			Reverse: reverse,
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetBlockHeadersMsg,
+		want: BlockHeadersMsg,
+		data: &GetBlockHeadersPacket66{
+			RequestId: id,
+			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+				Origin:  HashOrNumber{Hash: origin},
+				Amount:  uint64(amount),
+				Skip:    uint64(skip),
+				Reverse: reverse,
+			},
 		},
-	})
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
-func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-		RequestId: id,
-		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  HashOrNumber{Number: origin},
-			Amount:  uint64(amount),
-			Skip:    uint64(skip),
-			Reverse: reverse,
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetBlockHeadersMsg,
+		want: BlockHeadersMsg,
+		data: &GetBlockHeadersPacket66{
+			RequestId: id,
+			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+				Origin:  HashOrNumber{Number: origin},
+				Amount:  uint64(amount),
+				Skip:    uint64(skip),
+				Reverse: reverse,
+			},
 		},
-	})
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
-func (p *Peer) RequestBodies(hashes []common.Hash) error {
+func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetBlockBodiesMsg, BlockBodiesMsg, id)
-	return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
-		RequestId:            id,
-		GetBlockBodiesPacket: hashes,
-	})
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetBlockBodiesMsg,
+		want: BlockBodiesMsg,
+		data: &GetBlockBodiesPacket66{
+			RequestId:            id,
+			GetBlockBodiesPacket: hashes,
+		},
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestNodeData fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
-func (p *Peer) RequestNodeData(hashes []common.Hash) error {
+func (p *Peer) RequestNodeData(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetNodeDataMsg, NodeDataMsg, id)
-	return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{
-		RequestId:         id,
-		GetNodeDataPacket: hashes,
-	})
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetNodeDataMsg,
+		want: NodeDataMsg,
+		data: &GetNodeDataPacket66{
+			RequestId:         id,
+			GetNodeDataPacket: hashes,
+		},
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestReceipts(hashes []common.Hash) error {
+func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetReceiptsMsg, ReceiptsMsg, id)
-	return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{
-		RequestId:         id,
-		GetReceiptsPacket: hashes,
-	})
+	req := &Request{
+		id:   id,
+		sink: sink,
+		code: GetReceiptsMsg,
+		want: ReceiptsMsg,
+		data: &GetReceiptsPacket66{
+			RequestId:         id,
+			GetReceiptsPacket: hashes,
+		},
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
