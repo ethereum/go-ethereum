@@ -1643,7 +1643,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 
 			bc.chain2HeadFeed.Send(Chain2HeadEvent{
-				Type:     "head",
+				Type:     Chain2HeadCanonicalEvent,
 				NewChain: []*types.Block{block},
 			})
 
@@ -1653,7 +1653,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
-			Type:     "fork",
+			Type:     Chain2HeadForkEvent,
 			NewChain: []*types.Block{block},
 		})
 	}
@@ -1751,7 +1751,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
 
 			bc.chain2HeadFeed.Send(Chain2HeadEvent{
-				Type:     "head",
+				Type:     Chain2HeadCanonicalEvent,
 				NewChain: []*types.Block{lastCanon},
 			})
 		}
@@ -2281,7 +2281,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(oldChain) > 0 && len(newChain) > 0 {
 
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
-			Type:     "reorg",
+			Type:     Chain2HeadReorgEvent,
 			NewChain: newChain,
 			OldChain: oldChain,
 		})

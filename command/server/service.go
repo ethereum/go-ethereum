@@ -126,8 +126,6 @@ func ConvertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
 }
 
 func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainWatchServer) error {
-	// 1. start the feed to the blockchain events
-	// 2. for each event send a proto.ChainWatchResponse
 
 	chain2HeadChanSize := 10
 

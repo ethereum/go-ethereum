@@ -15,4 +15,6 @@
 
 - [```account import```](./account_import.md)
 
+- [```chain watch```](./chain_watch.md)
+
 - [```version```](./version.md)
