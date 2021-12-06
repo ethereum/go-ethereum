@@ -96,14 +96,15 @@ func localConsole(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
 	}
+	defer console.Stop(false)
+
+	// Track node shutdown and stop the console when it goes down.
+	// This happens when SIGTERM is sent to the process.
 	exitCh := make(chan struct{})
 	go func() {
-		// In case the blockchain is stopped, e.g. via ctrl-c, we should
-		// also close down the console.
 		stack.Wait()
 		close(exitCh)
 	}()
-	defer console.Stop(false)
 
 	// If only a short execution was requested, evaluate and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
