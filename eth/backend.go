@@ -97,6 +97,8 @@ type Ethereum struct {
 	p2pServer *p2p.Server
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	shutdownCh chan chan struct{} // Signals the unclean shutdown marker updating loop to terminate
 }
 
 // New creates a new Ethereum object (including the
@@ -157,6 +159,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		shutdownCh:        make(chan chan struct{}),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -275,6 +278,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
+	// Keep updating shutdown markers to pin down on the actual
+	// time of the crash.
+	go eth.updateUncleanShutdownMarkers()
 	return eth, nil
 }
 
@@ -577,9 +583,31 @@ func (s *Ethereum) Stop() error {
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	// Stop updating unclean shutdown markers and pop the last marker.
+	done := make(chan struct{})
+	s.shutdownCh <- done
+	<-done
+
 	s.chainDb.Close()
 	s.eventMux.Stop()
 
 	return nil
+}
+
+func (s *Ethereum) updateUncleanShutdownMarkers() {
+	// update marker every five minutes
+	ticker := time.NewTicker(60 * time.Second)
+	defer func() { ticker.Stop() }()
+	for {
+		select {
+		case <-ticker.C:
+			rawdb.UpdateUncleanShutdownMarker(s.chainDb)
+		case done := <-s.shutdownCh:
+			// Successful shutdown, clear last marker
+			rawdb.PopUncleanShutdownMarker(s.chainDb)
+			done <- struct{}{}
+			// ticker stops upon return
+			return
+		}
+	}
 }
