@@ -77,7 +77,7 @@ func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
-	startNode(ctx, stack, backend)
+	startNode(ctx, stack, backend, true)
 	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
@@ -196,7 +196,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	stack, backend := makeFullNode(ctx)
-	startNode(ctx, stack, backend)
+	startNode(ctx, stack, backend, false)
 	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console

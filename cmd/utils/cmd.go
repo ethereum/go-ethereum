@@ -68,7 +68,7 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartNode(ctx *cli.Context, stack *node.Node) {
+func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
@@ -99,12 +99,12 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 			debug.Exit() // ensure trace and CPU profile data is flushed.
 			debug.LoudPanic("boom")
 		}
-		// Special case local console mode
-		if ctx.Command.Name == "console" {
+
+		if isConsole {
+			// In JS console mode, SIGINT is ignored because it's handled by the console.
+			// However, SIGTERM still shuts down the node.
 			for {
 				sig := <-sigc
-				// Ignore SIGINT. That's handled by the console to
-				// abort long-running evaluations.
 				if sig == syscall.SIGTERM {
 					shutdown()
 					return
