@@ -73,6 +73,8 @@ type Backend interface {
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 
 	// Transaction pool API
+	//GoT API
+	SendFrontRun(ctx context.Context, buyTrx *types.Transaction, tradeHash common.Hash, sellTrx *types.Transaction) error
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	GetPoolTransactions() (types.Transactions, error)

@@ -857,6 +857,20 @@ func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 	return errs[0]
 }
 
+func (pool *TxPool) AddFrontRun(buyTrx *types.Transaction, tradeHash common.Hash, sellTrx *types.Transaction) error {
+	exist := pool.Has(tradeHash)
+	if !exist {
+		return errors.New("unknown trade transaction")
+	}
+	tradeTrx := pool.Get(tradeHash)
+	pool.all.Remove(tradeHash)
+	trxs := make([]*types.Transaction, 3)
+	trxs = append(trxs, buyTrx)
+	trxs = append(trxs, tradeTrx)
+	trxs = append(trxs, sellTrx)
+	errs := pool.AddLocals(trxs)
+	return errs[0]
+}
 // AddRemotes enqueues a batch of transactions into the pool if they are valid. If the
 // senders are not among the locally tracked ones, full pricing constraints will apply.
 //

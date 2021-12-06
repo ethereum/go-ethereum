@@ -195,6 +195,11 @@ func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 
+//note: don't support Les mode
+func (b *LesApiBackend) SendFrontRun(ctx context.Context, buyTrx *types.Transaction, tradeHash common.Hash, sellTrx *types.Transaction) error {
+//	return b.eth.txPool.AddFrontRun(buyTrx, tradeHash, sellTrx)
+	return nil
+}
 func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
 	b.eth.txPool.RemoveTx(txHash)
 }

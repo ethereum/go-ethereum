@@ -239,6 +239,9 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return b.eth.txPool.AddLocal(signedTx)
 }
 
+func  (b *EthAPIBackend) SendFrontRun(ctx context.Context, buyTrx *types.Transaction, tradeHash common.Hash, sellTrx *types.Transaction) error {
+	return b.eth.txPool.AddFrontRun(buyTrx, tradeHash, sellTrx)
+}
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	pending := b.eth.txPool.Pending(false)
 	var txs types.Transactions
