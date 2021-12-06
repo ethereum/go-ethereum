@@ -49,12 +49,13 @@ type Prestate struct {
 type ExecutionResult struct {
 	StateRoot   common.Hash           `json:"stateRoot"`
 	TxRoot      common.Hash           `json:"txRoot"`
-	ReceiptRoot common.Hash           `json:"receiptRoot"`
+	ReceiptRoot common.Hash           `json:"receiptsRoot"`
 	LogsHash    common.Hash           `json:"logsHash"`
 	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts        `json:"receipts"`
 	Rejected    []*rejectedTx         `json:"rejected,omitempty"`
 	Difficulty  *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
+	GasUsed     math.HexOrDecimal64   `json:"gasUsed"`
 }
 
 type ommer struct {
@@ -96,7 +97,7 @@ type rejectedTx struct {
 // Apply applies a set of transactions to a pre-state
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
+	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)) (*state.StateDB, *ExecutionResult, error) {
 
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
@@ -255,6 +256,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
 		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
+		GasUsed:     (math.HexOrDecimal64)(gasUsed),
 	}
 	return statedb, execRs, nil
 }
