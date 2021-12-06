@@ -70,7 +70,7 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = &operation{
+	jt[SELFBALANCE] = operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 1),
@@ -88,7 +88,7 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = &operation{
+	jt[CHAINID] = operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -160,7 +160,7 @@ func enable3529(jt *JumpTable) {
 // - Adds an opcode that returns the current block's base fee.
 func enable3198(jt *JumpTable) {
 	// New opcode
-	jt[BASEFEE] = &operation{
+	jt[BASEFEE] = operation{
 		execute:     opBaseFee,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
