@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -143,7 +143,6 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Difficulty:  t.json.Env.Difficulty,
 		GasPrice:    t.json.Exec.GasPrice,
 	}
-	vmconfig.NoRecursion = true
 	return vm.NewEVM(context, statedb, nil, params.MainnetChainConfig, vmconfig)
 }
 
