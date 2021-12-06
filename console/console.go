@@ -368,7 +368,7 @@ func (c *Console) Interactive(exitCh chan struct{}) {
 	// the signal, a signal can still be received for unsupported terminals. Unfortunately
 	// there is no way to cancel the line reader when this happens. The readLines
 	// goroutine will be leaked in this case.
-	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(interrupt, syscall.SIGINT)
 	defer signal.Stop(interrupt)
 
 	// The line reader runs in a separate goroutine.
