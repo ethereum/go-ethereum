@@ -10,10 +10,12 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 func Position(list []common.Address, x common.Address) int {
@@ -151,14 +153,33 @@ func SigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// Encode XDPoS 2.0 extra fields into bytes
-func (e *ExtraFields_v2) EncodeToBytes() ([]byte, error) {
-	bytes, err := rlp.EncodeToBytes(e)
+func SigHashV2(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewKeccak256()
+
+	err := rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
+		header.MixDigest,
+		header.Nonce,
+		header.Validators,
+		header.Penalties,
+	})
 	if err != nil {
-		return nil, err
+		log.Debug("Fail to encode", err)
 	}
-	versionByte := []byte{2}
-	return append(versionByte, bytes...), nil
+	hasher.Sum(hash[:0])
+	return hash
 }
 
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
@@ -174,4 +195,48 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	default:
 		return fmt.Errorf("consensus version %d is not defined", b[0])
 	}
+}
+
+// ecrecover extracts the Ethereum account address from a signed header.
+func Ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+	// If the signature's already cached, return that
+	hash := header.Hash()
+	if address, known := sigcache.Get(hash); known {
+		return address.(common.Address), nil
+	}
+	// Retrieve the signature from the header extra-data
+	if len(header.Extra) < ExtraSeal {
+		return common.Address{}, ErrMissingSignature
+	}
+	signature := header.Extra[len(header.Extra)-ExtraSeal:]
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(SigHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	sigcache.Add(hash, signer)
+	return signer, nil
+}
+
+func EcrecoverV2(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+	// If the signature's already cached, return that
+	hash := header.Hash()
+	if address, known := sigcache.Get(hash); known {
+		return address.(common.Address), nil
+	}
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(SigHashV2(header).Bytes(), header.Validator)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	sigcache.Add(hash, signer)
+	return signer, nil
 }

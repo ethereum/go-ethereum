@@ -523,6 +523,7 @@ func (self *worker) commitNewWork() {
 		// only go with XDPoS
 		if self.config.XDPoS != nil {
 			// get masternodes set from latest checkpoint
+			// TODO: refactor on yourturn with below condition for v1 v2
 			c := self.engine.(*XDPoS.XDPoS)
 			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
@@ -581,6 +582,10 @@ func (self *worker) commitNewWork() {
 	}
 
 	if err := self.engine.Prepare(self.chain, header); err != nil {
+		if err == consensus.ErrNotReadyToPropose {
+			log.Info("Waiting...", "err", err)
+			return
+		}
 		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}

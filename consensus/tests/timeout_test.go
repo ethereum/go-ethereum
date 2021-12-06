@@ -1,4 +1,4 @@
-package consensus
+package tests
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
-	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
+	blockchain, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 1
@@ -49,11 +49,11 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	assert.NotNil(t, syncInfoMsg)
 
-	// Should have QC, however, we did not inilise it, hence will show default empty value
-	qc := syncInfoMsg.(utils.SyncInfo).HighestQuorumCert
-	assert.NotNil(t, qc)
+	// Shouldn't have QC, however, we did not inilise it, hence will show default empty value
+	qc := syncInfoMsg.(*utils.SyncInfo).HighestQuorumCert
+	assert.Nil(t, qc)
 
-	tc := syncInfoMsg.(utils.SyncInfo).HighestTimeoutCert
+	tc := syncInfoMsg.(*utils.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)
 	assert.Equal(t, tc.Round, utils.Round(1))
 	sigatures := []utils.Signature{[]byte{1}, []byte{2}, []byte{3}}
@@ -62,7 +62,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 }
 
 func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
-	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
+	blockchain, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 3

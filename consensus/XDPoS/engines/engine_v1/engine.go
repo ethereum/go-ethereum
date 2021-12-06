@@ -28,31 +28,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
-	// Retrieve the signature from the header extra-data
-	if len(header.Extra) < utils.ExtraSeal {
-		return common.Address{}, utils.ErrMissingSignature
-	}
-	signature := header.Extra[len(header.Extra)-utils.ExtraSeal:]
-
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(utils.SigHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-	sigcache.Add(hash, signer)
-	return signer, nil
-}
-
 // XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS_v1 struct {
@@ -106,7 +81,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (x *XDPoS_v1) Author(header *types.Header) (common.Address, error) {
-	return ecrecover(header, x.signatures)
+	return utils.Ecrecover(header, x.signatures)
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
@@ -384,7 +359,7 @@ func whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error
 	if header.Number.Uint64() == 0 {
 		return common.Address{}, errors.New("Don't take block 0")
 	}
-	m, err := ecrecover(header, snap.sigcache)
+	m, err := utils.Ecrecover(header, snap.sigcache)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -549,7 +524,7 @@ func (x *XDPoS_v1) verifySeal(chain consensus.ChainReader, header *types.Header,
 	}
 
 	// Resolve the authorization key and check against signers
-	creator, err := ecrecover(header, x.signatures)
+	creator, err := utils.Ecrecover(header, x.signatures)
 	if err != nil {
 		return err
 	}
@@ -643,7 +618,7 @@ func (x *XDPoS_v1) GetValidator(creator common.Address, chain consensus.ChainRea
 			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
 		}
 	}
-	m, err := GetM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
+	m, err := utils.GetM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -911,7 +886,7 @@ func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 }
 
 func (x *XDPoS_v1) RecoverSigner(header *types.Header) (common.Address, error) {
-	return ecrecover(header, x.signatures)
+	return utils.Ecrecover(header, x.signatures)
 }
 
 func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error) {
@@ -977,21 +952,6 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 		copy(masternodes[i][:], checkpointHeader.Extra[utils.ExtraVanity+i*common.AddressLength:])
 	}
 	return masternodes
-}
-
-// Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, error) {
-	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
-		return nil, errors.New("This block is not checkpoint block epoc.")
-	}
-	// Get signers from this block.
-	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
-	validators := utils.ExtractValidatorsFromBytes(checkpointHeader.Validators)
-	m1m2, _, err := utils.GetM1M2(masternodes, validators, currentHeader, config)
-	if err != nil {
-		return map[common.Address]common.Address{}, err
-	}
-	return m1m2, nil
 }
 
 func (x *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpointHeader *types.Header) ([]common.Address, error) {

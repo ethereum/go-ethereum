@@ -1,7 +1,6 @@
-package consensus
+package tests
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -24,20 +23,14 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 		t.Fatal("Fail to decode extra data", err)
 	}
 
-	proposedBlockInfo := &utils.BlockInfo{
-		Hash:   currentBlock.Hash(),
-		Round:  utils.Round(11),
-		Number: big.NewInt(11),
-	}
-
-	err = engineV2.ProposedBlockHandler(blockchain, proposedBlockInfo, &extraField.QuorumCert)
+	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
 	}
 
 	voteMsg := <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	assert.Equal(t, proposedBlockInfo.Hash, voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
+	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
 	round, _, highestQC := engineV2.GetProperties()
 	// Shoud not trigger setNewRound

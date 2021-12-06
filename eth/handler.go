@@ -29,11 +29,12 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/eth/bfter"
+	"github.com/XinFinOrg/XDPoSChain/eth/bft"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/fetcher"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -82,7 +83,7 @@ type ProtocolManager struct {
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
-	bfter      *bfter.Bfter
+	bft        *bft.Bfter
 
 	SubProtocols []p2p.Protocol
 
@@ -198,6 +199,10 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	validator := func(header *types.Header) error {
 		return engine.VerifyHeader(blockchain, header, true)
 	}
+	handleProposedBlock := func(header *types.Header) error {
+		return engine.(*XDPoS.XDPoS).HandleProposedBlock(blockchain, header)
+	}
+
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
@@ -220,16 +225,16 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		return manager.blockchain.PrepareBlock(block)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, handleProposedBlock, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
 	//Define bft function
-	broadcasts := bfter.BroadcastFns{
+	broadcasts := bft.BroadcastFns{
 		Vote:     manager.BroadcastVote,
 		Timeout:  manager.BroadcastTimeout,
 		SyncInfo: manager.BroadcastSyncInfo,
 	}
-	manager.bfter = bfter.New(broadcasts, blockchain)
+	manager.bft = bft.New(broadcasts, blockchain)
 	if blockchain.Config().XDPoS != nil {
-		manager.bfter.SetConsensusFuns(engine)
+		manager.bft.SetConsensusFuns(engine)
 	}
 
 	return manager, nil
@@ -827,7 +832,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Mark the peer as owning the vote and process it
 		p.MarkVote(vote.Hash())
-		pm.bfter.Vote(&vote)
+		pm.bft.Vote(&vote)
 	case msg.Code == TimeoutMsg:
 		var timeout utils.Timeout
 		if err := msg.Decode(&timeout); err != nil {
@@ -836,7 +841,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		// Mark the peer as owning the timeout and process it
 		p.MarkTimeout(timeout.Hash())
-		pm.bfter.Timeout(&timeout)
+		pm.bft.Timeout(&timeout)
 	case msg.Code == SyncInfoMsg:
 		var syncInfo utils.SyncInfo
 		if err := msg.Decode(&syncInfo); err != nil {
@@ -844,7 +849,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Mark the peer as owning the syncInfo and process it
 		p.MarkSyncInfo(syncInfo.Hash())
-		pm.bfter.SyncInfo(&syncInfo)
+		pm.bft.SyncInfo(&syncInfo)
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -904,7 +909,7 @@ func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
 	for _, peer := range peers {
 		peer.SendVote(vote)
 	}
-	log.Trace("Propagated Vote", "hash", hash, "recipients", len(peers))
+	log.Info("Propagated Vote", "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
 }
 
 // BroadcastTimeout will propagate a Timeout to all peers which are not known to

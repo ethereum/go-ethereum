@@ -1,4 +1,4 @@
-package bfter
+package bft
 
 import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -79,9 +79,9 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 
 // TODO: rename
 func (b *Bfter) Vote(vote *utils.Vote) error {
-	log.Trace("Receive Vote", "vote", vote)
+	log.Info("Receive Vote", "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 	if b.knownVotes.Contains(vote.Hash()) {
-		log.Trace("Discarded vote, known vote", "Signature", vote.Signature, "hash", vote.Hash())
+		log.Info("Discarded vote, known vote", "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 		return nil
 	}
 
@@ -116,6 +116,10 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 
 	err = b.consensus.timeoutHandler(timeout)
 	if err != nil {
+		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
+			log.Debug("timeout message round not equal", "error", err)
+			return err
+		}
 		log.Error("handle BFT Timeout", "error", err)
 		return err
 	}

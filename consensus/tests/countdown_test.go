@@ -1,4 +1,4 @@
-package consensus
+package tests
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
-	blockchain, _, _, _ := PrepareXDCTestBlockChain(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
+	blockchain, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	engineV2.SetNewRoundFaker(utils.Round(1), true)

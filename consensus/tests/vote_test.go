@@ -1,4 +1,4 @@
-package consensus
+package tests
 
 import (
 	"math/big"
@@ -26,7 +26,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	engineV2.SetNewRoundFaker(utils.Round(11), false)
 	// Create two timeout message which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
 	}
 
@@ -35,10 +35,10 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert := engineV2.GetProperties()
 	// Inilised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
-	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
+	assert.Nil(t, highestQuorumCert)
 	assert.Equal(t, utils.Round(11), currentRound)
 	voteMsg = &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{2},
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -46,13 +46,13 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert = engineV2.GetProperties()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)
-	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
+	assert.Nil(t, highestQuorumCert)
 
 	assert.Equal(t, utils.Round(11), currentRound)
 
 	// Create a vote message that should trigger vote pool hook and increment the round to 12
 	voteMsg = &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{3},
 	}
 
@@ -80,7 +80,7 @@ func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	// Set round to 13
 	engineV2.SetNewRoundFaker(utils.Round(13), false)
 	voteMsg := &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
 	}
 
@@ -112,7 +112,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	}
 	// Create two vote message which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
 	}
 
@@ -121,11 +121,11 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert := engineV2.GetProperties()
 	// Inilised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
-	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
+	assert.Nil(t, highestQuorumCert)
 
 	assert.Equal(t, utils.Round(11), currentRound)
 	voteMsg = &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{2},
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -135,7 +135,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 
 	// Create a vote message that should trigger vote pool hook
 	voteMsg = &utils.Vote{
-		ProposedBlockInfo: *blockInfo,
+		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{3},
 	}
 
@@ -194,11 +194,11 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	assert.NotNil(t, syncInfoMsg)
 
 	// Should have HighestQuorumCert from previous round votes
-	qc := syncInfoMsg.(utils.SyncInfo).HighestQuorumCert
+	qc := syncInfoMsg.(*utils.SyncInfo).HighestQuorumCert
 	assert.NotNil(t, qc)
 	assert.Equal(t, utils.Round(11), qc.ProposedBlockInfo.Round)
 
-	tc := syncInfoMsg.(utils.SyncInfo).HighestTimeoutCert
+	tc := syncInfoMsg.(*utils.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)
 	assert.Equal(t, utils.Round(12), tc.Round)
 	sigatures := []utils.Signature{[]byte{1}, []byte{2}, []byte{3}}

@@ -36,11 +36,11 @@ var (
 
 var (
 	XDPoSV2Config = &V2{
-		TimeoutWorkerDuration: 50000,
+		TimeoutWorkerDuration: 50,
 		CertThreshold:         common.MaxMasternodesV2*2/3 + 1,
 	}
 	TestXDPoSV2Config = &V2{
-		TimeoutWorkerDuration: 5000,
+		TimeoutWorkerDuration: 5,
 		CertThreshold:         3,
 	}
 
@@ -195,12 +195,12 @@ type XDPoSConfig struct {
 	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
 	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
 	SkipValidation      bool           //Skip Block Validation for testing purpose
-	XDPoSV2Block        *big.Int
-	V2                  V2
+	XDPoSV2Block        *big.Int       `json:"v2Block"`
+	V2                  V2             `json:"v2"`
 }
 
 type V2 struct {
-	TimeoutWorkerDuration int64 `json:"TimeoutWorkerDuration"` // Duration in ms
+	TimeoutWorkerDuration int64 `json:"timeoutWorkerDuration"` // Duration in ms
 	CertThreshold         int   `json:"certificateThreshold"`  // Necessary number of messages from master nodes to form a certificate
 }
 

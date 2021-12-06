@@ -1,4 +1,4 @@
-package bfter
+package bft
 
 import (
 	"fmt"
@@ -11,13 +11,17 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v2"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/stretchr/testify/assert"
 )
 
 // make different votes based on Signatures
 func makeVotes(n int) []utils.Vote {
 	var votes []utils.Vote
 	for i := 0; i < n; i++ {
-		votes = append(votes, utils.Vote{Signature: []byte{byte(i)}})
+		votes = append(votes, utils.Vote{
+			ProposedBlockInfo: &utils.BlockInfo{},
+			Signature:         []byte{byte(i)},
+		})
 	}
 	return votes
 }
@@ -101,7 +105,7 @@ func TestDuplicateVotes(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	vote := utils.Vote{}
+	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
 
 	// send twice
 	tester.bfter.Vote(&vote)
@@ -132,7 +136,7 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	vote := utils.Vote{}
+	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
 	tester.bfter.Vote(&vote)
 
 	time.Sleep(50 * time.Millisecond)
@@ -143,3 +147,59 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 
 // TODO: SyncInfo and Timeout Test, should be same as Vote.
 // Once all test on vote covered, then duplicate to others
+
+func TestTimeoutHandler(t *testing.T) {
+	tester := newTester()
+	verifyCounter := uint32(0)
+	handlerCounter := uint32(0)
+	broadcastCounter := uint32(0)
+	targetVotes := 1
+
+	tester.bfter.consensus.verifyTimeout = func(timeout *utils.Timeout) error {
+		atomic.AddUint32(&verifyCounter, 1)
+		return nil
+	}
+
+	tester.bfter.consensus.timeoutHandler = func(timeout *utils.Timeout) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+
+	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
+		atomic.AddUint32(&broadcastCounter, 1)
+	}
+
+	timeoutMsg := &utils.Timeout{}
+
+	err := tester.bfter.Timeout(timeoutMsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	if int(verifyCounter) != targetVotes || int(handlerCounter) != targetVotes || int(broadcastCounter) != targetVotes {
+		t.Fatalf("count mismatch: have %v on verify, %v on handler, %v on broadcast, want %v", verifyCounter, handlerCounter, broadcastCounter, targetVotes)
+	}
+}
+
+func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
+	tester := newTester()
+
+	tester.bfter.consensus.verifyTimeout = func(timeout *utils.Timeout) error {
+		return nil
+	}
+
+	tester.bfter.consensus.timeoutHandler = func(timeout *utils.Timeout) error {
+		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{utils.Round(1), utils.Round(2)}
+	}
+
+	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
+		return
+	}
+
+	timeoutMsg := &utils.Timeout{}
+
+	err := tester.bfter.Timeout(timeoutMsg)
+	assert.Equal(t, "Timeout message round number: 1 does not match currentRound: 2", err.Error())
+}

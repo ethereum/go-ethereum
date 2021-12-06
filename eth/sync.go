@@ -134,9 +134,9 @@ func (pm *ProtocolManager) txsyncLoop() {
 func (pm *ProtocolManager) syncer() {
 	// Start and ensure cleanup of sync mechanisms
 	pm.fetcher.Start()
-	pm.bfter.Start()
+	pm.bft.Start()
 	defer pm.fetcher.Stop()
-	defer pm.bfter.Stop()
+	defer pm.bft.Stop()
 	defer pm.downloader.Terminate()
 
 	// Wait for different events to fire synchronisation operations
