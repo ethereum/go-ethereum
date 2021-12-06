@@ -132,14 +132,18 @@ func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainW
 	chain2HeadChanSize := 10
 
 	chain2HeadCh := make(chan core.Chain2HeadEvent, chain2HeadChanSize)
-	s.headSub = s.backend.APIBackend.SubscribeChain2HeadEvent(chain2HeadCh)
+	headSub := s.backend.APIBackend.SubscribeChain2HeadEvent(chain2HeadCh)
+	defer headSub.Unsubscribe()
 
 	for {
 		msg := <-chain2HeadCh
 
-		reply.Send(&proto.ChainWatchResponse{Type: msg.Type,
+		err := reply.Send(&proto.ChainWatchResponse{Type: msg.Type,
 			Newchain: ConvertBlockToBlockStub(msg.NewChain),
 			Oldchain: ConvertBlockToBlockStub(msg.OldChain),
 		})
+		if err != nil {
+			return err
+		}
 	}
 }

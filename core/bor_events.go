@@ -9,6 +9,12 @@ type StateSyncEvent struct {
 	Data *types.StateSyncData
 }
 
+var (
+	Chain2HeadReorgEvent     = "reorg"
+	Chain2HeadCanonicalEvent = "head"
+	Chain2HeadForkEvent      = "fork"
+)
+
 // For tracking reorgs related information
 type Chain2HeadEvent struct {
 	NewChain []*types.Block

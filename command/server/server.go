@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -39,7 +38,6 @@ type Server struct {
 	backend    *eth.Ethereum
 	grpcServer *grpc.Server
 	tracer     *sdktrace.TracerProvider
-	headSub    event.Subscription
 }
 
 func NewServer(config *Config) (*Server, error) {
