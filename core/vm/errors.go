@@ -64,6 +64,16 @@ func (e *ErrStackOverflow) Error() string {
 	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.limit)
 }
 
+type ErrStackUnderOverflow struct {
+	stackLen int
+	minStack int
+	maxStack int
+}
+
+func (e *ErrStackUnderOverflow) Error() string {
+	return fmt.Sprintf("stack height incorrect %d (min %d max %d)", e.stackLen, e.minStack, e.maxStack)
+}
+
 // ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
 type ErrInvalidOpCode struct {
 	opcode OpCode

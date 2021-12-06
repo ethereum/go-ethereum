@@ -65,6 +65,10 @@ func (st *Stack) len() int {
 	return len(st.data)
 }
 
+func (st *Stack) between(low, high int) bool {
+	return st.len() >= low && st.len() <= high
+}
+
 func (st *Stack) swap(n int) {
 	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
 }
