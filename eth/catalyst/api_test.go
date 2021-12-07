@@ -185,6 +185,31 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 	}
 }
 
+func TestInvalidPayloadTimestamp(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+	var (
+		api    = NewConsensusAPI(ethservice, nil)
+		parent = ethservice.BlockChain().CurrentBlock()
+	)
+	params := PayloadAttributesV1{
+		Timestamp:             parent.Time() - 1,
+		Random:                crypto.Keccak256Hash([]byte{byte(123)}),
+		SuggestedFeeRecipient: parent.Coinbase(),
+	}
+	fcState := ForkchoiceStateV1{
+		HeadBlockHash:      parent.Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	_, err := api.ForkchoiceUpdatedV1(fcState, &params)
+	if err == nil {
+		t.Fatalf("expected error preparing payload with invalid timestamp, err=%v", err)
+	}
+}
+
 func TestEth2NewBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
@@ -414,6 +439,5 @@ func TestFullAPI(t *testing.T) {
 			t.Fatalf("Chain head should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
-
 	}
 }
