@@ -77,6 +77,8 @@ type LightEthereum struct {
 	p2pServer  *p2p.Server
 	p2pConfig  *p2p.Config
 	udpEnabled bool
+
+	shutdownCh chan chan struct{} // Signals the unclean shutdown marker updating loop to terminate
 }
 
 // New creates an instance of the light client.
@@ -118,6 +120,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
 		udpEnabled:     stack.Config().P2P.DiscoveryV5,
+		shutdownCh:     make(chan chan struct{}),
 	}
 
 	var prenegQuery vfc.QueryFunc
@@ -198,6 +201,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
+	go leth.updateUncleanShutdownMarkers()
 	return leth, nil
 }
 
@@ -387,10 +391,32 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	// Stop updating unclean shutdown markers and pop the last marker.
+	done := make(chan struct{})
+	s.shutdownCh <- done
+	<-done
+
 	s.chainDb.Close()
 	s.lesDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
+}
+
+func (s *LightEthereum) updateUncleanShutdownMarkers() {
+	// update marker every five minutes
+	ticker := time.NewTicker(60 * time.Second)
+	defer func() { ticker.Stop() }()
+	for {
+		select {
+		case <-ticker.C:
+			rawdb.UpdateUncleanShutdownMarker(s.chainDb)
+		case done := <-s.shutdownCh:
+			// Successful shutdown, clear last marker
+			rawdb.PopUncleanShutdownMarker(s.chainDb)
+			done <- struct{}{}
+			// ticker stops upon return
+			return
+		}
+	}
 }
