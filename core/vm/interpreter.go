@@ -189,8 +189,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		cost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen == int(params.StackLimit) {
-			// TODO replace with operation.mayOverflow flag
-			if operation.maxStack < int(params.StackLimit) {
+			if operation.expandsStack {
 				return nil, ErrStackOverflow
 			}
 		} else if sLen < operation.minStack {
