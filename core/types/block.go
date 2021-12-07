@@ -390,13 +390,11 @@ func (b *Block) Hash() common.Hash {
 
 type Blocks []*Block
 
-// HeaderParentHashFromRLP returns the parentHash of an rlp-encoded
-// header-blob. If the 'value' is not a header, then the method will return
-// common.Hash
-func HeaderParentHashFromRLP(value rlp.RawValue) common.Hash {
-	// The parentHash is the first RLP element, thus preceded only by the
-	// envelope RLP size.
-	listContent, _, err := rlp.SplitList(value)
+// HeaderParentHashFromRLP returns the parentHash of an RLP-encoded
+// header. If 'header' is invalid, the zero hash is returned.
+func HeaderParentHashFromRLP(header []byte) common.Hash {
+	// parentHash is the first list element.
+	listContent, _, err := rlp.SplitList(header)
 	if err != nil {
 		return common.Hash{}
 	}
