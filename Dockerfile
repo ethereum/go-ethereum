@@ -1,18 +1,17 @@
-# Build Geth in a stock Go builder container
-FROM golang:1.17-alpine as builder
+FROM golang:latest
 
-RUN apk add --no-cache make gcc musl-dev linux-headers git bash
+ARG BOR_DIR=/bor
+ENV BOR_DIR=$BOR_DIR
 
-ADD . /bor
-RUN cd /bor && make bor-all
+RUN apt-get update -y && apt-get upgrade -y \
+    && apt install build-essential git -y \
+    && mkdir -p /bor
 
-CMD ["/bin/bash"]
+WORKDIR ${BOR_DIR}
+COPY . .
+RUN make bor-all
 
-# Pull Bor into a second stage deploy alpine container
-FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /bor/build/bin/bor /usr/local/bin/
-COPY --from=builder /bor/build/bin/bootnode /usr/local/bin/
-
+ENV SHELL /bin/bash
 EXPOSE 8545 8546 8547 30303 30303/udp
+
+ENTRYPOINT ["bor"]
