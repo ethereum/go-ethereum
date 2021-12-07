@@ -100,21 +100,20 @@ func localConsole(ctx *cli.Context) error {
 
 	// Track node shutdown and stop the console when it goes down.
 	// This happens when SIGTERM is sent to the process.
-	exitCh := make(chan struct{})
 	go func() {
 		stack.Wait()
-		close(exitCh)
+		console.StopInteractive()
 	}()
 
 	// If only a short execution was requested, evaluate and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		console.Evaluate(script, make(chan os.Signal))
+		console.Evaluate(script)
 		return nil
 	}
+
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
-	console.Interactive(exitCh)
-
+	console.Interactive()
 	return nil
 }
 
@@ -166,14 +165,13 @@ func remoteConsole(ctx *cli.Context) error {
 	defer console.Stop(false)
 
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		console.Evaluate(script, make(chan os.Signal))
+		console.Evaluate(script)
 		return nil
 	}
 
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
-	console.Interactive(nil)
-
+	console.Interactive()
 	return nil
 }
 
