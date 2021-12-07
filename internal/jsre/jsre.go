@@ -234,6 +234,9 @@ func (re *JSRE) Do(fn func(*goja.Runtime)) {
 
 // Stop terminates the event loop, optionally waiting for all timers to expire.
 func (re *JSRE) Stop(waitForCallbacks bool) {
+	timeout := time.NewTimer(10 * time.Millisecond)
+	defer timeout.Stop()
+
 	for {
 		select {
 		case <-re.closed:
@@ -241,8 +244,9 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 		case re.stopEventLoop <- waitForCallbacks:
 			<-re.closed
 			return
-		default:
-			re.Interrupt(errors.New("JS runtime stopped"))
+		case <-timeout.C:
+			// JS is blocked, interrupt and try again.
+			re.vm.Interrupt(errors.New("JS runtime stopped"))
 		}
 	}
 }
