@@ -405,7 +405,7 @@ func (s *LightEthereum) Stop() error {
 
 func (s *LightEthereum) updateUncleanShutdownMarkers() {
 	// update marker every five minutes
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(300 * time.Second)
 	defer func() { ticker.Stop() }()
 	for {
 		select {
