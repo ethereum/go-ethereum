@@ -20,6 +20,7 @@ package jsre
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -229,10 +230,16 @@ func (re *JSRE) Do(fn func(*goja.Runtime)) {
 
 // stops the event loop before exit, optionally waits for all timers to expire
 func (re *JSRE) Stop(waitForCallbacks bool) {
-	select {
-	case <-re.closed:
-	case re.stopEventLoop <- waitForCallbacks:
-		<-re.closed
+	for {
+		select {
+		case <-re.closed:
+			return
+		case re.stopEventLoop <- waitForCallbacks:
+			<-re.closed
+			return
+		default:
+			re.Interrupt(errors.New("interpreter is stopping"))
+		}
 	}
 }
 
@@ -282,8 +289,17 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
+// Interrupt causes JS evaluation .
 func (re *JSRE) Interrupt(v interface{}) {
-	re.vm.Interrupt(v)
+	done := make(chan bool)
+	noop := func(*goja.Runtime) {}
+
+	select {
+	case re.evalQueue <- &evalReq{noop, done}:
+		// event loop is not blocked.
+	default:
+		re.vm.Interrupt(v)
+	}
 }
 
 // Compile compiles and then runs a piece of JS code.
