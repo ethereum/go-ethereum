@@ -77,11 +77,12 @@ type Console struct {
 	history  []string            // Scroll history maintained by the console
 	printer  io.Writer           // Output writer to serialize any display strings to
 
-	wg                 sync.WaitGroup
 	interactiveStopped chan struct{}
 	stopInteractiveCh  chan struct{}
 	signalReceived     chan struct{}
 	stopped            chan struct{}
+	wg                 sync.WaitGroup
+	stopOnce           sync.Once
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -421,6 +422,10 @@ func (c *Console) Interactive() {
 		requestLine = make(chan string)    // requests a line of input
 	)
 
+	defer func() {
+		c.writeHistory()
+	}()
+
 	// The line reader runs in a separate goroutine.
 	go c.readLines(inputLine, inputErr, requestLine)
 	defer close(requestLine)
@@ -545,16 +550,19 @@ func (c *Console) Execute(path string) error {
 
 // Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
-	// Stop the interrupt handler.
-	close(c.stopped)
-	c.wg.Wait()
+	c.stopOnce.Do(func() {
+		// Stop the interrupt handler.
+		close(c.stopped)
+		c.wg.Wait()
+	})
 
+	c.jsre.Stop(graceful)
+	return nil
+}
+
+func (c *Console) writeHistory() error {
 	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
 	}
-	if err := os.Chmod(c.histPath, 0600); err != nil { // Force 0600, even if it was different previously
-		return err
-	}
-	c.jsre.Stop(graceful)
-	return nil
+	return os.Chmod(c.histPath, 0600) // Force 0600, even if it was different previously
 }
