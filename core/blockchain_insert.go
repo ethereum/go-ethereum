@@ -150,6 +150,14 @@ func (it *insertIterator) previous() *types.Header {
 	return it.chain[it.index-1].Header()
 }
 
+// current returns the current header that is being processed, or nil.
+func (it *insertIterator) current() *types.Header {
+	if it.index == -1 || it.index >= len(it.chain) {
+		return nil
+	}
+	return it.chain[it.index].Header()
+}
+
 // first returns the first block in the it.
 func (it *insertIterator) first() *types.Block {
 	return it.chain[0]
