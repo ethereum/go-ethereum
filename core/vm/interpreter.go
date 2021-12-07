@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Config are the configuration options for the Interpreter
@@ -187,8 +188,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		operation := in.cfg.JumpTable[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
-		if !stack.between(operation.minStack, operation.maxStack) {
-			return nil, &ErrStackUnderOverflow{stackLen: stack.len(), minStack: operation.minStack, maxStack: operation.maxStack}
+		if sLen := stack.len(); sLen == int(params.StackLimit) {
+			// TODO replace with operation.mayOverflow flag
+			if operation.maxStack < int(params.StackLimit) {
+				return nil, ErrStackOverflow
+			}
+		} else if sLen < operation.minStack {
+			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
 		}
 		if !contract.UseGas(cost) {
 			return nil, ErrOutOfGas

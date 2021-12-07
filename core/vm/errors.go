@@ -36,6 +36,7 @@ var (
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
+	ErrStackOverflow            = errors.New("stack limit reached")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
@@ -51,27 +52,6 @@ type ErrStackUnderflow struct {
 
 func (e *ErrStackUnderflow) Error() string {
 	return fmt.Sprintf("stack underflow (%d <=> %d)", e.stackLen, e.required)
-}
-
-// ErrStackOverflow wraps an evm error when the items on the stack exceeds
-// the maximum allowance.
-type ErrStackOverflow struct {
-	stackLen int
-	limit    int
-}
-
-func (e *ErrStackOverflow) Error() string {
-	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.limit)
-}
-
-type ErrStackUnderOverflow struct {
-	stackLen int
-	minStack int
-	maxStack int
-}
-
-func (e *ErrStackUnderOverflow) Error() string {
-	return fmt.Sprintf("stack height incorrect %d (min %d max %d)", e.stackLen, e.minStack, e.maxStack)
 }
 
 // ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
