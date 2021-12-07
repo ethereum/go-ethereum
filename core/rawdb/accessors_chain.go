@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -723,24 +724,59 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteHeader(db, block.Header())
 }
 
-// WriteAncientBlock writes entire block data into ancient store and returns the total written size.
+// WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
 func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, td *big.Int) (int64, error) {
+	// RLP encoding huge receipts is computationally intensive, which can starve
+	// the writer. The receipts will be encoded concurrently and the results fed
+	// as soon as they are available to the writer.
+	tasks := make(chan int, len(blocks))
+	for i := range blocks {
+		tasks <- i
+	}
+	close(tasks)
+
 	var (
-		tdSum      = new(big.Int).Set(td)
-		stReceipts []*types.ReceiptForStorage
+		headerRLPs  = make([]rlp.RawValue, len(blocks))
+		bodiesRLPs  = make([]rlp.RawValue, len(blocks))
+		receiptRLPs = make([]rlp.RawValue, len(blocks))
 	)
+	dones := make([]chan struct{}, len(blocks))
+	for i := range blocks {
+		dones[i] = make(chan struct{})
+	}
+	for i := 0; i < len(blocks) && i < runtime.NumCPU(); i++ {
+		go func() {
+			for idx := range tasks {
+				var stReceipts []*types.ReceiptForStorage
+				for _, receipt := range receipts[idx] {
+					stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
+				}
+				header, err := rlp.EncodeToBytes(blocks[idx].Header())
+				if err != nil {
+					panic(err) // Header encoding can't fail, keep for sanity
+				}
+				body, err := rlp.EncodeToBytes(blocks[idx].Body())
+				if err != nil {
+					panic(err) // Block encoding can't fail, keep for sanity
+				}
+				receipt, err := rlp.EncodeToBytes(stReceipts)
+				if err != nil {
+					panic(err) // Receipt encoding can't fail, keep for sanity
+				}
+				headerRLPs[idx], bodiesRLPs[idx], receiptRLPs[idx] = header, body, receipt
+				close(dones[idx])
+			}
+		}()
+	}
+	tdSum := new(big.Int).Set(td)
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
-			// Convert receipts to storage format and sum up total difficulty.
-			stReceipts = stReceipts[:0]
-			for _, receipt := range receipts[i] {
-				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
-			}
-			header := block.Header()
 			if i > 0 {
-				tdSum.Add(tdSum, header.Difficulty)
+				tdSum.Add(tdSum, block.Difficulty())
 			}
-			if err := writeAncientBlock(op, block, header, stReceipts, tdSum); err != nil {
+			// Wait for the encoder to finish and write the data
+			<-dones[i]
+			if err := writeAncientBlock(op, block.NumberU64(), block.Hash(), headerRLPs[i], bodiesRLPs[i], receiptRLPs[i], tdSum); err != nil {
 				return err
 			}
 		}
@@ -748,15 +784,14 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, td *big.Int) error {
-	num := block.NumberU64()
-	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
+func writeAncientBlock(op ethdb.AncientWriteOp, num uint64, hash common.Hash, header rlp.RawValue, body rlp.RawValue, receipts rlp.RawValue, td *big.Int) error {
+	if err := op.AppendRaw(freezerHashTable, num, hash.Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
 	}
 	if err := op.Append(freezerHeaderTable, num, header); err != nil {
 		return fmt.Errorf("can't append block header %d: %v", num, err)
 	}
-	if err := op.Append(freezerBodiesTable, num, block.Body()); err != nil {
+	if err := op.Append(freezerBodiesTable, num, body); err != nil {
 		return fmt.Errorf("can't append block body %d: %v", num, err)
 	}
 	if err := op.Append(freezerReceiptTable, num, receipts); err != nil {
