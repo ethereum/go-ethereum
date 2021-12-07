@@ -1,0 +1,28 @@
+version: "3.8"
+services:
+  extract_diffs:
+    image: makerdao/vdb-extract-diffs:latest # (needs wait-for-it.sh)
+    environment:
+      # Remote client would need to be statediff enabled
+      - CLIENT_IPCPATH=ws://geth:8546/
+      - STORAGEDIFFS_SOURCE=geth
+      - DATABASE_NAME=vdb
+      - DATABASE_HOSTNAME=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=vdb
+      - DATABASE_PASSWORD=vdb
+    depends_on:
+      - geth 
+    command: ["./wait-for-it.sh", "geth:8546", "--strict", "--", "./startup_script.sh"]
+
+  geth:
+    image: makerdao/vdb-go-ethereum:latest
+    command: ["--http", "--http.addr", "0.0.0.0", "--ws", "--ws.addr", "0.0.0.0", "--syncmode", "full"]
+
+  db:
+    image: postgres:12.1-alpine
+    environment:
+      - POSTGRES_USER=vdb
+      - POSTGRES_PASSWORD=vdb
+    restart: always
+    command: ["postgres", "-c", "track_activity_query_size=32786"]
