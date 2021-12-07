@@ -213,17 +213,20 @@ func ephemeralConsole(ctx *cli.Context) error {
 	}
 	defer console.Stop(false)
 
-	// Evaluate each of the specified JavaScript files
+	// Interrupt the JS interpreter when node is stopped.
+	go func() {
+		stack.Wait()
+		console.Stop(false)
+	}()
+
+	// Evaluate each of the specified JavaScript files.
 	for _, file := range ctx.Args() {
 		if err = console.Execute(file); err != nil {
 			return fmt.Errorf("Failed to execute %s: %v", file, err)
 		}
 	}
 
-	go func() {
-		stack.Wait()
-		console.Stop(false)
-	}()
+	// The main script is now done, but keep running timers/callbacks.
 	console.Stop(true)
 	return nil
 }
