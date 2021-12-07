@@ -221,14 +221,18 @@ loop:
 }
 
 // Do executes the given function on the JS event loop.
+// When the runtime is stopped, fn will not execute.
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
-	re.evalQueue <- req
-	<-done
+	select {
+	case re.evalQueue <- req:
+		<-done
+	case <-re.closed:
+	}
 }
 
-// stops the event loop before exit, optionally waits for all timers to expire
+// Stop terminates the event loop, optionally waiting for all timers to expire.
 func (re *JSRE) Stop(waitForCallbacks bool) {
 	for {
 		select {
@@ -238,7 +242,7 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 			<-re.closed
 			return
 		default:
-			re.Interrupt(errors.New("interpreter is stopping"))
+			re.Interrupt(errors.New("JS runtime stopped"))
 		}
 	}
 }
@@ -289,7 +293,7 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
-// Interrupt causes JS evaluation .
+// Interrupt stops the current JS evaluation.
 func (re *JSRE) Interrupt(v interface{}) {
 	done := make(chan bool)
 	noop := func(*goja.Runtime) {}
