@@ -305,8 +305,8 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", parentHash)
 	}
 
-	if params.Timestamp < parent.Time() {
-		return nil, fmt.Errorf("child timestamp lower than parent's: %d < %d", params.Timestamp, parent.Time())
+	if params.Timestamp <= parent.Time() {
+		return nil, fmt.Errorf("child timestamp lower or equal to parent's: %d < %d", params.Timestamp, parent.Time())
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
 		diff := time.Duration(params.Timestamp-now) * time.Second
