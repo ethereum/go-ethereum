@@ -1040,7 +1040,13 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		return err
 	}
 
-	if w.isRunning() && !w.merger.TDDReached() {
+	// If we're post merge, just ignore
+	td, ttd := w.chain.GetTd(block.ParentHash(), block.NumberU64()-1), w.chain.Config().TerminalTotalDifficulty
+	if td != nil && ttd != nil && td.Cmp(ttd) >= 0 {
+		return nil
+	}
+
+	if w.isRunning() {
 		if interval != nil {
 			interval()
 		}

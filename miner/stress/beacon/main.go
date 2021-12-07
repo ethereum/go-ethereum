@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -138,25 +137,30 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*catalyst.ExecutableData, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*catalyst.ExecutableDataV1, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
-	payload, err := n.api.PreparePayload(catalyst.AssembleBlockParams{
-		ParentHash: parentHash,
-		Timestamp:  uint64(time.Now().Unix()),
-	})
+	payloadAttribute := catalyst.PayloadAttributesV1{
+		Timestamp: uint64(time.Now().Unix()),
+	}
+	fcState := catalyst.ForkchoiceStateV1{
+		HeadBlockHash:      parentHash,
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	payload, err := n.api.ForkchoiceUpdatedV1(fcState, &payloadAttribute)
 	if err != nil {
 		return nil, err
 	}
-	return n.api.GetPayload(hexutil.Uint64(payload.PayloadID))
+	return n.api.GetPayloadV1(*payload.PayloadID)
 }
 
-func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
+func (n *ethNode) insertBlock(eb catalyst.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
-	newResp, err := n.api.ExecutePayload(eb)
+	newResp, err := n.api.ExecutePayloadV1(eb)
 	if err != nil {
 		return err
 	} else if newResp.Status != "VALID" {
@@ -165,7 +169,7 @@ func (n *ethNode) insertBlock(eb catalyst.ExecutableData) error {
 	return nil
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.ExecutableData) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -176,7 +180,12 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.Execut
 	if err != nil {
 		return err
 	}
-	if err := n.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: block.Hash(), Status: "VALID"}); err != nil {
+	fcState := catalyst.ForkchoiceStateV1{
+		HeadBlockHash:      block.ParentHash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	if _, err := n.api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		return err
 	}
 	return nil
@@ -275,7 +284,12 @@ func (mgr *nodeManager) run() {
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range append(nodes) {
-			node.api.ConsensusValidated(catalyst.ConsensusValidatedParams{BlockHash: oldest.Hash(), Status: catalyst.VALID.Status})
+			fcState := catalyst.ForkchoiceStateV1{
+				HeadBlockHash:      oldest.Hash(),
+				SafeBlockHash:      common.Hash{},
+				FinalizedBlockHash: common.Hash{},
+			}
+			node.api.ForkchoiceUpdatedV1(fcState, nil)
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]
