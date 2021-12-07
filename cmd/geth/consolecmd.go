@@ -80,10 +80,10 @@ func localConsole(ctx *cli.Context) error {
 	startNode(ctx, stack, backend, true)
 	defer stack.Close()
 
-	// Attach to the newly started node and start the JavaScript console
+	// Attach to the newly started node and create the JavaScript console.
 	client, err := stack.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		return fmt.Errorf("Failed to attach to the inproc geth: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -91,12 +91,17 @@ func localConsole(ctx *cli.Context) error {
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
-
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		return fmt.Errorf("Failed to start the JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
+
+	// If only a short execution was requested, evaluate and return.
+	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
+		console.Evaluate(script)
+		return nil
+	}
 
 	// Track node shutdown and stop the console when it goes down.
 	// This happens when SIGTERM is sent to the process.
@@ -105,13 +110,7 @@ func localConsole(ctx *cli.Context) error {
 		console.StopInteractive()
 	}()
 
-	// If only a short execution was requested, evaluate and return
-	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		console.Evaluate(script)
-		return nil
-	}
-
-	// Otherwise print the welcome screen and enter interactive mode
+	// Print the welcome screen and enter interactive mode.
 	console.Welcome()
 	console.Interactive()
 	return nil
@@ -120,7 +119,6 @@ func localConsole(ctx *cli.Context) error {
 // remoteConsole will connect to a remote geth instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	// Attach to a remotely running geth instance and start the JavaScript console
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
@@ -157,7 +155,6 @@ func remoteConsole(ctx *cli.Context) error {
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
-
 	console, err := console.New(config)
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
@@ -201,7 +198,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := stack.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		return fmt.Errorf("Failed to attach to the inproc geth: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -212,14 +209,14 @@ func ephemeralConsole(ctx *cli.Context) error {
 
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		return fmt.Errorf("Failed to start the JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
 	// Evaluate each of the specified JavaScript files
 	for _, file := range ctx.Args() {
 		if err = console.Execute(file); err != nil {
-			utils.Fatalf("Failed to execute %s: %v", file, err)
+			return fmt.Errorf("Failed to execute %s: %v", file, err)
 		}
 	}
 
@@ -228,6 +225,5 @@ func ephemeralConsole(ctx *cli.Context) error {
 		console.Stop(false)
 	}()
 	console.Stop(true)
-
 	return nil
 }
