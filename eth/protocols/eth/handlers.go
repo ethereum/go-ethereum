@@ -46,11 +46,11 @@ func ServiceGetBlockHeadersQuery(chain *core.BlockChain, query *GetBlockHeadersP
 		// The fast path: when the request is for a contiguous segment of headers.
 		return serviceContiguousBlockHeaderQuery(chain, query)
 	} else {
-		return serviceNonContigiousBlockHeaderQuery(chain, query, peer)
+		return serviceNonContiguousBlockHeaderQuery(chain, query, peer)
 	}
 }
 
-func serviceNonContigiousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHeadersPacket, peer *Peer) []rlp.RawValue {
+func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHeadersPacket, peer *Peer) []rlp.RawValue {
 	hashMode := query.Origin.Hash != (common.Hash{})
 	first := true
 	maxNonCanonical := uint64(100)
