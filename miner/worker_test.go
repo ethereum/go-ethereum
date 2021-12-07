@@ -116,7 +116,7 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int, isVerkle bool) *testWorkerBackend {
 	var gspec = core.Genesis{
 		Config: chainConfig,
 		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
@@ -151,9 +151,17 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	if n > 0 {
 		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
 	}
-	blocks, _ := core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
-		gen.SetCoinbase(testUserAddress)
-	})
+	var blocks []*types.Block
+
+	if isVerkle {
+		blocks, _ = core.GenerateVerkleChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
+			gen.SetCoinbase(testUserAddress)
+		})
+	} else {
+		blocks, _ = core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
+			gen.SetCoinbase(testUserAddress)
+		})
+	}
 
 	return &testWorkerBackend{
 		db:         db,
@@ -194,8 +202,8 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, isVerkle bool) (*worker, *testWorkerBackend) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks, isVerkle)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, consensus.NewMerger(rawdb.NewMemoryDatabase()))
 	w.setEtherbase(testBankAddress)
@@ -226,7 +234,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	}
 
 	chainConfig.LondonBlock = big.NewInt(0)
-	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0, false)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -265,6 +273,66 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	}
 }
 
+func TestGenerateBlocksAndImportVerkle(t *testing.T) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	chainConfig = params.VerkleChainConfig
+	engine = ethash.NewFaker()
+
+	w, b := newTestWorker(t, chainConfig, engine, db, 0, true)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	db2 := rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(db2)
+	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil, nil)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	/*
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+	*/
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Start mining!
+	w.start()
+
+	for i := 0; i < 5; i++ {
+		/*
+		// TODO this causes a failure, but shouldn't.  investigate.
+		b.txPool.AddLocal(b.newRandomTx(true))
+		b.txPool.AddLocal(b.newRandomTx(false))
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		*/
+
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			if block.Header().VerkleProof == nil {
+				t.Fatalf("expected Verkle proof in mined block header")
+			}
+			/*
+			// TODO this produces invalid merkle roots when attempting to insert.
+			// investigate.
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
+			*/
+		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
+			t.Fatalf("timeout")
+		}
+	}
+}
+
 func TestEmptyWorkEthash(t *testing.T) {
 	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
 }
@@ -275,7 +343,7 @@ func TestEmptyWorkClique(t *testing.T) {
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false)
 	defer w.close()
 
 	var (
@@ -321,7 +389,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1)
+	w, b := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, false)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -379,7 +447,7 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -439,7 +507,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {

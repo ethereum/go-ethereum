@@ -1043,10 +1043,10 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		vtr := tr.(*trie.VerkleTrie)
 		// Generate the proof if we are using a verkle tree
 		p, err := vtr.ProveAndSerialize(s.Witness().Keys(), s.Witness().KeyVals())
-		w.current.header.VerkleProof = p
 		if err != nil {
 			return err
 		}
+		block.SetVerkleProof(p)
 	}
 	if w.isRunning() && !w.merger.TDDReached() {
 		if interval != nil {
