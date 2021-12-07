@@ -353,6 +353,8 @@ func (c *Console) Evaluate(statement string) {
 		}
 	}()
 	c.jsre.Evaluate(statement, c.printer)
+
+	// Avoid exiting Interactive when jsre was interrupted by SIGINT.
 	c.clearSignalReceived()
 }
 
@@ -434,7 +436,8 @@ func (c *Console) Interactive() {
 
 		case <-c.signalReceived:
 			// SIGINT received while prompting for input -> unsupported terminal.
-			// We exit in this case.
+			// I'm not sure if the best choice would be to leave the console running here.
+			// Bash keeps running in this case. node.js does not.
 			fmt.Fprintln(c.printer, "caught interrupt, exiting")
 			return
 
