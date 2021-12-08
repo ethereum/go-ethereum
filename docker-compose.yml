@@ -16,7 +16,8 @@ services:
     command: ["./wait-for-it.sh", "geth:8546", "--strict", "--", "./startup_script.sh"]
 
   geth:
-    image: makerdao/vdb-go-ethereum:latest
+    build:
+      .
     command: ["--http", "--http.addr", "0.0.0.0", "--ws", "--ws.addr", "0.0.0.0", "--syncmode", "full"]
 
   db:
