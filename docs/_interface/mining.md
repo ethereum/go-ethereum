@@ -49,7 +49,7 @@ Now start geth and wait for it to sync the blockchain. This will take quite a wh
 
 To monitor the syncing, in another terminal you can `attach` the geth JavaScript console to the running node like so:
 
-    geth attach https://127.0.0.1:8545
+    geth attach http://127.0.0.1:8545
 
 and then at the > prompt type
 
