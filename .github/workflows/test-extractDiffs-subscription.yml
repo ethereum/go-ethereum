@@ -1,0 +1,23 @@
+name: TestExtractDiffSubscription
+
+on: push
+
+jobs:
+  test-subscription:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout repo
+        uses: actions/checkout@v2
+      -
+        name: Builds the docker compose stack
+        run: docker compose up -d
+      -
+        name: Wait for stack to start
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '1m'
+      -
+        name: Check log file
+        run: docker compose logs
+
