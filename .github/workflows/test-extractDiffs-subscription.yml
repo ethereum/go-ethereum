@@ -19,5 +19,5 @@ jobs:
           time: '1m'
       -
         name: Check log file
-        run: docker compose logs
+        run: docker compose logs | grep "Successfully created a geth client subscription"
 

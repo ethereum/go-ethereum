@@ -13,7 +13,7 @@ services:
       - DATABASE_PASSWORD=vdb
     depends_on:
       - geth 
-    command: ["./wait-for-it.sh", "geth:8546", "--strict", "--", "./startup_script.sh"]
+    command: ["./wait-for-it.sh", "db:5432", "--strict", "--", "./startup_script.sh"]
 
   geth:
     build:
