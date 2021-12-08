@@ -700,6 +700,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
 	// Move all of the accumulated preimages into a write batch
 	if db.preimages != nil {
 		rawdb.WritePreimages(batch, db.preimages)
@@ -724,9 +727,6 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 		return err
 	}
 	// Uncache any leftovers in the last batch
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
 	batch.Replay(uncacher)
 	batch.Reset()
 
