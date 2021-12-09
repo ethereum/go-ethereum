@@ -509,10 +509,6 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	}
 	headBlock := api.eth.BlockChain().CurrentBlock()
 	if headBlock.Hash() == newHead {
-		// Trigger the transition if it's the first `NewHead` event.
-		if merger := api.merger(); !merger.PoSFinalized() {
-			merger.FinalizePoS()
-		}
 		return nil
 	}
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
