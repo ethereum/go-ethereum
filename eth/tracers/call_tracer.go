@@ -88,7 +88,7 @@ func toAddress(value *uint256.Int) common.Address {
 	return common.BytesToAddress(value.Bytes())
 }
 
-func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (tracer *CallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	// for depth < len(tracer.callStack) {
 	//   c := tracer.callStack[tracer.i()]
 	//   c.GasUsed = c.Gas - gas
@@ -194,6 +194,6 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 	}
 	return
 }
-func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) { }
+func (tracer *CallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) { }
 func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) { }
 func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}

@@ -744,7 +744,7 @@ func TestReadLogs(t *testing.T) {
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
 
-	logs := ReadLogs(db, hash, 0)
+	logs := ReadLogs(db, hash, 0, params.TestChainConfig)
 	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
