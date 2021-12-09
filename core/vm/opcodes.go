@@ -32,11 +32,6 @@ func (op OpCode) IsPush() bool {
 	return false
 }
 
-// IsStaticJump specifies if an opcode is JUMP.
-func (op OpCode) IsStaticJump() bool {
-	return op == JUMP
-}
-
 // 0x0 range - arithmetic ops.
 const (
 	STOP       OpCode = 0x0
