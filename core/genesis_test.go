@@ -30,25 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestDefaultGenesisBlock(t *testing.T) {
-	block := DefaultGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.MainnetGenesisHash {
-		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
-	}
-	block = DefaultRopstenGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.RopstenGenesisHash {
-		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
-	}
-	block = DefaultRinkebyGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.RinkebyGenesisHash {
-		t.Errorf("wrong rinkeby genesis hash, got %v, want %v", block.Hash(), params.RinkebyGenesisHash)
-	}
-	block = DefaultGoerliGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.GoerliGenesisHash {
-		t.Errorf("wrong goerli genesis hash, got %v, want %v", block.Hash(), params.GoerliGenesisHash)
-	}
-}
-
 func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
@@ -179,33 +160,26 @@ func TestSetupGenesis(t *testing.T) {
 	}
 }
 
-// TestGenesisHashes checks the congruity of default genesis data to corresponding hardcoded genesis hash values.
+// TestGenesisHashes checks the congruity of default genesis data to
+// corresponding hardcoded genesis hash values.
 func TestGenesisHashes(t *testing.T) {
-	cases := []struct {
+	for i, c := range []struct {
 		genesis *Genesis
-		hash    common.Hash
+		want    common.Hash
 	}{
-		{
-			genesis: DefaultGenesisBlock(),
-			hash:    params.MainnetGenesisHash,
-		},
-		{
-			genesis: DefaultGoerliGenesisBlock(),
-			hash:    params.GoerliGenesisHash,
-		},
-		{
-			genesis: DefaultRopstenGenesisBlock(),
-			hash:    params.RopstenGenesisHash,
-		},
-		{
-			genesis: DefaultRinkebyGenesisBlock(),
-			hash:    params.RinkebyGenesisHash,
-		},
-	}
-	for i, c := range cases {
-		b := c.genesis.MustCommit(rawdb.NewMemoryDatabase())
-		if got := b.Hash(); got != c.hash {
-			t.Errorf("case: %d, want: %s, got: %s", i, c.hash.Hex(), got.Hex())
+		{DefaultGenesisBlock(), params.MainnetGenesisHash},
+		{DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
+		{DefaultRopstenGenesisBlock(), params.RopstenGenesisHash},
+		{DefaultRinkebyGenesisBlock(), params.RinkebyGenesisHash},
+		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
+	} {
+		// Test via MustCommit
+		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
+			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
+		}
+		// Test via ToBlock
+		if have := c.genesis.ToBlock(nil).Hash(); have != c.want {
+			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 	}
 }

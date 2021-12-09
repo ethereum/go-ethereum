@@ -45,6 +45,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.GoerliFlag,
 			utils.RinkebyFlag,
 			utils.RopstenFlag,
+			utils.SepoliaFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
 			utils.GCModeFlag,
@@ -74,6 +75,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
 			utils.DeveloperPeriodFlag,
+			utils.DeveloperGasLimitFlag,
 		},
 	},
 	{

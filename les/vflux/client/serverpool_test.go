@@ -19,6 +19,7 @@ package client
 import (
 	"math/rand"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func testNodeIndex(id enode.ID) int {
 type ServerPoolTest struct {
 	db                   ethdb.KeyValueStore
 	clock                *mclock.Simulated
-	quit                 chan struct{}
+	quit                 chan chan struct{}
 	preNeg, preNegFail   bool
 	vt                   *ValueTracker
 	sp                   *ServerPool
@@ -61,6 +62,8 @@ type ServerPoolTest struct {
 	testNodes            []spTestNode
 	trusted              []string
 	waitCount, waitEnded int32
+
+	lock sync.Mutex
 
 	cycle, conn, servedConn  int
 	serviceCycles, dialCount int
@@ -112,7 +115,9 @@ func (s *ServerPoolTest) start() {
 		testQuery = func(node *enode.Node) int {
 			idx := testNodeIndex(node.ID())
 			n := &s.testNodes[idx]
+			s.lock.Lock()
 			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
+			s.lock.Unlock()
 			if s.preNegFail {
 				// simulate a scenario where UDP queries never work
 				s.beginWait()
@@ -155,7 +160,7 @@ func (s *ServerPoolTest) start() {
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
 	s.disconnect = make(map[int][]int)
 	s.sp.Start()
-	s.quit = make(chan struct{})
+	s.quit = make(chan chan struct{})
 	go func() {
 		last := int32(-1)
 		for {
@@ -167,7 +172,8 @@ func (s *ServerPoolTest) start() {
 					s.clock.Run(time.Second)
 				}
 				last = c
-			case <-s.quit:
+			case quit := <-s.quit:
+				close(quit)
 				return
 			}
 		}
@@ -175,7 +181,9 @@ func (s *ServerPoolTest) start() {
 }
 
 func (s *ServerPoolTest) stop() {
-	close(s.quit)
+	quit := make(chan struct{})
+	s.quit <- quit
+	<-quit
 	s.sp.Stop()
 	s.spi.Close()
 	for i := range s.testNodes {
@@ -234,7 +242,9 @@ func (s *ServerPoolTest) run() {
 		}
 		s.serviceCycles += s.servedConn
 		s.clock.Run(time.Second)
+		s.lock.Lock()
 		s.cycle++
+		s.lock.Unlock()
 	}
 }
 

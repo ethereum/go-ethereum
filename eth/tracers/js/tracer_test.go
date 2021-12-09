@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package tracers
+package js
 
 import (
 	"encoding/json"
@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -58,13 +59,13 @@ func testCtx() *vmContext {
 	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
-func runTrace(tracer *Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
-	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
 	var (
+		env             = vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
 		startGas uint64 = 10000
 		value           = big.NewInt(0)
+		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
-	contract := vm.NewContract(account{}, account{}, value, startGas)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
@@ -79,14 +80,11 @@ func runTrace(tracer *Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (j
 func TestTracer(t *testing.T) {
 	execTracer := func(code string) ([]byte, string) {
 		t.Helper()
-		tracer, err := New(code, new(Context))
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runTrace(tracer, &vmContext{
-			blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
-			txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
-		}, params.TestChainConfig)
+		ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
 		if err != nil {
 			return nil, err.Error() // Stringify to allow comparison without nil checks
 		}
@@ -131,9 +129,8 @@ func TestTracer(t *testing.T) {
 
 func TestHalt(t *testing.T) {
 	t.Skip("duktape doesn't support abortion")
-
 	timeout := errors.New("stahp")
-	tracer, err := New("{step: function() { while(1); }, result: function() { return null; }}", new(Context))
+	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,18 +144,19 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	tracer, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }}", new(Context))
+	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
-	tracer.CaptureState(env, 0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
+	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
-	tracer.CaptureState(env, 0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
 
 	if _, err := tracer.GetResult(); err.Error() != timeout.Error() {
 		t.Errorf("Expected timeout error, got %v", err)
@@ -168,24 +166,16 @@ func TestHaltBetweenSteps(t *testing.T) {
 // TestNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
 func TestNoStepExec(t *testing.T) {
-	runEmptyTrace := func(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
-		env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
-		startGas := uint64(10000)
-		contract := vm.NewContract(account{}, account{}, big.NewInt(0), startGas)
-		tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, big.NewInt(0))
-		tracer.CaptureEnd(nil, startGas-contract.Gas, 1, nil)
-		return tracer.GetResult()
-	}
 	execTracer := func(code string) []byte {
 		t.Helper()
-		tracer, err := New(code, new(Context))
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runEmptyTrace(tracer, &vmContext{
-			blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
-			txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
-		})
+		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+		tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
+		tracer.CaptureEnd(nil, 0, 1, nil)
+		ret, err := tracer.GetResult()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -212,7 +202,7 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
 	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
-	tracer, err := New("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", new(Context))
+	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +216,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
 	}
 
-	tracer, _ = New("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", new(Context))
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
 	if err != nil {
@@ -239,23 +229,20 @@ func TestIsPrecompile(t *testing.T) {
 
 func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
-	if _, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(Context)); err == nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(Context)); err != nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context)); err != nil {
 		t.Fatal(err)
 	}
-
 	// test that the enter and exit method are correctly invoked and the values passed
-	tracer, err := New("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(Context))
+	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context))
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
-
 	tracer.CaptureEnter(vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
 	tracer.CaptureExit([]byte{}, 400, nil)
 
