@@ -42,6 +42,8 @@ type operation struct {
 
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
+
+	undefined bool
 }
 
 var (
@@ -1037,7 +1039,7 @@ func newFrontierInstructionSet() JumpTable {
 	// Fill all unassigned slots with opUndefined.
 	for i, entry := range tbl {
 		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
+			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0), undefined: true}
 		}
 	}
 
