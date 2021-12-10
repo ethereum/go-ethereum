@@ -90,9 +90,8 @@ func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		tx.GasFeeCap(),
 		tx.GasTipCap(),
 		hexutil.MustDecode(origin.Data),
-		nil, false,
+		nil, false, true,
 	)
-
 	return block, msg
 }
 
