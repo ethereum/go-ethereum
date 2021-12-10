@@ -131,7 +131,7 @@ func (c *Conn) handshake() error {
 		}
 		c.negotiateEthProtocol(msg.Caps)
 		if c.negotiatedProtoVersion == 0 {
-			return fmt.Errorf("unexpected eth protocol version")
+			return fmt.Errorf("could not negotiate protocol (remote caps: %v, local eth version: %v)", msg.Caps, c.ourHighestProtoVersion)
 		}
 		return nil
 	default:

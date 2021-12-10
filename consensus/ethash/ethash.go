@@ -136,13 +136,16 @@ func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(bu
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = dump.Truncate(int64(len(dumpMagic))*4 + int64(size)); err != nil {
+	if err = ensureSize(dump, int64(len(dumpMagic))*4+int64(size)); err != nil {
+		dump.Close()
+		os.Remove(temp)
 		return nil, nil, nil, err
 	}
 	// Memory map the file for writing and fill it with the generator
 	mem, buffer, err := memoryMapFile(dump, true)
 	if err != nil {
 		dump.Close()
+		os.Remove(temp)
 		return nil, nil, nil, err
 	}
 	copy(buffer, dumpMagic)
@@ -358,7 +361,7 @@ func (d *dataset) generate(dir string, limit int, lock bool, test bool) {
 		if err != nil {
 			logger.Error("Failed to generate mapped ethash dataset", "err", err)
 
-			d.dataset = make([]uint32, dsize/2)
+			d.dataset = make([]uint32, dsize/4)
 			generateDataset(d.dataset, d.epoch, cache)
 		}
 		// Iterate over all previous instances and delete old ones

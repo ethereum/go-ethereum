@@ -2,12 +2,7 @@ package eth
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"hash"
-	"math/big"
-	"time"
-
 	"github.com/DeBankDeFi/eth/txtrace"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -19,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/sha3"
+	"hash"
+	"math/big"
 )
 
 type helpHash struct {
@@ -143,7 +140,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, config *tracers.TraceConfig) (interface{}, error) {
 	var (
 		bc     = api.e.blockchain
-		tracer vm.Tracer
+		tracer vm.EVMLogger
 		err    error
 	)
 	d, err := api.prepareData(ctx, origin)
@@ -153,38 +150,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	txContext := core.NewEVMTxContext(d.msg)
 	txIndex := 0
 
-	switch {
-	case config != nil && config.Tracer != nil:
-		// Define a meaningful timeout of a single transaction trace
-		timeout := 5 * time.Second
-		if config.Timeout != nil {
-			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
-				return nil, err
-			}
-		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = tracers.New(*config.Tracer, &tracers.Context{
-			BlockHash: d.block.Hash(),
-			TxIndex:   txIndex,
-			TxHash:    d.tx.Hash(),
-		}); err != nil {
-			return nil, err
-		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		go func() {
-			<-deadlineCtx.Done()
-			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
-			}
-		}()
-	case config == nil:
-		fallthrough
-	default:
-		// Constuct the txtrace.StructLogger tracer to execute with
-		tracer = txtrace.NewTraceStructLogger(nil)
-	}
+	tracer = txtrace.NewTraceStructLogger(nil)
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
 	vmenv.Context.BaseFee = big.NewInt(0)
@@ -225,8 +191,6 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 			ReturnValue: returnVal,
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
-	case *tracers.Tracer:
-		return tracer.GetResult()
 	case *txtrace.StructLogger:
 		tracer.Finalize()
 		return tracer.GetResult(), nil
