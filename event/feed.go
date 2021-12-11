@@ -153,7 +153,9 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	// of sendCases. When a send succeeds, the corresponding case moves to the end of
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
+
 	log.Info("All cases","Cases",cases)
+
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
