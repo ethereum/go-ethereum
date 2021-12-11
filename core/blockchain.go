@@ -18,7 +18,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1309,11 +1308,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			chainHeadEvent := ChainHeadEvent{
 				Block: block,
 			}
-			newHeadsJson, err := json.Marshal(chainHeadEvent)
-			if err != nil {
-				return NonStatTy, err
-			}
-			bc.chainHeadFeed.SendNewHeads(newHeadsJson)
 			bc.chainHeadFeed.Send(chainHeadEvent)
 		}
 	} else {

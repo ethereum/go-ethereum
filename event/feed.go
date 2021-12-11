@@ -127,7 +127,10 @@ func (f *Feed) remove(sub *feedSub) {
 // Send delivers to all subscribed channels simultaneously.
 // It returns the number of subscribers that the value was sent to.
 func (f *Feed) Send(value interface{}) (nsent int) {
+
+
 	rvalue := reflect.ValueOf(value)
+	log.Info("Value Type","Send", rvalue.Type())
 
 	f.once.Do(f.init)
 	<-f.sendLock
