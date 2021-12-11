@@ -110,7 +110,7 @@ func (s *Server) ChainSetHead(ctx context.Context, req *proto.ChainSetHeadReques
 	return &proto.ChainSetHeadResponse{}, nil
 }
 
-func ConvertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
+func convertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
 
 	var blockStubs []*proto.BlockStub
 
@@ -137,8 +137,8 @@ func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainW
 		msg := <-chain2HeadCh
 
 		err := reply.Send(&proto.ChainWatchResponse{Type: msg.Type,
-			Newchain: ConvertBlockToBlockStub(msg.NewChain),
-			Oldchain: ConvertBlockToBlockStub(msg.OldChain),
+			Newchain: convertBlockToBlockStub(msg.NewChain),
+			Oldchain: convertBlockToBlockStub(msg.OldChain),
 		})
 		if err != nil {
 			return err
