@@ -157,11 +157,11 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
 	for {
+		log.Info("Try Send","Sending Event",rvalue)
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
 		// buffer space.
 		for i := firstSubSendCase; i < len(cases); i++ {
-			log.Info("Try Send","Sending Event",rvalue)
 			if cases[i].Chan.TrySend(rvalue) {
 				nsent++
 				cases = cases.deactivate(i)
