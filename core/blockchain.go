@@ -1296,6 +1296,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 	if status == CanonStatTy {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
 		}
