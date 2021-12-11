@@ -18,6 +18,7 @@ package event
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"reflect"
 	"sync"
 )
@@ -187,6 +188,11 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	}
 	f.sendLock <- struct{}{}
 	return nsent
+}
+
+func (f *Feed) SendNewHeads(value []byte) (nsent int) {
+	log.Info("Processing for Melange",string(value))
+	return 0
 }
 
 type feedSub struct {
