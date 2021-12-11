@@ -437,10 +437,10 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 }
 
 // Utils for test to check currentRound value
-func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert) {
+func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round) {
 	x.lock.Lock()
 	defer x.lock.Unlock()
-	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert
+	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound
 }
 
 /*
@@ -569,7 +569,9 @@ func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
 
 	// 1. checkRoundNumber
 	if timeout.Round != x.currentRound {
-		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{timeout.Round, x.currentRound}
+		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
+			IncomingRound: timeout.Round,
+			CurrentRound:  x.currentRound}
 	}
 	// Collect timeout, generate TC
 	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
@@ -836,11 +838,6 @@ func (x *XDPoS_v2) sendTimeout() error {
 		Signature: signedHash,
 	}
 	x.broadcastToBftChannel(timeoutMsg)
-	return nil
-}
-
-// Generate and send syncInfo into Broadcast channel. The SyncInfo includes local highest QC & TC
-func (x *XDPoS_v2) sendSyncInfo() error {
 	return nil
 }
 
