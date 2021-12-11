@@ -137,7 +137,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 	// Add new cases from the inbox after taking the send lock.
 	f.mu.Lock()
-	f.sendCases = apgpend(f.sendCases, f.inbox...)
+	f.sendCases = append(f.sendCases, f.inbox...)
 	f.inbox = nil
 
 	if !f.typecheck(rvalue.Type()) {
