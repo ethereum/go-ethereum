@@ -127,10 +127,7 @@ func (f *Feed) remove(sub *feedSub) {
 // Send delivers to all subscribed channels simultaneously.
 // It returns the number of subscribers that the value was sent to.
 func (f *Feed) Send(value interface{}) (nsent int) {
-
-
 	rvalue := reflect.ValueOf(value)
-	log.Info("Value Type","Send", rvalue)
 
 	f.once.Do(f.init)
 	<-f.sendLock
@@ -156,8 +153,8 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	// of sendCases. When a send succeeds, the corresponding case moves to the end of
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
+	log.Info("All cases","Cases",cases)
 	for {
-		log.Info("Try Send","Sending Event",rvalue)
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
 		// buffer space.
