@@ -30,10 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-const (
-	maxGasLimit = uint64(0x7fffffffffffffff) // Max gas limit (2^63-1)
-)
-
 // Proof-of-stake protocol constants.
 var (
 	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
@@ -200,8 +196,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
 	}
 	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit > maxGasLimit {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, maxGasLimit)
+	if header.GasLimit > consensus.MaxGasLimit {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, consensus.MaxGasLimit)
 	}
 	// Verify that the gasUsed is <= gasLimit
 	if header.GasUsed > header.GasLimit {

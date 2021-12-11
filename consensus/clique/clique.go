@@ -51,8 +51,6 @@ const (
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
 	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-
-	maxGasLimit = uint64(0x7fffffffffffffff) // Max gas limit (2^63-1)
 )
 
 // Clique proof-of-authority protocol constants.
@@ -297,8 +295,8 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		}
 	}
 	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit > maxGasLimit {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, maxGasLimit)
+	if header.GasLimit > consensus.MaxGasLimit {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, consensus.MaxGasLimit)
 	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
