@@ -756,6 +756,8 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
+
+	log.Info("Adding Block To DB","DB",block.Number())
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
