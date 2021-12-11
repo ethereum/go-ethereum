@@ -130,7 +130,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 
 	rvalue := reflect.ValueOf(value)
-	log.Info("Value Type","Send", rvalue.Type())
+	log.Info("Value Type","Send", rvalue.)
 
 	f.once.Do(f.init)
 	<-f.sendLock
@@ -161,6 +161,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		// This should usually succeed if subscribers are fast enough and have free
 		// buffer space.
 		for i := firstSubSendCase; i < len(cases); i++ {
+			log.Info("Try Send","Sending Event",rvalue)
 			if cases[i].Chan.TrySend(rvalue) {
 				nsent++
 				cases = cases.deactivate(i)
