@@ -130,14 +130,14 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 
 	rvalue := reflect.ValueOf(value)
-	log.Info("Value Type","Send", rvalue.)
+	log.Info("Value Type","Send", rvalue)
 
 	f.once.Do(f.init)
 	<-f.sendLock
 
 	// Add new cases from the inbox after taking the send lock.
 	f.mu.Lock()
-	f.sendCases = append(f.sendCases, f.inbox...)
+	f.sendCases = apgpend(f.sendCases, f.inbox...)
 	f.inbox = nil
 
 	if !f.typecheck(rvalue.Type()) {
