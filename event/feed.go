@@ -127,7 +127,7 @@ func (f *Feed) remove(sub *feedSub) {
 // Send delivers to all subscribed channels simultaneously.
 // It returns the number of subscribers that the value was sent to.
 func (f *Feed) Send(value interface{}) (nsent int) {
-	log.Info("Sending Events (not for Melange)",value)
+	log.Info("Sending Events","notMelange",value)
 	rvalue := reflect.ValueOf(value)
 
 	f.once.Do(f.init)
@@ -192,7 +192,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 }
 
 func (f *Feed) SendNewHeads(value []byte) (nsent int) {
-	log.Info("Processing for Melange",string(value))
+	log.Info("Processing Events","Melange",string(value))
 	return 0
 }
 
