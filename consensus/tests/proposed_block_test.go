@@ -11,7 +11,7 @@ import (
 )
 
 func TestProcessFirstV2BlockAndSendVoteMsg(t *testing.T) {
-	// Block 11 is the first v2 block with starting round of 0
+	// Block 11 is the first v2 block with round of 1
 	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -33,7 +33,8 @@ func TestProcessFirstV2BlockAndSendVoteMsg(t *testing.T) {
 	round, _, highestQC, _ := engineV2.GetProperties()
 	// Shoud trigger setNewRound
 	assert.Equal(t, utils.Round(1), round)
-	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
+	// Should not update the highestQC
+	assert.Equal(t, utils.Round(0), highestQC.ProposedBlockInfo.Round)
 
 }
 

@@ -51,7 +51,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	// Shouldn't have QC, however, we did not inilise it, hence will show default empty value
 	qc := syncInfoMsg.(*utils.SyncInfo).HighestQuorumCert
-	assert.Nil(t, qc)
+	assert.Equal(t, utils.Round(0), qc.ProposedBlockInfo.Round)
 
 	tc := syncInfoMsg.(*utils.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)

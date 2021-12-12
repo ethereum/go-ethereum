@@ -35,7 +35,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
-	assert.Nil(t, highestQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, utils.Round(1), currentRound)
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
@@ -46,7 +46,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)
-	assert.Nil(t, highestQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 
 	assert.Equal(t, utils.Round(1), currentRound)
 
@@ -63,7 +63,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	assert.Equal(t, utils.Round(0), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
-	// Check round has now changed from 5 to 6
+	// Check round has now changed from 1 to 2
 	assert.Equal(t, utils.Round(2), currentRound)
 }
 
@@ -90,7 +90,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
-	assert.Nil(t, highestQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, utils.Round(5), currentRound)
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
@@ -101,7 +101,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)
-	assert.Nil(t, highestQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 
 	assert.Equal(t, utils.Round(5), currentRound)
 
@@ -176,7 +176,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
-	assert.Nil(t, highestQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 
 	assert.Equal(t, utils.Round(5), currentRound)
 	voteMsg = &utils.Vote{
