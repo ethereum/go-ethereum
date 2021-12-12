@@ -74,9 +74,20 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 		timeoutPool:   timeoutPool,
 		votePool:      votePool,
 
-		highestTimeoutCert: nil,
-		highestQuorumCert:  nil,
+		highestTimeoutCert: &utils.TimeoutCert{
+			Round:      utils.Round(0),
+			Signatures: []utils.Signature{},
+		},
+		highestQuorumCert: &utils.QuorumCert{
+			ProposedBlockInfo: &utils.BlockInfo{
+				Hash:   common.Hash{},
+				Round:  utils.Round(0),
+				Number: big.NewInt(0),
+			},
+			Signatures: []utils.Signature{},
+		},
 		highestVotedRound:  utils.Round(0),
+		highestCommitBlock: nil,
 	}
 	// Add callback to the timer
 	timer.OnTimeoutFn = engine.onCountdownTimeout
@@ -436,13 +447,6 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 	return nil
 }
 
-// Utils for test to check currentRound value
-func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round) {
-	x.lock.Lock()
-	defer x.lock.Unlock()
-	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound
-}
-
 /*
 	SyncInfo workflow
 */
@@ -704,7 +708,7 @@ func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
 	log.Trace("[ProcessQC][Before]", "HighQC", x.highestQuorumCert)
 	// 1. Update HighestQC
-	if x.highestQuorumCert == nil || (quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round) {
+	if quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
 		x.highestQuorumCert = quorumCert
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
@@ -745,7 +749,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	2. Check TC round >= node's currentRound. If yes, call setNewRound
 */
 func (x *XDPoS_v2) processTC(timeoutCert *utils.TimeoutCert) error {
-	if x.highestTimeoutCert == nil || timeoutCert.Round > x.highestTimeoutCert.Round {
+	if timeoutCert.Round > x.highestTimeoutCert.Round {
 		x.highestTimeoutCert = timeoutCert
 	}
 	if timeoutCert.Round >= x.currentRound {
@@ -898,34 +902,11 @@ func (x *XDPoS_v2) getCurrentRoundMasterNodes() []common.Address {
 	return []common.Address{}
 }
 
-/*
-	Testing tools
-*/
-
-func (x *XDPoS_v2) SetHighestQuorumCert(qc *utils.QuorumCert) {
-	x.highestQuorumCert = qc
-}
-
 func (x *XDPoS_v2) getSyncInfo() *utils.SyncInfo {
 	return &utils.SyncInfo{
 		HighestQuorumCert:  x.highestQuorumCert,
 		HighestTimeoutCert: x.highestTimeoutCert,
 	}
-}
-
-func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
-	x.lock.Lock()
-	defer x.lock.Unlock()
-	// Reset a bunch of things
-	if resetTimer {
-		x.timeoutWorker.Reset()
-	}
-	x.currentRound = newRound
-}
-
-// Utils for test to check currentRound value
-func (x *XDPoS_v2) GetCurrentRound() utils.Round {
-	return x.currentRound
 }
 
 //TODO: find parent and grandparent and grandgrandparent block, check round number, if so, commit grandgrandparent
@@ -977,4 +958,30 @@ func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReade
 		return true, nil
 	}
 	return false, nil
+}
+
+/*
+	Testing tools
+*/
+
+func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+	// Reset a bunch of things
+	if resetTimer {
+		x.timeoutWorker.Reset()
+	}
+	x.currentRound = newRound
+}
+
+// Utils for test to check currentRound value
+func (x *XDPoS_v2) GetCurrentRound() utils.Round {
+	return x.currentRound
+}
+
+// Utils for test to check currentRound value
+func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round) {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound
 }

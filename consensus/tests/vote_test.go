@@ -33,7 +33,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
-	// Inilised with nil and 0 round
+	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Nil(t, highestQuorumCert)
 	assert.Equal(t, utils.Round(1), currentRound)
@@ -88,7 +88,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
-	// Inilised with nil and 0 round
+	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Nil(t, highestQuorumCert)
 	assert.Equal(t, utils.Round(5), currentRound)
@@ -174,7 +174,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
-	// Inilised with nil and 0 round
+	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Nil(t, highestQuorumCert)
 

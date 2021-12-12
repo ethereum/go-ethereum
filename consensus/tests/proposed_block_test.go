@@ -157,33 +157,63 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 	}
 }
 
-// TODO: Uncomment once confirmed the lockQuorumCert usage
-// func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
-// 	blockchain, _, currentBlock, _, forkedBlock := PrepareXDCTestBlockChainForV2Engine(t, 16, params.TestXDPoSMockChainConfigWithV2Engine, 16)
-// 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+/*
+	Block and round relationship diagram for this test
+	... - 13(3) - 14(4) - 15(5) - 16(6)
+            \ 14'(7)
+*/
+func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
+	// Block number 15, 16 have forks and forkedBlock is the 16th
+	blockchain, _, currentBlock, _, forkedBlock := PrepareXDCTestBlockChainForV2Engine(t, 16, params.TestXDPoSMockChainConfigWithV2Engine, 3)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-// 	var extraField utils.ExtraFields_v2
-// 	err := utils.DecodeBytesExtraFields(forkedBlock.Extra(), &extraField)
-// 	if err != nil {
-// 		t.Fatal("Fail to decode extra data", err)
-// 	}
-// 	// Set the lockQC and other pre-requist properties by block 16
-// 	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
-// 	if err != nil {
-// 		t.Fatal("Error while handling block 16", err)
-// 	}
-// 	// Now try with block 17 but from a different chain
-// 	err = engineV2.ProposedBlockHandler(blockchain, forkedBlock.Header())
-// 	if err != nil {
-// 		t.Fatal("Fail propose proposedBlock handler", err)
-// 	}
-// 	// Should not receive anything from the channel
-// 	select {
-// 	case <-engineV2.BroadcastCh:
-// 		t.Fatal("Should not trigger vote")
-// 	case <-time.After(5 * time.Second):
-// 		// Shoud not trigger setNewRound
-// 		round, _, _, _ := engineV2.GetProperties()
-// 		assert.Equal(t, utils.Round(8), round)
-// 	}
-// }
+	var extraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(forkedBlock.Extra(), &extraField)
+	if err != nil {
+		t.Fatal("Fail to decode extra data", err)
+	}
+	assert.Equal(t, utils.Round(9), extraField.Round)
+	// Set the lockQC and other pre-requist properties by block 16
+	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
+	if err != nil {
+		t.Fatal("Error while handling block 16", err)
+	}
+	vote := <-engineV2.BroadcastCh
+	assert.Equal(t, utils.Round(6), vote.(*utils.Vote).ProposedBlockInfo.Round)
+
+	// Find the first forked block at block 14th
+	firstForkedBlock := blockchain.GetBlockByHash(blockchain.GetBlockByHash(forkedBlock.ParentHash()).ParentHash())
+	engineV2.SetNewRoundFaker(utils.Round(7), false)
+	err = engineV2.ProposedBlockHandler(blockchain, firstForkedBlock.Header())
+	if err != nil {
+		t.Fatal("Fail propose proposedBlock handler", err)
+	}
+	// Should not receive anything from the channel
+	select {
+	case <-engineV2.BroadcastCh:
+		t.Fatal("Should not trigger vote")
+	case <-time.After(5 * time.Second):
+		// Shoud not trigger setNewRound
+		round, _, _, _ := engineV2.GetProperties()
+		assert.Equal(t, utils.Round(7), round)
+	}
+}
+
+func TestShouldSendVoteMsg(t *testing.T) {
+	// Block number 15, 16 have forks and forkedBlock is the 16th
+	blockchain, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 13, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Block 11 is first v2 block
+	for i := 11; i < 14; i++ {
+		blockHeader := blockchain.GetBlockByNumber(uint64(i)).Header()
+		err := engineV2.ProposedBlockHandler(blockchain, blockHeader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		round, _, _, _ := engineV2.GetProperties()
+		assert.Equal(t, utils.Round(i-10), round)
+		vote := <-engineV2.BroadcastCh
+		assert.Equal(t, round, vote.(*utils.Vote).ProposedBlockInfo.Round)
+	}
+}
