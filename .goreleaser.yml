@@ -95,7 +95,6 @@ dockers:
       - linux-amd64
     build_flag_templates:
       - --platform=linux/amd64
-    skip_push: true
   
   - image_templates:
       - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
@@ -106,7 +105,6 @@ dockers:
       - linux-arm64
     build_flag_templates:
       - --platform=linux/arm64
-    skip_push: true
 
 docker_manifests:
   - name_template: 0xpolygon/{{ .ProjectName }}:{{ .Version }}
