@@ -38,10 +38,13 @@ type Server struct {
 	backend    *eth.Ethereum
 	grpcServer *grpc.Server
 	tracer     *sdktrace.TracerProvider
+	config     *Config
 }
 
 func NewServer(config *Config) (*Server, error) {
-	srv := &Server{}
+	srv := &Server{
+		config: config,
+	}
 
 	// start the logger
 	setupLogger(config.LogLevel)

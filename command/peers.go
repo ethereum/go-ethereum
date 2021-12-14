@@ -17,11 +17,11 @@ func (c *PeersCommand) Help() string {
 	
   List the connected peers:
   
-    $ bor account new
+    $ bor peers list
 	
   Add a new peer by enode:
   
-    $ bor account import
+    $ bor peers add <enode>
 
   Remove a connected peer by enode:
 

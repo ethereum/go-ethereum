@@ -8,8 +8,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/command/server/pprof"
 	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/golang/protobuf/ptypes/empty"
 )
 
 func (s *Server) Pprof(ctx context.Context, req *proto.PprofRequest) (*proto.PprofResponse, error) {
@@ -106,4 +108,29 @@ func peerInfoToPeer(info *p2p.PeerInfo) *proto.Peer {
 func (s *Server) ChainSetHead(ctx context.Context, req *proto.ChainSetHeadRequest) (*proto.ChainSetHeadResponse, error) {
 	s.backend.APIBackend.SetHead(req.Number)
 	return &proto.ChainSetHeadResponse{}, nil
+}
+
+func (s *Server) Status(ctx context.Context, _ *empty.Empty) (*proto.StatusResponse, error) {
+	apiBackend := s.backend.APIBackend
+	syncProgress := apiBackend.SyncProgress()
+
+	resp := &proto.StatusResponse{
+		CurrentHeader: headerToProtoHeader(apiBackend.CurrentHeader()),
+		CurrentBlock:  headerToProtoHeader(apiBackend.CurrentBlock().Header()),
+		NumPeers:      int64(len(s.node.Server().PeersInfo())),
+		SyncMode:      s.config.SyncMode,
+		Syncing: &proto.StatusResponse_Syncing{
+			StartingBlock: int64(syncProgress.StartingBlock),
+			HighestBlock:  int64(syncProgress.HighestBlock),
+			CurrentBlock:  int64(syncProgress.CurrentBlock),
+		},
+	}
+	return resp, nil
+}
+
+func headerToProtoHeader(h *types.Header) *proto.Header {
+	return &proto.Header{
+		Hash:   h.Hash().String(),
+		Number: h.Number.Uint64(),
+	}
 }

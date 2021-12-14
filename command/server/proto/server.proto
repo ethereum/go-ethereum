@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package proto;
 
+import "google/protobuf/empty.proto";
+
 option go_package = "/command/server/proto";
 
 service Bor {
@@ -16,6 +18,8 @@ service Bor {
     rpc PeersStatus(PeersStatusRequest) returns (PeersStatusResponse);
 
     rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
+
+    rpc Status(google.protobuf.Empty) returns (StatusResponse);
 }
 
 
@@ -65,6 +69,25 @@ message ChainSetHeadRequest {
 }
 
 message ChainSetHeadResponse {
+}
+
+message StatusResponse {
+    Header currentBlock = 1;
+    Header currentHeader = 2;
+    int64 numPeers = 3;
+    string syncMode = 4;
+    Syncing syncing = 5;
+
+    message Syncing {
+        int64 startingBlock = 1;
+        int64 highestBlock = 2;
+        int64 currentBlock = 3;
+    }
+}
+
+message Header {
+    string hash = 1;
+    uint64 number = 2;
 }
 
 message PprofRequest {

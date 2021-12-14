@@ -18,7 +18,7 @@ type PeersListCommand struct {
 func (p *PeersListCommand) Help() string {
 	return `Usage: bor peers list
 
-  Build an archive containing Bor pprof traces
+  Lists the connected peers
 
   ` + p.Flags().Help()
 }
