@@ -43,14 +43,14 @@ import (
 )
 
 var (
-	VALID            = GenericStringResponse{"VALID"}
-	SUCCESS          = GenericStringResponse{"SUCCESS"}
-	INVALID          = ForkChoiceResponse{Status: "INVALID", PayloadID: nil}
-	SYNCING          = ForkChoiceResponse{Status: "INVALID", PayloadID: nil}
-	UnknownHeader    = rpc.CustomError{Code: -32000, ValidationError: "unknown header"}
-	UnknownPayload   = rpc.CustomError{Code: -32001, ValidationError: "unknown payload"}
-	TTDNotReached    = rpc.CustomError{Code: -32002, ValidationError: "TTD not reached yet"}
-	InvalidPayloadID = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
+	VALID              = GenericStringResponse{"VALID"}
+	SUCCESS            = GenericStringResponse{"SUCCESS"}
+	INVALID            = ForkChoiceResponse{Status: "INVALID", PayloadID: nil}
+	SYNCING            = ForkChoiceResponse{Status: "SYNCING", PayloadID: nil}
+	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
+	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
+	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
+	InvalidPayloadID   = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
 )
 
 // Register adds catalyst APIs to the full node.
@@ -476,11 +476,11 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// make sure the parent has enough terminal total difficulty
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(head)
 	if newHeadBlock == nil {
-		return &UnknownHeader
+		return &GenericServerError
 	}
 	td := api.eth.BlockChain().GetTd(newHeadBlock.Hash(), newHeadBlock.NumberU64())
 	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
-		return &TTDNotReached
+		return &InvalidTB
 	}
 	return nil
 }
@@ -495,7 +495,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		}
 		newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 		if newHeadHeader == nil {
-			return &UnknownHeader
+			return &GenericServerError
 		}
 		if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
 			return err
@@ -513,7 +513,7 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	}
 	newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
 	if newHeadBlock == nil {
-		return &UnknownHeader
+		return &GenericServerError
 	}
 	if err := api.eth.BlockChain().SetChainHead(newHeadBlock); err != nil {
 		return err
