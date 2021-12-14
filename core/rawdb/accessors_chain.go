@@ -714,7 +714,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
 			return logs
 		}
-		log.Error("Invalid receipt array RLP", "hash", "err", err)
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 
