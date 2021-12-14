@@ -665,6 +665,7 @@ var complexTypedData = `
     }
 }
 `
+
 func TestComplexTypedData(t *testing.T) {
 	var td core.TypedData
 	err := json.Unmarshal([]byte(complexTypedData), &td)
