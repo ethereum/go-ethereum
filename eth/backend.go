@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	inode "github.com/ethereum/go-ethereum/internal/node"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -98,7 +99,7 @@ type Ethereum struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
-	shutdownCh chan chan struct{} // Signals the unclean shutdown marker updating loop to terminate
+	shutdownTracker *inode.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 }
 
 // New creates a new Ethereum object (including the
@@ -159,7 +160,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
-		shutdownCh:        make(chan chan struct{}),
+		shutdownTracker:   inode.NewShutdownTracker(chainDb),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -265,22 +266,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 
-	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
-	// Keep updating shutdown markers to pin down on the actual
-	// time of the crash.
-	go eth.updateUncleanShutdownMarkers()
+	// Successful startup; push a marker and check previous unclean shutdowns.
+	eth.shutdownTracker.Start()
+
 	return eth, nil
 }
 
@@ -583,31 +571,12 @@ func (s *Ethereum) Stop() error {
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
-	// Stop updating unclean shutdown markers and pop the last marker.
-	done := make(chan struct{})
-	s.shutdownCh <- done
-	<-done
+
+	// Clean shutdown marker as the last thing before closing db
+	s.shutdownTracker.Stop()
 
 	s.chainDb.Close()
 	s.eventMux.Stop()
 
 	return nil
-}
-
-func (s *Ethereum) updateUncleanShutdownMarkers() {
-	// update marker every five minutes
-	ticker := time.NewTicker(300 * time.Second)
-	defer func() { ticker.Stop() }()
-	for {
-		select {
-		case <-ticker.C:
-			rawdb.UpdateUncleanShutdownMarker(s.chainDb)
-		case done := <-s.shutdownCh:
-			// Successful shutdown, clear last marker
-			rawdb.PopUncleanShutdownMarker(s.chainDb)
-			done <- struct{}{}
-			// ticker stops upon return
-			return
-		}
-	}
 }
