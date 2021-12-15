@@ -133,7 +133,7 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 
 	// Create the tables.
 	for name, disableSnappy := range tables {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy)
+		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy, readonly)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()

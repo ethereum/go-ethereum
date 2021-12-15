@@ -94,7 +94,8 @@ type freezerTable struct {
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	items uint64 // Number of items stored in the table (including items removed from tail)
 
-	noCompression bool   // if true, disables snappy compression. Note: does not work retroactively
+	noCompression bool // if true, disables snappy compression. Note: does not work retroactively
+	readonly      bool
 	maxFileSize   uint32 // Max file size for data-files
 	name          string
 	path          string
@@ -120,7 +121,7 @@ type freezerTable struct {
 
 // NewFreezerTable opens the given path as a freezer table.
 func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
-	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy)
+	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, false)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -164,7 +165,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // newTable opens a freezer table, creating the data and index files if they are
 // non existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
+func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression, readonly bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
@@ -192,6 +193,7 @@ func newTable(path string, name string, readMeter metrics.Meter, writeMeter metr
 		path:          path,
 		logger:        log.New("database", path, "table", name),
 		noCompression: noCompression,
+		readonly:      readonly,
 		maxFileSize:   maxFilesize,
 	}
 	if err := tab.repair(); err != nil {
