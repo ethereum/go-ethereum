@@ -20,7 +20,6 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -196,27 +195,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, ErrOutOfGas
 		}
 		if operation.dynamicGas != nil {
-			// All ops with a dynamic memory usage also has a dynamic gas cost.
-			var memorySize uint64
-			// calculate the new memory size and expand the memory to fit
-			// the operation
-			// Memory check needs to be done prior to evaluating the dynamic gas portion,
-			// to detect calculation overflows
-			if operation.memorySize != nil {
-				memSize, overflow := operation.memorySize(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
-				}
-				// memory is expanded in words of 32 bytes. Gas
-				// is also calculated in words.
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
-			}
-			// Consume the gas and return an error if not enough gas is available.
-			// cost is explicitly set so that the capture state defer method can get the proper cost
-			var dynamicCost uint64
-			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			dynamicCost, memorySize, err := operation.dynamicGas(in.evm, contract, stack, mem)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
