@@ -27,6 +27,17 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// handleGetBlockHeaders handles Block header query, collect the requested headers and reply
+func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the complex header query
+	var query GetBlockHeadersPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetBlockHeadersQuery(backend, &query, peer)
+	return peer.SendBlockHeaders(response)
+}
+
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
@@ -124,6 +135,16 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 	return headers
 }
 
+func handleGetBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block body retrieval message
+	var query GetBlockBodiesPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetBlockBodiesQuery(backend, query, peer)
+	return peer.SendBlockBodiesRLP(response)
+}
+
 func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block body retrieval message
 	var query GetBlockBodiesPacket66
@@ -151,6 +172,16 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		}
 	}
 	return bodies
+}
+
+func handleGetNodeData(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the trie node data retrieval message
+	var query GetNodeDataPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetNodeDataQuery(backend, query, peer)
+	return peer.SendNodeData(response)
 }
 
 func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
@@ -190,6 +221,16 @@ func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer
 		}
 	}
 	return nodes
+}
+
+func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block receipts retrieval message
+	var query GetReceiptsPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetReceiptsQuery(backend, query, peer)
+	return peer.SendReceiptsRLP(response)
 }
 
 func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {
@@ -271,6 +312,15 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, ann)
 }
 
+func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of headers arrived to one of our previous requests
+	res := new(BlockHeadersPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
+}
+
 func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of headers arrived to one of our previous requests
 	res := new(BlockHeadersPacket66)
@@ -280,6 +330,15 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
 
 	return backend.Handle(peer, &res.BlockHeadersPacket)
+}
+
+func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of block bodies arrived to one of our previous requests
+	res := new(BlockBodiesPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
 }
 
 func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
@@ -293,6 +352,15 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, &res.BlockBodiesPacket)
 }
 
+func handleNodeData(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of node state data arrived to one of our previous requests
+	res := new(NodeDataPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
+}
+
 func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of node state data arrived to one of our previous requests
 	res := new(NodeDataPacket66)
@@ -302,6 +370,15 @@ func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, NodeDataMsg, res.RequestId)
 
 	return backend.Handle(peer, &res.NodeDataPacket)
+}
+
+func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of receipts arrived to one of our previous requests
+	res := new(ReceiptsPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
 }
 
 func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
@@ -330,6 +407,16 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 		peer.markTransaction(hash)
 	}
 	return backend.Handle(peer, ann)
+}
+
+func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the pooled transactions retrieval message
+	var query GetPooledTransactionsPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	hashes, txs := answerGetPooledTransactions(backend, query, peer)
+	return peer.SendPooledTransactionsRLP(hashes, txs)
 }
 
 func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
@@ -377,6 +464,26 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs TransactionsPacket
+	if err := msg.Decode(&txs); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	for i, tx := range txs {
+		// Validate and mark the remote transaction
+		if tx == nil {
+			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
+		}
+		peer.markTransaction(tx.Hash())
+	}
+	return backend.Handle(peer, &txs)
+}
+
+func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
+	// Transactions arrived, make sure we have a valid and fresh chain to handle them
+	if !backend.AcceptTxs() {
+		return nil
+	}
+	// Transactions can be processed, parse all of them and deliver to the pool
+	var txs PooledTransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
