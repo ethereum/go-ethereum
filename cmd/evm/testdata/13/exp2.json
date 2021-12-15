@@ -8,6 +8,7 @@
     "receipts": [
       {
         "type": "0x2",
+        "output": "0x",
         "root": "0x",
         "status": "0x0",
         "cumulativeGasUsed": "0x84d0",
@@ -21,6 +22,7 @@
       },
       {
         "type": "0x2",
+        "output": "0x",
         "root": "0x",
         "status": "0x0",
         "cumulativeGasUsed": "0x109a0",

@@ -17,11 +17,13 @@
 package t8ntool
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -52,7 +54,7 @@ type ExecutionResult struct {
 	ReceiptRoot common.Hash           `json:"receiptsRoot"`
 	LogsHash    common.Hash           `json:"logsHash"`
 	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
-	Receipts    types.Receipts        `json:"receipts"`
+	Receipts    []*receiptWithOutput  `json:"receipts"`
 	Rejected    []*rejectedTx         `json:"rejected,omitempty"`
 	Difficulty  *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
 	GasUsed     math.HexOrDecimal64   `json:"gasUsed"`
@@ -94,6 +96,29 @@ type rejectedTx struct {
 	Err   string `json:"error"`
 }
 
+type receiptWithOutput struct {
+	Receipt *types.Receipt
+	Output  []byte
+}
+
+func (r *receiptWithOutput) MarshalJSON() ([]byte, error) {
+	receipt, err := json.Marshal(r.Receipt)
+	if err != nil {
+		return []byte{}, err
+	}
+	type output struct {
+		Output hexutil.Bytes `json:"output"`
+	}
+	out, err := json.Marshal(&output{r.Output})
+	if err != nil {
+		return []byte{}, err
+	}
+	extended := make(map[string]*string)
+	json.Unmarshal(receipt, &extended)
+	json.Unmarshal(out, &extended)
+	return json.Marshal(extended)
+}
+
 // Apply applies a set of transactions to a pre-state
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
@@ -121,7 +146,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
-		receipts    = make(types.Receipts, 0)
+		receipts    = make([]*receiptWithOutput, 0)
 		txIndex     = 0
 	)
 	gaspool.AddGas(pre.Env.GasLimit)
@@ -211,7 +236,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			//receipt.BlockHash
 			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
-			receipts = append(receipts, receipt)
+			receipts = append(receipts, &receiptWithOutput{receipt, msgResult.ReturnData})
 		}
 
 		txIndex++
@@ -247,11 +272,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
+	rawReceipts := make(types.Receipts, 0)
+	for _, receipt := range receipts {
+		rawReceipts = append(rawReceipts, receipt.Receipt)
+	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
-		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:       types.CreateBloom(receipts),
+		ReceiptRoot: types.DeriveSha(rawReceipts, trie.NewStackTrie(nil)),
+		Bloom:       types.CreateBloom(rawReceipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
