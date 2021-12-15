@@ -26,9 +26,9 @@ type Bfter struct {
 	broadcast        BroadcastFns
 
 	// Message Cache
-	knownVotes     *lru.ARCCache
-	knownSyncInfos *lru.ARCCache
-	knownTimeouts  *lru.ARCCache
+	knownVotes     *lru.Cache
+	knownSyncInfos *lru.Cache
+	knownTimeouts  *lru.Cache
 }
 
 type ConsensusFns struct {
@@ -49,9 +49,9 @@ type BroadcastFns struct {
 }
 
 func New(broadcasts BroadcastFns, blockCahinReader *core.BlockChain) *Bfter {
-	knownVotes, _ := lru.NewARC(messageLimit)
-	knownSyncInfos, _ := lru.NewARC(messageLimit)
-	knownTimeouts, _ := lru.NewARC(messageLimit)
+	knownVotes, _ := lru.New(messageLimit)
+	knownSyncInfos, _ := lru.New(messageLimit)
+	knownTimeouts, _ := lru.New(messageLimit)
 	return &Bfter{
 		quit:             make(chan struct{}),
 		broadcastCh:      make(chan interface{}),
@@ -79,9 +79,9 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 
 // TODO: rename
 func (b *Bfter) Vote(vote *utils.Vote) error {
-	log.Info("Receive Vote", "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
-	if b.knownVotes.Contains(vote.Hash()) {
-		log.Info("Discarded vote, known vote", "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
+	log.Trace("Receive Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "signature", vote.Signature)
+	if exist, _ := b.knownVotes.ContainsOrAdd(vote.Hash(), true); exist {
+		log.Info("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 		return nil
 	}
 
@@ -90,7 +90,6 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 		log.Error("Verify BFT Vote", "error", err)
 		return err
 	}
-	b.knownVotes.Add(vote.Hash(), true)
 	b.broadcastCh <- vote
 
 	err = b.consensus.voteHandler(b.blockCahinReader, vote)
@@ -102,7 +101,7 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 }
 func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 	log.Trace("Receive Timeout", "timeout", timeout)
-	if b.knownVotes.Contains(timeout.Hash()) {
+	if exist, _ := b.knownTimeouts.ContainsOrAdd(timeout.Hash(), true); exist {
 		log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
 		return nil
 	}
@@ -111,7 +110,6 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 		log.Error("Verify BFT Timeout", "error", err)
 		return err
 	}
-	b.knownTimeouts.Add(timeout.Hash(), true)
 	b.broadcastCh <- timeout
 
 	err = b.consensus.timeoutHandler(timeout)
@@ -127,7 +125,7 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 }
 func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 	log.Trace("Receive SyncInfo", "syncInfo", syncInfo)
-	if b.knownVotes.Contains(syncInfo.Hash()) {
+	if exist, _ := b.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true); exist {
 		log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
 		return nil
 	}
@@ -137,7 +135,6 @@ func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 		return err
 	}
 
-	b.knownSyncInfos.Add(syncInfo.Hash(), true)
 	b.broadcastCh <- syncInfo
 
 	err = b.consensus.syncInfoHandler(b.blockCahinReader, syncInfo)

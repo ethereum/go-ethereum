@@ -120,7 +120,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	currentRound := x.currentRound
 	highestQC := x.highestQuorumCert
 	x.lock.Unlock()
-	//parentRound := highestQC.ProposedBlockInfo.Round
+
 	if (highestQC == nil) || (header.ParentHash != highestQC.ProposedBlockInfo.Hash) {
 		return consensus.ErrNotReadyToPropose
 	}
@@ -447,6 +447,16 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 	return nil
 }
 
+// Utils for test to get current Pool size
+func (x *XDPoS_v2) GetVotePoolSize(vote *utils.Vote) int {
+	return x.votePool.Size(vote)
+}
+
+// Utils for test to get Timeout Pool Size
+func (x *XDPoS_v2) GetTimeoutPoolSize(timeout *utils.Timeout) int {
+	return x.timeoutPool.Size(timeout)
+}
+
 /*
 	SyncInfo workflow
 */
@@ -504,6 +514,10 @@ func (x *XDPoS_v2) VerifyVoteMessage(vote *utils.Vote) (bool, error) {
 func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *utils.Vote) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
+	return x.voteHandler(chain, voteMsg)
+}
+
+func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote) error {
 
 	// 1. checkRoundNumber
 	if voteMsg.ProposedBlockInfo.Round != x.currentRound {
@@ -516,7 +530,7 @@ func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 		log.Debug("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool)
 		err := x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg)
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 
@@ -570,7 +584,10 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(timeoutMsg *utils.Timeout) (bool, error)
 func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
+	return x.timeoutHandler(timeout)
+}
 
+func (x *XDPoS_v2) timeoutHandler(timeout *utils.Timeout) error {
 	// 1. checkRoundNumber
 	if timeout.Round != x.currentRound {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
@@ -666,7 +683,7 @@ func (x *XDPoS_v2) ProposedBlockHandler(blockChainReader consensus.ChainReader, 
 		return err
 	}
 	if verified {
-		return x.sendVote(blockInfo)
+		return x.sendVote(blockChainReader, blockInfo)
 	} else {
 		log.Info("Failed to pass the voting rule verification", "ProposeBlockHash", blockInfo.Hash)
 	}
@@ -806,7 +823,7 @@ func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, bloc
 }
 
 // Once Hot stuff voting rule has verified, this node can then send vote
-func (x *XDPoS_v2) sendVote(blockInfo *utils.BlockInfo) error {
+func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.BlockInfo) error {
 	// First step: Update the highest Voted round
 	// Second step: Generate the signature by using node's private key(The signature is the blockInfo signature)
 	// Third step: Construct the vote struct with the above signature & blockinfo struct
@@ -822,6 +839,8 @@ func (x *XDPoS_v2) sendVote(blockInfo *utils.BlockInfo) error {
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
 	}
+
+	x.voteHandler(chainReader, voteMsg)
 	x.broadcastToBftChannel(voteMsg)
 	return nil
 }
@@ -841,6 +860,8 @@ func (x *XDPoS_v2) sendTimeout() error {
 		Round:     x.currentRound,
 		Signature: signedHash,
 	}
+
+	x.timeoutHandler(timeoutMsg)
 	x.broadcastToBftChannel(timeoutMsg)
 	return nil
 }

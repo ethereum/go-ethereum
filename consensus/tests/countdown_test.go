@@ -16,6 +16,8 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	engineV2.SetNewRoundFaker(utils.Round(1), true)
 
 	timeoutMsg := <-engineV2.BroadcastCh
+	poolSize := engineV2.GetTimeoutPoolSize(timeoutMsg.(*utils.Timeout))
+	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
 
 	valid, err := engineV2.VerifyTimeoutMessage(timeoutMsg.(*utils.Timeout))
