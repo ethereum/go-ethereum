@@ -12,8 +12,9 @@
     "istanbulBlock": 0,
     "muirGlacierBlock": 0,
     "berlinBlock": 0,
-    "londonBlock": 10,
+    "londonBlock": 1,
     "bor": {
+      "jaipurBlock": 2,
       "period": {
         "0": 1
       },

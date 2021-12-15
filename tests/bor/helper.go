@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -111,6 +112,14 @@ func buildNextBlock(t *testing.T, _bor *bor.Bor, chain *core.BlockChain, block *
 		copy(header.Extra[32:], validatorBytes)
 	}
 
+	if chain.Config().IsLondon(header.Number) {
+		header.BaseFee = misc.CalcBaseFee(chain.Config(), block.Header())
+		if !chain.Config().IsLondon(block.Number()) {
+			parentGasLimit := block.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, parentGasLimit)
+		}
+	}
+
 	state, err := chain.State()
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -119,12 +128,12 @@ func buildNextBlock(t *testing.T, _bor *bor.Bor, chain *core.BlockChain, block *
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-	sign(t, header, signer)
+	sign(t, header, signer, borConfig)
 	return types.NewBlockWithHeader(header)
 }
 
-func sign(t *testing.T, header *types.Header, signer []byte) {
-	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), signer)
+func sign(t *testing.T, header *types.Header, signer []byte, c *params.BorConfig) {
+	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header, c)), signer)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}

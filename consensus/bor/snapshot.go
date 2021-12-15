@@ -131,7 +131,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		}
 
 		// Resolve the authorization key and check against signers
-		signer, err := ecrecover(header, s.sigcache)
+		signer, err := ecrecover(header, s.sigcache, s.config)
 		if err != nil {
 			return nil, err
 		}
