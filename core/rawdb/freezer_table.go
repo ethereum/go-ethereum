@@ -178,7 +178,14 @@ func newTable(path string, name string, readMeter metrics.Meter, writeMeter metr
 		// Compressed idx
 		idxName = fmt.Sprintf("%s.cidx", name)
 	}
-	offsets, err := openFreezerFileForAppend(filepath.Join(path, idxName))
+	var err error
+	var offsets *os.File
+	if readonly {
+		// Will fail if table doesn't exist
+		offsets, err = openFreezerFileForReadOnly(filepath.Join(path, idxName))
+	} else {
+		offsets, err = openFreezerFileForAppend(filepath.Join(path, idxName))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +236,9 @@ func (t *freezerTable) repair() error {
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
 	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
+		if t.readonly {
+			return fmt.Errorf("table index has invalid length")
+		}
 		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
 	}
 	// Retrieve the file sizes and prepare for truncation
@@ -254,7 +264,11 @@ func (t *freezerTable) repair() error {
 
 	t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 	lastIndex.unmarshalBinary(buffer)
-	t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForAppend)
+	if t.readonly {
+		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForReadOnly)
+	} else {
+		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForAppend)
+	}
 	if err != nil {
 		return err
 	}
@@ -267,6 +281,9 @@ func (t *freezerTable) repair() error {
 	contentExp = int64(lastIndex.offset)
 
 	for contentExp != contentSize {
+		if t.readonly {
+			return fmt.Errorf("head file has unexpected size. %d != %d", contentSize, contentExp)
+		}
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
 			t.logger.Warn("Truncating dangling head", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
@@ -304,11 +321,13 @@ func (t *freezerTable) repair() error {
 		}
 	}
 	// Ensure all reparation changes have been written to disk
-	if err := t.index.Sync(); err != nil {
-		return err
-	}
-	if err := t.head.Sync(); err != nil {
-		return err
+	if !t.readonly {
+		if err := t.index.Sync(); err != nil {
+			return err
+		}
+		if err := t.head.Sync(); err != nil {
+			return err
+		}
 	}
 	// Update the item and byte counters and return
 	t.items = uint64(t.itemOffset) + uint64(offsetsSize/indexEntrySize-1) // last indexEntry points to the end of the data file
@@ -336,8 +355,12 @@ func (t *freezerTable) preopen() (err error) {
 			return err
 		}
 	}
-	// Open head in read/write
-	t.head, err = t.openFile(t.headId, openFreezerFileForAppend)
+	if t.readonly {
+		t.head, err = t.openFile(t.headId, openFreezerFileForReadOnly)
+	} else {
+		// Open head in read/write
+		t.head, err = t.openFile(t.headId, openFreezerFileForAppend)
+	}
 	return err
 }
 

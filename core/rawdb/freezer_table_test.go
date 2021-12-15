@@ -829,3 +829,72 @@ func TestSequentialReadByteLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestFreezerReadonlyBasics(t *testing.T) {
+	// Case 1: Check it fails on non-existent file.
+	_, err := newTable(os.TempDir(),
+		fmt.Sprintf("readonlytest-%d", rand.Uint64()),
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
+	if err == nil {
+		t.Fatal("readonly table instantiation should fail for non-existent table")
+	}
+
+	// Case 2: Check that it fails on invalid index length.
+	tmpdir := os.TempDir()
+	fname := fmt.Sprintf("readonlytest-%d", rand.Uint64())
+	idxFile, err := openFreezerFileForAppend(filepath.Join(tmpdir, fmt.Sprintf("%s.ridx", fname)))
+	if err != nil {
+		t.Errorf("Failed to open index file: %v\n", err)
+	}
+	// size should not be a multiple of indexEntrySize.
+	idxFile.Write(make([]byte, 17))
+	idxFile.Close()
+	_, err = newTable(tmpdir, fname,
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
+	if err == nil {
+		t.Errorf("readonly table instantiation should fail for invalid index size")
+	}
+
+	// Case 3: Open table non-readonly table to write some data.
+	// Then corrupt the head file and make sure opening the table
+	// again in readonly triggers an error.
+	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
+	f, err := newTable(os.TempDir(), fname,
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+	writeChunks(t, f, 8, 32)
+	// Corrupt table file
+	if _, err := f.head.Write([]byte{1, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = newTable(os.TempDir(), fname,
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
+	if err == nil {
+		t.Errorf("readonly table instantiation should fail for corrupt table file")
+	}
+
+	// Case 4: Write some data to a table and later re-open it as readonly.
+	// Should be successful.
+	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
+	f, err = newTable(os.TempDir(), fname,
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+	writeChunks(t, f, 32, 128)
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f, err = newTable(os.TempDir(), fname,
+		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
+	if err != nil {
+		t.Error(err)
+	}
+	v, err := f.Retrieve(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := getChunk(128, 10)
+	if !bytes.Equal(v, exp) {
+		t.Errorf("retrieved value is incorrect")
+	}
+}
