@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	inode "github.com/ethereum/go-ethereum/internal/node"
+	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/vflux"
 	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
@@ -79,7 +79,7 @@ type LightEthereum struct {
 	p2pConfig  *p2p.Config
 	udpEnabled bool
 
-	shutdownTracker *inode.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 }
 
 // New creates an instance of the light client.
@@ -121,7 +121,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		p2pServer:       stack.Server(),
 		p2pConfig:       &stack.Config().P2P,
 		udpEnabled:      stack.Config().P2P.DiscoveryV5,
-		shutdownTracker: inode.NewShutdownTracker(chainDb),
+		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}
 
 	var prenegQuery vfc.QueryFunc
