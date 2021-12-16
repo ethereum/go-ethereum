@@ -861,6 +861,9 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
 	f, err := newTable(os.TempDir(), fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+	if err != nil {
+		t.Fatalf("failed to instantiate table: %v", err)
+	}
 	writeChunks(t, f, 8, 32)
 	// Corrupt table file
 	if _, err := f.head.Write([]byte{1, 1}); err != nil {
@@ -880,6 +883,9 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
 	f, err = newTable(os.TempDir(), fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+	if err != nil {
+		t.Fatalf("failed to instantiate table: %v\n", err)
+	}
 	writeChunks(t, f, 32, 128)
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
