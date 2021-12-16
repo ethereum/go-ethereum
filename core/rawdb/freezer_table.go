@@ -321,13 +321,11 @@ func (t *freezerTable) repair() error {
 		}
 	}
 	// Ensure all reparation changes have been written to disk
-	if !t.readonly {
-		if err := t.index.Sync(); err != nil {
-			return err
-		}
-		if err := t.head.Sync(); err != nil {
-			return err
-		}
+	if err := t.index.Sync(); err != nil {
+		return err
+	}
+	if err := t.head.Sync(); err != nil {
+		return err
 	}
 	// Update the item and byte counters and return
 	t.items = uint64(t.itemOffset) + uint64(offsetsSize/indexEntrySize-1) // last indexEntry points to the end of the data file
