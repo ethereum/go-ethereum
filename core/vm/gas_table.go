@@ -24,6 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
+type memorySizeFunc func(*Stack) (size uint64, overflow bool)
+
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.
 func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
