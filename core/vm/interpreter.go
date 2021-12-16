@@ -17,15 +17,12 @@
 package vm
 
 import (
-	"errors"
 	"hash"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/holiman/uint256"
 )
 
 // Config are the configuration options for the Interpreter
@@ -194,50 +191,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		// if the PC ends up in a new "page" of verkleized code, charge the
-		// associated witness costs.
-		inWitness := false
-		var codePage common.Hash
-		if in.evm.chainRules.IsCancun {
-			index := trieUtils.GetTreeKeyCodeChunk(contract.Address().Bytes(), uint256.NewInt(pc/31))
-
-			var value [32]byte
-			if in.evm.accesses != nil {
-				codePage, inWitness = in.evm.accesses[common.BytesToHash(index)]
-				// Return an error if we're in stateless mode
-				// and the code isn't in the witness. It means
-				// that if code is read beyond the actual code
-				// size, pages of 0s need to be added to the
-				// witness.
-				if !inWitness {
-					return nil, errors.New("code chunk missing from proof")
-				}
-				copy(value[:], codePage[:])
-			} else {
-				// Calculate the chunk
-				chunk := pc / 31
-				end := (chunk + 1) * 31
-				if end >= uint64(len(contract.Code)) {
-					end = uint64(len(contract.Code))
-				}
-				count := uint64(0)
-				// Look for the first code byte (i.e. no pushdata)
-				for ; chunk*31+count < end && count < 31 && !contract.IsCode(chunk*31+count); count++ {
-				}
-				value[0] = byte(count)
-				copy(value[1:], contract.Code[chunk*31:end])
-			}
-			contract.Gas -= in.evm.TxContext.Accesses.TouchAddressAndChargeGas(index, value[:])
+		if in.evm.TxContext.Accesses != nil {
+			// if the PC ends up in a new "page" of verkleized code, charge the
+			// associated witness costs.
+			contract.Gas -= touchEachChunksAndChargeGas(pc, 1, contract.Address().Bytes()[:], contract, in.evm.TxContext.Accesses)
 		}
 
-		if inWitness {
-			// Get the op from the tree, skipping the header byte
-			op = OpCode(codePage[1+pc%31])
-		} else {
-			// If we are in witness mode, then raise an error
-			op = contract.GetOp(pc)
-
-		}
+		// TODO how can we tell if we are in stateless mode here and need to get the op from the witness
+		// If we are in witness mode, then raise an error
+		op = contract.GetOp(pc)
 
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.

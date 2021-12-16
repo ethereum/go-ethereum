@@ -125,8 +125,6 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
-
-	accesses map[common.Hash]common.Hash
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -168,6 +166,19 @@ func (evm *EVM) Cancelled() bool {
 // Interpreter returns the current interpreter
 func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
+}
+
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
 }
 
 // Call executes the contract associated with the addr with the given input as
@@ -232,15 +243,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
-			// Touch the account data
-			var data [32]byte
-			evm.Accesses.TouchAddress(utils.GetTreeKeyVersion(addr.Bytes()), data[:])
-			binary.BigEndian.PutUint64(data[:], evm.StateDB.GetNonce(addr))
-			evm.Accesses.TouchAddress(utils.GetTreeKeyNonce(addr[:]), data[:])
-			evm.Accesses.TouchAddress(utils.GetTreeKeyBalance(addr[:]), evm.StateDB.GetBalance(addr).Bytes())
-			binary.BigEndian.PutUint64(data[:], uint64(len(code)))
-			evm.Accesses.TouchAddress(utils.GetTreeKeyCodeSize(addr[:]), data[:])
-			evm.Accesses.TouchAddress(utils.GetTreeKeyCodeKeccak(addr[:]), evm.StateDB.GetCodeHash(addr).Bytes())
+			if evm.Accesses != nil {
+				// Touch the account data
+				var data [32]byte
+				evm.Accesses.TouchAddress(utils.GetTreeKeyVersion(addr.Bytes()), data[:])
+				binary.BigEndian.PutUint64(data[:], evm.StateDB.GetNonce(addr))
+				evm.Accesses.TouchAddress(utils.GetTreeKeyNonce(addr[:]), data[:])
+				evm.Accesses.TouchAddress(utils.GetTreeKeyBalance(addr[:]), evm.StateDB.GetBalance(addr).Bytes())
+				binary.BigEndian.PutUint64(data[:], uint64(len(code)))
+				evm.Accesses.TouchAddress(utils.GetTreeKeyCodeSize(addr[:]), data[:])
+				evm.Accesses.TouchAddress(utils.GetTreeKeyCodeKeccak(addr[:]), evm.StateDB.GetCodeHash(addr).Bytes())
+			}
 
 			addrCopy := addr
 			// If the account has no code, we can abort here

@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/holiman/uint256"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -88,17 +87,6 @@ func memoryCopierGas(stackpos int) gasFunc {
 	}
 }
 
-func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	usedGas := uint64(0)
-	slot := stack.Back(0)
-	if evm.accesses != nil {
-		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
-		usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
-	}
-
-	return usedGas, nil
-}
-
 var (
 	gasCallDataCopy        = memoryCopierGas(2)
 	gasCodeCopyStateful    = memoryCopierGas(2)
@@ -106,9 +94,20 @@ var (
 	gasReturnDataCopy      = memoryCopierGas(2)
 )
 
+func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	usedGas := uint64(0)
+	slot := stack.Back(0)
+	if evm.Accesses != nil {
+		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
+		usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
+	}
+
+	return usedGas, nil
+}
+
 func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var statelessGas uint64
-	if evm.accesses != nil {
+	if evm.Accesses != nil {
 		var (
 			codeOffset = stack.Back(1)
 			length     = stack.Back(2)
@@ -117,21 +116,12 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		if overflow {
 			uint64CodeOffset = 0xffffffffffffffff
 		}
-		uint64CodeEnd, overflow := new(uint256.Int).Add(codeOffset, length).Uint64WithOverflow()
+		uint64Length, overflow := length.Uint64WithOverflow()
 		if overflow {
-			uint64CodeEnd = 0xffffffffffffffff
+			uint64Length = 0xffffffffffffffff
 		}
-		addr := contract.Address()
-		chunk := uint64CodeOffset / 31
-		endChunk := uint64CodeEnd / 31
-		// XXX uint64 overflow in condition check
-		for ; chunk < endChunk; chunk++ {
-
-			// TODO make a version of GetTreeKeyCodeChunk without the bigint
-			index := trieUtils.GetTreeKeyCodeChunk(addr[:], uint256.NewInt(chunk))
-			statelessGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
-		}
-
+		_, offset, nonPaddedSize := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, uint64Length)
+		statelessGas = touchEachChunksAndChargeGas(offset, nonPaddedSize, contract.Address().Bytes()[:], nil, evm.Accesses)
 	}
 	usedGas, err := gasCodeCopyStateful(evm, contract, stack, mem, memorySize)
 	return usedGas + statelessGas, err
@@ -139,9 +129,8 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 
 func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var statelessGas uint64
-	if evm.accesses != nil {
+	if evm.Accesses != nil {
 		var (
-			a          = stack.Back(0)
 			codeOffset = stack.Back(2)
 			length     = stack.Back(3)
 		)
@@ -149,20 +138,17 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		if overflow {
 			uint64CodeOffset = 0xffffffffffffffff
 		}
-		uint64CodeEnd, overflow := new(uint256.Int).Add(codeOffset, length).Uint64WithOverflow()
+		uint64Length, overflow := length.Uint64WithOverflow()
 		if overflow {
-			uint64CodeEnd = 0xffffffffffffffff
+			uint64Length = 0xffffffffffffffff
 		}
-		addr := common.Address(a.Bytes20())
-		chunk := uint64CodeOffset / 31
-		endChunk := uint64CodeEnd / 31
-		// XXX uint64 overflow in condition check
-		for ; chunk < endChunk; chunk++ {
-			// TODO(@gballet) make a version of GetTreeKeyCodeChunk without the bigint
-			index := trieUtils.GetTreeKeyCodeChunk(addr[:], uint256.NewInt(chunk))
-			statelessGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
-		}
-
+		// note:  we must charge witness costs for the specified range regardless of whether it
+		// is in-bounds of the actual target account code.  This is because we must charge the cost
+		// before hitting the db to be able to now what the actual code size is.  This is different
+		// behavior from CODECOPY which only charges witness access costs for the part of the range
+		// which overlaps in the account code.  TODO: clarify this is desired behavior and amend the
+		// spec.
+		statelessGas = touchEachChunksAndChargeGas(uint64CodeOffset, uint64Length, nil, nil, evm.Accesses)
 	}
 	usedGas, err := gasExtCodeCopyStateful(evm, contract, stack, mem, memorySize)
 	return usedGas + statelessGas, err
@@ -171,11 +157,11 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
 
-	if evm.accesses != nil {
+	if evm.Accesses != nil {
 		where := stack.Back(0)
 		addr := contract.Address()
 		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)
-		usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
+		usedGas += evm.Accesses.TouchAddressAndChargeGas(index, nil)
 	}
 
 	return usedGas, nil
@@ -207,7 +193,6 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			return params.SstoreResetGas + accessGas, nil
 		}
 	}
-
 	// The new gas metering is based on net gas costs (EIP-1283):
 	//
 	// 1. If current value equals new value (this is a no-op), 200 gas is deducted.
@@ -422,7 +407,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		transfersValue = !stack.Back(2).IsZero()
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
-	if evm.accesses != nil {
+	if evm.Accesses != nil {
 		// Charge witness costs
 		for i := trieUtils.VersionLeafKey; i <= trieUtils.CodeSizeLeafKey; i++ {
 			index := trieUtils.GetTreeKeyAccountLeaf(address[:], byte(i))
@@ -456,6 +441,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+
 	return gas, nil
 }
 

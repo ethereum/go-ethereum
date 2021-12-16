@@ -128,7 +128,9 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
-	statedb.Witness().Merge(txContext.Accesses)
+	if config.IsCancun(blockNumber) {
+		statedb.Witness().Merge(txContext.Accesses)
+	}
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
