@@ -60,13 +60,10 @@ func (t *ShutdownTracker) MarkStartup() {
 	}
 }
 
-// Start will run an event loop that updates the current marker's timestamp every 5 minutes.
+// Start runs an event loop that updates the current marker's timestamp every 5 minutes.
 func (t *ShutdownTracker) Start() {
-	// Keep updating shutdown markers to pin down on the actual
-	// time of the crash.
 	go func() {
-		// update marker every five minutes
-		ticker := time.NewTicker(300 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
