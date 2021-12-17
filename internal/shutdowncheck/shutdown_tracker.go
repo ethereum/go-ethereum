@@ -42,11 +42,10 @@ func NewShutdownTracker(db ethdb.Database) *ShutdownTracker {
 	}
 }
 
-// Start will:
+// MarkStartup is to be called in the beginning when the node starts. It will:
 // - Push a new startup marker to the db
 // - Report previous unclean shutdowns
-// - Start an event loop that updates the latest marker's timestamp
-func (t *ShutdownTracker) Start() {
+func (t *ShutdownTracker) MarkStartup() {
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(t.db); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
 	} else {
@@ -59,24 +58,25 @@ func (t *ShutdownTracker) Start() {
 				"age", common.PrettyAge(t))
 		}
 	}
-	// Keep updating shutdown markers to pin down on the actual
-	// time of the crash.
-	go t.loop()
 }
 
-// loop updates the timestamp of the current marker every 5 minutes.
-func (t *ShutdownTracker) loop() {
-	// update marker every five minutes
-	ticker := time.NewTicker(300 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			rawdb.UpdateUncleanShutdownMarker(t.db)
-		case <-t.stopCh:
-			return
+// Start will run an event loop that updates the current marker's timestamp every 5 minutes.
+func (t *ShutdownTracker) Start() {
+	// Keep updating shutdown markers to pin down on the actual
+	// time of the crash.
+	go func() {
+		// update marker every five minutes
+		ticker := time.NewTicker(300 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				rawdb.UpdateUncleanShutdownMarker(t.db)
+			case <-t.stopCh:
+				return
+			}
 		}
-	}
+	}()
 }
 
 // Stop will stop the update loop and clear the current marker.

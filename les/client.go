@@ -190,7 +190,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	stack.RegisterLifecycle(leth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	leth.shutdownTracker.Start()
+	leth.shutdownTracker.MarkStartup()
 
 	return leth, nil
 }
@@ -345,6 +345,9 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 // light ethereum protocol implementation.
 func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
+
+	// Regularly update shutdown marker
+	s.shutdownTracker.Start()
 
 	if s.udpEnabled && s.p2pServer.DiscV5 == nil {
 		s.udpEnabled = false

@@ -267,7 +267,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterLifecycle(eth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	eth.shutdownTracker.Start()
+	eth.shutdownTracker.MarkStartup()
 
 	return eth, nil
 }
@@ -542,6 +542,9 @@ func (s *Ethereum) Start() error {
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
+
+	// Regularly update shutdown marker
+	s.shutdownTracker.Start()
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
