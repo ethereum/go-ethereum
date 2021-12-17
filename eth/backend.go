@@ -524,21 +524,21 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	//eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
-	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= s.p2pServer.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
-		}
-		maxPeers -= s.config.LightPeers
-	}
+	//maxPeers := s.p2pServer.MaxPeers
+	//if s.config.LightServ > 0 {
+	//	if s.config.LightPeers >= s.p2pServer.MaxPeers {
+	//		return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+	//	}
+	//	maxPeers -= s.config.LightPeers
+	//}
 	// Start the networking layer and the light server if requested
-	s.handler.Start(maxPeers)
+	//s.handler.Start(maxPeers)
 	return nil
 }
 
@@ -548,7 +548,7 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()
-	s.handler.Stop()
+	//s.handler.Stop()
 
 	// Then stop everything else.
 	s.bloomIndexer.Close()
