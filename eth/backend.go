@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -97,6 +98,8 @@ type Ethereum struct {
 	p2pServer *p2p.Server
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 }
 
 // New creates a new Ethereum object (including the
@@ -157,6 +160,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -262,19 +266,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 
-	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
+	// Successful startup; push a marker and check previous unclean shutdowns.
+	eth.shutdownTracker.MarkStartup()
+
 	return eth, nil
 }
 
@@ -549,6 +543,9 @@ func (s *Ethereum) Start() error {
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
+	// Regularly update shutdown marker
+	s.shutdownTracker.Start()
+
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
 	if s.config.LightServ > 0 {
@@ -577,7 +574,10 @@ func (s *Ethereum) Stop() error {
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
+
+	// Clean shutdown marker as the last thing before closing db
+	s.shutdownTracker.Stop()
+
 	s.chainDb.Close()
 	s.eventMux.Stop()
 
