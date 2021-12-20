@@ -441,7 +441,6 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
 		MixDigest:   params.Random,
-		// TODO (MariusVanDerWijden) add params.Random to header once required
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
