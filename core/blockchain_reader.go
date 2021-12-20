@@ -345,11 +345,10 @@ func (bc *BlockChain) Genesis() *types.Block {
 }
 
 // GetVMConfig returns the block chain VM config.
-func (bc *BlockChain) GetVMConfig() *vm.Config {
+func (bc *BlockChain) GetVMConfig() vm.Config {
 	bc.vmConfigMu.RLock()
 	defer bc.vmConfigMu.RUnlock()
-	copy := bc.vmConfig
-	return &copy
+	return bc.vmConfig
 }
 
 // SetVMConfig sets the vm config.
