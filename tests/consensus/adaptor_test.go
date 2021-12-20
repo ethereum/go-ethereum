@@ -28,7 +28,7 @@ func TestAdaptorShouldGetAuthorForDifferentConsensusVersion(t *testing.T) {
 	// Insert block 11
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 11)
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block11, err := insertBlock(blockchain, 11, blockCoinBase, currentBlock, merkleRoot)
+	block11, err := insertBlock(blockchain, 11, blockCoinBase, currentBlock, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

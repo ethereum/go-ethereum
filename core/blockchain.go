@@ -1344,6 +1344,21 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		// Split same-difficulty blocks by number
 		reorg = block.NumberU64() > currentBlock.NumberU64()
 	}
+
+	// if reorg {
+	// 	// Write the positional metadata for transaction and receipt lookups
+	// 	if err := WriteTxLookupEntries(batch, block); err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// 	// Write hash preimages
+	// 	if err := WritePreimages(bc.db, block.NumberU64(), state.Preimages()); err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// }
+	// if err := batch.Write(); err != nil {
+	// 	return NonStatTy, err
+	// }
+
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
