@@ -94,3 +94,22 @@ func TestURLComparison(t *testing.T) {
 		}
 	}
 }
+
+func TestURL_TerminalString(t *testing.T) {
+	t.Run("url should be abbreviated", func(t *testing.T) {
+		expected := "https://ethereum.org/example/of.."
+		url := URL{Scheme: "https", Path: "ethereum.org/example/of/big/url"}
+		terminalString := url.TerminalString()
+		if terminalString != expected {
+			t.Errorf("expected: %v, got: %v", expected, terminalString)
+		}
+	})
+	t.Run("url shouldn't be abbreviated", func(t *testing.T) {
+		expected := "https://ethereum.org/example"
+		url := URL{Scheme: "https", Path: "ethereum.org/example"}
+		terminalString := url.TerminalString()
+		if terminalString != expected {
+			t.Errorf("expected: %v, got: %v", expected, terminalString)
+		}
+	})
+}
