@@ -188,12 +188,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		operation := in.cfg.JumpTable[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
-		if sLen := stack.len(); sLen == int(params.StackLimit) {
-			if operation.expandsStack {
-				return nil, ErrStackOverflow
-			}
-		} else if sLen < operation.minStack {
+		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
+		} else if sLen == int(params.StackLimit) && operation.expandsStack {
+			return nil, ErrStackOverflow
 		}
 		if !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
