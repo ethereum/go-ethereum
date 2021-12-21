@@ -345,17 +345,8 @@ func (bc *BlockChain) Genesis() *types.Block {
 }
 
 // GetVMConfig returns the block chain VM config.
-func (bc *BlockChain) GetVMConfig() vm.Config {
-	bc.vmConfigMu.RLock()
-	defer bc.vmConfigMu.RUnlock()
-	return bc.vmConfig
-}
-
-// SetVMConfig sets the vm config.
-func (bc *BlockChain) SetVMConfig(config vm.Config) {
-	bc.vmConfigMu.Lock()
-	defer bc.vmConfigMu.Unlock()
-	bc.vmConfig = config
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
 }
 
 // SetTxLookupLimit is responsible for updating the txlookup limit to the

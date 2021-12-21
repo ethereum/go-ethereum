@@ -76,6 +76,7 @@ type BlockContext struct {
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	Random      common.Hash    // Provides information for RANDOM
+	IsPostMerge bool           // Set if we are post-merge
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -132,7 +133,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.IsPostMerge),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm

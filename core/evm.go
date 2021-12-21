@@ -62,6 +62,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
 		Random:      header.MixDigest,
+		IsPostMerge: header.Difficulty.Cmp(common.Big0) == 0,
 	}
 }
 
