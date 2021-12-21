@@ -86,7 +86,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	}
 	ethservice.TxPool().AddLocal(tx)
 	blockParams := PayloadAttributesV1{
-		Timestamp: blocks[9].Time() + 5,
+		Timestamp: blocks[9].Time() + 1,
 	}
 	execData, err := api.assembleBlock(blocks[9].Hash(), &blockParams)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	// Put the 10th block's tx in the pool and produce a new block
 	api.insertTransactions(blocks[9].Transactions())
 	blockParams := PayloadAttributesV1{
-		Timestamp: blocks[8].Time() + 5,
+		Timestamp: blocks[8].Time() + 1,
 	}
 	execData, err := api.assembleBlock(blocks[8].Hash(), &blockParams)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	// Put the 10th block's tx in the pool and produce a new block
 	api.insertTransactions(blocks[9].Transactions())
 	blockParams := PayloadAttributesV1{
-		Timestamp: blocks[8].Time() + 5,
+		Timestamp: blocks[8].Time() + 1,
 	}
 	fcState := ForkchoiceStateV1{
 		HeadBlockHash:      blocks[8].Hash(),
@@ -211,7 +211,7 @@ func TestEth2NewBlock(t *testing.T) {
 		ethservice.TxPool().AddLocal(tx)
 
 		execData, err := api.assembleBlock(parent.Hash(), &PayloadAttributesV1{
-			Timestamp: parent.Time() + 5,
+			Timestamp: parent.Time() + 1,
 		})
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
@@ -302,7 +302,7 @@ func TestEth2DeepReorg(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			execData, err := api.assembleBlock(AssembleBlockParams{
 				ParentHash: parent.Hash(),
-				Timestamp:  parent.Time() + 5,
+				Timestamp:  parent.Time() + 1,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create the executable data %v", err)

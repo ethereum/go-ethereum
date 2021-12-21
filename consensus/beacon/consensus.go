@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -33,8 +34,9 @@ import (
 
 // Proof-of-stake protocol constants.
 var (
-	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
-	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
+	beaconDifficulty              = common.Big0          // The default block difficulty in the beacon consensus
+	beaconNonce                   = types.EncodeNonce(0) // The default block nonce in the beacon consensus
+	allowedFutureBlockTimeSeconds = int64(1)             // Max seconds from current time allowed for blocks, before they're considered future blocks
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -46,6 +48,7 @@ var (
 	errInvalidMixDigest = errors.New("invalid mix digest")
 	errInvalidNonce     = errors.New("invalid nonce")
 	errInvalidUncleHash = errors.New("invalid uncle hash")
+	errOlderBlockTime   = errors.New("timestamp older than parent")
 )
 
 // Beacon is a consensus engine that combines the eth1 consensus and proof-of-stake
@@ -175,7 +178,7 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 // 	   - nonce is expected to be 0
 //     - unclehash is expected to be Hash(emptyHeader)
 //     to be the desired constants
-// (b) the timestamp is not verified anymore
+// (b) the timestamp is older than it's parent and not in the future
 // (c) the extradata is limited to 32 bytes
 func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
 	// Ensure that the header's extra-data section is of a reasonable size
@@ -191,6 +194,12 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
+	}
+	if header.Time > uint64(time.Now().Unix()+allowedFutureBlockTimeSeconds) {
+		return consensus.ErrFutureBlock
+	}
+	if header.Time <= parent.Time {
+		return errOlderBlockTime
 	}
 	// Verify the block's difficulty to ensure it's the default constant
 	if beaconDifficulty.Cmp(header.Difficulty) != 0 {
