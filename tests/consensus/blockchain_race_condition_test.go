@@ -9,7 +9,7 @@ import (
 )
 
 // Snapshot try to read before blockchain is written
-func TestRaceconditionOnBlockchainReadAndWrite(t *testing.T) {
+func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 
 	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)
 
@@ -78,22 +78,25 @@ func TestRaceconditionOnBlockchainReadAndWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if blockchain.CurrentHeader().Hash() != block450B.Hash() {
+		t.Fatalf("the block with higher difficulty should be current header")
+	}
 	state, err = blockchain.State()
 	if err != nil {
 		t.Fatalf("Failed while trying to get blockchain state")
 	}
 	if state.GetBalance(acc1Addr).Cmp(new(big.Int).SetUint64(10000000888)) != 0 {
-		t.Fatalf("account 1 should NOT have 10000000999 in balance as the block is forked, not on the main chain")
+		t.Fatalf("account 1 should have 10000000888 in balance as the block replace previous head block at number 450")
 	}
 
 	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Should run the `updateM1` for forked chain as it's now the mainchain, hence account3 NOT exit
-	if signers[acc3Addr.Hex()] == true {
+	// Should run the `updateM1` for forked chain as it's now the mainchain, hence account2 should exist
+	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
-		t.Fatalf("account 3 should NOT sit in the signer list as previos block result")
+		t.Fatalf("account 2 should sit in the signer list")
 	}
 
 	//Insert block 451 parent is 451 B

@@ -249,7 +249,7 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 		when it happens we get the signers list by requesting smart contract
 	*/
 	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := x.snapshot(chain, number-1, header.ParentHash, parents, header)
+	snap, err := x.snapshot(chain, number-1, header.ParentHash, parents, nil)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
-func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header, currentHeader *types.Header) (*SnapshotV1, error) {
+func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header, selfHeader *types.Header) (*SnapshotV1, error) {
 	// Search for a SnapshotV1 in memory or on disk for checkpoints
 	var (
 		headers []*types.Header
@@ -482,8 +482,8 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 				return nil, consensus.ErrUnknownAncestor
 			}
 			parents = parents[:len(parents)-1]
-		} else if currentHeader != nil && currentHeader.Hash() == hash {
-			header = currentHeader
+		} else if selfHeader != nil && selfHeader.Hash() == hash {
+			header = selfHeader
 		} else {
 			// No explicit parents (or no more left), reach out to the database
 			header = chain.GetHeader(hash, number)
@@ -542,7 +542,7 @@ func (x *XDPoS_v1) verifySeal(chain consensus.ChainReader, header *types.Header,
 		return utils.ErrUnknownBlock
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := x.snapshot(chain, number-1, header.ParentHash, parents, header)
+	snap, err := x.snapshot(chain, number-1, header.ParentHash, parents, nil)
 	if err != nil {
 		return err
 	}
@@ -658,7 +658,7 @@ func (x *XDPoS_v1) Prepare(chain consensus.ChainReader, header *types.Header) er
 
 	number := header.Number.Uint64()
 	// Assemble the voting snapshot to check which votes make sense
-	snap, err := x.snapshot(chain, number-1, header.ParentHash, nil, header)
+	snap, err := x.snapshot(chain, number-1, header.ParentHash, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -834,7 +834,7 @@ func (x *XDPoS_v1) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	x.lock.RUnlock()
 
 	// Bail out if we're unauthorized to sign a block
-	snap, err := x.snapshot(chain, number-1, header.ParentHash, nil, block.Header())
+	snap, err := x.snapshot(chain, number-1, header.ParentHash, nil, nil)
 	if err != nil {
 		return nil, err
 	}
