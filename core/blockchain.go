@@ -1345,6 +1345,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		reorg = block.NumberU64() > currentBlock.NumberU64()
 	}
 
+	// This is the ETH fix. We shall ultimately have this workflow,
+	// but due to below code has diverged significantly between ETH and XDC, and current issue we have,
+	// it's best to have it in a different PR with more investigations.
 	// if reorg {
 	// 	// Write the positional metadata for transaction and receipt lookups
 	// 	if err := WriteTxLookupEntries(batch, block); err != nil {

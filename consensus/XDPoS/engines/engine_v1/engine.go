@@ -483,6 +483,7 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 			}
 			parents = parents[:len(parents)-1]
 		} else if selfHeader != nil && selfHeader.Hash() == hash {
+			// it prevents db doesn't have current block info, can be removed by refactor blockchain.go reorg function call.
 			header = selfHeader
 		} else {
 			// No explicit parents (or no more left), reach out to the database
