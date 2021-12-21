@@ -17,7 +17,9 @@
 package utils
 
 import (
-	"crypto/sha256"
+	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
+	"github.com/crate-crypto/go-ipa/ipa"
+	"github.com/gballet/go-verkle"
 
 	"github.com/holiman/uint256"
 )
@@ -40,15 +42,20 @@ var (
 )
 
 func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
-	digest := sha256.New()
-	digest.Write(address)
-	treeIndexBytes := treeIndex.Bytes()
-	var payload [32]byte
-	copy(payload[:len(treeIndexBytes)], treeIndexBytes)
-	digest.Write(payload[:])
-	h := digest.Sum(nil)
-	h[31] = subIndex
-	return h
+	var poly []fr.Element
+	verkle.FromLEBytes(&poly[0], []byte{2, 63})
+	verkle.FromLEBytes(&poly[1], address[:16])
+	verkle.FromLEBytes(&poly[2], address[16:])
+	verkle.FromLEBytes(&poly[3], treeIndex.Bytes()[:16])
+	verkle.FromLEBytes(&poly[4], treeIndex.Bytes()[16:])
+	for i := 5; i < len(poly); i++ {
+		verkle.CopyFr(&poly[i], &verkle.FrZero)
+	}
+
+	ret := ipa.NewIPASettings().Commit(poly)
+	retb := ret.Bytes()
+	return retb[:]
+
 }
 
 func GetTreeKeyAccountLeaf(address []byte, leaf byte) []byte {
