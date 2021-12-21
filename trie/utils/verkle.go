@@ -42,17 +42,20 @@ var (
 )
 
 func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
-	var poly []fr.Element
+	var poly [256]fr.Element
+	verkle.FromLEBytes(&poly[0], []byte{1})
 	verkle.FromLEBytes(&poly[0], []byte{2, 63})
 	verkle.FromLEBytes(&poly[1], address[:16])
 	verkle.FromLEBytes(&poly[2], address[16:])
-	verkle.FromLEBytes(&poly[3], treeIndex.Bytes()[:16])
-	verkle.FromLEBytes(&poly[4], treeIndex.Bytes()[16:])
+	var index [32]byte
+	copy(index[:], treeIndex.Bytes())
+	verkle.FromLEBytes(&poly[3], index[:16])
+	verkle.FromLEBytes(&poly[4], index[16:])
 	for i := 5; i < len(poly); i++ {
 		verkle.CopyFr(&poly[i], &verkle.FrZero)
 	}
 
-	ret := ipa.NewIPASettings().Commit(poly)
+	ret := ipa.NewIPASettings().Commit(poly[:])
 	retb := ret.Bytes()
 	return retb[:]
 
