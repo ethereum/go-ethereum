@@ -223,7 +223,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if t.json.Env.Random != nil {
 		vmconfig.RandomOpcode = true
 		context.Random = common.BigToHash(t.json.Env.Random)
-		context.Difficulty = nil
+		context.Difficulty = big.NewInt(0)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	// Execute the message.
