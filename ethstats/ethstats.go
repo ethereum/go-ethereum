@@ -57,6 +57,9 @@ const (
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+
+	// chain2HeadChanSize is the size of channel listening to Chain2HeadEvent.
+	chain2HeadChanSize = 10
 )
 
 // backend encompasses the bare-minimum functionality needed for ethstats reporting
@@ -70,10 +73,15 @@ type backend interface {
 	SyncProgress() ethereum.SyncProgress
 }
 
+type extendedBackend interface {
+	backend
+	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
+}
+
 // fullNodeBackend encompasses the functionality necessary for a full node
 // reporting to ethstats
 type fullNodeBackend interface {
-	backend
+	extendedBackend
 	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
@@ -84,7 +92,7 @@ type fullNodeBackend interface {
 // chain statistics up to a monitoring server.
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
-	backend backend
+	backend extendedBackend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
@@ -96,6 +104,9 @@ type Service struct {
 
 	headSub event.Subscription
 	txSub   event.Subscription
+
+	//bor related sub
+	chain2headSub event.Subscription
 }
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
@@ -168,7 +179,7 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
+func New(node *node.Node, backend extendedBackend, engine consensus.Engine, url string) error {
 	parts, err := parseEthstatsURL(url)
 	if err != nil {
 		return err
@@ -195,7 +206,9 @@ func (s *Service) Start() error {
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
 	s.txSub = s.backend.SubscribeNewTxsEvent(txEventCh)
-	go s.loop(chainHeadCh, txEventCh)
+	chain2HeadCh := make(chan core.Chain2HeadEvent, chain2HeadChanSize)
+	s.chain2headSub = s.backend.SubscribeChain2HeadEvent(chain2HeadCh)
+	go s.loop(chainHeadCh, chain2HeadCh, txEventCh)
 
 	log.Info("Stats daemon started")
 	return nil
@@ -211,12 +224,13 @@ func (s *Service) Stop() error {
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core.NewTxsEvent) {
+func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan core.Chain2HeadEvent, txEventCh chan core.NewTxsEvent) {
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
-		quitCh = make(chan struct{})
-		headCh = make(chan *types.Block, 1)
-		txCh   = make(chan struct{}, 1)
+		quitCh  = make(chan struct{})
+		headCh  = make(chan *types.Block, 1)
+		txCh    = make(chan struct{}, 1)
+		head2Ch = make(chan core.Chain2HeadEvent, 1)
 	)
 	go func() {
 		var lastTx mclock.AbsTime
@@ -228,6 +242,13 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 			case head := <-chainHeadCh:
 				select {
 				case headCh <- head.Block:
+				default:
+				}
+
+			// Notify of chain2head events, but drop if too frequent
+			case chain2head := <-chain2HeadCh:
+				select {
+				case head2Ch <- chain2head:
 				default:
 				}
 
@@ -333,6 +354,12 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 					if err = s.reportPending(conn); err != nil {
 						log.Warn("Post-block transaction stats report failed", "err", err)
 					}
+
+				case chain2head := <-head2Ch:
+					if err = s.reportChain2Head(conn, &chain2head); err != nil {
+						log.Warn("Reorg stats report failed", "err", err)
+					}
+
 				case <-txCh:
 					if err = s.reportPending(conn); err != nil {
 						log.Warn("Transaction stats report failed", "err", err)
@@ -746,6 +773,44 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	}
 	report := map[string][]interface{}{
 		"emit": {"pending", stats},
+	}
+	return conn.WriteJSON(report)
+}
+
+type Chain2HeadStats struct {
+	NewChain []*blockStats
+	OldChain []*blockStats
+	Type     string
+}
+
+// reportChain2Head checks for reorg and sends current head to stats server.
+func (s *Service) reportChain2Head(conn *connWrapper, chain2HeadData *core.Chain2HeadEvent) error {
+
+	var chain2headStats Chain2HeadStats
+
+	// assemble new chain
+	for _, block := range chain2HeadData.NewChain {
+		chain2headStats.NewChain = append(chain2headStats.NewChain, s.assembleBlockStats(block))
+	}
+
+	// assemble old chain
+	for _, block := range chain2HeadData.OldChain {
+		chain2headStats.OldChain = append(chain2headStats.OldChain, s.assembleBlockStats(block))
+	}
+
+	chain2headStats.Type = chain2HeadData.Type
+
+	// Assemble the block report and send it to the server
+	log.Trace("Reorg Detected", "reorg root block number", chain2headStats.NewChain[0].Number, "block hash", chain2headStats.NewChain[0].Hash)
+
+	stats := map[string]interface{}{
+		"id":                      s.node,
+		"reorg root block number": chain2headStats.NewChain[0].Number,
+		"reorg root block hash":   chain2headStats.NewChain[0].Hash,
+		"details":                 chain2headStats,
+	}
+	report := map[string][]interface{}{
+		"emit": {"Chain2Head", stats},
 	}
 	return conn.WriteJSON(report)
 }

@@ -99,6 +99,8 @@ type Backend interface {
 	GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 
+	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
+
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 }

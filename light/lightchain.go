@@ -49,16 +49,17 @@ var (
 // headers, downloading block bodies and receipts on demand through an ODR
 // interface. It only does header validation during chain insertion.
 type LightChain struct {
-	hc            *core.HeaderChain
-	indexerConfig *IndexerConfig
-	chainDb       ethdb.Database
-	engine        consensus.Engine
-	odr           OdrBackend
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc             *core.HeaderChain
+	indexerConfig  *IndexerConfig
+	chainDb        ethdb.Database
+	engine         consensus.Engine
+	odr            OdrBackend
+	chainFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	chain2HeadFeed event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -559,6 +560,11 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+// SubscribeChain2HeadEvent registers a subscription of Reorg/head/fork events.
+func (lc *LightChain) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	return lc.scope.Track(lc.chain2HeadFeed.Subscribe(ch))
 }
 
 // DisableCheckFreq disables header validation. This is used for ultralight mode.
