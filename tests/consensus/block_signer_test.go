@@ -26,7 +26,7 @@ func TestNotUpdateSignerListIfNotOnGapBlock(t *testing.T) {
 
 	//Get from block validator error message
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	blockA, err := insertBlockTxs(blockchain, 401, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 401, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 	// Insert block 450
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", 450)
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block, err := insertBlock(blockchain, 450, blockCoinBase, parentBlock, merkleRoot)
+	block, err := insertBlock(blockchain, 450, blockCoinBase, parentBlock, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 
 	//Get from block validator error message
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	block449, err := insertBlockTxs(blockchain, 449, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot)
+	block449, err := insertBlockTxs(blockchain, 449, blockCoinbaseA, parentBlock, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 	// Now, let's mine another block to trigger the GAP block signerList update
 	block450CoinbaseAddress := "0xaaa0000000000000000000000000000000000450"
 	merkleRoot = "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	block450, err := insertBlock(blockchain, 450, block450CoinbaseAddress, parentBlock, merkleRoot)
+	block450, err := insertBlock(blockchain, 450, block450CoinbaseAddress, parentBlock, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
 	//Get from block validator error message
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	}
 
 	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, currentBlock, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	}
 
 	merkleRoot = "068dfa09d7b4093441c0cc4d9807a71bc586f6101c072d939b214c21cd136eb3"
-	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, currentBlock, []*types.Transaction{tx}, merkleRoot)
+	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, currentBlock, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "068dfa09d7b4093441c0cc4d9807a71bc586f6101c072d939b214c21cd136eb3"
-	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, 1)
 
 	if err != nil {
 		t.Fatal(err)
@@ -316,7 +316,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	transferTransaction := transferTx(t, acc1Addr, 999)
 
 	merkleRoot := "ea465415b60d88429f181fec9fae67c0f19cbf5a4fa10971d96d4faa57d96ffa"
-	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	transferTransaction = transferTx(t, acc1Addr, 888)
 
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot)
+	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, 1)
 
 	if err != nil {
 		t.Fatal(err)
@@ -440,7 +440,7 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 	// Insert normal blocks 450 A
 	blockCoinBase450A := "0xaaa0000000000000000000000000000000000450"
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block450A, err := insertBlock(blockchain, 450, blockCoinBase450A, parentBlock, merkleRoot)
+	block450A, err := insertBlock(blockchain, 450, blockCoinBase450A, parentBlock, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +453,7 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 	}
 
 	merkleRoot = "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	block451A, err := insertBlockTxs(blockchain, 451, blockCoinbase451A, block450A, []*types.Transaction{tx}, merkleRoot)
+	block451A, err := insertBlockTxs(blockchain, 451, blockCoinbase451A, block450A, []*types.Transaction{tx}, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,21 +476,21 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 	// Insert forked Block 450 B
 	blockCoinBase450B := "0xbbb0000000000000000000000000000000000450"
 	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block450B, err := insertBlock(blockchain, 450, blockCoinBase450B, parentBlock, merkleRoot)
+	block450B, err := insertBlock(blockchain, 450, blockCoinBase450B, parentBlock, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot)
+	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blockCoinBase452B := "0xbbb0000000000000000000000000000000000452"
 	merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-	block452B, err := insertBlock(blockchain, 452, blockCoinBase452B, block451B, merkleRoot)
+	block452B, err := insertBlock(blockchain, 452, blockCoinBase452B, block451B, merkleRoot, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

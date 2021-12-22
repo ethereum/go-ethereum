@@ -1344,6 +1344,24 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		// Split same-difficulty blocks by number
 		reorg = block.NumberU64() > currentBlock.NumberU64()
 	}
+
+	// This is the ETH fix. We shall ultimately have this workflow,
+	// but due to below code has diverged significantly between ETH and XDC, and current issue we have,
+	// it's best to have it in a different PR with more investigations.
+	// if reorg {
+	// 	// Write the positional metadata for transaction and receipt lookups
+	// 	if err := WriteTxLookupEntries(batch, block); err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// 	// Write hash preimages
+	// 	if err := WritePreimages(bc.db, block.NumberU64(), state.Preimages()); err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// }
+	// if err := batch.Write(); err != nil {
+	// 	return NonStatTy, err
+	// }
+
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
@@ -2098,6 +2116,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 		}
 	)
+	log.Warn("Reorg", "oldBlock hash", oldBlock.Hash().Hex(), "number", oldBlock.NumberU64(), "newBlock hash", newBlock.Hash().Hex(), "number", newBlock.NumberU64())
 
 	// first reduce whoever is higher bound
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
@@ -2142,7 +2161,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
-		logFn := log.Debug
+		logFn := log.Warn
 		if len(oldChain) > 63 {
 			logFn = log.Warn
 		}

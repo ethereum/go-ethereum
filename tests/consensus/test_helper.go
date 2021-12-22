@@ -236,7 +236,7 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
 		merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-		block, err := insertBlock(blockchain, i, blockCoinBase, currentBlock, merkleRoot)
+		block, err := insertBlock(blockchain, i, blockCoinBase, currentBlock, merkleRoot, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,13 +252,14 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 }
 
 // insert Block without transcation attached
-func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, root string) (*types.Block, error) {
+func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, root string, difficulty int64) (*types.Block, error) {
 	block, err := createXDPoSTestBlock(
 		blockchain,
 		parentBlock.Hash().Hex(),
 		blockCoinBase, blockNum, nil,
 		"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
 		common.HexToHash(root),
+		difficulty,
 	)
 	if err != nil {
 		return nil, err
@@ -272,13 +273,14 @@ func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, par
 }
 
 // insert Block with transcation attached
-func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, txs []*types.Transaction, root string) (*types.Block, error) {
+func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, txs []*types.Transaction, root string, difficulty int64) (*types.Block, error) {
 	block, err := createXDPoSTestBlock(
 		blockchain,
 		parentBlock.Hash().Hex(),
 		blockCoinBase, blockNum, txs,
 		"0x9319777b782ba2c83a33c995481ff894ac96d9a92a1963091346a3e1e386705c",
 		common.HexToHash(root),
+		difficulty,
 	)
 	if err != nil {
 		return nil, err
@@ -291,7 +293,7 @@ func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, 
 	return block, nil
 }
 
-func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number int, txs []*types.Transaction, receiptHash string, root common.Hash) (*types.Block, error) {
+func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number int, txs []*types.Transaction, receiptHash string, root common.Hash, difficulty int64) (*types.Block, error) {
 	extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
 	//ReceiptHash = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 	//Root := "0xc99c095e53ff1afe3b86750affd13c7550a2d24d51fb8e41b3c3ef2ea8274bcc"
@@ -304,7 +306,7 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 		ReceiptHash: common.HexToHash(receiptHash),
 		Root:        root,
 		Coinbase:    common.HexToAddress(coinbase),
-		Difficulty:  big.NewInt(int64(1)),
+		Difficulty:  big.NewInt(difficulty),
 		Number:      big.NewInt(int64(number)),
 		GasLimit:    1200000000,
 		Time:        big.NewInt(int64(number * 10)),
