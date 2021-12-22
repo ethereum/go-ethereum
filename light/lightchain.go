@@ -49,17 +49,16 @@ var (
 // headers, downloading block bodies and receipts on demand through an ODR
 // interface. It only does header validation during chain insertion.
 type LightChain struct {
-	hc             *core.HeaderChain
-	indexerConfig  *IndexerConfig
-	chainDb        ethdb.Database
-	engine         consensus.Engine
-	odr            OdrBackend
-	chainFeed      event.Feed
-	chainSideFeed  event.Feed
-	chainHeadFeed  event.Feed
-	chain2HeadFeed event.Feed
-	scope          event.SubscriptionScope
-	genesisBlock   *types.Block
+	hc            *core.HeaderChain
+	indexerConfig *IndexerConfig
+	chainDb       ethdb.Database
+	engine        consensus.Engine
+	odr           OdrBackend
+	chainFeed     event.Feed
+	chainSideFeed event.Feed
+	chainHeadFeed event.Feed
+	scope         event.SubscriptionScope
+	genesisBlock  *types.Block
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -73,6 +72,9 @@ type LightChain struct {
 	running          int32 // whether LightChain is running or stopped
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
+
+	// Bor
+	chain2HeadFeed event.Feed
 }
 
 // NewLightChain returns a fully initialised light chain using information
