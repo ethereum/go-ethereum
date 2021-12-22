@@ -20,22 +20,6 @@ func memoryKeccak256(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
-func memoryCallDataCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
-}
-
-func memoryReturnDataCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
-}
-
-func memoryCodeCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
-}
-
-func memoryExtCodeCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(1), stack.Back(3))
-}
-
 func memoryMLoad(stack *Stack) (uint64, bool) {
 	return calcMemSize64WithUint(stack.Back(0), 32)
 }

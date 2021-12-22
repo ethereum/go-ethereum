@@ -78,21 +78,31 @@ func memoryGasCostAndSize(stack *Stack, mem *Memory, sizeFunc memorySizeFunc) (u
 }
 
 // memoryCopierGas creates the gas functions for the following opcodes, and takes
-// the stack position of the operand which determines the size of the data to copy
-// as argument:
-// CALLDATACOPY (stack position 2)
-// CODECOPY (stack position 2)
-// EXTCODECOPY (stack position 3)
-// RETURNDATACOPY (stack position 2)
-func memoryCopierGas(stackpos int, sizeFunc memorySizeFunc) gasFunc {
+// the stack positions of the operand which determine the memory offsset and size of
+// the data to copy as argument:
+// CALLDATACOPY (offset stack position 0, len stack position 2)
+// CODECOPY (offset stack position 0, len stack position 2)
+// EXTCODECOPY (offset stack position 1, len stack position 3)
+// RETURNDATACOPY (offset stack position 0, len stack position 2)
+func memoryCopierGas(offsetStackPos, lenStackPos int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint64, uint64, error) {
 		// Gas for expanding the memory
-		gas, memorySize, err := memoryGasCostAndSize(stack, mem, sizeFunc)
+		memSize, overflow := calcMemSize64(stack.Back(offsetStackPos), stack.Back(lenStackPos))
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		// memory is expanded in words of 32 bytes. Gas is also calculated in words.
+		memorySize, overflow := math.SafeMul(toWordSize(memSize), 32)
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		gas, err := memoryGasCost(mem, memorySize)
 		if err != nil {
 			return 0, 0, err
 		}
+
 		// And gas for copying data, charged per word at param.CopyGas
-		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
+		words, overflow := stack.Back(lenStackPos).Uint64WithOverflow()
 		if overflow {
 			return 0, 0, ErrGasUintOverflow
 		}
@@ -109,10 +119,10 @@ func memoryCopierGas(stackpos int, sizeFunc memorySizeFunc) gasFunc {
 }
 
 var (
-	gasCallDataCopy   = memoryCopierGas(2, memoryCallDataCopy)
-	gasCodeCopy       = memoryCopierGas(2, memoryCodeCopy)
-	gasExtCodeCopy    = memoryCopierGas(3, memoryExtCodeCopy)
-	gasReturnDataCopy = memoryCopierGas(2, memoryReturnDataCopy)
+	gasCallDataCopy   = memoryCopierGas(0, 2)
+	gasCodeCopy       = memoryCopierGas(0, 2)
+	gasExtCodeCopy    = memoryCopierGas(1, 3)
+	gasReturnDataCopy = memoryCopierGas(0, 2)
 )
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint64, uint64, error) {
