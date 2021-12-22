@@ -71,17 +71,15 @@ type backend interface {
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
-}
 
-type extendedBackend interface {
-	backend
+	// Bor
 	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
 // reporting to ethstats
 type fullNodeBackend interface {
-	extendedBackend
+	backend
 	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
@@ -92,7 +90,7 @@ type fullNodeBackend interface {
 // chain statistics up to a monitoring server.
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
-	backend extendedBackend
+	backend backend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
@@ -179,7 +177,7 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend extendedBackend, engine consensus.Engine, url string) error {
+func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
 	parts, err := parseEthstatsURL(url)
 	if err != nil {
 		return err
