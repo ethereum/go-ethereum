@@ -49,7 +49,7 @@ builds:
     tags:
       - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
       -s -w -extldflags "-static"
 
   - id: linux-arm64
@@ -65,7 +65,7 @@ builds:
     tags:
       - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
       -s -w -extldflags "-static"
 
 nfpms:
