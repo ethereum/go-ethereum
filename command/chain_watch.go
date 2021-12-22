@@ -35,18 +35,6 @@ func (c *ChainWatchCommand) Synopsis() string {
 	return "Watch the chainHead, reorg and fork events in real-time"
 }
 
-func printEvent(msg *proto.ChainWatchResponse) string {
-	var out string
-	if msg.Type == core.Chain2HeadCanonicalEvent {
-		out = fmt.Sprintf("Block Added : %v", msg.Newchain)
-	} else if msg.Type == core.Chain2HeadForkEvent {
-		out = fmt.Sprintf("New Fork Block : %v", msg.Newchain)
-	} else if msg.Type == core.Chain2HeadReorgEvent {
-		out = fmt.Sprintf("Reorg Detected \nAdded : %v \nRemoved : %v", msg.Newchain, msg.Oldchain)
-	}
-	return out
-}
-
 // Run implements the cli.Command interface
 func (c *ChainWatchCommand) Run(args []string) int {
 	flags := c.Flags()
@@ -82,8 +70,20 @@ func (c *ChainWatchCommand) Run(args []string) int {
 			c.UI.Output(err.Error())
 			break
 		}
-		c.UI.Output(printEvent(msg))
+		c.UI.Output(formatHeadEvent(msg))
 	}
 
 	return 0
+}
+
+func formatHeadEvent(msg *proto.ChainWatchResponse) string {
+	var out string
+	if msg.Type == core.Chain2HeadCanonicalEvent {
+		out = fmt.Sprintf("Block Added : %v", msg.Newchain)
+	} else if msg.Type == core.Chain2HeadForkEvent {
+		out = fmt.Sprintf("New Fork Block : %v", msg.Newchain)
+	} else if msg.Type == core.Chain2HeadReorgEvent {
+		out = fmt.Sprintf("Reorg Detected \nAdded : %v \nRemoved : %v", msg.Newchain, msg.Oldchain)
+	}
+	return out
 }

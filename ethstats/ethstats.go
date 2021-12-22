@@ -230,7 +230,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan c
 		quitCh  = make(chan struct{})
 		headCh  = make(chan *types.Block, 1)
 		txCh    = make(chan struct{}, 1)
-		head2Ch = make(chan core.Chain2HeadEvent, 1)
+		head2Ch = make(chan core.Chain2HeadEvent, 100)
 	)
 	go func() {
 		var lastTx mclock.AbsTime
@@ -777,40 +777,45 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	return conn.WriteJSON(report)
 }
 
-type Chain2HeadStats struct {
-	NewChain []*blockStats
-	OldChain []*blockStats
-	Type     string
+type blockStub struct {
+	Hash       string `json:"hash"`
+	Number     uint64 `json:"number"`
+	ParentHash string `json:"parent_hash"`
+}
+
+func createStub(b *types.Block) *blockStub {
+	s := &blockStub{
+		Hash:       b.Hash().String(),
+		ParentHash: b.ParentHash().String(),
+		Number:     b.NumberU64(),
+	}
+	return s
+}
+
+type ChainHeadEvent struct {
+	NewChain []*blockStub `json:"added"`
+	OldChain []*blockStub `json:"removed"`
+	Type     string       `json:"type"`
 }
 
 // reportChain2Head checks for reorg and sends current head to stats server.
 func (s *Service) reportChain2Head(conn *connWrapper, chain2HeadData *core.Chain2HeadEvent) error {
-
-	var chain2headStats Chain2HeadStats
-
-	// assemble new chain
+	chainHeadEvent := ChainHeadEvent{
+		Type: chain2HeadData.Type,
+	}
 	for _, block := range chain2HeadData.NewChain {
-		chain2headStats.NewChain = append(chain2headStats.NewChain, s.assembleBlockStats(block))
+		chainHeadEvent.NewChain = append(chainHeadEvent.NewChain, createStub(block))
 	}
-
-	// assemble old chain
 	for _, block := range chain2HeadData.OldChain {
-		chain2headStats.OldChain = append(chain2headStats.OldChain, s.assembleBlockStats(block))
+		chainHeadEvent.OldChain = append(chainHeadEvent.OldChain, createStub(block))
 	}
-
-	chain2headStats.Type = chain2HeadData.Type
-
-	// Assemble the block report and send it to the server
-	log.Trace("Reorg Detected", "reorg root block number", chain2headStats.NewChain[0].Number, "block hash", chain2headStats.NewChain[0].Hash)
 
 	stats := map[string]interface{}{
-		"id":                      s.node,
-		"reorg root block number": chain2headStats.NewChain[0].Number,
-		"reorg root block hash":   chain2headStats.NewChain[0].Hash,
-		"details":                 chain2headStats,
+		"id":    s.node,
+		"event": chainHeadEvent,
 	}
 	report := map[string][]interface{}{
-		"emit": {"Chain2Head", stats},
+		"emit": {"headEvent", stats},
 	}
 	return conn.WriteJSON(report)
 }
