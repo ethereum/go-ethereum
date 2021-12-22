@@ -300,19 +300,54 @@ func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint
 // makePureMemoryGasCost is used by several operations, which aside from their
 // static cost have a dynamic cost which is solely based on the memory
 // expansion
-func makePureMemoryGasCost(sizeFunc memorySizeFunc) gasFunc {
+func makePureMemoryGasCost(offsetStackPos, lenStackPos int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint64, uint64, error) {
-		return memoryGasCostAndSize(stack, mem, sizeFunc)
+		memSize, overflow := calcMemSize64(stack.Back(offsetStackPos), stack.Back(lenStackPos))
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		// memory is expanded in words of 32 bytes. Gas is also calculated in words.
+		memorySize, overflow := math.SafeMul(toWordSize(memSize), 32)
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		gas, err := memoryGasCost(mem, memorySize)
+		if err != nil {
+			return 0, 0, err
+		}
+		return gas, memorySize, nil
 	}
 }
 
 var (
-	gasReturn  = makePureMemoryGasCost(memoryReturn)
-	gasRevert  = makePureMemoryGasCost(memoryRevert)
-	gasMLoad   = makePureMemoryGasCost(memoryMLoad)
-	gasMStore8 = makePureMemoryGasCost(memoryMStore8)
-	gasMStore  = makePureMemoryGasCost(memoryMStore)
-	gasCreate  = makePureMemoryGasCost(memoryCreate)
+	gasReturn = makePureMemoryGasCost(0, 1)
+	gasRevert = makePureMemoryGasCost(0, 1)
+	gasCreate = makePureMemoryGasCost(1, 2)
+)
+
+func makePureMemoryGasCostWithUint(offsetStackPos int, length64 uint64) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint64, uint64, error) {
+		memSize, overflow := calcMemSize64WithUint(stack.Back(offsetStackPos), length64)
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		// memory is expanded in words of 32 bytes. Gas is also calculated in words.
+		memorySize, overflow := math.SafeMul(toWordSize(memSize), 32)
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		gas, err := memoryGasCost(mem, memorySize)
+		if err != nil {
+			return 0, 0, err
+		}
+		return gas, memorySize, nil
+	}
+}
+
+var (
+	gasMLoad   = makePureMemoryGasCostWithUint(0, 32)
+	gasMStore8 = makePureMemoryGasCostWithUint(0, 1)
+	gasMStore  = makePureMemoryGasCostWithUint(0, 32)
 )
 
 func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory) (uint64, uint64, error) {

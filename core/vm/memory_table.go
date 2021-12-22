@@ -20,22 +20,6 @@ func memoryKeccak256(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
-func memoryMLoad(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 32)
-}
-
-func memoryMStore8(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 1)
-}
-
-func memoryMStore(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 32)
-}
-
-func memoryCreate(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(1), stack.Back(2))
-}
-
 func memoryCreate2(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(1), stack.Back(2))
 }
@@ -82,14 +66,6 @@ func memoryStaticCall(stack *Stack) (uint64, bool) {
 		return x, false
 	}
 	return y, false
-}
-
-func memoryReturn(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
-}
-
-func memoryRevert(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
 func memoryLog(stack *Stack) (uint64, bool) {
