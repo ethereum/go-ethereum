@@ -67,7 +67,3 @@ func memoryStaticCall(stack *Stack) (uint64, bool) {
 	}
 	return y, false
 }
-
-func memoryLog(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
-}

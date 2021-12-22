@@ -256,7 +256,16 @@ func makeGasLog(n uint64) gasFunc {
 			return 0, 0, ErrGasUintOverflow
 		}
 
-		gas, memorySize, err := memoryGasCostAndSize(stack, mem, memoryLog)
+		memSize, overflow := calcMemSize64(stack.Back(0), stack.Back(1))
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		// memory is expanded in words of 32 bytes. Gas is also calculated in words.
+		memorySize, overflow := math.SafeMul(toWordSize(memSize), 32)
+		if overflow {
+			return 0, 0, ErrGasUintOverflow
+		}
+		gas, err := memoryGasCost(mem, memorySize)
 		if err != nil {
 			return 0, 0, err
 		}
