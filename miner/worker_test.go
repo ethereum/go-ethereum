@@ -259,7 +259,10 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
-		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
+		// TODO(gballet) the timeout had to be increased from 3s to 7s with verkle
+		// trees, presumably because calculating an address is orders of magnitude
+		// slower with perdersen_hash not using the multi-exponentiation.
+		case <-time.After(7 * time.Second): // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
 		}
 	}
