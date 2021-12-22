@@ -44,7 +44,7 @@ func (api *API) GetWork() ([4]string, error) {
 	}
 
 	var (
-		workCh = make(chan [4]string, 1)
+		workCh = make(chan [5]string, 1)
 		errc   = make(chan error, 1)
 	)
 	select {
@@ -53,7 +53,10 @@ func (api *API) GetWork() ([4]string, error) {
 		return [4]string{}, errEthashStopped
 	}
 	select {
-	case work := <-workCh:
+	case fullWork := <-workCh:
+		var work [4]string
+		copy(work[:], fullWork[:4])
+
 		return work, nil
 	case err := <-errc:
 		return [4]string{}, err
