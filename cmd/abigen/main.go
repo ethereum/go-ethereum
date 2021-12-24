@@ -25,13 +25,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/accounts/abi"
+	"github.com/scroll-tech/go-ethereum/accounts/abi/bind"
+	"github.com/scroll-tech/go-ethereum/cmd/utils"
+	"github.com/scroll-tech/go-ethereum/common/compiler"
+	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/internal/flags"
+	"github.com/scroll-tech/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

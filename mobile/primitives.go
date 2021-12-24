@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 // Strings represents s slice of strs.
