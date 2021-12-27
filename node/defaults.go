@@ -55,9 +55,9 @@ func DefaultDataDir() string {
 	home := homeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "XDPoSChain")
+			return filepath.Join(home, "Library", "XDCchain")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "XDPoSChain")
+			return filepath.Join(home, "AppData", "Roaming", "XDCchain")
 		} else {
 			return filepath.Join(home, ".XDC")
 		}
