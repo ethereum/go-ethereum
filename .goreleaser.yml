@@ -16,6 +16,8 @@ builds:
     env:
       - CC=o64-clang
       - CXX=o64-clang++
+    tags:
+      - netgo
     ldflags:
       -s -w
   
@@ -29,6 +31,8 @@ builds:
     env:
       - CC=oa64-clang
       - CXX=oa64-clang++
+    tags:
+      - netgo
     ldflags:
       -s -w
   
@@ -42,9 +46,11 @@ builds:
     env:
       - CC=gcc
       - CXX=g++
+    tags:
+      - netgo
     ldflags:
       # We need to build a static binary because we are building in a glibc based system and running in a musl container 
-      -s -w -linkmode external -extldflags "-static"
+      -s -w -extldflags "-static"
 
   - id: linux-arm64
     main: ./cmd/geth
@@ -56,9 +62,11 @@ builds:
     env:
       - CC=aarch64-linux-gnu-gcc
       - CXX=aarch64-linux-gnu-g++
+    tags:
+      - netgo
     ldflags:
       # We need to build a static binary because we are building in a glibc based system and running in a musl container 
-      -s -w -linkmode external -extldflags "-static"
+      -s -w -extldflags "-static"
 
 nfpms:
   - vendor: 0xPolygon
