@@ -548,6 +548,7 @@ func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt c
 		}
 		count++
 	}
+	// 如果一直Ctrl+C则会触发Panic
 	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count,
 		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil

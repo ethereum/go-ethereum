@@ -316,6 +316,10 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
+	// prepare 做了3件事
+	// 1. 打印日志说明Node在哪个网络环境
+	// 2. 设置默认缓存值（如果没有在flag -cache设置）主网络 全节点为4G 轻节点为128M
+	// 3. 开启度量工具 监控系统状态 cpu memory disk
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
