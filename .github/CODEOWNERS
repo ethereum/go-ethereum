@@ -1,0 +1,23 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+
+accounts/usbwallet              @karalabe
+accounts/scwallet               @gballet
+accounts/abi                    @gballet @MariusVanDerWijden
+cmd/clef                        @holiman
+cmd/puppeth                     @karalabe
+consensus                       @karalabe
+core/                           @karalabe @holiman @rjl493456442
+eth/                            @karalabe @holiman @rjl493456442
+eth/catalyst/                   @gballet
+graphql/                        @gballet
+les/                            @zsfelfoldi @rjl493456442
+light/                          @zsfelfoldi @rjl493456442
+mobile/                         @karalabe @ligi
+node/                           @fjl @renaynay
+p2p/                            @fjl @zsfelfoldi
+rpc/                            @fjl @holiman
+p2p/simulations                 @fjl
+p2p/protocols                   @fjl
+p2p/testing                     @fjl
+signer/                         @holiman

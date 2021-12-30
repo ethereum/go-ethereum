@@ -1,4 +1,20 @@
-// Package nat provides access to common port mapping protocols.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package nat provides access to common network port mapping protocols.
 package nat
 
 import (
@@ -9,11 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/jackpal/go-nat-pmp"
+	"github.com/ethereum/go-ethereum/log"
+	natpmp "github.com/jackpal/go-nat-pmp"
 )
-
-var log = logger.NewLogger("P2P NAT")
 
 // An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
@@ -77,22 +91,23 @@ func Parse(spec string) (Interface, error) {
 }
 
 const (
-	mapTimeout        = 20 * time.Minute
-	mapUpdateInterval = 15 * time.Minute
+	mapTimeout = 10 * time.Minute
 )
 
 // Map adds a port mapping on m and keeps it alive until c is closed.
 // This function is typically invoked in its own goroutine.
-func Map(m Interface, c chan struct{}, protocol string, extport, intport int, name string) {
-	refresh := time.NewTimer(mapUpdateInterval)
+func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, name string) {
+	log := log.New("proto", protocol, "extport", extport, "intport", intport, "interface", m)
+	refresh := time.NewTimer(mapTimeout)
 	defer func() {
 		refresh.Stop()
-		log.Debugf("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		log.Debug("Deleting port mapping")
 		m.DeleteMapping(protocol, extport, intport)
 	}()
-	log.Debugf("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
-	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-		log.Errorf("mapping error: %v\n", err)
+	if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
+		log.Debug("Couldn't add port mapping", "err", err)
+	} else {
+		log.Info("Mapped network port")
 	}
 	for {
 		select {
@@ -101,11 +116,11 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 				return
 			}
 		case <-refresh.C:
-			log.DebugDetailf("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
-			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-				log.Errorf("mapping error: %v\n", err)
+			log.Trace("Refreshing port mapping")
+			if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
+				log.Debug("Couldn't add port mapping", "err", err)
 			}
-			refresh.Reset(mapUpdateInterval)
+			refresh.Reset(mapTimeout)
 		}
 	}
 }
@@ -113,21 +128,15 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 // ExtIP assumes that the local machine is reachable on the given
 // external IP address, and that any required ports were mapped manually.
 // Mapping operations will not return an error but won't actually do anything.
-func ExtIP(ip net.IP) Interface {
-	if ip == nil {
-		panic("IP must not be nil")
-	}
-	return extIP(ip)
-}
+type ExtIP net.IP
 
-type extIP net.IP
-
-func (n extIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
-func (n extIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
+func (n ExtIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
+func (n ExtIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
 
 // These do nothing.
-func (extIP) AddMapping(string, int, int, string, time.Duration) error { return nil }
-func (extIP) DeleteMapping(string, int, int) error                     { return nil }
+
+func (ExtIP) AddMapping(string, int, int, string, time.Duration) error { return nil }
+func (ExtIP) DeleteMapping(string, int, int) error                     { return nil }
 
 // Any returns a port mapper that tries to discover any supported
 // mechanism on the local network.
@@ -171,8 +180,9 @@ func PMP(gateway net.IP) Interface {
 // This type is useful because discovery can take a while but we
 // want return an Interface value from UPnP, PMP and Auto immediately.
 type autodisc struct {
-	what string
-	done <-chan Interface
+	what string // type of interface being autodiscovered
+	once sync.Once
+	doit func() Interface
 
 	mu    sync.Mutex
 	found Interface
@@ -180,10 +190,7 @@ type autodisc struct {
 
 func startautodisc(what string, doit func() Interface) Interface {
 	// TODO: monitor network configuration and rerun doit when it changes.
-	done := make(chan Interface)
-	ad := &autodisc{what: what, done: done}
-	go func() { done <- doit(); close(done) }()
-	return ad
+	return &autodisc{what: what, doit: doit}
 }
 
 func (n *autodisc) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error {
@@ -212,24 +219,19 @@ func (n *autodisc) String() string {
 	defer n.mu.Unlock()
 	if n.found == nil {
 		return n.what
-	} else {
-		return n.found.String()
 	}
+	return n.found.String()
 }
 
+// wait blocks until auto-discovery has been performed.
 func (n *autodisc) wait() error {
-	n.mu.Lock()
-	found := n.found
-	n.mu.Unlock()
-	if found != nil {
-		// already discovered
-		return nil
+	n.once.Do(func() {
+		n.mu.Lock()
+		n.found = n.doit()
+		n.mu.Unlock()
+	})
+	if n.found == nil {
+		return fmt.Errorf("no %s router discovered", n.what)
 	}
-	if found = <-n.done; found == nil {
-		return errors.New("no devices discovered")
-	}
-	n.mu.Lock()
-	n.found = found
-	n.mu.Unlock()
 	return nil
 }
