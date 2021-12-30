@@ -10,7 +10,7 @@ import (
 )
 
 func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
-	blockchain, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	engineV2.SetNewRoundFaker(utils.Round(1), true)

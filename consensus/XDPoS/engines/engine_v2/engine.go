@@ -831,6 +831,7 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 
 	signedHash, err := x.signSignature(utils.VoteSigHash(blockInfo))
 	if err != nil {
+		log.Error("signSignature when sending out Vote", "BlockInfoHash", blockInfo.Hash, "Error", err)
 		return err
 	}
 
@@ -840,7 +841,11 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 		Signature:         signedHash,
 	}
 
-	x.voteHandler(chainReader, voteMsg)
+	err = x.voteHandler(chainReader, voteMsg)
+	if err != nil {
+		log.Error("sendVote error", "BlockInfoHash", blockInfo.Hash, "Error", err)
+		return err
+	}
 	x.broadcastToBftChannel(voteMsg)
 	return nil
 }
@@ -854,6 +859,7 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 func (x *XDPoS_v2) sendTimeout() error {
 	signedHash, err := x.signSignature(utils.TimeoutSigHash(&x.currentRound))
 	if err != nil {
+		log.Error("signSignature when sending out TC", "Error", err)
 		return err
 	}
 	timeoutMsg := &utils.Timeout{
@@ -861,7 +867,11 @@ func (x *XDPoS_v2) sendTimeout() error {
 		Signature: signedHash,
 	}
 
-	x.timeoutHandler(timeoutMsg)
+	err = x.timeoutHandler(timeoutMsg)
+	if err != nil {
+		log.Error("TimeoutHandler error", "TimeoutRound", timeoutMsg.Round, "Error", err)
+		return err
+	}
 	x.broadcastToBftChannel(timeoutMsg)
 	return nil
 }
@@ -930,36 +940,49 @@ func (x *XDPoS_v2) getSyncInfo() *utils.SyncInfo {
 	}
 }
 
-//TODO: find parent and grandparent and grandgrandparent block, check round number, if so, commit grandgrandparent
-func (x *XDPoS_v2) commitBlocks(blockCahinReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round) (bool, error) {
+//Find parent and grandparent, check round number, if so, commit grandparent(grandGrandParent of currentBlock)
+func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round) (bool, error) {
 	// XDPoS v1.0 switch to v2.0, skip commit
 	if big.NewInt(0).Sub(proposedBlockHeader.Number, big.NewInt(2)).Cmp(x.config.XDPoSV2Block) <= 0 {
 		return false, nil
 	}
-	// Find the last two parent block and check their rounds are the continous
-	parentBlock := blockCahinReader.GetHeaderByHash(proposedBlockHeader.ParentHash)
+	// Find the last two parent block and check their rounds are the continuous
+	parentBlock := blockChainReader.GetHeaderByHash(proposedBlockHeader.ParentHash)
 
 	var decodedExtraField utils.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(parentBlock.Extra, &decodedExtraField)
 	if err != nil {
+		log.Error("Fail to execute first DecodeBytesExtraFields for commiting block", "ProposedBlockHash", proposedBlockHeader.Hash())
 		return false, err
 	}
 	if *proposedBlockRound-1 != decodedExtraField.Round {
+		log.Debug("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", decodedExtraField.Round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 
-	// If parent round is continous, we check grandparent
-	grandParentBlock := blockCahinReader.GetHeaderByHash(parentBlock.ParentHash)
+	// If parent round is continuous, we check grandparent
+	grandParentBlock := blockChainReader.GetHeaderByHash(parentBlock.ParentHash)
 	err = utils.DecodeBytesExtraFields(grandParentBlock.Extra, &decodedExtraField)
 	if err != nil {
+		log.Error("Fail to execute second DecodeBytesExtraFields for commiting block", "parentBlockHash", parentBlock.Hash())
 		return false, err
 	}
 	if *proposedBlockRound-2 != decodedExtraField.Round {
+		log.Debug("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", decodedExtraField.Round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
-	// TODO: Commit the grandParent block
-
-	return true, nil
+	// Commit the grandParent block
+	if x.highestCommitBlock == nil || (x.highestCommitBlock.Round < decodedExtraField.Round && x.highestCommitBlock.Number.Cmp(grandParentBlock.Number) == -1) {
+		x.highestCommitBlock = &utils.BlockInfo{
+			Number: grandParentBlock.Number,
+			Hash:   grandParentBlock.Hash(),
+			Round:  decodedExtraField.Round,
+		}
+		log.Debug("👴 Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
+		return true, nil
+	}
+	// Everything else, fail to commit
+	return false, nil
 }
 
 func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReader, currentBlock *utils.BlockInfo, ancestorBlock *utils.BlockInfo) (bool, error) {
@@ -969,10 +992,11 @@ func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReade
 	for i := 0; i < blockNumDiff; i++ {
 		parentBlock := blockChainReader.GetHeaderByHash(nextBlockHash)
 		if parentBlock == nil {
-			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v is extending from the ancestorBlock %v", currentBlock.Number, ancestorBlock.Number)
+			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
 		} else {
 			nextBlockHash = parentBlock.ParentHash
 		}
+		log.Debug("[isExtendingFromAncestor] Found parent block", "CurrentBlockHash", currentBlock.Hash, "ParentHash", nextBlockHash)
 	}
 
 	if nextBlockHash == ancestorBlock.Hash {
@@ -1001,8 +1025,8 @@ func (x *XDPoS_v2) GetCurrentRound() utils.Round {
 }
 
 // Utils for test to check currentRound value
-func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round) {
+func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round, *utils.BlockInfo) {
 	x.lock.Lock()
 	defer x.lock.Unlock()
-	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound
+	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound, x.highestCommitBlock
 }

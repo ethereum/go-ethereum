@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -11,7 +12,7 @@ import (
 
 func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 	// Block 11 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2
@@ -32,15 +33,17 @@ func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	round, _, highestQuorumCert, _ := engineV2.GetProperties()
+	round, _, highestQuorumCert, _, highestCommitBlock := engineV2.GetProperties()
 	// QC is parent block's qc, which is pointing at round 4, hence 4 + 1 = 5
 	assert.Equal(t, utils.Round(5), round)
 	assert.Equal(t, extraField.QuorumCert, highestQuorumCert)
+	assert.Equal(t, utils.Round(2), highestCommitBlock.Round)
+	assert.Equal(t, big.NewInt(12), highestCommitBlock.Number)
 }
 
 func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
 	// Block 11 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2
@@ -63,7 +66,7 @@ func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	round, _, highestQuorumCert, _ := engineV2.GetProperties()
+	round, _, highestQuorumCert, _, _ := engineV2.GetProperties()
 	assert.Equal(t, utils.Round(7), round)
 	assert.Equal(t, extraField.QuorumCert, highestQuorumCert)
 }

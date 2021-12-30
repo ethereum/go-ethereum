@@ -13,7 +13,7 @@ import (
 )
 
 func TestAdaptorShouldGetAuthorForDifferentConsensusVersion(t *testing.T) {
-	blockchain, backend, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 10, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, backend, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 10, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	addressFromAdaptor, errorAdaptor := adaptor.Author(currentBlock.Header())
