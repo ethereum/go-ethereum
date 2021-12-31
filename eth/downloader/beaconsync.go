@@ -159,6 +159,10 @@ func (d *Downloader) findBeaconAncestor() uint64 {
 		check := (start + end) / 2
 
 		h := d.skeleton.Header(check)
+		if h == nil {
+			log.Warn("Header not found in skeleton", "check", check, "head", number)
+			return 0
+		}
 		n := h.Number.Uint64()
 
 		var known bool
