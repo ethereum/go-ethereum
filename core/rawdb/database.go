@@ -322,6 +322,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		preimages       stat
 		bloomBits       stat
 		cliqueSnaps     stat
+		skeleton        stat
 
 		// Ancient store statistics
 		ancientHeadersSize  common.StorageSize
@@ -379,6 +380,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
 			bloomBits.Add(size)
+		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
+			skeleton.Add(size)
 		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
 		case bytes.HasPrefix(key, []byte("cht-")) ||
@@ -395,7 +398,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey,
+				uncleanShutdownKey, badBlockKey, transitionStatusKey, snapshotSyncStatusKey, skeletonSyncStatusKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -432,6 +435,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
 		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count()},
 		{"Key-Value store", "Difficulties", tds.Size(), tds.Count()},
+		{"Key-Value store", "Skeleton", skeleton.Size(), skeleton.Count()},
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
