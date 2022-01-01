@@ -19,7 +19,7 @@ type broadcastTimeoutFn func(*utils.Timeout)
 type broadcastSyncInfoFn func(*utils.SyncInfo)
 
 type Bfter struct {
-	blockCahinReader consensus.ChainReader
+	blockChainReader consensus.ChainReader
 	broadcastCh      chan interface{}
 	quit             chan struct{}
 	consensus        ConsensusFns
@@ -48,7 +48,7 @@ type BroadcastFns struct {
 	SyncInfo broadcastSyncInfoFn
 }
 
-func New(broadcasts BroadcastFns, blockCahinReader *core.BlockChain) *Bfter {
+func New(broadcasts BroadcastFns, blockChainReader *core.BlockChain) *Bfter {
 	knownVotes, _ := lru.New(messageLimit)
 	knownSyncInfos, _ := lru.New(messageLimit)
 	knownTimeouts, _ := lru.New(messageLimit)
@@ -59,7 +59,7 @@ func New(broadcasts BroadcastFns, blockCahinReader *core.BlockChain) *Bfter {
 		knownVotes:       knownVotes,
 		knownSyncInfos:   knownSyncInfos,
 		knownTimeouts:    knownTimeouts,
-		blockCahinReader: blockCahinReader,
+		blockChainReader: blockChainReader,
 	}
 }
 
@@ -92,7 +92,7 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 	}
 	b.broadcastCh <- vote
 
-	err = b.consensus.voteHandler(b.blockCahinReader, vote)
+	err = b.consensus.voteHandler(b.blockChainReader, vote)
 	if err != nil {
 		log.Error("handle BFT Vote", "error", err)
 		return err
@@ -137,7 +137,7 @@ func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 
 	b.broadcastCh <- syncInfo
 
-	err = b.consensus.syncInfoHandler(b.blockCahinReader, syncInfo)
+	err = b.consensus.syncInfoHandler(b.blockChainReader, syncInfo)
 	if err != nil {
 		log.Error("handle BFT SyncInfo", "error", err)
 		return err

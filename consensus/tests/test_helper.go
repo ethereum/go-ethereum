@@ -266,7 +266,7 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	return blockchain, backend, currentBlock, signer
 }
 
-func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, numOfForkedBlocks int) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, *types.Block) {
+func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, numOfForkedBlocks int) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
 	// Preparation
 	var err error
 	backend := getCommonBackend(t, chainConfig)
@@ -321,7 +321,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 		t.Fatal(err)
 	}
 
-	return blockchain, backend, currentBlock, signer, currentForkBlock
+	return blockchain, backend, currentBlock, signer, signFn, currentForkBlock
 }
 
 func createBlock(chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumIteration int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) *types.Header {

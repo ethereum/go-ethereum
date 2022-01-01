@@ -11,7 +11,7 @@ import (
 
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
-	blockchain, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 1
@@ -24,7 +24,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	err := engineV2.TimeoutHandler(timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _ := engineV2.GetProperties()
+	currentRound, _, _, _, _ := engineV2.GetProperties()
 	assert.Equal(t, utils.Round(1), currentRound)
 	timeoutMsg = &utils.Timeout{
 		Round:     utils.Round(1),
@@ -32,7 +32,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	}
 	err = engineV2.TimeoutHandler(timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(1), currentRound)
 	// Create a timeout message that should trigger timeout pool hook
 	timeoutMsg = &utils.Timeout{
@@ -45,7 +45,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	syncInfoMsg := <-engineV2.BroadcastCh
 
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 
 	assert.NotNil(t, syncInfoMsg)
 
@@ -62,7 +62,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 }
 
 func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
-	blockchain, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 3

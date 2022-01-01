@@ -13,7 +13,7 @@ import (
 
 // VoteHandler
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *testing.T) {
-	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -32,7 +32,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
@@ -43,7 +43,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ = engineV2.GetProperties()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
@@ -58,7 +58,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ = engineV2.GetProperties()
 	// The lockQC shall be the parent's QC round number
 	assert.Equal(t, utils.Round(0), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
@@ -68,7 +68,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 }
 
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
-	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -87,7 +87,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
@@ -98,7 +98,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ = engineV2.GetProperties()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
@@ -113,17 +113,20 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, highestCommitBlock := engineV2.GetProperties()
 	// The lockQC shall be the parent's QC round number
 	assert.Equal(t, utils.Round(4), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
 	// Check round has now changed from 5 to 6
 	assert.Equal(t, utils.Round(6), currentRound)
+	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 13 with round 3
+	assert.Equal(t, utils.Round(3), highestCommitBlock.Round)
+	assert.Equal(t, big.NewInt(13), highestCommitBlock.Number)
 }
 
 func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
-	blockchain, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -153,7 +156,7 @@ func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 }
 
 func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
-	blockchain, _, currentBlock, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 5
@@ -173,7 +176,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, lockQuorumCert, highestQuorumCert, _ := engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
@@ -185,7 +188,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(5), currentRound)
 
 	// Create a vote message that should trigger vote pool hook
@@ -197,7 +200,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	// Check round has now changed from 5 to 6
-	currentRound, lockQuorumCert, highestQuorumCert, _ = engineV2.GetProperties()
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ = engineV2.GetProperties()
 	// The lockQC shall be the parent's QC round number
 	assert.Equal(t, utils.Round(4), lockQuorumCert.ProposedBlockInfo.Round)
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
@@ -225,7 +228,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 
 	err = engineV2.TimeoutHandler(timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(6), currentRound)
 	timeoutMsg = &utils.Timeout{
 		Round:     utils.Round(6),
@@ -233,7 +236,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	}
 	err = engineV2.TimeoutHandler(timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(6), currentRound)
 
 	// Create a timeout message that should trigger timeout pool hook
@@ -259,6 +262,6 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	sigatures := []utils.Signature{[]byte{1}, []byte{2}, []byte{3}}
 	assert.ElementsMatch(t, tc.Signatures, sigatures)
 	// Round shall be +1 now
-	currentRound, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(7), currentRound)
 }
