@@ -262,7 +262,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		// TODO(gballet) the timeout had to be increased from 3s to 7s with verkle
 		// trees, presumably because calculating an address is orders of magnitude
 		// slower with perdersen_hash not using the multi-exponentiation.
-		case <-time.After(7 * time.Second): // Worker needs 1s to include new changes.
+		case <-time.After(5 * time.Second): // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
 		}
 	}
