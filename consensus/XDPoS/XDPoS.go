@@ -243,7 +243,7 @@ func (x *XDPoS) GetPeriod() uint64 {
 func (x *XDPoS) IsAuthorisedAddress(header *types.Header, chain consensus.ChainReader, address common.Address) bool {
 	switch x.config.BlockConsensusVersion(header.Number) {
 	case params.ConsensusEngineVersion2:
-		return true
+		return x.EngineV2.IsAuthorisedAddress(header, chain, address)
 	default: // Default "v1"
 		return x.EngineV1.IsAuthorisedAddress(header, chain, address)
 	}
