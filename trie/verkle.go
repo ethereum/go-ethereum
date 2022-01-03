@@ -118,6 +118,16 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 	flush := make(chan verkle.VerkleNode)
 	go func() {
 		trie.root.(*verkle.InternalNode).Flush(func(n verkle.VerkleNode) {
+			if onleaf != nil {
+				if leaf, isLeaf := n.(*verkle.LeafNode); isLeaf {
+					for i := 0; i < verkle.NodeWidth; i++ {
+						if leaf.Value(i) != nil {
+							comm := n.ComputeCommitment().Bytes()
+							onleaf(nil, nil, leaf.Value(i), common.BytesToHash(comm[:]))
+						}
+					}
+				}
+			}
 			flush <- n
 		})
 		close(flush)
@@ -135,7 +145,6 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 		}
 	}
 
-	// XXX onleaf hasn't been called
 	return trie.Hash(), commitCount, nil
 }
 
