@@ -1218,49 +1218,49 @@ type SyncState struct {
 }
 
 func (s *SyncState) StartingBlock() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.StartingBlock)
+	return s.progress.StartingBlock
 }
 func (s *SyncState) CurrentBlock() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.CurrentBlock)
+	return s.progress.CurrentBlock
 }
 func (s *SyncState) HighestBlock() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HighestBlock)
+	return s.progress.HighestBlock
 }
 func (s *SyncState) SyncedAccounts() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedAccounts)
+	return s.progress.SyncedAccounts
 }
 func (s *SyncState) SyncedAccountBytes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedAccountBytes)
+	return s.progress.SyncedAccountBytes
 }
 func (s *SyncState) SyncedBytecodes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedBytecodes)
+	return s.progress.SyncedBytecodes
 }
 func (s *SyncState) SyncedBytecodeBytes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedBytecodeBytes)
+	return s.progress.SyncedBytecodeBytes
 }
 func (s *SyncState) SyncedStorage() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedStorage)
+	return s.progress.SyncedStorage
 }
 func (s *SyncState) SyncedStorageBytes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.SyncedStorageBytes)
+	return s.progress.SyncedStorageBytes
 }
 func (s *SyncState) HealedTrienodes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealedTrienodes)
+	return s.progress.HealedTrienodes
 }
 func (s *SyncState) HealedTrienodeBytes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealedTrienodeBytes)
+	return s.progress.HealedTrienodeBytes
 }
 func (s *SyncState) HealedBytecodes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealedBytecodes)
+	return s.progress.HealedBytecodes
 }
 func (s *SyncState) HealedBytecodeBytes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealedBytecodeBytes)
+	return s.progress.HealedBytecodeBytes
 }
 func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealingTrienodes)
+	return s.progress.HealingTrienodes
 }
 func (s *SyncState) HealingBytecode() hexutil.Uint64 {
-	return hexutil.Uint64(s.progress.HealingBytecode)
+	return s.progress.HealingBytecode
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
