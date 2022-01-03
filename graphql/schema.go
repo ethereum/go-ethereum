@@ -297,12 +297,6 @@ const schema string = `
         currentBlock: Long!
         # HighestBlock is the latest known block number.
         highestBlock: Long!
-        # PulledStates is the number of state entries fetched so far, or null
-        # if this is not known or not relevant.
-        pulledStates: Long
-        # KnownStates is the number of states the node knows of so far, or null
-        # if this is not known or not relevant.
-        knownStates: Long
     }
 
     # Pending represents the current pending state.

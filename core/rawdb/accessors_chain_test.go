@@ -883,3 +883,67 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 		}
 	})
 }
+
+func TestHeadersRLPStorage(t *testing.T) {
+	// Have N headers in the freezer
+	frdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temp freezer dir: %v", err)
+	}
+	defer os.Remove(frdir)
+
+	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend")
+	}
+	defer db.Close()
+	// Create blocks
+	var chain []*types.Block
+	var pHash common.Hash
+	for i := 0; i < 100; i++ {
+		block := types.NewBlockWithHeader(&types.Header{
+			Number:      big.NewInt(int64(i)),
+			Extra:       []byte("test block"),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
+			ParentHash:  pHash,
+		})
+		chain = append(chain, block)
+		pHash = block.Hash()
+	}
+	var receipts []types.Receipts = make([]types.Receipts, 100)
+	// Write first half to ancients
+	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
+	// Write second half to db
+	for i := 50; i < 100; i++ {
+		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
+		WriteBlock(db, chain[i])
+	}
+	checkSequence := func(from, amount int) {
+		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))
+		if have, want := len(headersRlp), amount; have != want {
+			t.Fatalf("have %d headers, want %d", have, want)
+		}
+		for i, headerRlp := range headersRlp {
+			var header types.Header
+			if err := rlp.DecodeBytes(headerRlp, &header); err != nil {
+				t.Fatal(err)
+			}
+			if have, want := header.Number.Uint64(), uint64(from-i); have != want {
+				t.Fatalf("wrong number, have %d want %d", have, want)
+			}
+		}
+	}
+	checkSequence(99, 20)  // Latest block and 19 parents
+	checkSequence(99, 50)  // Latest block -> all db blocks
+	checkSequence(99, 51)  // Latest block -> one from ancients
+	checkSequence(99, 52)  // Latest blocks -> two from ancients
+	checkSequence(50, 2)   // One from db, one from ancients
+	checkSequence(49, 1)   // One from ancients
+	checkSequence(49, 50)  // All ancient ones
+	checkSequence(99, 100) // All blocks
+	checkSequence(0, 1)    // Only genesis
+	checkSequence(1, 1)    // Only block 1
+	checkSequence(1, 2)    // Genesis + block 1
+}

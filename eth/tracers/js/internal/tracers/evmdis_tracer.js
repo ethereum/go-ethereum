@@ -71,12 +71,12 @@
 				opinfo["ops"] = [];
 				this.stack.push(opinfo);
 				break;
-			case "RETURN":
+			case "RETURN": case "REVERT":
 				var out = log.stack.peek(0).valueOf();
 				var outsize = log.stack.peek(1).valueOf();
 				frame.return = log.memory.slice(out, out + outsize);
 				break;
-			case "STOP": case "SUICIDE":
+			case "STOP": case "SELFDESTRUCT":
 				frame.return = log.memory.slice(0, 0);
 				break;
 			case "JUMPDEST":

@@ -175,6 +175,16 @@ type BlockHeadersPacket66 struct {
 	BlockHeadersPacket
 }
 
+// BlockHeadersRLPPacket represents a block header response, to use when we already
+// have the headers rlp encoded.
+type BlockHeadersRLPPacket []rlp.RawValue
+
+// BlockHeadersPacket represents a block header response over eth/66.
+type BlockHeadersRLPPacket66 struct {
+	RequestId uint64
+	BlockHeadersRLPPacket
+}
+
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block *types.Block
