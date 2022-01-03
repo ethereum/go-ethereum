@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -250,21 +251,21 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	progress, pending := d.SnapSyncer.Progress()
 
 	return ethereum.SyncProgress{
-		StartingBlock:       d.syncStatsChainOrigin,
-		CurrentBlock:        current,
-		HighestBlock:        d.syncStatsChainHeight,
-		SyncedAccounts:      progress.AccountSynced,
-		SyncedAccountBytes:  uint64(progress.AccountBytes),
-		SyncedBytecodes:     progress.BytecodeSynced,
-		SyncedBytecodeBytes: uint64(progress.BytecodeBytes),
-		SyncedStorage:       progress.StorageSynced,
-		SyncedStorageBytes:  uint64(progress.StorageBytes),
-		HealedTrienodes:     progress.TrienodeHealSynced,
-		HealedTrienodeBytes: uint64(progress.TrienodeHealBytes),
-		HealedBytecodes:     progress.BytecodeHealSynced,
-		HealedBytecodeBytes: uint64(progress.BytecodeHealBytes),
-		HealingTrienodes:    pending.TrienodeHeal,
-		HealingBytecode:     pending.BytecodeHeal,
+		StartingBlock:       hexutil.Uint64(d.syncStatsChainOrigin),
+		CurrentBlock:        hexutil.Uint64(current),
+		HighestBlock:        hexutil.Uint64(d.syncStatsChainHeight),
+		SyncedAccounts:      hexutil.Uint64(progress.AccountSynced),
+		SyncedAccountBytes:  hexutil.Uint64(progress.AccountBytes),
+		SyncedBytecodes:     hexutil.Uint64(progress.BytecodeSynced),
+		SyncedBytecodeBytes: hexutil.Uint64(progress.BytecodeBytes),
+		SyncedStorage:       hexutil.Uint64(progress.StorageSynced),
+		SyncedStorageBytes:  hexutil.Uint64(progress.StorageBytes),
+		HealedTrienodes:     hexutil.Uint64(progress.TrienodeHealSynced),
+		HealedTrienodeBytes: hexutil.Uint64(progress.TrienodeHealBytes),
+		HealedBytecodes:     hexutil.Uint64(progress.BytecodeHealSynced),
+		HealedBytecodeBytes: hexutil.Uint64(progress.BytecodeHealBytes),
+		HealingTrienodes:    hexutil.Uint64(pending.TrienodeHeal),
+		HealingBytecode:     hexutil.Uint64(pending.BytecodeHeal),
 	}
 }
 

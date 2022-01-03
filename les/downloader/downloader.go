@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -262,9 +263,9 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
 	}
 	return ethereum.SyncProgress{
-		StartingBlock: d.syncStatsChainOrigin,
-		CurrentBlock:  current,
-		HighestBlock:  d.syncStatsChainHeight,
+		StartingBlock: hexutil.Uint64(d.syncStatsChainOrigin),
+		CurrentBlock:  hexutil.Uint64(current),
+		HighestBlock:  hexutil.Uint64(d.syncStatsChainHeight),
 		//PulledStates:  d.syncStatsState.processed,
 		//KnownStates:   d.syncStatsState.processed + d.syncStatsState.pending,
 	}

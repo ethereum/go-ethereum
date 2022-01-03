@@ -778,7 +778,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		hashrate = int(fullBackend.Miner().Hashrate())
 
 		sync := fullBackend.SyncProgress()
-		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = fullBackend.CurrentHeader().Number.Uint64() >= uint64(sync.HighestBlock)
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
@@ -787,7 +787,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		}
 	} else {
 		sync := s.backend.SyncProgress()
-		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = s.backend.CurrentHeader().Number.Uint64() >= uint64(sync.HighestBlock)
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")

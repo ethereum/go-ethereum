@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -98,25 +99,25 @@ type ChainStateReader interface {
 // SyncProgress gives progress indications when the node is synchronising with
 // the Ethereum network.
 type SyncProgress struct {
-	StartingBlock uint64 // Block number where sync began
-	CurrentBlock  uint64 // Current block number where sync is at
-	HighestBlock  uint64 // Highest alleged block number in the chain
+	StartingBlock hexutil.Uint64 // Block number where sync began
+	CurrentBlock  hexutil.Uint64 // Current block number where sync is at
+	HighestBlock  hexutil.Uint64 // Highest alleged block number in the chain
 
 	// Fields belonging to snap sync
-	SyncedAccounts      uint64 // Number of accounts downloaded
-	SyncedAccountBytes  uint64 // Number of account trie bytes persisted to disk
-	SyncedBytecodes     uint64 // Number of bytecodes downloaded
-	SyncedBytecodeBytes uint64 // Number of bytecode bytes downloaded
-	SyncedStorage       uint64 // Number of storage slots downloaded
-	SyncedStorageBytes  uint64 // Number of storage trie bytes persisted to disk
+	SyncedAccounts      hexutil.Uint64 // Number of accounts downloaded
+	SyncedAccountBytes  hexutil.Uint64 // Number of account trie bytes persisted to disk
+	SyncedBytecodes     hexutil.Uint64 // Number of bytecodes downloaded
+	SyncedBytecodeBytes hexutil.Uint64 // Number of bytecode bytes downloaded
+	SyncedStorage       hexutil.Uint64 // Number of storage slots downloaded
+	SyncedStorageBytes  hexutil.Uint64 // Number of storage trie bytes persisted to disk
 
-	HealedTrienodes     uint64 // Number of state trie nodes downloaded
-	HealedTrienodeBytes uint64 // Number of state trie bytes persisted to disk
-	HealedBytecodes     uint64 // Number of bytecodes downloaded
-	HealedBytecodeBytes uint64 // Number of bytecodes persisted to disk
+	HealedTrienodes     hexutil.Uint64 // Number of state trie nodes downloaded
+	HealedTrienodeBytes hexutil.Uint64 // Number of state trie bytes persisted to disk
+	HealedBytecodes     hexutil.Uint64 // Number of bytecodes downloaded
+	HealedBytecodeBytes hexutil.Uint64 // Number of bytecodes persisted to disk
 
-	HealingTrienodes uint64 // Number of state trie nodes pending
-	HealingBytecode  uint64 // Number of bytecodes pending
+	HealingTrienodes hexutil.Uint64 // Number of state trie nodes pending
+	HealingBytecode  hexutil.Uint64 // Number of bytecodes pending
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no

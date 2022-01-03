@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -1171,7 +1172,7 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	}()
 	<-starting
 	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(chain.len()/2 - 1),
+		HighestBlock: hexutil.Uint64(chain.len()/2 - 1),
 	})
 	progress <- struct{}{}
 	pending.Wait()
@@ -1187,18 +1188,18 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	}()
 	<-starting
 	checkProgress(t, tester.downloader, "completing", ethereum.SyncProgress{
-		StartingBlock: uint64(chain.len()/2 - 1),
-		CurrentBlock:  uint64(chain.len()/2 - 1),
-		HighestBlock:  uint64(chain.len() - 1),
+		StartingBlock: hexutil.Uint64(chain.len()/2 - 1),
+		CurrentBlock:  hexutil.Uint64(chain.len()/2 - 1),
+		HighestBlock:  hexutil.Uint64(chain.len() - 1),
 	})
 
 	// Check final progress after successful sync
 	progress <- struct{}{}
 	pending.Wait()
 	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-		StartingBlock: uint64(chain.len()/2 - 1),
-		CurrentBlock:  uint64(chain.len() - 1),
-		HighestBlock:  uint64(chain.len() - 1),
+		StartingBlock: hexutil.Uint64(chain.len()/2 - 1),
+		CurrentBlock:  hexutil.Uint64(chain.len() - 1),
+		HighestBlock:  hexutil.Uint64(chain.len() - 1),
 	})
 }
 
@@ -1252,7 +1253,7 @@ func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	<-starting
 
 	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(chainA.len() - 1),
+		HighestBlock: hexutil.Uint64(chainA.len() - 1),
 	})
 	progress <- struct{}{}
 	pending.Wait()
@@ -1271,18 +1272,18 @@ func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	}()
 	<-starting
 	checkProgress(t, tester.downloader, "forking", ethereum.SyncProgress{
-		StartingBlock: uint64(testChainBase.len()) - 1,
-		CurrentBlock:  uint64(chainA.len() - 1),
-		HighestBlock:  uint64(chainB.len() - 1),
+		StartingBlock: hexutil.Uint64(testChainBase.len()) - 1,
+		CurrentBlock:  hexutil.Uint64(chainA.len() - 1),
+		HighestBlock:  hexutil.Uint64(chainB.len() - 1),
 	})
 
 	// Check final progress after successful sync
 	progress <- struct{}{}
 	pending.Wait()
 	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-		StartingBlock: uint64(testChainBase.len()) - 1,
-		CurrentBlock:  uint64(chainB.len() - 1),
-		HighestBlock:  uint64(chainB.len() - 1),
+		StartingBlock: hexutil.Uint64(testChainBase.len()) - 1,
+		CurrentBlock:  hexutil.Uint64(chainB.len() - 1),
+		HighestBlock:  hexutil.Uint64(chainB.len() - 1),
 	})
 }
 
@@ -1328,7 +1329,7 @@ func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	}()
 	<-starting
 	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(brokenChain.len() - 1),
+		HighestBlock: hexutil.Uint64(brokenChain.len() - 1),
 	})
 	progress <- struct{}{}
 	pending.Wait()
@@ -1351,8 +1352,8 @@ func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	progress <- struct{}{}
 	pending.Wait()
 	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-		CurrentBlock: uint64(chain.len() - 1),
-		HighestBlock: uint64(chain.len() - 1),
+		CurrentBlock: hexutil.Uint64(chain.len() - 1),
+		HighestBlock: hexutil.Uint64(chain.len() - 1),
 	})
 }
 
@@ -1396,7 +1397,7 @@ func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	}()
 	<-starting
 	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(brokenChain.len() - 1),
+		HighestBlock: hexutil.Uint64(brokenChain.len() - 1),
 	})
 	progress <- struct{}{}
 	pending.Wait()
@@ -1417,15 +1418,15 @@ func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	<-starting
 	checkProgress(t, tester.downloader, "completing", ethereum.SyncProgress{
 		CurrentBlock: afterFailedSync.CurrentBlock,
-		HighestBlock: uint64(validChain.len() - 1),
+		HighestBlock: hexutil.Uint64(validChain.len() - 1),
 	})
 
 	// Check final progress after successful sync.
 	progress <- struct{}{}
 	pending.Wait()
 	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-		CurrentBlock: uint64(validChain.len() - 1),
-		HighestBlock: uint64(validChain.len() - 1),
+		CurrentBlock: hexutil.Uint64(validChain.len() - 1),
+		HighestBlock: hexutil.Uint64(validChain.len() - 1),
 	})
 }
 
