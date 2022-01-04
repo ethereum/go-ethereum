@@ -447,8 +447,11 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 		if len(data) > 0 {
 			return nil
 		}
-		// Get it by hash from leveldb
-		data, _ = db.Get(blockBodyKey(number, ReadCanonicalHash(db, number)))
+		// We're going to need the hash. The number is not in ancients,
+		// so we read it from db directly
+		hash, _ := db.Get(headerHashKey(number))
+		// Now get body by hash from leveldb
+		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
 		return nil
 	})
 	return data
