@@ -1110,10 +1110,21 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	ret := make([]*Block, 0, to-from+1)
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
-		ret = append(ret, &Block{
+		block := &Block{
 			backend:      r.backend,
 			numberOrHash: &numberOrHash,
-		})
+		}
+		// Resolve the header to check for existence.
+		// Note we don't resolve block directly here since it will require an
+		// additional network request for light client.
+		h, err := block.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		} else if h == nil {
+			// Blocks after must be non-existent too, break.
+			break
+		}
+		ret = append(ret, block)
 	}
 	return ret, nil
 }
