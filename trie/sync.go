@@ -224,7 +224,7 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		codeHashes []common.Hash
 	)
 	for !s.queue.Empty() && (max == 0 || len(nodeHashes)+len(codeHashes) < max) {
-		// Retrieve th enext item in line
+		// Retrieve the next item in line
 		item, prio := s.queue.Peek()
 
 		// If we have too many already-pending tasks for this depth, throttle
