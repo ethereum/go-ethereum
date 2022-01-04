@@ -68,7 +68,7 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
+func StartNode(ctx *cli.Context, stack *node.Node) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
@@ -87,33 +87,17 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024)
 		}
 
-		shutdown := func() {
-			log.Info("Got interrupt, shutting down...")
-			go stack.Close()
-			for i := 10; i > 0; i-- {
-				<-sigc
-				if i > 1 {
-					log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
-				}
-			}
-			debug.Exit() // ensure trace and CPU profile data is flushed.
-			debug.LoudPanic("boom")
-		}
-
-		if isConsole {
-			// In JS console mode, SIGINT is ignored because it's handled by the console.
-			// However, SIGTERM still shuts down the node.
-			for {
-				sig := <-sigc
-				if sig == syscall.SIGTERM {
-					shutdown()
-					return
-				}
-			}
-		} else {
+		<-sigc
+		log.Info("Got interrupt, shutting down...")
+		go stack.Close()
+		for i := 10; i > 0; i-- {
 			<-sigc
-			shutdown()
+			if i > 1 {
+				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+			}
 		}
+		debug.Exit() // ensure trace and CPU profile data is flushed.
+		debug.LoudPanic("boom")
 	}()
 }
 

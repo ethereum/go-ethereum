@@ -325,10 +325,10 @@ type healTask struct {
 	codeTasks map[common.Hash]struct{}      // Set of byte code tasks currently queued for retrieval
 }
 
-// SyncProgress is a database entry to allow suspending and resuming a snapshot state
+// syncProgress is a database entry to allow suspending and resuming a snapshot state
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
-type SyncProgress struct {
+type syncProgress struct {
 	Tasks []*accountTask // The suspended account tasks (contract tasks within)
 
 	// Status report during syncing phase
@@ -342,15 +342,12 @@ type SyncProgress struct {
 	// Status report during healing phase
 	TrienodeHealSynced uint64             // Number of state trie nodes downloaded
 	TrienodeHealBytes  common.StorageSize // Number of state trie bytes persisted to disk
+	TrienodeHealDups   uint64             // Number of state trie nodes already processed
+	TrienodeHealNops   uint64             // Number of state trie nodes not requested
 	BytecodeHealSynced uint64             // Number of bytecodes downloaded
 	BytecodeHealBytes  common.StorageSize // Number of bytecodes persisted to disk
-}
-
-// SyncPending is analogous to SyncProgress, but it's used to report on pending
-// ephemeral sync progress that doesn't get persisted into the database.
-type SyncPending struct {
-	TrienodeHeal uint64 // Number of state trie nodes pending
-	BytecodeHeal uint64 // Number of bytecodes pending
+	BytecodeHealDups   uint64             // Number of bytecodes already processed
+	BytecodeHealNops   uint64             // Number of bytecodes not requested
 }
 
 // SyncPeer abstracts out the methods required for a peer to be synced against
@@ -546,7 +543,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.lock.Lock()
 	s.root = root
 	s.healer = &healTask{
-		scheduler: state.NewStateSync(root, s.db, s.onHealState),
+		scheduler: state.NewStateSync(root, s.db, nil, s.onHealState),
 		trieTasks: make(map[common.Hash]trie.SyncPath),
 		codeTasks: make(map[common.Hash]struct{}),
 	}
@@ -674,7 +671,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
 func (s *Syncer) loadSyncStatus() {
-	var progress SyncProgress
+	var progress syncProgress
 
 	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
 		if err := json.Unmarshal(status, &progress); err != nil {
@@ -778,7 +775,7 @@ func (s *Syncer) saveSyncStatus() {
 		}
 	}
 	// Store the actual progress markers
-	progress := &SyncProgress{
+	progress := &syncProgress{
 		Tasks:              s.tasks,
 		AccountSynced:      s.accountSynced,
 		AccountBytes:       s.accountBytes,
@@ -796,31 +793,6 @@ func (s *Syncer) saveSyncStatus() {
 		panic(err) // This can only fail during implementation
 	}
 	rawdb.WriteSnapshotSyncStatus(s.db, status)
-}
-
-// Progress returns the snap sync status statistics.
-func (s *Syncer) Progress() (*SyncProgress, *SyncPending) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	progress := &SyncProgress{
-		AccountSynced:      s.accountSynced,
-		AccountBytes:       s.accountBytes,
-		BytecodeSynced:     s.bytecodeSynced,
-		BytecodeBytes:      s.bytecodeBytes,
-		StorageSynced:      s.storageSynced,
-		StorageBytes:       s.storageBytes,
-		TrienodeHealSynced: s.trienodeHealSynced,
-		TrienodeHealBytes:  s.trienodeHealBytes,
-		BytecodeHealSynced: s.bytecodeHealSynced,
-		BytecodeHealBytes:  s.bytecodeHealBytes,
-	}
-	pending := new(SyncPending)
-	if s.healer != nil {
-		pending.TrienodeHeal = uint64(len(s.healer.trieTasks))
-		pending.BytecodeHeal = uint64(len(s.healer.codeTasks))
-	}
-	return progress, pending
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
