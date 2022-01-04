@@ -372,11 +372,11 @@ func (t *Transaction) Status(ctx context.Context) (*Long, error) {
 	if err != nil || receipt == nil {
 		return nil, err
 	}
-	var ret *Long
-	if len(receipt.PostState) == 0 {
-		*ret = Long(receipt.Status)
+	if len(receipt.PostState) != 0 {
+		return nil, nil
 	}
-	return ret, nil
+	ret := Long(receipt.Status)
+	return &ret, nil
 }
 
 func (t *Transaction) GasUsed(ctx context.Context) (*Long, error) {
