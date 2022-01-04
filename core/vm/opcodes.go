@@ -32,6 +32,11 @@ func (op OpCode) IsPush() bool {
 	return false
 }
 
+// IsStaticJump specifies if an opcode is JUMP.
+func (op OpCode) IsStaticJump() bool {
+	return op == JUMP
+}
+
 // 0x0 range - arithmetic ops.
 const (
 	STOP       OpCode = 0x0
@@ -65,7 +70,7 @@ const (
 	SHR    OpCode = 0x1c
 	SAR    OpCode = 0x1d
 
-	KECCAK256 OpCode = 0x20
+	SHA3 OpCode = 0x20
 )
 
 // 0x30 range - closure state.
@@ -202,6 +207,13 @@ const (
 	LOG4
 )
 
+// unofficial opcodes used for parsing.
+const (
+	PUSH OpCode = 0xb0 + iota
+	DUP
+	SWAP
+)
+
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0
@@ -213,7 +225,6 @@ const (
 
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
-	INVALID      OpCode = 0xfe
 	SELFDESTRUCT OpCode = 0xff
 )
 
@@ -250,7 +261,7 @@ var opCodeToString = map[OpCode]string{
 	MULMOD: "MULMOD",
 
 	// 0x20 range - crypto.
-	KECCAK256: "KECCAK256",
+	SHA3: "SHA3",
 
 	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
@@ -379,8 +390,11 @@ var opCodeToString = map[OpCode]string{
 	CREATE2:      "CREATE2",
 	STATICCALL:   "STATICCALL",
 	REVERT:       "REVERT",
-	INVALID:      "INVALID",
 	SELFDESTRUCT: "SELFDESTRUCT",
+
+	PUSH: "PUSH",
+	DUP:  "DUP",
+	SWAP: "SWAP",
 }
 
 func (op OpCode) String() string {
@@ -419,7 +433,7 @@ var stringToOp = map[string]OpCode{
 	"SAR":            SAR,
 	"ADDMOD":         ADDMOD,
 	"MULMOD":         MULMOD,
-	"KECCAK256":      KECCAK256,
+	"SHA3":           SHA3,
 	"ADDRESS":        ADDRESS,
 	"BALANCE":        BALANCE,
 	"ORIGIN":         ORIGIN,
@@ -534,7 +548,6 @@ var stringToOp = map[string]OpCode{
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,
-	"INVALID":        INVALID,
 	"SELFDESTRUCT":   SELFDESTRUCT,
 }
 

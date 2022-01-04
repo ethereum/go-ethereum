@@ -79,10 +79,10 @@ func testShortRepair(t *testing.T, snapshots bool) {
 // already committed, after which the process crashed. In this case we expect the full
 // chain to be rolled back to the committed block, but the chain data itself left in
 // the database for replaying.
-func TestShortSnapSyncedRepair(t *testing.T)              { testShortSnapSyncedRepair(t, false) }
-func TestShortSnapSyncedRepairWithSnapshots(t *testing.T) { testShortSnapSyncedRepair(t, true) }
+func TestShortFastSyncedRepair(t *testing.T)              { testShortFastSyncedRepair(t, false) }
+func TestShortFastSyncedRepairWithSnapshots(t *testing.T) { testShortFastSyncedRepair(t, true) }
 
-func testShortSnapSyncedRepair(t *testing.T, snapshots bool) {
+func testShortFastSyncedRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//
@@ -119,10 +119,10 @@ func testShortSnapSyncedRepair(t *testing.T, snapshots bool) {
 // not yet committed, but the process crashed. In this case we expect the chain to
 // detect that it was fast syncing and not delete anything, since we can just pick
 // up directly where we left off.
-func TestShortSnapSyncingRepair(t *testing.T)              { testShortSnapSyncingRepair(t, false) }
-func TestShortSnapSyncingRepairWithSnapshots(t *testing.T) { testShortSnapSyncingRepair(t, true) }
+func TestShortFastSyncingRepair(t *testing.T)              { testShortFastSyncingRepair(t, false) }
+func TestShortFastSyncingRepairWithSnapshots(t *testing.T) { testShortFastSyncingRepair(t, true) }
 
-func testShortSnapSyncingRepair(t *testing.T, snapshots bool) {
+func testShortFastSyncingRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//
@@ -203,14 +203,14 @@ func testShortOldForkedRepair(t *testing.T, snapshots bool) {
 // crashed. In this test scenario the side chain is below the committed block. In
 // this case we expect the canonical chain to be rolled back to the committed block,
 // but the chain data itself left in the database for replaying.
-func TestShortOldForkedSnapSyncedRepair(t *testing.T) {
-	testShortOldForkedSnapSyncedRepair(t, false)
+func TestShortOldForkedFastSyncedRepair(t *testing.T) {
+	testShortOldForkedFastSyncedRepair(t, false)
 }
-func TestShortOldForkedSnapSyncedRepairWithSnapshots(t *testing.T) {
-	testShortOldForkedSnapSyncedRepair(t, true)
+func TestShortOldForkedFastSyncedRepairWithSnapshots(t *testing.T) {
+	testShortOldForkedFastSyncedRepair(t, true)
 }
 
-func testShortOldForkedSnapSyncedRepair(t *testing.T, snapshots bool) {
+func testShortOldForkedFastSyncedRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3
@@ -250,14 +250,14 @@ func testShortOldForkedSnapSyncedRepair(t *testing.T, snapshots bool) {
 // test scenario the side chain is below the committed block. In this case we expect
 // the chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
-func TestShortOldForkedSnapSyncingRepair(t *testing.T) {
-	testShortOldForkedSnapSyncingRepair(t, false)
+func TestShortOldForkedFastSyncingRepair(t *testing.T) {
+	testShortOldForkedFastSyncingRepair(t, false)
 }
-func TestShortOldForkedSnapSyncingRepairWithSnapshots(t *testing.T) {
-	testShortOldForkedSnapSyncingRepair(t, true)
+func TestShortOldForkedFastSyncingRepairWithSnapshots(t *testing.T) {
+	testShortOldForkedFastSyncingRepair(t, true)
 }
 
-func testShortOldForkedSnapSyncingRepair(t *testing.T, snapshots bool) {
+func testShortOldForkedFastSyncingRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3
@@ -340,14 +340,14 @@ func testShortNewlyForkedRepair(t *testing.T, snapshots bool) {
 // crashed. In this test scenario the side chain reaches above the committed block.
 // In this case we expect the canonical chain to be rolled back to the committed
 // block, but the chain data itself left in the database for replaying.
-func TestShortNewlyForkedSnapSyncedRepair(t *testing.T) {
-	testShortNewlyForkedSnapSyncedRepair(t, false)
+func TestShortNewlyForkedFastSyncedRepair(t *testing.T) {
+	testShortNewlyForkedFastSyncedRepair(t, false)
 }
-func TestShortNewlyForkedSnapSyncedRepairWithSnapshots(t *testing.T) {
-	testShortNewlyForkedSnapSyncedRepair(t, true)
+func TestShortNewlyForkedFastSyncedRepairWithSnapshots(t *testing.T) {
+	testShortNewlyForkedFastSyncedRepair(t, true)
 }
 
-func testShortNewlyForkedSnapSyncedRepair(t *testing.T, snapshots bool) {
+func testShortNewlyForkedFastSyncedRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6
@@ -387,14 +387,14 @@ func testShortNewlyForkedSnapSyncedRepair(t *testing.T, snapshots bool) {
 // this test scenario the side chain reaches above the committed block. In this
 // case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
-func TestShortNewlyForkedSnapSyncingRepair(t *testing.T) {
-	testShortNewlyForkedSnapSyncingRepair(t, false)
+func TestShortNewlyForkedFastSyncingRepair(t *testing.T) {
+	testShortNewlyForkedFastSyncingRepair(t, false)
 }
-func TestShortNewlyForkedSnapSyncingRepairWithSnapshots(t *testing.T) {
-	testShortNewlyForkedSnapSyncingRepair(t, true)
+func TestShortNewlyForkedFastSyncingRepairWithSnapshots(t *testing.T) {
+	testShortNewlyForkedFastSyncingRepair(t, true)
 }
 
-func testShortNewlyForkedSnapSyncingRepair(t *testing.T, snapshots bool) {
+func testShortNewlyForkedFastSyncingRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6
@@ -475,14 +475,14 @@ func testShortReorgedRepair(t *testing.T, snapshots bool) {
 // the fast sync pivot point was already committed to disk and then the process
 // crashed. In this case we expect the canonical chain to be rolled back to the
 // committed block, but the chain data itself left in the database for replaying.
-func TestShortReorgedSnapSyncedRepair(t *testing.T) {
-	testShortReorgedSnapSyncedRepair(t, false)
+func TestShortReorgedFastSyncedRepair(t *testing.T) {
+	testShortReorgedFastSyncedRepair(t, false)
 }
-func TestShortReorgedSnapSyncedRepairWithSnapshots(t *testing.T) {
-	testShortReorgedSnapSyncedRepair(t, true)
+func TestShortReorgedFastSyncedRepairWithSnapshots(t *testing.T) {
+	testShortReorgedFastSyncedRepair(t, true)
 }
 
-func testShortReorgedSnapSyncedRepair(t *testing.T, snapshots bool) {
+func testShortReorgedFastSyncedRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10
@@ -521,14 +521,14 @@ func testShortReorgedSnapSyncedRepair(t *testing.T, snapshots bool) {
 // the fast sync pivot point was not yet committed, but the process crashed. In
 // this case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
-func TestShortReorgedSnapSyncingRepair(t *testing.T) {
-	testShortReorgedSnapSyncingRepair(t, false)
+func TestShortReorgedFastSyncingRepair(t *testing.T) {
+	testShortReorgedFastSyncingRepair(t, false)
 }
-func TestShortReorgedSnapSyncingRepairWithSnapshots(t *testing.T) {
-	testShortReorgedSnapSyncingRepair(t, true)
+func TestShortReorgedFastSyncingRepairWithSnapshots(t *testing.T) {
+	testShortReorgedFastSyncingRepair(t, true)
 }
 
-func testShortReorgedSnapSyncingRepair(t *testing.T, snapshots bool) {
+func testShortReorgedFastSyncingRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10
@@ -656,14 +656,14 @@ func testLongDeepRepair(t *testing.T, snapshots bool) {
 // sync pivot point - newer than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwads kept as fast sync data.
-func TestLongSnapSyncedShallowRepair(t *testing.T) {
-	testLongSnapSyncedShallowRepair(t, false)
+func TestLongFastSyncedShallowRepair(t *testing.T) {
+	testLongFastSyncedShallowRepair(t, false)
 }
-func TestLongSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
-	testLongSnapSyncedShallowRepair(t, true)
+func TestLongFastSyncedShallowRepairWithSnapshots(t *testing.T) {
+	testLongFastSyncedShallowRepair(t, true)
 }
 
-func testLongSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
+func testLongFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//
@@ -705,10 +705,10 @@ func testLongSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // sync pivot point - older than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwads deleted.
-func TestLongSnapSyncedDeepRepair(t *testing.T)              { testLongSnapSyncedDeepRepair(t, false) }
-func TestLongSnapSyncedDeepRepairWithSnapshots(t *testing.T) { testLongSnapSyncedDeepRepair(t, true) }
+func TestLongFastSyncedDeepRepair(t *testing.T)              { testLongFastSyncedDeepRepair(t, false) }
+func TestLongFastSyncedDeepRepairWithSnapshots(t *testing.T) { testLongFastSyncedDeepRepair(t, true) }
 
-func testLongSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
+func testLongFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//
@@ -750,14 +750,14 @@ func testLongSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
 // process crashed. In this case we expect the chain to detect that it was fast
 // syncing and not delete anything, since we can just pick up directly where we
 // left off.
-func TestLongSnapSyncingShallowRepair(t *testing.T) {
-	testLongSnapSyncingShallowRepair(t, false)
+func TestLongFastSyncingShallowRepair(t *testing.T) {
+	testLongFastSyncingShallowRepair(t, false)
 }
-func TestLongSnapSyncingShallowRepairWithSnapshots(t *testing.T) {
-	testLongSnapSyncingShallowRepair(t, true)
+func TestLongFastSyncingShallowRepairWithSnapshots(t *testing.T) {
+	testLongFastSyncingShallowRepair(t, true)
 }
 
-func testLongSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
+func testLongFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//
@@ -800,10 +800,10 @@ func testLongSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
 // process crashed. In this case we expect the chain to detect that it was fast
 // syncing and not delete anything, since we can just pick up directly where we
 // left off.
-func TestLongSnapSyncingDeepRepair(t *testing.T)              { testLongSnapSyncingDeepRepair(t, false) }
-func TestLongSnapSyncingDeepRepairWithSnapshots(t *testing.T) { testLongSnapSyncingDeepRepair(t, true) }
+func TestLongFastSyncingDeepRepair(t *testing.T)              { testLongFastSyncingDeepRepair(t, false) }
+func TestLongFastSyncingDeepRepairWithSnapshots(t *testing.T) { testLongFastSyncingDeepRepair(t, true) }
 
-func testLongSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
+func testLongFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//
@@ -946,14 +946,14 @@ func testLongOldForkedDeepRepair(t *testing.T, snapshots bool) {
 // the side chain is below the committed block. In this case we expect the chain
 // to be rolled back to the committed block, with everything afterwads kept as
 // fast sync data; the side chain completely nuked by the freezer.
-func TestLongOldForkedSnapSyncedShallowRepair(t *testing.T) {
-	testLongOldForkedSnapSyncedShallowRepair(t, false)
+func TestLongOldForkedFastSyncedShallowRepair(t *testing.T) {
+	testLongOldForkedFastSyncedShallowRepair(t, false)
 }
-func TestLongOldForkedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
-	testLongOldForkedSnapSyncedShallowRepair(t, true)
+func TestLongOldForkedFastSyncedShallowRepairWithSnapshots(t *testing.T) {
+	testLongOldForkedFastSyncedShallowRepair(t, true)
 }
 
-func testLongOldForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
+func testLongOldForkedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3
@@ -998,14 +998,14 @@ func testLongOldForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // the side chain is below the committed block. In this case we expect the canonical
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
-func TestLongOldForkedSnapSyncedDeepRepair(t *testing.T) {
-	testLongOldForkedSnapSyncedDeepRepair(t, false)
+func TestLongOldForkedFastSyncedDeepRepair(t *testing.T) {
+	testLongOldForkedFastSyncedDeepRepair(t, false)
 }
-func TestLongOldForkedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
-	testLongOldForkedSnapSyncedDeepRepair(t, true)
+func TestLongOldForkedFastSyncedDeepRepairWithSnapshots(t *testing.T) {
+	testLongOldForkedFastSyncedDeepRepair(t, true)
 }
 
-func testLongOldForkedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
+func testLongOldForkedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3
@@ -1049,14 +1049,14 @@ func testLongOldForkedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
 // chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
-func TestLongOldForkedSnapSyncingShallowRepair(t *testing.T) {
-	testLongOldForkedSnapSyncingShallowRepair(t, false)
+func TestLongOldForkedFastSyncingShallowRepair(t *testing.T) {
+	testLongOldForkedFastSyncingShallowRepair(t, false)
 }
-func TestLongOldForkedSnapSyncingShallowRepairWithSnapshots(t *testing.T) {
-	testLongOldForkedSnapSyncingShallowRepair(t, true)
+func TestLongOldForkedFastSyncingShallowRepairWithSnapshots(t *testing.T) {
+	testLongOldForkedFastSyncingShallowRepair(t, true)
 }
 
-func testLongOldForkedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
+func testLongOldForkedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3
@@ -1101,14 +1101,14 @@ func testLongOldForkedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
 // chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
-func TestLongOldForkedSnapSyncingDeepRepair(t *testing.T) {
-	testLongOldForkedSnapSyncingDeepRepair(t, false)
+func TestLongOldForkedFastSyncingDeepRepair(t *testing.T) {
+	testLongOldForkedFastSyncingDeepRepair(t, false)
 }
-func TestLongOldForkedSnapSyncingDeepRepairWithSnapshots(t *testing.T) {
-	testLongOldForkedSnapSyncingDeepRepair(t, true)
+func TestLongOldForkedFastSyncingDeepRepairWithSnapshots(t *testing.T) {
+	testLongOldForkedFastSyncingDeepRepair(t, true)
 }
 
-func testLongOldForkedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
+func testLongOldForkedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3
@@ -1252,14 +1252,14 @@ func testLongNewerForkedDeepRepair(t *testing.T, snapshots bool) {
 // the side chain is above the committed block. In this case we expect the chain
 // to be rolled back to the committed block, with everything afterwads kept as fast
 // sync data; the side chain completely nuked by the freezer.
-func TestLongNewerForkedSnapSyncedShallowRepair(t *testing.T) {
-	testLongNewerForkedSnapSyncedShallowRepair(t, false)
+func TestLongNewerForkedFastSyncedShallowRepair(t *testing.T) {
+	testLongNewerForkedFastSyncedShallowRepair(t, false)
 }
-func TestLongNewerForkedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
-	testLongNewerForkedSnapSyncedShallowRepair(t, true)
+func TestLongNewerForkedFastSyncedShallowRepairWithSnapshots(t *testing.T) {
+	testLongNewerForkedFastSyncedShallowRepair(t, true)
 }
 
-func testLongNewerForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
+func testLongNewerForkedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1304,14 +1304,14 @@ func testLongNewerForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // the side chain is above the committed block. In this case we expect the canonical
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
-func TestLongNewerForkedSnapSyncedDeepRepair(t *testing.T) {
-	testLongNewerForkedSnapSyncedDeepRepair(t, false)
+func TestLongNewerForkedFastSyncedDeepRepair(t *testing.T) {
+	testLongNewerForkedFastSyncedDeepRepair(t, false)
 }
-func TestLongNewerForkedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
-	testLongNewerForkedSnapSyncedDeepRepair(t, true)
+func TestLongNewerForkedFastSyncedDeepRepairWithSnapshots(t *testing.T) {
+	testLongNewerForkedFastSyncedDeepRepair(t, true)
 }
 
-func testLongNewerForkedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
+func testLongNewerForkedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1355,14 +1355,14 @@ func testLongNewerForkedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
 // chain is above the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
-func TestLongNewerForkedSnapSyncingShallowRepair(t *testing.T) {
-	testLongNewerForkedSnapSyncingShallowRepair(t, false)
+func TestLongNewerForkedFastSyncingShallowRepair(t *testing.T) {
+	testLongNewerForkedFastSyncingShallowRepair(t, false)
 }
-func TestLongNewerForkedSnapSyncingShallowRepairWithSnapshots(t *testing.T) {
-	testLongNewerForkedSnapSyncingShallowRepair(t, true)
+func TestLongNewerForkedFastSyncingShallowRepairWithSnapshots(t *testing.T) {
+	testLongNewerForkedFastSyncingShallowRepair(t, true)
 }
 
-func testLongNewerForkedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
+func testLongNewerForkedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1407,14 +1407,14 @@ func testLongNewerForkedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
 // chain is above the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
-func TestLongNewerForkedSnapSyncingDeepRepair(t *testing.T) {
-	testLongNewerForkedSnapSyncingDeepRepair(t, false)
+func TestLongNewerForkedFastSyncingDeepRepair(t *testing.T) {
+	testLongNewerForkedFastSyncingDeepRepair(t, false)
 }
-func TestLongNewerForkedSnapSyncingDeepRepairWithSnapshots(t *testing.T) {
-	testLongNewerForkedSnapSyncingDeepRepair(t, true)
+func TestLongNewerForkedFastSyncingDeepRepairWithSnapshots(t *testing.T) {
+	testLongNewerForkedFastSyncingDeepRepair(t, true)
 }
 
-func testLongNewerForkedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
+func testLongNewerForkedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1552,14 +1552,14 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 // expect the chain to be rolled back to the committed block, with everything
 // afterwads kept as fast sync data. The side chain completely nuked by the
 // freezer.
-func TestLongReorgedSnapSyncedShallowRepair(t *testing.T) {
-	testLongReorgedSnapSyncedShallowRepair(t, false)
+func TestLongReorgedFastSyncedShallowRepair(t *testing.T) {
+	testLongReorgedFastSyncedShallowRepair(t, false)
 }
-func TestLongReorgedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
-	testLongReorgedSnapSyncedShallowRepair(t, true)
+func TestLongReorgedFastSyncedShallowRepairWithSnapshots(t *testing.T) {
+	testLongReorgedFastSyncedShallowRepair(t, true)
 }
 
-func testLongReorgedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
+func testLongReorgedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1603,14 +1603,14 @@ func testLongReorgedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // was already committed to disk and then the process crashed. In this case we
 // expect the canonical chains to be rolled back to the committed block, with
 // everything afterwads deleted. The side chain completely nuked by the freezer.
-func TestLongReorgedSnapSyncedDeepRepair(t *testing.T) {
-	testLongReorgedSnapSyncedDeepRepair(t, false)
+func TestLongReorgedFastSyncedDeepRepair(t *testing.T) {
+	testLongReorgedFastSyncedDeepRepair(t, false)
 }
-func TestLongReorgedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
-	testLongReorgedSnapSyncedDeepRepair(t, true)
+func TestLongReorgedFastSyncedDeepRepairWithSnapshots(t *testing.T) {
+	testLongReorgedFastSyncedDeepRepair(t, true)
 }
 
-func testLongReorgedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
+func testLongReorgedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1653,14 +1653,14 @@ func testLongReorgedSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
 // was not yet committed, but the process crashed. In this case we expect the
 // chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
-func TestLongReorgedSnapSyncingShallowRepair(t *testing.T) {
-	testLongReorgedSnapSyncingShallowRepair(t, false)
+func TestLongReorgedFastSyncingShallowRepair(t *testing.T) {
+	testLongReorgedFastSyncingShallowRepair(t, false)
 }
-func TestLongReorgedSnapSyncingShallowRepairWithSnapshots(t *testing.T) {
-	testLongReorgedSnapSyncingShallowRepair(t, true)
+func TestLongReorgedFastSyncingShallowRepairWithSnapshots(t *testing.T) {
+	testLongReorgedFastSyncingShallowRepair(t, true)
 }
 
-func testLongReorgedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
+func testLongReorgedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1704,14 +1704,14 @@ func testLongReorgedSnapSyncingShallowRepair(t *testing.T, snapshots bool) {
 // was not yet committed, but the process crashed. In this case we expect the
 // chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
-func TestLongReorgedSnapSyncingDeepRepair(t *testing.T) {
-	testLongReorgedSnapSyncingDeepRepair(t, false)
+func TestLongReorgedFastSyncingDeepRepair(t *testing.T) {
+	testLongReorgedFastSyncingDeepRepair(t, false)
 }
-func TestLongReorgedSnapSyncingDeepRepairWithSnapshots(t *testing.T) {
-	testLongReorgedSnapSyncingDeepRepair(t, true)
+func TestLongReorgedFastSyncingDeepRepairWithSnapshots(t *testing.T) {
+	testLongReorgedFastSyncingDeepRepair(t, true)
 }
 
-func testLongReorgedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
+func testLongReorgedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1829,7 +1829,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
 
-	// Start a new blockchain back up and see where the repair leads us
+	// Start a new blockchain back up and see where the repait leads us
 	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)

@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -61,8 +60,8 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 			block.AddTx(tx)
 		}
 		// If the block number is a multiple of 5, add a bonus uncle to the block
-		if i > 0 && i%5 == 0 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 2).Hash(), Number: big.NewInt(int64(i - 1))})
+		if i%5 == 0 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
 		}
 	})
 	hashes := make([]common.Hash, n+1)
@@ -196,26 +195,16 @@ func (f *fetcherTester) makeHeaderFetcher(peer string, blocks map[common.Hash]*t
 		closure[hash] = block
 	}
 	// Create a function that return a header from the closure
-	return func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	return func(hash common.Hash) error {
 		// Gather the blocks to return
 		headers := make([]*types.Header, 0, 1)
 		if block, ok := closure[hash]; ok {
 			headers = append(headers, block.Header())
 		}
 		// Return on a new thread
-		req := &eth.Request{
-			Peer: peer,
-		}
-		res := &eth.Response{
-			Req:  req,
-			Res:  (*eth.BlockHeadersPacket)(&headers),
-			Time: drift,
-			Done: make(chan error, 1), // Ignore the returned status
-		}
-		go func() {
-			sink <- res
-		}()
-		return req, nil
+		go f.fetcher.FilterHeaders(peer, headers, time.Now().Add(drift))
+
+		return nil
 	}
 }
 
@@ -226,7 +215,7 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 		closure[hash] = block
 	}
 	// Create a function that returns blocks from the closure
-	return func(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	return func(hashes []common.Hash) error {
 		// Gather the block bodies to return
 		transactions := make([][]*types.Transaction, 0, len(hashes))
 		uncles := make([][]*types.Header, 0, len(hashes))
@@ -238,33 +227,14 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 			}
 		}
 		// Return on a new thread
-		bodies := make([]*eth.BlockBody, len(transactions))
-		for i, txs := range transactions {
-			bodies[i] = &eth.BlockBody{
-				Transactions: txs,
-				Uncles:       uncles[i],
-			}
-		}
-		req := &eth.Request{
-			Peer: peer,
-		}
-		res := &eth.Response{
-			Req:  req,
-			Res:  (*eth.BlockBodiesPacket)(&bodies),
-			Time: drift,
-			Done: make(chan error, 1), // Ignore the returned status
-		}
-		go func() {
-			sink <- res
-		}()
-		return req, nil
+		go f.fetcher.FilterBodies(peer, transactions, uncles, time.Now().Add(drift))
+
+		return nil
 	}
 }
 
 // verifyFetchingEvent verifies that one single event arrive on a fetching channel.
 func verifyFetchingEvent(t *testing.T, fetching chan []common.Hash, arrive bool) {
-	t.Helper()
-
 	if arrive {
 		select {
 		case <-fetching:
@@ -282,8 +252,6 @@ func verifyFetchingEvent(t *testing.T, fetching chan []common.Hash, arrive bool)
 
 // verifyCompletingEvent verifies that one single event arrive on an completing channel.
 func verifyCompletingEvent(t *testing.T, completing chan []common.Hash, arrive bool) {
-	t.Helper()
-
 	if arrive {
 		select {
 		case <-completing:
@@ -301,8 +269,6 @@ func verifyCompletingEvent(t *testing.T, completing chan []common.Hash, arrive b
 
 // verifyImportEvent verifies that one single event arrive on an import channel.
 func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
-	t.Helper()
-
 	if arrive {
 		select {
 		case <-imported:
@@ -321,8 +287,6 @@ func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
 // verifyImportCount verifies that exactly count number of events arrive on an
 // import hook channel.
 func verifyImportCount(t *testing.T, imported chan interface{}, count int) {
-	t.Helper()
-
 	for i := 0; i < count; i++ {
 		select {
 		case <-imported:
@@ -335,8 +299,6 @@ func verifyImportCount(t *testing.T, imported chan interface{}, count int) {
 
 // verifyImportDone verifies that no more events are arriving on an import channel.
 func verifyImportDone(t *testing.T, imported chan interface{}) {
-	t.Helper()
-
 	select {
 	case <-imported:
 		t.Fatalf("extra block imported")
@@ -346,8 +308,6 @@ func verifyImportDone(t *testing.T, imported chan interface{}) {
 
 // verifyChainHeight verifies the chain height is as expected.
 func verifyChainHeight(t *testing.T, fetcher *fetcherTester, height uint64) {
-	t.Helper()
-
 	if fetcher.chainHeight() != height {
 		t.Fatalf("chain height mismatch, got %d, want %d", fetcher.chainHeight(), height)
 	}
@@ -408,13 +368,13 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	secondBodyFetcher := tester.makeBodyFetcher("second", blocks, 0)
 
 	counter := uint32(0)
-	firstHeaderWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	firstHeaderWrapper := func(hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
-		return firstHeaderFetcher(hash, sink)
+		return firstHeaderFetcher(hash)
 	}
-	secondHeaderWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	secondHeaderWrapper := func(hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
-		return secondHeaderFetcher(hash, sink)
+		return secondHeaderFetcher(hash)
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
@@ -508,20 +468,15 @@ func testPendingDeduplication(t *testing.T, light bool) {
 
 	delay := 50 * time.Millisecond
 	counter := uint32(0)
-	headerWrapper := func(hash common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	headerWrapper := func(hash common.Hash) error {
 		atomic.AddUint32(&counter, 1)
 
 		// Simulate a long running fetch
-		resink := make(chan *eth.Response)
-		req, err := headerFetcher(hash, resink)
-		if err == nil {
-			go func() {
-				res := <-resink
-				time.Sleep(delay)
-				sink <- res
-			}()
-		}
-		return req, err
+		go func() {
+			time.Sleep(delay)
+			headerFetcher(hash)
+		}()
+		return nil
 	}
 	checkNonExist := func() bool {
 		return tester.getBlock(hashes[0]) == nil
