@@ -372,6 +372,9 @@ func (t *Transaction) Status(ctx context.Context) (*Long, error) {
 	if err != nil || receipt == nil {
 		return nil, err
 	}
+	if len(receipt.PostState) != 0 {
+		return nil, nil
+	}
 	ret := Long(receipt.Status)
 	return &ret, nil
 }
