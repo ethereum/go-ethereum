@@ -81,11 +81,11 @@ type stPostState struct {
 type stEnv struct {
 	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
 	Difficulty *big.Int       `json:"currentDifficulty" gencodec:"optional"`
-	Random     *big.Int       `json:"currentRandom" gencodec:"optional"`
+	Random     *big.Int       `json:"currentRandom"     gencodec:"optional"`
 	GasLimit   uint64         `json:"currentGasLimit"   gencodec:"required"`
 	Number     uint64         `json:"currentNumber"     gencodec:"required"`
 	Timestamp  uint64         `json:"currentTimestamp"  gencodec:"required"`
-	BaseFee    *big.Int       `json:"currentBaseFee"  gencodec:"optional"`
+	BaseFee    *big.Int       `json:"currentBaseFee"    gencodec:"optional"`
 }
 
 type stEnvMarshaling struct {
@@ -221,7 +221,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	if t.json.Env.Random != nil {
-		context.Random = common.BigToHash(t.json.Env.Random)
+		rnd := common.BigToHash(t.json.Env.Random)
+		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
@@ -285,7 +286,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	if t.json.Env.Random != nil {
 		// Post-Merge
 		genesis.Mixhash = common.BigToHash(t.json.Env.Random)
-		genesis.Difficulty = nil
+		genesis.Difficulty = common.Big0
 	}
 	return genesis
 }
