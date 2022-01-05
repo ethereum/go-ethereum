@@ -1144,25 +1144,23 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if interval != nil {
 			interval()
 		}
-		// Deep copy receipts here to avoid interaction between different tasks.
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}
 		// If we're post merge, just ignore
-		if w.isTTDReached(block.Header()) {
-			return nil
-		}
-		select {
-		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
-			w.unconfirmed.Shift(block.NumberU64() - 1)
-			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-				"uncles", len(env.uncles), "txs", env.tcount,
-				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
-				"elapsed", common.PrettyDuration(time.Since(start)))
+		if !w.isTTDReached(block.Header()) {
+			select {
+			case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
+				w.unconfirmed.Shift(block.NumberU64() - 1)
+				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+					"uncles", len(env.uncles), "txs", env.tcount,
+					"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+					"elapsed", common.PrettyDuration(time.Since(start)))
 
-		case <-w.exitCh:
-			log.Info("Worker has exited")
+			case <-w.exitCh:
+				log.Info("Worker has exited")
+			}
 		}
 	}
 	if update {
