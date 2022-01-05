@@ -198,6 +198,9 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 			return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 		}
 		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
+		if parent == nil {
+			return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
+		}
 		td := api.les.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 		ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
 		if td.Cmp(ttd) < 0 {
@@ -222,6 +225,9 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 		return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 	}
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	if parent == nil {
+		return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
+	}
 	td := api.eth.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if td.Cmp(ttd) < 0 {
@@ -366,10 +372,6 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	if api.light {
 		headHeader := api.les.BlockChain().CurrentHeader()
 		if headHeader.Hash() == newHead {
-			// Trigger the transition if it's the first `NewHead` event.
-			if merger := api.merger(); !merger.PoSFinalized() {
-				merger.FinalizePoS()
-			}
 			return nil
 		}
 		newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
