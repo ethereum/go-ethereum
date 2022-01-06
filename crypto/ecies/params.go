@@ -79,7 +79,7 @@ var (
 		BlockSize: aes.BlockSize,
 		KeyLen:    16,
 	}
-	
+
 	ECIES_AES192_SHA384 = &ECIESParams{
 		Hash:      sha512.New384,
 		hashAlgo:  crypto.SHA384,
