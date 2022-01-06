@@ -286,7 +286,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	if t.json.Env.Random != nil {
 		// Post-Merge
 		genesis.Mixhash = common.BigToHash(t.json.Env.Random)
-		genesis.Difficulty = common.Big0
+		genesis.Difficulty = big.NewInt(0)
 	}
 	return genesis
 }
