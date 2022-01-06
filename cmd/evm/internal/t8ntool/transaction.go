@@ -178,6 +178,10 @@ func Transaction(ctx *cli.Context) error {
 		case new(big.Int).Mul(tx.GasFeeCap(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
 			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
 		}
+		// Check whether the init code size has been exceeded.
+		if eip3860 && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+			r.Error = errors.New("init code size limit exceeded")
+		}
 		results = append(results, r)
 	}
 	out, err := json.MarshalIndent(results, "", "  ")
