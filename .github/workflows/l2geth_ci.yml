@@ -1,0 +1,22 @@
+on: [pull_request]
+name: Continuous Integration
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Lint
+      run: |
+        rm -rf $HOME/.cache/golangci-lint 
+        make lint
+    - name: Test
+      run: |
+        go get ./...
+        make test
+    - name: Upload coverage report
+      run: bash <(curl -s https://codecov.io/bash)
