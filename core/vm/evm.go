@@ -130,7 +130,7 @@ type EVM struct {
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
-	if txCtx.Accesses == nil {
+	if txCtx.Accesses == nil && chainConfig.IsCancun(blockCtx.BlockNumber) {
 		txCtx.Accesses = types.NewAccessWitness()
 	}
 	evm := &EVM{

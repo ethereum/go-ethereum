@@ -148,12 +148,14 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
-		witness:             types.NewAccessWitness(),
 	}
-	if sdb.snaps == nil && tr.IsVerkle() {
-		sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
-		if err != nil {
-			return nil, err
+	if tr.IsVerkle() {
+		sdb.witness = types.NewAccessWitness()
+		if sdb.snaps == nil {
+			sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if sdb.snaps != nil {
@@ -182,7 +184,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.snap != nil {
+	if s.snap != nil && !s.trie.IsVerkle() {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
 }
@@ -713,7 +715,9 @@ func (s *StateDB) Copy() *StateDB {
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
-		witness:             s.witness.Copy(),
+	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {

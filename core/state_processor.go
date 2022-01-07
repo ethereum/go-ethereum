@@ -95,6 +95,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
+	if config.IsCancun(blockNumber) {
+		txContext.Accesses = types.NewAccessWitness()
+	}
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
