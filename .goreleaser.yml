@@ -84,6 +84,12 @@ nfpms:
       - src: builder/files/bor.service
         dst: /lib/systemd/system/bor.service
         type: config
+      - src: builder/files/genesis-mainnet-v1.json
+        dst: /etc/bor/genesis-mainnet-v1.json
+        type: config
+      - src: builder/files/genesis-testnet-v4.json
+        dst: /etc/bor/genesis-testnet-v4.json
+        type: config
 
     overrides:
       rpm:
@@ -103,7 +109,9 @@ dockers:
       - linux-amd64
     build_flag_templates:
       - --platform=linux/amd64
-    skip_push: true
+    extra_files:
+      - builder/files/genesis-mainnet-v1.json
+      - builder/files/genesis-testnet-v4.json
   
   - image_templates:
       - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
@@ -113,8 +121,10 @@ dockers:
     ids:
       - linux-arm64
     build_flag_templates:
-      - --platform=linux/arm64
-    skip_push: true
+      - --platform=linux/arm64/v8
+    extra_files:
+      - builder/files/genesis-mainnet-v1.json
+      - builder/files/genesis-testnet-v4.json
 
 docker_manifests:
   - name_template: 0xpolygon/{{ .ProjectName }}:{{ .Version }}
