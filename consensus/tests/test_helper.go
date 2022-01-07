@@ -488,6 +488,7 @@ func createXDPoSTestBlock(bc *BlockChain, customHeader *types.Header, txs []*typ
 		Time:        big.NewInt(customHeader.Number.Int64() * 10),
 		Extra:       customHeader.Extra,
 		Validator:   customHeader.Validator,
+		Validators:   customHeader.Validators,
 	}
 	var block *types.Block
 	if len(txs) == 0 {

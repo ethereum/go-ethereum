@@ -352,6 +352,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
+	//TODO: i think this should be c.GetMasternodesFrom...
 	masternodes := utils.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {

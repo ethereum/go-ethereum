@@ -108,6 +108,12 @@ type ExtraFields_v2 struct {
 	QuorumCert *QuorumCert
 }
 
+type EpochSwitchInfo struct {
+	Masternodes                []common.Address
+	EpochSwitchBlockInfo       *BlockInfo
+	EpochSwitchParentBlockInfo *BlockInfo
+}
+
 // Encode XDPoS 2.0 extra fields into bytes
 func (e *ExtraFields_v2) EncodeToBytes() ([]byte, error) {
 	bytes, err := rlp.EncodeToBytes(e)

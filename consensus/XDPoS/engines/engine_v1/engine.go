@@ -988,3 +988,8 @@ func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v1 {
 	}
 	return fakeEngine
 }
+
+// Epoch Switch is also known as checkpoint in v1
+func (x *XDPoS_v1) IsEpochSwitch(header *types.Header) bool {
+	return (header.Number.Uint64() % x.config.Epoch) == 0
+}
