@@ -903,4 +903,13 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 	if !bytes.Equal(v, exp) {
 		t.Errorf("retrieved value is incorrect")
 	}
+	// Now write some data. This should fail either during AppendRaw or Commit
+	batch := f.newBatch()
+	writeErr := batch.AppendRaw(32, make([]byte, 1))
+	if writeErr == nil {
+		writeErr = batch.commit()
+	}
+	if writeErr == nil {
+		t.Fatalf("Writing to readonly table should fail")
+	}
 }
