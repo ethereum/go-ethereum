@@ -329,7 +329,6 @@ func (f *freezer) validate() error {
 		name = k
 		break
 	}
-	log.Info("validate", "name", name, "length", length)
 	// Now check every table against that length
 	for k, table := range f.tables {
 		items := atomic.LoadUint64(&table.items)
