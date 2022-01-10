@@ -18,7 +18,6 @@ package utils
 
 import (
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
-	"github.com/crate-crypto/go-ipa/ipa"
 	"github.com/gballet/go-verkle"
 
 	"github.com/holiman/uint256"
@@ -55,7 +54,7 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 		verkle.CopyFr(&poly[i], &verkle.FrZero)
 	}
 
-	ret := ipa.NewIPASettings().Commit(poly[:])
+	ret := verkle.GetConfig().CommitToPoly(poly[:], 0)
 	retb := ret.Bytes()
 	return retb[:]
 
