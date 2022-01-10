@@ -133,9 +133,9 @@ type blockExecutionEnv struct {
 }
 
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
-	vmconfig := *env.chain.GetVMConfig()
+	vmConfig := *env.chain.GetVMConfig()
 	snap := env.state.Snapshot()
-	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
+	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmConfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err
@@ -318,6 +318,7 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
 		Extra:      []byte{},          // TODO (MariusVanDerWijden) properly set extra data
 		Time:       params.Timestamp,
+		MixDigest:  params.Random,
 	}
 	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
@@ -432,7 +433,7 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		Time:        params.Timestamp,
 		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
-		// TODO (MariusVanDerWijden) add params.Random to header once required
+		MixDigest:   params.Random,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {

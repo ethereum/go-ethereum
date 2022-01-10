@@ -43,7 +43,6 @@ var (
 // error types into the consensus package.
 var (
 	errTooManyUncles    = errors.New("too many uncles")
-	errInvalidMixDigest = errors.New("invalid mix digest")
 	errInvalidNonce     = errors.New("invalid nonce")
 	errInvalidUncleHash = errors.New("invalid uncle hash")
 )
@@ -182,10 +181,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if len(header.Extra) > 32 {
 		return fmt.Errorf("extra-data longer than 32 bytes (%d)", len(header.Extra))
 	}
-	// Verify the seal parts. Ensure the mixhash, nonce and uncle hash are the expected value.
-	if header.MixDigest != (common.Hash{}) {
-		return errInvalidMixDigest
-	}
+	// Verify the seal parts. Ensure the nonce and uncle hash are the expected value.
 	if header.Nonce != beaconNonce {
 		return errInvalidNonce
 	}
