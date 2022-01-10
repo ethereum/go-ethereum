@@ -317,8 +317,9 @@ var (
 		IstanbulBlock:       big.NewInt(3395000),
 		MuirGlacierBlock:    big.NewInt(3395000),
 		BerlinBlock:         big.NewInt(14750000),
-		LondonBlock:         big.NewInt(0), // TODO - Add london fork block
+		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
+			JaipurBlock: 23850000,
 			Period: map[string]uint64{
 				"0": 2,
 			},
@@ -341,8 +342,8 @@ var (
 				"14953856": 0,
 			},
 			BurntContract: map[string]string{
-				"0": "0x0000000000000000000000000000000000000000",
-			}, // TODO add london fork contract and block
+				"23850000": "0x0000000000000000000000000000000000000000",
+			},
 			BlockAlloc: map[string]interface{}{
 				// write as interface since that is how it is decoded in genesis
 				"22156660": map[string]interface{}{
@@ -487,8 +488,8 @@ type BorConfig struct {
 	StateReceiverContract    string                 `json:"stateReceiverContract"`    // State receiver contract
 	OverrideStateSyncRecords map[string]int         `json:"overrideStateSyncRecords"` // override state records count
 	BlockAlloc               map[string]interface{} `json:"blockAlloc"`
-	BurntContract            map[string]string      `json:"burntContract"`         // governance contract where the token will be sent to and burnt in london fork
-	JaipurBlock              uint64                 `json:"jaipurBlock"` // Jaipur switch block (nil = no fork, 0 = already on jaipur)
+	BurntContract            map[string]string      `json:"burntContract"` // governance contract where the token will be sent to and burnt in london fork
+	JaipurBlock              uint64                 `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
 }
 
 // String implements the stringer interface, returning the consensus engine details.
