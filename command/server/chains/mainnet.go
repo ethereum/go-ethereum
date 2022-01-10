@@ -52,7 +52,7 @@ var mainnetBor = &Chain{
 					"14953856": 0,
 				},
 				BurntContract: map[string]string{
-					"23850000": "0x0000000000000000000000000000000000000000",
+					"23850000": "0x70bca57f4579f58670ab2d18ef16e02c17553c38",
 				},
 				BlockAlloc: map[string]interface{}{
 					// write as interface since that is how it is decoded in genesis
