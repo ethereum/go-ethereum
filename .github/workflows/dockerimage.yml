@@ -2,8 +2,12 @@ name: Bor Docker Image CI
 
 on:
   push:
+    branches-ignore:
+      - '**'
     tags:
       - 'v*.*.*'
+      # to be used by fork patch-releases ^^
+      - 'v*.*.*-*'
   
 jobs:
   build:
@@ -19,7 +23,7 @@ jobs:
         echo "Docker login"
         docker login -u $DOCKERHUB -p $DOCKERHUB_KEY
         echo "running build"
-        docker build -t maticnetwork/bor:${GITHUB_REF/refs\/tags\//} .
+        docker build -f Dockerfile.classic -t maticnetwork/bor:${GITHUB_REF/refs\/tags\//} .
         echo "pushing image"
         docker push maticnetwork/bor:${GITHUB_REF/refs\/tags\//}
         echo "DONE!"

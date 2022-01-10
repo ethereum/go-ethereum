@@ -123,7 +123,7 @@ var (
 type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
 
 // ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+func ecrecover(header *types.Header, sigcache *lru.ARCCache, c *params.BorConfig) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := sigcache.Get(hash); known {
@@ -136,7 +136,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	signature := header.Extra[len(header.Extra)-extraSeal:]
 
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
+	pubkey, err := crypto.Ecrecover(SealHash(header, c).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -148,15 +148,15 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
-func SealHash(header *types.Header) (hash common.Hash) {
+func SealHash(header *types.Header, c *params.BorConfig) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
-	encodeSigHeader(hasher, header)
+	encodeSigHeader(hasher, header, c)
 	hasher.Sum(hash[:0])
 	return hash
 }
 
-func encodeSigHeader(w io.Writer, header *types.Header) {
-	err := rlp.Encode(w, []interface{}{
+func encodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig) {
+	enc := []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -172,8 +172,13 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
 		header.MixDigest,
 		header.Nonce,
-	})
-	if err != nil {
+	}
+	if c.IsJaipur(header.Number.Uint64()) {
+		if header.BaseFee != nil {
+			enc = append(enc, header.BaseFee)
+		}
+	}
+	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}
 }
@@ -182,12 +187,12 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 func CalcProducerDelay(number uint64, succession int, c *params.BorConfig) uint64 {
 	// When the block is the first block of the sprint, it is expected to be delayed by `producerDelay`.
 	// That is to allow time for block propagation in the last sprint
-	delay := c.Period
+	delay := c.CalculatePeriod(number)
 	if number%c.Sprint == 0 {
 		delay = c.ProducerDelay
 	}
 	if succession > 0 {
-		delay += uint64(succession) * c.BackupMultiplier
+		delay += uint64(succession) * c.CalculateBackupMultiplier(number)
 	}
 	return delay
 }
@@ -199,9 +204,9 @@ func CalcProducerDelay(number uint64, succession int, c *params.BorConfig) uint6
 // Note, the method requires the extra data to be at least 65 bytes, otherwise it
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
-func BorRLP(header *types.Header) []byte {
+func BorRLP(header *types.Header, c *params.BorConfig) []byte {
 	b := new(bytes.Buffer)
-	encodeSigHeader(b, header)
+	encodeSigHeader(b, header, c)
 	return b.Bytes()
 }
 
@@ -280,7 +285,7 @@ func New(
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (c *Bor) Author(header *types.Header) (common.Address, error) {
-	return ecrecover(header, c.signatures)
+	return ecrecover(header, c.signatures, c.config)
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
@@ -353,6 +358,11 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 			return errInvalidDifficulty
 		}
 	}
+	// Verify that the gas limit is <= 2^63-1
+	cap := uint64(0x7fffffffffffffff)
+	if header.GasLimit > cap {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -396,7 +406,24 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 		return consensus.ErrUnknownAncestor
 	}
 
-	if parent.Time+c.config.Period > header.Time {
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	}
+	if !chain.Config().IsLondon(header.Number) {
+		// Verify BaseFee not present before EIP-1559 fork.
+		if header.BaseFee != nil {
+			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
+		}
+		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
+			return err
+		}
+	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-1559 attributes.
+		return err
+	}
+
+	if parent.Time+c.config.CalculatePeriod(number) > header.Time {
 		return ErrInvalidTimestamp
 	}
 
@@ -556,7 +583,7 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 	}
 
 	// Resolve the authorization key and check against signers
-	signer, err := ecrecover(header, c.signatures)
+	signer, err := ecrecover(header, c.signatures, c.config)
 	if err != nil {
 		return err
 	}
@@ -791,7 +818,7 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 		return errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if c.config.Period == 0 && len(block.Transactions()) == 0 {
+	if c.config.CalculatePeriod(number) == 0 && len(block.Transactions()) == 0 {
 		log.Info("Sealing paused, waiting for transactions")
 		return nil
 	}
@@ -819,10 +846,10 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
 	// wiggle was already accounted for in header.Time, this is just for logging
-	wiggle := time.Duration(successionNumber) * time.Duration(c.config.BackupMultiplier) * time.Second
+	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header, c.config))
 	if err != nil {
 		return err
 	}
@@ -854,7 +881,7 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result was not read by miner", "number", number, "sealhash", SealHash(header))
+			log.Warn("Sealing result was not read by miner", "number", number, "sealhash", SealHash(header, c.config))
 		}
 	}()
 	return nil
@@ -873,7 +900,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, par
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (c *Bor) SealHash(header *types.Header) common.Hash {
-	return SealHash(header)
+	return SealHash(header, c.config)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow

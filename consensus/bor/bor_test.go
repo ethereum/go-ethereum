@@ -99,3 +99,39 @@ func TestGenesisContractChange(t *testing.T) {
 	// make sure balance change DOES NOT take effect
 	assert.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
 }
+
+func TestEncodeSigHeaderJaipur(t *testing.T) {
+	// As part of the EIP-1559 fork in mumbai, an incorrect seal hash
+	// was used for Bor that did not included the BaseFee. The Jaipur
+	// block is a hard fork to fix that.
+	h := &types.Header{
+		Difficulty: new(big.Int),
+		Number:     big.NewInt(1),
+		Extra:      make([]byte, 32+65),
+	}
+
+	var (
+		// hash for the block without the BaseFee
+		hashWithoutBaseFee = common.HexToHash("0x1be13e83939b3c4701ee57a34e10c9290ce07b0e53af0fe90b812c6881826e36")
+		// hash for the block with the baseFee
+		hashWithBaseFee = common.HexToHash("0xc55b0cac99161f71bde1423a091426b1b5b4d7598e5981ad802cce712771965b")
+	)
+
+	// Jaipur NOT enabled and BaseFee not set
+	hash := SealHash(h, &params.BorConfig{JaipurBlock: 10})
+	assert.Equal(t, hash, hashWithoutBaseFee)
+
+	// Jaipur enabled (Jaipur=0) and BaseFee not set
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: 0})
+	assert.Equal(t, hash, hashWithoutBaseFee)
+
+	h.BaseFee = big.NewInt(2)
+
+	// Jaipur enabled (Jaipur=Header block) and BaseFee set
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: 1})
+	assert.Equal(t, hash, hashWithBaseFee)
+
+	// Jaipur NOT enabled and BaseFee set
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: 10})
+	assert.Equal(t, hash, hashWithoutBaseFee)
+}

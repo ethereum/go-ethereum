@@ -337,6 +337,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
+	if london {
+		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
+		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
+		st.state.AddBalance(burntContractAddress, burnAmount)
+	}
 	st.state.AddBalance(st.evm.Context.Coinbase, amount)
 	output1 := new(big.Int).SetBytes(input1.Bytes())
 	output2 := new(big.Int).SetBytes(input2.Bytes())

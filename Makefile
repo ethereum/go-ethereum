@@ -13,6 +13,9 @@ GO ?= latest
 GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
 
+protoc:
+	protoc --go_out=. --go-grpc_out=. ./command/server/proto/*.proto
+
 bor:
 	$(GORUN) build/ci.go install ./cmd/geth
 	mkdir -p $(GOPATH)/bin/
@@ -47,8 +50,8 @@ ios:
 
 test: all
 	# $(GORUN) build/ci.go test
-	go test github.com/ethereum/go-ethereum/consensus/bor
-	go test github.com/ethereum/go-ethereum/tests/bor
+	go test github.com/ethereum/go-ethereum/consensus/bor -v
+	go test github.com/ethereum/go-ethereum/tests/bor -v
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
@@ -160,3 +163,37 @@ geth-windows-amd64:
 	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/geth
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+PACKAGE_NAME          := github.com/maticnetwork/bor
+GOLANG_CROSS_VERSION  ?= v1.17.2
+
+.PHONY: release-dry-run
+release-dry-run:
+	@docker run \
+		--rm \
+		--privileged \
+		-e CGO_ENABLED=1 \
+		-e GITHUB_TOKEN \
+		-e DOCKER_USERNAME \
+		-e DOCKER_PASSWORD \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/$(PACKAGE_NAME) \
+		-w /go/src/$(PACKAGE_NAME) \
+		ghcr.io/troian/golang-cross:${GOLANG_CROSS_VERSION} \
+		--rm-dist --skip-validate --skip-publish
+
+.PHONY: release
+release:
+	@docker run \
+		--rm \
+		--privileged \
+		-e CGO_ENABLED=1 \
+		-e GITHUB_TOKEN \
+		-e DOCKER_USERNAME \
+		-e DOCKER_PASSWORD \
+		-e SLACK_WEBHOOK \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/$(PACKAGE_NAME) \
+		-w /go/src/$(PACKAGE_NAME) \
+		ghcr.io/troian/golang-cross:${GOLANG_CROSS_VERSION} \
+		--rm-dist --skip-validate
