@@ -979,32 +979,31 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// range. In this case, all tx indices of newly imported blocks should be
 		// generated.
 		var batch = bc.db.NewBatch()
-		for _, block := range blockChain {
+		for i, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			}
 			stats.processed++
-		}
 
-		// Flush all tx-lookup index data.
-		size += int64(batch.ValueSize())
-		if err := batch.Write(); err != nil {
-			// The tx index data could not be written.
-			// Roll back the ancient store update.
-			fastBlock := bc.CurrentFastBlock().NumberU64()
-			if err := bc.db.TruncateAncients(fastBlock + 1); err != nil {
-				log.Error("Can't truncate ancient store after failed insert", "err", err)
+			if batch.ValueSize() > ethdb.IdealBatchSize || i == len(blockChain)-1 {
+				size += int64(batch.ValueSize())
+				if err = batch.Write(); err != nil {
+					fastBlock := bc.CurrentFastBlock().NumberU64()
+					if err := bc.db.TruncateAncients(fastBlock + 1); err != nil {
+						log.Error("Can't truncate ancient store after failed insert", "err", err)
+					}
+					return 0, err
+				}
+				batch.Reset()
 			}
-			return 0, err
 		}
 
 		// Sync the ancient store explicitly to ensure all data has been flushed to disk.
 		if err := bc.db.Sync(); err != nil {
 			return 0, err
 		}
-
 		// Update the current fast block because all block data is now present in DB.
 		previousFastBlock := bc.CurrentFastBlock().NumberU64()
 		if !updateHead(blockChain[len(blockChain)-1]) {
