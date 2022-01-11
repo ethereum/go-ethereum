@@ -38,9 +38,9 @@ func TestMissingNodeAfterPruningIntermediateNode(t *testing.T) {
 	// Pruning uses a bloom filter to remove old trie nodes from the database, which
 	// creates some probability of an unprotected trie node being left in a state where
 	// some of its descendants have been pruned from the disk. This test ensures that this
-	// scenario is handled correctly by the trie database, such that if a block is processed
-	// such that the intermediate node with missing children is revived, the removed descendant
-	// nodes are re-written to disk correctly.
+	// scenario is handled correctly by the trie database, such that if processing a future block
+	// leads to the danlging intermediate node being revived into the current trie, the removed
+	// descendant nodes are re-written to disk correctly.
 	assert := assert.New(t)
 	memdb := memorydb.New()
 
@@ -117,7 +117,7 @@ func TestMissingNodeAfterPruningIntermediateNode(t *testing.T) {
 	assert.NoError(nodeIterator.Error())
 	assert.True(foundLeaf, "failed to find leaf to be deleted")
 
-	// Confirm that we can no longer construct trie1 now has a missing node.
+	// Confirm that trie1 is now broken on [db1].
 	trie1, err = New(root1, db1)
 	assert.NoError(err)
 
@@ -139,6 +139,7 @@ func TestMissingNodeAfterPruningIntermediateNode(t *testing.T) {
 	assert.Equal(root1, root3, "roots should be identical after adding k1 back to trie2")
 	assert.NoError(db2.Commit(root3, true, nil))
 
+	// Check the correctness of the revived trie
 	_, err = trie3.TryGet(k1)
 	assert.NoError(err)
 }
