@@ -120,8 +120,8 @@ type freezerTable struct {
 }
 
 // NewFreezerTable opens the given path as a freezer table.
-func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
-	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, false)
+func NewFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
+	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, readonly)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -178,8 +178,10 @@ func newTable(path string, name string, readMeter metrics.Meter, writeMeter metr
 		// Compressed idx
 		idxName = fmt.Sprintf("%s.cidx", name)
 	}
-	var err error
-	var offsets *os.File
+	var (
+		err     error
+		offsets *os.File
+	)
 	if readonly {
 		// Will fail if table doesn't exist
 		offsets, err = openFreezerFileForReadOnly(filepath.Join(path, idxName))
@@ -236,9 +238,6 @@ func (t *freezerTable) repair() error {
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
 	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
-		if t.readonly {
-			return fmt.Errorf("table index has invalid length")
-		}
 		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
 	}
 	// Retrieve the file sizes and prepare for truncation
@@ -281,9 +280,6 @@ func (t *freezerTable) repair() error {
 	contentExp = int64(lastIndex.offset)
 
 	for contentExp != contentSize {
-		if t.readonly {
-			return fmt.Errorf("head file has unexpected size. %d != %d", contentSize, contentExp)
-		}
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
 			t.logger.Warn("Truncating dangling head", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))

@@ -321,12 +321,14 @@ func (f *freezer) validate() error {
 	if len(f.tables) == 0 {
 		return nil
 	}
-	var length uint64
-	var name string
+	var (
+		length uint64
+		name   string
+	)
 	// Hack to get length of any table
-	for k, table := range f.tables {
+	for kind, table := range f.tables {
 		length = atomic.LoadUint64(&table.items)
-		name = k
+		name = kind
 		break
 	}
 	// Now check every table against that length

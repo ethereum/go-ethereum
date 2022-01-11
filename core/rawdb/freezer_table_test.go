@@ -830,7 +830,7 @@ func TestSequentialReadByteLimit(t *testing.T) {
 	}
 }
 
-func TestFreezerReadonlyBasics(t *testing.T) {
+func TestFreezerReadonly(t *testing.T) {
 	// Case 1: Check it fails on non-existent file.
 	_, err := newTable(os.TempDir(),
 		fmt.Sprintf("readonlytest-%d", rand.Uint64()),
@@ -904,7 +904,8 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 		t.Errorf("retrieved value is incorrect")
 	}
 
-	// Now write some data. This should fail either during AppendRaw or Commit
+	// Case 5: Now write some data via a batch.
+	// This should fail either during AppendRaw or Commit
 	batch := f.newBatch()
 	writeErr := batch.AppendRaw(32, make([]byte, 1))
 	if writeErr == nil {
