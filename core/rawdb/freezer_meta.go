@@ -151,27 +151,16 @@ func loadMetadata(index *os.File) (*freezerTableMeta, error) {
 // upgradeV0TableIndex extracts the indexes from version-0 index file and
 // encodes/stores them into the latest version index file.
 func upgradeV0TableIndex(index *os.File) error {
-	// Create a temporary offset buffer to read indexEntry info
-	buffer := make([]byte, indexEntrySize)
-
-	// Read index zero, determine what file is the earliest
-	// and how many entries are deleted from the freezer table.
-	var first indexEntry
-	if _, err := index.ReadAt(buffer, 0); err != nil {
-		return err
-	}
-	first.unmarshalBinary(buffer)
-
-	encoded, err := encodeMetadata(newMetadata(first.filenum, uint64(first.offset), 0))
-	if err != nil {
-		return err
-	}
 	// Close the origin index file.
 	if err := index.Close(); err != nil {
 		return err
 	}
 	return copyFrom(index.Name(), index.Name(), indexEntrySize, func(f *os.File) error {
-		_, err := f.Write(encoded)
+		encoded, err := encodeMetadata(newMetadata(0, 0, 0))
+		if err != nil {
+			return err
+		}
+		_, err = f.Write(encoded)
 		return err
 	})
 }
@@ -201,8 +190,8 @@ func upgradeTableIndex(index *os.File, version uint16) (*os.File, *freezerTableM
 }
 
 // repairTableIndex repairs the given index file of freezer table and returns
-// the stored metadata inside. If the index file is be rewritten, the function
-// should be responsible for closing the origin one and return the new handler.
+// the stored metadata inside. If the index file is to be rewritten, the function
+// should be responsible for closing the origin one and returning the new handler.
 // If the table is empty, commit the empty metadata;
 // If the table is legacy, upgrade it to the latest version;
 func repairTableIndex(index *os.File) (*os.File, *freezerTableMeta, error) {

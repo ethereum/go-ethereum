@@ -663,7 +663,7 @@ func TestTruncateTail(t *testing.T) {
 	fname := fmt.Sprintf("truncate-tail-%d", rand.Uint64())
 
 	// Fill table
-	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,7 +709,7 @@ func TestTruncateTail(t *testing.T) {
 
 	// Reopen the table, the deletion information should be persisted as well
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -741,7 +741,7 @@ func TestTruncateTail(t *testing.T) {
 
 	// Reopen the table, the above testing should still pass
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -780,7 +780,7 @@ func TestTruncateHeadBelowTail(t *testing.T) {
 	fname := fmt.Sprintf("truncate-head-blow-tail-%d", rand.Uint64())
 
 	// Fill table
-	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -838,8 +838,8 @@ func TestUpgradeLegacyFreezerTable(t *testing.T) {
 	defer os.Remove(f.Name())
 
 	index := &indexEntry{
-		filenum: 100,
-		offset:  200,
+		filenum: 0,
+		offset:  0,
 	}
 	encoded := index.append(nil)
 	f.Write(encoded)
@@ -851,10 +851,10 @@ func TestUpgradeLegacyFreezerTable(t *testing.T) {
 	if newf.Name() != f.Name() {
 		t.Fatal("Unexpected file name")
 	}
-	if meta.tailId != 100 {
-		t.Fatal("Unexpected tail file")
+	if meta.tailId != 0 {
+		t.Fatal("Unexpected tail file", meta.tailId)
 	}
-	if meta.deleted != 200 {
+	if meta.deleted != 0 {
 		t.Fatal("Unexpected deleted items")
 	}
 	if meta.hidden != 0 {

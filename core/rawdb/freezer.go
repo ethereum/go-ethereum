@@ -59,7 +59,7 @@ const (
 	freezerRecheckInterval = time.Minute
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
-	// before doing a fsync and deleting it from the key-value store.
+	// before doing an fsync and deleting it from the key-value store.
 	freezerBatchLimit = 30000
 
 	// freezerTableSize defines the maximum size of freezer data files.
@@ -298,17 +298,12 @@ func (f *freezer) TruncateHead(items uint64) error {
 	if atomic.LoadUint64(&f.frozen) <= items {
 		return nil
 	}
-	var frozen uint64
 	for _, table := range f.tables {
 		if err := table.truncateHead(items); err != nil {
 			return err
 		}
-		// Tables should be aligned, only check the first table.
-		if frozen == 0 {
-			frozen = atomic.LoadUint64(&table.items)
-		}
 	}
-	atomic.StoreUint64(&f.frozen, frozen)
+	atomic.StoreUint64(&f.frozen, items)
 	return nil
 }
 
@@ -323,17 +318,12 @@ func (f *freezer) TruncateTail(tail uint64) error {
 	if atomic.LoadUint64(&f.tail) >= tail {
 		return nil
 	}
-	var truncated uint64
 	for _, table := range f.tables {
 		if err := table.truncateTail(tail); err != nil {
 			return err
 		}
-		if truncated == 0 {
-			// Tables should be aligned, only check the first table.
-			truncated = table.tail()
-		}
 	}
-	atomic.StoreUint64(&f.tail, truncated)
+	atomic.StoreUint64(&f.tail, tail)
 	return nil
 }
 

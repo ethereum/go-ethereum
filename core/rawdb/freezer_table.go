@@ -94,10 +94,10 @@ type freezerTable struct {
 	items      uint64 // Number of items stored in the table (including items removed from tail)
 	itemOffset uint64 // Number of items removed from the table
 
-	// itemHidden is the number of items marked as deleted they are not removed
-	// from the table yet. Since the tail deletion is only supported at file level
-	// which means the actual deletion will be delayed until the total "marked as
-	// deleted" data reach the threshold. Before that these items will be hidden
+	// itemHidden is the number of items marked as deleted which are not removed
+	// from the table yet. Tail deletion is only supported at file level which
+	// means the actual deletion will be delayed until the total "marked as
+	// deleted" data reaches the threshold. Before that these items will be hidden
 	// to prevent being visited again.
 	itemHidden uint64
 
