@@ -893,7 +893,7 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 	f, err = newTable(os.TempDir(), fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	v, err := f.Retrieve(10)
 	if err != nil {
@@ -903,6 +903,7 @@ func TestFreezerReadonlyBasics(t *testing.T) {
 	if !bytes.Equal(v, exp) {
 		t.Errorf("retrieved value is incorrect")
 	}
+
 	// Now write some data. Append/AppendRaw should fail.
 	batch := f.newBatch()
 	if err := batch.AppendRaw(32, make([]byte, 1)); err == nil {
