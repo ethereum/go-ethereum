@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jedisct1/go-minisign"
 )
 
 func TestVerification(t *testing.T) {
@@ -127,4 +129,40 @@ func TestMatching(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGethPubKeysParseable(t *testing.T) {
+	for _, pubkey := range gethPubKeys {
+		_, err := minisign.NewPublicKey(pubkey)
+		if err != nil {
+			t.Errorf("Should be parseable")
+		}
+	}
+}
+
+func TestKeyID(t *testing.T) {
+	type args struct {
+		id [8]byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"@holiman key", args{id: extractKeyId(gethPubKeys[0])}, "FB1D084D39BAEC24"},
+		{"second key", args{id: extractKeyId(gethPubKeys[1])}, "138B1CA303E51687"},
+		{"third key", args{id: extractKeyId(gethPubKeys[2])}, "FD9813B2D2098484"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := keyID(tt.args.id); got != tt.want {
+				t.Errorf("keyID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func extractKeyId(pubkey string) [8]byte {
+	p, _ := minisign.NewPublicKey(pubkey)
+	return p.KeyId
 }

@@ -223,8 +223,9 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb f
 		var nb *nodeBalance
 		if node := bt.ns.GetNode(id); node != nil {
 			nb, _ = bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
-		} else {
-			node = enode.SignNull(&enr.Record{}, id)
+		}
+		if nb == nil {
+			node := enode.SignNull(&enr.Record{}, id)
 			nb = bt.newNodeBalance(node, connAddress, false)
 		}
 		cb(nb)

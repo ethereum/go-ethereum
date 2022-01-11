@@ -196,6 +196,10 @@ type signTransactionResult struct {
 	Tx  *types.Transaction `json:"tx"`
 }
 
+// SignTx sends the transaction to the external signer.
+// If chainID is nil, or tx.ChainID is zero, the chain ID will be assigned
+// by the external signer. For non-legacy transactions, the chain ID of the
+// transaction overrides the chainID parameter.
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	data := hexutil.Bytes(tx.Data())
 	var to *common.MixedcaseAddress
@@ -218,17 +222,17 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
 	default:
-		return nil, fmt.Errorf("Unsupported tx type %d", tx.Type())
+		return nil, fmt.Errorf("unsupported tx type %d", tx.Type())
 	}
 	// We should request the default chain id that we're operating with
 	// (the chain we're executing on)
-	if chainID != nil {
+	if chainID != nil && chainID.Sign() != 0 {
 		args.ChainID = (*hexutil.Big)(chainID)
 	}
 	if tx.Type() != types.LegacyTxType {
 		// However, if the user asked for a particular chain id, then we should
 		// use that instead.
-		if tx.ChainId() != nil {
+		if tx.ChainId().Sign() != 0 {
 			args.ChainID = (*hexutil.Big)(tx.ChainId())
 		}
 		accessList := tx.AccessList()

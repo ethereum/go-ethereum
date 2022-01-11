@@ -77,13 +77,13 @@ func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
-	startNode(ctx, stack, backend)
+	startNode(ctx, stack, backend, true)
 	defer stack.Close()
 
-	// Attach to the newly started node and start the JavaScript console
+	// Attach to the newly started node and create the JavaScript console.
 	client, err := stack.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		return fmt.Errorf("Failed to attach to the inproc geth: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -91,29 +91,34 @@ func localConsole(ctx *cli.Context) error {
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
-
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		return fmt.Errorf("Failed to start the JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
-	// If only a short execution was requested, evaluate and return
+	// If only a short execution was requested, evaluate and return.
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
 		console.Evaluate(script)
 		return nil
 	}
-	// Otherwise print the welcome screen and enter interactive mode
+
+	// Track node shutdown and stop the console when it goes down.
+	// This happens when SIGTERM is sent to the process.
+	go func() {
+		stack.Wait()
+		console.StopInteractive()
+	}()
+
+	// Print the welcome screen and enter interactive mode.
 	console.Welcome()
 	console.Interactive()
-
 	return nil
 }
 
 // remoteConsole will connect to a remote geth instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	// Attach to a remotely running geth instance and start the JavaScript console
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
@@ -134,8 +139,8 @@ func remoteConsole(ctx *cli.Context) error {
 				path = filepath.Join(path, "rinkeby")
 			} else if ctx.GlobalBool(utils.GoerliFlag.Name) {
 				path = filepath.Join(path, "goerli")
-			} else if ctx.GlobalBool(utils.CalaverasFlag.Name) {
-				path = filepath.Join(path, "calaveras")
+			} else if ctx.GlobalBool(utils.SepoliaFlag.Name) {
+				path = filepath.Join(path, "sepolia")
 			}
 		}
 		endpoint = fmt.Sprintf("%s/geth.ipc", path)
@@ -150,7 +155,6 @@ func remoteConsole(ctx *cli.Context) error {
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
-
 	console, err := console.New(config)
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
@@ -165,7 +169,6 @@ func remoteConsole(ctx *cli.Context) error {
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
-
 	return nil
 }
 
@@ -189,13 +192,13 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	stack, backend := makeFullNode(ctx)
-	startNode(ctx, stack, backend)
+	startNode(ctx, stack, backend, false)
 	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
 	client, err := stack.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		return fmt.Errorf("Failed to attach to the inproc geth: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -206,22 +209,24 @@ func ephemeralConsole(ctx *cli.Context) error {
 
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		return fmt.Errorf("Failed to start the JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
-	// Evaluate each of the specified JavaScript files
-	for _, file := range ctx.Args() {
-		if err = console.Execute(file); err != nil {
-			utils.Fatalf("Failed to execute %s: %v", file, err)
-		}
-	}
-
+	// Interrupt the JS interpreter when node is stopped.
 	go func() {
 		stack.Wait()
 		console.Stop(false)
 	}()
-	console.Stop(true)
 
+	// Evaluate each of the specified JavaScript files.
+	for _, file := range ctx.Args() {
+		if err = console.Execute(file); err != nil {
+			return fmt.Errorf("Failed to execute %s: %v", file, err)
+		}
+	}
+
+	// The main script is now done, but keep running timers/callbacks.
+	console.Stop(true)
 	return nil
 }

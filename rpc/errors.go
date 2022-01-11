@@ -54,6 +54,7 @@ var (
 	_ Error = new(invalidRequestError)
 	_ Error = new(invalidMessageError)
 	_ Error = new(invalidParamsError)
+	_ Error = new(CustomError)
 )
 
 const defaultErrorCode = -32000
@@ -101,3 +102,12 @@ type invalidParamsError struct{ message string }
 func (e *invalidParamsError) ErrorCode() int { return -32602 }
 
 func (e *invalidParamsError) Error() string { return e.message }
+
+type CustomError struct {
+	Code            int
+	ValidationError string
+}
+
+func (e *CustomError) ErrorCode() int { return e.Code }
+
+func (e *CustomError) Error() string { return e.ValidationError }

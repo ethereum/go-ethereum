@@ -36,20 +36,20 @@ func TestFeeHistory(t *testing.T) {
 		expCount            int
 		expErr              error
 	}{
-		{false, 0, 0, 10, 30, nil, 21, 10, nil},
-		{false, 0, 0, 10, 30, []float64{0, 10}, 21, 10, nil},
-		{false, 0, 0, 10, 30, []float64{20, 10}, 0, 0, errInvalidPercentile},
-		{false, 0, 0, 1000000000, 30, nil, 0, 31, nil},
-		{false, 0, 0, 1000000000, rpc.LatestBlockNumber, nil, 0, 33, nil},
-		{false, 0, 0, 10, 40, nil, 0, 0, errRequestBeyondHead},
-		{true, 0, 0, 10, 40, nil, 0, 0, errRequestBeyondHead},
+		{false, 1000, 1000, 10, 30, nil, 21, 10, nil},
+		{false, 1000, 1000, 10, 30, []float64{0, 10}, 21, 10, nil},
+		{false, 1000, 1000, 10, 30, []float64{20, 10}, 0, 0, errInvalidPercentile},
+		{false, 1000, 1000, 1000000000, 30, nil, 0, 31, nil},
+		{false, 1000, 1000, 1000000000, rpc.LatestBlockNumber, nil, 0, 33, nil},
+		{false, 1000, 1000, 10, 40, nil, 0, 0, errRequestBeyondHead},
+		{true, 1000, 1000, 10, 40, nil, 0, 0, errRequestBeyondHead},
 		{false, 20, 2, 100, rpc.LatestBlockNumber, nil, 13, 20, nil},
 		{false, 20, 2, 100, rpc.LatestBlockNumber, []float64{0, 10}, 31, 2, nil},
 		{false, 20, 2, 100, 32, []float64{0, 10}, 31, 2, nil},
-		{false, 0, 0, 1, rpc.PendingBlockNumber, nil, 0, 0, nil},
-		{false, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 1, nil},
-		{true, 0, 0, 2, rpc.PendingBlockNumber, nil, 32, 2, nil},
-		{true, 0, 0, 2, rpc.PendingBlockNumber, []float64{0, 10}, 32, 2, nil},
+		{false, 1000, 1000, 1, rpc.PendingBlockNumber, nil, 0, 0, nil},
+		{false, 1000, 1000, 2, rpc.PendingBlockNumber, nil, 32, 1, nil},
+		{true, 1000, 1000, 2, rpc.PendingBlockNumber, nil, 32, 2, nil},
+		{true, 1000, 1000, 2, rpc.PendingBlockNumber, []float64{0, 10}, 32, 2, nil},
 	}
 	for i, c := range cases {
 		config := Config{

@@ -68,10 +68,10 @@ func (it tokenType) String() string {
 
 var stringtokenTypes = []string{
 	eof:              "EOF",
+	lineStart:        "new line",
+	lineEnd:          "end of line",
 	invalidStatement: "invalid statement",
 	element:          "element",
-	lineEnd:          "end of line",
-	lineStart:        "new line",
 	label:            "label",
 	labelDef:         "label definition",
 	number:           "number",
