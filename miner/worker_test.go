@@ -191,6 +191,22 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	return blocks[0]
 }
 
+func (b *testWorkerBackend) newRandomVerkleUncle() *types.Block {
+	var parent *types.Block
+	cur := b.chain.CurrentBlock()
+	if cur.NumberU64() == 0 {
+		parent = b.chain.Genesis()
+	} else {
+		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
+	}
+	blocks, _ := core.GenerateVerkleChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
+		var addr = make([]byte, common.AddressLength)
+		rand.Read(addr)
+		gen.SetCoinbase(common.BytesToAddress(addr))
+	})
+	return blocks[0]
+}
+
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
@@ -306,11 +322,10 @@ func TestGenerateBlocksAndImportVerkle(t *testing.T) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		// TODO this causes a failure, but shouldn't.  investigate.
-		//b.txPool.AddLocal(b.newRandomTx(true))
+		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
-		//w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		//w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomVerkleUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomVerkleUncle()})
 
 		select {
 		case ev := <-sub.Chan():
