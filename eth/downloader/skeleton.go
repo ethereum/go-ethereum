@@ -932,7 +932,7 @@ func (s *skeleton) processResponse(res *headerResponse) bool {
 // Note, the method will not use the internal state of the skeleton, but will
 // rather blindly pull stuff from the database. This is fine, because the back-
 // filler will only run when the skeleton chain is fully downloaded and stable.
-// There might be new heads appended, but those are stomic from the perspective
+// There might be new heads appended, but those are atomic from the perspective
 // of this method. Any head reorg will first tear down the backfiller and only
 // then make the modification.
 func (s *skeleton) Head() (*types.Header, error) {

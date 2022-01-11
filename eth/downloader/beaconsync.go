@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -136,24 +137,36 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
 // none of the head links match), we do a binary search to find the ancestor.
 func (d *Downloader) findBeaconAncestor() uint64 {
 	// Figure out the current local head position
-	var head *types.Header
+	var chainHead *types.Header
 
 	switch d.getMode() {
 	case FullSync:
-		head = d.blockchain.CurrentBlock().Header()
+		chainHead = d.blockchain.CurrentBlock().Header()
 	case SnapSync:
-		head = d.blockchain.CurrentFastBlock().Header()
+		chainHead = d.blockchain.CurrentFastBlock().Header()
 	default:
-		head = d.lightchain.CurrentHeader()
+		chainHead = d.lightchain.CurrentHeader()
 	}
-	number := head.Number.Uint64()
+	number := chainHead.Number.Uint64()
 
 	// If the head is present in the skeleton chain, return that
-	if head.Hash() == d.skeleton.Header(number).Hash() {
+	if chainHead.Hash() == d.skeleton.Header(number).Hash() {
 		return number
 	}
 	// Head header not present, binary search to find the ancestor
 	start, end := uint64(0), number
+
+	beaconHead, err := d.skeleton.Head()
+	if err != nil {
+		panic(fmt.Sprintf("failed to read skeleton head: %v", err)) // can't reach this method without a head
+	}
+	if number := beaconHead.Number.Uint64(); end > number {
+		// This shouldn't really happen in a healty network, but if the consensus
+		// clients feeds us a shorter chain as the canonical, we should not attempt
+		// to access non-existent skeleton items.
+		log.Warn("Beacon head lower than local chain", "beacon", number, "local", end)
+		end = number
+	}
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
