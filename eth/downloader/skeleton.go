@@ -944,14 +944,14 @@ func (s *skeleton) Head() (*types.Header, error) {
 	if len(status) == 0 {
 		return nil, errors.New("beacon sync not yet started")
 	}
-	s.progress = new(skeletonProgress)
-	if err := json.Unmarshal(status, s.progress); err != nil {
+	progress := new(skeletonProgress)
+	if err := json.Unmarshal(status, progress); err != nil {
 		return nil, err
 	}
-	if s.progress.Subchains[0].Tail != 1 {
+	if progress.Subchains[0].Tail != 1 {
 		return nil, errors.New("beacon sync not yet finished")
 	}
-	return rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[0].Head), nil
+	return rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head), nil
 }
 
 // Header retrieves a specific header tracked by the skeleton syncer. This method
