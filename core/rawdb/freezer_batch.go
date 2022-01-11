@@ -115,11 +115,6 @@ func (batch *freezerTableBatch) reset() {
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
 func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
-	// Sanity check. In principle this method shouldn't be called at all
-	// in readonly mode.
-	if batch.t.readonly {
-		return fmt.Errorf("permission error: table in readonly mode")
-	}
 	if item != batch.curItem {
 		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
 	}
@@ -140,11 +135,6 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
 func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
-	// Sanity check. In principle this method shouldn't be called at all
-	// in readonly mode.
-	if batch.t.readonly {
-		return fmt.Errorf("permission error: table in readonly mode")
-	}
 	if item != batch.curItem {
 		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
 	}
