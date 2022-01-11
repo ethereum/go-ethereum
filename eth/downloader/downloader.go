@@ -325,7 +325,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // LegacySync tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) LegacySync(id string, head common.Hash, td *big.Int, mode SyncMode) error {
-	err := d.synchronise(id, head, td, mode, false)
+	err := d.synchronise(id, head, td, mode, false, nil)
 
 	switch err {
 	case nil, errBusy, errCanceled:
@@ -351,7 +351,21 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td *big.Int, mode S
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode, beaconMode bool) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode, beaconMode bool, beaconPing chan struct{}) error {
+	// The beacon header syncer is async. It will start this synchronization and
+	// will continue doing other tasks. However, if synchornization needs to be
+	// cancelled, the syncer needs to know if we reached the startup point (and
+	// inited the cancel cannel) or not yet. Make sure that we'll signal even in
+	// case of a failure.
+	if beaconPing != nil {
+		defer func() {
+			select {
+			case <-beaconPing: // already notified
+			default:
+				close(beaconPing) // weird exit condition, notify that it's safe to cancel (the nothing)
+			}
+		}()
+	}
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -412,6 +426,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 		if p == nil {
 			return errUnknownPeer
 		}
+	}
+	if beaconPing != nil {
+		close(beaconPing)
 	}
 	return d.syncWithPeer(p, hash, td, beaconMode)
 }

@@ -32,11 +32,12 @@ import (
 // the genesis block or an existing header in the database. Its operation is fully
 // directed by the skeleton sync's head/tail events.
 type beaconBackfiller struct {
-	downloader *Downloader // Downloader to direct via this callback implementation
-	syncMode   SyncMode    // Sync mode to use for backfilling the skeleton chains
-	success    func()      // Callback to run on successful sync cycle completion
-	filling    bool        // Flag whether the downloader is backfilling or not
-	lock       sync.Mutex  // Mutex protecting the sync lock
+	downloader *Downloader   // Downloader to direct via this callback implementation
+	syncMode   SyncMode      // Sync mode to use for backfilling the skeleton chains
+	success    func()        // Callback to run on successful sync cycle completion
+	filling    bool          // Flag whether the downloader is backfilling or not
+	started    chan struct{} // Notification channel whether the downloader inited
+	lock       sync.Mutex    // Mutex protecting the sync lock
 }
 
 // newBeaconBackfiller is a helper method to create the backfiller.
@@ -49,6 +50,24 @@ func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
 
 // suspend cancels any background downloader threads.
 func (b *beaconBackfiller) suspend() {
+	// If no filling is running, don't waste cycles
+	b.lock.Lock()
+	filling := b.filling
+	started := b.started
+	b.lock.Unlock()
+
+	if !filling {
+		return
+	}
+	// A previous filling should be running, though it may happen that it hasn't
+	// yet started (being done on a new goroutine). Many concurrent beacon head
+	// announcements can lead to sync start/stop thrashing. In that case we need
+	// to wait for initialization before we can safely cancel it. It is safe to
+	// read this channel multiple times, it gets closed on startup.
+	<-started
+
+	// Now that we're sure the downloader successfully started up, we can cancel
+	// it safely without running the risk of data races.
 	b.downloader.Cancel()
 }
 
@@ -62,6 +81,7 @@ func (b *beaconBackfiller) resume() {
 		return
 	}
 	b.filling = true
+	b.started = make(chan struct{})
 	mode := b.syncMode
 	b.lock.Unlock()
 
@@ -76,7 +96,7 @@ func (b *beaconBackfiller) resume() {
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
 		// should be no errors as long as the chain we're syncing to is valid.
-		if err := b.downloader.synchronise("", common.Hash{}, nil, mode, true); err != nil {
+		if err := b.downloader.synchronise("", common.Hash{}, nil, mode, true, b.started); err != nil {
 			log.Error("Beacon backfilling failed", "err", err)
 			return
 		}
