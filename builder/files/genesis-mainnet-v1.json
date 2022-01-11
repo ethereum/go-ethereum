@@ -15,10 +15,14 @@
     "londonBlock": 23850000,
     "bor": {
       "jaipurBlock": 23850000,
-      "period": 2,
+      "period": {
+        "0": 2
+      },
       "producerDelay": 6,
       "sprint": 64,
-      "backupMultiplier": 2,
+      "backupMultiplier": {
+        "0": 2
+      },
       "validatorContract": "0x0000000000000000000000000000000000001000",
       "stateReceiverContract": "0x0000000000000000000000000000000000001001",
       "overrideStateSyncRecords": {
