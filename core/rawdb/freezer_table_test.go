@@ -831,8 +831,9 @@ func TestSequentialReadByteLimit(t *testing.T) {
 }
 
 func TestFreezerReadonly(t *testing.T) {
+	tmpdir := os.TempDir()
 	// Case 1: Check it fails on non-existent file.
-	_, err := newTable(os.TempDir(),
+	_, err := newTable(tmpdir,
 		fmt.Sprintf("readonlytest-%d", rand.Uint64()),
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
 	if err == nil {
@@ -840,7 +841,6 @@ func TestFreezerReadonly(t *testing.T) {
 	}
 
 	// Case 2: Check that it fails on invalid index length.
-	tmpdir := os.TempDir()
 	fname := fmt.Sprintf("readonlytest-%d", rand.Uint64())
 	idxFile, err := openFreezerFileForAppend(filepath.Join(tmpdir, fmt.Sprintf("%s.ridx", fname)))
 	if err != nil {
@@ -859,7 +859,7 @@ func TestFreezerReadonly(t *testing.T) {
 	// Then corrupt the head file and make sure opening the table
 	// again in readonly triggers an error.
 	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
-	f, err := newTable(os.TempDir(), fname,
+	f, err := newTable(tmpdir, fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
 	if err != nil {
 		t.Fatalf("failed to instantiate table: %v", err)
@@ -872,7 +872,7 @@ func TestFreezerReadonly(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = newTable(os.TempDir(), fname,
+	_, err = newTable(tmpdir, fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
 	if err == nil {
 		t.Errorf("readonly table instantiation should fail for corrupt table file")
@@ -881,7 +881,7 @@ func TestFreezerReadonly(t *testing.T) {
 	// Case 4: Write some data to a table and later re-open it as readonly.
 	// Should be successful.
 	fname = fmt.Sprintf("readonlytest-%d", rand.Uint64())
-	f, err = newTable(os.TempDir(), fname,
+	f, err = newTable(tmpdir, fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
 	if err != nil {
 		t.Fatalf("failed to instantiate table: %v\n", err)
@@ -890,7 +890,7 @@ func TestFreezerReadonly(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err = newTable(os.TempDir(), fname,
+	f, err = newTable(tmpdir, fname,
 		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, true)
 	if err != nil {
 		t.Fatal(err)
