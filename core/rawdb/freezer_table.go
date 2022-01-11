@@ -316,6 +316,7 @@ func (t *freezerTable) repair() error {
 			contentExp = int64(lastIndex.offset)
 		}
 	}
+	// Sync() fails for read-only files on windows.
 	if !t.readonly {
 		// Ensure all reparation changes have been written to disk
 		if err := t.index.Sync(); err != nil {
