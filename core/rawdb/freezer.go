@@ -332,10 +332,10 @@ func (f *freezer) validate() error {
 		break
 	}
 	// Now check every table against that length
-	for k, table := range f.tables {
+	for kind, table := range f.tables {
 		items := atomic.LoadUint64(&table.items)
 		if length != items {
-			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", k, name, items, length)
+			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
 		}
 	}
 	atomic.StoreUint64(&f.frozen, length)
