@@ -469,13 +469,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			return err
 		}
-		if mode == SnapSync && pivot == nil {
-			// If no pivot block was returned, the head is below the min full block
-			// threshold (i.e. new chain). In that case we won't really snap sync
-			// anyway, but still need a valid pivot block to avoid some code hitting
-			// nil panics on an access.
-			pivot = d.blockchain.CurrentBlock().Header()
-		}
 	} else {
 		// In beacon mode, user the skeleton chain to retrieve the headers from
 		latest, err = d.skeleton.Head()
@@ -488,6 +481,13 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		// block import after the pivot, so make it off by one to avoid having
 		// to special case everything internally.
 		pivot = d.skeleton.Header(latest.Number.Uint64() - 1)
+	}
+	// If no pivot block was returned, the head is below the min full block
+	// threshold (i.e. new chain). In that case we won't really snap sync
+	// anyway, but still need a valid pivot block to avoid some code hitting
+	// nil panics on access.
+	if mode == SnapSync && pivot == nil {
+		pivot = d.blockchain.CurrentBlock().Header()
 	}
 	height := latest.Number.Uint64()
 
