@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,8 +18,7 @@
 package catalyst
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -27,16 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// Register adds catalyst APIs to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum) error {
-	log.Warn("Catalyst mode enabled", "protocol", "eth")
+// Register adds catalyst APIs to the light client.
+func Register(stack *node.Node, backend *les.LightEthereum) error {
+	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "engine",
@@ -49,36 +48,26 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 }
 
 type ConsensusAPI struct {
-	eth            *eth.Ethereum
-	preparedBlocks *payloadQueue // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
+	les *les.LightEthereum
 }
 
-func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
-	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
+func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
+	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
 		panic("Catalyst started without valid total difficulty")
 	}
-	return &ConsensusAPI{
-		eth:            eth,
-		preparedBlocks: newPayloadQueue(),
-	}
+	return &ConsensusAPI{les: les}
 }
 
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
-	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.preparedBlocks.get(payloadID)
-	if data == nil {
-		return nil, &beacon.UnknownPayload
-	}
-	return data, nil
+	return nil, &beacon.GenericServerError
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
-	log.Trace("Engine API request received", "method", "ForkChoiceUpdated", "head", heads.HeadBlockHash, "finalized", heads.FinalizedBlockHash, "safe", heads.SafeBlockHash)
 	if heads.HeadBlockHash == (common.Hash{}) {
 		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
 	}
 	if err := api.checkTerminalTotalDifficulty(heads.HeadBlockHash); err != nil {
-		if block := api.eth.BlockChain().GetBlockByHash(heads.HeadBlockHash); block == nil {
+		if header := api.les.BlockChain().GetHeaderByHash(heads.HeadBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
 			return beacon.SYNCING, nil
 		}
@@ -86,7 +75,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 	}
 	// If the finalized block is set, check if it is in our blockchain
 	if heads.FinalizedBlockHash != (common.Hash{}) {
-		if block := api.eth.BlockChain().GetBlockByHash(heads.FinalizedBlockHash); block == nil {
+		if header := api.les.BlockChain().GetHeaderByHash(heads.FinalizedBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
 			return beacon.SYNCING, nil
 		}
@@ -95,44 +84,23 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 	if err := api.setHead(heads.HeadBlockHash); err != nil {
 		return beacon.INVALID, err
 	}
-	// Assemble block (if needed). It only works for full node.
 	if payloadAttributes != nil {
-		data, err := api.assembleBlock(heads.HeadBlockHash, payloadAttributes)
-		if err != nil {
-			return beacon.INVALID, err
-		}
-		id := computePayloadId(heads.HeadBlockHash, payloadAttributes)
-		api.preparedBlocks.put(id, data)
-		log.Info("Created payload", "payloadID", id)
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: &id}, nil
+		return beacon.INVALID, errors.New("not supported")
 	}
 	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttributesV1) beacon.PayloadID {
-	// Hash
-	hasher := sha256.New()
-	hasher.Write(headBlockHash[:])
-	binary.Write(hasher, binary.BigEndian, params.Timestamp)
-	hasher.Write(params.Random[:])
-	hasher.Write(params.SuggestedFeeRecipient[:])
-	var out beacon.PayloadID
-	copy(out[:], hasher.Sum(nil)[:8])
-	return out
-}
-
 func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
+	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
-	log.Trace("Engine API request received", "method", "ExecutePayload", params.BlockHash, "number", params.Number)
 	block, err := ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
 	}
-	if !api.eth.BlockChain().HasBlock(block.ParentHash(), block.NumberU64()-1) {
+	if !api.les.BlockChain().HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		/*
 			TODO (MariusVanDerWijden) reenable once sync is merged
 			if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
@@ -142,40 +110,22 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
 		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 	}
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
-	td := api.eth.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
-	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
+	parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
+	if parent == nil {
+		return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
+	}
+	td := api.les.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
+	ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
 	if td.Cmp(ttd) < 0 {
 		return api.invalid(), fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
-	log.Trace("Inserting block without head", "hash", block.Hash(), "number", block.Number)
-	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
+	if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 		return api.invalid(), err
 	}
-
 	if merger := api.merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
 	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
-}
-
-// AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
-// data" required for eth2 clients to process the new block.
-func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	log.Info("Producing block", "parentHash", parentHash)
-	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	return BlockToExecutableData(block), nil
-}
-
-func encodeTransactions(txs []*types.Transaction) [][]byte {
-	var enc = make([][]byte, len(txs))
-	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
-	}
-	return enc
 }
 
 func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
@@ -222,47 +172,18 @@ func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error)
 	return block, nil
 }
 
-// BlockToExecutableData constructs the executableDataV1 structure by filling the
-// fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block) *beacon.ExecutableDataV1 {
-	return &beacon.ExecutableDataV1{
-		BlockHash:     block.Hash(),
-		ParentHash:    block.ParentHash(),
-		FeeRecipient:  block.Coinbase(),
-		StateRoot:     block.Root(),
-		Number:        block.NumberU64(),
-		GasLimit:      block.GasLimit(),
-		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee(),
-		Timestamp:     block.Time(),
-		ReceiptsRoot:  block.ReceiptHash(),
-		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        block.MixDigest(),
-		ExtraData:     block.Extra(),
-	}
-}
-
-// Used in tests to add a the list of transactions from a block to the tx pool.
-func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
-	for _, tx := range txs {
-		api.eth.TxPool().AddLocal(tx)
-	}
-	return nil
-}
-
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// shortcut if we entered PoS already
 	if api.merger().PoSFinalized() {
 		return nil
 	}
 	// make sure the parent has enough terminal total difficulty
-	newHeadBlock := api.eth.BlockChain().GetBlockByHash(head)
-	if newHeadBlock == nil {
+	header := api.les.BlockChain().GetHeaderByHash(head)
+	if header == nil {
 		return &beacon.GenericServerError
 	}
-	td := api.eth.BlockChain().GetTd(newHeadBlock.Hash(), newHeadBlock.NumberU64())
-	if td != nil && td.Cmp(api.eth.BlockChain().Config().TerminalTotalDifficulty) < 0 {
+	td := api.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
+	if td != nil && td.Cmp(api.les.BlockChain().Config().TerminalTotalDifficulty) < 0 {
 		return &beacon.InvalidTB
 	}
 	return nil
@@ -271,27 +192,26 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 // setHead is called to perform a force choice.
 func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	log.Info("Setting head", "head", newHead)
-	headBlock := api.eth.BlockChain().CurrentBlock()
-	if headBlock.Hash() == newHead {
+
+	headHeader := api.les.BlockChain().CurrentHeader()
+	if headHeader.Hash() == newHead {
 		return nil
 	}
-	newHeadBlock := api.eth.BlockChain().GetBlockByHash(newHead)
-	if newHeadBlock == nil {
+	newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
+	if newHeadHeader == nil {
 		return &beacon.GenericServerError
 	}
-	if err := api.eth.BlockChain().SetChainHead(newHeadBlock); err != nil {
+	if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
 	if merger := api.merger(); !merger.PoSFinalized() {
 		merger.FinalizePoS()
 	}
-	// TODO (MariusVanDerWijden) are we really synced now?
-	api.eth.SetSynced()
 	return nil
 }
 
 // Helper function, return the merger instance.
 func (api *ConsensusAPI) merger() *consensus.Merger {
-	return api.eth.Merger()
+	return api.les.Merger()
 }
