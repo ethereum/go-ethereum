@@ -255,7 +255,7 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 	if err != nil {
 		return nil, err
 	}
-	return BlockToExecutableData(block, params.Random), nil
+	return BlockToExecutableData(block), nil
 }
 
 func encodeTransactions(txs []*types.Transaction) [][]byte {
@@ -310,7 +310,9 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	return block, nil
 }
 
-func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableDataV1 {
+// BlockToExecutableData constructs the executableDataV1 structure by filling the
+// fields from the given block. It assumes the given block is post-merge block.
+func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 	return &ExecutableDataV1{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
@@ -324,7 +326,7 @@ func BlockToExecutableData(block *types.Block, random common.Hash) *ExecutableDa
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
 		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        random,
+		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
 }

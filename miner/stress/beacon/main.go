@@ -141,8 +141,14 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
+	timestamp := uint64(time.Now().Unix())
+	if timestamp <= parentTimestamp {
+		timestamp = parentTimestamp + 1
+	}
 	payloadAttribute := catalyst.PayloadAttributesV1{
-		Timestamp: uint64(time.Now().Unix()),
+		Timestamp:             timestamp,
+		Random:                common.Hash{},
+		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
 	}
 	fcState := catalyst.ForkchoiceStateV1{
 		HeadBlockHash:      parentHash,
