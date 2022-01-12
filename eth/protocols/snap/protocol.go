@@ -27,7 +27,7 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	snap1 = 1
+	SNAP1 = 1
 )
 
 // ProtocolName is the official short name of the `snap` protocol used during
@@ -36,11 +36,11 @@ const ProtocolName = "snap"
 
 // ProtocolVersions are the supported versions of the `snap` protocol (first
 // is primary).
-var ProtocolVersions = []uint{snap1}
+var ProtocolVersions = []uint{SNAP1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{snap1: 8}
+var protocolLengths = map[uint]uint64{SNAP1: 8}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024

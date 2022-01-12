@@ -275,7 +275,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	}
 }
 
-// init initializes the the iterator.
+// init initializes the iterator.
 func (it *nodeIterator) init() (*nodeIteratorState, error) {
 	root := it.trie.Hash()
 	state := &nodeIteratorState{node: it.trie.root, index: -1}

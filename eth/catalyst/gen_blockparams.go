@@ -10,37 +10,44 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-var _ = (*assembleBlockParamsMarshaling)(nil)
+var _ = (*payloadAttributesMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (a assembleBlockParams) MarshalJSON() ([]byte, error) {
-	type assembleBlockParams struct {
-		ParentHash common.Hash    `json:"parentHash"    gencodec:"required"`
-		Timestamp  hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+func (p PayloadAttributesV1) MarshalJSON() ([]byte, error) {
+	type PayloadAttributesV1 struct {
+		Timestamp             hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random                common.Hash    `json:"random"        gencodec:"required"`
+		SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
-	var enc assembleBlockParams
-	enc.ParentHash = a.ParentHash
-	enc.Timestamp = hexutil.Uint64(a.Timestamp)
+	var enc PayloadAttributesV1
+	enc.Timestamp = hexutil.Uint64(p.Timestamp)
+	enc.Random = p.Random
+	enc.SuggestedFeeRecipient = p.SuggestedFeeRecipient
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (a *assembleBlockParams) UnmarshalJSON(input []byte) error {
-	type assembleBlockParams struct {
-		ParentHash *common.Hash    `json:"parentHash"    gencodec:"required"`
-		Timestamp  *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
+	type PayloadAttributesV1 struct {
+		Timestamp             *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
+		Random                *common.Hash    `json:"random"        gencodec:"required"`
+		SuggestedFeeRecipient *common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
-	var dec assembleBlockParams
+	var dec PayloadAttributesV1
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	if dec.ParentHash == nil {
-		return errors.New("missing required field 'parentHash' for assembleBlockParams")
-	}
-	a.ParentHash = *dec.ParentHash
 	if dec.Timestamp == nil {
-		return errors.New("missing required field 'timestamp' for assembleBlockParams")
+		return errors.New("missing required field 'timestamp' for PayloadAttributesV1")
 	}
-	a.Timestamp = uint64(*dec.Timestamp)
+	p.Timestamp = uint64(*dec.Timestamp)
+	if dec.Random == nil {
+		return errors.New("missing required field 'random' for PayloadAttributesV1")
+	}
+	p.Random = *dec.Random
+	if dec.SuggestedFeeRecipient == nil {
+		return errors.New("missing required field 'suggestedFeeRecipient' for PayloadAttributesV1")
+	}
+	p.SuggestedFeeRecipient = *dec.SuggestedFeeRecipient
 	return nil
 }

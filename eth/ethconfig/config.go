@@ -210,12 +210,14 @@ type Config struct {
 	// No heimdall service
 	WithoutHeimdall bool
 
-	// Berlin block override (TODO: remove after the fork)
-	OverrideBerlin *big.Int `toml:",omitempty"`
-	OverrideLondon *big.Int `toml:",omitempty"`
-
 	// Bor logs flag
 	BorLogs bool
+
+	// Arrow Glacier block override (TODO: remove after the fork)
+	OverrideArrowGlacier *big.Int `toml:",omitempty"`
+
+	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
+	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
@@ -225,8 +227,31 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	noverify := ethConfig.Miner.Noverify
 
 	// If proof-of-authority is requested, set it up
+	var engine consensus.Engine
 	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		switch config.PowMode {
+		case ethash.ModeFake:
+			log.Warn("Ethash used in fake mode")
+		case ethash.ModeTest:
+			log.Warn("Ethash used in test mode")
+		case ethash.ModeShared:
+			log.Warn("Ethash used in shared mode")
+		}
+		engine = ethash.New(ethash.Config{
+			PowMode:          config.PowMode,
+			CacheDir:         stack.ResolvePath(config.CacheDir),
+			CachesInMem:      config.CachesInMem,
+			CachesOnDisk:     config.CachesOnDisk,
+			CachesLockMmap:   config.CachesLockMmap,
+			DatasetDir:       config.DatasetDir,
+			DatasetsInMem:    config.DatasetsInMem,
+			DatasetsOnDisk:   config.DatasetsOnDisk,
+			DatasetsLockMmap: config.DatasetsLockMmap,
+			NotifyFull:       config.NotifyFull,
+		}, notify, noverify)
+		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
 	// If Matic bor consensus is requested, set it up
 	if chainConfig.Bor != nil {
@@ -241,7 +266,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 	}
-	engine := ethash.New(ethash.Config{
+	engine = ethash.New(ethash.Config{
 		PowMode:          config.PowMode,
 		CacheDir:         stack.ResolvePath(config.CacheDir),
 		CachesInMem:      config.CachesInMem,
@@ -253,6 +278,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		DatasetsLockMmap: config.DatasetsLockMmap,
 		NotifyFull:       config.NotifyFull,
 	}, notify, noverify)
-	engine.SetThreads(-1) // Disable CPU mining
+	// TODO - Check this
+	// engine.SetThreads(-1) // Disable CPU mining
 	return engine
 }
