@@ -61,8 +61,8 @@ func (bits bitvec) set16(pos uint64) {
 	bits[pos/8+2] = ^a
 }
 
-// codeSegment checks if the position is in a code segment.
-func (bits *bitvec) codeSegment(pos uint64) bool {
+// IsCode checks if the position is in a code segment.
+func (bits *bitvec) IsCode(pos uint64) bool {
 	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
