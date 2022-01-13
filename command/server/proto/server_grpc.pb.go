@@ -19,7 +19,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BorClient interface {
-	Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (*PprofResponse, error)
+	Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (Bor_PprofClient, error)
 	PeersAdd(ctx context.Context, in *PeersAddRequest, opts ...grpc.CallOption) (*PeersAddResponse, error)
 	PeersRemove(ctx context.Context, in *PeersRemoveRequest, opts ...grpc.CallOption) (*PeersRemoveResponse, error)
 	PeersList(ctx context.Context, in *PeersListRequest, opts ...grpc.CallOption) (*PeersListResponse, error)
@@ -36,13 +36,36 @@ func NewBorClient(cc grpc.ClientConnInterface) BorClient {
 	return &borClient{cc}
 }
 
-func (c *borClient) Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (*PprofResponse, error) {
-	out := new(PprofResponse)
-	err := c.cc.Invoke(ctx, "/proto.Bor/Pprof", in, out, opts...)
+func (c *borClient) Pprof(ctx context.Context, in *PprofRequest, opts ...grpc.CallOption) (Bor_PprofClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Bor_ServiceDesc.Streams[0], "/proto.Bor/Pprof", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &borPprofClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Bor_PprofClient interface {
+	Recv() (*PprofResponse, error)
+	grpc.ClientStream
+}
+
+type borPprofClient struct {
+	grpc.ClientStream
+}
+
+func (x *borPprofClient) Recv() (*PprofResponse, error) {
+	m := new(PprofResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *borClient) PeersAdd(ctx context.Context, in *PeersAddRequest, opts ...grpc.CallOption) (*PeersAddResponse, error) {
@@ -103,7 +126,7 @@ func (c *borClient) Status(ctx context.Context, in *empty.Empty, opts ...grpc.Ca
 // All implementations must embed UnimplementedBorServer
 // for forward compatibility
 type BorServer interface {
-	Pprof(context.Context, *PprofRequest) (*PprofResponse, error)
+	Pprof(*PprofRequest, Bor_PprofServer) error
 	PeersAdd(context.Context, *PeersAddRequest) (*PeersAddResponse, error)
 	PeersRemove(context.Context, *PeersRemoveRequest) (*PeersRemoveResponse, error)
 	PeersList(context.Context, *PeersListRequest) (*PeersListResponse, error)
@@ -117,8 +140,8 @@ type BorServer interface {
 type UnimplementedBorServer struct {
 }
 
-func (UnimplementedBorServer) Pprof(context.Context, *PprofRequest) (*PprofResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Pprof not implemented")
+func (UnimplementedBorServer) Pprof(*PprofRequest, Bor_PprofServer) error {
+	return status.Errorf(codes.Unimplemented, "method Pprof not implemented")
 }
 func (UnimplementedBorServer) PeersAdd(context.Context, *PeersAddRequest) (*PeersAddResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PeersAdd not implemented")
@@ -151,22 +174,25 @@ func RegisterBorServer(s grpc.ServiceRegistrar, srv BorServer) {
 	s.RegisterService(&Bor_ServiceDesc, srv)
 }
 
-func _Bor_Pprof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PprofRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _Bor_Pprof_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PprofRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(BorServer).Pprof(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.Bor/Pprof",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BorServer).Pprof(ctx, req.(*PprofRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(BorServer).Pprof(m, &borPprofServer{stream})
+}
+
+type Bor_PprofServer interface {
+	Send(*PprofResponse) error
+	grpc.ServerStream
+}
+
+type borPprofServer struct {
+	grpc.ServerStream
+}
+
+func (x *borPprofServer) Send(m *PprofResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Bor_PeersAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -285,10 +311,6 @@ var Bor_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Pprof",
-			Handler:    _Bor_Pprof_Handler,
-		},
-		{
 			MethodName: "PeersAdd",
 			Handler:    _Bor_PeersAdd_Handler,
 		},
@@ -313,6 +335,12 @@ var Bor_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Bor_Status_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Pprof",
+			Handler:       _Bor_Pprof_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "command/server/proto/server.proto",
 }

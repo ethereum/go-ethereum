@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -13,14 +12,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	gproto "github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
+	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
 )
 
-func (s *Server) Pprof(ctx context.Context, req *proto.PprofRequest) (*proto.PprofResponse, error) {
+func (s *Server) Pprof(req *proto.PprofRequest, stream proto.Bor_PprofServer) error {
 	var payload []byte
 	var headers map[string]string
 	var err error
 
+	ctx := context.Background()
 	switch req.Type {
 	case proto.PprofRequest_CPU:
 		payload, headers, err = pprof.CPUProfile(ctx, int(req.Seconds))
@@ -30,14 +32,42 @@ func (s *Server) Pprof(ctx context.Context, req *proto.PprofRequest) (*proto.Ppr
 		payload, headers, err = pprof.Profile(req.Profile, 0, 0)
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	resp := &proto.PprofResponse{
-		Payload: hex.EncodeToString(payload),
-		Headers: headers,
+	// open the stream and send the headers
+	err = stream.Send(&proto.PprofResponse{
+		Event: &proto.PprofResponse_Open_{
+			Open: &proto.PprofResponse_Open{
+				Headers: headers,
+				Size:    int64(len(payload)),
+			},
+		},
+	})
+	if err != nil {
+		return err
 	}
-	return resp, nil
+
+	// Wrap our conn around the response.
+	conn := &grpc_net_conn.Conn{
+		Stream:  stream,
+		Request: &proto.PprofResponse_Input{},
+		Encode: grpc_net_conn.SimpleEncoder(func(msg gproto.Message) *[]byte {
+			return &msg.(*proto.PprofResponse_Input).Data
+		}),
+	}
+	if _, err := conn.Write(payload); err != nil {
+		return err
+	}
+
+	// send the eof
+	err = stream.Send(&proto.PprofResponse{
+		Event: &proto.PprofResponse_Eof{},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Server) PeersAdd(ctx context.Context, req *proto.PeersAddRequest) (*proto.PeersAddResponse, error) {

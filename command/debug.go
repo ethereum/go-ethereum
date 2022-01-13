@@ -6,7 +6,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +18,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/command/flagset"
 	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/golang/protobuf/jsonpb"
+	gproto "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
+	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
 )
 
 type DebugCommand struct {
@@ -118,16 +121,35 @@ func (d *DebugCommand) Run(args []string) int {
 			req.Type = proto.PprofRequest_LOOKUP
 			req.Profile = profile
 		}
-		resp, err := clt.Pprof(ctx, req)
+		stream, err := clt.Pprof(ctx, req)
 		if err != nil {
 			return err
 		}
-		// write file
-		raw, err := hex.DecodeString(resp.Payload)
+		// wait for open request
+		msg, err := stream.Recv()
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(tmp, filename+".prof"), raw, 0755); err != nil {
+		if _, ok := msg.Event.(*proto.PprofResponse_Open_); !ok {
+			return fmt.Errorf("expected open message")
+		}
+
+		// create the stream
+		conn := &grpc_net_conn.Conn{
+			Stream:   stream,
+			Response: &proto.PprofResponse_Input{},
+			Decode: grpc_net_conn.SimpleDecoder(func(msg gproto.Message) *[]byte {
+				return &msg.(*proto.PprofResponse_Input).Data
+			}),
+		}
+
+		file, err := os.OpenFile(filepath.Join(tmp, filename+".prof"), os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		if _, err := io.Copy(file, conn); err != nil {
 			return err
 		}
 		return nil
@@ -144,6 +166,25 @@ func (d *DebugCommand) Run(args []string) int {
 	for profile, filename := range profiles {
 		if err := pprofProfile(ctx, profile, filename); err != nil {
 			d.UI.Error(fmt.Sprintf("Error creating profile '%s': %v", profile, err))
+			return 1
+		}
+	}
+
+	// append the status
+	{
+		statusResp, err := clt.Status(ctx, &empty.Empty{})
+		if err != nil {
+			d.UI.Output(fmt.Sprintf("Failed to get status: %v", err))
+			return 1
+		}
+		m := jsonpb.Marshaler{}
+		data, err := m.MarshalToString(statusResp)
+		if err != nil {
+			d.UI.Output(err.Error())
+			return 1
+		}
+		if err := ioutil.WriteFile(filepath.Join(tmp, "status.json"), []byte(data), 0644); err != nil {
+			d.UI.Output(fmt.Sprintf("Failed to write status: %v", err))
 			return 1
 		}
 	}
