@@ -8,13 +8,26 @@
     "eip158Block": 0,
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "muirGlacierBlock": 0,
+    "berlinBlock": 0,
+    "londonBlock": 1,
     "bor": {
-      "period": 1,
+      "jaipurBlock": 2,
+      "period": {
+        "0": 1
+      },
       "producerDelay": 4,
       "sprint": 4,
-      "backupMultiplier": 1,
+      "backupMultiplier": {
+        "0": 1
+      },
       "validatorContract": "0x0000000000000000000000000000000000001000",
-      "stateReceiverContract": "0x0000000000000000000000000000000000001001"
+      "stateReceiverContract": "0x0000000000000000000000000000000000001001",
+      "burntContract": {
+        "0": "0x0000000000000000000000000000000000000000"
+      }
     }
   },
   "nonce": "0x0",
