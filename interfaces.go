@@ -101,8 +101,27 @@ type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at
 	HighestBlock  uint64 // Highest alleged block number in the chain
-	PulledStates  uint64 // Number of state trie entries already downloaded
-	KnownStates   uint64 // Total number of state trie entries known about
+
+	// "fast sync" fields. These used to be sent by geth, but are no longer used
+	// since version v1.10.
+	PulledStates uint64 // Number of state trie entries already downloaded
+	KnownStates  uint64 // Total number of state trie entries known about
+
+	// "snap sync" fields.
+	SyncedAccounts      uint64 // Number of accounts downloaded
+	SyncedAccountBytes  uint64 // Number of account trie bytes persisted to disk
+	SyncedBytecodes     uint64 // Number of bytecodes downloaded
+	SyncedBytecodeBytes uint64 // Number of bytecode bytes downloaded
+	SyncedStorage       uint64 // Number of storage slots downloaded
+	SyncedStorageBytes  uint64 // Number of storage trie bytes persisted to disk
+
+	HealedTrienodes     uint64 // Number of state trie nodes downloaded
+	HealedTrienodeBytes uint64 // Number of state trie bytes persisted to disk
+	HealedBytecodes     uint64 // Number of bytecodes downloaded
+	HealedBytecodeBytes uint64 // Number of bytecodes persisted to disk
+
+	HealingTrienodes uint64 // Number of state trie nodes pending
+	HealingBytecode  uint64 // Number of bytecodes pending
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no
