@@ -23,9 +23,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/log"
-	"github.com/olekukonko/tablewriter"
 )
 
 // networkStats verifies the status of network components and generates a protip

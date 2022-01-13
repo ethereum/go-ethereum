@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 // ContractRef is a reference to the contract's backing object

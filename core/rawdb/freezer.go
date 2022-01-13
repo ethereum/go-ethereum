@@ -26,12 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/tsdb/fileutil"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/prometheus/tsdb/fileutil"
 )
 
 var (

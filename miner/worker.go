@@ -394,9 +394,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		/*case head := <-w.chainHeadCh:
-			clearPending(head.Block.NumberU64())
-			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)*/
+		clearPending(head.Block.NumberU64())
+		timestamp = time.Now().Unix()
+		commit(false, commitInterruptNewHead)*/
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in

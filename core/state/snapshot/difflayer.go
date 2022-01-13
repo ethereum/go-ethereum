@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/rlp"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (

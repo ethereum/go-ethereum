@@ -25,9 +25,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/crypto"
-	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )
 

@@ -25,10 +25,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	"github.com/scroll-tech/go-ethereum/internal/testlog"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rpc"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )
 
