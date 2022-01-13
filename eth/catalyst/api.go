@@ -25,8 +25,9 @@ import (
 	"math/big"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -50,8 +51,9 @@ var (
 	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
 	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
 	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
-	InvalidPayloadID   = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
 )
+
+const preparedPayloadsCacheSize = 10
 
 // Register adds catalyst APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
@@ -86,7 +88,8 @@ type ConsensusAPI struct {
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
 	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	preparedBlocks map[uint64]*ExecutableDataV1
+	preparedBlocks *lru.Cache       // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
+
 }
 
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
@@ -110,12 +113,16 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 			engine = beacon.New(eth.Engine())
 		}
 	}
+	preparedBlocks, _ := lru.NewWithEvict(preparedPayloadsCacheSize, func(key, value interface{}) {
+		log.Trace("evicted payload from preparedBlocks", "payloadID", key.(PayloadID),
+			"blockhash", value.(*ExecutableDataV1).BlockHash)
+	}) // positive cache size, no error
 	return &ConsensusAPI{
 		light:          eth == nil,
 		eth:            eth,
 		les:            les,
 		engine:         engine,
-		preparedBlocks: make(map[uint64]*ExecutableDataV1),
+		preparedBlocks: preparedBlocks,
 	}
 }
 
@@ -175,17 +182,12 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
-func (api *ConsensusAPI) GetPayloadV1(payloadID hexutil.Bytes) (*ExecutableDataV1, error) {
-	hash := []byte(payloadID)
-	if len(hash) < 8 {
-		return nil, &InvalidPayloadID
-	}
-	id := binary.BigEndian.Uint64(hash[:8])
-	data, ok := api.preparedBlocks[id]
+func (api *ConsensusAPI) GetPayloadV1(payloadID PayloadID) (*ExecutableDataV1, error) {
+	data, ok := api.preparedBlocks.Get(payloadID)
 	if !ok {
 		return nil, &UnknownPayload
 	}
-	return data, nil
+	return data.(*ExecutableDataV1), nil
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAttributes *PayloadAttributesV1) (ForkChoiceResponse, error) {
@@ -216,25 +218,23 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAtt
 		if err != nil {
 			return INVALID, err
 		}
-		hash := computePayloadId(heads.HeadBlockHash, PayloadAttributes)
-		id := binary.BigEndian.Uint64(hash)
-		api.preparedBlocks[id] = data
-		log.Info("Created payload", "payloadid", id)
-		// TODO (MariusVanDerWijden) do something with the payloadID?
-		hex := hexutil.Bytes(hash)
-		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: &hex}, nil
+		id := computePayloadId(heads.HeadBlockHash, PayloadAttributes)
+		api.preparedBlocks.Add(id, data)
+		log.Info("Created payload", "payloadID", id)
+		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: &id}, nil
 	}
 	return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) []byte {
+func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) (out PayloadID) {
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(headBlockHash[:])
 	binary.Write(hasher, binary.BigEndian, params.Timestamp)
 	hasher.Write(params.Random[:])
 	hasher.Write(params.SuggestedFeeRecipient[:])
-	return hasher.Sum([]byte{})[:8]
+	copy(out[:], hasher.Sum(nil)[:8])
+	return
 }
 
 func (api *ConsensusAPI) invalid() ExecutePayloadResponse {

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -158,7 +157,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
-	execData, err := api.GetPayloadV1(hexutil.Bytes(payloadID))
+	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -391,7 +390,7 @@ func TestFullAPI(t *testing.T) {
 			t.Fatalf("error preparing payload, invalid status: %v", resp.Status)
 		}
 		payloadID := computePayloadId(parent.Hash(), &params)
-		payload, err := api.GetPayloadV1(hexutil.Bytes(payloadID))
+		payload, err := api.GetPayloadV1(payloadID)
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
