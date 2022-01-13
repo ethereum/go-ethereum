@@ -77,6 +77,13 @@ message StatusResponse {
     int64 numPeers = 3;
     string syncMode = 4;
     Syncing syncing = 5;
+    repeated Fork forks = 6;
+
+    message Fork {
+        string name = 1;
+        int64 block = 2;
+        bool disabled = 3;
+    }
 
     message Syncing {
         int64 startingBlock = 1;

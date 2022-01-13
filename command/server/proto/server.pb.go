@@ -630,6 +630,7 @@ type StatusResponse struct {
 	NumPeers      int64                   `protobuf:"varint,3,opt,name=numPeers,proto3" json:"numPeers,omitempty"`
 	SyncMode      string                  `protobuf:"bytes,4,opt,name=syncMode,proto3" json:"syncMode,omitempty"`
 	Syncing       *StatusResponse_Syncing `protobuf:"bytes,5,opt,name=syncing,proto3" json:"syncing,omitempty"`
+	Forks         []*StatusResponse_Fork  `protobuf:"bytes,6,rep,name=forks,proto3" json:"forks,omitempty"`
 }
 
 func (x *StatusResponse) Reset() {
@@ -695,6 +696,13 @@ func (x *StatusResponse) GetSyncMode() string {
 func (x *StatusResponse) GetSyncing() *StatusResponse_Syncing {
 	if x != nil {
 		return x.Syncing
+	}
+	return nil
+}
+
+func (x *StatusResponse) GetForks() []*StatusResponse_Fork {
+	if x != nil {
+		return x.Forks
 	}
 	return nil
 }
@@ -872,6 +880,69 @@ func (x *PprofResponse) GetHeaders() map[string]string {
 	return nil
 }
 
+type StatusResponse_Fork struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name     string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Block    int64  `protobuf:"varint,2,opt,name=block,proto3" json:"block,omitempty"`
+	Disabled bool   `protobuf:"varint,3,opt,name=disabled,proto3" json:"disabled,omitempty"`
+}
+
+func (x *StatusResponse_Fork) Reset() {
+	*x = StatusResponse_Fork{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_command_server_proto_server_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *StatusResponse_Fork) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusResponse_Fork) ProtoMessage() {}
+
+func (x *StatusResponse_Fork) ProtoReflect() protoreflect.Message {
+	mi := &file_command_server_proto_server_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusResponse_Fork.ProtoReflect.Descriptor instead.
+func (*StatusResponse_Fork) Descriptor() ([]byte, []int) {
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11, 0}
+}
+
+func (x *StatusResponse_Fork) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StatusResponse_Fork) GetBlock() int64 {
+	if x != nil {
+		return x.Block
+	}
+	return 0
+}
+
+func (x *StatusResponse_Fork) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
+	}
+	return false
+}
+
 type StatusResponse_Syncing struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -885,7 +956,7 @@ type StatusResponse_Syncing struct {
 func (x *StatusResponse_Syncing) Reset() {
 	*x = StatusResponse_Syncing{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_command_server_proto_server_proto_msgTypes[15]
+		mi := &file_command_server_proto_server_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -898,7 +969,7 @@ func (x *StatusResponse_Syncing) String() string {
 func (*StatusResponse_Syncing) ProtoMessage() {}
 
 func (x *StatusResponse_Syncing) ProtoReflect() protoreflect.Message {
-	mi := &file_command_server_proto_server_proto_msgTypes[15]
+	mi := &file_command_server_proto_server_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -911,7 +982,7 @@ func (x *StatusResponse_Syncing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse_Syncing.ProtoReflect.Descriptor instead.
 func (*StatusResponse_Syncing) Descriptor() ([]byte, []int) {
-	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11, 0}
+	return file_command_server_proto_server_proto_rawDescGZIP(), []int{11, 1}
 }
 
 func (x *StatusResponse_Syncing) GetStartingBlock() int64 {
@@ -978,7 +1049,7 @@ var file_command_server_proto_server_proto_rawDesc = []byte{
 	0x65, 0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a,
 	0x06, 0x6e, 0x75, 0x6d, 0x62, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x6e,
 	0x75, 0x6d, 0x62, 0x65, 0x72, 0x22, 0x16, 0x0a, 0x14, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x53, 0x65,
-	0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xe2, 0x02,
+	0x74, 0x48, 0x65, 0x61, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xe2, 0x03,
 	0x0a, 0x0e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
 	0x12, 0x31, 0x0a, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x42, 0x6c, 0x6f, 0x63, 0x6b,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x48,
@@ -993,7 +1064,15 @@ var file_command_server_proto_server_proto_rawDesc = []byte{
 	0x12, 0x37, 0x0a, 0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x18, 0x05, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x1d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
 	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67,
-	0x52, 0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x1a, 0x77, 0x0a, 0x07, 0x53, 0x79, 0x6e,
+	0x52, 0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x12, 0x30, 0x0a, 0x05, 0x66, 0x6f, 0x72,
+	0x6b, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e,
+	0x46, 0x6f, 0x72, 0x6b, 0x52, 0x05, 0x66, 0x6f, 0x72, 0x6b, 0x73, 0x1a, 0x4c, 0x0a, 0x04, 0x46,
+	0x6f, 0x72, 0x6b, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x62, 0x6c, 0x6f, 0x63, 0x6b,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x12, 0x1a, 0x0a,
+	0x08, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x08, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x64, 0x1a, 0x77, 0x0a, 0x07, 0x53, 0x79, 0x6e,
 	0x63, 0x69, 0x6e, 0x67, 0x12, 0x24, 0x0a, 0x0d, 0x73, 0x74, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x67,
 	0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0d, 0x73, 0x74, 0x61,
 	0x72, 0x74, 0x69, 0x6e, 0x67, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x12, 0x22, 0x0a, 0x0c, 0x68, 0x69,
@@ -1070,7 +1149,7 @@ func file_command_server_proto_server_proto_rawDescGZIP() []byte {
 }
 
 var file_command_server_proto_server_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_command_server_proto_server_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_command_server_proto_server_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_command_server_proto_server_proto_goTypes = []interface{}{
 	(PprofRequest_Type)(0),         // 0: proto.PprofRequest.Type
 	(*PeersAddRequest)(nil),        // 1: proto.PeersAddRequest
@@ -1088,37 +1167,39 @@ var file_command_server_proto_server_proto_goTypes = []interface{}{
 	(*Header)(nil),                 // 13: proto.Header
 	(*PprofRequest)(nil),           // 14: proto.PprofRequest
 	(*PprofResponse)(nil),          // 15: proto.PprofResponse
-	(*StatusResponse_Syncing)(nil), // 16: proto.StatusResponse.Syncing
-	nil,                            // 17: proto.PprofResponse.HeadersEntry
-	(*empty.Empty)(nil),            // 18: google.protobuf.Empty
+	(*StatusResponse_Fork)(nil),    // 16: proto.StatusResponse.Fork
+	(*StatusResponse_Syncing)(nil), // 17: proto.StatusResponse.Syncing
+	nil,                            // 18: proto.PprofResponse.HeadersEntry
+	(*empty.Empty)(nil),            // 19: google.protobuf.Empty
 }
 var file_command_server_proto_server_proto_depIdxs = []int32{
 	9,  // 0: proto.PeersListResponse.peers:type_name -> proto.Peer
 	9,  // 1: proto.PeersStatusResponse.peer:type_name -> proto.Peer
 	13, // 2: proto.StatusResponse.currentBlock:type_name -> proto.Header
 	13, // 3: proto.StatusResponse.currentHeader:type_name -> proto.Header
-	16, // 4: proto.StatusResponse.syncing:type_name -> proto.StatusResponse.Syncing
-	0,  // 5: proto.PprofRequest.type:type_name -> proto.PprofRequest.Type
-	17, // 6: proto.PprofResponse.headers:type_name -> proto.PprofResponse.HeadersEntry
-	14, // 7: proto.Bor.Pprof:input_type -> proto.PprofRequest
-	1,  // 8: proto.Bor.PeersAdd:input_type -> proto.PeersAddRequest
-	3,  // 9: proto.Bor.PeersRemove:input_type -> proto.PeersRemoveRequest
-	5,  // 10: proto.Bor.PeersList:input_type -> proto.PeersListRequest
-	7,  // 11: proto.Bor.PeersStatus:input_type -> proto.PeersStatusRequest
-	10, // 12: proto.Bor.ChainSetHead:input_type -> proto.ChainSetHeadRequest
-	18, // 13: proto.Bor.Status:input_type -> google.protobuf.Empty
-	15, // 14: proto.Bor.Pprof:output_type -> proto.PprofResponse
-	2,  // 15: proto.Bor.PeersAdd:output_type -> proto.PeersAddResponse
-	4,  // 16: proto.Bor.PeersRemove:output_type -> proto.PeersRemoveResponse
-	6,  // 17: proto.Bor.PeersList:output_type -> proto.PeersListResponse
-	8,  // 18: proto.Bor.PeersStatus:output_type -> proto.PeersStatusResponse
-	11, // 19: proto.Bor.ChainSetHead:output_type -> proto.ChainSetHeadResponse
-	12, // 20: proto.Bor.Status:output_type -> proto.StatusResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	17, // 4: proto.StatusResponse.syncing:type_name -> proto.StatusResponse.Syncing
+	16, // 5: proto.StatusResponse.forks:type_name -> proto.StatusResponse.Fork
+	0,  // 6: proto.PprofRequest.type:type_name -> proto.PprofRequest.Type
+	18, // 7: proto.PprofResponse.headers:type_name -> proto.PprofResponse.HeadersEntry
+	14, // 8: proto.Bor.Pprof:input_type -> proto.PprofRequest
+	1,  // 9: proto.Bor.PeersAdd:input_type -> proto.PeersAddRequest
+	3,  // 10: proto.Bor.PeersRemove:input_type -> proto.PeersRemoveRequest
+	5,  // 11: proto.Bor.PeersList:input_type -> proto.PeersListRequest
+	7,  // 12: proto.Bor.PeersStatus:input_type -> proto.PeersStatusRequest
+	10, // 13: proto.Bor.ChainSetHead:input_type -> proto.ChainSetHeadRequest
+	19, // 14: proto.Bor.Status:input_type -> google.protobuf.Empty
+	15, // 15: proto.Bor.Pprof:output_type -> proto.PprofResponse
+	2,  // 16: proto.Bor.PeersAdd:output_type -> proto.PeersAddResponse
+	4,  // 17: proto.Bor.PeersRemove:output_type -> proto.PeersRemoveResponse
+	6,  // 18: proto.Bor.PeersList:output_type -> proto.PeersListResponse
+	8,  // 19: proto.Bor.PeersStatus:output_type -> proto.PeersStatusResponse
+	11, // 20: proto.Bor.ChainSetHead:output_type -> proto.ChainSetHeadResponse
+	12, // 21: proto.Bor.Status:output_type -> proto.StatusResponse
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_command_server_proto_server_proto_init() }
@@ -1308,6 +1389,18 @@ func file_command_server_proto_server_proto_init() {
 			}
 		}
 		file_command_server_proto_server_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*StatusResponse_Fork); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_command_server_proto_server_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StatusResponse_Syncing); i {
 			case 0:
 				return &v.state
@@ -1326,7 +1419,7 @@ func file_command_server_proto_server_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_command_server_proto_server_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
