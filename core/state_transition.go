@@ -304,7 +304,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
-	if st.evm.Accesses != nil {
+	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
 		if msg.To() != nil {
 			toBalance := trieUtils.GetTreeKeyBalance(msg.To().Bytes())
 			pre := st.state.GetBalance(*msg.To())

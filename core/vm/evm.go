@@ -243,7 +243,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
-			if evm.Accesses != nil {
+			if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 				// Touch the account data
 				var data [32]byte
 				evm.Accesses.TouchAddress(utils.GetTreeKeyVersion(addr.Bytes()), data[:])

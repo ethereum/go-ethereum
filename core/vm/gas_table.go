@@ -97,7 +97,7 @@ var (
 func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
 	slot := stack.Back(0)
-	if evm.Accesses != nil {
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
 		usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
 	}
@@ -107,7 +107,7 @@ func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 
 func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var statelessGas uint64
-	if evm.Accesses != nil {
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		var (
 			codeOffset = stack.Back(1)
 			length     = stack.Back(2)
@@ -129,7 +129,7 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 
 func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var statelessGas uint64
-	if evm.Accesses != nil {
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		var (
 			codeOffset = stack.Back(2)
 			length     = stack.Back(3)
@@ -158,7 +158,7 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
 
-	if evm.Accesses != nil {
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		where := stack.Back(0)
 		addr := contract.Address()
 		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)
@@ -408,7 +408,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		transfersValue = !stack.Back(2).IsZero()
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
-	if evm.Accesses != nil {
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		// Charge witness costs
 		for i := trieUtils.VersionLeafKey; i <= trieUtils.CodeSizeLeafKey; i++ {
 			index := trieUtils.GetTreeKeyAccountLeaf(address[:], byte(i))
