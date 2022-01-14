@@ -2,20 +2,14 @@ package utils
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 func Position(list []common.Address, x common.Address) int {
@@ -55,51 +49,6 @@ func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
 	return validators
 }
 
-// Get masternodes address from checkpoint Header.
-func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
-	masternodes := make([]common.Address, (len(checkpointHeader.Extra)-ExtraVanity-ExtraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], checkpointHeader.Extra[ExtraVanity+i*common.AddressLength:])
-	}
-	return masternodes
-}
-
-// Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, error) {
-	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
-		return nil, errors.New("This block is not checkpoint block epoc.")
-	}
-	// Get signers from this block.
-	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
-	validators := ExtractValidatorsFromBytes(checkpointHeader.Validators)
-	m1m2, _, err := GetM1M2(masternodes, validators, currentHeader, config)
-	if err != nil {
-		return map[common.Address]common.Address{}, err
-	}
-	return m1m2, nil
-}
-
-func GetM1M2(masternodes []common.Address, validators []int64, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, uint64, error) {
-	m1m2 := map[common.Address]common.Address{}
-	maxMNs := len(masternodes)
-	moveM2 := uint64(0)
-	if len(validators) < maxMNs {
-		return nil, moveM2, errors.New("len(m2) is less than len(m1)")
-	}
-	if maxMNs > 0 {
-		isForked := config.IsTIPRandomize(currentHeader.Number)
-		if isForked {
-			moveM2 = ((currentHeader.Number.Uint64() % config.XDPoS.Epoch) / uint64(maxMNs)) % uint64(maxMNs)
-		}
-		for i, m1 := range masternodes {
-			m2Index := uint64(validators[i] % int64(maxMNs))
-			m2Index = (m2Index + moveM2) % uint64(maxMNs)
-			m1m2[m1] = masternodes[m2Index]
-		}
-	}
-	return m1m2, moveM2, nil
-}
-
 // compare 2 signers lists
 // return true if they are same elements, otherwise return false
 func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
@@ -115,73 +64,6 @@ func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
 	return reflect.DeepEqual(list1, list2)
 }
 
-// SignerFn is a signer callback function to request a hash to be signed by a
-// backing account.
-//type SignerFn func(accounts.Account, []byte) ([]byte, error)
-
-// sigHash returns the hash which is used as input for the delegated-proof-of-stake
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
-func SigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
-
-	err := rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
-	})
-	if err != nil {
-		log.Debug("Fail to encode", err)
-	}
-	hasher.Sum(hash[:0])
-	return hash
-}
-
-func SigHashV2(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
-
-	err := rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra,
-		header.MixDigest,
-		header.Nonce,
-		header.Validators,
-		header.Penalties,
-	})
-	if err != nil {
-		log.Debug("Fail to encode", err)
-	}
-	hasher.Sum(hash[:0])
-	return hash
-}
-
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
 func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	if len(b) == 0 {
@@ -195,48 +77,4 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	default:
 		return fmt.Errorf("consensus version %d is not defined", b[0])
 	}
-}
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func Ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
-	// Retrieve the signature from the header extra-data
-	if len(header.Extra) < ExtraSeal {
-		return common.Address{}, ErrMissingSignature
-	}
-	signature := header.Extra[len(header.Extra)-ExtraSeal:]
-
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SigHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-	sigcache.Add(hash, signer)
-	return signer, nil
-}
-
-func EcrecoverV2(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
-
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SigHashV2(header).Bytes(), header.Validator)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-	sigcache.Add(hash, signer)
-	return signer, nil
 }

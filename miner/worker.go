@@ -381,7 +381,11 @@ func (self *worker) wait() {
 			}
 			if work.config.XDPoS != nil {
 				// epoch block
-				if (block.NumberU64() % work.config.XDPoS.Epoch) == 0 {
+				isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(block.Header())
+				if err != nil {
+					log.Error("[wait] fail to check if block is epoch switch block when worker waiting", "BlockNum", block.Number(), "Hash", block.Hash())
+				}
+				if isEpochSwitchBlock {
 					core.CheckpointCh <- 1
 				}
 			}
@@ -402,7 +406,7 @@ func (self *worker) wait() {
 					log.Error("[wait] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
 				}
 
-				authorized := c.IsAuthorisedAddress(block.Header(), self.chain, self.coinbase)
+				authorized := c.IsAuthorisedAddress(self.chain, block.Header(), self.coinbase)
 				if !authorized {
 					valid := false
 					masternodes := c.GetMasternodes(self.chain, block.Header())
@@ -635,13 +639,19 @@ func (self *worker) commitNewWork() {
 		lendingFinalizedTradeTransaction                                     *types.Transaction
 	)
 	feeCapacity := state.GetTRC21FeeCapacityFromStateWithCache(parent.Root(), work.state)
-	if self.config.XDPoS != nil && header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
-		pending, err := self.eth.TxPool().Pending()
+	if self.config.XDPoS != nil {
+		isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 		if err != nil {
-			log.Error("Failed to fetch pending transactions", "err", err)
-			return
+			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
-		txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers, feeCapacity)
+		if !isEpochSwitchBlock {
+			pending, err := self.eth.TxPool().Pending()
+			if err != nil {
+				log.Error("Failed to fetch pending transactions", "err", err)
+				return
+			}
+			txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers, feeCapacity)
+		}
 	}
 	if atomic.LoadInt32(&self.mining) == 1 {
 		wallet, err := self.eth.AccountManager().Find(accounts.Account{Address: self.coinbase})
@@ -653,16 +663,20 @@ func (self *worker) commitNewWork() {
 			XDCX := self.eth.GetXDCX()
 			XDCXLending := self.eth.GetXDCXLending()
 			if XDCX != nil && header.Number.Uint64() > self.config.XDPoS.Epoch {
-				if header.Number.Uint64()%self.config.XDPoS.Epoch == 0 {
-					err := XDCX.UpdateMediumPriceBeforeEpoch(header.Number.Uint64()/self.config.XDPoS.Epoch, work.tradingState, work.state)
+				isEpochSwitchBlock, epochNumber, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
+				if err != nil {
+					log.Error("[commitNewWork] fail to check if block is epoch switch block when performing XDCX and XDCXLending operations", "BlockNum", header.Number, "Hash", header.Hash())
+				}
+
+				if isEpochSwitchBlock {
+					err := XDCX.UpdateMediumPriceBeforeEpoch(epochNumber, work.tradingState, work.state)
 					if err != nil {
 						log.Error("Fail when update medium price last epoch", "error", err)
 						return
 					}
-				}
-				// won't grasp tx at checkpoint
-				//https://github.com/XinFinOrg/XDPoSChain-v1/pull/416
-				if header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
+				} else {
+					// won't grasp tx at checkpoint
+					//https://github.com/XinFinOrg/XDPoSChain-v1/pull/416
 					log.Debug("Start processing order pending")
 					tradingOrderPending, _ := self.eth.OrderPool().Pending()
 					log.Debug("Start processing order pending", "len", len(tradingOrderPending))
@@ -680,6 +694,7 @@ func (self *worker) commitNewWork() {
 						}
 					}
 				}
+
 				if len(tradingTxMatches) > 0 {
 					txMatchBatch := &tradingstate.TxMatchBatch{
 						Data:      tradingTxMatches,
@@ -1062,10 +1077,16 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		}
 		go func(logs []*types.Log, tcount int) {
 			if len(logs) > 0 {
-				mux.Post(core.PendingLogsEvent{Logs: logs})
+				err := mux.Post(core.PendingLogsEvent{Logs: logs})
+				if err != nil {
+					log.Warn("[commitTransactions] Error when sending PendingLogsEvent", "LogLength", len(logs))
+				}
 			}
 			if tcount > 0 {
-				mux.Post(core.PendingStateEvent{})
+				err := mux.Post(core.PendingStateEvent{})
+				if err != nil {
+					log.Warn("[commitTransactions] Error when sending PendingStateEvent", "tcount", tcount)
+				}
 			}
 		}(cpy, env.tcount)
 	}

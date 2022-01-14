@@ -187,7 +187,7 @@ func (s *SnapshotV1) apply(headers []*types.Header) (*SnapshotV1, error) {
 			delete(snap.Recents, number-limit)
 		}
 		// Resolve the authorization key and check against signers
-		signer, err := utils.Ecrecover(header, s.sigcache)
+		signer, err := ecrecover(header, s.sigcache)
 		if err != nil {
 			return nil, err
 		}

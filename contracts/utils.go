@@ -352,8 +352,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
-	//TODO: i think this should be c.GetMasternodesFrom...
-	masternodes := utils.GetMasternodesFromCheckpointHeader(header)
+	masternodes := c.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {

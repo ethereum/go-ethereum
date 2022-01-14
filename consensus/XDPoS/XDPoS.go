@@ -35,8 +35,13 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-func SigHash(header *types.Header) (hash common.Hash) {
-	return utils.SigHash(header)
+func (x *XDPoS) SigHash(header *types.Header) (hash common.Hash) {
+	switch x.config.BlockConsensusVersion(header.Number) {
+	case params.ConsensusEngineVersion2:
+		return x.EngineV2.SignHash(header)
+	default: // Default "v1"
+		return x.EngineV1.SigHash(header)
+	}
 }
 
 // XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
@@ -240,12 +245,12 @@ func (x *XDPoS) GetPeriod() uint64 {
 	return x.config.Period
 }
 
-func (x *XDPoS) IsAuthorisedAddress(header *types.Header, chain consensus.ChainReader, address common.Address) bool {
+func (x *XDPoS) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {
 	switch x.config.BlockConsensusVersion(header.Number) {
 	case params.ConsensusEngineVersion2:
-		return x.EngineV2.IsAuthorisedAddress(header, chain, address)
+		return x.EngineV2.IsAuthorisedAddress(chain, header, address)
 	default: // Default "v1"
-		return x.EngineV1.IsAuthorisedAddress(header, chain, address)
+		return x.EngineV1.IsAuthorisedAddress(chain, header, address)
 	}
 }
 
@@ -255,6 +260,20 @@ func (x *XDPoS) GetMasternodes(chain consensus.ChainReader, header *types.Header
 		return x.EngineV2.GetMasternodes(chain, header)
 	default: // Default "v1"
 		return x.EngineV1.GetMasternodes(chain, header)
+	}
+}
+
+func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber uint64) []common.Address {
+	blockHeader := chain.GetHeaderByNumber(blockNumber)
+	if blockHeader == nil {
+		log.Error("[GetMasternodesByNumber] Unable to find block", "Num", blockNumber)
+		return []common.Address{}
+	}
+	switch x.config.BlockConsensusVersion(big.NewInt(int64(blockNumber))) {
+	case params.ConsensusEngineVersion2:
+		return x.EngineV2.GetMasternodes(chain, blockHeader)
+	default: // Default "v1"
+		return x.EngineV1.GetMasternodes(chain, blockHeader)
 	}
 }
 
@@ -302,27 +321,31 @@ func (x *XDPoS) RecoverValidator(header *types.Header) (common.Address, error) {
 }
 
 // Get master nodes over extra data of previous checkpoint block.
-func (x *XDPoS) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header, n, e uint64) []common.Address {
-	switch x.config.BlockConsensusVersion(preCheckpointHeader.Number) {
+func (x *XDPoS) GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
+	switch x.config.BlockConsensusVersion(checkpointHeader.Number) {
 	case params.ConsensusEngineVersion2:
-		return x.EngineV2.GetMasternodesFromEpochSwitchHeader(preCheckpointHeader)
+		return x.EngineV2.GetMasternodesFromEpochSwitchHeader(checkpointHeader)
 	default: // Default "v1"
-		return x.EngineV1.GetMasternodesFromCheckpointHeader(preCheckpointHeader, n, e)
+		return x.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
 	}
 }
 
 // Check is epoch switch (checkpoint) block
-func (x *XDPoS) IsEpochSwitch(header *types.Header) bool {
+func (x *XDPoS) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 	switch x.config.BlockConsensusVersion(header.Number) {
 	case params.ConsensusEngineVersion2:
-		b, _, err := x.EngineV2.IsEpochSwitch(header)
-		if err != nil {
-			log.Error("[IsEpochSwitch] Adaptor v2 IsEpochSwitch has error", "err", err)
-			return false
-		}
-		return b
+		return x.EngineV2.IsEpochSwitch(header)
 	default: // Default "v1"
 		return x.EngineV1.IsEpochSwitch(header)
+	}
+}
+
+func (x *XDPoS) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, blockNumber *big.Int) (uint64, uint64, error) {
+	switch x.config.BlockConsensusVersion(blockNumber) {
+	case params.ConsensusEngineVersion2:
+		return x.EngineV2.GetCurrentEpochSwitchBlock(chain, blockNumber)
+	default: // Default "v1"
+		return x.EngineV1.GetCurrentEpochSwitchBlock(blockNumber)
 	}
 }
 

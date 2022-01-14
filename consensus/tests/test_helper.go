@@ -262,6 +262,10 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	if err != nil {
 		t.Fatal(err)
 	}
+	go func() {
+		checkpointChanMsg := <-core.CheckpointCh
+		log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+	}()
 
 	return blockchain, backend, currentBlock, signer
 }
@@ -320,6 +324,10 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	if err != nil {
 		t.Fatal(err)
 	}
+	go func() {
+		checkpointChanMsg := <-core.CheckpointCh
+		log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+	}()
 
 	return blockchain, backend, currentBlock, signer, signFn, currentForkBlock
 }
@@ -385,13 +393,13 @@ func createBlock(chainConfig *params.ChainConfig, startingBlock *types.Block, bl
 	return header
 }
 
-func generateSignature(backend *backends.SimulatedBackend, header *types.Header) error {
+func generateSignature(backend *backends.SimulatedBackend, adaptor *XDPoS.XDPoS, header *types.Header) error {
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
 	if err != nil {
 		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
 	}
 
-	signature, err := signFn(accounts.Account{Address: signer}, utils.SigHashV2(header).Bytes())
+	signature, err := signFn(accounts.Account{Address: signer}, adaptor.SigHash(header).Bytes())
 	if err != nil {
 		return err
 	}
@@ -488,7 +496,7 @@ func createXDPoSTestBlock(bc *BlockChain, customHeader *types.Header, txs []*typ
 		Time:        big.NewInt(customHeader.Number.Int64() * 10),
 		Extra:       customHeader.Extra,
 		Validator:   customHeader.Validator,
-		Validators:   customHeader.Validators,
+		Validators:  customHeader.Validators,
 	}
 	var block *types.Block
 	if len(txs) == 0 {

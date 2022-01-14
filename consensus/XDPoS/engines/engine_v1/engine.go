@@ -53,6 +53,23 @@ type XDPoS_v1 struct {
 	HookGetSignersFromContract func(blockHash common.Hash) ([]common.Address, error)
 }
 
+/* V1 Block
+SignerFn is a signer callback function to request a hash to be signed by a
+backing account.
+type SignerFn func(accounts.Account, []byte) ([]byte, error)
+
+sigHash returns the hash which is used as input for the delegated-proof-of-stake
+signing. It is the hash of the entire header apart from the 65 byte signature
+contained at the end of the extra data.
+
+Note, the method requires the extra data to be at least 65 bytes, otherwise it
+panics. This is done to avoid accidentally using both forms (signature present
+or not), which could be abused to produce different hashes for the same header.
+*/
+func (x *XDPoS_v1) SigHash(header *types.Header) (hash common.Hash) {
+	return sigHash(header)
+}
+
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
@@ -81,7 +98,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (x *XDPoS_v1) Author(header *types.Header) (common.Address, error) {
-	return utils.Ecrecover(header, x.signatures)
+	return ecrecover(header, x.signatures)
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
@@ -296,7 +313,7 @@ func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header 
 	return nil
 }
 
-func (x *XDPoS_v1) IsAuthorisedAddress(header *types.Header, chain consensus.ChainReader, address common.Address) bool {
+func (x *XDPoS_v1) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {
 	snap, err := x.GetSnapshot(chain, header)
 	if err != nil {
 		log.Error("[IsAuthorisedAddress] Can't get snapshot with at ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
@@ -330,36 +347,37 @@ func (x *XDPoS_v1) StoreSnapshot(snap *SnapshotV1) error {
 	return snap.store(x.db)
 }
 
-func position(list []common.Address, x common.Address) int {
-	for i, item := range list {
-		if item == x {
-			return i
-		}
-	}
-	return -1
-}
-
 func (x *XDPoS_v1) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
 	n := header.Number.Uint64()
 	e := x.config.Epoch
 	switch {
 	case n%e == 0:
-		return x.GetMasternodesFromCheckpointHeader(header, n, e)
+		return x.GetMasternodesFromCheckpointHeader(header)
 	case n%e != 0:
 		h := chain.GetHeaderByNumber(n - (n % e))
-		return x.GetMasternodesFromCheckpointHeader(h, n, e)
+		if h == nil {
+			log.Warn("[GetMasternodes v1] epoch switch block header nil", "BlockNum", n)
+		}
+		return x.GetMasternodesFromCheckpointHeader(h)
 	default:
 		return []common.Address{}
 	}
 }
 
+func (x *XDPoS_v1) GetCurrentEpochSwitchBlock(blockNumber *big.Int) (uint64, uint64, error) {
+	currentBlockNum := blockNumber.Uint64()
+	currentCheckpointNumber := currentBlockNum - currentBlockNum%x.config.Epoch
+	epochNumber := currentBlockNum / x.config.Epoch
+	return currentCheckpointNumber, epochNumber, nil
+}
+
 func (x *XDPoS_v1) GetPeriod() uint64 { return x.config.Period }
 
-func whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error) {
+func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error) {
 	if header.Number.Uint64() == 0 {
 		return common.Address{}, errors.New("Don't take block 0")
 	}
-	m, err := utils.Ecrecover(header, snap.sigcache)
+	m, err := ecrecover(header, snap.sigcache)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -390,13 +408,13 @@ func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	// masternode[0] has chance to create block 1
 	preIndex := -1
 	if parent.Number.Uint64() != 0 {
-		pre, err = whoIsCreator(snap, parent)
+		pre, err = x.whoIsCreator(snap, parent)
 		if err != nil {
 			return 0, 0, 0, false, err
 		}
-		preIndex = position(masternodes, pre)
+		preIndex = utils.Position(masternodes, pre)
 	}
-	curIndex := position(masternodes, signer)
+	curIndex := utils.Position(masternodes, signer)
 	if signer == x.signer {
 		log.Debug("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", signer, "position", curIndex)
 	}
@@ -524,7 +542,7 @@ func (x *XDPoS_v1) verifySeal(chain consensus.ChainReader, header *types.Header,
 	}
 
 	// Resolve the authorization key and check against signers
-	creator, err := utils.Ecrecover(header, x.signatures)
+	creator, err := ecrecover(header, x.signatures)
 	if err != nil {
 		return err
 	}
@@ -618,7 +636,7 @@ func (x *XDPoS_v1) GetValidator(creator common.Address, chain consensus.ChainRea
 			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
 		}
 	}
-	m, err := utils.GetM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
+	m, err := getM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -851,7 +869,7 @@ func (x *XDPoS_v1) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	default:
 	}
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, utils.SigHash(header).Bytes())
+	sighash, err := signFn(accounts.Account{Address: signer}, x.SigHash(header).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -886,7 +904,7 @@ func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 }
 
 func (x *XDPoS_v1) RecoverSigner(header *types.Header) (common.Address, error) {
-	return utils.Ecrecover(header, x.signatures)
+	return ecrecover(header, x.signatures)
 }
 
 func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error) {
@@ -901,7 +919,7 @@ func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error
 		return common.Address{}, consensus.ErrFailValidatorSignature
 	}
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(utils.SigHash(header).Bytes(), header.Validator)
+	pubkey, err := crypto.Ecrecover(x.SigHash(header).Bytes(), header.Validator)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -912,18 +930,13 @@ func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error
 	return signer, nil
 }
 
-// Get master nodes over extra data of previous checkpoint block.
-func (x *XDPoS_v1) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header, n, e uint64) []common.Address {
-	if preCheckpointHeader == nil {
-		log.Info("Previous checkpoint's header is empty", "block number", n, "epoch", e)
+// Get master nodes over extra data of checkpoint block.
+func (x *XDPoS_v1) GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
+	if checkpointHeader == nil {
+		log.Warn("Checkpoint's header is empty", "Header", checkpointHeader)
 		return []common.Address{}
 	}
-	masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-utils.ExtraVanity-utils.ExtraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], preCheckpointHeader.Extra[utils.ExtraVanity+i*common.AddressLength:])
-	}
-
-	return masternodes
+	return decodeMasternodesFromHeaderExtra(checkpointHeader)
 }
 
 func (x *XDPoS_v1) GetDb() ethdb.Database {
@@ -941,15 +954,6 @@ func removePenaltiesFromBlock(chain consensus.ChainReader, masternodes []common.
 	if penalties != nil {
 		prevPenalties := common.ExtractAddressFromBytes(penalties)
 		masternodes = common.RemoveItemFromArray(masternodes, prevPenalties)
-	}
-	return masternodes
-}
-
-// Get masternodes address from checkpoint Header.
-func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
-	masternodes := make([]common.Address, (len(checkpointHeader.Extra)-utils.ExtraVanity-utils.ExtraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], checkpointHeader.Extra[utils.ExtraVanity+i*common.AddressLength:])
 	}
 	return masternodes
 }
@@ -990,6 +994,8 @@ func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v1 {
 }
 
 // Epoch Switch is also known as checkpoint in v1
-func (x *XDPoS_v1) IsEpochSwitch(header *types.Header) bool {
-	return (header.Number.Uint64() % x.config.Epoch) == 0
+func (x *XDPoS_v1) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
+	epochNumber := header.Number.Uint64() / x.config.Epoch
+	blockNumInEpoch := header.Number.Uint64() % x.config.Epoch
+	return blockNumInEpoch == 0, epochNumber, nil
 }
