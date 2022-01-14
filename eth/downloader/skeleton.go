@@ -93,8 +93,8 @@ type subchain struct {
 
 // skeletonProgress is a database entry to allow suspending and resuming a chain
 // sync. As the skeleton header chain is downloaded backwards, restarts can and
-// will produce temporarilly disjoint subchains. There is no way to restart a
-// suspended skeleton sync without prior knowlege of all prior suspension points.
+// will produce temporarily disjoint subchains. There is no way to restart a
+// suspended skeleton sync without prior knowledge of all prior suspension points.
 type skeletonProgress struct {
 	Subchains []*subchain // Disjoint subchains downloaded until now
 }
@@ -129,7 +129,7 @@ type headerResponse struct {
 
 // backfiller is a callback interface through which the skeleton sync can tell
 // the downloader that it should suspend or resume backfilling on specific head
-// events (e.g. suspend on forks or gaps, resume on successfull linkups).
+// events (e.g. suspend on forks or gaps, resume on successful linkups).
 type backfiller interface {
 	// suspend requests the backfiller to abort any running full or snap sync
 	// based on the skeleton chain as it might be invalid. The backfiller should
