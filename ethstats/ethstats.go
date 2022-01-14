@@ -57,6 +57,9 @@ const (
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+
+	// chain2HeadChanSize is the size of channel listening to Chain2HeadEvent.
+	chain2HeadChanSize = 10
 )
 
 // backend encompasses the bare-minimum functionality needed for ethstats reporting
@@ -68,6 +71,9 @@ type backend interface {
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
+
+	// Bor
+	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -96,6 +102,9 @@ type Service struct {
 
 	headSub event.Subscription
 	txSub   event.Subscription
+
+	//bor related sub
+	chain2headSub event.Subscription
 }
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
@@ -195,7 +204,9 @@ func (s *Service) Start() error {
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
 	s.txSub = s.backend.SubscribeNewTxsEvent(txEventCh)
-	go s.loop(chainHeadCh, txEventCh)
+	chain2HeadCh := make(chan core.Chain2HeadEvent, chain2HeadChanSize)
+	s.chain2headSub = s.backend.SubscribeChain2HeadEvent(chain2HeadCh)
+	go s.loop(chainHeadCh, chain2HeadCh, txEventCh)
 
 	log.Info("Stats daemon started")
 	return nil
@@ -211,12 +222,13 @@ func (s *Service) Stop() error {
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core.NewTxsEvent) {
+func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan core.Chain2HeadEvent, txEventCh chan core.NewTxsEvent) {
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
-		quitCh = make(chan struct{})
-		headCh = make(chan *types.Block, 1)
-		txCh   = make(chan struct{}, 1)
+		quitCh  = make(chan struct{})
+		headCh  = make(chan *types.Block, 1)
+		txCh    = make(chan struct{}, 1)
+		head2Ch = make(chan core.Chain2HeadEvent, 100)
 	)
 	go func() {
 		var lastTx mclock.AbsTime
@@ -228,6 +240,13 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 			case head := <-chainHeadCh:
 				select {
 				case headCh <- head.Block:
+				default:
+				}
+
+			// Notify of chain2head events, but drop if too frequent
+			case chain2head := <-chain2HeadCh:
+				select {
+				case head2Ch <- chain2head:
 				default:
 				}
 
@@ -333,6 +352,12 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 					if err = s.reportPending(conn); err != nil {
 						log.Warn("Post-block transaction stats report failed", "err", err)
 					}
+
+				case chain2head := <-head2Ch:
+					if err = s.reportChain2Head(conn, &chain2head); err != nil {
+						log.Warn("Reorg stats report failed", "err", err)
+					}
+
 				case <-txCh:
 					if err = s.reportPending(conn); err != nil {
 						log.Warn("Transaction stats report failed", "err", err)
@@ -746,6 +771,49 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	}
 	report := map[string][]interface{}{
 		"emit": {"pending", stats},
+	}
+	return conn.WriteJSON(report)
+}
+
+type blockStub struct {
+	Hash       string `json:"hash"`
+	Number     uint64 `json:"number"`
+	ParentHash string `json:"parent_hash"`
+}
+
+func createStub(b *types.Block) *blockStub {
+	s := &blockStub{
+		Hash:       b.Hash().String(),
+		ParentHash: b.ParentHash().String(),
+		Number:     b.NumberU64(),
+	}
+	return s
+}
+
+type ChainHeadEvent struct {
+	NewChain []*blockStub `json:"added"`
+	OldChain []*blockStub `json:"removed"`
+	Type     string       `json:"type"`
+}
+
+// reportChain2Head checks for reorg and sends current head to stats server.
+func (s *Service) reportChain2Head(conn *connWrapper, chain2HeadData *core.Chain2HeadEvent) error {
+	chainHeadEvent := ChainHeadEvent{
+		Type: chain2HeadData.Type,
+	}
+	for _, block := range chain2HeadData.NewChain {
+		chainHeadEvent.NewChain = append(chainHeadEvent.NewChain, createStub(block))
+	}
+	for _, block := range chain2HeadData.OldChain {
+		chainHeadEvent.OldChain = append(chainHeadEvent.OldChain, createStub(block))
+	}
+
+	stats := map[string]interface{}{
+		"id":    s.node,
+		"event": chainHeadEvent,
+	}
+	report := map[string][]interface{}{
+		"emit": {"headEvent", stats},
 	}
 	return conn.WriteJSON(report)
 }

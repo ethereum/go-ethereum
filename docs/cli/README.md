@@ -31,4 +31,6 @@
 
 - [```status```](./status.md)
 
+- [```chain watch```](./chain_watch.md)
+
 - [```version```](./version.md)

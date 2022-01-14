@@ -20,8 +20,24 @@ service Bor {
     rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
 
     rpc Status(google.protobuf.Empty) returns (StatusResponse);
+    
+    rpc ChainWatch(ChainWatchRequest) returns (stream ChainWatchResponse);
 }
 
+message ChainWatchRequest {
+
+}
+
+message ChainWatchResponse {
+    repeated BlockStub oldchain = 1;
+    repeated BlockStub newchain = 2;
+    string type = 3;
+}
+
+message BlockStub {
+    string hash = 1;
+    uint64 number = 2;
+}
 
 message PeersAddRequest {
     string enode = 1;

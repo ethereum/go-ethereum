@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/command/server/pprof"
 	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -217,4 +218,40 @@ func gatherForks(configList ...interface{}) []*proto.StatusResponse_Fork {
 		}
 	}
 	return forks
+}
+
+func convertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
+
+	var blockStubs []*proto.BlockStub
+
+	for _, block := range blocks {
+		blockStub := &proto.BlockStub{
+			Hash:   block.Hash().String(),
+			Number: block.NumberU64(),
+		}
+		blockStubs = append(blockStubs, blockStub)
+	}
+
+	return blockStubs
+}
+
+func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainWatchServer) error {
+
+	chain2HeadChanSize := 10
+
+	chain2HeadCh := make(chan core.Chain2HeadEvent, chain2HeadChanSize)
+	headSub := s.backend.APIBackend.SubscribeChain2HeadEvent(chain2HeadCh)
+	defer headSub.Unsubscribe()
+
+	for {
+		msg := <-chain2HeadCh
+
+		err := reply.Send(&proto.ChainWatchResponse{Type: msg.Type,
+			Newchain: convertBlockToBlockStub(msg.NewChain),
+			Oldchain: convertBlockToBlockStub(msg.OldChain),
+		})
+		if err != nil {
+			return err
+		}
+	}
 }
