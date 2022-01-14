@@ -50,8 +50,8 @@ ios:
 
 test: all
 	# $(GORUN) build/ci.go test
-	go test github.com/ethereum/go-ethereum/consensus/bor -v
-	go test github.com/ethereum/go-ethereum/tests/bor -v
+	# Skip mobile and cmd tests since they are being deprecated
+	go test -v $(go list ./... | grep -v go-ethereum/cmd/ | grep -v go-ethereum/mobile/)
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

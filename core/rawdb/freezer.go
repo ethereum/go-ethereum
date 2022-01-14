@@ -151,8 +151,10 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 	// This way they don't have to sync again from block 0 and still be compatible
 	// for block logs for future blocks. Note that already synced nodes
 	// won't have past block logs. Newly synced node will have all the data.
-	if err := freezer.tables[freezerBorReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
-		return nil, err
+	if _, ok := freezer.tables[freezerBorReceiptTable]; ok {
+		if err := freezer.tables[freezerBorReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
+			return nil, err
+		}
 	}
 
 	// Truncate all tables to common length.
