@@ -79,7 +79,7 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 
 // TODO: rename
 func (b *Bfter) Vote(vote *utils.Vote) error {
-	log.Trace("Receive Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "signature", vote.Signature)
+	log.Trace("Receive Vote", "hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "signature", vote.Signature)
 	if exist, _ := b.knownVotes.ContainsOrAdd(vote.Hash(), true); exist {
 		log.Info("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 		return nil
@@ -94,6 +94,10 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 
 	err = b.consensus.voteHandler(b.blockChainReader, vote)
 	if err != nil {
+		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
+			log.Warn("vote round not equal", "error", err, "vote", vote.Hash())
+			return err
+		}
 		log.Error("handle BFT Vote", "error", err)
 		return err
 	}
@@ -115,7 +119,7 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 	err = b.consensus.timeoutHandler(timeout)
 	if err != nil {
 		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
-			log.Debug("timeout message round not equal", "error", err)
+			log.Warn("timeout round not equal", "error", err)
 			return err
 		}
 		log.Error("handle BFT Timeout", "error", err)

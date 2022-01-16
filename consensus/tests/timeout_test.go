@@ -75,12 +75,12 @@ func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	err := engineV2.TimeoutHandler(timeoutMsg)
 	assert.NotNil(t, err)
 	// Timeout msg round > currentRound
-	assert.Equal(t, "Timeout message round number: 2 does not match currentRound: 3", err.Error())
+	assert.Equal(t, "timeout message round number: 2 does not match currentRound: 3", err.Error())
 
 	// Set round to 1
 	engineV2.SetNewRoundFaker(utils.Round(1), false)
 	err = engineV2.TimeoutHandler(timeoutMsg)
 	assert.NotNil(t, err)
 	// Timeout msg round < currentRound
-	assert.Equal(t, "Timeout message round number: 2 does not match currentRound: 1", err.Error())
+	assert.Equal(t, "timeout message round number: 2 does not match currentRound: 1", err.Error())
 }

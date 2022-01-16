@@ -93,7 +93,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 		highestCommitBlock: nil,
 	}
 	// Add callback to the timer
-	timer.OnTimeoutFn = engine.onCountdownTimeout
+	timer.OnTimeoutFn = engine.OnCountdownTimeout
 
 	return engine
 }
@@ -192,6 +192,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 
 	// Ensure the timestamp has the correct delay
 
+	// TODO: Proper deal with time
 	//　TODO: if timestamp > current time, how to deal with future timestamp
 	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(x.config.Period))
 	if header.Time.Int64() < time.Now().Unix() {
@@ -525,8 +526,8 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(syncInfo *utils.SyncInfo) error {
 }
 
 func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *utils.SyncInfo) error {
-	x.signLock.Lock()
-	defer x.signLock.Unlock()
+	x.lock.Lock()
+	defer x.lock.Unlock()
 	/*
 		1. processQC
 		2. processTC
@@ -564,13 +565,17 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 
 	// 1. checkRoundNumber
 	if voteMsg.ProposedBlockInfo.Round != x.currentRound {
-		return fmt.Errorf("Vote message round number: %v does not match currentRound: %v", voteMsg.ProposedBlockInfo.Round, x.currentRound)
+		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
+			Type:          "vote",
+			IncomingRound: voteMsg.ProposedBlockInfo.Round,
+			CurrentRound:  x.currentRound,
+		}
 	}
 
 	// Collect vote
 	thresholdReached, numberOfVotesInPool, pooledVotes := x.votePool.Add(voteMsg)
 	if thresholdReached {
-		log.Debug("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool)
+		log.Info(fmt.Sprintf("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 		err := x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg)
 		if err != nil {
 			return err
@@ -634,14 +639,16 @@ func (x *XDPoS_v2) timeoutHandler(timeout *utils.Timeout) error {
 	// 1. checkRoundNumber
 	if timeout.Round != x.currentRound {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
+			Type:          "timeout",
 			IncomingRound: timeout.Round,
-			CurrentRound:  x.currentRound}
+			CurrentRound:  x.currentRound,
+		}
 	}
 	// Collect timeout, generate TC
 	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
 	// Threshold reached
 	if isThresholdReached {
-		log.Debug("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool)
+		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))
 		err := x.onTimeoutPoolThresholdReached(pooledTimeouts, timeout)
 		if err != nil {
 			return err
@@ -954,7 +961,7 @@ func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signat
 	Function that will be called by timer when countdown reaches its threshold.
 	In the engine v2, we would need to broadcast timeout messages to other peers
 */
-func (x *XDPoS_v2) onCountdownTimeout(time time.Time) error {
+func (x *XDPoS_v2) OnCountdownTimeout(time time.Time) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
 
@@ -1064,13 +1071,15 @@ func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
 
 // Utils for test to check currentRound value
 func (x *XDPoS_v2) GetCurrentRound() utils.Round {
+	x.lock.RLock()
+	defer x.lock.RUnlock()
 	return x.currentRound
 }
 
 // Utils for test to check currentRound value
 func (x *XDPoS_v2) GetProperties() (utils.Round, *utils.QuorumCert, *utils.QuorumCert, utils.Round, *utils.BlockInfo) {
-	x.lock.Lock()
-	defer x.lock.Unlock()
+	x.lock.RLock()
+	defer x.lock.RUnlock()
 	return x.currentRound, x.lockQuorumCert, x.highestQuorumCert, x.highestVotedRound, x.highestCommitBlock
 }
 

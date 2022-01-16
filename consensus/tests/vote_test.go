@@ -145,14 +145,14 @@ func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	// voteRound > currentRound
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.NotNil(t, err)
-	assert.Equal(t, "Vote message round number: 6 does not match currentRound: 7", err.Error())
+	assert.Equal(t, "vote message round number: 6 does not match currentRound: 7", err.Error())
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(utils.Round(5), false)
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.NotNil(t, err)
 	// voteRound < currentRound
-	assert.Equal(t, "Vote message round number: 6 does not match currentRound: 5", err.Error())
+	assert.Equal(t, "vote message round number: 6 does not match currentRound: 5", err.Error())
 }
 
 func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
@@ -218,7 +218,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 
 	err = engineV2.TimeoutHandler(timeoutMsg)
 	assert.NotNil(t, err)
-	assert.Equal(t, "Timeout message round number: 5 does not match currentRound: 6", err.Error())
+	assert.Equal(t, "timeout message round number: 5 does not match currentRound: 6", err.Error())
 
 	// Ok, let's do the timeout msg which is on the same round as the current round by creating two timeout message which will not reach timeout pool threshold
 	timeoutMsg = &utils.Timeout{

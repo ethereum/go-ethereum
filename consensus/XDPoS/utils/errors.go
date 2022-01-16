@@ -80,10 +80,11 @@ var (
 )
 
 type ErrIncomingMessageRoundNotEqualCurrentRound struct {
+	Type          string
 	IncomingRound Round
 	CurrentRound  Round
 }
 
 func (e *ErrIncomingMessageRoundNotEqualCurrentRound) Error() string {
-	return fmt.Sprintf("Timeout message round number: %v does not match currentRound: %v", e.IncomingRound, e.CurrentRound)
+	return fmt.Sprintf("%s message round number: %v does not match currentRound: %v", e.Type, e.IncomingRound, e.CurrentRound)
 }

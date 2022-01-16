@@ -191,7 +191,11 @@ func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 	}
 
 	tester.bfter.consensus.timeoutHandler = func(timeout *utils.Timeout) error {
-		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{utils.Round(1), utils.Round(2)}
+		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
+			Type:          "timeout",
+			IncomingRound: utils.Round(1),
+			CurrentRound:  utils.Round(2),
+		}
 	}
 
 	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
@@ -201,5 +205,5 @@ func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 	timeoutMsg := &utils.Timeout{}
 
 	err := tester.bfter.Timeout(timeoutMsg)
-	assert.Equal(t, "Timeout message round number: 1 does not match currentRound: 2", err.Error())
+	assert.Equal(t, "timeout message round number: 1 does not match currentRound: 2", err.Error())
 }
