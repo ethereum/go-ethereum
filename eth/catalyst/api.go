@@ -36,10 +36,11 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "engine",
-			Version:   "1.0",
-			Service:   NewConsensusAPI(backend),
-			Public:    true,
+			Namespace:     "engine",
+			Version:       "1.0",
+			Service:       NewConsensusAPI(backend),
+			Public:        true,
+			Authenticated: true,
 		},
 	})
 	return nil

@@ -577,13 +577,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		}
 	}
 	for _, path := range test.wantWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err != nil {
 			t.Errorf("Error: %s: WebSocket connection failed: %v", path, err)
 		}
 	}
 	for _, path := range test.wantNoWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}

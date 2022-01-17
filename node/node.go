@@ -17,6 +17,7 @@
 package node
 
 import (
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,6 +28,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -55,6 +58,8 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	http          *httpServer //
 	ws            *httpServer //
+	httpAuth      *httpServer //
+	wsAuth        *httpServer //
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
@@ -147,7 +152,9 @@ func New(conf *Config) (*Node, error) {
 
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
@@ -335,7 +342,42 @@ func (n *Node) closeDataDir() {
 	}
 }
 
-// configureRPC is a helper method to configure all the various RPC endpoints during node
+// obtainJWTSecret loads the jwt-secret, either from the provided config,
+// or from the default location. If neither of those are present, it generates
+// a new secret and stores to the default location.
+func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
+	// If one was provided via cli flags, use that
+	if len(cliParam) > 0 {
+		jwtSecret := common.FromHex(cliParam)
+		if len(jwtSecret) == 32 {
+			return jwtSecret, nil
+		}
+		log.Warn("Discarding provided jwt secret", "size", len(jwtSecret))
+	}
+	jwtFile := n.ResolvePath(datadirJWTKey)
+	log.Debug("Reading jwt-key", "path", jwtFile)
+	if data, err := os.ReadFile(jwtFile); err == nil {
+		jwtSecret := common.FromHex(string(data))
+		if len(jwtSecret) == 32 {
+			return jwtSecret, nil
+		}
+	}
+	// Need to generate one
+	jwtSecret := make([]byte, 32)
+	crand.Read(jwtSecret)
+	// if we're in --dev mode, don't bother saving, just show it
+	if jwtFile == "" {
+		log.Info("Generated ephemeral secret", "jwt-secret", hexutil.Encode(jwtSecret))
+		return jwtSecret, nil
+	}
+	if err := os.WriteFile(jwtFile, []byte(hexutil.Encode(jwtSecret)), 0700); err != nil {
+		return nil, err
+	}
+	log.Info("Generated jwt-key", "path", jwtFile)
+	return jwtSecret, nil
+}
+
+// startRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
@@ -349,55 +391,101 @@ func (n *Node) startRPC() error {
 			return err
 		}
 	}
+	var (
+		servers   []*httpServer
+		open, all = n.GetAPIs()
+		jwtSecret []byte
+	)
+	if len(open) != len(all) {
+		if s, err := n.obtainJWTSecret(n.config.JwtSecret); err != nil {
+			return err
+		} else {
+			jwtSecret = s
+		}
+	}
 
-	// Configure HTTP.
-	if n.config.HTTPHost != "" {
-		config := httpConfig{
+	initHttp := func(server *httpServer, apis []rpc.API, port int, secret []byte) error {
+		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
+			return err
+		}
+		if err := server.enableRPC(apis, httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-		}
-		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+			jwtSecret:          secret,
+		}); err != nil {
 			return err
 		}
-		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+		servers = append(servers, server)
+		return nil
+	}
+	initWS := func(apis []rpc.API, port int, secret []byte) error {
+		server := n.wsServerForPort(port, secret != nil)
+		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
+		}
+		if err := server.enableWS(n.rpcAPIs, wsConfig{
+			Modules:   n.config.WSModules,
+			Origins:   n.config.WSOrigins,
+			prefix:    n.config.WSPathPrefix,
+			jwtSecret: secret,
+		}); err != nil {
+			return err
+		}
+		servers = append(servers, server)
+		return nil
+	}
+	// Set up HTTP.
+	if n.config.HTTPHost != "" {
+		// Configure legacy unauthenticated HTTP.
+		if err := initHttp(n.http, open, n.config.HTTPPort, nil); err != nil {
+			return err
+		}
+		// Configure authenticated HTTP (if needed).
+		if len(open) != len(all) {
+			if err := initHttp(n.httpAuth, all, 8551, jwtSecret); err != nil {
+				return err
+			}
 		}
 	}
-
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
-		server := n.wsServerForPort(n.config.WSPort)
-		config := wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
-		}
-		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+		// legacy unauthenticated
+		if err := initWS(open, n.config.WSPort, nil); err != nil {
 			return err
 		}
-		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+		// authenticated
+		if len(open) != len(all) {
+			if err := initWS(all, 8551, jwtSecret); err != nil {
+				return err
+			}
+		}
+	}
+	for _, server := range servers {
+		if err := server.start(); err != nil {
 			return err
 		}
 	}
-
-	if err := n.http.start(); err != nil {
-		return err
-	}
-	return n.ws.start()
+	return nil
 }
 
-func (n *Node) wsServerForPort(port int) *httpServer {
-	if n.config.HTTPHost == "" || n.http.port == port {
-		return n.http
+func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
+	httpServer, wsServer := n.http, n.ws
+	if authenticated {
+		httpServer, wsServer = n.httpAuth, n.wsAuth
 	}
-	return n.ws
+	if n.config.HTTPHost == "" || httpServer.port == port {
+		return httpServer
+	}
+	return wsServer
 }
 
 func (n *Node) stopRPC() {
 	n.http.stop()
 	n.ws.stop()
+	n.httpAuth.stop()
+	n.wsAuth.stop()
 	n.ipc.stop()
 	n.stopInProc()
 }
@@ -456,6 +544,17 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
+}
+
+// GetAPIs return two sets of APIs, both the ones that do not require
+// authentication, and the complete set
+func (n *Node) GetAPIs() (unauthenticated, all []rpc.API) {
+	for _, api := range n.rpcAPIs {
+		if !api.Authenticated {
+			unauthenticated = append(unauthenticated, api)
+		}
+	}
+	return unauthenticated, n.rpcAPIs
 }
 
 // RegisterHandler mounts a handler on the given path on the canonical HTTP server.
