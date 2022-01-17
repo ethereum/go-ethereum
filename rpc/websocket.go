@@ -55,6 +55,13 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 		CheckOrigin:     wsHandshakeValidator(allowedOrigins),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, validator := range s.requestValidators {
+			if code, err := validator(r); err != nil {
+				log.Info("WS request rejected", "remote", r.RemoteAddr, "response", code, "err", err)
+				http.Error(w, err.Error(), code)
+				return
+			}
+		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Debug("WebSocket upgrade failed", "err", err)

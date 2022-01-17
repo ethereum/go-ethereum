@@ -76,7 +76,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	// Connections without origin header should work.
 	client, err = DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
-		t.Fatal("error for empty origin")
+		t.Fatalf("error for empty origin: %v", err)
 	}
 	client.Close()
 }
@@ -413,4 +413,23 @@ func (s *severableReadWriteCloser) Write(p []byte) (n int, err error) {
 
 func (s *severableReadWriteCloser) Close() error {
 	return s.ReadWriteCloser.Close()
+}
+
+// This test checks that the server rejects connections from disallowed origins.
+func TestWebsocketAuthCheck(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = newTestServer().WithJwtSecret([]byte("testme"))
+		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"http://example.com"}))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+	// TODO: Add authorization header
+	client, err = DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatalf("error for empty origin: %v", err)
+	}
+	client.Close()
 }

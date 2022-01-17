@@ -46,16 +46,32 @@ type Server struct {
 	idgen    func() ID
 	run      int32
 	codecs   mapset.Set
+
+	// Chained request validators
+	requestValidators []RequestValidator
 }
 
-// NewServer creates a new server instance with no registered handlers.
+// NewServer creates a new server instance with no registered handlers, but with the
+// default set of request validators.
 func NewServer() *Server {
-	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
+	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1,
+		requestValidators: DefaultValidators}
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
 	server.RegisterName(MetadataApi, rpcService)
 	return server
+}
+
+// SetValidators sets the http request validators.
+func (s *Server) SetValidators(validators []RequestValidator) *Server {
+	s.requestValidators = validators
+	return s
+}
+
+// AppendValidator appends a http request validator.
+func (s *Server) AppendValidator(validator RequestValidator) {
+	s.requestValidators = append(s.requestValidators, validator)
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no

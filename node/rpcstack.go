@@ -40,13 +40,15 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
+	jwtSecret          []byte // optional JWT secret
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins []string
-	Modules []string
-	prefix  string // path prefix on which to mount ws handler
+	Origins   []string
+	Modules   []string
+	prefix    string // path prefix on which to mount ws handler
+	jwtSecret []byte // optional JWT secret
 }
 
 type rpcHandler struct {
@@ -280,6 +282,9 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
+	if len(config.jwtSecret) != 0 {
+		srv.AppendValidator(rpc.MakeJWTValidator(config.jwtSecret))
+	}
 	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
@@ -309,9 +314,15 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	if h.wsAllowed() {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
-
+	validators := []rpc.RequestValidator{
+		rpc.ValidateMethod,
+		rpc.ValidateContentLength,
+	}
+	if len(config.jwtSecret) != 0 {
+		validators = append(validators, rpc.MakeJWTValidator(config.jwtSecret))
+	}
 	// Create RPC server and handler.
-	srv := rpc.NewServer()
+	srv := rpc.NewServer().SetValidators(validators)
 	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}

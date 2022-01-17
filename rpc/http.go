@@ -20,11 +20,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
 	"net/http"
 	"net/url"
 	"sync"
@@ -240,9 +237,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	if code, err := validateRequest(r); err != nil {
-		http.Error(w, err.Error(), code)
-		return
+	for _, validator := range s.requestValidators {
+		if code, err := validator(r); err != nil {
+			http.Error(w, err.Error(), code)
+			return
+		}
 	}
 
 	// Create request-scoped context.
@@ -261,31 +260,4 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	codec := newHTTPServerConn(r, w)
 	defer codec.close()
 	s.serveSingleRequest(ctx, codec)
-}
-
-// validateRequest returns a non-zero response code and error message if the
-// request is invalid.
-func validateRequest(r *http.Request) (int, error) {
-	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
-		return http.StatusMethodNotAllowed, errors.New("method not allowed")
-	}
-	if r.ContentLength > maxRequestContentLength {
-		err := fmt.Errorf("content length too large (%d>%d)", r.ContentLength, maxRequestContentLength)
-		return http.StatusRequestEntityTooLarge, err
-	}
-	// Allow OPTIONS (regardless of content-type)
-	if r.Method == http.MethodOptions {
-		return 0, nil
-	}
-	// Check content-type
-	if mt, _, err := mime.ParseMediaType(r.Header.Get("content-type")); err == nil {
-		for _, accepted := range acceptedContentTypes {
-			if accepted == mt {
-				return 0, nil
-			}
-		}
-	}
-	// Invalid content-type
-	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
-	return http.StatusUnsupportedMediaType, err
 }
