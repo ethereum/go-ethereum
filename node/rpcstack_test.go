@@ -24,10 +24,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )
@@ -146,12 +148,12 @@ func TestWebsocketOrigins(t *testing.T) {
 		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
 		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
-			if err := wsRequest(t, url, origin); err != nil {
+			if err := wsRequest(t, url, "Origin", origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
 			}
 		}
 		for _, origin := range tc.expFail {
-			if err := wsRequest(t, url, origin); err == nil {
+			if err := wsRequest(t, url, "Origin", origin); err == nil {
 				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
 			}
 		}
@@ -243,13 +245,18 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 }
 
 // wsRequest attempts to open a WebSocket connection to the given URL.
-func wsRequest(t *testing.T, url, browserOrigin string) error {
+func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 	t.Helper()
-	t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
+	//t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
 
 	headers := make(http.Header)
-	if browserOrigin != "" {
-		headers.Set("Origin", browserOrigin)
+	// Apply extra headers.
+	if len(extraHeaders)%2 != 0 {
+		panic("odd extraHeaders length")
+	}
+	for i := 0; i < len(extraHeaders); i += 2 {
+		key, value := extraHeaders[i], extraHeaders[i+1]
+		headers.Set(key, value)
 	}
 	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if conn != nil {
@@ -290,4 +297,48 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 		t.Fatal(err)
 	}
 	return resp
+}
+
+type tokenTest struct {
+	expOk   []string
+	expFail []string
+}
+
+func TestJWT(t *testing.T) {
+
+	makeToken := func() string {
+		mySigningKey := []byte("secret")
+		// Create the Claims
+		claims := &jwt.RegisteredClaims{
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		ss, _ := token.SignedString(mySigningKey)
+		return ss
+	}
+	tests := []originTest{
+		{
+			//expFail: []string{"Bearer ", "Bearer: abc", "Baxonk hello there"},
+			expOk: []string{
+				fmt.Sprintf("Bearer %v", makeToken()),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
+			true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
+		url := fmt.Sprintf("ws://%v", srv.listenAddr())
+		for i, token := range tc.expOk {
+			if err := wsRequest(t, url, "Authorization", token); err != nil {
+				t.Errorf("test %d, token '%v': expected ok, got %v", i, token, err)
+			}
+		}
+		for i, token := range tc.expFail {
+			if err := wsRequest(t, url, "Authorization", token); err == nil {
+				t.Errorf("tc %d, token '%v': expected not to allow,  got ok", i, token)
+			}
+		}
+		srv.stop()
+	}
 }
