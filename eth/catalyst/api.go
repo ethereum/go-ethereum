@@ -183,7 +183,7 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 }
 
 func (api *ConsensusAPI) GetPayloadV1(payloadID PayloadID) (*ExecutableDataV1, error) {
-	log.Trace("GetPayload", "payloadID", payloadID)
+	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data, ok := api.preparedBlocks.Get(payloadID)
 	if !ok {
 		return nil, &UnknownPayload
@@ -192,7 +192,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID PayloadID) (*ExecutableDataV1, e
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAttributes *PayloadAttributesV1) (ForkChoiceResponse, error) {
-	log.Trace("ForkChoiceUpdatedV1", "head", heads.HeadBlockHash, "finalBH", heads.FinalizedBlockHash, "safeBH", heads.SafeBlockHash)
+	log.Trace("Engine API request received", "method", "ForkChoiceUpdated", "head", heads.HeadBlockHash, "finalized", heads.FinalizedBlockHash, "safe", heads.SafeBlockHash)
 	if heads.HeadBlockHash == (common.Hash{}) {
 		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: nil}, nil
 	}
@@ -248,7 +248,7 @@ func (api *ConsensusAPI) invalid() ExecutePayloadResponse {
 
 // ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePayloadResponse, error) {
-	log.Trace("ExecutePayloadV1", "hash", params.BlockHash, "number", params.Number)
+	log.Trace("Engine API request received", "method", "ExecutePayload", params.BlockHash, "number", params.Number)
 	block, err := ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
@@ -306,7 +306,7 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 	}
 
 	if params.Timestamp <= parent.Time() {
-		return nil, fmt.Errorf("child timestamp lower or equal to parent's: %d < %d", params.Timestamp, parent.Time())
+		return nil, fmt.Errorf("invalid timestamp: child's %d <= parent's %d", params.Timestamp, parent.Time())
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
 		diff := time.Duration(params.Timestamp-now) * time.Second
