@@ -206,7 +206,7 @@ func forGatherChildren(n node, onChild func(hash common.Hash)) {
 		onChild(common.BytesToHash(n))
 	case valueNode, nil, rawNode:
 	default:
-		panic(fmt.Sprintf("unknown 1 2 	node type: %T", n))
+		panic(fmt.Sprintf("unknown 1 2 	3node type: %T", n))
 	}
 }
 
