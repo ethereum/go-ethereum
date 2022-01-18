@@ -796,9 +796,9 @@ func (s *skeleton) revertRequest(req *headerRequest) {
 func (s *skeleton) processResponse(res *headerResponse) bool {
 	res.peer.log.Trace("Processing header response", "head", res.headers[0].Number, "hash", res.headers[0].Hash(), "count", len(res.headers))
 
-	// Whether or not the response is valid, we can mark the peer as idle and
-	// notify the scheduler to assign a new task. If the response is invalid,
-	// we'll drop the peer in a bit.
+	// Whether the response is valid, we can mark the peer as idle and notify
+	// the scheduler to assign a new task. If the response is invalid, we'll
+	// drop the peer in a bit.
 	s.idles[res.peer.id] = res.peer
 
 	// Ensure the response is for a valid request
@@ -910,7 +910,7 @@ func (s *skeleton) processResponse(res *headerResponse) bool {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton headers and progress", "err", err)
 	}
-	// Print a progress report to make the UX a bit nicer
+	// Print a progress report making the UX a bit nicer
 	left := s.progress.Subchains[0].Tail - 1
 	if time.Since(s.logged) > 8*time.Second || left == 0 {
 		s.logged = time.Now()
