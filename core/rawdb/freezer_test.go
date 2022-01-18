@@ -253,6 +253,44 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	}
 }
 
+func TestFreezerReadonlyValidate(t *testing.T) {
+	tables := map[string]bool{"a": true, "b": true}
+	dir, err := ioutil.TempDir("", "freezer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	// Open non-readonly freezer and fill individual tables
+	// with different amount of data.
+	f, err := newFreezer(dir, "", false, 2049, tables)
+	if err != nil {
+		t.Fatal("can't open freezer", err)
+	}
+	var item = make([]byte, 1024)
+	aBatch := f.tables["a"].newBatch()
+	require.NoError(t, aBatch.AppendRaw(0, item))
+	require.NoError(t, aBatch.AppendRaw(1, item))
+	require.NoError(t, aBatch.AppendRaw(2, item))
+	require.NoError(t, aBatch.commit())
+	bBatch := f.tables["b"].newBatch()
+	require.NoError(t, bBatch.AppendRaw(0, item))
+	require.NoError(t, bBatch.commit())
+	if f.tables["a"].items != 3 {
+		t.Fatalf("unexpected number of items in table")
+	}
+	if f.tables["b"].items != 1 {
+		t.Fatalf("unexpected number of items in table")
+	}
+	require.NoError(t, f.Close())
+
+	// Re-openening as readonly should fail when validating
+	// table lengths.
+	f, err = newFreezer(dir, "", true, 2049, tables)
+	if err == nil {
+		t.Fatal("readonly freezer should fail with differing table lengths")
+	}
+}
+
 func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
 	t.Helper()
 

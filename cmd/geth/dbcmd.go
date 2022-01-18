@@ -539,7 +539,7 @@ func freezerInspect(ctx *cli.Context) error {
 	defer stack.Close()
 	path := filepath.Join(stack.ResolvePath("chaindata"), "ancient")
 	log.Info("Opening freezer", "location", path, "name", kind)
-	if f, err := rawdb.NewFreezerTable(path, kind, disableSnappy); err != nil {
+	if f, err := rawdb.NewFreezerTable(path, kind, disableSnappy, true); err != nil {
 		return err
 	} else {
 		f.DumpIndex(start, end)
