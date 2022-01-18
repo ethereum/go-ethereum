@@ -37,13 +37,13 @@ func FuzzCrossPairing(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G1 points
-	kpG1, cpG1, _, err := getG1Points(input)
+	kpG1, cpG1, blG1, err := getG1Points(input)
 	if err != nil {
 		return 0
 	}
 
 	// get random G2 points
-	kpG2, cpG2, _, err := getG2Points(input)
+	kpG2, cpG2, blG2, err := getG2Points(input)
 	if err != nil {
 		return 0
 	}
@@ -64,13 +64,18 @@ func FuzzCrossPairing(data []byte) int {
 		panic("pairing mismatch gnark / geth ")
 	}
 
+	_ = blG1
+	_ = blG2
 	/*
 		var b []byte
 		ctx := blst.PairingCtx(false, b)
 		// compute pairing using blst
 		blst.PairingRawAggregate(ctx, blG2, blG1)
-		blst.PairingFinalVerify(ctx)
-		if err */
+		blstResult := blst.PairingAsFp12(ctx)
+		if !(bytes.Equal(blstResult, bls12381.NewGT().ToBytes(kResult))) {
+			panic("pairing mismatch blst / geth ")
+		}
+	*/
 
 	return 1
 }
