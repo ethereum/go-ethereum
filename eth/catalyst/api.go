@@ -228,15 +228,16 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAtt
 	return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) (out PayloadID) {
+func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) PayloadID {
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(headBlockHash[:])
 	binary.Write(hasher, binary.BigEndian, params.Timestamp)
 	hasher.Write(params.Random[:])
 	hasher.Write(params.SuggestedFeeRecipient[:])
+	var out PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
-	return
+	return out
 }
 
 func (api *ConsensusAPI) invalid() ExecutePayloadResponse {
