@@ -146,7 +146,8 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		return err
 	default:
-		return rlp.ErrExpectedList
+		// Expects the EIP-2718 transaction as default.
+		return rlp.ErrExpectedString
 	}
 }
 

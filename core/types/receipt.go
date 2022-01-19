@@ -201,7 +201,8 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		return ErrTxTypeNotSupported
 	default:
-		return rlp.ErrExpectedList
+		// Expects the EIP-2718 transaction as default.
+		return rlp.ErrExpectedString
 	}
 }
 
