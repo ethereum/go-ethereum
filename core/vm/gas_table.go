@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
@@ -408,13 +409,6 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		transfersValue = !stack.Back(2).IsZero()
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
-	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
-		// Charge witness costs
-		for i := trieUtils.VersionLeafKey; i <= trieUtils.CodeSizeLeafKey; i++ {
-			index := trieUtils.GetTreeKeyAccountLeaf(address[:], byte(i))
-			gas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
-		}
-	}
 
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
@@ -442,6 +436,20 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()[:]))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+		if transfersValue {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeValueTransfer(contract.Address().Bytes()[:], address.Bytes()[:]))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 
 	return gas, nil
 }
@@ -468,6 +476,15 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -484,6 +501,15 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -499,6 +525,15 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
+	}
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		address := common.Address(stack.Back(1).Bytes20())
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
 	}
 	return gas, nil
 }
@@ -518,6 +553,12 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		} else if !evm.StateDB.Exist(address) {
 			gas += params.CreateBySelfdestructGas
 		}
+	}
+
+	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		// TODO turn this into a panic (when we are sure this method
+		// will never execute when verkle is enabled)
+		log.Warn("verkle witness accumulation not supported for selfdestruct")
 	}
 
 	if !evm.StateDB.HasSuicided(contract.Address()) {

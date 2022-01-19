@@ -288,6 +288,24 @@ func (s *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
+func (s *StateDB) GetNonceLittleEndian(address common.Address) []byte {
+	var nonceBytes [8]byte
+	binary.LittleEndian.PutUint64(nonceBytes[:], s.GetNonce(address))
+	return nonceBytes[:]
+}
+
+func (s *StateDB) GetBalanceLittleEndian(address common.Address) []byte {
+	var paddedBalance [32]byte
+	balanceBytes := s.GetBalance(address).Bytes()
+	// swap to little-endian
+	for i, j := 0, len(balanceBytes)-1; i < j; i, j = i+1, j-1 {
+		balanceBytes[i], balanceBytes[j] = balanceBytes[j], balanceBytes[i]
+	}
+
+	copy(paddedBalance[:len(balanceBytes)], balanceBytes)
+	return paddedBalance[:len(balanceBytes)]
+}
+
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
@@ -486,20 +504,27 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if err := s.trie.TryUpdateAccount(addr[:], &obj.data); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 	}
-	if len(obj.code) > 0 && s.trie.IsVerkle() {
-		cs := make([]byte, 32)
-		binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
-		if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
-			s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
-		}
+	if s.trie.IsVerkle() {
+		if len(obj.code) > 0 {
+			cs := make([]byte, 32)
+			binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+			if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+			}
 
-		if obj.dirtyCode {
-			if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
-				for i := range chunks {
-					s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr[:], uint256.NewInt(uint64(i))), chunks[i][:])
+			if obj.dirtyCode {
+				if chunks, err := trie.ChunkifyCode(addr, obj.code); err == nil {
+					for i := range chunks {
+						s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunk(addr[:], uint256.NewInt(uint64(i))), chunks[i][:])
+					}
+				} else {
+					s.setError(err)
 				}
-			} else {
-				s.setError(err)
+			}
+		} else {
+			cs := []byte{0}
+			if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 			}
 		}
 	}

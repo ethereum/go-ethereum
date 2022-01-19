@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -261,6 +260,19 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
+}
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -305,25 +317,33 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
-		if msg.To() != nil {
-			toBalance := trieUtils.GetTreeKeyBalance(msg.To().Bytes())
-			pre := st.state.GetBalance(*msg.To())
-			gas += st.evm.Accesses.TouchAddressAndChargeGas(toBalance, pre.Bytes())
+		var targetBalance, targetNonce, targetCodeSize, targetCodeKeccak, originBalance, originNonce []byte
 
-			// NOTE: Nonce also needs to be charged, because it is needed for execution
-			// on the statless side.
-			var preTN [8]byte
-			fromNonce := trieUtils.GetTreeKeyNonce(msg.To().Bytes())
-			binary.BigEndian.PutUint64(preTN[:], st.state.GetNonce(*msg.To()))
-			gas += st.evm.Accesses.TouchAddressAndChargeGas(fromNonce, preTN[:])
+		targetAddr := msg.To()
+		originAddr := msg.From()
+
+		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndChargeGas(originAddr.Bytes())
+		if !tryConsumeGas(&st.gas, statelessGasOrigin) {
+			return nil, fmt.Errorf("insufficient gas to cover witness access costs")
 		}
-		fromBalance := trieUtils.GetTreeKeyBalance(msg.From().Bytes())
-		preFB := st.state.GetBalance(msg.From()).Bytes()
-		fromNonce := trieUtils.GetTreeKeyNonce(msg.From().Bytes())
-		var preFN [8]byte
-		binary.BigEndian.PutUint64(preFN[:], st.state.GetNonce(msg.From()))
-		gas += st.evm.Accesses.TouchAddressAndChargeGas(fromNonce, preFN[:])
-		gas += st.evm.Accesses.TouchAddressAndChargeGas(fromBalance, preFB[:])
+		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
+		originNonce = st.evm.StateDB.GetNonceLittleEndian(originAddr)
+		st.evm.Accesses.SetTxTouchedLeaves(originAddr.Bytes(), originBalance, originNonce)
+
+		if msg.To() != nil {
+			statelessGasDest := st.evm.Accesses.TouchTxExistingAndChargeGas(targetAddr.Bytes())
+			if !tryConsumeGas(&st.gas, statelessGasDest) {
+				return nil, fmt.Errorf("insufficient gas to cover witness access costs")
+			}
+			targetBalance = st.evm.StateDB.GetBalanceLittleEndian(*targetAddr)
+			targetNonce = st.evm.StateDB.GetNonceLittleEndian(*targetAddr)
+			targetCodeKeccak = st.evm.StateDB.GetCodeHash(*targetAddr).Bytes()
+
+			codeSize := uint64(st.evm.StateDB.GetCodeSize(*targetAddr))
+			var codeSizeBytes [32]byte
+			binary.LittleEndian.PutUint64(codeSizeBytes[:8], codeSize)
+			st.evm.Accesses.SetTxExistingTouchedLeaves(targetAddr.Bytes(), targetBalance, targetNonce, targetCodeSize, targetCodeKeccak)
+		}
 	}
 	st.gas -= gas
 

@@ -19,6 +19,7 @@ package types
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 // AccessWitness lists the locations of the state that are being accessed
@@ -43,6 +44,125 @@ func NewAccessWitness() *AccessWitness {
 		Chunks:    make(map[common.Hash][]byte),
 		Undefined: make(map[common.Hash]struct{}),
 	}
+}
+
+// TODO TouchAndCharge + SetLeafValue* does redundant calls to GetTreeKey*
+
+func (aw *AccessWitness) TouchAndChargeProofOfAbsence(addr []byte) uint64 {
+	var gas uint64
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeSize(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeKeccak(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(addr[:]), nil)
+	return gas
+}
+
+func (aw *AccessWitness) TouchAndChargeMessageCall(addr []byte) uint64 {
+	var gas uint64
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeSize(addr[:]), nil)
+	return gas
+}
+
+func (aw *AccessWitness) SetLeafValuesMessageCall(addr, codeSize []byte) {
+	var data [32]byte
+	aw.TouchAddress(utils.GetTreeKeyVersion(addr[:]), data[:])
+	aw.TouchAddress(utils.GetTreeKeyCodeSize(addr[:]), codeSize[:])
+}
+
+func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []byte) uint64 {
+	var gas uint64
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(callerAddr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(targetAddr[:]), nil)
+	return gas
+}
+
+func (aw *AccessWitness) SetLeafValuesValueTransfer(callerAddr, targetAddr, callerBalance, targetBalance []byte) {
+	aw.TouchAddress(utils.GetTreeKeyBalance(callerAddr[:]), callerBalance)
+	aw.TouchAddress(utils.GetTreeKeyBalance(targetAddr[:]), targetBalance)
+}
+
+// TouchAndChargeContractCreateInit charges access costs to initiate
+// a contract creation
+func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte) uint64 {
+	var gas uint64
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(addr[:]), nil)
+	return gas
+}
+
+func (aw *AccessWitness) SetLeafValuesContractCreateInit(addr, nonce []byte) {
+	var version [32]byte
+	aw.TouchAddress(utils.GetTreeKeyVersion(addr[:]), version[:])
+	aw.TouchAddress(utils.GetTreeKeyNonce(addr[:]), nonce)
+}
+
+// TouchAndChargeContractCreateCompleted charges access access costs after
+// the completion of a contract creation to populate the created account in
+// the tree
+func (aw *AccessWitness) TouchAndChargeContractCreateCompleted(addr []byte, withValue bool) uint64 {
+	var gas uint64
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(addr[:]), nil)
+	if withValue {
+		gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(addr[:]), nil)
+	}
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeSize(addr[:]), nil)
+	gas += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeKeccak(addr[:]), nil)
+	return gas
+}
+
+func (aw *AccessWitness) SetLeafValuesContractCreateCompleted(addr, codeSize, codeKeccak []byte) {
+	aw.TouchAddress(utils.GetTreeKeyCodeSize(addr[:]), codeSize)
+	aw.TouchAddress(utils.GetTreeKeyCodeKeccak(addr[:]), codeKeccak)
+}
+
+func (aw *AccessWitness) TouchTxAndChargeGas(originAddr, targetAddr []byte) uint64 {
+	var gasUsed uint64
+	var version [32]byte
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(originAddr[:]), version[:])
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(originAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(originAddr[:]), nil)
+
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(targetAddr[:]), version[:])
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeSize(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeKeccak(targetAddr[:]), nil)
+	return gasUsed
+}
+
+func (aw *AccessWitness) TouchTxOriginAndChargeGas(originAddr []byte) uint64 {
+	var gasUsed uint64
+	var version [32]byte
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(originAddr[:]), version[:])
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(originAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(originAddr[:]), nil)
+	return gasUsed
+}
+
+func (aw *AccessWitness) TouchTxExistingAndChargeGas(targetAddr []byte) uint64 {
+	var gasUsed uint64
+	var version [32]byte
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyVersion(targetAddr[:]), version[:])
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyBalance(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyNonce(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeSize(targetAddr[:]), nil)
+	gasUsed += aw.TouchAddressAndChargeGas(utils.GetTreeKeyCodeKeccak(targetAddr[:]), nil)
+	return gasUsed
+}
+
+func (aw *AccessWitness) SetTxTouchedLeaves(originAddr, originBalance, originNonce []byte) {
+	aw.TouchAddress(utils.GetTreeKeyBalance(originAddr[:]), originBalance)
+	aw.TouchAddress(utils.GetTreeKeyNonce(originAddr[:]), originNonce)
+}
+
+func (aw *AccessWitness) SetTxExistingTouchedLeaves(targetAddr, targetBalance, targetNonce, targetCodeSize, targetCodeHash []byte) {
+	aw.TouchAddress(utils.GetTreeKeyBalance(targetAddr[:]), targetBalance)
+	aw.TouchAddress(utils.GetTreeKeyNonce(targetAddr[:]), targetNonce)
+	aw.TouchAddress(utils.GetTreeKeyCodeSize(targetAddr[:]), targetCodeSize)
+	aw.TouchAddress(utils.GetTreeKeyCodeKeccak(targetAddr[:]), targetCodeHash)
 }
 
 // TouchAddress adds any missing addr to the witness and returns respectively
