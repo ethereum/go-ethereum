@@ -1067,3 +1067,43 @@ func nonRandomTrie(n int) (*Trie, map[string]*kv) {
 	}
 	return trie, vals
 }
+
+func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
+	// TODO: test fails if 1st key/value pair is omitted.
+	keys := [][]byte{
+		common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("aa10000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("aa20000000000000000000000000000000000000000000000000000000000000"),
+	}
+	vals := [][]byte{
+		common.Hex2Bytes("01"),
+		common.Hex2Bytes("02"),
+		common.Hex2Bytes("03"),
+	}
+	db := memorydb.New()
+	tr, err := New(common.Hash{}, NewDatabase(db))
+	if err != nil {
+		t.Fatalf("could not create new trie: %v", err)
+	}
+	for i, key := range keys {
+		tr.Update(key, vals[i])
+	}
+	root := tr.Hash()
+	proof := memorydb.New()
+	start := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	end := common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	if err := tr.Prove(start, 0, proof); err != nil {
+		t.Fatalf("failed to prove start: %v", err)
+	}
+	if err := tr.Prove(end, 0, proof); err != nil {
+		t.Fatalf("failed to prove end: %v", err)
+	}
+
+	more, err := VerifyRangeProof(root, start, end, keys, vals, proof)
+	if err != nil {
+		t.Fatalf("failed to verify range proof: %v", err)
+	}
+	if more != false {
+		t.Error("expected more to be false")
+	}
+}
