@@ -25,8 +25,6 @@ import (
 	"math/big"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -88,8 +86,7 @@ type ConsensusAPI struct {
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
 	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	preparedBlocks *lru.Cache       // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
-
+	preparedBlocks *payloadQueue    // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
 }
 
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
@@ -113,16 +110,13 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 			engine = beacon.New(eth.Engine())
 		}
 	}
-	preparedBlocks, _ := lru.NewWithEvict(preparedPayloadsCacheSize, func(key, value interface{}) {
-		log.Trace("evicted payload from preparedBlocks", "payloadID", key.(PayloadID),
-			"blockhash", value.(*ExecutableDataV1).BlockHash)
-	}) // positive cache size, no error
+
 	return &ConsensusAPI{
 		light:          eth == nil,
 		eth:            eth,
 		les:            les,
 		engine:         engine,
-		preparedBlocks: preparedBlocks,
+		preparedBlocks: newPayloadQueue(),
 	}
 }
 
@@ -184,11 +178,11 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 
 func (api *ConsensusAPI) GetPayloadV1(payloadID PayloadID) (*ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data, ok := api.preparedBlocks.Get(payloadID)
-	if !ok {
+	data := api.preparedBlocks.get(payloadID)
+	if data == nil {
 		return nil, &UnknownPayload
 	}
-	return data.(*ExecutableDataV1), nil
+	return data, nil
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAttributes *PayloadAttributesV1) (ForkChoiceResponse, error) {
@@ -221,7 +215,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAtt
 			return INVALID, err
 		}
 		id := computePayloadId(heads.HeadBlockHash, PayloadAttributes)
-		api.preparedBlocks.Add(id, data)
+		api.preparedBlocks.put(id, data)
 		log.Info("Created payload", "payloadID", id)
 		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: &id}, nil
 	}

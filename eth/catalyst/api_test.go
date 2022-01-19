@@ -165,6 +165,14 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	if len(execData.Transactions) != blocks[9].Transactions().Len() {
 		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
 	}
+	// Test invalid payloadID
+	var invPayload PayloadID
+	copy(invPayload[:], payloadID[:])
+	invPayload[0] = ^invPayload[0]
+	_, err = api.GetPayloadV1(invPayload)
+	if err == nil {
+		t.Fatal("expected error retrieving invalid payload")
+	}
 }
 
 func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan core.RemovedLogsEvent, wantNew, wantRemoved int) {
