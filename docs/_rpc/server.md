@@ -85,5 +85,5 @@ On Windows, IPC is provided via named pipes. The default location of the geth pi
 You can configure the location of the socket using the `--ipcpath` flag. IPC can
 be disabled using the `--ipcdisable` flag.
 
-[web3-rpc]: https://github.com/ethereum/wiki/wiki/JSON-RPC
+[web3-rpc]: https://github.com/ethereum/execution-apis
 [remix]: https://remix.ethereum.org
