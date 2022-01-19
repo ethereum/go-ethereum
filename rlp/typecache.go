@@ -42,7 +42,7 @@ type typekey struct {
 
 type decoder func(*Stream, reflect.Value) error
 
-type writer func(reflect.Value, *encbuf) error
+type writer func(reflect.Value, *encBuffer) error
 
 var theTC = newTypeCache()
 
@@ -237,8 +237,4 @@ func isUint(k reflect.Kind) bool {
 
 func isByte(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
-}
-
-func isByteArray(typ reflect.Type) bool {
-	return (typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array) && isByte(typ.Elem())
 }
