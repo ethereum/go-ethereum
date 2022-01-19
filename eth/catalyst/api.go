@@ -147,7 +147,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, payloadAtt
 		return INVALID, err
 	}
 	// Assemble block (if needed). It only works for full node.
-	if payloadAttributes != nil {
+	if !api.light && payloadAttributes != nil {
 		data, err := api.assembleBlock(heads.HeadBlockHash, payloadAttributes)
 		if err != nil {
 			return INVALID, err
@@ -198,9 +198,6 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 			return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 		}
 		parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
-		if parent == nil {
-			return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
-		}
 		td := api.les.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 		ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
 		if td.Cmp(ttd) < 0 {
@@ -225,9 +222,6 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 		return ExecutePayloadResponse{Status: SYNCING.Status, LatestValidHash: common.Hash{}}, nil
 	}
 	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
-	if parent == nil {
-		return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
-	}
 	td := api.eth.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if td.Cmp(ttd) < 0 {

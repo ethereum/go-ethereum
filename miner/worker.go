@@ -1055,7 +1055,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
+func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
@@ -1069,16 +1069,15 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
 		if w.commitTransactions(env, txs, interrupt) {
-			return nil
+			return
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
 		if w.commitTransactions(env, txs, interrupt) {
-			return nil
+			return
 		}
 	}
-	return nil
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -1089,9 +1088,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	if err := w.fillTransactions(nil, work); err != nil {
-		return nil, err
-	}
+	w.fillTransactions(nil, work)
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
@@ -1122,9 +1119,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		w.commit(work.copy(), nil, false, start)
 	}
 	// Fill pending transactions from the txpool
-	if err := w.fillTransactions(interrupt, work); err != nil {
-		return
-	}
+	w.fillTransactions(interrupt, work)
 	w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
