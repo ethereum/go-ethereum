@@ -54,27 +54,21 @@ collections:
     caption: JSON RPC APIs
     frontpage: _rpc/server.md
     sidebar_index: 5
-  graphql:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: GraphQL API
-    frontpage: _graphql/server.md
-    sidebar_index: 6
   developers:
     output: true
     permalink: docs/:collection/:slug
     caption: For Geth Developers
     frontpage: _developers/devguide.md
-    sidebar_index: 7
+    sidebar_index: 6
   clef:
     output: true
     permalink: docs/:collection/:slug
     caption: Clef
-    sidebar_index: 8
+    sidebar_index: 7
     frontpage: _clef/Tutorial.md
   vulnerabilities:
     output: true
     permalink: docs/:collection/:slug
     caption: Vulnerabilities
-    sidebar_index: 9
+    sidebar_index: 8
     frontpage: _vulnerabilies/vulnerabilities.md
