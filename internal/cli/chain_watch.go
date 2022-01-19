@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server/proto"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 )
 
 // ChainWatchCommand is the command to group the peers commands
