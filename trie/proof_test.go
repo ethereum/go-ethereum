@@ -1080,22 +1080,18 @@ func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
 		common.Hex2Bytes("02"),
 		common.Hex2Bytes("03"),
 	}
-	db := memorydb.New()
-	tr, err := New(common.Hash{}, NewDatabase(db))
-	if err != nil {
-		t.Fatalf("could not create new trie: %v", err)
-	}
+	trie := new(Trie)
 	for i, key := range keys {
-		tr.Update(key, vals[i])
+		trie.Update(key, vals[i])
 	}
-	root := tr.Hash()
+	root := trie.Hash()
 	proof := memorydb.New()
 	start := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
 	end := common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-	if err := tr.Prove(start, 0, proof); err != nil {
+	if err := trie.Prove(start, 0, proof); err != nil {
 		t.Fatalf("failed to prove start: %v", err)
 	}
-	if err := tr.Prove(end, 0, proof); err != nil {
+	if err := trie.Prove(end, 0, proof); err != nil {
 		t.Fatalf("failed to prove end: %v", err)
 	}
 
