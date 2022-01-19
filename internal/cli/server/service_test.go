@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/ethereum/go-ethereum/command/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
 func (c *Command) Flags() *flagset.Flagset {

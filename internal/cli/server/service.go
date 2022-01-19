@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/command/server/pprof"
-	"github.com/ethereum/go-ethereum/command/server/proto"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/cli/server/pprof"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	gproto "github.com/golang/protobuf/proto"

@@ -1,4 +1,4 @@
-package main
+package cli
 
 // Based on https://github.com/hashicorp/nomad/blob/main/command/operator_debug.go
 
@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/golang/protobuf/jsonpb"
 	gproto "github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
