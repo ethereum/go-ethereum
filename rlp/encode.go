@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"reflect"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 )
 
 var (
@@ -323,7 +325,7 @@ func (r *encReader) next() []byte {
 var encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
 
 // makeWriter creates a writer function for the given type.
-func makeWriter(typ reflect.Type, ts tags) (writer, error) {
+func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 	kind := typ.Kind()
 	switch {
 	case typ == rawValueType:
@@ -492,14 +494,14 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 	return writer(eval, w)
 }
 
-func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
-	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), tags{})
+func makeSliceWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
+	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), rlpstruct.Tags{})
 	if etypeinfo.writerErr != nil {
 		return nil, etypeinfo.writerErr
 	}
 
 	var wfn writer
-	if ts.tail {
+	if ts.Tail {
 		// This is for struct tail slices.
 		// w.list is not called for them.
 		wfn = func(val reflect.Value, w *encbuf) error {
@@ -580,31 +582,16 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 	return writer, nil
 }
 
-// nilEncoding returns the encoded value of a nil pointer.
-func nilEncoding(typ reflect.Type, ts tags) uint8 {
-	var nilKind Kind
-	if ts.nilOK {
-		nilKind = ts.nilKind // use struct tag if provided
-	} else {
-		nilKind = defaultNilKind(typ.Elem())
-	}
-
-	switch nilKind {
-	case String:
-		return 0x80
-	case List:
-		return 0xC0
-	default:
-		panic(fmt.Errorf("rlp: invalid nil kind %d", nilKind))
-	}
-}
-
-func makePtrWriter(typ reflect.Type, ts tags) (writer, error) {
-	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), tags{})
+func makePtrWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
+	etypeinfo := theTC.infoWhileGenerating(typ.Elem(), rlpstruct.Tags{})
 	if etypeinfo.writerErr != nil {
 		return nil, etypeinfo.writerErr
 	}
-	nilEncoding := nilEncoding(typ, ts)
+
+	nilEncoding := byte(0xC0)
+	if typeNilKind(typ, ts) == String {
+		nilEncoding = 0x80
+	}
 
 	writer := func(val reflect.Value, w *encbuf) error {
 		if ev := val.Elem(); ev.IsValid() {

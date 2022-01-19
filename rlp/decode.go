@@ -27,6 +27,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 )
 
 //lint:ignore ST1012 EOL is not an error.
@@ -148,7 +150,7 @@ var (
 	bigInt           = reflect.TypeOf(big.Int{})
 )
 
-func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
+func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error) {
 	kind := typ.Kind()
 	switch {
 	case typ == rawValueType:
@@ -268,7 +270,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
+func makeListDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
@@ -276,7 +278,7 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		}
 		return decodeByteSlice, nil
 	}
-	etypeinfo := theTC.infoWhileGenerating(etype, tags{})
+	etypeinfo := theTC.infoWhileGenerating(etype, rlpstruct.Tags{})
 	if etypeinfo.decoderErr != nil {
 		return nil, etypeinfo.decoderErr
 	}
@@ -286,7 +288,7 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
 		}
-	case tag.tail:
+	case tag.Tail:
 		// A slice with "tail" tag can occur as the last field
 		// of a struct and is supposed to swallow all remaining
 		// list elements. The struct decoder already called s.List,
@@ -451,16 +453,16 @@ func zeroFields(structval reflect.Value, fields []field) {
 }
 
 // makePtrDecoder creates a decoder that decodes into the pointer's element type.
-func makePtrDecoder(typ reflect.Type, tag tags) (decoder, error) {
+func makePtrDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
-	etypeinfo := theTC.infoWhileGenerating(etype, tags{})
+	etypeinfo := theTC.infoWhileGenerating(etype, rlpstruct.Tags{})
 	switch {
 	case etypeinfo.decoderErr != nil:
 		return nil, etypeinfo.decoderErr
-	case !tag.nilOK:
+	case !tag.NilOK:
 		return makeSimplePtrDecoder(etype, etypeinfo), nil
 	default:
-		return makeNilPtrDecoder(etype, etypeinfo, tag.nilKind), nil
+		return makeNilPtrDecoder(etype, etypeinfo, tag), nil
 	}
 }
 
@@ -481,9 +483,13 @@ func makeSimplePtrDecoder(etype reflect.Type, etypeinfo *typeinfo) decoder {
 // values are decoded into a value of the element type, just like makePtrDecoder does.
 //
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
-func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, nilKind Kind) decoder {
+func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, ts rlpstruct.Tags) decoder {
 	typ := reflect.PtrTo(etype)
 	nilPtr := reflect.Zero(typ)
+
+	// Determine the value kind that results in nil pointer.
+	nilKind := typeNilKind(etype, ts)
+
 	return func(s *Stream, val reflect.Value) (err error) {
 		kind, size, err := s.Kind()
 		if err != nil {
