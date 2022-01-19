@@ -28,6 +28,13 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+const (
+	// timeout waiting for M1
+	waitPeriod = 10
+	// timeout for checkpoint.
+	waitPeriodCheckpoint = 20
+)
+
 // XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS_v1 struct {
@@ -383,8 +390,41 @@ func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.
 	}
 	return m, nil
 }
+func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
+	len, preIndex, curIndex, ok, err := x.yourTurn(chain, parent, signer)
 
-func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
+	if err != nil {
+		log.Warn("Failed when trying to commit new work", "err", err)
+		return false, err
+	}
+	if !ok {
+		// in case some nodes are down
+		if preIndex == -1 {
+			// first block
+			return false, nil
+		}
+		if curIndex == -1 {
+			// you're not allowed to create this block
+			return false, nil
+		}
+		h := utils.Hop(len, preIndex, curIndex)
+		gap := waitPeriod * int64(h)
+		// Check nearest checkpoint block in hop range.
+		nearest := x.config.Epoch - (parent.Number.Uint64() % x.config.Epoch)
+		if uint64(h) >= nearest {
+			gap = waitPeriodCheckpoint * int64(h)
+		}
+		log.Info("Distance from the parent block", "seconds", gap, "hops", h)
+		waitedTime := time.Now().Unix() - parent.Time.Int64()
+		if gap > waitedTime {
+			return false, nil
+		}
+		log.Info("Wait enough. It's my turn", "waited seconds", waitedTime)
+	}
+	return true, nil
+}
+
+func (x *XDPoS_v1) yourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	masternodes := x.GetMasternodes(chain, parent)
 
 	// if common.IsTestnet {
@@ -896,7 +936,7 @@ func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 	if x.config.SkipValidation {
 		return big.NewInt(1)
 	}
-	len, preIndex, curIndex, _, err := x.YourTurn(chain, parent, signer)
+	len, preIndex, curIndex, _, err := x.yourTurn(chain, parent, signer)
 	if err != nil {
 		return big.NewInt(int64(len + curIndex - preIndex))
 	}

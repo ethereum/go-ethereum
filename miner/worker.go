@@ -34,7 +34,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -528,40 +527,16 @@ func (self *worker) commitNewWork() {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		// only go with XDPoS
 		if self.config.XDPoS != nil {
-			// get masternodes set from latest checkpoint
-			// TODO: refactor on yourturn with below condition for v1 v2
 			c := self.engine.(*XDPoS.XDPoS)
-			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
+			ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return
 			}
 			if !ok {
 				log.Info("Not my turn to commit block. Waiting...")
-				// in case some nodes are down
-				if preIndex == -1 {
-					// first block
-					return
-				}
-				if curIndex == -1 {
-					// you're not allowed to create this block
-					return
-				}
-				h := utils.Hop(len, preIndex, curIndex)
-				gap := waitPeriod * int64(h)
-				// Check nearest checkpoint block in hop range.
-				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
-				if uint64(h) >= nearest {
-					gap = waitPeriodCheckpoint * int64(h)
-				}
-				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
-				waitedTime := time.Now().Unix() - parent.Header().Time.Int64()
-				if gap > waitedTime {
-					return
-				}
-				log.Info("Wait enough. It's my turn", "waited seconds", waitedTime)
+				return
 			}
 		}
 	}

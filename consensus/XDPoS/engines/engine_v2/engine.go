@@ -321,7 +321,7 @@ func (x *XDPoS_v2) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 }
 
 // Check if it's my turm to mine a block. Note: The second return value `preIndex` is useless in V2 engine
-func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
+func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
 	x.lock.RLock()
 	defer x.lock.RUnlock()
 
@@ -329,7 +329,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	isEpochSwitch, _, err := x.IsEpochSwitchAtRound(round, parent)
 	if err != nil {
 		log.Error("[YourTurn]", "Error", err)
-		return 0, -1, -1, false, err
+		return false, err
 	}
 	var masterNodes []common.Address
 	if isEpochSwitch {
@@ -346,7 +346,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 
 	if len(masterNodes) == 0 {
 		log.Error("[YourTurn] Fail to find any master nodes from current block round epoch", "Hash", parent.Hash(), "CurrentRound", round, "Number", parent.Number)
-		return 0, -1, -1, false, errors.New("Masternodes not found")
+		return false, errors.New("Masternodes not found")
 	}
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 
@@ -359,10 +359,10 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	}
 
 	if masterNodes[leaderIndex] == signer {
-		return len(masterNodes), -1, curIndex, true, nil
+		return true, nil
 	}
 	log.Warn("[YourTurn] Not authorised signer", "signer", signer, "MN", masterNodes, "Hash", parent.Hash(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
-	return len(masterNodes), -1, curIndex, false, nil
+	return false, nil
 }
 
 func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {

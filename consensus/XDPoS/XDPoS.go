@@ -277,7 +277,7 @@ func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber 
 	}
 }
 
-func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
+func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
 	switch x.config.BlockConsensusVersion(parent.Number) {
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.YourTurn(chain, parent, signer)
