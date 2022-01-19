@@ -1,12 +1,12 @@
-package main
+package cli
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 )
 
 // PeersListCommand is the command to group the peers commands

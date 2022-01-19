@@ -1,4 +1,4 @@
-package main
+package cli
 
 import "github.com/mitchellh/cli"
 
