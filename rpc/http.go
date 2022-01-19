@@ -39,6 +39,16 @@ const (
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
+type headerStrings string
+
+const (
+	remoteKey    = headerStrings("remote")
+	hostKey      = headerStrings("local")
+	userAgentKey = headerStrings("User-Agent")
+	originKey    = headerStrings("origin")
+	schemeKey    = headerStrings("scheme")
+)
+
 type httpConn struct {
 	client    *http.Client
 	url       string
@@ -240,14 +250,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
-	ctx = context.WithValue(ctx, "scheme", r.Proto)
-	ctx = context.WithValue(ctx, "local", r.Host)
+	ctx = context.WithValue(ctx, remoteKey, r.RemoteAddr)
+	ctx = context.WithValue(ctx, schemeKey, r.Proto)
+	ctx = context.WithValue(ctx, hostKey, r.Host)
 	if ua := r.Header.Get("User-Agent"); ua != "" {
-		ctx = context.WithValue(ctx, "User-Agent", ua)
+		ctx = context.WithValue(ctx, userAgentKey, ua)
 	}
 	if origin := r.Header.Get("Origin"); origin != "" {
-		ctx = context.WithValue(ctx, "Origin", origin)
+		ctx = context.WithValue(ctx, originKey, origin)
 	}
 
 	w.Header().Set("content-type", contentType)
