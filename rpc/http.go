@@ -48,9 +48,16 @@ type httpConn struct {
 	headers   http.Header
 }
 
-// httpConn is treated specially by Client.
+// httpConn implements ServerCodec, but it is treated specially by Client
+// and some methods don't work. The panic() stubs here exist to ensure
+// this special treatment is correct.
+
 func (hc *httpConn) writeJSON(context.Context, interface{}) error {
 	panic("writeJSON called on httpConn")
+}
+
+func (hc *httpConn) peerInfo() PeerInfo {
+	panic("peerInfo called on httpConn")
 }
 
 func (hc *httpConn) remoteAddr() string {
@@ -236,20 +243,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
+
+	// Create request-scoped context.
+	connInfo := PeerInfo{Transport: "http", RemoteAddr: r.RemoteAddr}
+	connInfo.HTTP.Version = r.Proto
+	connInfo.HTTP.Host = r.Host
+	connInfo.HTTP.Origin = r.Header.Get("Origin")
+	connInfo.HTTP.UserAgent = r.Header.Get("User-Agent")
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, peerInfoContextKey{}, connInfo)
+
 	// All checks passed, create a codec that reads directly from the request body
 	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
-	ctx := r.Context()
-	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
-	ctx = context.WithValue(ctx, "scheme", r.Proto)
-	ctx = context.WithValue(ctx, "local", r.Host)
-	if ua := r.Header.Get("User-Agent"); ua != "" {
-		ctx = context.WithValue(ctx, "User-Agent", ua)
-	}
-	if origin := r.Header.Get("Origin"); origin != "" {
-		ctx = context.WithValue(ctx, "Origin", origin)
-	}
-
 	w.Header().Set("content-type", contentType)
 	codec := newHTTPServerConn(r, w)
 	defer codec.close()
