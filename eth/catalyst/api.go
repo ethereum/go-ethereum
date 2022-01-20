@@ -51,8 +51,6 @@ var (
 	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
 )
 
-const preparedPayloadsCacheSize = 10
-
 // Register adds catalyst APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "eth")
@@ -241,7 +239,7 @@ func (api *ConsensusAPI) invalid() ExecutePayloadResponse {
 	return ExecutePayloadResponse{Status: INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
 }
 
-// ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+// ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePayloadResponse, error) {
 	log.Trace("Engine API request received", "method", "ExecutePayload", params.BlockHash, "number", params.Number)
 	block, err := ExecutableDataToBlock(params)
@@ -274,7 +272,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 	if td.Cmp(ttd) < 0 {
 		return api.invalid(), fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
-	log.Trace("InsertingBlockWithoutSetHead", "hash", block.Hash(), "number", block.Number)
+	log.Trace("Inserting block without head", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		return api.invalid(), err
 	}
