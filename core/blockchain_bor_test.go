@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -30,6 +31,9 @@ func TestChain2HeadEvent(t *testing.T) {
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 
+	chain2HeadCh := make(chan Chain2HeadEvent, 64)
+	blockchain.SubscribeChain2HeadEvent(chain2HeadCh)
+
 	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 3, func(i int, gen *BlockGen) {})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
@@ -45,11 +49,41 @@ func TestChain2HeadEvent(t *testing.T) {
 		}
 		gen.AddTx(tx)
 	})
-	chain2HeadCh := make(chan Chain2HeadEvent, 64)
-	blockchain.SubscribeChain2HeadEvent(chain2HeadCh)
 	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
+
+	readEvent := func() *Chain2HeadEvent {
+		select {
+		case evnt := <-chain2HeadCh:
+			return &evnt
+		case <-time.After(2 * time.Second):
+			t.Fatal("timeout")
+		}
+		return nil
+	}
+
+	// head event
+	evnt := readEvent()
+	fmt.Println(evnt.Type)
+
+	// fork event
+	evnt = readEvent()
+	fmt.Println(evnt.Type)
+
+	// fork event
+	evnt = readEvent()
+	fmt.Println(evnt.Type)
+
+	// reorg event
+	evnt = readEvent()
+	fmt.Println(evnt.Type)
+
+	// head event
+	evnt = readEvent()
+	fmt.Println(evnt.Type)
+
+	return
 
 	// first two block of the secondary chain are for a brief moment considered
 	// side chains because up to that point the first one is considered the
