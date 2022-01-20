@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -50,7 +49,6 @@ var (
 	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
 	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
 	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
-	InvalidPayloadID   = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
 )
 
 // Register adds catalyst APIs to the full node.
@@ -86,7 +84,7 @@ type ConsensusAPI struct {
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
 	engine         consensus.Engine // engine is the post-merge consensus engine, only for block creation
-	preparedBlocks map[uint64]*ExecutableDataV1
+	preparedBlocks *payloadQueue    // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
 }
 
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
@@ -110,12 +108,13 @@ func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
 			engine = beacon.New(eth.Engine())
 		}
 	}
+
 	return &ConsensusAPI{
 		light:          eth == nil,
 		eth:            eth,
 		les:            les,
 		engine:         engine,
-		preparedBlocks: make(map[uint64]*ExecutableDataV1),
+		preparedBlocks: newPayloadQueue(),
 	}
 }
 
@@ -175,20 +174,17 @@ func (api *ConsensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 	return env, nil
 }
 
-func (api *ConsensusAPI) GetPayloadV1(payloadID hexutil.Bytes) (*ExecutableDataV1, error) {
-	hash := []byte(payloadID)
-	if len(hash) < 8 {
-		return nil, &InvalidPayloadID
-	}
-	id := binary.BigEndian.Uint64(hash[:8])
-	data, ok := api.preparedBlocks[id]
-	if !ok {
+func (api *ConsensusAPI) GetPayloadV1(payloadID PayloadID) (*ExecutableDataV1, error) {
+	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
+	data := api.preparedBlocks.get(payloadID)
+	if data == nil {
 		return nil, &UnknownPayload
 	}
 	return data, nil
 }
 
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAttributes *PayloadAttributesV1) (ForkChoiceResponse, error) {
+	log.Trace("Engine API request received", "method", "ForkChoiceUpdated", "head", heads.HeadBlockHash, "finalized", heads.FinalizedBlockHash, "safe", heads.SafeBlockHash)
 	if heads.HeadBlockHash == (common.Hash{}) {
 		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: nil}, nil
 	}
@@ -216,25 +212,24 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads ForkchoiceStateV1, PayloadAtt
 		if err != nil {
 			return INVALID, err
 		}
-		hash := computePayloadId(heads.HeadBlockHash, PayloadAttributes)
-		id := binary.BigEndian.Uint64(hash)
-		api.preparedBlocks[id] = data
-		log.Info("Created payload", "payloadid", id)
-		// TODO (MariusVanDerWijden) do something with the payloadID?
-		hex := hexutil.Bytes(hash)
-		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: &hex}, nil
+		id := computePayloadId(heads.HeadBlockHash, PayloadAttributes)
+		api.preparedBlocks.put(id, data)
+		log.Info("Created payload", "payloadID", id)
+		return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: &id}, nil
 	}
 	return ForkChoiceResponse{Status: SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) []byte {
+func computePayloadId(headBlockHash common.Hash, params *PayloadAttributesV1) PayloadID {
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(headBlockHash[:])
 	binary.Write(hasher, binary.BigEndian, params.Timestamp)
 	hasher.Write(params.Random[:])
 	hasher.Write(params.SuggestedFeeRecipient[:])
-	return hasher.Sum([]byte{})[:8]
+	var out PayloadID
+	copy(out[:], hasher.Sum(nil)[:8])
+	return out
 }
 
 func (api *ConsensusAPI) invalid() ExecutePayloadResponse {
@@ -244,8 +239,9 @@ func (api *ConsensusAPI) invalid() ExecutePayloadResponse {
 	return ExecutePayloadResponse{Status: INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
 }
 
-// ExecutePayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+// ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePayloadResponse, error) {
+	log.Trace("Engine API request received", "method", "ExecutePayload", params.BlockHash, "number", params.Number)
 	block, err := ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
@@ -276,6 +272,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params ExecutableDataV1) (ExecutePaylo
 	if td.Cmp(ttd) < 0 {
 		return api.invalid(), fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
+	log.Trace("Inserting block without head", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		return api.invalid(), err
 	}
@@ -301,8 +298,8 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *PayloadAt
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", parentHash)
 	}
 
-	if params.Timestamp < parent.Time() {
-		return nil, fmt.Errorf("child timestamp lower than parent's: %d < %d", params.Timestamp, parent.Time())
+	if params.Timestamp <= parent.Time() {
+		return nil, fmt.Errorf("invalid timestamp: child's %d <= parent's %d", params.Timestamp, parent.Time())
 	}
 	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
 		diff := time.Duration(params.Timestamp-now) * time.Second

@@ -17,12 +17,12 @@
 package catalyst
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -158,12 +158,20 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
-	execData, err := api.GetPayloadV1(hexutil.Bytes(payloadID))
+	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
 	if len(execData.Transactions) != blocks[9].Transactions().Len() {
 		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	}
+	// Test invalid payloadID
+	var invPayload PayloadID
+	copy(invPayload[:], payloadID[:])
+	invPayload[0] = ^invPayload[0]
+	_, err = api.GetPayloadV1(invPayload)
+	if err == nil {
+		t.Fatal("expected error retrieving invalid payload")
 	}
 }
 
@@ -182,6 +190,48 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 	}
 	for i := 0; i < len(rmLogsCh); i++ {
 		<-rmLogsCh
+	}
+}
+
+func TestInvalidPayloadTimestamp(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+	var (
+		api    = NewConsensusAPI(ethservice, nil)
+		parent = ethservice.BlockChain().CurrentBlock()
+	)
+	tests := []struct {
+		time      uint64
+		shouldErr bool
+	}{
+		{0, true},
+		{parent.Time(), true},
+		{parent.Time() - 1, true},
+		{parent.Time() + 1, false},
+		{uint64(time.Now().Unix()) + uint64(time.Minute), false},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("Timestamp test: %v", i), func(t *testing.T) {
+			params := PayloadAttributesV1{
+				Timestamp:             test.time,
+				Random:                crypto.Keccak256Hash([]byte{byte(123)}),
+				SuggestedFeeRecipient: parent.Coinbase(),
+			}
+			fcState := ForkchoiceStateV1{
+				HeadBlockHash:      parent.Hash(),
+				SafeBlockHash:      common.Hash{},
+				FinalizedBlockHash: common.Hash{},
+			}
+			_, err := api.ForkchoiceUpdatedV1(fcState, &params)
+			if test.shouldErr && err == nil {
+				t.Fatalf("expected error preparing payload with invalid timestamp, err=%v", err)
+			} else if !test.shouldErr && err != nil {
+				t.Fatalf("error preparing payload with valid timestamp, err=%v", err)
+			}
+		})
 	}
 }
 
@@ -391,7 +441,7 @@ func TestFullAPI(t *testing.T) {
 			t.Fatalf("error preparing payload, invalid status: %v", resp.Status)
 		}
 		payloadID := computePayloadId(parent.Hash(), &params)
-		payload, err := api.GetPayloadV1(hexutil.Bytes(payloadID))
+		payload, err := api.GetPayloadV1(payloadID)
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
@@ -414,6 +464,5 @@ func TestFullAPI(t *testing.T) {
 			t.Fatalf("Chain head should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
-
 	}
 }
