@@ -382,7 +382,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
-	var taskCh = make(chan struct{})
+	var taskCh = make(chan struct{}, 3)
 
 	taskIndex := 0
 	w.newTaskHook = func(task *task) {
