@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
 )
@@ -180,33 +179,20 @@ type KeyValuePair struct {
 	Value []byte
 }
 
-type verkleproof struct {
-	Proof *verkle.Proof
-
-	Cis     []*verkle.Point
-	Indices []byte
-	Yis     []*verkle.Fr
-
-	Leaves []KeyValuePair
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]byte) ([]byte, error) {
+	proof, _, _, _ := verkle.MakeVerkleMultiProof(trie.root, keys)
+	return verkle.SerializeProof(proof)
 }
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]byte) ([]byte, error) {
-	proof, cis, indices, yis := verkle.MakeVerkleMultiProof(trie.root, keys)
-	vp := verkleproof{
-		Proof:   proof,
-		Cis:     cis,
-		Indices: indices,
-		Yis:     yis,
-	}
-	for key, val := range kv {
-		var k [32]byte
-		copy(k[:], key[:])
-		vp.Leaves = append(vp.Leaves, KeyValuePair{
-			Key:   k[:],
-			Value: val,
-		})
-	}
-	return rlp.EncodeToBytes(vp)
+type set = map[string]struct{}
+
+func hasKey(s set, key []byte) bool {
+	_, ok := s[string(key)]
+	return ok
+}
+
+func addKey(s set, key []byte) {
+	s[string(key)] = struct{}{}
 }
 
 func DeserializeAndVerifyVerkleProof(serialized []byte) (map[common.Hash]common.Hash, error) {
@@ -221,17 +207,89 @@ func DeserializeAndVerifyVerkleProof(serialized []byte) (map[common.Hash]common.
 	return leaves, nil
 }
 
-func deserializeVerkleProof(proof []byte) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, map[common.Hash]common.Hash, error) {
-	var vp verkleproof
-	err := rlp.DecodeBytes(proof, &vp)
+func deserializeVerkleProof(serialized []byte) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, map[common.Hash]common.Hash, error) {
+	var (
+		indices           []byte       // List of zis
+		yis               []*verkle.Fr // List of yis
+		seenIdx, seenComm set          // Mark when a zi/yi has already been seen in deserialization
+		others            set          // Mark when an "other" stem has been seen
+	)
+
+	proof, err := verkle.DeserializeProof(serialized)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
 	}
-	leaves := make(map[common.Hash]common.Hash, len(vp.Leaves))
-	for _, kvp := range vp.Leaves {
-		leaves[common.BytesToHash(kvp.Key)] = common.BytesToHash(kvp.Value)
+
+	for _, stem := range proof.PoaStems {
+		addKey(others, stem)
 	}
-	return vp.Proof, vp.Cis, vp.Indices, vp.Yis, leaves, nil
+
+	keyvals := make(map[common.Hash]common.Hash)
+	for i, key := range proof.Keys {
+		keyvals[common.BytesToHash(key)] = common.BytesToHash(proof.Values[i])
+	}
+
+	if len(proof.Keys) != len(proof.Values) {
+		return nil, nil, nil, nil, nil, fmt.Errorf("keys and values are of different length %d != %d", len(proof.Keys), len(proof.Values))
+	}
+	if len(proof.Keys) != len(proof.ExtStatus) {
+		return nil, nil, nil, nil, nil, fmt.Errorf("keys and values are of different length %d != %d", len(proof.Keys), len(proof.Values))
+	}
+
+	// Rebuild the tree, creating nodes in the lexicographic order of their path
+	lastcomm, lastpoa := 0, 0
+	root := verkle.NewStateless()
+	for i, es := range proof.ExtStatus {
+		depth := es & 0x1F
+		status := es >> 5
+		node := root
+		stem := proof.Keys[i]
+
+		// go over the stem's bytes, in order to rebuild the internal nodes
+		for j := byte(0); j < depth; j++ {
+			// Recurse into the tree that is being rebuilt
+			if node.Children()[stem[j]] == nil {
+				node.SetChild(int(stem[j]), verkle.NewStatelessWithCommitment(proof.Cs[lastcomm]))
+				lastcomm++
+			}
+
+			node = node.Children()[stem[j]].(*verkle.StatelessNode)
+
+			// if that zi hasn't been encountered yet, add it to
+			// the list of zis sorted by path.
+			if !hasKey(seenIdx, stem[:j]) {
+				addKey(seenIdx, stem[:j])
+				indices = append(indices, stem[j])
+			}
+
+			// same thing with a yi
+			if !hasKey(seenComm, stem[:j]) {
+				addKey(seenComm, stem[:j])
+				yis = append(yis, node.ComputeCommitment())
+			}
+		}
+
+		// Reached the end, add the extension-and-suffix tree
+		switch status {
+		case 0:
+			// missing stem, leave it as is
+			break
+		case 1:
+			// another stem is found, build it
+			node.SetStem(proof.PoaStems[lastpoa])
+			lastpoa++
+			break
+		case 2:
+			// stem is present
+			node.SetStem(stem[:31])
+			break
+		default:
+			return nil, nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: invalid extension status %d", status)
+		}
+
+	}
+
+	return proof, proof.Cs, indices, yis, keyvals, nil
 }
 
 // Copy the values here so as to avoid an import cycle
