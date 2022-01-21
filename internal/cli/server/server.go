@@ -107,8 +107,8 @@ func NewServer(config *Config) (*Server, error) {
 		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
 	}
 
-	// sealing (if enabled)
-	if config.Sealer.Enabled {
+	// sealing (if enabled) or in dev mode
+	if config.Sealer.Enabled || config.Developer.Enabled {
 		if err := backend.StartMining(1); err != nil {
 			return nil, err
 		}
