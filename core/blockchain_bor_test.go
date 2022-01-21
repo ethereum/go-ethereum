@@ -53,78 +53,12 @@ func TestChain2HeadEvent(t *testing.T) {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
-	// first two block of the secondary chain are for a brief moment considered
-	// side chains because up to that point the first one is considered the
-	// heavier chain.
-	expectedReorgHashes := map[common.Hash]bool{
-		replacementBlocks[0].Hash(): true,
-		replacementBlocks[1].Hash(): true,
-		replacementBlocks[2].Hash(): true,
-	}
-
-	expectedReplacedHashes := map[common.Hash]bool{
-		chain[0].Hash(): true,
-		chain[1].Hash(): true,
-		chain[2].Hash(): true,
-	}
-
-	expectedForkHashes := map[common.Hash]bool{
-		replacementBlocks[0].Hash(): true,
-		replacementBlocks[1].Hash(): true,
-	}
-
-	expectedHeadHashes := map[common.Hash]bool{
-		chain[2].Hash():             true,
-		replacementBlocks[3].Hash(): true,
-	}
-
 	i := 0
-
-	tot := 0
-
 	readEvent := func() *Chain2HeadEvent {
 		select {
 		case ev := <-chain2HeadCh:
 			i++
-			if ev.Type == Chain2HeadReorgEvent {
-				//Reorg Event Sends Chain of Added Blocks in NewChain. So need to check all of them in reorgHashes
-				for j := 0; j < len(ev.OldChain); j++ {
-					tot++
-					block := ev.OldChain[j]
-					if _, ok := expectedReplacedHashes[block.Hash()]; !ok {
-						t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
-					}
-
-				}
-				//Reorg Event also Sends Chain of Removed Blocks in NewChain. So need to check all of them in replacedHashes
-				for j := 0; j < len(ev.OldChain); j++ {
-					tot++
-					block := ev.NewChain[j]
-					if _, ok := expectedReorgHashes[block.Hash()]; !ok {
-						t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
-					}
-
-				}
-
-			}
-
-			if ev.Type == Chain2HeadForkEvent {
-				tot++
-				block := ev.NewChain[0]
-				if _, ok := expectedForkHashes[block.Hash()]; !ok {
-					t.Errorf("%d: didn't expect %x to be in fork chain", i, block.Hash())
-				}
-			}
-
-			if ev.Type == Chain2HeadCanonicalEvent {
-				tot++
-				block := ev.NewChain[0]
-				if _, ok := expectedHeadHashes[block.Hash()]; !ok {
-					t.Errorf("%d: didn't expect %x to be in head chain", i, block.Hash())
-				}
-			}
-
-			return nil
+			return &ev
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout")
 		}
@@ -132,17 +66,58 @@ func TestChain2HeadEvent(t *testing.T) {
 	}
 
 	// head event
-	readEvent()
+	event1 := readEvent()
+	if event1.Type != Chain2HeadCanonicalEvent {
+		t.Fatal("it should be type head")
+	}
+	if event1.NewChain[0].Hash() != chain[2].Hash() {
+		t.Fatalf("%d : Hash Does Not Match", i)
+	}
 
 	// fork event
-	readEvent()
+	event2 := readEvent()
+	if event2.Type != Chain2HeadForkEvent {
+		t.Fatal("it should be type fork")
+	}
+	if event2.NewChain[0].Hash() != replacementBlocks[0].Hash() {
+		t.Fatalf("%d : Hash Does Not Match", i)
+	}
 
 	// fork event
-	readEvent()
+	event3 := readEvent()
+	if event3.Type != Chain2HeadForkEvent {
+		t.Fatal("it should be type fork")
+	}
+	if event3.NewChain[0].Hash() != replacementBlocks[1].Hash() {
+		t.Fatalf("%d : Hash Does Not Match", i)
+	}
 
 	// reorg event
-	readEvent()
+	//In this event the channel recieves an array of Blocks in NewChain and OldChain
+	expectedOldChainHashes := [3]common.Hash{0: chain[2].Hash(), 1: chain[1].Hash(), 2: chain[0].Hash()}
+	expectedNewChainHashes := [3]common.Hash{0: replacementBlocks[2].Hash(), 1: replacementBlocks[1].Hash(), 2: replacementBlocks[0].Hash()}
+
+	event4 := readEvent()
+	if event4.Type != Chain2HeadReorgEvent {
+		t.Fatal("it should be type reorg")
+	}
+	for j := 0; j < len(event4.OldChain); j++ {
+		if event4.OldChain[j].Hash() != expectedOldChainHashes[j] {
+			t.Fatalf("%d : Oldchain hashes Does Not Match", i)
+		}
+	}
+	for j := 0; j < len(event4.NewChain); j++ {
+		if event4.NewChain[j].Hash() != expectedNewChainHashes[j] {
+			t.Fatalf("%d : Newchain hashes Does Not Match", i)
+		}
+	}
 
 	// head event
-	readEvent()
+	event5 := readEvent()
+	if event5.Type != Chain2HeadCanonicalEvent {
+		t.Fatal("it should be type head")
+	}
+	if event5.NewChain[0].Hash() != replacementBlocks[3].Hash() {
+		t.Fatalf("%d : Hash Does Not Match", i)
+	}
 }
