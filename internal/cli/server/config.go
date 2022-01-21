@@ -91,6 +91,9 @@ type Config struct {
 
 	// GRPC has the grpc server related settings
 	GRPC *GRPCConfig
+
+	// Developer has the developer mode related settings
+	Developer *DeveloperConfig
 }
 
 type P2PConfig struct {
@@ -365,6 +368,14 @@ type AccountsConfig struct {
 	UseLightweightKDF bool `hcl:"use-lightweight-kdf,optional"`
 }
 
+type DeveloperConfig struct {
+	// Enabled enables the developer mode
+	Enabled bool `hcl:"dev,optional"`
+
+	// Period is the block period to use in developer mode
+	Period uint64 `hcl:"period,optional"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:     "mainnet",
@@ -486,6 +497,10 @@ func DefaultConfig() *Config {
 		GRPC: &GRPCConfig{
 			Addr: ":3131",
 		},
+		Developer: &DeveloperConfig{
+			Enabled: false,
+			Period:  0,
+		},
 	}
 }
 
@@ -573,6 +588,9 @@ func readConfigFile(path string) (*Config, error) {
 }
 
 func (c *Config) loadChain() error {
+	if c.Developer.Enabled {
+		return nil
+	}
 	chain, ok := chains.GetChain(c.Chain)
 	if !ok {
 		return fmt.Errorf("chain '%s' not found", c.Chain)
@@ -585,7 +603,7 @@ func (c *Config) loadChain() error {
 	}
 
 	// depending on the chain we have different cache values
-	if c.Chain != "mainnet" {
+	if c.Chain == "mainnet" {
 		c.Cache.Cache = 4096
 	} else {
 		c.Cache.Cache = 1024
@@ -599,8 +617,13 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 		return nil, err
 	}
 	n := ethconfig.Defaults
-	n.NetworkId = c.chain.NetworkId
-	n.Genesis = c.chain.Genesis
+
+	// only update for non-developer mode as we don't yet
+	// have the chain object for it.
+	if !c.Developer.Enabled {
+		n.NetworkId = c.chain.NetworkId
+		n.Genesis = c.chain.Genesis
+	}
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
 
@@ -637,6 +660,27 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 				return nil, fmt.Errorf("etherbase is not an address: %s", etherbase)
 			}
 			n.Miner.Etherbase = common.HexToAddress(etherbase)
+		}
+	}
+
+	// update for developer mode
+	if c.Developer.Enabled {
+		// get developer mode chain config
+		c.chain = chains.GetDeveloperChain(c.Developer.Period, n.Miner.Etherbase)
+
+		// update the parameters
+		n.NetworkId = c.chain.NetworkId
+		n.Genesis = c.chain.Genesis
+
+		// Update cache
+		c.Cache.Cache = 1024
+
+		// Update sync mode
+		c.SyncMode = "full"
+
+		// update miner gas price
+		if n.Miner.GasPrice == nil {
+			n.Miner.GasPrice = big.NewInt(1)
 		}
 	}
 
@@ -786,6 +830,20 @@ func (c *Config) buildNode() (*node.Config, error) {
 		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
 		GraphQLCors:         c.JsonRPC.Cors,
 		GraphQLVirtualHosts: c.JsonRPC.VHost,
+	}
+
+	// dev mode
+	if c.Developer.Enabled {
+		cfg.UseLightweightKDF = true
+
+		// disable p2p networking
+		c.P2P.NoDiscover = true
+		cfg.P2P.ListenAddr = ""
+		cfg.P2P.NoDial = true
+		cfg.P2P.DiscoveryV5 = false
+
+		// data dir
+		cfg.DataDir = ""
 	}
 
 	// enable jsonrpc endpoints
