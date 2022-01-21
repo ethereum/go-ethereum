@@ -1069,14 +1069,11 @@ func nonRandomTrie(n int) (*Trie, map[string]*kv) {
 }
 
 func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
-	// TODO: test fails if 1st key/value pair is omitted.
 	keys := [][]byte{
-		common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000"),
 		common.Hex2Bytes("aa10000000000000000000000000000000000000000000000000000000000000"),
 		common.Hex2Bytes("aa20000000000000000000000000000000000000000000000000000000000000"),
 	}
 	vals := [][]byte{
-		common.Hex2Bytes("01"),
 		common.Hex2Bytes("02"),
 		common.Hex2Bytes("03"),
 	}
