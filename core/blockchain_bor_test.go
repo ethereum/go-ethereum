@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -49,41 +48,10 @@ func TestChain2HeadEvent(t *testing.T) {
 		}
 		gen.AddTx(tx)
 	})
+
 	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
-
-	readEvent := func() *Chain2HeadEvent {
-		select {
-		case evnt := <-chain2HeadCh:
-			return &evnt
-		case <-time.After(2 * time.Second):
-			t.Fatal("timeout")
-		}
-		return nil
-	}
-
-	// head event
-	evnt := readEvent()
-	fmt.Println(evnt.Type)
-
-	// fork event
-	evnt = readEvent()
-	fmt.Println(evnt.Type)
-
-	// fork event
-	evnt = readEvent()
-	fmt.Println(evnt.Type)
-
-	// reorg event
-	evnt = readEvent()
-	fmt.Println(evnt.Type)
-
-	// head event
-	evnt = readEvent()
-	fmt.Println(evnt.Type)
-
-	return
 
 	// first two block of the secondary chain are for a brief moment considered
 	// side chains because up to that point the first one is considered the
@@ -106,23 +74,22 @@ func TestChain2HeadEvent(t *testing.T) {
 	}
 
 	expectedHeadHashes := map[common.Hash]bool{
+		chain[2].Hash():             true,
 		replacementBlocks[3].Hash(): true,
 	}
+
 	i := 0
 
-	//number of totalEvents are 4 : when the second chain is generated, there are 2 fork events,
-	//then reorg happens and triggers 1 event, then last head block of Replacement chain triggers 1 event
-	totalEvents := 4
+	tot := 0
 
-	const timeoutDura = 10 * time.Second
-	timeout := time.NewTimer(timeoutDura)
-done:
-	for {
+	readEvent := func() *Chain2HeadEvent {
 		select {
 		case ev := <-chain2HeadCh:
+			i++
 			if ev.Type == Chain2HeadReorgEvent {
 				//Reorg Event Sends Chain of Added Blocks in NewChain. So need to check all of them in reorgHashes
 				for j := 0; j < len(ev.OldChain); j++ {
+					tot++
 					block := ev.OldChain[j]
 					if _, ok := expectedReplacedHashes[block.Hash()]; !ok {
 						t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
@@ -131,6 +98,7 @@ done:
 				}
 				//Reorg Event also Sends Chain of Removed Blocks in NewChain. So need to check all of them in replacedHashes
 				for j := 0; j < len(ev.OldChain); j++ {
+					tot++
 					block := ev.NewChain[j]
 					if _, ok := expectedReorgHashes[block.Hash()]; !ok {
 						t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
@@ -141,6 +109,7 @@ done:
 			}
 
 			if ev.Type == Chain2HeadForkEvent {
+				tot++
 				block := ev.NewChain[0]
 				if _, ok := expectedForkHashes[block.Hash()]; !ok {
 					t.Errorf("%d: didn't expect %x to be in fork chain", i, block.Hash())
@@ -148,31 +117,32 @@ done:
 			}
 
 			if ev.Type == Chain2HeadCanonicalEvent {
+				tot++
 				block := ev.NewChain[0]
 				if _, ok := expectedHeadHashes[block.Hash()]; !ok {
 					t.Errorf("%d: didn't expect %x to be in head chain", i, block.Hash())
 				}
 			}
 
-			i++
-
-			if i == (totalEvents) {
-				timeout.Stop()
-
-				break done
-			}
-			timeout.Reset(timeoutDura)
-
-		case <-timeout.C:
-			t.Fatal("Timeout. Possibly not all blocks were triggered for sideevent")
+			return nil
+		case <-time.After(2 * time.Second):
+			t.Fatal("timeout")
 		}
+		return nil
 	}
 
-	// make sure no more events are fired
-	select {
-	case e := <-chain2HeadCh:
-		t.Errorf("unexpected event fired: %v", e)
-	case <-time.After(250 * time.Millisecond):
-	}
+	// head event
+	readEvent()
 
+	// fork event
+	readEvent()
+
+	// fork event
+	readEvent()
+
+	// reorg event
+	readEvent()
+
+	// head event
+	readEvent()
 }
