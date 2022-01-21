@@ -69,6 +69,14 @@ func TestChain2HeadEvent(t *testing.T) {
 			if ev.Type != expect.Type {
 				t.Fatalf("%d : type mismatch", i)
 			}
+
+			if len(ev.NewChain) != len(expect.Added) {
+				t.Fatalf("%d : Newchain and Added Array Size don't match", i)
+			}
+			if len(ev.OldChain) != len(expect.Removed) {
+				t.Fatalf("%d : Oldchain and Removed Array Size don't match", i)
+			}
+
 			for j := 0; j < len(ev.OldChain); j++ {
 				if ev.OldChain[j].Hash() != expect.Removed[j] {
 					t.Fatalf("%d : Oldchain hashes Does Not Match", i)
