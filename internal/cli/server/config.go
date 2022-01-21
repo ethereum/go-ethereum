@@ -591,12 +591,9 @@ func readConfigFile(path string) (*Config, error) {
 }
 
 func (c *Config) loadChain() error {
-	if c.Developer.Enabled {
-		return nil
-	}
-	chain, ok := chains.GetChain(c.Chain)
-	if !ok {
-		return fmt.Errorf("chain '%s' not found", c.Chain)
+	chain, err := chains.GetChain(c.Chain)
+	if err != nil {
+		return err
 	}
 	c.chain = chain
 
