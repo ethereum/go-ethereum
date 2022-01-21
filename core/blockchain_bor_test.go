@@ -59,32 +59,28 @@ func TestChain2HeadEvent(t *testing.T) {
 		Removed []common.Hash
 	}
 
-	// To use in fatal log, indicates the readEvent which failed the test.
-	i := 0
-
 	readEvent := func(expect *eventTest) {
 		select {
 		case ev := <-chain2HeadCh:
-			i++
 			if ev.Type != expect.Type {
-				t.Fatalf("%d : type mismatch", i)
+				t.Fatal("Type mismatch")
 			}
 
 			if len(ev.NewChain) != len(expect.Added) {
-				t.Fatalf("%d : Newchain and Added Array Size don't match", i)
+				t.Fatal("Newchain and Added Array Size don't match")
 			}
 			if len(ev.OldChain) != len(expect.Removed) {
-				t.Fatalf("%d : Oldchain and Removed Array Size don't match", i)
+				t.Fatal("Oldchain and Removed Array Size don't match")
 			}
 
 			for j := 0; j < len(ev.OldChain); j++ {
 				if ev.OldChain[j].Hash() != expect.Removed[j] {
-					t.Fatalf("%d : Oldchain hashes Does Not Match", i)
+					t.Fatal("Oldchain hashes Do Not Match")
 				}
 			}
 			for j := 0; j < len(ev.NewChain); j++ {
 				if ev.NewChain[j].Hash() != expect.Added[j] {
-					t.Fatalf("%d : Newchain hashes Does Not Match", i)
+					t.Fatal("Newchain hashes Do Not Match")
 				}
 			}
 		case <-time.After(2 * time.Second):
