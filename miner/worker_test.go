@@ -580,11 +580,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 				t.Error("Unexpected coinbase")
 			}
 		}
-		if postMerge && random == (common.Hash{}) {
-			if block.MixDigest() == (common.Hash{}) {
-				t.Error("Unexpected mix digest")
-			}
-		} else if !isClique {
+		if !isClique {
 			if block.MixDigest() != random {
 				t.Error("Unexpected mix digest")
 			}

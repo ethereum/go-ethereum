@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -998,17 +997,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if !genParams.noExtra && len(w.extra) != 0 {
 		header.Extra = w.extra
 	}
-	// Set the randomness field for post-merge blocks, either fed by beacon chain
-	// or generated locally.
+	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
-	} else if w.isTTDReached(header) {
-		random := make([]byte, common.HashLength)
-		_, err := rand.Read(random)
-		if err != nil {
-			return nil, err
-		}
-		header.MixDigest = common.BytesToHash(random)
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
