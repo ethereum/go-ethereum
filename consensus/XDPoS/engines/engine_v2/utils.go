@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
@@ -56,4 +57,14 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 
 	sigcache.Add(hash, signer)
 	return signer, nil
+
+}
+
+// Get masternodes address from checkpoint Header. Only used for v1 last block
+func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.Address {
+	masternodes := make([]common.Address, (len(checkpointHeader.Extra)-utils.ExtraVanity-utils.ExtraSeal)/common.AddressLength)
+	for i := 0; i < len(masternodes); i++ {
+		copy(masternodes[i][:], checkpointHeader.Extra[utils.ExtraVanity+i*common.AddressLength:])
+	}
+	return masternodes
 }

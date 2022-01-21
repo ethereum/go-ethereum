@@ -20,7 +20,7 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
 
-	valid, err := engineV2.VerifyTimeoutMessage(timeoutMsg.(*utils.Timeout))
+	valid, err := engineV2.VerifyTimeoutMessage(blockchain, timeoutMsg.(*utils.Timeout))
 	// We can only test valid = false for now as the implementation for getCurrentRoundMasterNodes is not complete
 	assert.False(t, valid)
 	// This shows we are able to decode the timeout message, which is what this test is all about

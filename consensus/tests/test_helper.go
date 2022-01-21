@@ -241,6 +241,11 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 
 	currentBlock := blockchain.Genesis()
 
+	go func() {
+		checkpointChanMsg := <-core.CheckpointCh
+		log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+	}()
+
 	// Insert initial blocks
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
@@ -262,10 +267,6 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	if err != nil {
 		t.Fatal(err)
 	}
-	go func() {
-		checkpointChanMsg := <-core.CheckpointCh
-		log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
-	}()
 
 	return blockchain, backend, currentBlock, signer
 }
@@ -288,11 +289,45 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 
 	var currentForkBlock *types.Block
 
+	go func() {
+		checkpointChanMsg := <-core.CheckpointCh
+		log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+	}()
+
+	var masternodesFromV1LastEpoch []common.Address
+
 	// Insert initial blocks
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
 		roundNumber := int64(i) - chainConfig.XDPoS.XDPoSV2Block.Int64()
 		header := createBlock(chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn)
+		// Inject the hardcoded master node list for the last v1 epoch block
+		if int64(i) == chainConfig.XDPoS.XDPoSV2Block.Int64() {
+			// reset extra
+			header.Extra = []byte{}
+			if len(header.Extra) < utils.ExtraVanity {
+				header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, utils.ExtraVanity-len(header.Extra))...)
+			}
+			header.Extra = header.Extra[:utils.ExtraVanity]
+			var masternodes []common.Address
+			masternodes = append(masternodes, acc1Addr, acc2Addr, acc3Addr, signer)
+			masternodesFromV1LastEpoch = masternodes
+			for _, masternode := range masternodes {
+				header.Extra = append(header.Extra, masternode[:]...)
+			}
+			header.Extra = append(header.Extra, make([]byte, utils.ExtraSeal)...)
+
+			// Sign all the things for v1 block use v1 sigHash function
+			sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
+		} else if (int64(i) == (chainConfig.XDPoS.XDPoSV2Block.Int64() + 1)) && masternodesFromV1LastEpoch != nil { // This is the first v2 block, we need to copy the last v1 epoch master node list and inject into v2 validators
+			for _, v := range masternodesFromV1LastEpoch {
+				header.Validators = append(header.Validators, v[:]...)
+			}
+		}
 
 		block, err := insertBlock(blockchain, header)
 		if err != nil {
@@ -324,10 +359,6 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	if err != nil {
 		t.Fatal(err)
 	}
-	go func() {
-		checkpointChanMsg := <-core.CheckpointCh
-		log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
-	}()
 
 	return blockchain, backend, currentBlock, signer, signFn, currentForkBlock
 }
