@@ -289,6 +289,7 @@ type ReceiptForStorage Receipt
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
+	outerList := w.List()
 	w.WriteBytes((*Receipt)(r).statusEncoding())
 	w.WriteUint64(r.CumulativeGasUsed)
 	logList := w.List()
@@ -298,6 +299,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+	w.ListEnd(outerList)
 	return w.Flush()
 }
 
