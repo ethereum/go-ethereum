@@ -34,7 +34,7 @@ func init() {
 
 type prestate = map[common.Address]account
 type account struct {
-	Balance *big.Int                    `json:"balance"`
+	Balance string                      `json:"balance"`
 	Nonce   uint64                      `json:"nonce"`
 	Code    string                      `json:"code"`
 	Storage map[common.Hash]common.Hash `json:"storage"`
@@ -58,7 +58,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 	t.prestate[addr] = account{
-		Balance: t.env.StateDB.GetBalance(addr),
+		Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
 		Storage: make(map[common.Hash]common.Hash),
