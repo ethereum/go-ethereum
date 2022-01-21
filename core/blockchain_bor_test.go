@@ -53,71 +53,78 @@ func TestChain2HeadEvent(t *testing.T) {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
+	type eventTest struct {
+		Type    string
+		Added   []common.Hash
+		Removed []common.Hash
+	}
+
+	// To use in fatal log, indicates the readEvent which failed the test.
 	i := 0
-	readEvent := func() *Chain2HeadEvent {
+
+	readEvent := func(expect *eventTest) {
 		select {
 		case ev := <-chain2HeadCh:
 			i++
-			return &ev
+			if ev.Type != expect.Type {
+				t.Fatalf("%d : type mismatch", i)
+			}
+			for j := 0; j < len(ev.OldChain); j++ {
+				if ev.OldChain[j].Hash() != expect.Removed[j] {
+					t.Fatalf("%d : Oldchain hashes Does Not Match", i)
+				}
+			}
+			for j := 0; j < len(ev.NewChain); j++ {
+				if ev.NewChain[j].Hash() != expect.Added[j] {
+					t.Fatalf("%d : Newchain hashes Does Not Match", i)
+				}
+			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout")
 		}
-		return nil
 	}
 
 	// head event
-	event1 := readEvent()
-	if event1.Type != Chain2HeadCanonicalEvent {
-		t.Fatal("it should be type head")
-	}
-	if event1.NewChain[0].Hash() != chain[2].Hash() {
-		t.Fatalf("%d : Hash Does Not Match", i)
-	}
+	readEvent(&eventTest{
+		Type: Chain2HeadCanonicalEvent,
+		Added: []common.Hash{
+			chain[2].Hash(),
+		}})
 
 	// fork event
-	event2 := readEvent()
-	if event2.Type != Chain2HeadForkEvent {
-		t.Fatal("it should be type fork")
-	}
-	if event2.NewChain[0].Hash() != replacementBlocks[0].Hash() {
-		t.Fatalf("%d : Hash Does Not Match", i)
-	}
+	readEvent(&eventTest{
+		Type: Chain2HeadForkEvent,
+		Added: []common.Hash{
+			replacementBlocks[0].Hash(),
+		}})
 
 	// fork event
-	event3 := readEvent()
-	if event3.Type != Chain2HeadForkEvent {
-		t.Fatal("it should be type fork")
-	}
-	if event3.NewChain[0].Hash() != replacementBlocks[1].Hash() {
-		t.Fatalf("%d : Hash Does Not Match", i)
-	}
+	readEvent(&eventTest{
+		Type: Chain2HeadForkEvent,
+		Added: []common.Hash{
+			replacementBlocks[1].Hash(),
+		}})
 
 	// reorg event
 	//In this event the channel recieves an array of Blocks in NewChain and OldChain
-	expectedOldChainHashes := [3]common.Hash{0: chain[2].Hash(), 1: chain[1].Hash(), 2: chain[0].Hash()}
-	expectedNewChainHashes := [3]common.Hash{0: replacementBlocks[2].Hash(), 1: replacementBlocks[1].Hash(), 2: replacementBlocks[0].Hash()}
-
-	event4 := readEvent()
-	if event4.Type != Chain2HeadReorgEvent {
-		t.Fatal("it should be type reorg")
-	}
-	for j := 0; j < len(event4.OldChain); j++ {
-		if event4.OldChain[j].Hash() != expectedOldChainHashes[j] {
-			t.Fatalf("%d : Oldchain hashes Does Not Match", i)
-		}
-	}
-	for j := 0; j < len(event4.NewChain); j++ {
-		if event4.NewChain[j].Hash() != expectedNewChainHashes[j] {
-			t.Fatalf("%d : Newchain hashes Does Not Match", i)
-		}
-	}
+	readEvent(&eventTest{
+		Type: Chain2HeadReorgEvent,
+		Added: []common.Hash{
+			replacementBlocks[2].Hash(),
+			replacementBlocks[1].Hash(),
+			replacementBlocks[0].Hash(),
+		},
+		Removed: []common.Hash{
+			chain[2].Hash(),
+			chain[1].Hash(),
+			chain[0].Hash(),
+		},
+	})
 
 	// head event
-	event5 := readEvent()
-	if event5.Type != Chain2HeadCanonicalEvent {
-		t.Fatal("it should be type head")
-	}
-	if event5.NewChain[0].Hash() != replacementBlocks[3].Hash() {
-		t.Fatalf("%d : Hash Does Not Match", i)
-	}
+	readEvent(&eventTest{
+		Type: Chain2HeadCanonicalEvent,
+		Added: []common.Hash{
+			replacementBlocks[3].Hash(),
+		}})
 }
