@@ -19,6 +19,7 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -126,10 +127,12 @@ func (pt PooledTransactions) Code() int { return 26 }
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
-	ourKey                 *ecdsa.PrivateKey
-	negotiatedProtoVersion uint
-	ourHighestProtoVersion uint
-	caps                   []p2p.Cap
+	ourKey                     *ecdsa.PrivateKey
+	negotiatedProtoVersion     uint
+	negotiatedSnapProtoVersion uint
+	ourHighestProtoVersion     uint
+	ourHighestSnapProtoVersion uint
+	caps                       []p2p.Cap
 }
 
 // Read reads an eth packet from the connection.
@@ -259,12 +262,7 @@ func (c *Conn) Read66() (uint64, Message) {
 
 // Write writes a eth packet to the connection.
 func (c *Conn) Write(msg Message) error {
-	// check if message is eth protocol message
-	var (
-		payload []byte
-		err     error
-	)
-	payload, err = rlp.EncodeToBytes(msg)
+	payload, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
 	}
@@ -280,4 +278,33 @@ func (c *Conn) Write66(req eth.Packet, code int) error {
 	}
 	_, err = c.Conn.Write(uint64(code), payload)
 	return err
+}
+
+// ReadSnap reads a snap/1 response with the given id from the connection.
+func (c *Conn) ReadSnap(id uint64) (Message, error) {
+	respId := id + 1
+	start := time.Now()
+	for respId != id && time.Since(start) < timeout {
+		code, rawData, _, err := c.Conn.Read()
+		if err != nil {
+			return nil, fmt.Errorf("could not read from connection: %v", err)
+		}
+		switch int(code) {
+		case (GetAccountRange{}).Code():
+			snpMsg := new(GetAccountRange)
+			if err := rlp.DecodeBytes(rawData, snpMsg); err != nil {
+				return nil, fmt.Errorf("could not rlp decode message: %v", err)
+			}
+			return snpMsg, nil
+		case (AccountRange{}).Code():
+			snpMsg := new(AccountRange)
+			if err := rlp.DecodeBytes(rawData, snpMsg); err != nil {
+				return nil, fmt.Errorf("could not rlp decode message: %v", err)
+			}
+			return snpMsg, nil
+		default:
+			return nil, fmt.Errorf("invalid message code: %d", code)
+		}
+	}
+	return nil, fmt.Errorf("request timed out")
 }
