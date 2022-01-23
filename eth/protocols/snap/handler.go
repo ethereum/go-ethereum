@@ -467,7 +467,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
-		} else if blob, err := chain.ContractCode(hash); err == nil {
+		} else if blob, err := chain.ContractCodeWithPrefix(hash); err == nil {
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}
