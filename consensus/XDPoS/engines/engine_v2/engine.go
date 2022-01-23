@@ -343,7 +343,13 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	var masterNodes []common.Address
 	if isEpochSwitch {
 		if x.config.XDPoSV2Block.Cmp(parent.Number) == 0 {
-			// TODO: read v1 master nodes
+			snap, err := x.getSnapshot(chain, x.config.XDPoSV2Block.Uint64())
+			if err != nil {
+				log.Error("[YourTurn]Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.XDPoSV2Block.Uint64())
+				return false, err
+			}
+			// the initial snapshot of v1->v2 switch does not need penalty
+			masterNodes = snap.NextEpochMasterNodes
 		} else {
 			// TODO: calc master nodes by smart contract - penalty
 			// TODO: related to snapshot

@@ -35,7 +35,13 @@ func TestYourTurnInitialV2(t *testing.T) {
 	}
 
 	// YourTurn is called before mine first v2 block
-	adaptor.YourTurn(blockchain, block900.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
+	b, err := adaptor.YourTurn(blockchain, block900.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
+	assert.Nil(t, err)
+	assert.False(t, b)
+	b, err = adaptor.YourTurn(blockchain, block900.Header(), common.HexToAddress("xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff"))
+	assert.Nil(t, err)
+	// round=1, so masternode[1] has YourTurn = True
+	assert.True(t, b)
 	assert.Equal(t, adaptor.EngineV2.GetCurrentRound(), utils.Round(1))
 
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, block900.Header())
