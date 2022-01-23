@@ -325,6 +325,20 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
+// BlockResultByHash returns the blockResult.
+func (ec *Client) BlockResultByHash(ctx context.Context, blockHash common.Hash) (*types.BlockResult, error) {
+	var blockResult types.BlockResult
+	if err := ec.c.CallContext(ctx, &blockResult, "eth_blockResultByHash", blockHash); err != nil {
+		return nil, err
+	}
+	return &blockResult, nil
+}
+
+// SubscribeNewBlockResult subscribes to block execution trace when a new block is created.
+func (ec *Client) SubscribeNewBlockResult(ctx context.Context, ch chan<- *types.BlockResult) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newBlockResult")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.

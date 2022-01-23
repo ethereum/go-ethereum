@@ -1182,17 +1182,17 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, blockResult *types.BlockResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
+	return bc.writeBlockWithState(block, receipts, logs, blockResult, state, emitHeadEvent)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, blockResult *types.BlockResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if bc.insertStopped() {
 		return NonStatTy, errInsertionInterrupted
 	}
@@ -1215,6 +1215,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WriteBlockResult(blockBatch, block.Hash(), blockResult)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1314,7 +1315,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
-		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs, BlockResult: blockResult})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
 		}
@@ -1644,7 +1645,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
+		// EvmTraces is nil is safe because l2geth's p2p server is stoped and the code will not execute there.
+		status, err := bc.writeBlockWithState(block, receipts, logs, nil, statedb, false)
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err

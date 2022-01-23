@@ -70,6 +70,9 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+
+	// The value of evm execution result.
+	ReturnValue []byte `json:"returnValue,omitempty"`
 }
 
 type receiptMarshaling struct {
