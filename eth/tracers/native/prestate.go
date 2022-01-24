@@ -43,21 +43,18 @@ type account struct {
 }
 
 type prestateTracer struct {
-	env         *vm.EVM
-	prestate    prestate
-	create      bool
-	from        common.Address
-	to          common.Address
-	fromBalance *big.Int
-	gasPrice    *big.Int
-	interrupt   uint32 // Atomic flag to signal execution interruption
-	reason      error  // Textual reason for the interruption
+	env       *vm.EVM
+	prestate  prestate
+	create    bool
+	to        common.Address
+	interrupt uint32 // Atomic flag to signal execution interruption
+	reason    error  // Textual reason for the interruption
 }
 
 func newPrestateTracer() tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &prestateTracer{prestate: prestate{}, fromBalance: new(big.Int)}
+	return &prestateTracer{prestate: prestate{}}
 }
 
 func (t *prestateTracer) lookupAccount(addr common.Address) {
@@ -83,9 +80,7 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.create = create
-	t.from = from
 	t.to = to
-	t.gasPrice = env.TxContext.GasPrice
 
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
@@ -95,26 +90,32 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 		return
 	}
 
-	t.lookupAccount(to)
 	t.lookupAccount(from)
-	// The sender and recipient balances include value transfer and gas cost.
-	// Manually revert them back to get to pre-state.
-	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
+	t.lookupAccount(to)
+
+	// The recipient balance includes the value transferred.
 	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
 	toBal = new(big.Int).Sub(toBal, value)
 	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
-	t.prestate[from].Nonce--
 
-	// Intrinsic gas is accounted for here. Execution gas usage is accounted for in `CaptureEnd`.
-	intrinsicCost := new(big.Int).Mul(t.gasPrice, new(big.Int).SetUint64(intrinsicGas))
-	t.fromBalance.Add(fromBal, t.fromBalance.Add(value, intrinsicCost))
+	// The sender balance is after reducing: value, gasLimit, intrinsicGas.
+	// We need to re-add them to get the pre-tx balance.
+	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
+	gasPrice := env.TxContext.GasPrice
+	consumedGas := new(big.Int).Mul(
+		gasPrice,
+		new(big.Int).Add(
+			new(big.Int).SetUint64(intrinsicGas),
+			new(big.Int).SetUint64(gas),
+		),
+	)
+	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+	t.prestate[from].Balance = hexutil.EncodeBig(fromBal)
+	t.prestate[from].Nonce--
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.fromBalance.Add(t.fromBalance, new(big.Int).Mul(t.gasPrice, new(big.Int).SetUint64(gasUsed)))
-	t.prestate[t.from].Balance = hexutil.EncodeBig(t.fromBalance)
-
 	if t.create {
 		// Exclude created contract.
 		delete(t.prestate, t.to)
