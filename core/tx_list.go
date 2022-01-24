@@ -285,20 +285,18 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
 			return false, nil
 		}
-		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
-		a := big.NewInt(100 + int64(priceBump))
-		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
-		aTip := a.Mul(a, old.GasTipCap())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
+		a := big.NewInt(100 + int64(priceBump))
+		aTip := a.Mul(a, old.GasTipCap())
 		b := big.NewInt(100)
-		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
 		thresholdTip := aTip.Div(aTip, b)
 
-		// We have to ensure that both the new fee cap and tip are higher than the
-		// old ones as well as checking the percentage threshold to ensure that
-		// this is accurate for low (Wei-level) gas price replacements.
-		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
+		// We have to ensure that the tip is higher than the previous ones as
+		// well as checking the percentage threshold to ensure that this is
+		// accurate for low (Wei-level) gas price replacements.
+		// FeeCap is already guaranteed to be at least as high as the old one
+		if tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
 	}
