@@ -77,7 +77,7 @@ type ConsensusAPI struct {
 	light          bool
 	eth            *eth.Ethereum
 	les            *les.LightEthereum
-	preparedBlocks *payloadQueue    // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
+	preparedBlocks *payloadQueue // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
 }
 
 func NewConsensusAPI(eth *eth.Ethereum, les *les.LightEthereum) *ConsensusAPI {
