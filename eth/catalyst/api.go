@@ -53,6 +53,8 @@ type ConsensusAPI struct {
 	preparedBlocks *payloadQueue // preparedBlocks caches payloads (*ExecutableDataV1) by payload ID (PayloadID)
 }
 
+// NewConsensusAPI creates a new consensus api for the given backend.
+// The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		panic("Catalyst started without valid total difficulty")
@@ -63,15 +65,16 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	}
 }
 
-func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
-	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.preparedBlocks.get(payloadID)
-	if data == nil {
-		return nil, &beacon.UnknownPayload
-	}
-	return data, nil
-}
-
+// ForkchoiceUpdatedV1 has several responsibilities:
+// If the method is called with an empty head block:
+// 		we return success, which can be used to check if the catalyst mode is enabled
+// If the total difficulty was not reached:
+// 		we return INVALID
+// If the finalizedBlockHash is set:
+// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
+// We try to set our blockchain to the headBlock
+// If there are payloadAttributes:
+// 		we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	log.Trace("Engine API request received", "method", "ForkChoiceUpdated", "head", heads.HeadBlockHash, "finalized", heads.FinalizedBlockHash, "safe", heads.SafeBlockHash)
 	if heads.HeadBlockHash == (common.Hash{}) {
@@ -109,20 +112,14 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttributesV1) beacon.PayloadID {
-	// Hash
-	hasher := sha256.New()
-	hasher.Write(headBlockHash[:])
-	binary.Write(hasher, binary.BigEndian, params.Timestamp)
-	hasher.Write(params.Random[:])
-	hasher.Write(params.SuggestedFeeRecipient[:])
-	var out beacon.PayloadID
-	copy(out[:], hasher.Sum(nil)[:8])
-	return out
-}
-
-func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
+// GetPayloadV1 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
+	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
+	data := api.preparedBlocks.get(payloadID)
+	if data == nil {
+		return nil, &beacon.UnknownPayload
+	}
+	return data, nil
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -159,8 +156,26 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
 }
 
-// AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
-// data" required for eth2 clients to process the new block.
+// computePayloadId computes a pseudo-random payloadid, based on the parameters.
+func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttributesV1) beacon.PayloadID {
+	// Hash
+	hasher := sha256.New()
+	hasher.Write(headBlockHash[:])
+	binary.Write(hasher, binary.BigEndian, params.Timestamp)
+	hasher.Write(params.Random[:])
+	hasher.Write(params.SuggestedFeeRecipient[:])
+	var out beacon.PayloadID
+	copy(out[:], hasher.Sum(nil)[:8])
+	return out
+}
+
+// invalid returns a response "INVALID" with the latest valid hash set to the current head.
+func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
+	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
+}
+
+// assembleBlock creates a new block and returns the "execution
+// data" required for beacon clients to process the new block.
 func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
 	log.Info("Producing block", "parentHash", parentHash)
 	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
@@ -190,6 +205,12 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
+// ExecutableDataToBlock constructs a block from executable data.
+// It verifies that the following fields:
+// 		len(extraData) <= 32
+// 		uncleHash = emptyUncleHash
+// 		difficulty = 0
+// and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {

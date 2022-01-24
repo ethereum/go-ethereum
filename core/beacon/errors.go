@@ -26,5 +26,4 @@ var (
 	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
 	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
 	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
-	InvalidPayloadID   = rpc.CustomError{Code: 1, ValidationError: "invalid payload id"}
 )
