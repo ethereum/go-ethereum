@@ -1645,13 +1645,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.NetworkId = 80001
 		}
 		cfg.Genesis = core.DefaultMumbaiGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.MumbaiGenesisHash)
 	case ctx.GlobalBool(BorMainnetFlag.Name):
 		if !ctx.GlobalIsSet(BorMainnetFlag.Name) {
 			cfg.NetworkId = 137
 		}
 		cfg.Genesis = core.DefaultBorMainnetGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.BorMainnetGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337

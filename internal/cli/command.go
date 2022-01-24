@@ -1,22 +1,18 @@
-package main
+package cli
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server"
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mitchellh/cli"
 	"github.com/ryanuber/columnize"
 	"google.golang.org/grpc"
 )
-
-func main() {
-	os.Exit(Run(os.Args[1:]))
-}
 
 func Run(args []string) int {
 	commands := commands()
@@ -116,6 +112,11 @@ func commands() map[string]cli.CommandFactory {
 		},
 		"peers status": func() (cli.Command, error) {
 			return &PeersStatusCommand{
+				Meta2: meta2,
+			}, nil
+		},
+		"status": func() (cli.Command, error) {
+			return &StatusCommand{
 				Meta2: meta2,
 			}, nil
 		},

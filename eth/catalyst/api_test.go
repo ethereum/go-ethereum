@@ -110,6 +110,8 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 */
 
 func TestEth2AssembleBlock(t *testing.T) {
+	t.Skip("bor due to burn contract")
+
 	genesis, blocks := generateTestChain()
 	n, ethservice := startEthService(t, genesis, blocks[1:9])
 	defer n.Close()
@@ -137,6 +139,8 @@ func TestEth2AssembleBlock(t *testing.T) {
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
+	t.Skip("bor due to burn contract")
+
 	genesis, blocks := generateTestChain()
 	n, ethservice := startEthService(t, genesis, blocks[1:9])
 	defer n.Close()

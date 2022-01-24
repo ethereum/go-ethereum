@@ -16,9 +16,11 @@ builds:
     env:
       - CC=o64-clang
       - CXX=o64-clang++
+    tags:
+      - netgo
     ldflags:
       -s -w
-  
+
   - id: darwin-arm64
     main: ./cmd/geth
     binary: bor
@@ -29,9 +31,11 @@ builds:
     env:
       - CC=oa64-clang
       - CXX=oa64-clang++
+    tags:
+      - netgo
     ldflags:
       -s -w
-  
+
   - id: linux-amd64
     main: ./cmd/geth
     binary: bor
@@ -42,9 +46,11 @@ builds:
     env:
       - CC=gcc
       - CXX=g++
+    tags:
+      - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
-      -s -w -linkmode external -extldflags "-static"
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container
+      -s -w -extldflags "-static"
 
   - id: linux-arm64
     main: ./cmd/geth
@@ -56,9 +62,11 @@ builds:
     env:
       - CC=aarch64-linux-gnu-gcc
       - CXX=aarch64-linux-gnu-g++
+    tags:
+      - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
-      -s -w -linkmode external -extldflags "-static"
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container
+      -s -w -extldflags "-static"
 
 nfpms:
   - vendor: 0xPolygon
@@ -75,6 +83,12 @@ nfpms:
     contents:
       - src: builder/files/bor.service
         dst: /lib/systemd/system/bor.service
+        type: config
+      - src: builder/files/genesis-mainnet-v1.json
+        dst: /etc/bor/genesis-mainnet-v1.json
+        type: config
+      - src: builder/files/genesis-testnet-v4.json
+        dst: /etc/bor/genesis-testnet-v4.json
         type: config
 
     overrides:
@@ -95,7 +109,10 @@ dockers:
       - linux-amd64
     build_flag_templates:
       - --platform=linux/amd64
-  
+    extra_files:
+      - builder/files/genesis-mainnet-v1.json
+      - builder/files/genesis-testnet-v4.json
+
   - image_templates:
       - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
     dockerfile: Dockerfile.release
@@ -104,7 +121,10 @@ dockers:
     ids:
       - linux-arm64
     build_flag_templates:
-      - --platform=linux/arm64
+      - --platform=linux/arm64/v8
+    extra_files:
+      - builder/files/genesis-mainnet-v1.json
+      - builder/files/genesis-testnet-v4.json
 
 docker_manifests:
   - name_template: 0xpolygon/{{ .ProjectName }}:{{ .Version }}

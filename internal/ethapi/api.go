@@ -634,7 +634,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 	}
 
 	if len(txs) != len(receipts) {
-		return nil, fmt.Errorf("txs length doesn't equal to receipts' length", len(txs), len(receipts))
+		return nil, fmt.Errorf("txs length %d doesn't equal to receipts' length %d", len(txs), len(receipts))
 	}
 
 	txReceipts := make([]map[string]interface{}, 0, len(txs))

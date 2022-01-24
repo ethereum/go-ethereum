@@ -1,9 +1,9 @@
-package main
+package cli
 
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
 type AccountNewCommand struct {

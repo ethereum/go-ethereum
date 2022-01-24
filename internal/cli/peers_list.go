@@ -1,12 +1,12 @@
-package main
+package cli
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 )
 
 // PeersListCommand is the command to group the peers commands
@@ -18,7 +18,7 @@ type PeersListCommand struct {
 func (p *PeersListCommand) Help() string {
 	return `Usage: bor peers list
 
-  Build an archive containing Bor pprof traces
+  Lists the connected peers
 
   ` + p.Flags().Help()
 }

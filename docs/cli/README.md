@@ -15,4 +15,20 @@
 
 - [```account import```](./account_import.md)
 
+- [```chain```](./chain.md)
+
+- [```chain sethead```](./chain_sethead.md)
+
+- [```peers```](./peers.md)
+
+- [```peers add```](./peers_add.md)
+
+- [```peers list```](./peers_list.md)
+
+- [```peers remove```](./peers_remove.md)
+
+- [```peers status```](./peers_status.md)
+
+- [```status```](./status.md)
+
 - [```version```](./version.md)
