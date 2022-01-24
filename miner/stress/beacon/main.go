@@ -141,8 +141,14 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
+	timestamp := uint64(time.Now().Unix())
+	if timestamp <= parentTimestamp {
+		timestamp = parentTimestamp + 1
+	}
 	payloadAttribute := catalyst.PayloadAttributesV1{
-		Timestamp: uint64(time.Now().Unix()),
+		Timestamp:             timestamp,
+		Random:                common.Hash{},
+		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
 	}
 	fcState := catalyst.ForkchoiceStateV1{
 		HeadBlockHash:      parentHash,
@@ -287,9 +293,12 @@ func (mgr *nodeManager) run() {
 			fcState := catalyst.ForkchoiceStateV1{
 				HeadBlockHash:      oldest.Hash(),
 				SafeBlockHash:      common.Hash{},
-				FinalizedBlockHash: common.Hash{},
+				FinalizedBlockHash: oldest.Hash(),
 			}
-			node.api.ForkchoiceUpdatedV1(fcState, nil)
+			// TODO(rjl493456442) finalization doesn't work properly, FIX IT
+			_ = fcState
+			_ = node
+			//node.api.ForkchoiceUpdatedV1(fcState, nil)
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]
@@ -331,10 +340,13 @@ func (mgr *nodeManager) run() {
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
-			nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
-
 			for _, node := range nodes {
 				if err := node.insertBlockAndSetHead(parentBlock.Header(), *ed); err != nil {
+					log.Error("Failed to insert block", "type", node.typ, "err", err)
+				}
+			}
+			for _, node := range mgr.getNodes(eth2LightClient) {
+				if err := node.insertBlock(*ed); err != nil {
 					log.Error("Failed to insert block", "type", node.typ, "err", err)
 				}
 			}
@@ -410,9 +422,8 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis.Difficulty = params.MinimumDifficulty
 	genesis.GasLimit = 25000000
 
-	genesis.Config.ChainID = big.NewInt(18)
-	genesis.Config.EIP150Hash = common.Hash{}
 	genesis.BaseFee = big.NewInt(params.InitialBaseFee)
+	genesis.Config = params.AllEthashProtocolChanges
 	genesis.Config.TerminalTotalDifficulty = transitionDifficulty
 
 	genesis.Alloc = core.GenesisAlloc{}
