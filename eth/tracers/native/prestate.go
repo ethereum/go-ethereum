@@ -45,7 +45,9 @@ type account struct {
 type prestateTracer struct {
 	env         *vm.EVM
 	prestate    prestate
+	create      bool
 	from        common.Address
+	to          common.Address
 	fromBalance *big.Int
 	gasPrice    *big.Int
 	interrupt   uint32 // Atomic flag to signal execution interruption
@@ -80,7 +82,9 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+	t.create = create
 	t.from = from
+	t.to = to
 	t.gasPrice = env.TxContext.GasPrice
 
 	// Compute intrinsic gas
@@ -110,6 +114,11 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 	t.fromBalance.Add(t.fromBalance, new(big.Int).Mul(t.gasPrice, new(big.Int).SetUint64(gasUsed)))
 	t.prestate[t.from].Balance = hexutil.EncodeBig(t.fromBalance)
+
+	if t.create {
+		// Exclude created contract.
+		delete(t.prestate, t.to)
+	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
