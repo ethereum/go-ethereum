@@ -107,6 +107,43 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 	}
 }
 
+type stRangesTest struct {
+	root     common.Hash
+	accounts []common.Hash
+	origin   []byte
+	limit    []byte
+	nBytes   uint64
+
+	expSlots int
+}
+
+// TestSnapGetStorageRange various forms of GetStorageRanges requests.
+func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
+	var (
+		ffHash    = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		zero      = common.Hash{}
+		firstKey  = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
+		secondKey = common.HexToHash("0x09e47cd5056a689e708f22fe1f932709a320518e444f5f7d8d46a3da523d6606")
+	)
+	for i, tc := range []stRangesTest{
+		{
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{secondKey, firstKey},
+			origin:   zero[:],
+			limit:    ffHash[:],
+			nBytes:   500,
+			expSlots: 0,
+		},
+		// TODO, make more testcases. The 'halfchain' currently does not appear
+		// to have any storage slots set, for any account.
+	} {
+		if err := s.snapGetStorageRanges(t, &tc); err != nil {
+			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
+				i, tc.root, tc.origin, tc.limit, tc.nBytes, len(tc.accounts), err)
+		}
+	}
+}
+
 type byteCodesTest struct {
 	nBytes uint64
 	hashes []common.Hash
@@ -421,6 +458,50 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], end, keys, accounts, proofdb)
 	return err
+}
+
+func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
+	conn, err := s.dialSnap()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	if err = conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+	// write request
+	req := &GetStorageRanges{
+		ID:       uint64(rand.Int63()),
+		Root:     tc.root,
+		Accounts: tc.accounts,
+		Origin:   tc.origin,
+		Limit:    tc.limit,
+		Bytes:    tc.nBytes,
+	}
+	resp, err := conn.snapRequest(req, req.ID, s.chain)
+	if err != nil {
+		return fmt.Errorf("account range request failed: %v", err)
+	}
+	var res *snap.StorageRangesPacket
+	if r, ok := resp.(*StorageRanges); !ok {
+		return fmt.Errorf("account range response wrong: %T %v", resp, resp)
+	} else {
+		res = (*snap.StorageRangesPacket)(r)
+	}
+	gotSlots := 0
+	// Ensure the ranges are monotonically increasing
+	for i, slots := range res.Slots {
+		gotSlots += len(slots)
+		for j := 1; j < len(slots); j++ {
+			if bytes.Compare(slots[j-1].Hash[:], slots[j].Hash[:]) >= 0 {
+				return fmt.Errorf("storage slots not monotonically increasing for account #%d: #%d [%x] vs #%d [%x]", i, j-1, slots[j-1].Hash[:], j, slots[j].Hash[:])
+			}
+		}
+	}
+	if exp, got := tc.expSlots, gotSlots; exp != got {
+		return fmt.Errorf("expected %d slots, got %d", exp, got)
+	}
+	return nil
 }
 
 func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
