@@ -131,6 +131,7 @@ func (s *Suite) SnapTests() []utesting.Test {
 		{Name: "TestSnapAccountRange", Fn: s.TestSnapGetAccountRange},
 		{Name: "TestSnapGetByteCodes", Fn: s.TestSnapGetByteCodes},
 		{Name: "TestSnapGetTrieNodes", Fn: s.TestSnapTrieNodes},
+		{Name: "TestSnapGetStorageRanges", Fn: s.TestSnapGetStorageRanges},
 	}
 }
 
