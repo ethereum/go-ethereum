@@ -759,6 +759,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		// The maximum acceptable reorg depth can be limited by the finalised block
 		// somehow. TODO(rjl493456442) fix the hard-coded number here later.
 		state, err = w.eth.StateAtBlock(parent, 1024, nil, false, false)
+		log.Warn("Recovered mining state", "root", parent.Root(), "err", err)
 	}
 	if err != nil {
 		return nil, err
