@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -32,7 +34,7 @@ func init() {
 	register("nativePrestateTracer", newPrestateTracer)
 }
 
-type prestate = map[common.Address]account
+type prestate = map[common.Address]*account
 type account struct {
 	Balance string                      `json:"balance"`
 	Nonce   uint64                      `json:"nonce"`
@@ -41,23 +43,26 @@ type account struct {
 }
 
 type prestateTracer struct {
-	env       *vm.EVM
-	prestate  prestate
-	interrupt uint32 // Atomic flag to signal execution interruption
-	reason    error  // Textual reason for the interruption
+	env         *vm.EVM
+	prestate    prestate
+	from        common.Address
+	fromBalance *big.Int
+	gasPrice    *big.Int
+	interrupt   uint32 // Atomic flag to signal execution interruption
+	reason      error  // Textual reason for the interruption
 }
 
 func newPrestateTracer() tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &prestateTracer{prestate: prestate{}}
+	return &prestateTracer{prestate: prestate{}, fromBalance: new(big.Int)}
 }
 
 func (t *prestateTracer) lookupAccount(addr common.Address) {
 	if _, ok := t.prestate[addr]; ok {
 		return
 	}
-	t.prestate[addr] = account{
+	t.prestate[addr] = &account{
 		Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
@@ -75,19 +80,40 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
-	// TODO: check balance is after value deduction
-	//t.lookupAccount(from)
+	t.from = from
+	t.gasPrice = env.TxContext.GasPrice
+
+	// Compute intrinsic gas
+	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
+	if err != nil {
+		return
+	}
+
+	t.lookupAccount(to)
+	t.lookupAccount(from)
+	// The sender and recipient balances include value transfer and gas cost.
+	// Manually revert them back to get to pre-state.
+	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
+	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
+	toBal = new(big.Int).Sub(toBal, value)
+	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
+	t.prestate[from].Nonce--
+
+	// Intrinsic gas is accounted for here. Execution gas usage is accounted for in `CaptureEnd`.
+	intrinsicCost := new(big.Int).Mul(t.gasPrice, new(big.Int).SetUint64(intrinsicGas))
+	t.fromBalance.Add(fromBal, t.fromBalance.Add(value, intrinsicCost))
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+	t.fromBalance.Add(t.fromBalance, new(big.Int).Mul(t.gasPrice, new(big.Int).SetUint64(gasUsed)))
+	t.prestate[t.from].Balance = hexutil.EncodeBig(t.fromBalance)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	if len(t.prestate) == 0 {
-		t.lookupAccount(scope.Contract.Address())
-	}
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
