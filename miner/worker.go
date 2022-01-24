@@ -791,6 +791,9 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 
 // commitUncle adds the given block to uncle block set, returns error if failed to add.
 func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
+	if w.isTTDReached(env.header) {
+		return errors.New("ignore uncle for beacon block")
+	}
 	hash := uncle.Hash()
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
