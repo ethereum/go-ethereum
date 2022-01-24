@@ -37,32 +37,88 @@ func getCoresCount(cp []cpu.InfoStat) int {
 	return cores
 }
 
+type MemoryDetails struct {
+	TotalMem float64 `json:"totalMem"`
+	FreeMem  float64 `json:"freeMem"`
+	UsedMem  float64 `json:"usedMem"`
+}
+
+type DiskDetails struct {
+	TotalDisk float64 `json:"totalDisk"`
+	FreeDisk  float64 `json:"freeDisk"`
+	UsedDisk  float64 `json:"usedDisk"`
+}
+
+type BorFingerprint struct {
+	CoresCount    int            `json:"coresCount"`
+	OsName        string         `json:"osName"`
+	OsVer         string         `json:"osVer"`
+	DiskDetails   *DiskDetails   `json:"diskDetails"`
+	MemoryDetails *MemoryDetails `json:"memoryDetails"`
+}
+
+func formatFingerprint(borFingerprint *BorFingerprint) string {
+	base := formatKV([]string{
+		fmt.Sprintf("Bor Version : %s", params.VersionWithMeta),
+		fmt.Sprintf("CPU : %d cores", borFingerprint.CoresCount),
+		fmt.Sprintf("OS : %s %s ", borFingerprint.OsName, borFingerprint.OsVer),
+		fmt.Sprintf("RAM :: total : %v GB, free : %v GB, used : %v GB", borFingerprint.MemoryDetails.TotalMem, borFingerprint.MemoryDetails.FreeMem, borFingerprint.MemoryDetails.UsedMem),
+		fmt.Sprintf("STORAGE :: total : %v GB, free : %v GB, used : %v GB", borFingerprint.DiskDetails.TotalDisk, borFingerprint.DiskDetails.FreeDisk, borFingerprint.DiskDetails.UsedDisk),
+	})
+	return base
+}
+
+func convertBytesToGB(bytesValue uint64) float64 {
+	return math.Floor(float64(bytesValue)/(1024*1024*1024)*100) / 100
+}
+
 // Run implements the cli.Command interface
 func (c *FingerprintCommand) Run(args []string) int {
-	v, _ := mem.VirtualMemory()
-	h, _ := host.Info()
-	cp, _ := cpu.Info()
-	d, _ := disk.Usage("/")
 
-	osName := h.OS
-	osVer := h.Platform + " - " + h.PlatformVersion + " - " + h.KernelArch
-	totalMem := math.Floor(float64(v.Total)/(1024*1024*1024)*100) / 100
-	availableMem := math.Floor(float64(v.Available)/(1024*1024*1024)*100) / 100
-	usedMem := math.Floor(float64(v.Used)/(1024*1024*1024)*100) / 100
-	totalDisk := math.Floor(float64(d.Total)/(1024*1024*1024)*100) / 100
-	availableDisk := math.Floor(float64(d.Free)/(1024*1024*1024)*100) / 100
-	usedDisk := math.Floor(float64(d.Used)/(1024*1024*1024)*100) / 100
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
-	borDetails := fmt.Sprintf("Bor Version : %s", params.VersionWithMeta)
-	cpuDetails := fmt.Sprintf("CPU : %d cores", getCoresCount(cp))
-	osDetails := fmt.Sprintf("OS : %s %s ", osName, osVer)
-	memDetails := fmt.Sprintf("RAM :: total : %v GB, free : %v GB, used : %v GB", totalMem, availableMem, usedMem)
-	diskDetails := fmt.Sprintf("STORAGE :: total : %v GB, free : %v GB, used : %v GB", totalDisk, availableDisk, usedDisk)
+	h, err := host.Info()
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
-	c.UI.Output(borDetails)
-	c.UI.Output(cpuDetails)
-	c.UI.Output(osDetails)
-	c.UI.Output(memDetails)
-	c.UI.Output(diskDetails)
+	cp, err := cpu.Info()
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+
+	d, err := disk.Usage("/")
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+
+	diskDetails := &DiskDetails{
+		TotalDisk: convertBytesToGB(d.Total),
+		FreeDisk:  convertBytesToGB(d.Free),
+		UsedDisk:  convertBytesToGB(d.Used),
+	}
+
+	memoryDetails := &MemoryDetails{
+		TotalMem: convertBytesToGB(v.Total),
+		FreeMem:  convertBytesToGB(v.Available),
+		UsedMem:  convertBytesToGB(v.Used),
+	}
+
+	borFingerprint := &BorFingerprint{
+		CoresCount:    getCoresCount(cp),
+		OsName:        h.OS,
+		OsVer:         h.Platform + " - " + h.PlatformVersion + " - " + h.KernelArch,
+		DiskDetails:   diskDetails,
+		MemoryDetails: memoryDetails,
+	}
+
+	c.UI.Output(formatFingerprint(borFingerprint))
 	return 0
 }
