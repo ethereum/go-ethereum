@@ -63,6 +63,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		firstKey       = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 		firstKeyPlus1  = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2b")
 		secondKey      = common.HexToHash("0x09e47cd5056a689e708f22fe1f932709a320518e444f5f7d8d46a3da523d6606")
+		storageRoot    = common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790")
 	)
 	for i, tc := range []accRangeTest{
 		// Tests decreasing the number of bytes
@@ -89,6 +90,8 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		{4000, s.chain.RootAt(0), zero, ffHash, 0, zero, zero},
 		// A 127 block old stateroot, expected to be served
 		{4000, s.chain.RootAt(999 - 127), zero, ffHash, 77, firstKey, common.HexToHash("0xe4c6fdef5dd4e789a2612390806ee840b8ec0fe52548f8b4efe41abb20c37aac")},
+		// A root which is not actually an account root, but a storage orot
+		{4000, storageRoot, zero, ffHash, 0, zero, zero},
 
 		// And some non-sensical requests
 		//
@@ -134,8 +137,62 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 			nBytes:   500,
 			expSlots: 0,
 		},
-		// TODO, make more testcases. The 'halfchain' currently does not appear
-		// to have any storage slots set, for any account.
+
+		/*
+			Some tests against this account:
+			{
+			  "balance": "0",
+			  "nonce": 1,
+			  "root": "0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790",
+			  "codeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+			  "storage": {
+			    "0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace": "02",
+			    "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6": "01",
+			    "0xc2575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b": "03"
+			  },
+			  "key": "0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844"
+			}
+		*/
+		{ // [:] -> [slot1, slot2, slot3]
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{common.HexToHash("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844")},
+			origin:   zero[:],
+			limit:    ffHash[:],
+			nBytes:   500,
+			expSlots: 3,
+		},
+		{ // [slot1:] -> [slot1, slot2, slot3]
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{common.HexToHash("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844")},
+			origin:   common.FromHex("0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"),
+			limit:    ffHash[:],
+			nBytes:   500,
+			expSlots: 3,
+		},
+		{ // [slot1+ :] -> [slot2, slot3]
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{common.HexToHash("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844")},
+			origin:   common.FromHex("0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5acf"),
+			limit:    ffHash[:],
+			nBytes:   500,
+			expSlots: 2,
+		},
+		{ // [slot1:slot2] -> [slot1, slot2]
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{common.HexToHash("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844")},
+			origin:   common.FromHex("0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"),
+			limit:    common.FromHex("0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6"),
+			nBytes:   500,
+			expSlots: 2,
+		},
+		{ // [slot1+:slot2+] -> [slot2, slot3]
+			root:     s.chain.RootAt(999),
+			accounts: []common.Hash{common.HexToHash("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844")},
+			origin:   common.FromHex("0x4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			limit:    common.FromHex("0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf7"),
+			nBytes:   500,
+			expSlots: 2,
+		},
 	} {
 		if err := s.snapGetStorageRanges(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
