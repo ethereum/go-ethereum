@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestImportFromFile(t *testing.T) {
+func TestChain_ImportFromFile(t *testing.T) {
 	type args struct {
 		filename string
 	}
