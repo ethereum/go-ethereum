@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -69,11 +70,22 @@ func NewServer(config *Config) (*Server, error) {
 	}
 	srv.node = stack
 
+	// setup account manager (only keystore)
+	{
+		keydir := stack.KeyStoreDir()
+		n, p := keystore.StandardScryptN, keystore.StandardScryptP
+		if config.Accounts.UseLightweightKDF {
+			n, p = keystore.LightScryptN, keystore.LightScryptP
+		}
+		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
+	}
+
 	// register the ethereum backend
-	ethCfg, err := config.buildEth()
+	ethCfg, err := config.buildEth(stack)
 	if err != nil {
 		return nil, err
 	}
+
 	backend, err := eth.New(stack, ethCfg)
 	if err != nil {
 		return nil, err
@@ -95,16 +107,6 @@ func NewServer(config *Config) (*Server, error) {
 		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), config.Ethstats); err != nil {
 			return nil, err
 		}
-	}
-
-	// setup account manager (only keystore)
-	{
-		keydir := stack.KeyStoreDir()
-		n, p := keystore.StandardScryptN, keystore.StandardScryptP
-		if config.Accounts.UseLightweightKDF {
-			n, p = keystore.LightScryptN, keystore.LightScryptP
-		}
-		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
 	}
 
 	// sealing (if enabled) or in dev mode
@@ -282,4 +284,24 @@ func setupLogger(logLevel string) {
 		glogger.Verbosity(log.LvlInfo)
 	}
 	log.Root().SetHandler(glogger)
+}
+
+// Fatalf formats a message to standard error and exits the program.
+// The message is also printed to standard output if standard error
+// is redirected to a different file.
+func Fatalf(format string, args ...interface{}) {
+	w := io.MultiWriter(os.Stdout, os.Stderr)
+	if runtime.GOOS == "windows" {
+		// The SameFile check below doesn't work on Windows.
+		// stdout is unlikely to get redirected though, so just print there.
+		w = os.Stdout
+	} else {
+		outf, _ := os.Stdout.Stat()
+		errf, _ := os.Stderr.Stat()
+		if outf != nil && errf != nil && os.SameFile(outf, errf) {
+			w = os.Stderr
+		}
+	}
+	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
+	os.Exit(1)
 }

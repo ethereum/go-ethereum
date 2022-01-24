@@ -14,6 +14,8 @@ import (
 
 	godebug "runtime/debug"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -611,7 +613,7 @@ func (c *Config) loadChain() error {
 	return nil
 }
 
-func (c *Config) buildEth() (*ethconfig.Config, error) {
+func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 	dbHandles, err := makeDatabaseHandles()
 	if err != nil {
 		return nil, err
@@ -665,8 +667,36 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 
 	// update for developer mode
 	if c.Developer.Enabled {
+		// Get a keystore
+		var ks *keystore.KeyStore
+		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
+			ks = keystores[0].(*keystore.KeyStore)
+		}
+
+		// Create new developer account or reuse existing one
+		var (
+			developer  accounts.Account
+			passphrase string
+			err        error
+		)
+		// etherbase has been set above, configuring the miner address from command line flags.
+		if n.Miner.Etherbase != (common.Address{}) {
+			developer = accounts.Account{Address: n.Miner.Etherbase}
+		} else if accs := ks.Accounts(); len(accs) > 0 {
+			developer = ks.Accounts()[0]
+		} else {
+			developer, err = ks.NewAccount(passphrase)
+			if err != nil {
+				Fatalf("Failed to create developer account: %v", err)
+			}
+		}
+		if err := ks.Unlock(developer, passphrase); err != nil {
+			Fatalf("Failed to unlock developer account: %v", err)
+		}
+		log.Info("Using developer account", "address", developer.Address)
+
 		// get developer mode chain config
-		c.chain = chains.GetDeveloperChain(c.Developer.Period, n.Miner.Etherbase)
+		c.chain = chains.GetDeveloperChain(c.Developer.Period, developer.Address)
 
 		// update the parameters
 		n.NetworkId = c.chain.NetworkId
@@ -841,9 +871,6 @@ func (c *Config) buildNode() (*node.Config, error) {
 		cfg.P2P.ListenAddr = ""
 		cfg.P2P.NoDial = true
 		cfg.P2P.DiscoveryV5 = false
-
-		// data dir
-		cfg.DataDir = ""
 	}
 
 	// enable jsonrpc endpoints
@@ -864,23 +891,26 @@ func (c *Config) buildNode() (*node.Config, error) {
 	}
 	cfg.P2P.NAT = natif
 
-	// Discovery
-	// if no bootnodes are defined, use the ones from the chain file.
-	bootnodes := c.P2P.Discovery.Bootnodes
-	if len(bootnodes) == 0 {
-		bootnodes = c.chain.Bootnodes
-	}
-	if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
-		return nil, err
+	// only check for non-developer modes
+	if !c.Developer.Enabled {
+		// Discovery
+		// if no bootnodes are defined, use the ones from the chain file.
+		bootnodes := c.P2P.Discovery.Bootnodes
+		if len(bootnodes) == 0 {
+			bootnodes = c.chain.Bootnodes
+		}
+		if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
+			return nil, err
+		}
 	}
 
 	if c.P2P.NoDiscover {

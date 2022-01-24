@@ -16,7 +16,7 @@ func TestConfigDefault(t *testing.T) {
 	_, err := config.buildNode()
 	assert.NoError(t, err)
 
-	_, err = config.buildEth()
+	_, err = config.buildEth(nil)
 	assert.NoError(t, err)
 }
 
