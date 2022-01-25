@@ -687,11 +687,11 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 		} else {
 			developer, err = ks.NewAccount(passphrase)
 			if err != nil {
-				Fatalf("Failed to create developer account: %v", err)
+				return nil, fmt.Errorf("failed to create developer account: %v", err)
 			}
 		}
 		if err := ks.Unlock(developer, passphrase); err != nil {
-			Fatalf("Failed to unlock developer account: %v", err)
+			return nil, fmt.Errorf("failed to unlock developer account: %v", err)
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
