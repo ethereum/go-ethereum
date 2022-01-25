@@ -122,7 +122,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		addr := scope.Contract.Address()
 		nonce := t.env.StateDB.GetNonce(addr)
 		t.lookupAccount(crypto.CreateAddress(addr, nonce))
-	case op == vm.CREATE2:
+	case stackLen >= 4 && op == vm.CREATE2:
 		addr := scope.Contract.Address()
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
