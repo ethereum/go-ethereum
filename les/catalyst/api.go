@@ -23,7 +23,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/les"
@@ -51,6 +50,8 @@ type ConsensusAPI struct {
 	les *les.LightEthereum
 }
 
+// NewConsensusAPI creates a new consensus api for the given backend.
+// The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
 		panic("Catalyst started without valid total difficulty")
@@ -58,10 +59,16 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	return &ConsensusAPI{les: les}
 }
 
-func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
-	return nil, &beacon.GenericServerError
-}
-
+// ForkchoiceUpdatedV1 has several responsibilities:
+// If the method is called with an empty head block:
+// 		we return success, which can be used to check if the catalyst mode is enabled
+// If the total difficulty was not reached:
+// 		we return INVALID
+// If the finalizedBlockHash is set:
+// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
+// We try to set our blockchain to the headBlock
+// If there are payloadAttributes:
+//      we return an error since block creation is not supported in les mode
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
 		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
@@ -90,8 +97,9 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
 }
 
-func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
+// GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
+func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
+	return nil, &beacon.GenericServerError
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -122,10 +130,15 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 		return api.invalid(), err
 	}
-	if merger := api.merger(); !merger.TDDReached() {
+	if merger := api.les.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
 	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+}
+
+// invalid returns a response "INVALID" with the latest valid hash set to the current head.
+func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
+	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
 }
 
 func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
@@ -140,6 +153,12 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
+// ExecutableDataToBlock constructs a block from executable data.
+// It verifies that the following fields:
+// 		len(extraData) <= 32
+// 		uncleHash = emptyUncleHash
+// 		difficulty = 0
+// and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
@@ -174,7 +193,7 @@ func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error)
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// shortcut if we entered PoS already
-	if api.merger().PoSFinalized() {
+	if api.les.Merger().PoSFinalized() {
 		return nil
 	}
 	// make sure the parent has enough terminal total difficulty
@@ -205,13 +224,8 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
-	if merger := api.merger(); !merger.PoSFinalized() {
+	if merger := api.les.Merger(); !merger.PoSFinalized() {
 		merger.FinalizePoS()
 	}
 	return nil
-}
-
-// Helper function, return the merger instance.
-func (api *ConsensusAPI) merger() *consensus.Merger {
-	return api.les.Merger()
 }

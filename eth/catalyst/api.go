@@ -24,7 +24,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -150,7 +149,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 		return api.invalid(), err
 	}
 
-	if merger := api.merger(); !merger.TDDReached() {
+	if merger := api.eth.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
 	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
@@ -274,7 +273,7 @@ func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// shortcut if we entered PoS already
-	if api.merger().PoSFinalized() {
+	if api.eth.Merger().PoSFinalized() {
 		return nil
 	}
 	// make sure the parent has enough terminal total difficulty
@@ -304,15 +303,10 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
-	if merger := api.merger(); !merger.PoSFinalized() {
+	if merger := api.eth.Merger(); !merger.PoSFinalized() {
 		merger.FinalizePoS()
 	}
 	// TODO (MariusVanDerWijden) are we really synced now?
 	api.eth.SetSynced()
 	return nil
-}
-
-// Helper function, return the merger instance.
-func (api *ConsensusAPI) merger() *consensus.Merger {
-	return api.eth.Merger()
 }
