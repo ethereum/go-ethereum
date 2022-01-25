@@ -21,8 +21,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Register adds catalyst APIs to the full node.
@@ -124,7 +121,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
 	log.Trace("Engine API request received", "method", "ExecutePayload", params.BlockHash, "number", params.Number)
-	block, err := ExecutableDataToBlock(params)
+	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
 	}
@@ -181,86 +178,7 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.Pa
 	if err != nil {
 		return nil, err
 	}
-	return BlockToExecutableData(block), nil
-}
-
-func encodeTransactions(txs []*types.Transaction) [][]byte {
-	var enc = make([][]byte, len(txs))
-	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
-	}
-	return enc
-}
-
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
-	for i, encTx := range enc {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	return txs, nil
-}
-
-// ExecutableDataToBlock constructs a block from executable data.
-// It verifies that the following fields:
-// 		len(extraData) <= 32
-// 		uncleHash = emptyUncleHash
-// 		difficulty = 0
-// and that the blockhash of the constructed block matches the parameters.
-func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error) {
-	txs, err := decodeTransactions(params.Transactions)
-	if err != nil {
-		return nil, err
-	}
-	if len(params.ExtraData) > 32 {
-		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
-	}
-	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.FeeRecipient,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      new(big.Int).SetUint64(params.Number),
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-		BaseFee:     params.BaseFeePerGas,
-		Extra:       params.ExtraData,
-		MixDigest:   params.Random,
-	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
-	if block.Hash() != params.BlockHash {
-		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
-	}
-	return block, nil
-}
-
-// BlockToExecutableData constructs the executableDataV1 structure by filling the
-// fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block) *beacon.ExecutableDataV1 {
-	return &beacon.ExecutableDataV1{
-		BlockHash:     block.Hash(),
-		ParentHash:    block.ParentHash(),
-		FeeRecipient:  block.Coinbase(),
-		StateRoot:     block.Root(),
-		Number:        block.NumberU64(),
-		GasLimit:      block.GasLimit(),
-		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee(),
-		Timestamp:     block.Time(),
-		ReceiptsRoot:  block.ReceiptHash(),
-		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        block.MixDigest(),
-		ExtraData:     block.Extra(),
-	}
+	return beacon.BlockToExecutableData(block), nil
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.

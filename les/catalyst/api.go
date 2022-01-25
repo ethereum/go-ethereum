@@ -20,16 +20,13 @@ package catalyst
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Register adds catalyst APIs to the light client.
@@ -104,7 +101,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
-	block, err := ExecutableDataToBlock(params)
+	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
 	}
@@ -139,56 +136,6 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 // invalid returns a response "INVALID" with the latest valid hash set to the current head.
 func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
 	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
-}
-
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
-	for i, encTx := range enc {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	return txs, nil
-}
-
-// ExecutableDataToBlock constructs a block from executable data.
-// It verifies that the following fields:
-// 		len(extraData) <= 32
-// 		uncleHash = emptyUncleHash
-// 		difficulty = 0
-// and that the blockhash of the constructed block matches the parameters.
-func ExecutableDataToBlock(params beacon.ExecutableDataV1) (*types.Block, error) {
-	txs, err := decodeTransactions(params.Transactions)
-	if err != nil {
-		return nil, err
-	}
-	if len(params.ExtraData) > 32 {
-		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
-	}
-	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.FeeRecipient,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      new(big.Int).SetUint64(params.Number),
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-		BaseFee:     params.BaseFeePerGas,
-		Extra:       params.ExtraData,
-		MixDigest:   params.Random,
-	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
-	if block.Hash() != params.BlockHash {
-		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
-	}
-	return block, nil
 }
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {

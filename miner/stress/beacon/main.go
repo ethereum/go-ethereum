@@ -200,7 +200,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.Executab
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
-	block, err := fcatalyst.ExecutableDataToBlock(ed)
+	block, err := beacon.ExecutableDataToBlock(ed)
 	if err != nil {
 		return err
 	}
@@ -364,7 +364,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := fcatalyst.ExecutableDataToBlock(*ed)
+			block, _ := beacon.ExecutableDataToBlock(*ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
