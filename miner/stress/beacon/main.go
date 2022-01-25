@@ -173,7 +173,7 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 	}
 	switch n.typ {
 	case eth2NormalNode, eth2MiningNode:
-		newResp, err := n.api.ExecutePayloadV1(eb)
+		newResp, err := n.api.NewPayloadV1(eb)
 		if err != nil {
 			return err
 		} else if newResp.Status != "VALID" {
