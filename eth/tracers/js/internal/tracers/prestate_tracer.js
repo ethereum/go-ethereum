@@ -47,6 +47,13 @@
 	// result is invoked when all the opcodes have been iterated over and returns
 	// the final result of the tracing.
 	result: function(ctx, db) {
+		if (this.prestate === null) {
+			this.prestate = {};
+			// If tx is transfer-only, the recipient account
+			// hasn't been populated.
+			this.lookupAccount(ctx.to, db);
+		}
+
 		// At this point, we need to deduct the 'value' from the
 		// outer transaction, and move it back to the origin
 		this.lookupAccount(ctx.from, db);
