@@ -2052,7 +2052,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 		}
 		if isEpochSwithBlock {
 			CheckpointCh <- 1
-
 		}
 	}
 	// Append a single chain head event if we've progressed the chain
@@ -2480,16 +2479,12 @@ func (bc *BlockChain) UpdateM1() error {
 	// if can't get anything, request from contracts
 	stateDB, err := bc.State()
 	if err != nil {
-
 		candidates, err = validator.GetCandidates(opts)
 		if err != nil {
-
 			return err
 		}
 	} else {
-
 		candidates = state.GetCandidates(stateDB)
-
 	}
 
 	var ms []utils.Masternode

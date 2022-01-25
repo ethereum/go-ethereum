@@ -242,8 +242,10 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	currentBlock := blockchain.Genesis()
 
 	go func() {
-		checkpointChanMsg := <-core.CheckpointCh
-		log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		for range core.CheckpointCh {
+			checkpointChanMsg := <-core.CheckpointCh
+			log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		}
 	}()
 
 	// Insert initial blocks
@@ -290,8 +292,10 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	var currentForkBlock *types.Block
 
 	go func() {
-		checkpointChanMsg := <-core.CheckpointCh
-		log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		for range core.CheckpointCh {
+			checkpointChanMsg := <-core.CheckpointCh
+			log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		}
 	}()
 
 	var masternodesFromV1LastEpoch []common.Address
