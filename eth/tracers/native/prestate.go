@@ -127,30 +127,28 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
-	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
+	switch {
+	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
 		t.lookupStorage(scope.Contract.Address(), slot)
-	}
-	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
+	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
-	}
-	if (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE) && stackLen >= 5 {
+	case stackLen >= 5 (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE) :
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
-	}
-	if op == vm.CREATE {
+	case op == vm.CREATE:
 		addr := scope.Contract.Address()
 		nonce := t.env.StateDB.GetNonce(addr)
 		t.lookupAccount(crypto.CreateAddress(addr, nonce))
-	}
-	if op == vm.CREATE2 {
+	case op == vm.CREATE2:
 		/*addr := scope.Contract.Address()
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]*/
 		// TODO
 		panic("unimplemented")
 	}
+}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
