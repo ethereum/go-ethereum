@@ -41,16 +41,14 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 
 // ReadCode retrieves the contract code of the provided code hash.
 func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	// Try with the legacy code scheme first, if not then try with current
-	// scheme. Since most of the code will be found with legacy scheme.
-	//
-	// todo(rjl493456442) change the order when we forcibly upgrade the code
-	// scheme with snapshot.
-	data, _ := db.Get(hash[:])
+	// Try with the prefixed code scheme first, if not then try with legacy
+	// scheme.
+	data := ReadCodeWithPrefix(db, hash)
 	if len(data) != 0 {
 		return data
 	}
-	return ReadCodeWithPrefix(db, hash)
+	data, _ := db.Get(hash[:])
+	return data
 }
 
 // ReadCodeWithPrefix retrieves the contract code of the provided code hash.
