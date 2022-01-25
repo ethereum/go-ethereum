@@ -86,7 +86,7 @@
 		}
 		// Whenever new state is accessed, add it to the prestate
 		switch (log.op.toString()) {
-			case "EXTCODECOPY": case "EXTCODESIZE": case "BALANCE":
+			case "EXTCODECOPY": case "EXTCODESIZE": case "EXTCODEHASH": case "BALANCE":
 				this.lookupAccount(toAddress(log.stack.peek(0).toString(16)), db);
 				break;
 			case "CREATE":
