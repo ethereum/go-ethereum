@@ -217,6 +217,7 @@ type BlockChain struct {
 	borReceiptsCache *lru.Cache             // Cache for the most recent bor receipt receipts per block
 	stateSyncData    []*types.StateSyncData // State sync data
 	stateSyncFeed    event.Feed             // State sync feed
+	chain2HeadFeed   event.Feed             // Reorg/NewHead/Fork data feed
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1640,10 +1641,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			for _, data := range bc.stateSyncData {
 				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 			}
+
+			bc.chain2HeadFeed.Send(Chain2HeadEvent{
+				Type:     Chain2HeadCanonicalEvent,
+				NewChain: []*types.Block{block},
+			})
+
 			// BOR
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+
+		bc.chain2HeadFeed.Send(Chain2HeadEvent{
+			Type:     Chain2HeadForkEvent,
+			NewChain: []*types.Block{block},
+		})
 	}
 	return status, nil
 }
@@ -1737,6 +1749,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
+
+			bc.chain2HeadFeed.Send(Chain2HeadEvent{
+				Type:     Chain2HeadCanonicalEvent,
+				NewChain: []*types.Block{lastCanon},
+			})
 		}
 	}()
 	// Start the parallel header verifier
@@ -2262,6 +2279,13 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
+
+		bc.chain2HeadFeed.Send(Chain2HeadEvent{
+			Type:     Chain2HeadReorgEvent,
+			NewChain: newChain,
+			OldChain: oldChain,
+		})
+
 		logFn := log.Info
 		msg := "Chain reorg detected"
 		if len(oldChain) > 63 {
@@ -2568,6 +2592,11 @@ func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscripti
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChain2HeadEvent registers a subscription of ChainHeadEvent. ()
+func (bc *BlockChain) SubscribeChain2HeadEvent(ch chan<- Chain2HeadEvent) event.Subscription {
+	return bc.scope.Track(bc.chain2HeadFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

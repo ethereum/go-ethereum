@@ -72,6 +72,9 @@ type LightChain struct {
 	running          int32 // whether LightChain is running or stopped
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
+
+	// Bor
+	chain2HeadFeed event.Feed
 }
 
 // NewLightChain returns a fully initialised light chain using information
@@ -559,6 +562,11 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+// SubscribeChain2HeadEvent registers a subscription of Reorg/head/fork events.
+func (lc *LightChain) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	return lc.scope.Track(lc.chain2HeadFeed.Subscribe(ch))
 }
 
 // DisableCheckFreq disables header validation. This is used for ultralight mode.
