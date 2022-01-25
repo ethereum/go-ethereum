@@ -86,6 +86,20 @@ type fullNodeBackend interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
+type EthstatsDataType struct {
+	kv map[string]string
+}
+
+// Function to add data to EthstatsData
+func (e *EthstatsDataType) AddKV(key, val string) {
+	e.kv[key] = val
+}
+
+// Arbitrary Data that can be included
+var EthstatsData = &EthstatsDataType{
+	kv: make(map[string]string),
+}
+
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
@@ -466,16 +480,17 @@ func (s *Service) readLoop(conn *connWrapper) {
 // nodeInfo is the collection of meta information about a node that is displayed
 // on the monitoring page.
 type nodeInfo struct {
-	Name     string `json:"name"`
-	Node     string `json:"node"`
-	Port     int    `json:"port"`
-	Network  string `json:"net"`
-	Protocol string `json:"protocol"`
-	API      string `json:"api"`
-	Os       string `json:"os"`
-	OsVer    string `json:"os_v"`
-	Client   string `json:"client"`
-	History  bool   `json:"canUpdateHistory"`
+	Name     string            `json:"name"`
+	Node     string            `json:"node"`
+	Port     int               `json:"port"`
+	Network  string            `json:"net"`
+	Protocol string            `json:"protocol"`
+	API      string            `json:"api"`
+	Os       string            `json:"os"`
+	OsVer    string            `json:"os_v"`
+	Client   string            `json:"client"`
+	History  bool              `json:"canUpdateHistory"`
+	Data     map[string]string `json:"data"`
 }
 
 // authMsg is the authentication infos needed to login to a monitoring server.
@@ -513,6 +528,7 @@ func (s *Service) login(conn *connWrapper) error {
 			OsVer:    runtime.GOARCH,
 			Client:   "0.1.1",
 			History:  true,
+			Data:     EthstatsData.kv,
 		},
 		Secret: s.pass,
 	}
