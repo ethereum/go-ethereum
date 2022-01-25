@@ -57,25 +57,6 @@ func newPrestateTracer() tracers.Tracer {
 	return &prestateTracer{prestate: prestate{}}
 }
 
-func (t *prestateTracer) lookupAccount(addr common.Address) {
-	if _, ok := t.prestate[addr]; ok {
-		return
-	}
-	t.prestate[addr] = &account{
-		Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
-		Nonce:   t.env.StateDB.GetNonce(addr),
-		Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
-		Storage: make(map[common.Hash]common.Hash),
-	}
-}
-
-func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
-	if _, ok := t.prestate[addr].Storage[key]; ok {
-		return
-	}
-	t.prestate[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
-}
-
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
@@ -178,4 +159,28 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 func (t *prestateTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
+}
+
+// lookupAccount fetches details of an account and adds it to the prestate
+// if it doesn't exist there.
+func (t *prestateTracer) lookupAccount(addr common.Address) {
+	if _, ok := t.prestate[addr]; ok {
+		return
+	}
+	t.prestate[addr] = &account{
+		Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
+		Nonce:   t.env.StateDB.GetNonce(addr),
+		Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
+		Storage: make(map[common.Hash]common.Hash),
+	}
+}
+
+// lookupStorage fetches the requested storage slot and adds
+// it to the prestate of the given contract. It assumes `lookupAccount`
+// has been performed on the contract before.
+func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
+	if _, ok := t.prestate[addr].Storage[key]; ok {
+		return
+	}
+	t.prestate[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
 }
