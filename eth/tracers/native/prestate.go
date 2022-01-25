@@ -142,11 +142,12 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		nonce := t.env.StateDB.GetNonce(addr)
 		t.lookupAccount(crypto.CreateAddress(addr, nonce))
 	case op == vm.CREATE2:
-		/*addr := scope.Contract.Address()
+		addr := scope.Contract.Address()
 		offset := stackData[stackLen-2]
-		size := stackData[stackLen-3]*/
-		// TODO
-		panic("unimplemented")
+		size := stackData[stackLen-3]
+		inithash := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+		salt := stackData[stackLen-4]
+		t.lookupAccount(crypto.CreateAddress2(addr, salt.Bytes32(), inithash))
 	}
 }
 
