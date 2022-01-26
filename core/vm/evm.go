@@ -148,6 +148,9 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
+	if txCtx.Accesses == nil && evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+		txCtx.Accesses = types.NewAccessWitness()
+	}
 	evm.TxContext = txCtx
 	evm.StateDB = statedb
 }

@@ -168,6 +168,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+func (s *StateDB) Snaps() *snapshot.Tree {
+	return s.snaps
+}
+
 func (s *StateDB) Witness() *types.AccessWitness {
 	return s.witness
 }

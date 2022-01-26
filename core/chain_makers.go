@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -357,8 +358,9 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		}
 		return nil, nil
 	}
+	var snaps *snapshot.Tree
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabaseWithConfig(db, &trie.Config{UseVerkle: true}), nil)
+		statedb, err := state.New(parent.Root(), state.NewDatabaseWithConfig(db, &trie.Config{UseVerkle: true}), snaps)
 		if err != nil {
 			panic(err)
 		}
@@ -366,6 +368,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
+		snaps = statedb.Snaps()
 	}
 	return blocks, receipts
 }
