@@ -100,12 +100,14 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+	readOnly        bool
 }
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
+	readOnly := stack.ReadOnly()
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -131,12 +133,28 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	ethashConfig := config.Ethash
 	ethashConfig.NotifyFull = config.Miner.NotifyFull
 
+	var chainDb ethdb.Database
+	var err error
+	var chainConfig *params.ChainConfig
+	var genesisHash common.Hash
+	var genesisErr error
 	// Assemble the Ethereum object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	if readOnly {
+		chainDb, err = stack.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", true)
+		if config.Genesis != nil {
+			chainConfig = config.Genesis.Config
+		} else {
+			chainConfig = core.DefaultGenesisBlock().Config
+		}
+		genesisHash = common.Hash{}
+		genesisErr = nil
+	} else {
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+		chainConfig, genesisHash, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
+	}
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -161,6 +179,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
+		readOnly:          readOnly,
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -170,7 +189,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
 
-	if !config.SkipBcVersionCheck {
+	if !config.SkipBcVersionCheck && !readOnly {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
 			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, params.VersionWithMeta, core.BlockChainVersion)
 		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
@@ -196,12 +215,18 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
+	if readOnly {
+		cacheConfig.SnapshotLimit = 0
+		cacheConfig.TrieDirtyDisabled = true
+		cacheConfig.TrieCleanJournal = ""
+		config.TxPool.Journal = ""
+	}
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+	if compat, ok := genesisErr.(*params.ConfigCompatError); ok && !readOnly {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		eth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
@@ -212,7 +237,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
-
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	checkpoint := config.Checkpoint
@@ -233,10 +257,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}); err != nil {
 		return nil, err
 	}
-
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
-
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
@@ -247,28 +269,32 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	// Setup DNS discovery iterators.
-	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
-	if err != nil {
-		return nil, err
+	if !readOnly {
+		// Setup DNS discovery iterators.
+		dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
+		eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
+		if err != nil {
+			return nil, err
+		}
+		eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
+		if err != nil {
+			return nil, err
+		}
 	}
-	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
-
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
-	stack.RegisterProtocols(eth.Protocols())
+	if !readOnly {
+		stack.RegisterProtocols(eth.Protocols())
+	}
 	stack.RegisterLifecycle(eth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	eth.shutdownTracker.MarkStartup()
-
+	if !readOnly {
+		eth.shutdownTracker.MarkStartup()
+	}
 	return eth, nil
 }
 
@@ -538,46 +564,51 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
-
+	if !s.readOnly {
+		eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	}
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
 
-	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
-	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= s.p2pServer.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+	if s.readOnly {
+		// Figure out a max peers count based on the server limits
+		maxPeers := s.p2pServer.MaxPeers
+		if s.config.LightServ > 0 {
+			if s.config.LightPeers >= s.p2pServer.MaxPeers {
+				return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+			}
+			maxPeers -= s.config.LightPeers
 		}
-		maxPeers -= s.config.LightPeers
+		// Start the networking layer and the light server if requested
+		s.handler.Start(maxPeers)
 	}
-	// Start the networking layer and the light server if requested
-	s.handler.Start(maxPeers)
 	return nil
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	// Stop all the peer-related stuff first.
-	s.ethDialCandidates.Close()
-	s.snapDialCandidates.Close()
-	s.handler.Stop()
-
+	// Only Stop P2P when P2P was initiated
+	if !s.readOnly {
+		// Stop all the peer-related stuff first.
+		s.ethDialCandidates.Close()
+		s.snapDialCandidates.Close()
+		s.handler.Stop()
+	}
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
-	s.txPool.Stop()
 	s.miner.Close()
+	s.txPool.Stop()
 	s.blockchain.Stop()
 	s.engine.Close()
-
-	// Clean shutdown marker as the last thing before closing db
-	s.shutdownTracker.Stop()
-
+	if !s.readOnly {
+		// Clean shutdown marker as the last thing before closing db
+		s.shutdownTracker.Stop()
+	}
 	s.chainDb.Close()
 	s.eventMux.Stop()
 

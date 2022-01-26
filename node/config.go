@@ -190,6 +190,7 @@ type Config struct {
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
+	ReadOnly            bool
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -339,6 +340,9 @@ func (c *Config) ResolvePath(path string) string {
 func (c *Config) instanceDir() string {
 	if c.DataDir == "" {
 		return ""
+	}
+	if c.ReadOnly {
+		return filepath.Join(c.DataDir, "geth")
 	}
 	return filepath.Join(c.DataDir, c.name())
 }

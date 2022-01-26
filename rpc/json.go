@@ -214,7 +214,7 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	if err := c.decode(&rawmsg); err != nil {
 		return nil, false, err
 	}
-	messages, batch = parseMessage(rawmsg)
+	messages, batch = ParseMessage(rawmsg)
 	for i, msg := range messages {
 		if msg == nil {
 			// Message is JSON 'null'. Replace with zero value so it
@@ -253,7 +253,7 @@ func (c *jsonCodec) closed() <-chan interface{} {
 // checks in this function because the raw message has already been syntax-checked when it
 // is called. Any non-JSON-RPC messages in the input return the zero value of
 // jsonrpcMessage.
-func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
+func ParseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	if !isBatch(raw) {
 		msgs := []*jsonrpcMessage{{}}
 		json.Unmarshal(raw, &msgs[0])

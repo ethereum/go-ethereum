@@ -57,8 +57,8 @@ type Node struct {
 	ws            *httpServer //
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
-
-	databases map[*closeTrackingDB]struct{} // All open databases
+	readOnly      bool
+	databases     map[*closeTrackingDB]struct{} // All open databases
 }
 
 const (
@@ -66,6 +66,10 @@ const (
 	runningState
 	closedState
 )
+
+func (n *Node) ReadOnly() bool {
+	return n.readOnly
+}
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -104,52 +108,56 @@ func New(conf *Config) (*Node, error) {
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
+		readOnly:      conf.ReadOnly,
 	}
 
 	// Register built-in APIs.
 	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
 
 	// Acquire the instance directory lock.
-	if err := node.openDataDir(); err != nil {
-		return nil, err
+	if !node.readOnly {
+		if err := node.openDataDir(); err != nil {
+			return nil, err
+		}
+		keyDir, isEphem, err := getKeyStoreDir(conf)
+		if err != nil {
+			return nil, err
+		}
+		node.keyDir = keyDir
+		node.keyDirTemp = isEphem
 	}
-	keyDir, isEphem, err := getKeyStoreDir(conf)
-	if err != nil {
-		return nil, err
-	}
-	node.keyDir = keyDir
-	node.keyDirTemp = isEphem
+
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
 	// are required to add the backends later on.
 	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
+	if !node.readOnly {
+		// Initialize the p2p server. This creates the node key and discovery databases.
+		node.server.Config.PrivateKey = node.config.NodeKey()
+		node.server.Config.Name = node.config.NodeName()
+		node.server.Config.Logger = node.log
+		if node.server.Config.StaticNodes == nil {
+			node.server.Config.StaticNodes = node.config.StaticNodes()
+		}
+		if node.server.Config.TrustedNodes == nil {
+			node.server.Config.TrustedNodes = node.config.TrustedNodes()
+		}
+		if node.server.Config.NodeDatabase == "" {
+			node.server.Config.NodeDatabase = node.config.NodeDB()
+		}
 
-	// Initialize the p2p server. This creates the node key and discovery databases.
-	node.server.Config.PrivateKey = node.config.NodeKey()
-	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = node.log
-	if node.server.Config.StaticNodes == nil {
-		node.server.Config.StaticNodes = node.config.StaticNodes()
-	}
-	if node.server.Config.TrustedNodes == nil {
-		node.server.Config.TrustedNodes = node.config.TrustedNodes()
-	}
-	if node.server.Config.NodeDatabase == "" {
-		node.server.Config.NodeDatabase = node.config.NodeDB()
-	}
+		// Check HTTP/WS prefixes are valid.
+		if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
+			return nil, err
+		}
+		if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
+			return nil, err
+		}
 
-	// Check HTTP/WS prefixes are valid.
-	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
-		return nil, err
+		// Configure RPC servers.
+		node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+		node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+		node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 	}
-	if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
-		return nil, err
-	}
-
-	// Configure RPC servers.
-	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
-
 	return node, nil
 }
 
@@ -261,9 +269,11 @@ func (n *Node) doClose(errs []error) error {
 // openEndpoints starts all network and RPC endpoints.
 func (n *Node) openEndpoints() error {
 	// start networking endpoints
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-	if err := n.server.Start(); err != nil {
-		return convertFileLockError(err)
+	if !n.readOnly {
+		n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+		if err := n.server.Start(); err != nil {
+			return convertFileLockError(err)
+		}
 	}
 	// start RPC endpoints
 	err := n.startRPC()
@@ -342,50 +352,52 @@ func (n *Node) startRPC() error {
 	if err := n.startInProc(); err != nil {
 		return err
 	}
+	if !n.readOnly {
+		// Configure IPC.
+		if n.ipc.endpoint != "" {
+			if err := n.ipc.start(n.rpcAPIs); err != nil {
+				return err
+			}
+		}
 
-	// Configure IPC.
-	if n.ipc.endpoint != "" {
-		if err := n.ipc.start(n.rpcAPIs); err != nil {
-			return err
+		// Configure HTTP.
+		if n.config.HTTPHost != "" {
+			config := httpConfig{
+				CorsAllowedOrigins: n.config.HTTPCors,
+				Vhosts:             n.config.HTTPVirtualHosts,
+				Modules:            n.config.HTTPModules,
+				prefix:             n.config.HTTPPathPrefix,
+			}
+			if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+				return err
+			}
+			if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+				return err
+			}
 		}
-	}
 
-	// Configure HTTP.
-	if n.config.HTTPHost != "" {
-		config := httpConfig{
-			CorsAllowedOrigins: n.config.HTTPCors,
-			Vhosts:             n.config.HTTPVirtualHosts,
-			Modules:            n.config.HTTPModules,
-			prefix:             n.config.HTTPPathPrefix,
+		// Configure WebSocket.
+		if n.config.WSHost != "" {
+			server := n.wsServerForPort(n.config.WSPort)
+			config := wsConfig{
+				Modules: n.config.WSModules,
+				Origins: n.config.WSOrigins,
+				prefix:  n.config.WSPathPrefix,
+			}
+			if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+				return err
+			}
+			if err := server.enableWS(n.rpcAPIs, config); err != nil {
+				return err
+			}
 		}
-		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
-			return err
-		}
-		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
-			return err
-		}
-	}
 
-	// Configure WebSocket.
-	if n.config.WSHost != "" {
-		server := n.wsServerForPort(n.config.WSPort)
-		config := wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
-		}
-		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+		if err := n.http.start(); err != nil {
 			return err
 		}
-		if err := server.enableWS(n.rpcAPIs, config); err != nil {
-			return err
-		}
+		return n.ws.start()
 	}
-
-	if err := n.http.start(); err != nil {
-		return err
-	}
-	return n.ws.start()
+	return nil
 }
 
 func (n *Node) wsServerForPort(port int) *httpServer {
@@ -396,9 +408,11 @@ func (n *Node) wsServerForPort(port int) *httpServer {
 }
 
 func (n *Node) stopRPC() {
-	n.http.stop()
-	n.ws.stop()
-	n.ipc.stop()
+	if !n.readOnly {
+		n.http.stop()
+		n.ws.stop()
+		n.ipc.stop()
+	}
 	n.stopInProc()
 }
 

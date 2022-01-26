@@ -13,6 +13,9 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
+
+readOnlyGeth:
+	go build -buildmode c-shared -o build/bin/readOnlyGeth.so ./cmd/readOnlyGeth
 all:
 	$(GORUN) build/ci.go install
 

@@ -48,7 +48,7 @@ func NewID() ID {
 	return globalGen()
 }
 
-// randomIDGenerator returns a function generates a random IDs.
+// RandomIDGenerator returns a function generates a random IDs.
 func randomIDGenerator() func() ID {
 	var buf = make([]byte, 8)
 	var seed int64

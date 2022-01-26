@@ -48,6 +48,10 @@ type Server struct {
 	codecs   mapset.Set
 }
 
+func (s *Server) Services() *serviceRegistry {
+	return &s.services
+}
+
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
