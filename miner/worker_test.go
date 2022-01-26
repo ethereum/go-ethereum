@@ -290,6 +290,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 }
 
 func TestGenerateBlocksAndImportVerkle(t *testing.T) {
+	t.Skip("Skipping due to a faulty testing infrastructure, see gballet/go-verkle/issues/180 for more information.")
 	var (
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
@@ -309,9 +310,9 @@ func TestGenerateBlocksAndImportVerkle(t *testing.T) {
 
 	// Ignore empty commit here for less noise.
 	/*
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
+		w.skipSealHook = func(task *task) bool {
+			return len(task.receipts) == 0
+		}
 	*/
 
 	// Wait for mined blocks.
