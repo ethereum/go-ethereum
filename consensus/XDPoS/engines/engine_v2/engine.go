@@ -742,6 +742,10 @@ func (x *XDPoS_v2) ProposedBlockHandler(blockChainReader consensus.ChainReader, 
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
 func (x *XDPoS_v2) VerifyBlockInfo(blockInfo *utils.BlockInfo) error {
+	/*
+		1. Check if is able to get header by hash from the chain
+		2. Check the header from step 1 matches what's in the blockInfo. This includes the block number and the round
+	*/
 	return nil
 }
 
@@ -789,9 +793,10 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	return x.VerifyBlockInfo(quorumCert.ProposedBlockInfo)
 }
 
+// TODO: Unhold, wait till proposal finalise
 func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 	/*
-		1. Get epoch master node list by round/number
+		1. Get epoch master node list by round/number with chain's current header
 		2. Verify signer signature: (List of signatures)
 					- Use ecRecover to get the public key
 					- Use the above public key to find out the xdc address
@@ -890,11 +895,16 @@ func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, bloc
 	if x.lockQuorumCert == nil {
 		return true, nil
 	}
+
+	if quorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round {
+		return true, nil
+	}
+
 	isExtended, err := x.isExtendingFromAncestor(blockChainReader, blockInfo, x.lockQuorumCert.ProposedBlockInfo)
 	if err != nil {
 		return false, err
 	}
-	if isExtended || (quorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round) {
+	if isExtended {
 		return true, nil
 	}
 
