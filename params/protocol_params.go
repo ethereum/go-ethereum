@@ -158,8 +158,11 @@ const (
 	RefundQuotientEIP3529 uint64 = 5
 
 	// Verkle tree EIP: costs associated to witness accesses
-	WitnessBranchCost = uint64(1900)
-	WitnessChunkCost  = uint64(200)
+	WitnessBranchReadCost  = uint64(1900)
+	WitnessChunkReadCost   = uint64(200)
+	WitnessBranchWriteCost = uint64(3000)
+	WitnessChunkWriteCost  = uint64(500)
+	WitnessChunkFillCost   = uint64(6200)
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

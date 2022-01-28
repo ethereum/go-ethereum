@@ -322,16 +322,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		targetAddr := msg.To()
 		originAddr := msg.From()
 
-		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndChargeGas(originAddr.Bytes())
+		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndComputeGas(originAddr.Bytes(), msg.Value().Sign() != 0)
 		if !tryConsumeGas(&st.gas, statelessGasOrigin) {
 			return nil, fmt.Errorf("insufficient gas to cover witness access costs")
 		}
 		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
 		originNonce = st.evm.StateDB.GetNonceLittleEndian(originAddr)
-		st.evm.Accesses.SetTxTouchedLeaves(originAddr.Bytes(), originBalance, originNonce)
+		st.evm.Accesses.SetTxOriginTouchedLeaves(originAddr.Bytes(), originBalance, originNonce)
 
 		if msg.To() != nil {
-			statelessGasDest := st.evm.Accesses.TouchTxExistingAndChargeGas(targetAddr.Bytes())
+			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value().Sign() != 0)
 			if !tryConsumeGas(&st.gas, statelessGasDest) {
 				return nil, fmt.Errorf("insufficient gas to cover witness access costs")
 			}
@@ -343,6 +343,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			var codeSizeBytes [32]byte
 			binary.LittleEndian.PutUint64(codeSizeBytes[:8], codeSize)
 			st.evm.Accesses.SetTxExistingTouchedLeaves(targetAddr.Bytes(), targetBalance, targetNonce, targetCodeSize, targetCodeKeccak)
+		}
+		if st.gas < gas {
+			return nil, fmt.Errorf("Insufficient funds to cover witness access costs for transaction: have %d, want %d", st.gas, gas)
 		}
 	}
 	st.gas -= gas

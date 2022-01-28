@@ -662,9 +662,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
 
-		if state.Witness() != nil {
+		if config.IsCancun(header.Number) {
 			uncleCoinbase := utils.GetTreeKeyBalance(uncle.Coinbase.Bytes())
-			state.Witness().TouchAddress(uncleCoinbase, state.GetBalance(uncle.Coinbase).Bytes())
+			state.Witness().TouchAddressOnReadAndComputeGas(uncleCoinbase)
+			state.Witness().SetLeafValue(uncleCoinbase, state.GetBalance(uncle.Coinbase).Bytes())
 		}
 		state.AddBalance(uncle.Coinbase, r)
 
@@ -673,7 +674,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 	if config.IsCancun(header.Number) {
 		coinbase := utils.GetTreeKeyBalance(header.Coinbase.Bytes())
-		state.Witness().TouchAddress(coinbase, state.GetBalance(header.Coinbase).Bytes())
+		state.Witness().TouchAddressOnReadAndComputeGas(coinbase)
+		state.Witness().SetLeafValue(coinbase, state.GetBalance(header.Coinbase).Bytes())
 	}
 	state.AddBalance(header.Coinbase, reward)
 }

@@ -100,7 +100,7 @@ func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	slot := stack.Back(0)
 	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
-		usedGas += evm.TxContext.Accesses.TouchAddressAndChargeGas(index, nil)
+		usedGas += evm.TxContext.Accesses.TouchAddressOnReadAndComputeGas(index)
 	}
 
 	return usedGas, nil
@@ -122,7 +122,7 @@ func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 			uint64Length = 0xffffffffffffffff
 		}
 		_, offset, nonPaddedSize := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, uint64Length)
-		statelessGas = touchEachChunksAndChargeGas(offset, nonPaddedSize, contract.Address().Bytes()[:], nil, nil, evm.Accesses)
+		statelessGas = touchEachChunksOnReadAndChargeGas(offset, nonPaddedSize, contract.Address().Bytes()[:], nil, nil, evm.Accesses)
 	}
 	usedGas, err := gasCodeCopyStateful(evm, contract, stack, mem, memorySize)
 	return usedGas + statelessGas, err
@@ -150,7 +150,7 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		// behavior from CODECOPY which only charges witness access costs for the part of the range
 		// which overlaps in the account code.  TODO: clarify this is desired behavior and amend the
 		// spec.
-		statelessGas = touchEachChunksAndChargeGas(uint64CodeOffset, uint64Length, targetAddr[:], nil, nil, evm.Accesses)
+		statelessGas = touchEachChunksOnReadAndChargeGas(uint64CodeOffset, uint64Length, targetAddr[:], nil, nil, evm.Accesses)
 	}
 	usedGas, err := gasExtCodeCopyStateful(evm, contract, stack, mem, memorySize)
 	return usedGas + statelessGas, err
@@ -163,7 +163,7 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 		where := stack.Back(0)
 		addr := contract.Address()
 		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)
-		usedGas += evm.Accesses.TouchAddressAndChargeGas(index, nil)
+		usedGas += evm.Accesses.TouchAddressOnReadAndComputeGas(index)
 	}
 
 	return usedGas, nil
