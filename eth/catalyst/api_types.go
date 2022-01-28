@@ -17,54 +17,98 @@
 package catalyst
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-//go:generate go run github.com/fjl/gencodec -type assembleBlockParams -field-override assembleBlockParamsMarshaling -out gen_blockparams.go
+//go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
-// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type assembleBlockParams struct {
-	ParentHash common.Hash `json:"parentHash"    gencodec:"required"`
-	Timestamp  uint64      `json:"timestamp"     gencodec:"required"`
+// Structure described at https://github.com/ethereum/execution-apis/pull/74
+type PayloadAttributesV1 struct {
+	Timestamp             uint64         `json:"timestamp"     gencodec:"required"`
+	Random                common.Hash    `json:"random"        gencodec:"required"`
+	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 }
 
-// JSON type overrides for assembleBlockParams.
-type assembleBlockParamsMarshaling struct {
+// JSON type overrides for PayloadAttributesV1.
+type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type executableData -field-override executableDataMarshaling -out gen_ed.go
+//go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
 
-// Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
-type executableData struct {
-	BlockHash    common.Hash    `json:"blockHash"     gencodec:"required"`
-	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
-	Miner        common.Address `json:"miner"         gencodec:"required"`
-	StateRoot    common.Hash    `json:"stateRoot"     gencodec:"required"`
-	Number       uint64         `json:"number"        gencodec:"required"`
-	GasLimit     uint64         `json:"gasLimit"      gencodec:"required"`
-	GasUsed      uint64         `json:"gasUsed"       gencodec:"required"`
-	Timestamp    uint64         `json:"timestamp"     gencodec:"required"`
-	ReceiptRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom    []byte         `json:"logsBloom"     gencodec:"required"`
-	Transactions [][]byte       `json:"transactions"  gencodec:"required"`
+// Structure described at https://github.com/ethereum/execution-apis/src/engine/specification.md
+type ExecutableDataV1 struct {
+	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
+	FeeRecipient  common.Address `json:"feeRecipient"  gencodec:"required"`
+	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot  common.Hash    `json:"receiptsRoot"   gencodec:"required"`
+	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
+	Random        common.Hash    `json:"random"        gencodec:"required"`
+	Number        uint64         `json:"blockNumber"   gencodec:"required"`
+	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
+	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
+	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
+	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
+	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }
 
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number       hexutil.Uint64
-	GasLimit     hexutil.Uint64
-	GasUsed      hexutil.Uint64
-	Timestamp    hexutil.Uint64
-	LogsBloom    hexutil.Bytes
-	Transactions []hexutil.Bytes
+	Number        hexutil.Uint64
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Timestamp     hexutil.Uint64
+	BaseFeePerGas *hexutil.Big
+	ExtraData     hexutil.Bytes
+	LogsBloom     hexutil.Bytes
+	Transactions  []hexutil.Bytes
 }
 
-type newBlockResponse struct {
+//go:generate go run github.com/fjl/gencodec -type PayloadResponse -field-override payloadResponseMarshaling -out gen_payload.go
+
+type PayloadResponse struct {
+	PayloadID uint64 `json:"payloadId"`
+}
+
+// JSON type overrides for payloadResponse.
+type payloadResponseMarshaling struct {
+	PayloadID hexutil.Uint64
+}
+
+type NewBlockResponse struct {
 	Valid bool `json:"valid"`
 }
 
-type genericResponse struct {
+type GenericResponse struct {
 	Success bool `json:"success"`
+}
+
+type GenericStringResponse struct {
+	Status string `json:"status"`
+}
+
+type ExecutePayloadResponse struct {
+	Status          string      `json:"status"`
+	LatestValidHash common.Hash `json:"latestValidHash"`
+}
+
+type ConsensusValidatedParams struct {
+	BlockHash common.Hash `json:"blockHash"`
+	Status    string      `json:"status"`
+}
+
+type ForkChoiceResponse struct {
+	Status    string         `json:"status"`
+	PayloadID *hexutil.Bytes `json:"payloadId"`
+}
+
+type ForkchoiceStateV1 struct {
+	HeadBlockHash      common.Hash `json:"headBlockHash"`
+	SafeBlockHash      common.Hash `json:"safeBlockHash"`
+	FinalizedBlockHash common.Hash `json:"finalizedBlockHash"`
 }

@@ -304,7 +304,7 @@ func (r *Record) AppendElements(list []interface{}) []interface{} {
 }
 
 func (r *Record) encode(sig []byte) (raw []byte, err error) {
-	list := make([]interface{}, 1, 2*len(r.pairs)+1)
+	list := make([]interface{}, 1, 2*len(r.pairs)+2)
 	list[0] = sig
 	list = r.AppendElements(list)
 	if raw, err = rlp.EncodeToBytes(list); err != nil {
