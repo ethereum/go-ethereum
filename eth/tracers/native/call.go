@@ -143,6 +143,12 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
+// Settings returns information about the tracer and which hooks
+// it is interested in.
+func (t *callTracer) Settings() tracers.TracerSettings {
+	return tracers.TracerSettings{Engine: "native"}
+}
+
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *callTracer) GetResult() (json.RawMessage, error) {

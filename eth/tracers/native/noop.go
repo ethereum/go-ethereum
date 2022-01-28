@@ -64,6 +64,12 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
+// Settings returns information about the tracer and which hooks
+// it is interested in.
+func (t *noopTracer) Settings() tracers.TracerSettings {
+	return tracers.TracerSettings{Engine: "native"}
+}
+
 // GetResult returns an empty json object.
 func (t *noopTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil

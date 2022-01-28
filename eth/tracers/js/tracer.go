@@ -825,6 +825,12 @@ func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
+// Settings returns information about the tracer and which hooks
+// it is interested in.
+func (jst *jsTracer) Settings() tracers2.TracerSettings {
+	return tracers2.TracerSettings{Engine: "js"}
+}
+
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (jst *jsTracer) GetResult() (json.RawMessage, error) {
 	// Transform the context into a JavaScript object and inject into the state
