@@ -44,10 +44,11 @@ func TestAdaptorShouldGetAuthorForDifferentConsensusVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	block11, err := insertBlock(blockchain, header)
+	block11, err := createBlockFromHeader(blockchain, header, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockchain.InsertBlock(block11)
 
 	addressFromAdaptor, errorAdaptor = adaptor.Author(block11.Header())
 	if errorAdaptor != nil {
@@ -177,24 +178,17 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 11
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	blockHeader := createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
-	// it contains 3 master nodes
-	blockHeader.Validators = common.Hex2Bytes("0278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758c")
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+
 	// block 11 is the first v2 block, and is treated as epoch switch block
-	currentBlock, err := insertBlock(blockchain, blockHeader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	blockchain.InsertBlock(currentBlock)
 	masternodes1 := adaptor.GetMasternodes(blockchain, currentBlock.Header())
-	assert.Equal(t, 3, len(masternodes1))
+	assert.Equal(t, 4, len(masternodes1))
 	masternodes1ByNumber := adaptor.GetMasternodesByNumber(blockchain, currentBlock.NumberU64())
 	assert.True(t, reflect.DeepEqual(masternodes1, masternodes1ByNumber), "at block number", blockNum)
 	for blockNum = 12; blockNum < 15; blockNum++ {
-		blockHeader = createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
-		currentBlock, err = insertBlock(blockchain, blockHeader)
-		if err != nil {
-			t.Fatal(err)
-		}
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
+		blockchain.InsertBlock(currentBlock)
 		masternodes2 := adaptor.GetMasternodes(blockchain, currentBlock.Header())
 		assert.True(t, reflect.DeepEqual(masternodes1, masternodes2), "at block number", blockNum)
 		masternodes2ByNumber := adaptor.GetMasternodesByNumber(blockchain, currentBlock.NumberU64())
@@ -215,25 +209,17 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	// V2
 	blockNum := 11
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	blockHeader := createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
-	// it contains 3 master nodes
-	blockHeader.Validators = common.Hex2Bytes("0278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758c")
-	// block 11 is the first v2 block, and is treated as epoch switch block
-	currentBlock, err = insertBlock(blockchain, blockHeader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	blockchain.InsertBlock(currentBlock)
 	currentCheckpointNumber, epochNum, err = adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(11), currentCheckpointNumber)
 	assert.Equal(t, uint64(0), epochNum)
 
 	for blockNum = 12; blockNum < 15; blockNum++ {
-		blockHeader = createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
-		currentBlock, err = insertBlock(blockchain, blockHeader)
-		if err != nil {
-			t.Fatal(err)
-		}
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
+
+		blockchain.InsertBlock(currentBlock)
 		currentCheckpointNumber, epochNum, err := adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
 		assert.Nil(t, err)
 		assert.Equal(t, uint64(11), currentCheckpointNumber)

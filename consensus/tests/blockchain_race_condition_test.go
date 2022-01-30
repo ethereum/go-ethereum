@@ -48,10 +48,11 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 		Coinbase:   common.HexToAddress(blockCoinbaseA),
 	}
 
-	blockA, err := insertBlockTxs(blockchain, header, []*types.Transaction{tx, transferTransaction})
+	blockA, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx, transferTransaction})
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockchain.InsertBlock(blockA)
 	state, err = blockchain.State()
 	if err != nil {
 		t.Fatalf("Failed while trying to get blockchain state")
@@ -92,10 +93,11 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 		Difficulty: big.NewInt(2),
 	}
 
-	block450B, err := insertBlockTxs(blockchain, header, []*types.Transaction{tx, transferTransaction})
+	block450B, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx, transferTransaction})
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockchain.InsertBlock(block450B)
 	if blockchain.CurrentHeader().Hash() != block450B.Hash() {
 		t.Fatalf("the block with higher difficulty should be current header")
 	}
@@ -129,11 +131,11 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 		Coinbase:   common.HexToAddress(blockCoinBase451B),
 		Difficulty: big.NewInt(3),
 	}
-	block451B, err := insertBlock(blockchain, header)
-
+	block451B, err := createBlockFromHeader(blockchain, header, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockchain.InsertBlock(block451B)
 
 	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
 	if err != nil {

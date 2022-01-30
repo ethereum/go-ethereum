@@ -32,7 +32,8 @@ func TestIsAuthorisedMNForConsensusV1(t *testing.T) {
 		ParentHash: parentBlock.Hash(),
 		Coinbase:   common.HexToAddress(blockCoinbaseA),
 	}
-	block449, err := insertBlockTxs(blockchain, header, []*types.Transaction{tx})
+	block449, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx})
+	blockchain.InsertBlock(block449)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,10 +58,11 @@ func TestIsAuthorisedMNForConsensusV1(t *testing.T) {
 		ParentHash: parentBlock.Hash(),
 		Coinbase:   common.HexToAddress(block450CoinbaseAddress),
 	}
-	block450, err := insertBlock(blockchain, header)
+	block450, err := createBlockFromHeader(blockchain, header, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	blockchain.InsertBlock(block450)
 
 	isAuthorisedMN = engine.IsAuthorisedAddress(blockchain, block450.Header(), acc3Addr)
 	assert.False(t, isAuthorisedMN)
@@ -75,23 +77,14 @@ func TestIsAuthorisedMNForConsensusV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 11
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	blockHeader := createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
-	// it contains 3 master nodes
-	// xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1
-	// xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff
-	// xdc065551F0dcAC6f00CAe11192D462db709bE3758c
-	blockHeader.Validators = common.Hex2Bytes("0278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758c")
-	// block 11 is the first v2 block, and is treated as epoch switch block
-	currentBlock, err := insertBlock(blockchain, blockHeader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	blockchain.InsertBlock(currentBlock)
 
 	// As long as the address is in the master node list, they are all valid
-	isAuthorisedMN := adaptor.IsAuthorisedAddress(blockchain, currentBlock.Header(), common.HexToAddress("xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff"))
+	isAuthorisedMN := adaptor.IsAuthorisedAddress(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.True(t, isAuthorisedMN)
 
-	isAuthorisedMN = adaptor.IsAuthorisedAddress(blockchain, currentBlock.Header(), common.HexToAddress("xdc065551F0dcAC6f00CAe11192D462db709bE3758c"))
+	isAuthorisedMN = adaptor.IsAuthorisedAddress(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
 	assert.True(t, isAuthorisedMN)
 
 	isAuthorisedMN = adaptor.IsAuthorisedAddress(blockchain, currentBlock.Header(), common.HexToAddress("xdcbanana"))
@@ -105,47 +98,35 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 11
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	blockHeader := createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
-	// it contains 3 master nodes
-	// xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1
-	// xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff
-	// xdc065551F0dcAC6f00CAe11192D462db709bE3758c
-	blockHeader.Validators = common.Hex2Bytes("0278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758c")
-	// block 11 is the first v2 block, and is treated as epoch switch block
-	currentBlock, err := insertBlock(blockchain, blockHeader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	blockchain.InsertBlock(currentBlock)
 
 	// The first address is valid
-	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
+	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.Nil(t, err)
 	assert.True(t, isYourTurn)
 
 	// The second and third address are not valid
-	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff"))
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
-	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc065551F0dcAC6f00CAe11192D462db709bE3758c"))
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
 
 	// We continue to grow the chain which will increase the round number
 	blockNum = 12
-	blockHeader = createBlock(params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
-	currentBlock, err = insertBlock(blockchain, blockHeader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
+	blockchain.InsertBlock(currentBlock)
 
 	adaptor.EngineV2.SetNewRoundFaker(1, false)
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.False(t, isYourTurn)
 
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc03d9e17Ae3fF2c6712E44e25B09Ac5ee91f6c9ff"))
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.True(t, isYourTurn)
 
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc065551F0dcAC6f00CAe11192D462db709bE3758c"))
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
 	assert.False(t, isYourTurn)
 
 }

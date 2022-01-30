@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(utils.Round(1), false)
-	// Create two timeout message which will not reach vote pool threshold
+	// Create two vote messages which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
@@ -79,7 +80,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(utils.Round(5), false)
-	// Create two timeout message which will not reach vote pool threshold
+	// Create two vote messages which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
@@ -264,4 +265,74 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	// Round shall be +1 now
 	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(7), currentRound)
+}
+
+func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Create a new block but don't inject it into the chain yet
+	blockNum := 16
+	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
+	block := CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 6, blockCoinBase, signer, signFn)
+
+	blockInfo := &utils.BlockInfo{
+		Hash:   block.Header().Hash(),
+		Round:  utils.Round(6),
+		Number: big.NewInt(16),
+	}
+
+	// Set round to 6
+	engineV2.SetNewRoundFaker(utils.Round(6), false)
+	// Create two vote messages which will not reach vote pool threshold
+	voteMsg := &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         []byte{1},
+	}
+
+	err := engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         []byte{2},
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	// Create a vote message that should trigger vote pool hook, but it shall not produce any QC yet
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         []byte{3},
+	}
+
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
+	// Still using the initlised value because we did not yet go to the next round
+	assert.Nil(t, lockQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
+
+	assert.Equal(t, utils.Round(6), currentRound)
+
+	// Now, inject the block into the chain
+	blockchain.InsertBlock(block)
+
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         []byte{4},
+	}
+
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	currentRound, lockQuorumCert, highestQuorumCert, _, highestCommitBlock := engineV2.GetProperties()
+	// The lockQC shall be the parent's QC round number
+	assert.Equal(t, utils.Round(5), lockQuorumCert.ProposedBlockInfo.Round)
+	// The highestQC proposedBlockInfo shall be the same as the one from its votes
+	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
+	assert.Equal(t, utils.Round(7), currentRound)
+	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 14 with round 4
+	assert.Equal(t, utils.Round(4), highestCommitBlock.Round)
+	assert.Equal(t, big.NewInt(14), highestCommitBlock.Number)
 }

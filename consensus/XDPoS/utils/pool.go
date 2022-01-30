@@ -31,7 +31,6 @@ func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
 	objListKeyed[obj.Hash()] = obj
 	numOfItems := len(objListKeyed)
 	if numOfItems >= p.threshold {
-		delete(p.objList, poolKey)
 		return true, numOfItems, objListKeyed
 	}
 	return false, numOfItems, objListKeyed
@@ -43,6 +42,12 @@ func (p *Pool) Size(obj PoolObj) int {
 		return 0
 	}
 	return len(objListKeyed)
+}
+
+// Given the pool object, clear all object under the same pool key
+func (p *Pool) ClearPoolKeyByObj(obj PoolObj) {
+	poolKey := obj.PoolKey()
+	delete(p.objList, poolKey)
 }
 
 func (p *Pool) Clear() {
