@@ -149,8 +149,30 @@ func (x *XDPoS) VerifyHeader(chain consensus.ChainReader, header *types.Header, 
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
 func (x *XDPoS) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, fullVerifies []bool) (chan<- struct{}, <-chan error) {
-	// TODO: (Hashlab) This funciton is a special case
-	return x.EngineV1.VerifyHeaders(chain, headers, fullVerifies)
+	abort := make(chan struct{})
+	results := make(chan error, len(headers))
+
+	// Split the headers list into v1 and v2 buckets
+	var v1headers []*types.Header
+	var v2headers []*types.Header
+
+	for _, header := range headers {
+		switch x.config.BlockConsensusVersion(header.Number) {
+		case params.ConsensusEngineVersion2:
+			v2headers = append(v2headers, header)
+		default: // Default "v1"
+			v1headers = append(v1headers, header)
+		}
+	}
+
+	if v1headers != nil {
+		x.EngineV1.VerifyHeaders(chain, headers, fullVerifies, abort, results)
+	}
+	if v2headers != nil {
+		x.EngineV2.VerifyHeaders(chain, headers, fullVerifies, abort, results)
+	}
+
+	return abort, results
 }
 
 // VerifyUncles implements consensus.Engine, always returning an error for any

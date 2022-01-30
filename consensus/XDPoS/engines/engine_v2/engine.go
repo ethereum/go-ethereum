@@ -478,6 +478,19 @@ func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 	return nil
 }
 
+// TODO: Yet to be implemented XIN-135
+func (x *XDPoS_v2) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, fullVerifies []bool, abort <-chan struct{}, results chan<- error) {
+	go func() {
+		for range headers {
+			select {
+			case <-abort:
+				return
+			case results <- nil:
+			}
+		}
+	}()
+}
+
 // Utils for test to get current Pool size
 func (x *XDPoS_v2) GetVotePoolSize(vote *utils.Vote) int {
 	return x.votePool.Size(vote)
@@ -556,8 +569,8 @@ func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote) error {
 
 	// 1. checkRoundNumber
-	if voteMsg.ProposedBlockInfo.Round != x.currentRound {
-		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
+	if (voteMsg.ProposedBlockInfo.Round != x.currentRound) && (voteMsg.ProposedBlockInfo.Round != x.currentRound+1) {
+		return &utils.ErrIncomingMessageRoundTooFarFromCurrentRound{
 			Type:          "vote",
 			IncomingRound: voteMsg.ProposedBlockInfo.Round,
 			CurrentRound:  x.currentRound,

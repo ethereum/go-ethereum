@@ -88,3 +88,13 @@ type ErrIncomingMessageRoundNotEqualCurrentRound struct {
 func (e *ErrIncomingMessageRoundNotEqualCurrentRound) Error() string {
 	return fmt.Sprintf("%s message round number: %v does not match currentRound: %v", e.Type, e.IncomingRound, e.CurrentRound)
 }
+
+type ErrIncomingMessageRoundTooFarFromCurrentRound struct {
+	Type          string
+	IncomingRound Round
+	CurrentRound  Round
+}
+
+func (e *ErrIncomingMessageRoundTooFarFromCurrentRound) Error() string {
+	return fmt.Sprintf("%s message round number: %v is too far away from currentRound: %v", e.Type, e.IncomingRound, e.CurrentRound)
+}

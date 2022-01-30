@@ -94,7 +94,7 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 
 	err = b.consensus.voteHandler(b.blockChainReader, vote)
 	if err != nil {
-		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
+		if _, ok := err.(*utils.ErrIncomingMessageRoundTooFarFromCurrentRound); ok {
 			log.Warn("vote round not equal", "error", err, "vote", vote.Hash())
 			return err
 		}

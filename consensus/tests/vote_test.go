@@ -126,7 +126,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	assert.Equal(t, big.NewInt(13), highestCommitBlock.Number)
 }
 
-func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
+func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testing.T) {
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -146,14 +146,18 @@ func TestThrowErrorIfVoteMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	// voteRound > currentRound
 	err := engineV2.VoteHandler(blockchain, voteMsg)
 	assert.NotNil(t, err)
-	assert.Equal(t, "vote message round number: 6 does not match currentRound: 7", err.Error())
+	assert.Equal(t, "vote message round number: 6 is too far away from currentRound: 7", err.Error())
 
-	// Set round to 5
+	// Set round to 5, it's 1 round away, should not trigger failure
 	engineV2.SetNewRoundFaker(utils.Round(5), false)
 	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	engineV2.SetNewRoundFaker(utils.Round(4), false)
+	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.NotNil(t, err)
-	// voteRound < currentRound
-	assert.Equal(t, "vote message round number: 6 does not match currentRound: 5", err.Error())
+	assert.Equal(t, "vote message round number: 6 is too far away from currentRound: 4", err.Error())
+
 }
 
 func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
