@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"math"
+	"os/exec"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/mitchellh/cli"
@@ -72,6 +73,63 @@ func convertBytesToGB(bytesValue uint64) float64 {
 	return math.Floor(float64(bytesValue)/(1024*1024*1024)*100) / 100
 }
 
+// Install fio on the node if it does not exist
+func (c *FingerprintCommand) installFio() error {
+
+	cmd := exec.Command("/bin/sh", "-c", "fio -v")
+
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		c.UI.Output("fio not installed\nInstalling Fio...")
+
+		cmd := exec.Command("/bin/sh", "-c", "sudo apt-get update && sudo apt-get install fio -y")
+		_, err := cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+
+		cmd = exec.Command("/bin/sh", "-c", "sudo yum install fio -y")
+		_, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+
+		cmd = exec.Command("/bin/sh", "-c", "sudo dnf install fio -y")
+		_, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+
+		c.UI.Output("Unable to install fio")
+		return err
+	}
+
+	return nil
+}
+
+// Run the IOPS benchmark for the node
+func (c *FingerprintCommand) benchmark() error {
+	var b []byte
+	err := c.installFio()
+	if err != nil {
+		return err
+	}
+
+	c.UI.Output("\nRunning a 10 second test...\n")
+
+	cmd := exec.Command("/bin/sh", "-c", "sudo fio --filename=/file --size=2GB --direct=1 --rw=randrw --bs=64k --ioengine=libaio --iodepth=64 --runtime=10 --numjobs=4 --time_based --group_reporting --name=throughput-test-job --eta-newline=1 | grep -e 'read:' -e 'write:' | awk '{print $1,$2}' ")
+
+	b, err = cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	out := string(b)
+	c.UI.Output(out)
+
+	return nil
+}
+
 // Run implements the cli.Command interface
 func (c *FingerprintCommand) Run(args []string) int {
 
@@ -120,5 +178,14 @@ func (c *FingerprintCommand) Run(args []string) int {
 	}
 
 	c.UI.Output(formatFingerprint(borFingerprint))
+
+	if borFingerprint.OsName == "linux" {
+		err = c.benchmark()
+		if err != nil {
+			c.UI.Error(err.Error())
+			return 1
+		}
+	}
+
 	return 0
 }
