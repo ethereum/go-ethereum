@@ -44,8 +44,19 @@ type Tracer interface {
 	Stop(err error)
 }
 
+type Hooks uint16
+
+const (
+	Step      Hooks = 1 << iota
+	CallFrame Hooks = 2 << iota
+)
+
+func Set(h, flag Hooks) Hooks { return h | flag }
+func Has(h, flag Hooks) bool  { return h&flag != 0 }
+
 type TracerSettings struct {
 	Engine string
+	Hooks  Hooks
 }
 
 type lookupFunc func(string, *Context) (Tracer, error)

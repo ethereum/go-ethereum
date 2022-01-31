@@ -67,7 +67,7 @@ func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 // Settings returns information about the tracer and which hooks
 // it is interested in.
 func (t *noopTracer) Settings() tracers.TracerSettings {
-	return tracers.TracerSettings{Engine: "native"}
+	return tracers.TracerSettings{Engine: "native", Hooks: 0}
 }
 
 // GetResult returns an empty json object.

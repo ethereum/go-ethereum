@@ -134,9 +134,7 @@ func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 // Settings returns information about the tracer and which hooks
 // it is interested in.
 func (t *fourByteTracer) Settings() tracers.TracerSettings {
-	return tracers.TracerSettings{
-		Engine: "native",
-	}
+	return tracers.TracerSettings{Engine: "native", Hooks: tracers.CallFrame}
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any
