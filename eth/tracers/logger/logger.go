@@ -351,3 +351,7 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 }
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
+func (t *mdLogger) Settings() *vm.LoggerSettings {
+	return &vm.LoggerSettings{Hooks: vm.StepHook}
+}
