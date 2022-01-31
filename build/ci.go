@@ -334,7 +334,11 @@ func downloadLinter(cachedir string) string {
 	const version = "1.42.0"
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, runtime.GOARCH)
+	arch := runtime.GOARCH
+	if arch == "arm" {
+		arch += "v" + os.Getenv("GOARM")
+	}
+	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, arch)
 	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s.tar.gz", version, base)
 	archivePath := filepath.Join(cachedir, base+".tar.gz")
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
