@@ -35,7 +35,7 @@ type EVMLogger interface {
 	CaptureExit(output []byte, gasUsed uint64, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
-	Settings() LoggerSettings
+	Settings() *LoggerSettings
 }
 
 type Hooks uint16
@@ -49,5 +49,5 @@ type LoggerSettings struct {
 	Hooks Hooks
 }
 
-func (s LoggerSettings) SetHook(flag Hooks)      { s.Hooks = s.Hooks | flag }
-func (s LoggerSettings) HasHook(flag Hooks) bool { return s.Hooks&flag != 0 }
+func (s *LoggerSettings) SetHook(flag Hooks)      { s.Hooks = s.Hooks | flag }
+func (s *LoggerSettings) HasHook(flag Hooks) bool { return s.Hooks&flag != 0 }

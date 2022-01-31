@@ -416,9 +416,8 @@ type jsTracer struct {
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
 
-	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
-	traceSteps        bool             // When true, will invoke step() on each opcode
-	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
+	activePrecompiles []common.Address  // Updated on CaptureStart based on given rules
+	settings          vm.LoggerSettings // Settings provided by the tracer to the EVM
 }
 
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
@@ -553,9 +552,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	}
 	tracer.tracerObject = 0 // yeah, nice, eval can't return the index itself
 
-	hasStep := tracer.vm.GetPropString(tracer.tracerObject, "step")
-	tracer.vm.Pop()
-
+	// First check required methods.
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
 		return nil, fmt.Errorf("trace object must expose a function fault()")
 	}
@@ -566,15 +563,46 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	}
 	tracer.vm.Pop()
 
-	hasEnter := tracer.vm.GetPropString(tracer.tracerObject, "enter")
-	tracer.vm.Pop()
-	hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
-	tracer.vm.Pop()
-	if hasEnter != hasExit {
-		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
+	settings := vm.LoggerSettings{Hooks: 0}
+	// Then check if it's a new tracer providing the settings field for optional hooks.
+	hasSettings := tracer.vm.GetPropString(tracer.tracerObject, "settings")
+	if hasSettings {
+		topIndex := tracer.vm.GetTopIndex()
+		if ok := tracer.vm.GetPropString(topIndex, "step"); ok {
+			if set := tracer.vm.GetBoolean(topIndex + 1); set {
+				settings.SetHook(vm.StepHook)
+			}
+		}
+		tracer.vm.Pop()
+		if ok := tracer.vm.GetPropString(topIndex, "callframe"); ok {
+			if set := tracer.vm.GetBoolean(topIndex + 1); set {
+				settings.SetHook(vm.CallFrameHook)
+			}
+		}
+		tracer.vm.Pop()
 	}
-	tracer.traceCallFrames = hasEnter && hasExit
-	tracer.traceSteps = hasStep
+	tracer.vm.Pop()
+	// If an older tracer, figure out desired hooks by checking which methods
+	// are implemented.
+	if !hasSettings {
+		hasStep := tracer.vm.GetPropString(tracer.tracerObject, "step")
+		tracer.vm.Pop()
+
+		hasEnter := tracer.vm.GetPropString(tracer.tracerObject, "enter")
+		tracer.vm.Pop()
+		hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
+		tracer.vm.Pop()
+		if hasEnter != hasExit {
+			return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
+		}
+		if hasStep {
+			settings.SetHook(vm.StepHook)
+		}
+		if hasEnter && hasExit {
+			settings.SetHook(vm.CallFrameHook)
+		}
+	}
+	tracer.settings = settings
 
 	// Tracer is valid, inject the big int library to access large numbers
 	tracer.vm.EvalString(bigIntegerJS)
@@ -712,9 +740,6 @@ func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
 func (jst *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	if !jst.traceSteps {
-		return
-	}
 	if jst.err != nil {
 		return
 	}
@@ -773,9 +798,6 @@ func (jst *jsTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, 
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (jst *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	if !jst.traceCallFrames {
-		return
-	}
 	if jst.err != nil {
 		return
 	}
@@ -803,9 +825,6 @@ func (jst *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	if !jst.traceCallFrames {
-		return
-	}
 	// If tracing was interrupted, set the error and stop
 	if atomic.LoadUint32(&jst.interrupt) > 0 {
 		jst.err = jst.reason
@@ -827,8 +846,8 @@ func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (jst *jsTracer) Settings() vm.LoggerSettings {
-	return vm.LoggerSettings{Hooks: vm.StepHook | vm.CallFrameHook}
+func (jst *jsTracer) Settings() *vm.LoggerSettings {
+	return &jst.settings
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error

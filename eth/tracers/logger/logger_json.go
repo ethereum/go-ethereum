@@ -99,6 +99,6 @@ func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (l *JSONLogger) Settings() vm.LoggerSettings {
-	return vm.LoggerSettings{Hooks: vm.StepHook}
+func (l *JSONLogger) Settings() *vm.LoggerSettings {
+	return &vm.LoggerSettings{Hooks: vm.StepHook}
 }

@@ -44,8 +44,7 @@ func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-}
+func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {}
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
@@ -61,13 +60,12 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-}
+func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (t *noopTracer) Settings() vm.LoggerSettings {
-	return vm.LoggerSettings{Hooks: 0}
+func (t *noopTracer) Settings() *vm.LoggerSettings {
+	return &vm.LoggerSettings{Hooks: 0}
 }
 
 // GetResult returns an empty json object.
