@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package catalyst
+package beacon
 
 import (
 	"fmt"
@@ -22,6 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -120,4 +122,83 @@ type ForkchoiceStateV1 struct {
 	HeadBlockHash      common.Hash `json:"headBlockHash"`
 	SafeBlockHash      common.Hash `json:"safeBlockHash"`
 	FinalizedBlockHash common.Hash `json:"finalizedBlockHash"`
+}
+
+func encodeTransactions(txs []*types.Transaction) [][]byte {
+	var enc = make([][]byte, len(txs))
+	for i, tx := range txs {
+		enc[i], _ = tx.MarshalBinary()
+	}
+	return enc
+}
+
+func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+	var txs = make([]*types.Transaction, len(enc))
+	for i, encTx := range enc {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(encTx); err != nil {
+			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+		}
+		txs[i] = &tx
+	}
+	return txs, nil
+}
+
+// ExecutableDataToBlock constructs a block from executable data.
+// It verifies that the following fields:
+// 		len(extraData) <= 32
+// 		uncleHash = emptyUncleHash
+// 		difficulty = 0
+// and that the blockhash of the constructed block matches the parameters.
+func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
+	txs, err := decodeTransactions(params.Transactions)
+	if err != nil {
+		return nil, err
+	}
+	if len(params.ExtraData) > 32 {
+		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	}
+	header := &types.Header{
+		ParentHash:  params.ParentHash,
+		UncleHash:   types.EmptyUncleHash,
+		Coinbase:    params.FeeRecipient,
+		Root:        params.StateRoot,
+		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash: params.ReceiptsRoot,
+		Bloom:       types.BytesToBloom(params.LogsBloom),
+		Difficulty:  common.Big0,
+		Number:      new(big.Int).SetUint64(params.Number),
+		GasLimit:    params.GasLimit,
+		GasUsed:     params.GasUsed,
+		Time:        params.Timestamp,
+		BaseFee:     params.BaseFeePerGas,
+		Extra:       params.ExtraData,
+		MixDigest:   params.Random,
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	if block.Hash() != params.BlockHash {
+		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
+	}
+	return block, nil
+}
+
+// BlockToExecutableData constructs the executableDataV1 structure by filling the
+// fields from the given block. It assumes the given block is post-merge block.
+func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
+	return &ExecutableDataV1{
+		BlockHash:     block.Hash(),
+		ParentHash:    block.ParentHash(),
+		FeeRecipient:  block.Coinbase(),
+		StateRoot:     block.Root(),
+		Number:        block.NumberU64(),
+		GasLimit:      block.GasLimit(),
+		GasUsed:       block.GasUsed(),
+		BaseFeePerGas: block.BaseFee(),
+		Timestamp:     block.Time(),
+		ReceiptsRoot:  block.ReceiptHash(),
+		LogsBloom:     block.Bloom().Bytes(),
+		Transactions:  encodeTransactions(block.Transactions()),
+		Random:        block.MixDigest(),
+		ExtraData:     block.Extra(),
+	}
 }

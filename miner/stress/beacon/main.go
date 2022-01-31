@@ -32,13 +32,15 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
+	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/les"
+	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -88,24 +90,26 @@ var (
 
 type ethNode struct {
 	typ        nodetype
-	api        *catalyst.ConsensusAPI
-	ethBackend *eth.Ethereum
-	lesBackend *les.LightEthereum
 	stack      *node.Node
 	enode      *enode.Node
+	api        *ethcatalyst.ConsensusAPI
+	ethBackend *eth.Ethereum
+	lapi       *lescatalyst.ConsensusAPI
+	lesBackend *les.LightEthereum
 }
 
 func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode {
 	var (
 		err        error
-		api        *catalyst.ConsensusAPI
+		api        *ethcatalyst.ConsensusAPI
+		lapi       *lescatalyst.ConsensusAPI
 		stack      *node.Node
 		ethBackend *eth.Ethereum
 		lesBackend *les.LightEthereum
 	)
 	// Start the node and wait until it's up
 	if typ == eth2LightClient {
-		stack, lesBackend, api, err = makeLightNode(genesis)
+		stack, lesBackend, lapi, err = makeLightNode(genesis)
 	} else {
 		stack, ethBackend, api, err = makeFullNode(genesis)
 	}
@@ -131,13 +135,14 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 		typ:        typ,
 		api:        api,
 		ethBackend: ethBackend,
+		lapi:       lapi,
 		lesBackend: lesBackend,
 		stack:      stack,
 		enode:      enode,
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*catalyst.ExecutableDataV1, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableDataV1, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
@@ -145,12 +150,12 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if timestamp <= parentTimestamp {
 		timestamp = parentTimestamp + 1
 	}
-	payloadAttribute := catalyst.PayloadAttributesV1{
+	payloadAttribute := beacon.PayloadAttributesV1{
 		Timestamp:             timestamp,
 		Random:                common.Hash{},
 		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
 	}
-	fcState := catalyst.ForkchoiceStateV1{
+	fcState := beacon.ForkchoiceStateV1{
 		HeadBlockHash:      parentHash,
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -162,39 +167,62 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	return n.api.GetPayloadV1(*payload.PayloadID)
 }
 
-func (n *ethNode) insertBlock(eb catalyst.ExecutableDataV1) error {
+func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
-	newResp, err := n.api.ExecutePayloadV1(eb)
-	if err != nil {
-		return err
-	} else if newResp.Status != "VALID" {
-		return errors.New("failed to insert block")
+	switch n.typ {
+	case eth2NormalNode, eth2MiningNode:
+		newResp, err := n.api.ExecutePayloadV1(eb)
+		if err != nil {
+			return err
+		} else if newResp.Status != "VALID" {
+			return errors.New("failed to insert block")
+		}
+		return nil
+	case eth2LightClient:
+		newResp, err := n.lapi.ExecutePayloadV1(eb)
+		if err != nil {
+			return err
+		} else if newResp.Status != "VALID" {
+			return errors.New("failed to insert block")
+		}
+		return nil
+	default:
+		return errors.New("undefined node")
 	}
-	return nil
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed catalyst.ExecutableDataV1) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableDataV1) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
-	block, err := catalyst.ExecutableDataToBlock(ed)
+	block, err := beacon.ExecutableDataToBlock(ed)
 	if err != nil {
 		return err
 	}
-	fcState := catalyst.ForkchoiceStateV1{
+	fcState := beacon.ForkchoiceStateV1{
 		HeadBlockHash:      block.ParentHash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := n.api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-		return err
+	switch n.typ {
+	case eth2NormalNode, eth2MiningNode:
+		if _, err := n.api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			return err
+		}
+		return nil
+	case eth2LightClient:
+		if _, err := n.lapi.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			return err
+		}
+		return nil
+	default:
+		return errors.New("undefined node")
 	}
-	return nil
 }
 
 type nodeManager struct {
@@ -290,7 +318,7 @@ func (mgr *nodeManager) run() {
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range append(nodes) {
-			fcState := catalyst.ForkchoiceStateV1{
+			fcState := beacon.ForkchoiceStateV1{
 				HeadBlockHash:      oldest.Hash(),
 				SafeBlockHash:      common.Hash{},
 				FinalizedBlockHash: oldest.Hash(),
@@ -336,17 +364,13 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := catalyst.ExecutableDataToBlock(*ed)
+			block, _ := beacon.ExecutableDataToBlock(*ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
+			nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 			for _, node := range nodes {
 				if err := node.insertBlockAndSetHead(parentBlock.Header(), *ed); err != nil {
-					log.Error("Failed to insert block", "type", node.typ, "err", err)
-				}
-			}
-			for _, node := range mgr.getNodes(eth2LightClient) {
-				if err := node.insertBlock(*ed); err != nil {
 					log.Error("Failed to insert block", "type", node.typ, "err", err)
 				}
 			}
@@ -435,7 +459,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.ConsensusAPI, error) {
+func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -483,10 +507,10 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *catalyst.C
 		log.Crit("Failed to create the LES server", "err", err)
 	}
 	err = stack.Start()
-	return stack, ethBackend, catalyst.NewConsensusAPI(ethBackend, nil), err
+	return stack, ethBackend, ethcatalyst.NewConsensusAPI(ethBackend), err
 }
 
-func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *catalyst.ConsensusAPI, error) {
+func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -521,7 +545,7 @@ func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *cata
 		return nil, nil, nil, err
 	}
 	err = stack.Start()
-	return stack, lesBackend, catalyst.NewConsensusAPI(nil, lesBackend), err
+	return stack, lesBackend, lescatalyst.NewConsensusAPI(lesBackend), err
 }
 
 func eth2types(typ nodetype) bool {

@@ -16,7 +16,11 @@
 
 package catalyst
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/ethereum/go-ethereum/core/beacon"
+)
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
 // engine tracks before evicting old ones. Ideally we should only ever track the
@@ -26,8 +30,8 @@ const maxTrackedPayloads = 10
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
-	id      PayloadID
-	payload *ExecutableDataV1
+	id      beacon.PayloadID
+	payload *beacon.ExecutableDataV1
 }
 
 // payloadQueue tracks the latest handful of constructed payloads to be retrieved
@@ -46,7 +50,7 @@ func newPayloadQueue() *payloadQueue {
 }
 
 // put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id PayloadID, data *ExecutableDataV1) {
+func (q *payloadQueue) put(id beacon.PayloadID, data *beacon.ExecutableDataV1) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -58,7 +62,7 @@ func (q *payloadQueue) put(id PayloadID, data *ExecutableDataV1) {
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id PayloadID) *ExecutableDataV1 {
+func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
