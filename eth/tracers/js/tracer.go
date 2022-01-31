@@ -827,8 +827,8 @@ func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (jst *jsTracer) Settings() tracers2.TracerSettings {
-	return tracers2.TracerSettings{Engine: "js", Hooks: tracers2.Step | tracers2.CallFrame}
+func (jst *jsTracer) Settings() vm.LoggerSettings {
+	return vm.LoggerSettings{Hooks: vm.StepHook | vm.CallFrameHook}
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error

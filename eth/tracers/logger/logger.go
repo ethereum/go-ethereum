@@ -223,6 +223,10 @@ func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
+func (l *StructLogger) Settings() vm.LoggerSettings {
+	return vm.LoggerSettings{Hooks: vm.StepHook}
+}
+
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
 

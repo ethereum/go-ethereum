@@ -37,26 +37,9 @@ type Context struct {
 // allows collecting the tracing result.
 type Tracer interface {
 	vm.EVMLogger
-	// Returns info such as which hooks the tracer is interested in.
-	Settings() TracerSettings
 	GetResult() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop(err error)
-}
-
-type Hooks uint16
-
-const (
-	Step      Hooks = 1 << iota
-	CallFrame Hooks = 2 << iota
-)
-
-func Set(h, flag Hooks) Hooks { return h | flag }
-func Has(h, flag Hooks) bool  { return h&flag != 0 }
-
-type TracerSettings struct {
-	Engine string
-	Hooks  Hooks
 }
 
 type lookupFunc func(string, *Context) (Tracer, error)
