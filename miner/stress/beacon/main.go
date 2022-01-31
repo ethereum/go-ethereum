@@ -36,11 +36,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	fcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
+	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/les"
-	lcatalyst "github.com/ethereum/go-ethereum/les/catalyst"
+	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -92,17 +92,17 @@ type ethNode struct {
 	typ        nodetype
 	stack      *node.Node
 	enode      *enode.Node
-	api        *fcatalyst.ConsensusAPI
+	api        *ethcatalyst.ConsensusAPI
 	ethBackend *eth.Ethereum
-	lapi       *lcatalyst.ConsensusAPI
+	lapi       *lescatalyst.ConsensusAPI
 	lesBackend *les.LightEthereum
 }
 
 func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode {
 	var (
 		err        error
-		api        *fcatalyst.ConsensusAPI
-		lapi       *lcatalyst.ConsensusAPI
+		api        *ethcatalyst.ConsensusAPI
+		lapi       *lescatalyst.ConsensusAPI
 		stack      *node.Node
 		ethBackend *eth.Ethereum
 		lesBackend *les.LightEthereum
@@ -459,7 +459,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *fcatalyst.ConsensusAPI, error) {
+func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -507,10 +507,10 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *fcatalyst.
 		log.Crit("Failed to create the LES server", "err", err)
 	}
 	err = stack.Start()
-	return stack, ethBackend, fcatalyst.NewConsensusAPI(ethBackend), err
+	return stack, ethBackend, ethcatalyst.NewConsensusAPI(ethBackend), err
 }
 
-func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lcatalyst.ConsensusAPI, error) {
+func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -545,7 +545,7 @@ func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lcat
 		return nil, nil, nil, err
 	}
 	err = stack.Start()
-	return stack, lesBackend, lcatalyst.NewConsensusAPI(lesBackend), err
+	return stack, lesBackend, lescatalyst.NewConsensusAPI(lesBackend), err
 }
 
 func eth2types(typ nodetype) bool {
