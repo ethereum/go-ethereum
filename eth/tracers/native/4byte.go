@@ -133,8 +133,10 @@ func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (t *fourByteTracer) Settings() *vm.LoggerSettings {
-	return &vm.LoggerSettings{Hooks: vm.CallFrameHook}
+func (t *fourByteTracer) Hooks() *vm.Hooks {
+	h := new(vm.Hooks)
+	h.Set(vm.CallFrameHook)
+	return h
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any

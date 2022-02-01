@@ -167,7 +167,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		defer func() {
 			if err != nil {
 				if !logged {
-					if in.cfg.Tracer.Settings().HasHook(StepHook) {
+					if in.cfg.Tracer.Hooks().Has(StepHook) {
 						in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 					}
 				} else {
@@ -230,7 +230,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 		if in.cfg.Debug {
-			if in.cfg.Tracer.Settings().HasHook(StepHook) {
+			if in.cfg.Tracer.Hooks().Has(StepHook) {
 				in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			}
 			// TODO: fault and step are kind of related. What to do here?

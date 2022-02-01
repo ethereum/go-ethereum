@@ -145,8 +145,10 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (t *callTracer) Settings() *vm.LoggerSettings {
-	return &vm.LoggerSettings{Hooks: vm.CallFrameHook}
+func (t *callTracer) Hooks() *vm.Hooks {
+	h := new(vm.Hooks)
+	h.Set(vm.CallFrameHook)
+	return h
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any

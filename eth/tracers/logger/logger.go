@@ -223,8 +223,10 @@ func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (l *StructLogger) Settings() *vm.LoggerSettings {
-	return &vm.LoggerSettings{Hooks: vm.StepHook}
+func (l *StructLogger) Hooks() *vm.Hooks {
+	h := new(vm.Hooks)
+	h.Set(vm.StepHook)
+	return h
 }
 
 // StructLogs returns the captured log entries.
@@ -352,6 +354,8 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (t *mdLogger) Settings() *vm.LoggerSettings {
-	return &vm.LoggerSettings{Hooks: vm.StepHook}
+func (t *mdLogger) Hooks() *vm.Hooks {
+	h := new(vm.Hooks)
+	h.Set(vm.StepHook)
+	return h
 }

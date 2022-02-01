@@ -416,8 +416,8 @@ type jsTracer struct {
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
 
-	activePrecompiles []common.Address  // Updated on CaptureStart based on given rules
-	settings          vm.LoggerSettings // Settings provided by the tracer to the EVM
+	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	hooks             *vm.Hooks        // Settings provided by the tracer to the EVM
 }
 
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
@@ -563,20 +563,20 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	}
 	tracer.vm.Pop()
 
-	settings := vm.LoggerSettings{Hooks: 0}
+	hooks := new(vm.Hooks)
 	// Then check if it's a new tracer providing the settings field for optional hooks.
 	hasSettings := tracer.vm.GetPropString(tracer.tracerObject, "settings")
 	if hasSettings {
 		topIndex := tracer.vm.GetTopIndex()
 		if ok := tracer.vm.GetPropString(topIndex, "step"); ok {
 			if set := tracer.vm.GetBoolean(topIndex + 1); set {
-				settings.SetHook(vm.StepHook)
+				hooks.Set(vm.StepHook)
 			}
 		}
 		tracer.vm.Pop()
 		if ok := tracer.vm.GetPropString(topIndex, "callframe"); ok {
 			if set := tracer.vm.GetBoolean(topIndex + 1); set {
-				settings.SetHook(vm.CallFrameHook)
+				hooks.Set(vm.CallFrameHook)
 			}
 		}
 		tracer.vm.Pop()
@@ -596,13 +596,13 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 			return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 		}
 		if hasStep {
-			settings.SetHook(vm.StepHook)
+			hooks.Set(vm.StepHook)
 		}
 		if hasEnter && hasExit {
-			settings.SetHook(vm.CallFrameHook)
+			hooks.Set(vm.CallFrameHook)
 		}
 	}
-	tracer.settings = settings
+	tracer.hooks = hooks
 
 	// Tracer is valid, inject the big int library to access large numbers
 	tracer.vm.EvalString(bigIntegerJS)
@@ -846,8 +846,8 @@ func (jst *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 // Settings returns information about the tracer and which hooks
 // it is interested in.
-func (jst *jsTracer) Settings() *vm.LoggerSettings {
-	return &jst.settings
+func (jst *jsTracer) Hooks() *vm.Hooks {
+	return jst.hooks
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
