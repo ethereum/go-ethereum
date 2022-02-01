@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	register("nativePrestateTracer", newPrestateTracer)
+	register("prestateTracer", newPrestateTracer)
 }
 
 type prestate = map[common.Address]*account
