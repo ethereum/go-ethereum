@@ -230,6 +230,9 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 	defer b.mu.Unlock()
 
 	receipt, _, _, _ := rawdb.ReadReceipt(b.database, txHash, b.config)
+	if receipt == nil {
+		return nil, ethereum.NotFound
+	}
 	return receipt, nil
 }
 
