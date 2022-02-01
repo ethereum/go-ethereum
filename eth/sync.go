@@ -62,10 +62,10 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 
 // chainSyncer coordinates blockchain sync components.
 type chainSyncer struct {
-	ttd         *big.Int // Terminal difficulty to leave self-triggering sync
 	handler     *handler
 	force       *time.Timer
 	forced      bool // true when force timer fired
+	warned      time.Time
 	peerEventCh chan struct{}
 	doneCh      chan error // non-nil when sync is running
 }
@@ -81,7 +81,6 @@ type chainSyncOp struct {
 // newChainSyncer creates a chainSyncer.
 func newChainSyncer(handler *handler) *chainSyncer {
 	return &chainSyncer{
-		ttd:         handler.chain.Config().TerminalTotalDifficulty,
 		handler:     handler,
 		peerEventCh: make(chan struct{}),
 	}
@@ -114,7 +113,6 @@ func (cs *chainSyncer) loop() {
 	cs.force = time.NewTimer(forceSyncCycle)
 	defer cs.force.Stop()
 
-	var warned time.Time
 	for {
 		if op := cs.nextSyncOp(); op != nil {
 			cs.startSync(op)
@@ -130,9 +128,9 @@ func (cs *chainSyncer) loop() {
 			// If we've reached the merge transition but no beacon client is available, or
 			// it has not yet switched us over, keep warning the user that their infra is
 			// potentially flaky.
-			if err == downloader.ErrMergeTransition && time.Since(warned) > 10*time.Second {
+			if err == downloader.ErrMergeTransition && time.Since(cs.warned) > 10*time.Second {
 				log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
-				warned = time.Now()
+				cs.warned = time.Now()
 			}
 		case <-cs.force.C:
 			cs.forced = true
@@ -187,6 +185,13 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	mode, ourTD := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
+		// We seem to be in sync according to the legacy rules. In the merge
+		// world, it can also mean we're stuck on the merge block, waiting for
+		// a beacon client. In the latter case, notify the user.
+		if cs.handler.chain.Config().TerminalTotalDifficulty != nil && time.Since(cs.warned) > 10*time.Second {
+			log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
+			cs.warned = time.Now()
+		}
 		return nil // We're in sync
 	}
 	return op
