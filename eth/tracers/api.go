@@ -891,6 +891,8 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			}()
 			defer cancel()
 			tracer = t
+			// Check tracer engine
+			log.Info("Initiated tracer", "engine", tracer.(Tracer).Settings().Engine)
 		}
 	default:
 		tracer = logger.NewStructLogger(config.Config)

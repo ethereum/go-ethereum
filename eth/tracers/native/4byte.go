@@ -139,6 +139,10 @@ func (t *fourByteTracer) Hooks() *vm.Hooks {
 	return h
 }
 
+func (t *fourByteTracer) Settings() *tracers.TracerSettings {
+	return &tracers.TracerSettings{Engine: "native"}
+}
+
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *fourByteTracer) GetResult() (json.RawMessage, error) {

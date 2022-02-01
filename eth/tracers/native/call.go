@@ -151,6 +151,10 @@ func (t *callTracer) Hooks() *vm.Hooks {
 	return h
 }
 
+func (t *callTracer) Settings() *tracers.TracerSettings {
+	return &tracers.TracerSettings{Engine: "native"}
+}
+
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *callTracer) GetResult() (json.RawMessage, error) {

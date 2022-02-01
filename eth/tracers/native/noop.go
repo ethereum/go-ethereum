@@ -68,6 +68,10 @@ func (t *noopTracer) Hooks() *vm.Hooks {
 	return new(vm.Hooks)
 }
 
+func (t *noopTracer) Settings() *tracers.TracerSettings {
+	return &tracers.TracerSettings{Engine: "native"}
+}
+
 // GetResult returns an empty json object.
 func (t *noopTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
