@@ -474,18 +474,21 @@ func (c *codeAndHash) Hash() common.Hash {
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	var zeroVerkleLeaf [32]byte
+	var balance []byte
 
 	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
 		// note: assumption is that the nonce, code size, code hash
 		// will be 0x0000...00 at the target account before it is created
 		// otherwise would imply contract creation collision which is
 		// impossible if self-destruct is removed
-		balance := evm.StateDB.GetBalanceLittleEndian(address)
+		if evm.StateDB.GetBalance(address).Sign() != 0 {
+			balance = evm.StateDB.GetBalanceLittleEndian(address)
+		}
 
 		if value.Sign() != 0 {
 			evm.Accesses.SetLeafValuesContractCreateInit(address.Bytes()[:], zeroVerkleLeaf[:], nil)
 		} else {
-			evm.Accesses.SetLeafValuesContractCreateInit(address.Bytes()[:], zeroVerkleLeaf[:], balance[:])
+			evm.Accesses.SetLeafValuesContractCreateInit(address.Bytes()[:], zeroVerkleLeaf[:], balance)
 		}
 	}
 
