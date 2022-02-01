@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gballet/go-verkle"
 )
 
 var (
@@ -87,7 +88,8 @@ type Header struct {
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
 	// The verkle proof is ignored in legacy headers
-	VerkleProof []byte `json:"verkleProof" rlp:"optional"`
+	VerkleProof   []byte                `json:"verkleProof" rlp:"optional"`
+	VerkleKeyVals []verkle.KeyValuePair `json:"verkleKeyVals" rlp:"optional"`
 
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
@@ -340,8 +342,9 @@ func (b *Block) SanityCheck() error {
 	return b.header.SanityCheck()
 }
 
-func (b *Block) SetVerkleProof(vp []byte) {
+func (b *Block) SetVerkleProof(vp []byte, kv []verkle.KeyValuePair) {
 	b.header.VerkleProof = vp
+	b.header.VerkleKeyVals = kv
 }
 
 type writeCounter common.StorageSize

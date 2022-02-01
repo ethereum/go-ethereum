@@ -174,14 +174,14 @@ func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
 
-type KeyValuePair struct {
-	Key   []byte
-	Value []byte
-}
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[string][]byte) ([]byte, []verkle.KeyValuePair, error) {
+	proof, _, _, _ := verkle.MakeVerkleMultiProof(trie.root, keys, kv)
+	p, kvps, err := verkle.SerializeProof(proof)
+	if err != nil {
+		return nil, nil, err
+	}
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[common.Hash][]byte) ([]byte, error) {
-	proof, _, _, _ := verkle.MakeVerkleMultiProof(trie.root, keys)
-	return verkle.SerializeProof(proof)
+	return p, kvps, nil
 }
 
 type set = map[string]struct{}
