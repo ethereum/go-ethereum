@@ -383,7 +383,7 @@ func TestProcessStateless(t *testing.T) {
 	defer blockchain.Stop()
 	txCost1 := params.WitnessBranchWriteCost*2 + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*3 + params.WitnessChunkReadCost*12 + params.TxGas
 	txCost2 := params.WitnessBranchWriteCost + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*2 + params.WitnessChunkReadCost*10 + params.TxGas
-	blockGasUsedExpected := txCost1 * 2 + txCost2
+	blockGasUsedExpected := txCost1*2 + txCost2
 	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, gen *BlockGen) {
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{1, 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
@@ -409,7 +409,7 @@ func TestProcessStateless(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		b := blockchain.GetBlockByNumber(uint64(i) + 1)
 		if b == nil {
-			t.Fatalf("expected block %d to be present in chain", i + 1)
+			t.Fatalf("expected block %d to be present in chain", i+1)
 		}
 		if b.GasUsed() != blockGasUsedExpected {
 			t.Fatalf("expected block txs to use %d, got %d\n", blockGasUsedExpected, b.GasUsed())
