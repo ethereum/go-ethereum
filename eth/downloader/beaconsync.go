@@ -128,7 +128,7 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	b.resume()
 }
 
-// BeaconSync is the Ethereum 2 version of the chain synchronization, where the
+// BeaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
 //
@@ -148,7 +148,7 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 	return d.beaconSync(mode, head, false)
 }
 
-// beaconSync is the Ethereum 2 version of the chain synchronization, where the
+// beaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
 //
