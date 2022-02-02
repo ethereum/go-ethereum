@@ -227,38 +227,17 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	noverify := ethConfig.Miner.Noverify
 
 	// If proof-of-authority is requested, set it up
-	var engine consensus.Engine
 	if chainConfig.Clique != nil {
-		engine = clique.New(chainConfig.Clique, db)
-	} else {
-		switch config.PowMode {
-		case ethash.ModeFake:
-			log.Warn("Ethash used in fake mode")
-		case ethash.ModeTest:
-			log.Warn("Ethash used in test mode")
-		case ethash.ModeShared:
-			log.Warn("Ethash used in shared mode")
-		}
-		engine = ethash.New(ethash.Config{
-			PowMode:          config.PowMode,
-			CacheDir:         stack.ResolvePath(config.CacheDir),
-			CachesInMem:      config.CachesInMem,
-			CachesOnDisk:     config.CachesOnDisk,
-			CachesLockMmap:   config.CachesLockMmap,
-			DatasetDir:       config.DatasetDir,
-			DatasetsInMem:    config.DatasetsInMem,
-			DatasetsOnDisk:   config.DatasetsOnDisk,
-			DatasetsLockMmap: config.DatasetsLockMmap,
-			NotifyFull:       config.NotifyFull,
-		}, notify, noverify)
-		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
+		return clique.New(chainConfig.Clique, db)
 	}
+
 	// If Matic bor consensus is requested, set it up
 	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
 	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
 	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		return bor.New(chainConfig, db, blockchainAPI, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
 	}
+
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case ethash.ModeFake:
@@ -268,7 +247,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 	}
-	engine = ethash.New(ethash.Config{
+	engine := ethash.New(ethash.Config{
 		PowMode:          config.PowMode,
 		CacheDir:         stack.ResolvePath(config.CacheDir),
 		CachesInMem:      config.CachesInMem,
@@ -280,7 +259,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		DatasetsLockMmap: config.DatasetsLockMmap,
 		NotifyFull:       config.NotifyFull,
 	}, notify, noverify)
-	// TODO - Check this
-	// engine.SetThreads(-1) // Disable CPU mining
+	engine.SetThreads(-1) // Disable CPU mining
 	return engine
 }
