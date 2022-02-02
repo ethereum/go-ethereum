@@ -135,6 +135,26 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
 func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
+	return d.beaconSync(mode, head, true)
+}
+
+// BeaconExtend is an optimistic version of BeaconSync, where an attempt is made
+// to extend the current beacon chain with a new header, but in case of a mismatch,
+// the old sync will not be terminated and reorged, rather the new head is dropped.
+//
+// This is useful if a beacon client is feeding us large chunks of payloads to run,
+// but is not setting the head after each.
+func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
+	return d.beaconSync(mode, head, false)
+}
+
+// beaconSync is the Ethereum 2 version of the chain synchronization, where the
+// chain is not downloaded from genesis onward, rather from trusted head announces
+// backwards.
+//
+// Internally backfilling and state sync is done the same way, but the header
+// retrieval and scheduling is replaced.
+func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) error {
 	// When the downloader starts a sync cycle, it needs to be aware of the sync
 	// mode to use (full, snap). To keep the skeleton chain oblivious, inject the
 	// mode into the backfiller directly.
@@ -144,7 +164,7 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
 	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
 
 	// Signal the skeleton sync to switch to a new head, however it wants
-	if err := d.skeleton.Sync(head); err != nil {
+	if err := d.skeleton.Sync(head, force); err != nil {
 		return err
 	}
 	return nil
@@ -230,13 +250,16 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			hashes = append(hashes, headers[i].Hash())
 			from++
 		}
-		select {
-		case d.headerProcCh <- &headerTask{
-			headers: headers,
-			hashes:  hashes,
-		}:
-		case <-d.cancelCh:
-			return errCanceled
+		if len(headers) > 0 {
+			log.Trace("Scheduling new beacon headers", "count", len(headers), "from", from-uint64(len(headers)))
+			select {
+			case d.headerProcCh <- &headerTask{
+				headers: headers,
+				hashes:  hashes,
+			}:
+			case <-d.cancelCh:
+				return errCanceled
+			}
 		}
 		// If we still have headers to import, loop and keep pushing them
 		if from <= head.Number.Uint64() {
@@ -244,10 +267,15 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		}
 		// If the pivot block is committed, signal header sync termination
 		if atomic.LoadInt32(&d.committed) == 1 {
-			d.headerProcCh <- nil
-			return nil
+			select {
+			case d.headerProcCh <- nil:
+				return nil
+			case <-d.cancelCh:
+				return errCanceled
+			}
 		}
 		// State sync still going, wait a bit for new headers and retry
+		log.Trace("Pivot not yet comitted, waiting...")
 		select {
 		case <-time.After(fsHeaderContCheck):
 		case <-d.cancelCh:

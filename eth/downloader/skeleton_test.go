@@ -232,7 +232,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 
 		skeleton := newSkeleton(db, newPeerSet(), func(string) {}, newNoopBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
-		skeleton.Sync(tt.head)
+		skeleton.Sync(tt.head, true)
 
 		<-wait
 		skeleton.Terminate()

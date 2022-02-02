@@ -19,13 +19,20 @@ package catalyst
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
 // engine tracks before evicting old ones. Ideally we should only ever track the
 // latest one; but have a slight wiggle room for non-ideal conditions.
 const maxTrackedPayloads = 10
+
+// maxTrackedHeaders is the maximum number of executed payloads the execution
+// engine tracks before evicting old ones. Ideally we should only ever track the
+// latest one; but have a slight wiggle room for non-ideal conditions.
+const maxTrackedHeaders = 10
 
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
@@ -72,6 +79,56 @@ func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
 		}
 		if item.id == id {
 			return item.payload
+		}
+	}
+	return nil
+}
+
+// headerQueueItem represents an hash->header tuple to store until it's retrieved
+// or evicted.
+type headerQueueItem struct {
+	hash   common.Hash
+	header *types.Header
+}
+
+// headerQueue tracks the latest handful of constructed headers to be retrieved
+// by the beacon chain if block production is requested.
+type headerQueue struct {
+	headers []*headerQueueItem
+	lock    sync.RWMutex
+}
+
+// newHeaderQueue creates a pre-initialized queue with a fixed number of slots
+// all containing empty items.
+func newHeaderQueue() *headerQueue {
+	return &headerQueue{
+		headers: make([]*headerQueueItem, maxTrackedHeaders),
+	}
+}
+
+// put inserts a new header into the queue at the given hash.
+func (q *headerQueue) put(hash common.Hash, data *types.Header) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	copy(q.headers[1:], q.headers)
+	q.headers[0] = &headerQueueItem{
+		hash:   hash,
+		header: data,
+	}
+}
+
+// get retrieves a previously stored header item or nil if it does not exist.
+func (q *headerQueue) get(hash common.Hash) *types.Header {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.headers {
+		if item == nil {
+			return nil // no more items
+		}
+		if item.hash == hash {
+			return item.header
 		}
 	}
 	return nil

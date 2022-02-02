@@ -99,6 +99,15 @@ type skeletonProgress struct {
 	Subchains []*subchain // Disjoint subchains downloaded until now
 }
 
+// headUpdate is a notification that the beacon sync should switch to a new target.
+// The update might request whether to forcefully change the target, or only try to
+// extend it and fail if it's not possible.
+type headUpdate struct {
+	header *types.Header // Header to update the sync target to
+	force  bool          // Whether to force the update or only extend if possible
+	errc   chan error    // Channel to signal acceptance of the new head
+}
+
 // headerRequest tracks a pending header request to ensure responses are to
 // actual requests and to validate any security constraints.
 //
@@ -189,9 +198,9 @@ type skeleton struct {
 
 	requests map[uint64]*headerRequest // Header requests currently running
 
-	headEvents chan *types.Header // Notification channel for new heads
-	terminate  chan chan error    // Termination channel to abort sync
-	terminated chan struct{}      // Channel to signal that the syner is dead
+	headEvents chan *headUpdate // Notification channel for new heads
+	terminate  chan chan error  // Termination channel to abort sync
+	terminated chan struct{}    // Channel to signal that the syner is dead
 
 	// Callback hooks used during testing
 	syncStarting func() // callback triggered after a sync cycle is inited but before started
@@ -206,7 +215,7 @@ func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler back
 		peers:      peers,
 		drop:       drop,
 		requests:   make(map[uint64]*headerRequest),
-		headEvents: make(chan *types.Header),
+		headEvents: make(chan *headUpdate),
 		terminate:  make(chan chan error),
 		terminated: make(chan struct{}),
 	}
@@ -223,53 +232,63 @@ func (s *skeleton) startup() {
 	// sync loop was torn down for good.
 	defer close(s.terminated)
 
-	// Wait for startup or teardown
-	select {
-	case errc := <-s.terminate:
-		// No head was announced but Geth is shutting down
-		errc <- nil
-		return
+	// Wait for startup or teardown. This wait might loop a few times if a beacon
+	// client requests sync head extensions, but not forced reorgs (i.e. they are
+	// giving us new payloads without setting a starting head intially).
+	for {
+		select {
+		case errc := <-s.terminate:
+			// No head was announced but Geth is shutting down
+			errc <- nil
+			return
 
-	case head := <-s.headEvents:
-		// New head announced, start syncing to it, looping every time a current
-		// cycle is terminated due to a chain event (head reorg, old chain merge)
-		s.started = time.Now()
+		case event := <-s.headEvents:
+			// New head announced, start syncing to it, looping every time a current
+			// cycle is terminated due to a chain event (head reorg, old chain merge).
+			if !event.force {
+				event.errc <- errors.New("forced head needed for startup")
+				continue
+			}
+			event.errc <- nil // forced head accepted for startup
+			head := event.header
+			s.started = time.Now()
 
-		for {
-			// If the sync cycle terminated or was terminated, propagate up when
-			// higher layers request termination. There's no fancy explicit error
-			// signalling as the sync loop should never terminate (TM).
-			newhead, err := s.sync(head)
-			switch {
-			case err == errSyncLinked:
-				// Sync cycle linked up to the genesis block. Tear down the loop
-				// and restart it so, it can properly notify the backfiller. Don't
-				// account a new head.
-				head = nil
+			for {
+				// If the sync cycle terminated or was terminated, propagate up when
+				// higher layers request termination. There's no fancy explicit error
+				// signalling as the sync loop should never terminate (TM).
+				newhead, err := s.sync(head)
+				switch {
+				case err == errSyncLinked:
+					// Sync cycle linked up to the genesis block. Tear down the loop
+					// and restart it so, it can properly notify the backfiller. Don't
+					// account a new head.
+					head = nil
 
-			case err == errSyncMerged:
-				// Subchains were merged, we just need to reinit the internal
-				// start to continue on the tail of the merged chain. Don't
-				// announce a new head,
-				head = nil
+				case err == errSyncMerged:
+					// Subchains were merged, we just need to reinit the internal
+					// start to continue on the tail of the merged chain. Don't
+					// announce a new head,
+					head = nil
 
-			case err == errSyncReorged:
-				// The subchain being synced got modified at the head in a
-				// way that requires resyncing it. Restart sync with the new
-				// head to force a cleanup.
-				head = newhead
+				case err == errSyncReorged:
+					// The subchain being synced got modified at the head in a
+					// way that requires resyncing it. Restart sync with the new
+					// head to force a cleanup.
+					head = newhead
 
-			case err == errTerminated:
-				// Sync was requested to be terminated from within, stop and
-				// return (no need to pass a message, was already done internally)
-				return
+				case err == errTerminated:
+					// Sync was requested to be terminated from within, stop and
+					// return (no need to pass a message, was already done internally)
+					return
 
-			default:
-				// Sync either successfully terminated or failed with an unhandled
-				// error. Abort and wait until Geth requests a termination.
-				errc := <-s.terminate
-				errc <- err
-				return
+				default:
+					// Sync either successfully terminated or failed with an unhandled
+					// error. Abort and wait until Geth requests a termination.
+					errc := <-s.terminate
+					errc <- err
+					return
+				}
 			}
 		}
 	}
@@ -293,11 +312,13 @@ func (s *skeleton) Terminate() error {
 //
 // This method does not block, rather it just waits until the syncer receives the
 // fed header. What the syncer does with it is the syncer's problem.
-func (s *skeleton) Sync(head *types.Header) error {
-	log.Trace("New skeleton head announced", "number", head.Number, "hash", head.Hash())
+func (s *skeleton) Sync(head *types.Header, force bool) error {
+	log.Trace("New skeleton head announced", "number", head.Number, "hash", head.Hash(), "force", force)
+	errc := make(chan error)
+
 	select {
-	case s.headEvents <- head:
-		return nil
+	case s.headEvents <- &headUpdate{header: head, force: force, errc: errc}:
+		return <-errc
 	case <-s.terminated:
 		return errTerminated
 	}
@@ -385,15 +406,25 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			errc <- nil
 			return nil, errTerminated
 
-		case head := <-s.headEvents:
+		case event := <-s.headEvents:
 			// New head was announced, try to integrate it. If successful, nothing
 			// needs to be done as the head simply extended the last range. For now
 			// we don't seamlessly integrate reorgs to keep things simple. If the
 			// network starts doing many mini reorgs, it might be worthwhile handling
 			// a limited depth without an error.
-			if reorged := s.processNewHead(head); reorged {
-				return head, errSyncReorged
+			if reorged := s.processNewHead(event.header); reorged {
+				// If a reorg is needed, and we're forcing the new head, signal
+				// the syncer to tear down and start over. Otherwise, drop the
+				// non-force reorg.
+				if event.force {
+					event.errc <- nil // forced head reorg accepted
+					return event.header, errSyncReorged
+				}
+				event.errc <- errors.New("non-forced head reorg denied")
+				continue
 			}
+			event.errc <- nil // head extension accepted
+
 			// New head was integrated into the skeleton chain. If the backfiller
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
@@ -412,13 +443,18 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// the extended subchain, but since the scenario is rare, it's cleaner
 			// to rely on the restart mechanism than a stateful modification.
 			if merged := s.processResponse(res); merged {
+				log.Debug("Beacon sync merged subchains")
 				return nil, errSyncMerged
 			}
 			// If we've just reached the genesis block, tear down the sync cycle
 			// and restart it to resume the backfiller. We could just as well do
 			// a signalling here, but it's a tad cleaner to have only one entry
 			// pathway to suspending/resuming it.
-			return nil, errSyncLinked
+			if len(s.progress.Subchains) == 1 && s.progress.Subchains[0].Tail == 1 {
+				log.Debug("Beacon sync linked to genesis")
+				return nil, errSyncLinked
+			}
+			// We still have work to do, loop and repeat
 		}
 	}
 }

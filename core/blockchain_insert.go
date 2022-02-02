@@ -39,7 +39,7 @@ const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
-func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize) {
+func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize, setHead bool) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -71,8 +71,11 @@ func (st *insertStats) report(chain []*types.Block, index int, dirty common.Stor
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
-		log.Info("Imported new chain segment", context...)
-
+		if setHead {
+			log.Info("Imported new chain segment", context...)
+		} else {
+			log.Info("Imported new potential chain segment", context...)
+		}
 		// Bump the stats reported to the next section
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
