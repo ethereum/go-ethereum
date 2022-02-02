@@ -913,8 +913,10 @@ func TestHeadersRLPStorage(t *testing.T) {
 		pHash = block.Hash()
 	}
 	var receipts []types.Receipts = make([]types.Receipts, 100)
+	var borReceipts []types.Receipts = make([]types.Receipts, 100)
+
 	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
+	WriteAncientBlocks(db, chain[:50], receipts[:50], borReceipts[:50], big.NewInt(100))
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
