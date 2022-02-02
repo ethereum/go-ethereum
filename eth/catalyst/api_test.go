@@ -44,6 +44,27 @@ var (
 	testBalance = big.NewInt(2e18)
 )
 
+func generateTestChain() (*core.Genesis, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
+	genesis := &core.Genesis{
+		Config:    config,
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+		BaseFee:   big.NewInt(params.InitialBaseFee),
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+	}
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
+	blocks = append([]*types.Block{gblock}, blocks...)
+	return genesis, blocks
+}
+
 func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
@@ -74,6 +95,8 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 }
 
 func TestEth2AssembleBlock(t *testing.T) {
+	t.Skip("bor due to burn contract")
+
 	genesis, blocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -98,6 +121,8 @@ func TestEth2AssembleBlock(t *testing.T) {
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
+	t.Skip("bor due to burn contract")
+
 	genesis, blocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
@@ -186,6 +211,8 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 }
 
 func TestEth2NewBlock(t *testing.T) {
+	t.Skip("ETH2 in Bor")
+
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	ethservice.Merger().ReachTTD()
@@ -357,6 +384,8 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 }
 
 func TestFullAPI(t *testing.T) {
+	t.Skip("ETH2 in Bor")
+
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	ethservice.Merger().ReachTTD()
