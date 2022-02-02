@@ -44,10 +44,9 @@ ios:
 	@echo "Done building."
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
-test: all
-	# $(GORUN) build/ci.go test
-	go test github.com/ethereum/go-ethereum/consensus/bor -v
-	go test github.com/ethereum/go-ethereum/tests/bor -v
+test:
+	# Skip mobile and cmd tests since they are being deprecated
+	go test -v $$(go list ./... | grep -v go-ethereum/cmd/)
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

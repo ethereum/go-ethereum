@@ -1,11 +1,11 @@
-package main
+package cli
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -57,6 +57,13 @@ func printStatus(status *proto.StatusResponse) string {
 			fmt.Sprintf("Number|%d", h.Number),
 		})
 	}
+
+	forks := make([]string, len(status.Forks)+1)
+	forks[0] = "Name|Block|Enabled"
+	for i, d := range status.Forks {
+		forks[i+1] = fmt.Sprintf("%s|%d|%v", d.Name, d.Block, !d.Disabled)
+	}
+
 	full := []string{
 		"General",
 		formatKV([]string{
@@ -73,6 +80,8 @@ func printStatus(status *proto.StatusResponse) string {
 			fmt.Sprintf("Highest block|%d", status.Syncing.HighestBlock),
 			fmt.Sprintf("Starting block|%d", status.Syncing.StartingBlock),
 		}),
+		"\nForks",
+		formatList(forks),
 	}
 	return strings.Join(full, "\n")
 }

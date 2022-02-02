@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/ethereum/go-ethereum/command/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
 func (c *Command) Flags() *flagset.Flagset {
@@ -460,6 +460,18 @@ func (c *Command) Flags() *flagset.Flagset {
 		Name:  "grpc.addr",
 		Usage: "Address and port to bind the GRPC server",
 		Value: &c.cliConfig.GRPC.Addr,
+	})
+
+	// developer
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:  "dev",
+		Usage: "Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled",
+		Value: &c.cliConfig.Developer.Enabled,
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:  "dev.period",
+		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
+		Value: &c.cliConfig.Developer.Period,
 	})
 	return f
 }

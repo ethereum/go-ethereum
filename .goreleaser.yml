@@ -20,7 +20,7 @@ builds:
       - netgo
     ldflags:
       -s -w
-  
+
   - id: darwin-arm64
     main: ./cmd/geth
     binary: bor
@@ -35,7 +35,7 @@ builds:
       - netgo
     ldflags:
       -s -w
-  
+
   - id: linux-amd64
     main: ./cmd/geth
     binary: bor
@@ -49,7 +49,7 @@ builds:
     tags:
       - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container
       -s -w -extldflags "-static"
 
   - id: linux-arm64
@@ -65,7 +65,7 @@ builds:
     tags:
       - netgo
     ldflags:
-      # We need to build a static binary because we are building in a glibc based system and running in a musl container 
+      # We need to build a static binary because we are building in a glibc based system and running in a musl container
       -s -w -extldflags "-static"
 
 nfpms:
@@ -112,7 +112,7 @@ dockers:
     extra_files:
       - builder/files/genesis-mainnet-v1.json
       - builder/files/genesis-testnet-v4.json
-  
+
   - image_templates:
       - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
     dockerfile: Dockerfile.release

@@ -67,3 +67,8 @@ func (b *EthAPIBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context,
 func (b *EthAPIBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeStateSyncEvent(ch)
 }
+
+// SubscribeChain2HeadEvent subscribes to reorg/head/fork event
+func (b *EthAPIBackend) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeChain2HeadEvent(ch)
+}

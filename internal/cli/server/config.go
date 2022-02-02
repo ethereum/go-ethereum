@@ -14,12 +14,14 @@ import (
 
 	godebug "runtime/debug"
 
-	"github.com/ethereum/go-ethereum/command/server/chains"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/internal/cli/server/chains"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -91,6 +93,9 @@ type Config struct {
 
 	// GRPC has the grpc server related settings
 	GRPC *GRPCConfig
+
+	// Developer has the developer mode related settings
+	Developer *DeveloperConfig
 }
 
 type P2PConfig struct {
@@ -365,6 +370,14 @@ type AccountsConfig struct {
 	UseLightweightKDF bool `hcl:"use-lightweight-kdf,optional"`
 }
 
+type DeveloperConfig struct {
+	// Enabled enables the developer mode
+	Enabled bool `hcl:"dev,optional"`
+
+	// Period is the block period to use in developer mode
+	Period uint64 `hcl:"period,optional"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:     "mainnet",
@@ -486,6 +499,10 @@ func DefaultConfig() *Config {
 		GRPC: &GRPCConfig{
 			Addr: ":3131",
 		},
+		Developer: &DeveloperConfig{
+			Enabled: false,
+			Period:  0,
+		},
 	}
 }
 
@@ -573,6 +590,9 @@ func readConfigFile(path string) (*Config, error) {
 }
 
 func (c *Config) loadChain() error {
+	if c.Developer.Enabled {
+		return nil
+	}
 	chain, ok := chains.GetChain(c.Chain)
 	if !ok {
 		return fmt.Errorf("chain '%s' not found", c.Chain)
@@ -585,7 +605,7 @@ func (c *Config) loadChain() error {
 	}
 
 	// depending on the chain we have different cache values
-	if c.Chain != "mainnet" {
+	if c.Chain == "mainnet" {
 		c.Cache.Cache = 4096
 	} else {
 		c.Cache.Cache = 1024
@@ -593,14 +613,19 @@ func (c *Config) loadChain() error {
 	return nil
 }
 
-func (c *Config) buildEth() (*ethconfig.Config, error) {
+func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 	dbHandles, err := makeDatabaseHandles()
 	if err != nil {
 		return nil, err
 	}
 	n := ethconfig.Defaults
-	n.NetworkId = c.chain.NetworkId
-	n.Genesis = c.chain.Genesis
+
+	// only update for non-developer mode as we don't yet
+	// have the chain object for it.
+	if !c.Developer.Enabled {
+		n.NetworkId = c.chain.NetworkId
+		n.Genesis = c.chain.Genesis
+	}
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
 
@@ -637,6 +662,55 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 				return nil, fmt.Errorf("etherbase is not an address: %s", etherbase)
 			}
 			n.Miner.Etherbase = common.HexToAddress(etherbase)
+		}
+	}
+
+	// update for developer mode
+	if c.Developer.Enabled {
+		// Get a keystore
+		var ks *keystore.KeyStore
+		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
+			ks = keystores[0].(*keystore.KeyStore)
+		}
+
+		// Create new developer account or reuse existing one
+		var (
+			developer  accounts.Account
+			passphrase string
+			err        error
+		)
+		// etherbase has been set above, configuring the miner address from command line flags.
+		if n.Miner.Etherbase != (common.Address{}) {
+			developer = accounts.Account{Address: n.Miner.Etherbase}
+		} else if accs := ks.Accounts(); len(accs) > 0 {
+			developer = ks.Accounts()[0]
+		} else {
+			developer, err = ks.NewAccount(passphrase)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create developer account: %v", err)
+			}
+		}
+		if err := ks.Unlock(developer, passphrase); err != nil {
+			return nil, fmt.Errorf("failed to unlock developer account: %v", err)
+		}
+		log.Info("Using developer account", "address", developer.Address)
+
+		// get developer mode chain config
+		c.chain = chains.GetDeveloperChain(c.Developer.Period, developer.Address)
+
+		// update the parameters
+		n.NetworkId = c.chain.NetworkId
+		n.Genesis = c.chain.Genesis
+
+		// Update cache
+		c.Cache.Cache = 1024
+
+		// Update sync mode
+		c.SyncMode = "full"
+
+		// update miner gas price
+		if n.Miner.GasPrice == nil {
+			n.Miner.GasPrice = big.NewInt(1)
 		}
 	}
 
@@ -786,6 +860,17 @@ func (c *Config) buildNode() (*node.Config, error) {
 		GraphQLVirtualHosts: c.JsonRPC.VHost,
 	}
 
+	// dev mode
+	if c.Developer.Enabled {
+		cfg.UseLightweightKDF = true
+
+		// disable p2p networking
+		c.P2P.NoDiscover = true
+		cfg.P2P.ListenAddr = ""
+		cfg.P2P.NoDial = true
+		cfg.P2P.DiscoveryV5 = false
+	}
+
 	// enable jsonrpc endpoints
 	{
 		if c.JsonRPC.Http.Enabled {
@@ -804,23 +889,26 @@ func (c *Config) buildNode() (*node.Config, error) {
 	}
 	cfg.P2P.NAT = natif
 
-	// Discovery
-	// if no bootnodes are defined, use the ones from the chain file.
-	bootnodes := c.P2P.Discovery.Bootnodes
-	if len(bootnodes) == 0 {
-		bootnodes = c.chain.Bootnodes
-	}
-	if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
-		return nil, err
-	}
-	if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
-		return nil, err
+	// only check for non-developer modes
+	if !c.Developer.Enabled {
+		// Discovery
+		// if no bootnodes are defined, use the ones from the chain file.
+		bootnodes := c.P2P.Discovery.Bootnodes
+		if len(bootnodes) == 0 {
+			bootnodes = c.chain.Bootnodes
+		}
+		if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
+			return nil, err
+		}
+		if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
+			return nil, err
+		}
 	}
 
 	if c.P2P.NoDiscover {

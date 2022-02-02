@@ -254,7 +254,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
 	// If Matic bor consensus is requested, set it up
-	if chainConfig.Bor != nil {
+	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
+	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
+	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		return bor.New(chainConfig, db, blockchainAPI, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
 	}
 	// Otherwise assume proof-of-work

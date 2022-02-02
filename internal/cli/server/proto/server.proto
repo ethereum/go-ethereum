@@ -7,7 +7,7 @@ import "google/protobuf/empty.proto";
 option go_package = "/command/server/proto";
 
 service Bor {
-    rpc Pprof(PprofRequest) returns (PprofResponse);
+    rpc Pprof(PprofRequest) returns (stream PprofResponse);
 
     rpc PeersAdd(PeersAddRequest) returns (PeersAddResponse);
 
@@ -20,8 +20,24 @@ service Bor {
     rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
 
     rpc Status(google.protobuf.Empty) returns (StatusResponse);
+    
+    rpc ChainWatch(ChainWatchRequest) returns (stream ChainWatchResponse);
 }
 
+message ChainWatchRequest {
+
+}
+
+message ChainWatchResponse {
+    repeated BlockStub oldchain = 1;
+    repeated BlockStub newchain = 2;
+    string type = 3;
+}
+
+message BlockStub {
+    string hash = 1;
+    uint64 number = 2;
+}
 
 message PeersAddRequest {
     string enode = 1;
@@ -77,6 +93,13 @@ message StatusResponse {
     int64 numPeers = 3;
     string syncMode = 4;
     Syncing syncing = 5;
+    repeated Fork forks = 6;
+
+    message Fork {
+        string name = 1;
+        int64 block = 2;
+        bool disabled = 3;
+    }
 
     message Syncing {
         int64 startingBlock = 1;
@@ -105,6 +128,18 @@ message PprofRequest {
 }
 
 message PprofResponse {
-    string payload = 1;
-    map<string, string> headers = 2;
+    oneof event {
+        Open open = 1;
+        Input input = 2;
+        google.protobuf.Empty eof = 3;
+    }
+
+    message Open {
+        map<string, string> headers = 1;
+        int64 size = 2;
+    }
+
+    message Input {
+        bytes data = 1;    
+    }
 }

@@ -1,30 +1,30 @@
-package main
+package cli
 
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/command/flagset"
-	"github.com/ethereum/go-ethereum/command/server/proto"
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 )
 
-// PeersAddCommand is the command to group the peers commands
-type PeersAddCommand struct {
+// PeersRemoveCommand is the command to group the peers commands
+type PeersRemoveCommand struct {
 	*Meta2
 
 	trusted bool
 }
 
 // Help implements the cli.Command interface
-func (p *PeersAddCommand) Help() string {
-	return `Usage: bor peers add <enode>
+func (p *PeersRemoveCommand) Help() string {
+	return `Usage: bor peers remove <enode>
 
-  Joins the local client to another remote peer.
+  Disconnects the local client from a connected peer if exists.
 
   ` + p.Flags().Help()
 }
 
-func (p *PeersAddCommand) Flags() *flagset.Flagset {
-	flags := p.NewFlagSet("peers add")
+func (p *PeersRemoveCommand) Flags() *flagset.Flagset {
+	flags := p.NewFlagSet("peers remove")
 
 	flags.BoolFlag(&flagset.BoolFlag{
 		Name:  "trusted",
@@ -36,12 +36,12 @@ func (p *PeersAddCommand) Flags() *flagset.Flagset {
 }
 
 // Synopsis implements the cli.Command interface
-func (c *PeersAddCommand) Synopsis() string {
-	return "Join the client to a remote peer"
+func (c *PeersRemoveCommand) Synopsis() string {
+	return "Disconnects a peer from the client"
 }
 
 // Run implements the cli.Command interface
-func (c *PeersAddCommand) Run(args []string) int {
+func (c *PeersRemoveCommand) Run(args []string) int {
 	flags := c.Flags()
 	if err := flags.Parse(args); err != nil {
 		c.UI.Error(err.Error())
@@ -60,11 +60,11 @@ func (c *PeersAddCommand) Run(args []string) int {
 		return 1
 	}
 
-	req := &proto.PeersAddRequest{
+	req := &proto.PeersRemoveRequest{
 		Enode:   args[0],
 		Trusted: c.trusted,
 	}
-	if _, err := borClt.PeersAdd(context.Background(), req); err != nil {
+	if _, err := borClt.PeersRemove(context.Background(), req); err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
