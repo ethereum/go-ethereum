@@ -121,7 +121,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// If the head block is already in our canonical chain, the beacon client is
 	// probably resyncing. Ignore the update.
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == update.HeadBlockHash {
-		log.Warn("Ignored forkchoice update to old block", "reqhead", block.NumberU64(), "havehead", api.eth.BlockChain().CurrentBlock().NumberU64())
+		log.Warn("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
 		return beacon.ForkChoiceResponse{Status: beacon.VALID.Status, PayloadID: nil}, nil
 	}
 	// Requested head is known - and processed locally - but is not canonical.
@@ -178,8 +178,8 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	}
 	// If we alreayd have the block locally, ignore the entire execution and just
 	// return a fake success.
-	if api.eth.BlockChain().GetBlockByHash(params.BlockHash) != nil {
-		log.Warn("Ignoring already processed payload", "number", params.Number, "hash", params.BlockHash)
+	if block := api.eth.BlockChain().GetBlockByHash(params.BlockHash); block != nil {
+		log.Warn("Ignoring already known beacon payload", "number", params.Number, "hash", params.BlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
 		return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
 	}
 	// If the parent is missing, we - in theory - could trigger a sync, but that
