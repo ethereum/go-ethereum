@@ -710,8 +710,6 @@ func (c *Config) buildEth() (*ethconfig.Config, error) {
 	// sync mode. It can either be "fast", "full" or "snap". We disable
 	// for now the "light" mode.
 	switch c.SyncMode {
-	case "fast":
-		n.SyncMode = downloader.FastSync
 	case "full":
 		n.SyncMode = downloader.FullSync
 	case "snap":
