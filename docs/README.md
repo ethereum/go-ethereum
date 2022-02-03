@@ -19,18 +19,4 @@ $ bor server
 $ bor server --config ./legacy.toml
 ```
 
-- Modules, vhost and Cors configuration are common for all jsonrpc endpoints.
-
-Before:
-
-```
-$ bor --http --http.modules "eth,web" --ws --ws.modules "eth,web"
-```
-
-Now: 
-
-```
-$ bor server --http --ws --jsonrpc.modules "eth,web"
-```
-
 - ```Admin```, ```Personal``` and account related endpoints in ```Eth``` are being removed from the JsonRPC interface. Some of this functionality will be moved to the new GRPC server for operational tasks.

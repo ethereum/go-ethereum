@@ -109,8 +109,6 @@ The ```bor server``` command runs the Bor client.
 
 - ```jsonrpc.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 
-- ```jsonrpc.modules```: API's offered over the HTTP-RPC interface.
-
 - ```http```: Enable the HTTP-RPC server.
 
 - ```http.addr```: HTTP-RPC server listening interface.
@@ -119,6 +117,8 @@ The ```bor server``` command runs the Bor client.
         
 - ```http.rpcprefix```: HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
 
+- ```http.modules```: API's offered over the HTTP-RPC interface.
+
 - ```ws```: Enable the WS-RPC server.
 
 - ```ws.addr```: WS-RPC server listening interface.
@@ -126,6 +126,8 @@ The ```bor server``` command runs the Bor client.
 - ```ws.port```: WS-RPC server listening port.
 
 - ```ws.rpcprefix```: HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
+
+- ```ws.modules```: API's offered over the WS-RPC interface.
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
 

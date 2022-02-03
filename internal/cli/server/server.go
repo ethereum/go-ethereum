@@ -96,7 +96,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	// graphql is started from another place
 	if config.JsonRPC.Graphql.Enabled {
-		if err := graphql.New(stack, backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.Modules); err != nil {
+		if err := graphql.New(stack, backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.VHost); err != nil {
 			return nil, fmt.Errorf("failed to register the GraphQL service: %v", err)
 		}
 	}
