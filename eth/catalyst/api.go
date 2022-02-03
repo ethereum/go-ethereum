@@ -121,8 +121,19 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// Block is known locally, just sanity check that the beacon client does not
 	// attempt to push as back to before the merge.
 	if block.Difficulty().BitLen() > 0 {
-		log.Error("Refusing beacon update to pre-merge", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
-		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("refusing reorg to pre-merge")
+		var (
+			td  = api.eth.BlockChain().GetTd(update.HeadBlockHash, block.NumberU64())
+			ptd = api.eth.BlockChain().GetTd(block.ParentHash(), block.NumberU64()-1)
+			ttd = api.eth.BlockChain().Config().TerminalTotalDifficulty
+		)
+		if td == nil || (block.NumberU64() > 0 && ptd == nil) {
+			log.Error("TDs unavailable for TTD check", "number", block.NumberU64(), "hash", update.HeadBlockHash, "td", td, "parent", block.ParentHash(), "ptd", ptd)
+			return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("TDs unavailable for TDD check")
+		}
+		if td.Cmp(ttd) < 0 || (block.NumberU64() > 0 && ptd.Cmp(ttd) >= 0) {
+			log.Error("Refusing beacon update to pre-merge", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
+			return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("refusing reorg to pre-merge")
+		}
 	}
 	// If the head block is already in our canonical chain, the beacon client is
 	// probably resyncing. Ignore the update.
@@ -210,7 +221,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 		// have to rely on the beacon client to forcefully update the head with
 		// a forkchoice update request.
 		log.Warn("Ignoring payload with missing parent", "number", params.Number, "hash", params.BlockHash, "parent", params.ParentHash)
-		return beacon.ExecutePayloadResponse{Status: beacon.ACCEPTED, LatestValidHash: common.Hash{}}, nil
+		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING, LatestValidHash: common.Hash{}}, nil // TODO(karalabe): Switch to ACCEPTED
 	}
 	// We have an existing parent, do some sanity checks to avoid the beacon client
 	// triggering too early
