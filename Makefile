@@ -22,7 +22,7 @@ bor-all:
 	cp $(GOBIN)/* $(GOPATH)/bin/
 
 protoc:
-	protoc --go_out=. --go-grpc_out=. ./command/server/proto/*.proto
+	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth

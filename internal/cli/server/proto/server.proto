@@ -4,7 +4,7 @@ package proto;
 
 import "google/protobuf/empty.proto";
 
-option go_package = "/command/server/proto";
+option go_package = "/internal/cli/server/proto";
 
 service Bor {
     rpc Pprof(PprofRequest) returns (stream PprofResponse);
