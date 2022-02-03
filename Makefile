@@ -10,16 +10,8 @@ GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
 
 bor:
-	$(GORUN) build/ci.go install ./cmd/geth
 	mkdir -p $(GOPATH)/bin/
-	cp $(GOBIN)/geth $(GOBIN)/bor
-	cp $(GOBIN)/* $(GOPATH)/bin/
-
-bor-all:
-	$(GORUN) build/ci.go install
-	mkdir -p $(GOPATH)/bin/
-	cp $(GOBIN)/geth $(GOBIN)/bor
-	cp $(GOBIN)/* $(GOPATH)/bin/
+	go build -o $(GOBIN)/bor ./cmd/cli/main.go
 
 protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
