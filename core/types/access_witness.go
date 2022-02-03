@@ -67,10 +67,11 @@ func (aw *AccessWitness) SetLeafValue(addr []byte, value []byte) {
 	var stem [31]byte
 	copy(stem[:], addr[:31])
 
-	if chunk, exists := aw.Chunks[common.BytesToHash(addr)]; exists {
+	if chunk, exists := aw.Chunks[common.BytesToHash(addr)]; exists && len(chunk.value) == 0 {
+		// overwrite nil
 		chunk.value = value
 		aw.Chunks[common.BytesToHash(addr)] = chunk
-	} else {
+	} else if !exists {
 		panic(fmt.Sprintf("address not in access witness: %x", addr))
 	}
 }
@@ -113,9 +114,9 @@ func (aw *AccessWitness) touchAddressOnWrite(addr []byte) (bool, bool, bool) {
 // true if the stem or the stub weren't arleady present.
 func (aw *AccessWitness) touchAddress(addr []byte, isWrite bool) (bool, bool, bool, bool, bool) {
 	var (
-		stem         [31]byte
-		stemRead     bool
-		selectorRead bool
+		stem                                [31]byte
+		stemRead, selectorRead              bool
+		stemWrite, selectorWrite, chunkFill bool
 	)
 	copy(stem[:], addr[:31])
 
@@ -125,17 +126,14 @@ func (aw *AccessWitness) touchAddress(addr []byte, isWrite bool) (bool, bool, bo
 		aw.Branches[stem] = AccessWitnessReadFlag
 	}
 
-	selectorRead = true
-
 	// Check for the presence of the leaf selector
 	if _, hasSelector := aw.Chunks[common.BytesToHash(addr)]; !hasSelector {
+		selectorRead = true
 		aw.Chunks[common.BytesToHash(addr)] = ChunkValue{
 			AccessWitnessReadFlag,
 			nil,
 		}
 	}
-
-	var stemWrite, selectorWrite, chunkFill bool
 
 	if isWrite {
 		stemWrite, selectorWrite, chunkFill = aw.touchAddressOnWrite(addr)
