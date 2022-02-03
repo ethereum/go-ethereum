@@ -67,8 +67,6 @@ func newNoopBackfiller() backfiller {
 // Tests various sync initialzations based on previous leftovers in the database
 // and announced heads.
 func TestSkeletonSyncInit(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
 	// Create a few key headers
 	var (
 		genesis  = &types.Header{Number: big.NewInt(0)}
@@ -235,6 +233,126 @@ func TestSkeletonSyncInit(t *testing.T) {
 		skeleton.Sync(tt.head, true)
 
 		<-wait
+		skeleton.Terminate()
+
+		// Ensure the correct resulting sync status
+		var progress skeletonProgress
+		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
+		if len(progress.Subchains) != len(tt.newstate) {
+			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
+			continue
+		}
+		for j := 0; j < len(progress.Subchains); j++ {
+			if progress.Subchains[j].Head != tt.newstate[j].Head {
+				t.Errorf("test %d: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.newstate[j].Head)
+			}
+			if progress.Subchains[j].Tail != tt.newstate[j].Tail {
+				t.Errorf("test %d: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.newstate[j].Tail)
+			}
+		}
+	}
+}
+
+// Tests that a running skeleton sync can be extended with properly linked up
+// headers but not with side chains.
+func TestSkeletonSyncExtend(t *testing.T) {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	// Create a few key headers
+	var (
+		genesis  = &types.Header{Number: big.NewInt(0)}
+		block49  = &types.Header{Number: big.NewInt(49)}
+		block49B = &types.Header{Number: big.NewInt(49), Extra: []byte("B")}
+		block50  = &types.Header{Number: big.NewInt(50), ParentHash: block49.Hash()}
+		block51  = &types.Header{Number: big.NewInt(51), ParentHash: block50.Hash()}
+	)
+	tests := []struct {
+		head     *types.Header // New head header to announce to reorg to
+		extend   *types.Header // New head header to announce to extend with
+		newstate []*subchain   // Expected sync state after the reorg
+		err      error         // Whether extension succeeds or not
+	}{
+		// Initialize a sync and try to extend it with a subsequent block.
+		{
+			head:   block49,
+			extend: block50,
+			newstate: []*subchain{
+				{Head: 50, Tail: 49},
+			},
+		},
+		// Initialize a sync and try to extend it with the existing head block.
+		{
+			head:   block49,
+			extend: block49,
+			newstate: []*subchain{
+				{Head: 49, Tail: 49},
+			},
+			err: errReorgDenied,
+		},
+		// Initialize a sync and try to extend it with a sibling block.
+		{
+			head:   block49,
+			extend: block49B,
+			newstate: []*subchain{
+				{Head: 49, Tail: 49},
+			},
+			err: errReorgDenied,
+		},
+		// Initialize a sync and try to extend it with a number-wise sequential
+		// header, but a hash wise non-linking one.
+		{
+			head:   block49B,
+			extend: block50,
+			newstate: []*subchain{
+				{Head: 49, Tail: 49},
+			},
+			err: errReorgDenied,
+		},
+		// Initialize a sync and try to extend it with a non-linking future block.
+		{
+			head:   block49,
+			extend: block51,
+			newstate: []*subchain{
+				{Head: 49, Tail: 49},
+			},
+			err: errReorgDenied,
+		},
+		// Initialize a sync and try to extend it with a past canonical block.
+		{
+			head:   block50,
+			extend: block49,
+			newstate: []*subchain{
+				{Head: 50, Tail: 50},
+			},
+			err: errReorgDenied,
+		},
+		// Initialize a sync and try to extend it with a past sidechain block.
+		{
+			head:   block50,
+			extend: block49B,
+			newstate: []*subchain{
+				{Head: 50, Tail: 50},
+			},
+			err: errReorgDenied,
+		},
+	}
+	for i, tt := range tests {
+		// Create a fresh database and initialize it with the starting state
+		db := rawdb.NewMemoryDatabase()
+		rawdb.WriteHeader(db, genesis)
+
+		// Create a skeleton sync and run a cycle
+		wait := make(chan struct{})
+
+		skeleton := newSkeleton(db, newPeerSet(), func(string) {}, newNoopBackfiller())
+		skeleton.syncStarting = func() { close(wait) }
+		skeleton.Sync(tt.head, true)
+
+		<-wait
+		if err := skeleton.Sync(tt.extend, false); err != tt.err {
+			t.Errorf("extension failure mismatch: have %v, want %v", err, tt.err)
+		}
 		skeleton.Terminate()
 
 		// Ensure the correct resulting sync status

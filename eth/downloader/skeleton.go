@@ -68,6 +68,10 @@ var errSyncReorged = errors.New("sync reorged")
 // might still be propagating.
 var errTerminated = errors.New("terminated")
 
+// errReorgDenied is returned if an attempt is made to extend the beacon chain
+// with a new header, but it does not link up to the existing sync.
+var errReorgDenied = errors.New("non-forced head reorg denied")
+
 func init() {
 	// Tuning parameters is nice, but the scratch space must be assignable in
 	// full to peers. It's a useless cornercase to support a dangling half-group.
@@ -412,7 +416,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// we don't seamlessly integrate reorgs to keep things simple. If the
 			// network starts doing many mini reorgs, it might be worthwhile handling
 			// a limited depth without an error.
-			if reorged := s.processNewHead(event.header); reorged {
+			if reorged := s.processNewHead(event.header, event.force); reorged {
 				// If a reorg is needed, and we're forcing the new head, signal
 				// the syncer to tear down and start over. Otherwise, drop the
 				// non-force reorg.
@@ -420,7 +424,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 					event.errc <- nil // forced head reorg accepted
 					return event.header, errSyncReorged
 				}
-				event.errc <- errors.New("non-forced head reorg denied")
+				event.errc <- errReorgDenied
 				continue
 			}
 			event.errc <- nil // head extension accepted
@@ -568,22 +572,28 @@ func (s *skeleton) saveSyncStatus(db ethdb.KeyValueWriter) {
 // accepts and integrates it into the skeleton or requests a reorg. Upon reorg,
 // the syncer will tear itself down and restart with a fresh head. It is simpler
 // to reconstruct the sync state than to mutate it and hope for the best.
-func (s *skeleton) processNewHead(head *types.Header) bool {
+func (s *skeleton) processNewHead(head *types.Header, force bool) bool {
 	// If the header cannot be inserted without interruption, return an error for
 	// the outer loop to tear down the skeleton sync and restart it
 	number := head.Number.Uint64()
 
 	lastchain := s.progress.Subchains[0]
 	if lastchain.Tail >= number {
-		log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "newHead", number)
+		if force {
+			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "newHead", number)
+		}
 		return true
 	}
 	if lastchain.Head+1 < number {
-		log.Warn("Beacon chain gapped", "head", lastchain.Head, "newHead", number)
+		if force {
+			log.Warn("Beacon chain gapped", "head", lastchain.Head, "newHead", number)
+		}
 		return true
 	}
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
-		log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+		if force {
+			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+		}
 		return true
 	}
 	// New header seems to be in the last subchain range. Unwind any extra headers
