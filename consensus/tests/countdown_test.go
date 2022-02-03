@@ -24,5 +24,5 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	// We can only test valid = false for now as the implementation for getCurrentRoundMasterNodes is not complete
 	assert.False(t, valid)
 	// This shows we are able to decode the timeout message, which is what this test is all about
-	assert.Regexp(t, "^Masternodes does not contain signer addres.*", err.Error())
+	assert.Regexp(t, "Empty masternode list detected when verifying message signatures", err.Error())
 }

@@ -544,19 +544,22 @@ func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *utils.
 */
 func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
 	/*
-		  1. Get masterNode list belong to this epoch by hash
+		  1. Get masterNode list from snapshot
 		  2. Check signature:
 					- Use ecRecover to get the public key
 					- Use the above public key to find out the xdc address
 					- Use the above xdc address to check against the master node list from step 1(For the running epoch)
-			3. Verify blockInfo
 			4. Broadcast(Not part of consensus)
 	*/
-	epochInfo, err := x.getEpochSwitchInfo(chain, nil, vote.ProposedBlockInfo.Hash)
+	snapshot, err := x.getSnapshot(chain, vote.ProposedBlockInfo.Number.Uint64())
 	if err != nil {
-		log.Error("[VerifyVoteMessage] Error when getting epoch switch Info to verify vote message", "Error", err)
+		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "BlockNum", vote.ProposedBlockInfo.Number, "Hash", vote.ProposedBlockInfo.Hash, "Error", err.Error())
 	}
-	return x.verifyMsgSignature(utils.VoteSigHash(vote.ProposedBlockInfo), vote.Signature, epochInfo.Masternodes)
+	verified, err := x.verifyMsgSignature(utils.VoteSigHash(vote.ProposedBlockInfo), vote.Signature, snapshot.NextEpochMasterNodes)
+	if err != nil {
+		log.Error("[VerifyVoteMessage] Error while verifying vote message", "Error", err.Error())
+	}
+	return verified, err
 }
 
 // Consensus entry point for processing vote message to produce QC
@@ -583,18 +586,16 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 		log.Info(fmt.Sprintf("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 
 		// Check if the block already exist, otherwise we try luck with the next vote
-		proposedBlock := chain.GetHeaderByHash(voteMsg.ProposedBlockInfo.Hash)
-		if proposedBlock == nil {
+		proposedBlockHeader := chain.GetHeaderByHash(voteMsg.ProposedBlockInfo.Hash)
+		if proposedBlockHeader == nil {
 			log.Warn("[voteHandler] The proposed block from vote message does not exist yet, wait for the next vote to try again", "Hash", voteMsg.ProposedBlockInfo.Hash, "Round", voteMsg.ProposedBlockInfo.Round)
 			return nil
 		}
 
-		err := x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg)
+		err := x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg, proposedBlockHeader)
 		if err != nil {
 			return err
 		}
-		// clean up vote at the same poolKey. and pookKey is proposed block hash
-		x.votePool.ClearPoolKeyByObj(voteMsg)
 	}
 
 	return nil
@@ -604,15 +605,46 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 	Function that will be called by votePool when it reached threshold.
 	In the engine v2, we will need to generate and process QC
 */
-func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj) error {
-	signatures := []utils.Signature{}
-	for _, v := range pooledVotes {
-		signatures = append(signatures, v.(*utils.Vote).Signature)
+func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj, proposedBlockHeader *types.Header) error {
+
+	masternodes := x.GetMasternodes(chain, proposedBlockHeader)
+
+	// Filter out non-Master nodes signatures
+	var wg sync.WaitGroup
+	wg.Add(len(pooledVotes))
+	signatureSlice := make([]utils.Signature, len(pooledVotes))
+	counter := 0
+	for h, vote := range pooledVotes {
+		go func(hash common.Hash, v *utils.Vote, i int) {
+			defer wg.Done()
+			verified, err := x.verifyMsgSignature(utils.VoteSigHash(v.ProposedBlockInfo), v.Signature, masternodes)
+			if !verified || err != nil {
+				log.Warn("[onVotePoolThresholdReached] Skip not verified vote signatures when building QC", "Error", err.Error(), "verified", verified)
+			} else {
+				signatureSlice[i] = v.Signature
+			}
+		}(h, vote.(*utils.Vote), counter)
+		counter++
+	}
+	wg.Wait()
+
+	// The signature list may contain empty entey. we only care the ones with values
+	var validSignatureSlice []utils.Signature
+	for _, v := range signatureSlice {
+		if len(v) != 0 {
+			validSignatureSlice = append(validSignatureSlice, v)
+		}
+	}
+
+	// Skip and wait for the next vote to process again if valid votes is less than what we required
+	if len(validSignatureSlice) < x.config.V2.CertThreshold {
+		log.Warn("[onVotePoolThresholdReached] Not enough valid signatures to generate QC", "VotesSignaturesAfterFilter", validSignatureSlice, "NumberOfValidVotes", len(validSignatureSlice), "NumberOfVotes", len(pooledVotes))
+		return nil
 	}
 	// Genrate QC
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: currentVoteMsg.(*utils.Vote).ProposedBlockInfo,
-		Signatures:        signatures,
+		Signatures:        validSignatureSlice,
 	}
 	err := x.processQC(chain, quorumCert)
 	if err != nil {
@@ -620,6 +652,8 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		return err
 	}
 	log.Info("🗳 Successfully processed the vote and produced QC!")
+	// clean up vote at the same poolKey. and pookKey is proposed block hash
+	x.votePool.ClearPoolKeyByObj(currentVoteMsg)
 	return nil
 }
 
@@ -1004,6 +1038,9 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (utils.Signature, erro
 }
 
 func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature utils.Signature, masternodes []common.Address) (bool, error) {
+	if len(masternodes) == 0 {
+		return false, fmt.Errorf("Empty masternode list detected when verifying message signatures")
+	}
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)
 	if err != nil {

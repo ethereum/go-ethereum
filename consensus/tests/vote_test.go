@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
@@ -14,7 +16,7 @@ import (
 
 // VoteHandler
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *testing.T) {
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -22,25 +24,31 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 		Round:  utils.Round(1),
 		Number: big.NewInt(11),
 	}
+	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(utils.Round(1), false)
 	// Create two vote messages which will not reach vote pool threshold
+	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{1},
+		Signature:         signedHash,
 	}
 
-	err := engineV2.VoteHandler(blockchain, voteMsg)
+	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, utils.Round(1), currentRound)
+
+	signedHash = SignHashByPK(acc2Key, voteSigningHash.Bytes())
+
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{2},
+		Signature:         signedHash,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -52,9 +60,10 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	assert.Equal(t, utils.Round(1), currentRound)
 
 	// Create a vote message that should trigger vote pool hook and increment the round to 6
+	signedHash = SignHashByPK(acc3Key, voteSigningHash.Bytes())
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{3},
+		Signature:         signedHash,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -69,7 +78,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 }
 
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -77,25 +86,29 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 		Round:  utils.Round(5),
 		Number: big.NewInt(15),
 	}
+	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(utils.Round(5), false)
 	// Create two vote messages which will not reach vote pool threshold
+	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{1},
+		Signature:         signedHash,
 	}
 
-	err := engineV2.VoteHandler(blockchain, voteMsg)
+	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _, _ := engineV2.GetProperties()
 	// initialised with nil and 0 round
 	assert.Nil(t, lockQuorumCert)
 	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, utils.Round(5), currentRound)
+	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{2},
+		Signature:         signedHash,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -106,10 +119,28 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 
 	assert.Equal(t, utils.Round(5), currentRound)
 
-	// Create a vote message that should trigger vote pool hook and increment the round to 6
+	// Create another vote which is signed by someone not from the master node list
+	randomSigner, randomSignFn, err := backends.SimulateWalletAddressAndSignFn()
+	assert.Nil(t, err)
+	randomlySignedHash, err := randomSignFn(accounts.Account{Address: randomSigner}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{3},
+		Signature:         randomlySignedHash,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+	currentRound, lockQuorumCert, highestQuorumCert, _, _ = engineV2.GetProperties()
+	// Still using the initlised value because we did not yet go to the next round
+	assert.Nil(t, lockQuorumCert)
+	assert.Equal(t, utils.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
+	assert.Equal(t, utils.Round(5), currentRound)
+
+	// Create a vote message that should trigger vote pool hook and increment the round to 6
+	signedHash = SignHashByPK(acc3Key, voteSigningHash.Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -173,10 +204,12 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Round:  utils.Round(5),
 		Number: big.NewInt(11),
 	}
+	voteSigningHash := utils.VoteSigHash(blockInfo)
 	// Create two vote message which will not reach vote pool threshold
+	signedHash := SignHashByPK(acc1Key, voteSigningHash.Bytes())
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{1},
+		Signature:         signedHash,
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
@@ -189,7 +222,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	assert.Equal(t, utils.Round(5), currentRound)
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{2},
+		Signature:         SignHashByPK(acc2Key, voteSigningHash.Bytes()),
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -199,7 +232,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	// Create a vote message that should trigger vote pool hook
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{3},
+		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -285,13 +318,14 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 		Round:  utils.Round(6),
 		Number: big.NewInt(16),
 	}
+	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 6
 	engineV2.SetNewRoundFaker(utils.Round(6), false)
 	// Create two vote messages which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{1},
+		Signature:         SignHashByPK(acc1Key, voteSigningHash.Bytes()),
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
@@ -299,7 +333,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{2},
+		Signature:         SignHashByPK(acc2Key, voteSigningHash.Bytes()),
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -307,7 +341,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	// Create a vote message that should trigger vote pool hook, but it shall not produce any QC yet
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{3},
+		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -324,7 +358,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         []byte{4},
+		Signature:         SignHashByPK(voterKey, voteSigningHash.Bytes()),
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)

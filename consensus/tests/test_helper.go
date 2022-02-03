@@ -3,9 +3,13 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"math/rand"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +17,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
@@ -58,6 +63,50 @@ func debugMessage(backend *backends.SimulatedBackend, signers signersList, t *te
 			fmt.Println(signer)
 		}
 	}
+}
+
+func SignHashByPK(pk *ecdsa.PrivateKey, itemToSign []byte) []byte {
+	signer, signFn, err := getSignerAndSignFn(pk)
+	if err != nil {
+		panic(err)
+	}
+	signedHash, err := signFn(accounts.Account{Address: signer}, itemToSign)
+	if err != nil {
+		panic(err)
+	}
+	return signedHash
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
+func getSignerAndSignFn(pk *ecdsa.PrivateKey) (common.Address, func(account accounts.Account, hash []byte) ([]byte, error), error) {
+	veryLightScryptN := 2
+	veryLightScryptP := 1
+	dir, _ := ioutil.TempDir("", fmt.Sprintf("eth-getSignerAndSignFn-test-%v", RandStringBytes(5)))
+
+	new := func(kd string) *keystore.KeyStore {
+		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)
+	}
+
+	defer os.RemoveAll(dir)
+	ks := new(dir)
+	pass := "" // not used but required by API
+	a1, err := ks.ImportECDSA(pk, pass)
+	if err != nil {
+		return common.Address{}, nil, fmt.Errorf(err.Error())
+	}
+	if err := ks.Unlock(a1, ""); err != nil {
+		return a1.Address, nil, fmt.Errorf(err.Error())
+	}
+	return a1.Address, ks.SignHash, nil
 }
 
 func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.SimulatedBackend {
@@ -229,12 +278,13 @@ func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testi
 func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address) {
 	// Preparation
 	var err error
+	// Authorise
+	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
+
 	backend := getCommonBackend(t, chainConfig)
 	blockchain := backend.GetBlockChain()
 	blockchain.Client = backend
 
-	// Authorise
-	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
 	if err != nil {
 		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
 	}
@@ -279,15 +329,15 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, numOfForkedBlocks int) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
 	// Preparation
 	var err error
+	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
+	if err != nil {
+		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
+	}
 	backend := getCommonBackend(t, chainConfig)
 	blockchain := backend.GetBlockChain()
 	blockchain.Client = backend
 
 	// Authorise
-	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
-	if err != nil {
-		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
-	}
 	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
 
 	currentBlock := blockchain.Genesis()
