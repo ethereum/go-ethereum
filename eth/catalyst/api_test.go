@@ -438,7 +438,7 @@ func TestFullAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error preparing payload, err=%v", err)
 		}
-		if resp.Status != beacon.SUCCESS.Status {
+		if resp.Status != beacon.VALID {
 			t.Fatalf("error preparing payload, invalid status: %v", resp.Status)
 		}
 		payloadID := computePayloadId(parent.Hash(), &params)
@@ -450,7 +450,7 @@ func TestFullAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
-		if execResp.Status != beacon.VALID.Status {
+		if execResp.Status != beacon.VALID {
 			t.Fatalf("invalid status: %v", execResp.Status)
 		}
 		fcState = beacon.ForkchoiceStateV1{

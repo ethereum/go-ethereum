@@ -89,7 +89,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	log.Trace("Engine API request received", "method", "ForkChoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, nil // TODO(karalabe): Why does someone send us this?
 	}
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
@@ -103,7 +103,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		header := api.remoteBlocks.get(update.HeadBlockHash)
 		if header == nil {
 			log.Warn("Forkcoice requested unknown head", "hash", update.HeadBlockHash)
-			return beacon.INVALID, errors.New("head hash never advertised")
+			return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("head hash never advertised")
 		}
 		// Header advertised via a past newPayload request. Start syncing to it.
 		// Before we do however, make sure any legacy sync in switched off so we
@@ -114,20 +114,24 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		}
 		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
-			return beacon.ForkChoiceResponse{Status: beacon.SYNCING.Status, PayloadID: nil}, err
+			return beacon.ForkChoiceResponse{Status: beacon.SYNCING}, err
 		}
-		return beacon.ForkChoiceResponse{Status: beacon.SYNCING.Status, PayloadID: nil}, nil
+		return beacon.ForkChoiceResponse{Status: beacon.SYNCING}, nil
+	}
+	// Block is known locally, just sanity check that the beacon client does not
+	// attempt to push as back to before the merge.
+	if block.Difficulty().BitLen() > 0 {
+		log.Error("Refusing beacon update to pre-merge", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("refusing reorg to pre-merge")
 	}
 	// If the head block is already in our canonical chain, the beacon client is
 	// probably resyncing. Ignore the update.
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == update.HeadBlockHash {
 		log.Warn("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
-		return beacon.ForkChoiceResponse{Status: beacon.VALID.Status, PayloadID: nil}, nil
+		return beacon.ForkChoiceResponse{Status: beacon.VALID}, nil
 	}
-	// Requested head is known - and processed locally - but is not canonical.
-	// Either it is a new block on top of our head or a side chain. Reorg.
 	if err := api.eth.BlockChain().SetChainHead(block); err != nil {
-		return beacon.INVALID, err
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, err
 	}
 	api.eth.SetSynced()
 
@@ -148,15 +152,15 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
-			return beacon.INVALID, err
+			return beacon.ForkChoiceResponse{Status: beacon.VALID}, err // Valid as setHead was accepted
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
 		api.localBlocks.put(id, data)
 
 		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: &id}, nil
+		return beacon.ForkChoiceResponse{Status: beacon.VALID, PayloadID: &id}, nil
 	}
-	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+	return beacon.ForkChoiceResponse{Status: beacon.VALID}, nil
 }
 
 // GetPayloadV1 returns a cached payload by id.
@@ -180,7 +184,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	// return a fake success.
 	if block := api.eth.BlockChain().GetBlockByHash(params.BlockHash); block != nil {
 		log.Warn("Ignoring already known beacon payload", "number", params.Number, "hash", params.BlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
-		return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+		return beacon.ExecutePayloadResponse{Status: beacon.VALID, LatestValidHash: block.Hash()}, nil
 	}
 	// If the parent is missing, we - in theory - could trigger a sync, but that
 	// would also entail a reorg. That is problematic if multiple sibling blocks
@@ -199,15 +203,14 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 		// some strain from the forkchoice update.
 		if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
 			log.Debug("Payload accepted for sync extension", "number", params.Number, "hash", params.BlockHash)
-			return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: api.eth.BlockChain().CurrentBlock().Hash()}, nil
+			return beacon.ExecutePayloadResponse{Status: beacon.SYNCING, LatestValidHash: api.eth.BlockChain().CurrentBlock().Hash()}, nil
 		}
 		// Either no beacon sync was started yet, or it rejected the delivered
 		// payload as non-integratable on top of the existing sync. We'll just
 		// have to rely on the beacon client to forcefully update the head with
 		// a forkchoice update request.
 		log.Warn("Ignoring payload with missing parent", "number", params.Number, "hash", params.BlockHash, "parent", params.ParentHash)
-		// TODO(karalabe): Change this to ACCEPTED once it's included in the code
-		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: common.Hash{}}, nil
+		return beacon.ExecutePayloadResponse{Status: beacon.ACCEPTED, LatestValidHash: common.Hash{}}, nil
 	}
 	// We have an existing parent, do some sanity checks to avoid the beacon client
 	// triggering too early
@@ -230,7 +233,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 		merger.ReachTTD()
 		api.eth.Downloader().Cancel()
 	}
-	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+	return beacon.ExecutePayloadResponse{Status: beacon.VALID, LatestValidHash: block.Hash()}, nil
 }
 
 // computePayloadId computes a pseudo-random payloadid, based on the parameters.
@@ -248,7 +251,7 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 
 // invalid returns a response "INVALID" with the latest valid hash set to the current head.
 func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
+	return beacon.ExecutePayloadResponse{Status: beacon.INVALID, LatestValidHash: api.eth.BlockChain().CurrentHeader().Hash()}
 }
 
 // assembleBlock creates a new block and returns the "execution

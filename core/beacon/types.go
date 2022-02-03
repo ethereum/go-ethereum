@@ -72,18 +72,6 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
-type NewBlockResponse struct {
-	Valid bool `json:"valid"`
-}
-
-type GenericResponse struct {
-	Success bool `json:"success"`
-}
-
-type GenericStringResponse struct {
-	Status string `json:"status"`
-}
-
 type ExecutePayloadResponse struct {
 	Status          string      `json:"status"`
 	LatestValidHash common.Hash `json:"latestValidHash"`
