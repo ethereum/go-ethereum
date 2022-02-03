@@ -35,9 +35,9 @@ type VerkleTrie struct {
 	db   *Database
 }
 
-//func (vt *VerkleTrie) ToDot() string {
-//return verkle.ToDot(vt.root)
-//}
+func (vt *VerkleTrie) ToDot() string {
+	return verkle.ToDot(vt.root)
+}
 
 func NewVerkleTrie(root verkle.VerkleNode, db *Database) *VerkleTrie {
 	return &VerkleTrie{
