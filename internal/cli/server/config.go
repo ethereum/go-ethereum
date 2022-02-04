@@ -443,11 +443,11 @@ func DefaultConfig() *Config {
 			GasCap:     ethconfig.Defaults.RPCGasCap,
 			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
 			Http: &APIConfig{
-				Enabled: false,
+				Enabled: true,
 				Port:    8545,
 				Prefix:  "",
 				Host:    "localhost",
-				Modules: []string{"web3", "net"},
+				Modules: []string{"eth", "web3", "net"},
 			},
 			Ws: &APIConfig{
 				Enabled: false,
