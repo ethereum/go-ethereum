@@ -2307,7 +2307,7 @@ var toChecksumAddress = function (address) {
 };
 
 /**
- * Transforms given string to valid 20 bytes-length addres with 0x prefix
+ * Transforms given string to valid 20 bytes-length address with 0x prefix
  *
  * @method toAddress
  * @param {String} address
