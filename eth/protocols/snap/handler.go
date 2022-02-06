@@ -299,7 +299,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		size     uint64
 		last     common.Hash
 	)
-	for it.Next() && size < req.Bytes {
+	for it.Next() {
 		hash, account := it.Hash(), common.CopyBytes(it.Account())
 
 		// Track the returned interval for the Merkle proofs
@@ -313,6 +313,9 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		})
 		// If we've exceeded the request threshold, abort
 		if bytes.Compare(hash[:], req.Limit[:]) >= 0 {
+			break
+		}
+		if size > req.Bytes {
 			break
 		}
 	}
@@ -464,7 +467,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
-		} else if blob, err := chain.ContractCode(hash); err == nil {
+		} else if blob, err := chain.ContractCodeWithPrefix(hash); err == nil {
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}
