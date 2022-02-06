@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.10-stable-bb74230f
+   1.10.15-stable-8be800ff
 
 COMMANDS:
    account                            Manage accounts
@@ -54,7 +54,8 @@ ETHEREUM OPTIONS:
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
-  --syncmode value                    Blockchain sync mode ("fast", "full", "snap" or "light") (default: snap)
+  --sepolia                           Sepolia network: pre-configured proof-of-work test network
+  --syncmode value                    Blockchain sync mode ("snap", "full" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
   --txlookuplimit value               Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (default: 2350000)
@@ -77,6 +78,7 @@ LIGHT CLIENT OPTIONS:
 DEVELOPER CHAIN OPTIONS:
   --dev                               Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
   --dev.period value                  Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
+  --dev.gaslimit value                Initial block gas limit (default: 11500000)
 
 ETHASH OPTIONS:
   --ethash.cachedir value             Directory to store the ethash verification caches (default = inside the datadir)
@@ -173,7 +175,7 @@ MINER OPTIONS:
 GAS PRICE ORACLE OPTIONS:
   --gpo.blocks value                  Number of recent blocks to check for gas prices (default: 20)
   --gpo.percentile value              Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
-  --gpo.maxprice value                Maximum gas price will be recommended by gpo (default: 500000000000)
+  --gpo.maxprice value                Maximum transaction priority fee (or gasprice before London fork) to be recommended by gpo (default: 500000000000)
   --gpo.ignoreprice value             Gas price below which gpo will ignore transactions (default: 2)
 
 VIRTUAL MACHINE OPTIONS:
@@ -210,16 +212,17 @@ METRICS AND STATS OPTIONS:
   --metrics.influxdb.token value         Token to authorize access to the database (v2 only) (default: "test")
   --metrics.influxdb.bucket value        InfluxDB bucket name to push reported metrics to (v2 only) (default: "geth")
   --metrics.influxdb.organization value  InfluxDB organization name (v2 only) (default: "geth")
-
+  
 ALIASED (deprecated) OPTIONS:
   --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
 
 MISC OPTIONS:
-  --snapshot                          Enables snapshot-database mode (default = enable)
-  --bloomfilter.size value            Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
-  --help, -h                          show help
-  --catalyst                          Catalyst mode (eth2 integration testing)
-  --override.london value             Manually specify London fork-block, overriding the bundled setting (default: 0)
+  --snapshot                                Enables snapshot-database mode (default = enable)
+  --bloomfilter.size value                  Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
+  --help, -h                                show help
+  --catalyst                                Catalyst mode (eth2 integration testing)
+  --override.arrowglacier value             Manually specify Arrow Glacier fork-block, overriding the bundled setting (default: 0)
+  --override.terminaltotaldifficulty value  Manually specify TerminalTotalDifficulty, overriding the bundled setting (default: 0)
 
 
 COPYRIGHT:
