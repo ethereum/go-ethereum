@@ -187,6 +187,7 @@ func enable3855(jt *JumpTable) {
 	}
 }
 
+// opPush0 implements the PUSH0 opcode
 func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int))
 	return nil, nil
