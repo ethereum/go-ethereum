@@ -24,6 +24,7 @@ func makeConfigNode(datadir string) (*node.Node, *ethconfig.Config) {
 	eth_cfg := ethconfig.Defaults
 	node_cfg.DataDir = datadir
 	node_cfg.ReadOnly = true
+	node_cfg.LocalLib = true
 	stack, err := node.New(&node_cfg)
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)

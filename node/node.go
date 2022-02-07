@@ -58,6 +58,7 @@ type Node struct {
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 	readOnly      bool
+	localLib      bool
 	databases     map[*closeTrackingDB]struct{} // All open databases
 }
 
@@ -109,6 +110,7 @@ func New(conf *Config) (*Node, error) {
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 		readOnly:      conf.ReadOnly,
+		localLib:      conf.LocalLib,
 	}
 
 	// Register built-in APIs.
@@ -144,7 +146,8 @@ func New(conf *Config) (*Node, error) {
 		if node.server.Config.NodeDatabase == "" {
 			node.server.Config.NodeDatabase = node.config.NodeDB()
 		}
-
+	}
+	if !node.localLib {
 		// Check HTTP/WS prefixes are valid.
 		if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
 			return nil, err
@@ -345,59 +348,65 @@ func (n *Node) closeDataDir() {
 	}
 }
 
-// configureRPC is a helper method to configure all the various RPC endpoints during node
-// startup. It's not meant to be called at any time afterwards as it makes certain
-// assumptions about the state of the node.
 func (n *Node) startRPC() error {
 	if err := n.startInProc(); err != nil {
 		return err
 	}
-	if !n.readOnly {
-		// Configure IPC.
-		if n.ipc.endpoint != "" {
-			if err := n.ipc.start(n.rpcAPIs); err != nil {
-				return err
-			}
-		}
+	if n.localLib {
+		return nil
+	} else {
+		return n.startExternalRPC()
+	}
+}
 
-		// Configure HTTP.
-		if n.config.HTTPHost != "" {
-			config := httpConfig{
-				CorsAllowedOrigins: n.config.HTTPCors,
-				Vhosts:             n.config.HTTPVirtualHosts,
-				Modules:            n.config.HTTPModules,
-				prefix:             n.config.HTTPPathPrefix,
-			}
-			if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
-				return err
-			}
-			if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
-				return err
-			}
-		}
-
-		// Configure WebSocket.
-		if n.config.WSHost != "" {
-			server := n.wsServerForPort(n.config.WSPort)
-			config := wsConfig{
-				Modules: n.config.WSModules,
-				Origins: n.config.WSOrigins,
-				prefix:  n.config.WSPathPrefix,
-			}
-			if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
-				return err
-			}
-			if err := server.enableWS(n.rpcAPIs, config); err != nil {
-				return err
-			}
-		}
-
-		if err := n.http.start(); err != nil {
+// configureRPC is a helper method to configure all the various RPC endpoints during node
+// startup. It's not meant to be called at any time afterwards as it makes certain
+// assumptions about the state of the node.
+func (n *Node) startExternalRPC() error {
+	// Configure IPC.
+	if n.ipc.endpoint != "" {
+		if err := n.ipc.start(n.rpcAPIs); err != nil {
 			return err
 		}
-		return n.ws.start()
 	}
-	return nil
+
+	// Configure HTTP.
+	if n.config.HTTPHost != "" {
+		config := httpConfig{
+			CorsAllowedOrigins: n.config.HTTPCors,
+			Vhosts:             n.config.HTTPVirtualHosts,
+			Modules:            n.config.HTTPModules,
+			prefix:             n.config.HTTPPathPrefix,
+		}
+		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+			return err
+		}
+		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+			return err
+		}
+	}
+
+	// Configure WebSocket.
+	if n.config.WSHost != "" {
+		server := n.wsServerForPort(n.config.WSPort)
+		config := wsConfig{
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+			prefix:  n.config.WSPathPrefix,
+		}
+		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+			return err
+		}
+		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+			return err
+		}
+	}
+
+	if err := n.http.start(); err != nil {
+		return err
+	}
+	return n.ws.start()
+
 }
 
 func (n *Node) wsServerForPort(port int) *httpServer {
@@ -408,12 +417,16 @@ func (n *Node) wsServerForPort(port int) *httpServer {
 }
 
 func (n *Node) stopRPC() {
-	if !n.readOnly {
-		n.http.stop()
-		n.ws.stop()
-		n.ipc.stop()
+	if !n.localLib {
+		n.stopExternalRPC()
 	}
 	n.stopInProc()
+}
+
+func (n *Node) stopExternalRPC() {
+	n.http.stop()
+	n.ws.stop()
+	n.ipc.stop()
 }
 
 // startInProc registers all RPC APIs on the inproc server.

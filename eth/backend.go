@@ -215,12 +215,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	if readOnly {
-		cacheConfig.SnapshotLimit = 0
-		cacheConfig.TrieDirtyDisabled = true
-		cacheConfig.TrieCleanJournal = ""
-		config.TxPool.Journal = ""
-	}
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
@@ -283,6 +278,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, err
 		}
+		stack.RegisterProtocols(eth.Protocols())
 	}
 
 	// Start the RPC service
@@ -290,15 +286,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
-	if !readOnly {
-		stack.RegisterProtocols(eth.Protocols())
-	}
 	stack.RegisterLifecycle(eth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	if !readOnly {
-		eth.shutdownTracker.MarkStartup()
-	}
+	eth.shutdownTracker.MarkStartup()
 	return eth, nil
 }
 
@@ -577,7 +568,7 @@ func (s *Ethereum) Start() error {
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
 
-	if s.readOnly {
+	if !s.readOnly {
 		// Figure out a max peers count based on the server limits
 		maxPeers := s.p2pServer.MaxPeers
 		if s.config.LightServ > 0 {
@@ -609,10 +600,9 @@ func (s *Ethereum) Stop() error {
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
-	if !s.readOnly {
-		// Clean shutdown marker as the last thing before closing db
-		s.shutdownTracker.Stop()
-	}
+
+	// Clean shutdown marker as the last thing before closing db
+	s.shutdownTracker.Stop()
 	s.chainDb.Close()
 	s.eventMux.Stop()
 
