@@ -19,6 +19,7 @@ package client
 import (
 	"math/rand"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func testNodeIndex(id enode.ID) int {
 type ServerPoolTest struct {
 	db                   ethdb.KeyValueStore
 	clock                *mclock.Simulated
-	quit                 chan struct{}
+	quit                 chan chan struct{}
 	preNeg, preNegFail   bool
 	vt                   *ValueTracker
 	sp                   *ServerPool
@@ -61,6 +62,12 @@ type ServerPoolTest struct {
 	testNodes            []spTestNode
 	trusted              []string
 	waitCount, waitEnded int32
+
+	// preNegLock protects the cycle counter, testNodes list and its connected field
+	// (accessed from both the main thread and the preNeg callback)
+	preNegLock sync.Mutex
+	queryWg    *sync.WaitGroup // a new wait group is created each time the simulation is started
+	stopping   bool            // stopping avoid callind queryWg.Add after queryWg.Wait
 
 	cycle, conn, servedConn  int
 	serviceCycles, dialCount int
@@ -108,11 +115,21 @@ func (s *ServerPoolTest) addTrusted(i int) {
 
 func (s *ServerPoolTest) start() {
 	var testQuery QueryFunc
+	s.queryWg = new(sync.WaitGroup)
 	if s.preNeg {
 		testQuery = func(node *enode.Node) int {
+			s.preNegLock.Lock()
+			if s.stopping {
+				s.preNegLock.Unlock()
+				return 0
+			}
+			s.queryWg.Add(1)
 			idx := testNodeIndex(node.ID())
 			n := &s.testNodes[idx]
 			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
+			s.preNegLock.Unlock()
+			defer s.queryWg.Done()
+
 			if s.preNegFail {
 				// simulate a scenario where UDP queries never work
 				s.beginWait()
@@ -155,7 +172,7 @@ func (s *ServerPoolTest) start() {
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
 	s.disconnect = make(map[int][]int)
 	s.sp.Start()
-	s.quit = make(chan struct{})
+	s.quit = make(chan chan struct{})
 	go func() {
 		last := int32(-1)
 		for {
@@ -167,7 +184,8 @@ func (s *ServerPoolTest) start() {
 					s.clock.Run(time.Second)
 				}
 				last = c
-			case <-s.quit:
+			case quit := <-s.quit:
+				close(quit)
 				return
 			}
 		}
@@ -175,9 +193,20 @@ func (s *ServerPoolTest) start() {
 }
 
 func (s *ServerPoolTest) stop() {
-	close(s.quit)
+	// disable further queries and wait if one is currently running
+	s.preNegLock.Lock()
+	s.stopping = true
+	s.preNegLock.Unlock()
+	s.queryWg.Wait()
+
+	quit := make(chan struct{})
+	s.quit <- quit
+	<-quit
 	s.sp.Stop()
 	s.spi.Close()
+	s.preNegLock.Lock()
+	s.stopping = false
+	s.preNegLock.Unlock()
 	for i := range s.testNodes {
 		n := &s.testNodes[i]
 		if n.connected {
@@ -197,7 +226,9 @@ func (s *ServerPoolTest) run() {
 				n := &s.testNodes[idx]
 				s.sp.UnregisterNode(n.node)
 				n.totalConn += s.cycle
+				s.preNegLock.Lock()
 				n.connected = false
+				s.preNegLock.Unlock()
 				n.node = nil
 				s.conn--
 				if n.service {
@@ -222,7 +253,9 @@ func (s *ServerPoolTest) run() {
 					s.servedConn++
 				}
 				n.totalConn -= s.cycle
+				s.preNegLock.Lock()
 				n.connected = true
+				s.preNegLock.Unlock()
 				dc := s.cycle + n.connectCycles
 				s.disconnect[dc] = append(s.disconnect[dc], idx)
 				n.node = dial
@@ -234,7 +267,9 @@ func (s *ServerPoolTest) run() {
 		}
 		s.serviceCycles += s.servedConn
 		s.clock.Run(time.Second)
+		s.preNegLock.Lock()
 		s.cycle++
+		s.preNegLock.Unlock()
 	}
 }
 
@@ -245,11 +280,13 @@ func (s *ServerPoolTest) setNodes(count, conn, wait int, service, trusted bool) 
 			idx = rand.Intn(spTestNodes)
 		}
 		res = append(res, idx)
+		s.preNegLock.Lock()
 		s.testNodes[idx] = spTestNode{
 			connectCycles: conn,
 			waitCycles:    wait,
 			service:       service,
 		}
+		s.preNegLock.Unlock()
 		if trusted {
 			s.addTrusted(idx)
 		}
@@ -263,7 +300,9 @@ func (s *ServerPoolTest) resetNodes() {
 			n.totalConn += s.cycle
 			s.sp.UnregisterNode(n.node)
 		}
+		s.preNegLock.Lock()
 		s.testNodes[i] = spTestNode{totalConn: n.totalConn}
+		s.preNegLock.Unlock()
 	}
 	s.conn, s.servedConn = 0, 0
 	s.disconnect = make(map[int][]int)

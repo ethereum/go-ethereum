@@ -18,10 +18,8 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -44,35 +42,6 @@ var (
 	NoUSBFlag = cli.BoolFlag{
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
-	}
-	LegacyRPCEnabledFlag = cli.BoolFlag{
-		Name:  "rpc",
-		Usage: "Enable the HTTP-RPC server (deprecated and will be removed June 2021, use --http)",
-	}
-	LegacyRPCListenAddrFlag = cli.StringFlag{
-		Name:  "rpcaddr",
-		Usage: "HTTP-RPC server listening interface (deprecated and will be removed June 2021, use --http.addr)",
-		Value: node.DefaultHTTPHost,
-	}
-	LegacyRPCPortFlag = cli.IntFlag{
-		Name:  "rpcport",
-		Usage: "HTTP-RPC server listening port (deprecated and will be removed June 2021, use --http.port)",
-		Value: node.DefaultHTTPPort,
-	}
-	LegacyRPCCORSDomainFlag = cli.StringFlag{
-		Name:  "rpccorsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated and will be removed June 2021, use --http.corsdomain)",
-		Value: "",
-	}
-	LegacyRPCVirtualHostsFlag = cli.StringFlag{
-		Name:  "rpcvhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated and will be removed June 2021, use --http.vhosts)",
-		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
-	}
-	LegacyRPCApiFlag = cli.StringFlag{
-		Name:  "rpcapi",
-		Usage: "API's offered over the HTTP-RPC interface (deprecated and will be removed June 2021, use --http.api)",
-		Value: "",
 	}
 	// (Deprecated July 2021, shown in aliased flags section)
 	LegacyMinerGasTargetFlag = cli.Uint64Flag{

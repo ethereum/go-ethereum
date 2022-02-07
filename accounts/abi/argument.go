@@ -81,13 +81,7 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		if len(arguments) != 0 {
 			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
-		// Nothing to unmarshal, return default variables
-		nonIndexedArgs := arguments.NonIndexed()
-		defaultVars := make([]interface{}, len(nonIndexedArgs))
-		for index, arg := range nonIndexedArgs {
-			defaultVars[index] = reflect.New(arg.Type.GetType())
-		}
-		return defaultVars, nil
+		return make([]interface{}, 0), nil
 	}
 	return arguments.UnpackValues(data)
 }
@@ -137,7 +131,7 @@ func (arguments Arguments) copyAtomic(v interface{}, marshalledValues interface{
 	dst := reflect.ValueOf(v).Elem()
 	src := reflect.ValueOf(marshalledValues)
 
-	if dst.Kind() == reflect.Struct && src.Kind() != reflect.Struct {
+	if dst.Kind() == reflect.Struct {
 		return set(dst.Field(0), src)
 	}
 	return set(dst, src)

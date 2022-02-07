@@ -17,14 +17,12 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -38,7 +36,6 @@ func makeWizard(network string) *wizard {
 		},
 		servers:  make(map[string]*sshClient),
 		services: make(map[string][]string),
-		in:       bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -82,25 +79,17 @@ func (w *wizard) run() {
 	} else if err := json.Unmarshal(blob, &w.conf); err != nil {
 		log.Crit("Previous configuration corrupted", "path", w.conf.path, "err", err)
 	} else {
-		// Dial all previously known servers concurrently
-		var pend sync.WaitGroup
+		// Dial all previously known servers
 		for server, pubkey := range w.conf.Servers {
-			pend.Add(1)
-
-			go func(server string, pubkey []byte) {
-				defer pend.Done()
-
-				log.Info("Dialing previously configured server", "server", server)
-				client, err := dial(server, pubkey)
-				if err != nil {
-					log.Error("Previous server unreachable", "server", server, "err", err)
-				}
-				w.lock.Lock()
-				w.servers[server] = client
-				w.lock.Unlock()
-			}(server, pubkey)
+			log.Info("Dialing previously configured server", "server", server)
+			client, err := dial(server, pubkey)
+			if err != nil {
+				log.Error("Previous server unreachable", "server", server, "err", err)
+			}
+			w.lock.Lock()
+			w.servers[server] = client
+			w.lock.Unlock()
 		}
-		pend.Wait()
 		w.networkStats()
 	}
 	// Basics done, loop ad infinitum about what to do

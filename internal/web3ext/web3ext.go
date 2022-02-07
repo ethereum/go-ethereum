@@ -224,6 +224,11 @@ web3._extend({
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
+			name: 'getHeaderRlp',
+			call: 'debug_getHeaderRlp',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'getBlockRlp',
 			call: 'debug_getBlockRlp',
 			params: 1
@@ -278,7 +283,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stacks',
 			call: 'debug_stacks',
-			params: 0,
+			params: 1,
+			inputFormatter: [null],
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
@@ -391,6 +397,12 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
+			name: 'intermediateRoots',
+			call: 'debug_intermediateRoots',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
 			name: 'standardTraceBlockToFile',
 			call: 'debug_standardTraceBlockToFile',
 			params: 2,
@@ -452,6 +464,12 @@ web3._extend({
 			name: 'freezeClient',
 			call: 'debug_freezeClient',
 			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'getAccessibleState',
+			call: 'debug_getAccessibleState',
+			params: 2,
+			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 	],
 	properties: []
@@ -557,6 +575,11 @@ web3._extend({
 			call: 'eth_feeHistory',
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter, null]
+		}),
+		new web3._extend.Method({
+			name: 'getLogs',
+			call: 'eth_getLogs',
+			params: 1,
 		}),
 	],
 	properties: [

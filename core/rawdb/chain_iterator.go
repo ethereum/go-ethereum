@@ -44,24 +44,29 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
 		hash   common.Hash
 	)
-	for i := uint64(0); i < frozen; i++ {
-		// Since the freezer has all data in sequential order on a file,
-		// it would be 'neat' to read more data in one go, and let the
-		// freezerdb return N items (e.g up to 1000 items per go)
-		// That would require an API change in Ancients though
-		if h, err := db.Ancient(freezerHashTable, i); err != nil {
+	for i := uint64(0); i < frozen; {
+		// We read 100K hashes at a time, for a total of 3.2M
+		count := uint64(100_000)
+		if i+count > frozen {
+			count = frozen - i
+		}
+		data, err := db.AncientRange(freezerHashTable, i, count, 32*count)
+		if err != nil {
 			log.Crit("Failed to init database from freezer", "err", err)
-		} else {
+		}
+		for j, h := range data {
+			number := i + uint64(j)
 			hash = common.BytesToHash(h)
-		}
-		WriteHeaderNumber(batch, hash, i)
-		// If enough data was accumulated in memory or we're at the last block, dump to disk
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write data to db", "err", err)
+			WriteHeaderNumber(batch, hash, number)
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write data to db", "err", err)
+				}
+				batch.Reset()
 			}
-			batch.Reset()
 		}
+		i += uint64(len(data))
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -242,7 +247,8 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 }
 
-// IndexTransactions creates txlookup indices of the specified block range.
+// IndexTransactions creates txlookup indices of the specified block range. The from
+// is included while to is excluded.
 //
 // This function iterates canonical chain in reverse order, it has one main advantage:
 // We can write tx index tail flag periodically even without the whole indexing
@@ -334,6 +340,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
+// The from is included while to is excluded.
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.

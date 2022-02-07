@@ -41,16 +41,14 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 
 // ReadCode retrieves the contract code of the provided code hash.
 func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	// Try with the legacy code scheme first, if not then try with current
-	// scheme. Since most of the code will be found with legacy scheme.
-	//
-	// todo(rjl493456442) change the order when we forcibly upgrade the code
-	// scheme with snapshot.
-	data, _ := db.Get(hash[:])
+	// Try with the prefixed code scheme first, if not then try with legacy
+	// scheme.
+	data := ReadCodeWithPrefix(db, hash)
 	if len(data) != 0 {
 		return data
 	}
-	return ReadCodeWithPrefix(db, hash)
+	data, _ = db.Get(hash[:])
+	return data
 }
 
 // ReadCodeWithPrefix retrieves the contract code of the provided code hash.
@@ -59,6 +57,14 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(codeKey(hash))
 	return data
+}
+
+// HasCodeWithPrefix checks if the contract code corresponding to the
+// provided code hash is present in the db. This function will only check
+// presence using the prefix-scheme.
+func HasCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) bool {
+	ok, _ := db.Has(codeKey(hash))
+	return ok
 }
 
 // WriteCode writes the provided contract code database.
@@ -79,6 +85,12 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(hash.Bytes())
 	return data
+}
+
+// HasTrieNode checks if the trie node with the provided hash is present in db.
+func HasTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
+	ok, _ := db.Has(hash.Bytes())
+	return ok
 }
 
 // WriteTrieNode writes the provided trie node database.

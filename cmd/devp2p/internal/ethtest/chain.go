@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,16 +38,6 @@ type Chain struct {
 	genesis     core.Genesis
 	blocks      []*types.Block
 	chainConfig *params.ChainConfig
-}
-
-func (c *Chain) WriteTo(writer io.Writer) error {
-	for _, block := range c.blocks {
-		if err := rlp.Encode(writer, block); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Len returns the length of the chain.
@@ -75,6 +66,13 @@ func (c *Chain) TotalDifficultyAt(height int) *big.Int {
 		sum.Add(sum, block.Difficulty())
 	}
 	return sum
+}
+
+func (c *Chain) RootAt(height int) common.Hash {
+	if height < c.Len() {
+		return c.blocks[height].Root()
+	}
+	return common.Hash{}
 }
 
 // ForkID gets the fork id of the chain.

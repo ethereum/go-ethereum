@@ -55,20 +55,20 @@ type TransactionArgs struct {
 }
 
 // from retrieves the transaction sender address.
-func (arg *TransactionArgs) from() common.Address {
-	if arg.From == nil {
+func (args *TransactionArgs) from() common.Address {
+	if args.From == nil {
 		return common.Address{}
 	}
-	return *arg.From
+	return *args.From
 }
 
 // data retrieves the transaction calldata. Input field is preferred.
-func (arg *TransactionArgs) data() []byte {
-	if arg.Input != nil {
-		return *arg.Input
+func (args *TransactionArgs) data() []byte {
+	if args.Input != nil {
+		return *args.Input
 	}
-	if arg.Data != nil {
-		return *arg.Data
+	if args.Data != nil {
+		return *args.Data
 	}
 	return nil
 }
@@ -146,6 +146,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Gas == nil {
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
+		data := args.data()
 		callArgs := TransactionArgs{
 			From:                 args.From,
 			To:                   args.To,
@@ -153,7 +154,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			MaxFeePerGas:         args.MaxFeePerGas,
 			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
 			Value:                args.Value,
-			Data:                 args.Data,
+			Data:                 (*hexutil.Bytes)(&data),
 			AccessList:           args.AccessList,
 		}
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)

@@ -3949,10 +3949,18 @@ var outputSyncingFormatter = function(result) {
     result.startingBlock = utils.toDecimal(result.startingBlock);
     result.currentBlock = utils.toDecimal(result.currentBlock);
     result.highestBlock = utils.toDecimal(result.highestBlock);
-    if (result.knownStates) {
-        result.knownStates = utils.toDecimal(result.knownStates);
-        result.pulledStates = utils.toDecimal(result.pulledStates);
-    }
+    result.syncedAccounts = utils.toDecimal(result.syncedAccounts);
+    result.syncedAccountBytes = utils.toDecimal(result.syncedAccountBytes);
+    result.syncedBytecodes = utils.toDecimal(result.syncedBytecodes);
+    result.syncedBytecodeBytes = utils.toDecimal(result.syncedBytecodeBytes);
+    result.syncedStorage = utils.toDecimal(result.syncedStorage);
+    result.syncedStorageBytes = utils.toDecimal(result.syncedStorageBytes);
+    result.healedTrienodes = utils.toDecimal(result.healedTrienodes);
+    result.healedTrienodeBytes = utils.toDecimal(result.healedTrienodeBytes);
+    result.healedBytecodes = utils.toDecimal(result.healedBytecodes);
+    result.healedBytecodeBytes = utils.toDecimal(result.healedBytecodeBytes);
+    result.healingTrienodes = utils.toDecimal(result.healingTrienodes);
+    result.healingBytecode = utils.toDecimal(result.healingBytecode);
 
     return result;
 };
@@ -13635,4 +13643,4 @@ if (typeof window !== 'undefined' && typeof window.Web3 === 'undefined') {
 module.exports = Web3;
 
 },{"./lib/web3":22}]},{},["web3"])
-//# sourceMappingURL=web3-light.js.map
+
