@@ -79,12 +79,19 @@ func Transaction(ctx *cli.Context) error {
 		txStr       = ctx.String(InputTxsFlag.Name)
 		inputData   = &input{}
 		chainConfig *params.ChainConfig
+		eip3860     = false
 	)
 	// Construct the chainconfig
-	if cConf, _, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
+	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
 		return NewError(ErrorConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
 	} else {
 		chainConfig = cConf
+		for _, eip := range extraEips {
+			if eip == 3860 {
+				eip3860 = true
+				break
+			}
+		}
 	}
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
@@ -140,7 +147,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Check intrinsic gas
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), eip3860); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
