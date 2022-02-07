@@ -43,21 +43,21 @@ commas. For example:
 Sometimes you just can't get connected. The most common reasons are as follows:
 
 - Your local time might be incorrect. An accurate clock is required to participate in the
-  Ethereum network. Check your OS for how to resync your clock (example sudo ntpdate -s
-  time.nist.gov) because even 12 seconds too fast can lead to 0 peers.
+  Ethereum network. Check your OS for how to resync your clock (example `sudo ntpdate -s
+  time.nist.gov`) because even 12 seconds too fast can lead to 0 peers.
 - Some firewall configurations can prevent UDP traffic from flowing. You can use the
   static nodes feature or `admin.addPeer()` on the console to configure connections by
   hand.
 
 To start geth without the discovery protocol, you can use the `--nodiscover` parameter.
-You only want this is you are running a test node or an experimental test network with
+You only want this if you are running a test node or an experimental test network with
 fixed nodes.
 
 ## Checking Connectivity
 
 To check how many peers the client is connected to in the interactive console, the `net`
-module has two attributes give you info about the number of peers and whether you are a
-listening node.
+module has two attributes that give you info about the number of peers and whether you
+are a listening node.
 
 ```js
 > net.listening
