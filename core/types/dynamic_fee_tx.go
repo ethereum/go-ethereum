@@ -25,8 +25,8 @@ import (
 type DynamicFeeTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
-	GasTipCap  *big.Int
-	GasFeeCap  *big.Int
+	GasTipCap  *big.Int // a.k.a. maxPriorityFeePerGas
+	GasFeeCap  *big.Int // a.k.a. maxFeePerGas
 	Gas        uint64
 	To         *common.Address `rlp:"nil"` // nil means contract creation
 	Value      *big.Int
@@ -43,7 +43,7 @@ type DynamicFeeTx struct {
 func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
 		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
+		To:    copyAddressPtr(tx.To),
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
@@ -84,7 +84,6 @@ func (tx *DynamicFeeTx) copy() TxData {
 // accessors for innerTx.
 func (tx *DynamicFeeTx) txType() byte           { return DynamicFeeTxType }
 func (tx *DynamicFeeTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *DynamicFeeTx) protected() bool        { return true }
 func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }

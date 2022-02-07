@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
-	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -158,14 +157,14 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 // AccessTuple represents EIP-2930
 type AccessTuple struct {
 	address     common.Address
-	storageKeys *[]common.Hash
+	storageKeys []common.Hash
 }
 
 func (at *AccessTuple) Address(ctx context.Context) common.Address {
 	return at.address
 }
 
-func (at *AccessTuple) StorageKeys(ctx context.Context) *[]common.Hash {
+func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
 	return at.storageKeys
 }
 
@@ -373,6 +372,9 @@ func (t *Transaction) Status(ctx context.Context) (*Long, error) {
 	if err != nil || receipt == nil {
 		return nil, err
 	}
+	if len(receipt.PostState) != 0 {
+		return nil, nil
+	}
 	ret := Long(receipt.Status)
 	return &ret, nil
 }
@@ -442,7 +444,7 @@ func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
 	for _, al := range accessList {
 		ret = append(ret, &AccessTuple{
 			address:     al.Address,
-			storageKeys: &al.StorageKeys,
+			storageKeys: al.StorageKeys,
 		})
 	}
 	return &ret, nil
@@ -597,21 +599,18 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
-	// If the block header hasn't been fetched, and we'll need it, fetch it.
-	if b.numberOrHash == nil && b.header == nil {
-		if _, err := b.resolveHeader(ctx); err != nil {
-			return nil, err
-		}
+	if _, err := b.resolveHeader(ctx); err != nil {
+		return nil, err
 	}
-	if b.header != nil && b.header.Number.Uint64() > 0 {
-		num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
-		return &Block{
-			backend:      b.backend,
-			numberOrHash: &num,
-			hash:         b.header.ParentHash,
-		}, nil
+	if b.header == nil || b.header.Number.Uint64() < 1 {
+		return nil, nil
 	}
-	return nil, nil
+	num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
+	return &Block{
+		backend:      b.backend,
+		numberOrHash: &num,
+		hash:         b.header.ParentHash,
+	}, nil
 }
 
 func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
@@ -954,7 +953,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 			return nil, err
 		}
 	}
-	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, 5*time.Second, b.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, b.backend.RPCEVMTimeout(), b.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -1024,7 +1023,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, 5*time.Second, p.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, p.backend.RPCEVMTimeout(), p.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -1111,10 +1110,21 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	ret := make([]*Block, 0, to-from+1)
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
-		ret = append(ret, &Block{
+		block := &Block{
 			backend:      r.backend,
 			numberOrHash: &numberOrHash,
-		})
+		}
+		// Resolve the header to check for existence.
+		// Note we don't resolve block directly here since it will require an
+		// additional network request for light client.
+		h, err := block.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		} else if h == nil {
+			// Blocks after must be non-existent too, break.
+			break
+		}
+		ret = append(ret, block)
 	}
 	return ret, nil
 }
@@ -1221,34 +1231,68 @@ type SyncState struct {
 func (s *SyncState) StartingBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StartingBlock)
 }
-
 func (s *SyncState) CurrentBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.CurrentBlock)
 }
-
 func (s *SyncState) HighestBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HighestBlock)
 }
-
-func (s *SyncState) PulledStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.PulledStates)
-	return &ret
+func (s *SyncState) SyncedAccounts() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccounts)
 }
-
-func (s *SyncState) KnownStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.KnownStates)
-	return &ret
+func (s *SyncState) SyncedAccountBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccountBytes)
+}
+func (s *SyncState) SyncedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodes)
+}
+func (s *SyncState) SyncedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodeBytes)
+}
+func (s *SyncState) SyncedStorage() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorage)
+}
+func (s *SyncState) SyncedStorageBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorageBytes)
+}
+func (s *SyncState) HealedTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodes)
+}
+func (s *SyncState) HealedTrienodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodeBytes)
+}
+func (s *SyncState) HealedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodes)
+}
+func (s *SyncState) HealedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodeBytes)
+}
+func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingTrienodes)
+}
+func (s *SyncState) HealingBytecode() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingBytecode)
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock: block number this node started to synchronise from
-// - currentBlock:  block number this node is currently importing
-// - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
+// - startingBlock:       block number this node started to synchronise from
+// - currentBlock:        block number this node is currently importing
+// - highestBlock:        block number of the highest block header this node has received from peers
+// - syncedAccounts:      number of accounts downloaded
+// - syncedAccountBytes:  number of account trie bytes persisted to disk
+// - syncedBytecodes:     number of bytecodes downloaded
+// - syncedBytecodeBytes: number of bytecode bytes downloaded
+// - syncedStorage:       number of storage slots downloaded
+// - syncedStorageBytes:  number of storage trie bytes persisted to disk
+// - healedTrienodes:     number of state trie nodes downloaded
+// - healedTrienodeBytes: number of state trie bytes persisted to disk
+// - healedBytecodes:     number of bytecodes downloaded
+// - healedBytecodeBytes: number of bytecodes persisted to disk
+// - healingTrienodes:    number of state trie nodes pending
+// - healingBytecode:     number of bytecodes pending
 func (r *Resolver) Syncing() (*SyncState, error) {
-	progress := r.backend.Downloader().Progress()
+	progress := r.backend.SyncProgress()
 
 	// Return not syncing if the synchronisation already completed
 	if progress.CurrentBlock >= progress.HighestBlock {

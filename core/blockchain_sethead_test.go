@@ -194,10 +194,10 @@ func testShortSetHead(t *testing.T, snapshots bool) {
 // Everything above the sethead point should be deleted. In between the committed
 // block and the requested head the data can remain as "fast sync" data to avoid
 // redownloading it.
-func TestShortFastSyncedSetHead(t *testing.T)              { testShortFastSyncedSetHead(t, false) }
-func TestShortFastSyncedSetHeadWithSnapshots(t *testing.T) { testShortFastSyncedSetHead(t, true) }
+func TestShortSnapSyncedSetHead(t *testing.T)              { testShortSnapSyncedSetHead(t, false) }
+func TestShortSnapSyncedSetHeadWithSnapshots(t *testing.T) { testShortSnapSyncedSetHead(t, true) }
 
-func testShortFastSyncedSetHead(t *testing.T, snapshots bool) {
+func testShortSnapSyncedSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//
@@ -236,10 +236,10 @@ func testShortFastSyncedSetHead(t *testing.T, snapshots bool) {
 // detect that it was fast syncing and delete everything from the new head, since
 // we can just pick up fast syncing from there. The head full block should be set
 // to the genesis.
-func TestShortFastSyncingSetHead(t *testing.T)              { testShortFastSyncingSetHead(t, false) }
-func TestShortFastSyncingSetHeadWithSnapshots(t *testing.T) { testShortFastSyncingSetHead(t, true) }
+func TestShortSnapSyncingSetHead(t *testing.T)              { testShortSnapSyncingSetHead(t, false) }
+func TestShortSnapSyncingSetHeadWithSnapshots(t *testing.T) { testShortSnapSyncingSetHead(t, true) }
 
-func testShortFastSyncingSetHead(t *testing.T, snapshots bool) {
+func testShortSnapSyncingSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//
@@ -326,14 +326,14 @@ func testShortOldForkedSetHead(t *testing.T, snapshots bool) {
 // block. Everything above the sethead point should be deleted. In between the
 // committed block and the requested head the data can remain as "fast sync" data
 // to avoid redownloading it. The side chain should be left alone as it was shorter.
-func TestShortOldForkedFastSyncedSetHead(t *testing.T) {
-	testShortOldForkedFastSyncedSetHead(t, false)
+func TestShortOldForkedSnapSyncedSetHead(t *testing.T) {
+	testShortOldForkedSnapSyncedSetHead(t, false)
 }
-func TestShortOldForkedFastSyncedSetHeadWithSnapshots(t *testing.T) {
-	testShortOldForkedFastSyncedSetHead(t, true)
+func TestShortOldForkedSnapSyncedSetHeadWithSnapshots(t *testing.T) {
+	testShortOldForkedSnapSyncedSetHead(t, true)
 }
 
-func testShortOldForkedFastSyncedSetHead(t *testing.T, snapshots bool) {
+func testShortOldForkedSnapSyncedSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3
@@ -375,14 +375,14 @@ func testShortOldForkedFastSyncedSetHead(t *testing.T, snapshots bool) {
 // the chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The head full block
 // should be set to the genesis.
-func TestShortOldForkedFastSyncingSetHead(t *testing.T) {
-	testShortOldForkedFastSyncingSetHead(t, false)
+func TestShortOldForkedSnapSyncingSetHead(t *testing.T) {
+	testShortOldForkedSnapSyncingSetHead(t, false)
 }
-func TestShortOldForkedFastSyncingSetHeadWithSnapshots(t *testing.T) {
-	testShortOldForkedFastSyncingSetHead(t, true)
+func TestShortOldForkedSnapSyncingSetHeadWithSnapshots(t *testing.T) {
+	testShortOldForkedSnapSyncingSetHead(t, true)
 }
 
-func testShortOldForkedFastSyncingSetHead(t *testing.T, snapshots bool) {
+func testShortOldForkedSnapSyncingSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3
@@ -478,14 +478,14 @@ func testShortNewlyForkedSetHead(t *testing.T, snapshots bool) {
 // The side chain could be left to be if the fork point was before the new head
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
-func TestShortNewlyForkedFastSyncedSetHead(t *testing.T) {
-	testShortNewlyForkedFastSyncedSetHead(t, false)
+func TestShortNewlyForkedSnapSyncedSetHead(t *testing.T) {
+	testShortNewlyForkedSnapSyncedSetHead(t, false)
 }
-func TestShortNewlyForkedFastSyncedSetHeadWithSnapshots(t *testing.T) {
-	testShortNewlyForkedFastSyncedSetHead(t, true)
+func TestShortNewlyForkedSnapSyncedSetHeadWithSnapshots(t *testing.T) {
+	testShortNewlyForkedSnapSyncedSetHead(t, true)
 }
 
-func testShortNewlyForkedFastSyncedSetHead(t *testing.T, snapshots bool) {
+func testShortNewlyForkedSnapSyncedSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8
@@ -531,14 +531,14 @@ func testShortNewlyForkedFastSyncedSetHead(t *testing.T, snapshots bool) {
 // The side chain could be left to be if the fork point was before the new head
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
-func TestShortNewlyForkedFastSyncingSetHead(t *testing.T) {
-	testShortNewlyForkedFastSyncingSetHead(t, false)
+func TestShortNewlyForkedSnapSyncingSetHead(t *testing.T) {
+	testShortNewlyForkedSnapSyncingSetHead(t, false)
 }
-func TestShortNewlyForkedFastSyncingSetHeadWithSnapshots(t *testing.T) {
-	testShortNewlyForkedFastSyncingSetHead(t, true)
+func TestShortNewlyForkedSnapSyncingSetHeadWithSnapshots(t *testing.T) {
+	testShortNewlyForkedSnapSyncingSetHead(t, true)
 }
 
-func testShortNewlyForkedFastSyncingSetHead(t *testing.T, snapshots bool) {
+func testShortNewlyForkedSnapSyncingSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8
@@ -634,14 +634,14 @@ func testShortReorgedSetHead(t *testing.T, snapshots bool) {
 // The side chain could be left to be if the fork point was before the new head
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
-func TestShortReorgedFastSyncedSetHead(t *testing.T) {
-	testShortReorgedFastSyncedSetHead(t, false)
+func TestShortReorgedSnapSyncedSetHead(t *testing.T) {
+	testShortReorgedSnapSyncedSetHead(t, false)
 }
-func TestShortReorgedFastSyncedSetHeadWithSnapshots(t *testing.T) {
-	testShortReorgedFastSyncedSetHead(t, true)
+func TestShortReorgedSnapSyncedSetHeadWithSnapshots(t *testing.T) {
+	testShortReorgedSnapSyncedSetHead(t, true)
 }
 
-func testShortReorgedFastSyncedSetHead(t *testing.T, snapshots bool) {
+func testShortReorgedSnapSyncedSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10
@@ -686,14 +686,14 @@ func testShortReorgedFastSyncedSetHead(t *testing.T, snapshots bool) {
 // The side chain could be left to be if the fork point was before the new head
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
-func TestShortReorgedFastSyncingSetHead(t *testing.T) {
-	testShortReorgedFastSyncingSetHead(t, false)
+func TestShortReorgedSnapSyncingSetHead(t *testing.T) {
+	testShortReorgedSnapSyncingSetHead(t, false)
 }
-func TestShortReorgedFastSyncingSetHeadWithSnapshots(t *testing.T) {
-	testShortReorgedFastSyncingSetHead(t, true)
+func TestShortReorgedSnapSyncingSetHeadWithSnapshots(t *testing.T) {
+	testShortReorgedSnapSyncingSetHead(t, true)
 }
 
-func testShortReorgedFastSyncingSetHead(t *testing.T, snapshots bool) {
+func testShortReorgedSnapSyncingSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10
@@ -829,14 +829,14 @@ func testLongDeepSetHead(t *testing.T, snapshots bool) {
 // back to the committed block. Everything above the sethead point should be
 // deleted. In between the committed block and the requested head the data can
 // remain as "fast sync" data to avoid redownloading it.
-func TestLongFastSyncedShallowSetHead(t *testing.T) {
-	testLongFastSyncedShallowSetHead(t, false)
+func TestLongSnapSyncedShallowSetHead(t *testing.T) {
+	testLongSnapSyncedShallowSetHead(t, false)
 }
-func TestLongFastSyncedShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongFastSyncedShallowSetHead(t, true)
+func TestLongSnapSyncedShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongSnapSyncedShallowSetHead(t, true)
 }
 
-func testLongFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
+func testLongSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//
@@ -880,10 +880,10 @@ func testLongFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // which sethead was called. In this case we expect the full chain to be rolled
 // back to the committed block. Since the ancient limit was underflown, everything
 // needs to be deleted onwards to avoid creating a gap.
-func TestLongFastSyncedDeepSetHead(t *testing.T)              { testLongFastSyncedDeepSetHead(t, false) }
-func TestLongFastSyncedDeepSetHeadWithSnapshots(t *testing.T) { testLongFastSyncedDeepSetHead(t, true) }
+func TestLongSnapSyncedDeepSetHead(t *testing.T)              { testLongSnapSyncedDeepSetHead(t, false) }
+func TestLongSnapSyncedDeepSetHeadWithSnapshots(t *testing.T) { testLongSnapSyncedDeepSetHead(t, true) }
 
-func testLongFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
+func testLongSnapSyncedDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//
@@ -926,14 +926,14 @@ func testLongFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
 // sethead was called. In this case we expect the chain to detect that it was fast
 // syncing and delete everything from the new head, since we can just pick up fast
 // syncing from there.
-func TestLongFastSyncingShallowSetHead(t *testing.T) {
-	testLongFastSyncingShallowSetHead(t, false)
+func TestLongSnapSyncingShallowSetHead(t *testing.T) {
+	testLongSnapSyncingShallowSetHead(t, false)
 }
-func TestLongFastSyncingShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongFastSyncingShallowSetHead(t, true)
+func TestLongSnapSyncingShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongSnapSyncingShallowSetHead(t, true)
 }
 
-func testLongFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
+func testLongSnapSyncingShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//
@@ -977,14 +977,14 @@ func testLongFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
 // sethead was called. In this case we expect the chain to detect that it was fast
 // syncing and delete everything from the new head, since we can just pick up fast
 // syncing from there.
-func TestLongFastSyncingDeepSetHead(t *testing.T) {
-	testLongFastSyncingDeepSetHead(t, false)
+func TestLongSnapSyncingDeepSetHead(t *testing.T) {
+	testLongSnapSyncingDeepSetHead(t, false)
 }
-func TestLongFastSyncingDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongFastSyncingDeepSetHead(t, true)
+func TestLongSnapSyncingDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongSnapSyncingDeepSetHead(t, true)
 }
 
-func testLongFastSyncingDeepSetHead(t *testing.T, snapshots bool) {
+func testLongSnapSyncingDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//
@@ -1132,14 +1132,14 @@ func testLongOldForkedDeepSetHead(t *testing.T, snapshots bool) {
 // sethead point should be deleted. In between the committed block and the
 // requested head the data can remain as "fast sync" data to avoid redownloading
 // it. The side chain is nuked by the freezer.
-func TestLongOldForkedFastSyncedShallowSetHead(t *testing.T) {
-	testLongOldForkedFastSyncedShallowSetHead(t, false)
+func TestLongOldForkedSnapSyncedShallowSetHead(t *testing.T) {
+	testLongOldForkedSnapSyncedShallowSetHead(t, false)
 }
-func TestLongOldForkedFastSyncedShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongOldForkedFastSyncedShallowSetHead(t, true)
+func TestLongOldForkedSnapSyncedShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongOldForkedSnapSyncedShallowSetHead(t, true)
 }
 
-func testLongOldForkedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
+func testLongOldForkedSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3
@@ -1186,14 +1186,14 @@ func testLongOldForkedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // full chain to be rolled back to the committed block. Since the ancient limit was
 // underflown, everything needs to be deleted onwards to avoid creating a gap. The
 // side chain is nuked by the freezer.
-func TestLongOldForkedFastSyncedDeepSetHead(t *testing.T) {
-	testLongOldForkedFastSyncedDeepSetHead(t, false)
+func TestLongOldForkedSnapSyncedDeepSetHead(t *testing.T) {
+	testLongOldForkedSnapSyncedDeepSetHead(t, false)
 }
-func TestLongOldForkedFastSyncedDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongOldForkedFastSyncedDeepSetHead(t, true)
+func TestLongOldForkedSnapSyncedDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongOldForkedSnapSyncedDeepSetHead(t, true)
 }
 
-func testLongOldForkedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
+func testLongOldForkedSnapSyncedDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3
@@ -1239,14 +1239,14 @@ func testLongOldForkedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
 // that it was fast syncing and delete everything from the new head, since we can
 // just pick up fast syncing from there. The side chain is completely nuked by the
 // freezer.
-func TestLongOldForkedFastSyncingShallowSetHead(t *testing.T) {
-	testLongOldForkedFastSyncingShallowSetHead(t, false)
+func TestLongOldForkedSnapSyncingShallowSetHead(t *testing.T) {
+	testLongOldForkedSnapSyncingShallowSetHead(t, false)
 }
-func TestLongOldForkedFastSyncingShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongOldForkedFastSyncingShallowSetHead(t, true)
+func TestLongOldForkedSnapSyncingShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongOldForkedSnapSyncingShallowSetHead(t, true)
 }
 
-func testLongOldForkedFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
+func testLongOldForkedSnapSyncingShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3
@@ -1293,14 +1293,14 @@ func testLongOldForkedFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
 // that it was fast syncing and delete everything from the new head, since we can
 // just pick up fast syncing from there. The side chain is completely nuked by the
 // freezer.
-func TestLongOldForkedFastSyncingDeepSetHead(t *testing.T) {
-	testLongOldForkedFastSyncingDeepSetHead(t, false)
+func TestLongOldForkedSnapSyncingDeepSetHead(t *testing.T) {
+	testLongOldForkedSnapSyncingDeepSetHead(t, false)
 }
-func TestLongOldForkedFastSyncingDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongOldForkedFastSyncingDeepSetHead(t, true)
+func TestLongOldForkedSnapSyncingDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongOldForkedSnapSyncingDeepSetHead(t, true)
 }
 
-func testLongOldForkedFastSyncingDeepSetHead(t *testing.T, snapshots bool) {
+func testLongOldForkedSnapSyncingDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3
@@ -1446,15 +1446,15 @@ func testLongNewerForkedDeepSetHead(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was already committed to disk and then sethead was called. In this test scenario
 // the side chain is above the committed block. In this case the freezer will delete
-// the sidechain since it's dangling, reverting to TestLongFastSyncedShallowSetHead.
-func TestLongNewerForkedFastSyncedShallowSetHead(t *testing.T) {
-	testLongNewerForkedFastSyncedShallowSetHead(t, false)
+// the sidechain since it's dangling, reverting to TestLongSnapSyncedShallowSetHead.
+func TestLongNewerForkedSnapSyncedShallowSetHead(t *testing.T) {
+	testLongNewerForkedSnapSyncedShallowSetHead(t, false)
 }
-func TestLongNewerForkedFastSyncedShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongNewerForkedFastSyncedShallowSetHead(t, true)
+func TestLongNewerForkedSnapSyncedShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongNewerForkedSnapSyncedShallowSetHead(t, true)
 }
 
-func testLongNewerForkedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
+func testLongNewerForkedSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1498,15 +1498,15 @@ func testLongNewerForkedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already committed to disk and then sethead was called. In this test scenario
 // the side chain is above the committed block. In this case the freezer will delete
-// the sidechain since it's dangling, reverting to TestLongFastSyncedDeepSetHead.
-func TestLongNewerForkedFastSyncedDeepSetHead(t *testing.T) {
-	testLongNewerForkedFastSyncedDeepSetHead(t, false)
+// the sidechain since it's dangling, reverting to TestLongSnapSyncedDeepSetHead.
+func TestLongNewerForkedSnapSyncedDeepSetHead(t *testing.T) {
+	testLongNewerForkedSnapSyncedDeepSetHead(t, false)
 }
-func TestLongNewerForkedFastSyncedDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongNewerForkedFastSyncedDeepSetHead(t, true)
+func TestLongNewerForkedSnapSyncedDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongNewerForkedSnapSyncedDeepSetHead(t, true)
 }
 
-func testLongNewerForkedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
+func testLongNewerForkedSnapSyncedDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1549,15 +1549,15 @@ func testLongNewerForkedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was not yet committed, but sethead was called. In this test scenario the side
 // chain is above the committed block. In this case the freezer will delete the
-// sidechain since it's dangling, reverting to TestLongFastSyncinghallowSetHead.
-func TestLongNewerForkedFastSyncingShallowSetHead(t *testing.T) {
-	testLongNewerForkedFastSyncingShallowSetHead(t, false)
+// sidechain since it's dangling, reverting to TestLongSnapSyncinghallowSetHead.
+func TestLongNewerForkedSnapSyncingShallowSetHead(t *testing.T) {
+	testLongNewerForkedSnapSyncingShallowSetHead(t, false)
 }
-func TestLongNewerForkedFastSyncingShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongNewerForkedFastSyncingShallowSetHead(t, true)
+func TestLongNewerForkedSnapSyncingShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongNewerForkedSnapSyncingShallowSetHead(t, true)
 }
 
-func testLongNewerForkedFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
+func testLongNewerForkedSnapSyncingShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1601,15 +1601,15 @@ func testLongNewerForkedFastSyncingShallowSetHead(t *testing.T, snapshots bool) 
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was not yet committed, but sethead was called. In this test scenario the side
 // chain is above the committed block. In this case the freezer will delete the
-// sidechain since it's dangling, reverting to TestLongFastSyncingDeepSetHead.
-func TestLongNewerForkedFastSyncingDeepSetHead(t *testing.T) {
-	testLongNewerForkedFastSyncingDeepSetHead(t, false)
+// sidechain since it's dangling, reverting to TestLongSnapSyncingDeepSetHead.
+func TestLongNewerForkedSnapSyncingDeepSetHead(t *testing.T) {
+	testLongNewerForkedSnapSyncingDeepSetHead(t, false)
 }
-func TestLongNewerForkedFastSyncingDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongNewerForkedFastSyncingDeepSetHead(t, true)
+func TestLongNewerForkedSnapSyncingDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongNewerForkedSnapSyncingDeepSetHead(t, true)
 }
 
-func testLongNewerForkedFastSyncingDeepSetHead(t *testing.T, snapshots bool) {
+func testLongNewerForkedSnapSyncingDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12
@@ -1745,15 +1745,15 @@ func testLongReorgedDeepSetHead(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was already committed to disk and then sethead was called. In this case the
 // freezer will delete the sidechain since it's dangling, reverting to
-// TestLongFastSyncedShallowSetHead.
-func TestLongReorgedFastSyncedShallowSetHead(t *testing.T) {
-	testLongReorgedFastSyncedShallowSetHead(t, false)
+// TestLongSnapSyncedShallowSetHead.
+func TestLongReorgedSnapSyncedShallowSetHead(t *testing.T) {
+	testLongReorgedSnapSyncedShallowSetHead(t, false)
 }
-func TestLongReorgedFastSyncedShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongReorgedFastSyncedShallowSetHead(t, true)
+func TestLongReorgedSnapSyncedShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongReorgedSnapSyncedShallowSetHead(t, true)
 }
 
-func testLongReorgedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
+func testLongReorgedSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1797,15 +1797,15 @@ func testLongReorgedFastSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already committed to disk and then sethead was called. In this case the
 // freezer will delete the sidechain since it's dangling, reverting to
-// TestLongFastSyncedDeepSetHead.
-func TestLongReorgedFastSyncedDeepSetHead(t *testing.T) {
-	testLongReorgedFastSyncedDeepSetHead(t, false)
+// TestLongSnapSyncedDeepSetHead.
+func TestLongReorgedSnapSyncedDeepSetHead(t *testing.T) {
+	testLongReorgedSnapSyncedDeepSetHead(t, false)
 }
-func TestLongReorgedFastSyncedDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongReorgedFastSyncedDeepSetHead(t, true)
+func TestLongReorgedSnapSyncedDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongReorgedSnapSyncedDeepSetHead(t, true)
 }
 
-func testLongReorgedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
+func testLongReorgedSnapSyncedDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1850,14 +1850,14 @@ func testLongReorgedFastSyncedDeepSetHead(t *testing.T, snapshots bool) {
 // chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The side chain is
 // completely nuked by the freezer.
-func TestLongReorgedFastSyncingShallowSetHead(t *testing.T) {
-	testLongReorgedFastSyncingShallowSetHead(t, false)
+func TestLongReorgedSnapSyncingShallowSetHead(t *testing.T) {
+	testLongReorgedSnapSyncingShallowSetHead(t, false)
 }
-func TestLongReorgedFastSyncingShallowSetHeadWithSnapshots(t *testing.T) {
-	testLongReorgedFastSyncingShallowSetHead(t, true)
+func TestLongReorgedSnapSyncingShallowSetHeadWithSnapshots(t *testing.T) {
+	testLongReorgedSnapSyncingShallowSetHead(t, true)
 }
 
-func testLongReorgedFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
+func testLongReorgedSnapSyncingShallowSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26
@@ -1903,14 +1903,14 @@ func testLongReorgedFastSyncingShallowSetHead(t *testing.T, snapshots bool) {
 // chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The side chain is
 // completely nuked by the freezer.
-func TestLongReorgedFastSyncingDeepSetHead(t *testing.T) {
-	testLongReorgedFastSyncingDeepSetHead(t, false)
+func TestLongReorgedSnapSyncingDeepSetHead(t *testing.T) {
+	testLongReorgedSnapSyncingDeepSetHead(t, false)
 }
-func TestLongReorgedFastSyncingDeepSetHeadWithSnapshots(t *testing.T) {
-	testLongReorgedFastSyncingDeepSetHead(t, true)
+func TestLongReorgedSnapSyncingDeepSetHeadWithSnapshots(t *testing.T) {
+	testLongReorgedSnapSyncingDeepSetHead(t, true)
 }
 
-func testLongReorgedFastSyncingDeepSetHead(t *testing.T, snapshots bool) {
+func testLongReorgedSnapSyncingDeepSetHead(t *testing.T, snapshots bool) {
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10->C11->C12->C13->C14->C15->C16->C17->C18->C19->C20->C21->C22->C23->C24 (HEAD)
 	//   └->S1->S2->S3->S4->S5->S6->S7->S8->S9->S10->S11->S12->S13->S14->S15->S16->S17->S18->S19->S20->S21->S22->S23->S24->S25->S26

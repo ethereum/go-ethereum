@@ -1,7 +1,7 @@
 # This file configures github.com/golangci/golangci-lint.
 
 run:
-  timeout: 3m
+  timeout: 20m
   tests: true
   # default is true. Enables skipping of directories:
   #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$

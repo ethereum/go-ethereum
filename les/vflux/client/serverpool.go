@@ -44,7 +44,7 @@ const (
 	queryWaitStep       = 1.02                   // exponential multiplier of redial wait time when no value was provided by the server
 	waitThreshold       = time.Hour * 2000       // drop node if waiting time is over the threshold
 	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
-	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
+	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the known (valuable) set
 	minRedialWait       = 10                     // minimum redial wait time in seconds
 	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
 	warnQueryFails      = 20                     // number of consecutive UDP query failures before we print a warning

@@ -218,7 +218,7 @@ func (api *privateAdminAPI) StartHTTP(host *string, port *int, cors *string, api
 }
 
 // StartRPC starts the HTTP RPC API server.
-// This method is deprecated. Use StartHTTP instead.
+// Deprecated: use StartHTTP instead.
 func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	log.Warn("Deprecation warning", "method", "admin.StartRPC", "use-instead", "admin.StartHTTP")
 	return api.StartHTTP(host, port, cors, apis, vhosts)
@@ -231,7 +231,7 @@ func (api *privateAdminAPI) StopHTTP() (bool, error) {
 }
 
 // StopRPC shuts down the HTTP server.
-// This method is deprecated. Use StopHTTP instead.
+// Deprecated: use StopHTTP instead.
 func (api *privateAdminAPI) StopRPC() (bool, error) {
 	log.Warn("Deprecation warning", "method", "admin.StopRPC", "use-instead", "admin.StopHTTP")
 	return api.StopHTTP()

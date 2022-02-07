@@ -21,7 +21,9 @@ package eth
 
 import (
 	"crypto/rand"
+	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -58,4 +60,29 @@ func newTestPeer(name string, version uint, backend Backend) (*testPeer, <-chan 
 func (p *testPeer) close() {
 	p.Peer.Close()
 	p.app.Close()
+}
+
+func TestPeerSet(t *testing.T) {
+	size := 5
+	s := newKnownCache(size)
+
+	// add 10 items
+	for i := 0; i < size*2; i++ {
+		s.Add(common.Hash{byte(i)})
+	}
+
+	if s.Cardinality() != size {
+		t.Fatalf("wrong size, expected %d but found %d", size, s.Cardinality())
+	}
+
+	vals := []common.Hash{}
+	for i := 10; i < 20; i++ {
+		vals = append(vals, common.Hash{byte(i)})
+	}
+
+	// add item in batch
+	s.Add(vals...)
+	if s.Cardinality() < size {
+		t.Fatalf("bad size")
+	}
 }

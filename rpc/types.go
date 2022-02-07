@@ -40,8 +40,10 @@ type API struct {
 // a RPC session. Implementations must be go-routine safe since the codec can be called in
 // multiple go-routines concurrently.
 type ServerCodec interface {
+	peerInfo() PeerInfo
 	readBatch() (msgs []*jsonrpcMessage, isBatch bool, err error)
 	close()
+
 	jsonWriter
 }
 
@@ -96,6 +98,22 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	}
 	*bn = BlockNumber(blckNum)
 	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler. It marshals:
+// - "latest", "earliest" or "pending" as strings
+// - other numbers as hex
+func (bn BlockNumber) MarshalText() ([]byte, error) {
+	switch bn {
+	case EarliestBlockNumber:
+		return []byte("earliest"), nil
+	case LatestBlockNumber:
+		return []byte("latest"), nil
+	case PendingBlockNumber:
+		return []byte("pending"), nil
+	default:
+		return hexutil.Uint64(bn).MarshalText()
+	}
 }
 
 func (bn BlockNumber) Int64() int64 {
@@ -168,6 +186,16 @@ func (bnh *BlockNumberOrHash) Number() (BlockNumber, bool) {
 		return *bnh.BlockNumber, true
 	}
 	return BlockNumber(0), false
+}
+
+func (bnh *BlockNumberOrHash) String() string {
+	if bnh.BlockNumber != nil {
+		return strconv.Itoa(int(*bnh.BlockNumber))
+	}
+	if bnh.BlockHash != nil {
+		return bnh.BlockHash.String()
+	}
+	return "nil"
 }
 
 func (bnh *BlockNumberOrHash) Hash() (common.Hash, bool) {

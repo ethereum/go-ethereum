@@ -65,15 +65,19 @@ func BenchmarkFilters(b *testing.B) {
 		case 2403:
 			receipt := makeReceipt(addr1)
 			gen.AddUncheckedReceipt(receipt)
+			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 1034:
 			receipt := makeReceipt(addr2)
 			gen.AddUncheckedReceipt(receipt)
+			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 34:
 			receipt := makeReceipt(addr3)
 			gen.AddUncheckedReceipt(receipt)
+			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 99999:
 			receipt := makeReceipt(addr4)
 			gen.AddUncheckedReceipt(receipt)
+			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 
 		}
 	})

@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -54,6 +55,10 @@ func (m *mockBackend) TxPool() *core.TxPool {
 	return m.txPool
 }
 
+func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
+
 type testBlockChain struct {
 	statedb       *state.StateDB
 	gasLimit      uint64
@@ -79,7 +84,8 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 }
 
 func TestMiner(t *testing.T) {
-	miner, mux := createMiner(t)
+	miner, mux, cleanup := createMiner(t)
+	defer cleanup(false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
 	// Start the downloader
@@ -106,7 +112,8 @@ func TestMiner(t *testing.T) {
 // An initial FailedEvent should allow mining to stop on a subsequent
 // downloader StartEvent.
 func TestMinerDownloaderFirstFails(t *testing.T) {
-	miner, mux := createMiner(t)
+	miner, mux, cleanup := createMiner(t)
+	defer cleanup(false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
 	// Start the downloader
@@ -137,8 +144,8 @@ func TestMinerDownloaderFirstFails(t *testing.T) {
 }
 
 func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
-	miner, mux := createMiner(t)
-
+	miner, mux, cleanup := createMiner(t)
+	defer cleanup(false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
 	// Start the downloader
@@ -160,7 +167,8 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 }
 
 func TestStartWhileDownload(t *testing.T) {
-	miner, mux := createMiner(t)
+	miner, mux, cleanup := createMiner(t)
+	defer cleanup(false)
 	waitForMiningState(t, miner, false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
@@ -173,16 +181,19 @@ func TestStartWhileDownload(t *testing.T) {
 }
 
 func TestStartStopMiner(t *testing.T) {
-	miner, _ := createMiner(t)
+	miner, _, cleanup := createMiner(t)
+	defer cleanup(false)
 	waitForMiningState(t, miner, false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
 	miner.Stop()
 	waitForMiningState(t, miner, false)
+
 }
 
 func TestCloseMiner(t *testing.T) {
-	miner, _ := createMiner(t)
+	miner, _, cleanup := createMiner(t)
+	defer cleanup(true)
 	waitForMiningState(t, miner, false)
 	miner.Start(common.HexToAddress("0x12345"))
 	waitForMiningState(t, miner, true)
@@ -194,7 +205,8 @@ func TestCloseMiner(t *testing.T) {
 // TestMinerSetEtherbase checks that etherbase becomes set even if mining isn't
 // possible at the moment
 func TestMinerSetEtherbase(t *testing.T) {
-	miner, mux := createMiner(t)
+	miner, mux, cleanup := createMiner(t)
+	defer cleanup(false)
 	// Start with a 'bad' mining address
 	miner.Start(common.HexToAddress("0xdead"))
 	waitForMiningState(t, miner, true)
@@ -229,7 +241,7 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 	t.Fatalf("Mining() == %t, want %t", state, mining)
 }
 
-func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
+func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	// Create Ethash config
 	config := Config{
 		Etherbase: common.HexToAddress("123456789"),
@@ -237,7 +249,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create chainConfig
 	memdb := memorydb.New()
 	chainDB := rawdb.NewDatabase(memdb)
-	genesis := core.DeveloperGenesisBlock(15, common.HexToAddress("12345"))
+	genesis := core.DeveloperGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
@@ -257,5 +269,14 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create event Mux
 	mux := new(event.TypeMux)
 	// Create Miner
-	return New(backend, &config, chainConfig, mux, engine, nil), mux
+	miner := New(backend, &config, chainConfig, mux, engine, nil)
+	cleanup := func(skipMiner bool) {
+		bc.Stop()
+		engine.Close()
+		pool.Stop()
+		if !skipMiner {
+			miner.Close()
+		}
+	}
+	return miner, mux, cleanup
 }

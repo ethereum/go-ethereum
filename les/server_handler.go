@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -359,20 +358,20 @@ func (h *serverHandler) AddTxsSync() bool {
 }
 
 // getAccount retrieves an account from the state based on root.
-func getAccount(triedb *trie.Database, root, hash common.Hash) (state.Account, error) {
+func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccount, error) {
 	trie, err := trie.New(root, triedb)
 	if err != nil {
-		return state.Account{}, err
+		return types.StateAccount{}, err
 	}
 	blob, err := trie.TryGet(hash[:])
 	if err != nil {
-		return state.Account{}, err
+		return types.StateAccount{}, err
 	}
-	var account state.Account
-	if err = rlp.DecodeBytes(blob, &account); err != nil {
-		return state.Account{}, err
+	var acc types.StateAccount
+	if err = rlp.DecodeBytes(blob, &acc); err != nil {
+		return types.StateAccount{}, err
 	}
-	return account, nil
+	return acc, nil
 }
 
 // getHelperTrie returns the post-processed trie root for the given trie ID and section index
@@ -408,7 +407,7 @@ func (h *serverHandler) broadcastLoop() {
 	defer headSub.Unsubscribe()
 
 	var (
-		lastHead *types.Header
+		lastHead = h.blockchain.CurrentHeader()
 		lastTd   = common.Big0
 	)
 	for {
@@ -422,7 +421,10 @@ func (h *serverHandler) broadcastLoop() {
 			}
 			var reorg uint64
 			if lastHead != nil {
-				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
+				// If a setHead has been performed, the common ancestor can be nil.
+				if ancestor := rawdb.FindCommonAncestor(h.chainDb, header, lastHead); ancestor != nil {
+					reorg = lastHead.Number.Uint64() - ancestor.Number.Uint64()
+				}
 			}
 			lastHead, lastTd = header, td
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)

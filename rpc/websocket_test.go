@@ -18,11 +18,15 @@ package rpc
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
+	"net/http/httputil"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,7 +69,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 		t.Fatal("no error for wrong origin")
 	}
 	wantErr := wsHandshakeError{websocket.ErrBadHandshake, "403 Forbidden"}
-	if !reflect.DeepEqual(err, wantErr) {
+	if !errors.Is(err, wantErr) {
 		t.Fatalf("wrong error for wrong origin: %q", err)
 	}
 
@@ -110,6 +114,41 @@ func TestWebsocketLargeCall(t *testing.T) {
 	err = client.Call(&result, "test_echo", arg)
 	if err == nil {
 		t.Fatal("no error for too large call")
+	}
+}
+
+func TestWebsocketPeerInfo(t *testing.T) {
+	var (
+		s     = newTestServer()
+		ts    = httptest.NewServer(s.WebsocketHandler([]string{"origin.example.com"}))
+		tsurl = "ws:" + strings.TrimPrefix(ts.URL, "http:")
+	)
+	defer s.Stop()
+	defer ts.Close()
+
+	ctx := context.Background()
+	c, err := DialWebsocket(ctx, tsurl, "origin.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Request peer information.
+	var connInfo PeerInfo
+	if err := c.Call(&connInfo, "test_peerInfo"); err != nil {
+		t.Fatal(err)
+	}
+
+	if connInfo.RemoteAddr == "" {
+		t.Error("RemoteAddr not set")
+	}
+	if connInfo.Transport != "ws" {
+		t.Errorf("wrong Transport %q", connInfo.Transport)
+	}
+	if connInfo.HTTP.UserAgent != "Go-http-client/1.1" {
+		t.Errorf("wrong HTTP.UserAgent %q", connInfo.HTTP.UserAgent)
+	}
+	if connInfo.HTTP.Origin != "origin.example.com" {
+		t.Errorf("wrong HTTP.Origin %q", connInfo.HTTP.UserAgent)
 	}
 }
 
@@ -185,6 +224,63 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	}
 	if len(r) != respLength {
 		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
+func TestClientWebsocketSevered(t *testing.T) {
+	t.Parallel()
+
+	var (
+		server = wsPingTestServer(t, nil)
+		ctx    = context.Background()
+	)
+	defer server.Shutdown(ctx)
+
+	u, err := url.Parse("http://" + server.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rproxy := httputil.NewSingleHostReverseProxy(u)
+	var severable *severableReadWriteCloser
+	rproxy.ModifyResponse = func(response *http.Response) error {
+		severable = &severableReadWriteCloser{ReadWriteCloser: response.Body.(io.ReadWriteCloser)}
+		response.Body = severable
+		return nil
+	}
+	frontendProxy := httptest.NewServer(rproxy)
+	defer frontendProxy.Close()
+
+	wsURL := "ws:" + strings.TrimPrefix(frontendProxy.URL, "http:")
+	client, err := DialWebsocket(ctx, wsURL, "")
+	if err != nil {
+		t.Fatalf("client dial error: %v", err)
+	}
+	defer client.Close()
+
+	resultChan := make(chan int)
+	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
+	if err != nil {
+		t.Fatalf("client subscribe error: %v", err)
+	}
+
+	// sever the connection
+	severable.Sever()
+
+	// Wait for subscription error.
+	timeout := time.NewTimer(3 * wsPingInterval)
+	defer timeout.Stop()
+	for {
+		select {
+		case err := <-sub.Err():
+			t.Log("client subscription error:", err)
+			return
+		case result := <-resultChan:
+			t.Error("unexpected result:", result)
+			return
+		case <-timeout.C:
+			t.Error("didn't get any error within the test timeout")
+			return
+		}
 	}
 }
 
@@ -289,4 +385,32 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			return
 		}
 	}
+}
+
+// severableReadWriteCloser wraps an io.ReadWriteCloser and provides a Sever() method to drop writes and read empty.
+type severableReadWriteCloser struct {
+	io.ReadWriteCloser
+	severed int32 // atomic
+}
+
+func (s *severableReadWriteCloser) Sever() {
+	atomic.StoreInt32(&s.severed, 1)
+}
+
+func (s *severableReadWriteCloser) Read(p []byte) (n int, err error) {
+	if atomic.LoadInt32(&s.severed) > 0 {
+		return 0, nil
+	}
+	return s.ReadWriteCloser.Read(p)
+}
+
+func (s *severableReadWriteCloser) Write(p []byte) (n int, err error) {
+	if atomic.LoadInt32(&s.severed) > 0 {
+		return len(p), nil
+	}
+	return s.ReadWriteCloser.Write(p)
+}
+
+func (s *severableReadWriteCloser) Close() error {
+	return s.ReadWriteCloser.Close()
 }
