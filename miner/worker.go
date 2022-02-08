@@ -82,6 +82,7 @@ type environment struct {
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
+	original  *state.StateDB // verkle: keep the orignal data to prove the pre-state
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	uncles    mapset.Set     // uncle set
@@ -692,6 +693,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
+		original:  state.Copy(),
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		uncles:    mapset.NewSet(),
@@ -1039,7 +1041,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	if tr := s.GetTrie(); tr.IsVerkle() {
+	if tr := w.current.original.GetTrie(); tr.IsVerkle() {
 		vtr := tr.(*trie.VerkleTrie)
 		// Generate the proof if we are using a verkle tree
 		p, k, err := vtr.ProveAndSerialize(s.Witness().Keys(), s.Witness().KeyVals())

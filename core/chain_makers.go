@@ -295,6 +295,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		preState := statedb.Copy()
 
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
@@ -329,30 +330,25 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			}
 
 			// Generate an associated verkle proof
-			if tr := statedb.GetTrie(); tr.IsVerkle() {
-				vtr := tr.(*trie.VerkleTrie)
-				// Generate the proof if we are using a verkle tree
-				// WORKAROUND: make sure all keys are resolved
-				// before building the proof. Ultimately, node
-				// resolution can be done with a prefetcher or
-				// from GetCommitmentsAlongPath.
+			tr := preState.GetTrie()
+			if !tr.IsVerkle() {
+				panic("tree should be verkle")
+			}
 
-				keys := statedb.Witness().Keys()
-				for _, key := range keys {
-					out, err := vtr.TryGet(key)
-					if err != nil {
-						panic(err)
-					}
-					if len(out) == 0 {
-						panic(fmt.Sprintf("%x should be present in the tree", key))
-					}
-				}
-				vtr.Hash()
-				p, k, err := vtr.ProveAndSerialize(keys, statedb.Witness().KeyVals())
-				block.SetVerkleProof(p, k)
-				if err != nil {
-					panic(err)
-				}
+			vtr := tr.(*trie.VerkleTrie)
+			// Make sure all keys are resolved before
+			// building the proof. Ultimately, node
+			// resolution can be done with a prefetcher
+			// or from GetCommitmentsAlongPath.
+			keys := statedb.Witness().Keys()
+			for _, key := range keys {
+				vtr.TryGet(key)
+			}
+			vtr.Hash()
+			p, k, err := vtr.ProveAndSerialize(keys, statedb.Witness().KeyVals())
+			block.SetVerkleProof(p, k)
+			if err != nil {
+				panic(err)
 			}
 			return block, b.receipts
 		}
