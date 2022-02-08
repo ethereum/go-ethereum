@@ -58,7 +58,7 @@ To quickly open a Terminal window at any time, press Ctrl+Alt+T.
 ## Step 2: Create accounts
 
 use the command below to create an account 
-Note: you will need to create two accounts for this guide
+> **Note:** you will need to create two accounts for this guide
 
 ```shell
 clef newaccount --keystore geth-tutorial/keystore
@@ -75,6 +75,7 @@ Enter your desired password and hit the enter key to get the result below:
 ![Create new account command](../../static/images/createaccount2.png){:width="70%"}
 
 Copy and save your password and generated account somewhere safe; you will need it later in this tutorial.
+
 **The Generated account:**
 ```shell
 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
@@ -95,7 +96,8 @@ A successful call will give you the result below:
 
 ![Create new account command](../../static/images/startchef.png){:width="70%"}
 
-Note: keep this terminal open.
+> **Note:** keep this terminal open.
+
 ## Step 4:  Start Geth
 To start geth, open a new terminal and run the command below. It would be best if you did not close this terminal, always keep it running while working.
 
@@ -108,7 +110,7 @@ A successful call will give you the result below:
 
 ![Create new account command](../../static/images/startgeth.png){:width="70%"}
 
-Note: keep this terminal open.
+> **Note:** keep this terminal open.
 
 
 
@@ -146,7 +148,7 @@ Result after running the above command:
 
 **→ Check account balance**
 
-Note: the value comes in wei
+> **Note:** the value comes in wei
 **Syntax:**
 
 ```shell
@@ -250,7 +252,7 @@ if successful, you will get the below response
        --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
  
- Note: http://127.0.0.1:8545 this is the default address
+ > **Note:** http://127.0.0.1:8545 this is the default address
  
  To check your account balance use the command below.
 
