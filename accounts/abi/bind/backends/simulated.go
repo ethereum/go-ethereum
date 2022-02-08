@@ -414,11 +414,11 @@ func (e *revertError) ErrorData() interface{} {
 }
 
 // CallContract executes a contract call.
-func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumberOrHash rpc.BlockNumberOrHash) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+	if (blockNumberOrHash.BlockHash != nil && *blockNumberOrHash.BlockHash != b.blockchain.CurrentBlock().Hash()) || (blockNumberOrHash.BlockNumber != nil && (*blockNumberOrHash.BlockNumber) != (rpc.BlockNumber(b.blockchain.CurrentBlock().Number().Int64()))) {
 		return nil, errBlockNumberUnsupported
 	}
 	stateDB, err := b.blockchain.State()

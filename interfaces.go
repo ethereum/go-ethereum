@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -149,7 +150,7 @@ type CallMsg struct {
 // execute such calls. For applications which are structured around specific contracts,
 // the abigen tool provides a nicer, properly typed way to perform calls.
 type ContractCaller interface {
-	CallContract(ctx context.Context, call CallMsg, blockNumber *big.Int) ([]byte, error)
+	CallContract(ctx context.Context, call CallMsg, blockNumberOrHash rpc.BlockNumberOrHash) ([]byte, error)
 }
 
 // FilterQuery contains options for contract log filtering.

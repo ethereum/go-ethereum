@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 func TestSimulatedBackend(t *testing.T) {
@@ -1042,7 +1043,7 @@ func TestPendingAndCallContract(t *testing.T) {
 		From: testAddr,
 		To:   &addr,
 		Data: input,
-	}, nil)
+	}, rpc.BlockNumberOrHash{})
 	if err != nil {
 		t.Errorf("could not call receive method on contract: %v", err)
 	}
@@ -1117,7 +1118,7 @@ func TestCallContractRevert(t *testing.T) {
 			From: testAddr,
 			To:   &addr,
 			Data: input,
-		}, nil)
+		}, rpc.BlockNumberOrHash{})
 	}
 
 	// Run pending calls then commit

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -180,7 +181,12 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 			}
 		}
 	} else {
-		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
+		blockNumberOrHash := rpc.BlockNumberOrHash{}
+		if opts.BlockNumber != nil {
+			blockNumber := rpc.BlockNumber(opts.BlockNumber.Int64())
+			blockNumberOrHash.BlockNumber = &blockNumber
+		}
+		output, err = c.caller.CallContract(ctx, msg, blockNumberOrHash)
 		if err != nil {
 			return err
 		}
