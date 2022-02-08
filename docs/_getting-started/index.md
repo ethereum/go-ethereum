@@ -42,7 +42,8 @@ For this tutorial, you will use a `light` sync:
 
 ## Step 1: Open Terminal
 You will need your system terminal to run the commands for this tutorial.
-![Clef init command](https://paper.dropbox.com/ep/redirect/image?url=https%3A%2F%2Fpaper-attachments.dropbox.com%2Fs_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644261248020_Screenshot%2B2022-02-07%2Bat%2B20.10.06.png&hmac=u78AuCP9io2DlhLyay%2BRQioFXVcp9%2BOGq4OcX8OqacM%3D){:width="70%"}
+
+![Create new account command](../../static/images/open_terminal.png){:width="70%"}
 
 ### Steps to open your system terminal:
 **Mac book:**
@@ -65,13 +66,13 @@ clef newaccount --keystore geth-tutorial/keystore
 
 it will give you the result below:
 
-![Create new account command](https://paper.dropbox.com/ep/redirect/image?url=https%3A%2F%2Fpaper-attachments.dropbox.com%2Fs_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644255368476_Screenshot%2B2022-02-07%2Bat%2B18.12.41.png&hmac=Gv1oXwU4YBtCatEb2XL5Pu%2F%2Bp1%2F025nqncAgEizTF5U%3D){:width="70%"}
+![Create new account command](../../static/images/create_account.png){:width="70%"}
 
 Enter “ok” and hit the enter key. Next, the system will request the below action.
 Please enter a password for the new account to be created (attempt 0 of 3)
 Enter your desired password and hit the enter key to get the result below:
 
-![Create new account command](https://paper.dropbox.com/ep/redirect/image?url=https%3A%2F%2Fpaper-attachments.dropbox.com%2Fs_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644255433564_Screenshot%2B2022-02-07%2Bat%2B18.26.37.png&hmac=eeLGC9zJ7L%2B9q%2B1%2B8JZtV%2BIqN2%2FZ9pwfWWCgkGq5AsI%3D&width=1490){:width="70%"}
+![Create new account command](../../static/images/createaccount2.png){:width="70%"}
 
 Copy and save your password and generated account somewhere safe; you will need it later in this tutorial.
 **The Generated account:**
@@ -92,7 +93,7 @@ after running the command above, the system will request you to type “ok” to
 
 A successful call will give you the result below:
 
-![Create new account command](https://paper.dropbox.com/ep/redirect/image?url=https%3A%2F%2Fpaper-attachments.dropbox.com%2Fs_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644272658382_Screenshot%2B2022-02-07%2Bat%2B23.22.20.png&hmac=Qzk34Kp9ClJQf2hAEdKNlO8FWd2EaK3J18rPb66bGe8%3D&width=1490){:width="70%"}
+![Create new account command](../../static/images/startchef.png){:width="70%"}
 
 Note: keep this terminal open.
 ## Step 4:  Start Geth
@@ -105,7 +106,7 @@ geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syn
 
 A successful call will give you the result below:
 
-![Create new account command](https://paper.dropbox.com/ep/redirect/image?url=https%3A%2F%2Fpaper-attachments.dropbox.com%2Fs_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644272805150_Screenshot%2B2022-02-07%2Bat%2B23.26.25.png&hmac=FJHQSqMQzJih7TP3jC7qDwdaRtzE0o4dYQkNmwpH2yU%3D&width=1490){:width="70%"}
+![Create new account command](../../static/images/startgeth.png){:width="70%"}
 
 Note: keep this terminal open.
 
@@ -140,7 +141,7 @@ geth attach http://127.0.0.1:8545
 
 Result after running the above command: 
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644274703969_Screenshot+2022-02-07+at+23.57.11.png){:width="70%"}
+![Create new account command](../../static/images/ipc.png){:width="70%"}
 
 
 **→ Check account balance**
@@ -150,7 +151,7 @@ Note: the value comes in wei
 
 ```shell
 web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
-````
+```
 
 run the command below to check your account balance
 
@@ -160,25 +161,29 @@ web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"),"ether
 
 **Result:**
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644276258069_Screenshot+2022-02-08+at+00.22.55.png){:width="70%"}
+![Create new account command](../../static/images/accountresult.png){:width="70%"}
 
 
 **→ Check list of accounts**
+
 **step 1:**
 Run the command below to get the list of accounts in your keystore
+ ```javascript
  eth.accounts
+ ```
+
 **step 2:**
 Accept request in your Clef terminal 
 the command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644276747708_Screenshot+2022-02-08+at+00.31.12.png){:width="70%"}
+![Create new account command](../../static/images/ipclistaccounts.png){:width="70%"}
 
 
 approve the request by typing “y” and hit the enter key.
 
 **Result:**
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644276986503_Screenshot+2022-02-08+at+00.31.12.png){:width="70%"}
+![Create new account command](../../static/images/ipclistaccountsresult.png){:width="70%"}
 
 
 **→ Send ETH to account**
@@ -200,18 +205,17 @@ eth.sendTransaction({from:"0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",to:"0x8EB
 accept request in your Clef terminal 
 The command in step 1 will need approval from the terminal running clef, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from. If the password is correct, Geth proceeds with the transaction.
 
-
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644278525355_Screenshot+2022-02-08+at+01.01.18.png){:width="70%"}
+![Create new account command](../../static/images/ipcsendeth.png){:width="70%"}
 
 
 After approving the transaction you will see the below screen in the Clef terminal
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644278775275_Screenshot+2022-02-08+at+01.06.05.png){:width="70%"}
+![Create new account command](../../static/images/ipcsclef.png){:width="70%"}
 
 
 **Step 1** Terminal Result, it will return a response that includes the transaction hash:
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644279037329_Screenshot+2022-02-08+at+01.09.45.png){:width="70%"}
+![Create new account command](../../static/images/ipcsclefresult.png){:width="70%"}
 
 
 **→ Check Transaction hash**
@@ -228,12 +232,11 @@ Run the command below.
 
 ```javscript
 eth.getTransaction("0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187")
-````
+```
 
 if successful, you will get the below response 
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644290184662_Screenshot+2022-02-08+at+04.15.18.png){:width="70%"}
-
+![Create new account command](../../static/images/ipchash.png){:width="70%"}
 
 ## Step 7: Using RPC
 
@@ -259,7 +262,7 @@ if successful, you will get the below response
 
 A successful call will return a response below:
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644280003369_Screenshot+2022-02-08+at+01.26.32.png){:width="70%"}
+![Create new account command](../../static/images/rpcbalanceresult.png){:width="70%"}
 
 
 so Geth returns the value without invoking Clef. Note that the value returned is in hexadecimal and WEI. To get the ETH value, convert to decimal and divide by 10^18.
@@ -277,7 +280,7 @@ Follow the same step as the IPC Check account balance
 
 A successful call will return a response below:
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644280927308_Screenshot+2022-02-08+at+01.28.14.png){:width="70%"}
+![Create new account command](../../static/images/rpclistaccounts.png){:width="70%"}
 
 
 **→ Send ETH to accounts**
@@ -290,10 +293,10 @@ A successful call will return a response below:
 ```
 
 **step 1:** convert value from Eth to Wei decimal
-Use this link to do the conversation: https://eth-converter.com/
+Use this link to do the conversation: [Eth converter](https://eth-converter.com/)
 
 **step 2:** convert decimal to Hexadecimal
-Use this link to do the conversion: https://www.rapidtables.com/convert/number/decimal-to-hex.html and add 0x at the begging of the number.
+Use this link to do the conversion: [Rapidtable](https://www.rapidtables.com/convert/number/decimal-to-hex.html) and add 0x at the begging of the number.
 Example:  from 2386F26FC10000 to 0x2386F26FC10000
 
 **step 3:** Run the command below
@@ -305,5 +308,5 @@ curl -X POST http://127.0.0.1:8545 \
 
 A successful call will return a response below:
 
-![](https://paper-attachments.dropbox.com/s_B9DD796393E608BD6B8358DDFCBFEB5B6F1555AA272CA011CE94B8B98D38751D_1644288977377_Screenshot+2022-02-08+at+02.53.21.png){:width="70%"}
+![Create new account command](../../static/images/rpcsendeth.png){:width="70%"}
 
