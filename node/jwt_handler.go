@@ -18,12 +18,10 @@ package node
 
 import (
 	"net/http"
-
-	"fmt"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/golang-jwt/jwt/v4"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type jwtHandler struct {
@@ -41,49 +39,40 @@ func newJWTHandler(secret []byte, next http.Handler) http.Handler {
 	}
 }
 
-// customClaim is basically a standard RegisteredClaim, but we override the
-// Valid method to be more lax in allowing some time skew.
-type customClaim jwt.RegisteredClaims
-
-// Valid implements jwt.Claim. This method only validates the (optional) expiry-time.
-func (c customClaim) Valid() error {
-	now := jwt.TimeFunc()
-	rc := jwt.RegisteredClaims(c)
-	if !rc.VerifyExpiresAt(now, false) { // optional
-		return fmt.Errorf("token is expired")
-	}
-	if c.IssuedAt == nil {
-		return fmt.Errorf("missing issued-at")
-	}
-	if time.Since(c.IssuedAt.Time) > 5*time.Second {
-		return fmt.Errorf("stale token")
-	}
-	if time.Until(c.IssuedAt.Time) > 5*time.Second {
-		return fmt.Errorf("future token")
-	}
-	return nil
-}
-
 // ServeHTTP implements http.Handler
 func (handler *jwtHandler) ServeHTTP(out http.ResponseWriter, r *http.Request) {
-	var token string
+	var (
+		strToken string
+		claims   jwt.RegisteredClaims
+	)
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-		token = strings.TrimPrefix(auth, "Bearer ")
+		strToken = strings.TrimPrefix(auth, "Bearer ")
 	}
-	if len(token) == 0 {
+	if len(strToken) == 0 {
 		http.Error(out, "missing token", http.StatusForbidden)
 		return
 	}
-	var claims customClaim
-	t, err := jwt.ParseWithClaims(token, &claims, handler.keyFunc, jwt.WithValidMethods([]string{"HS256"}))
-	if err != nil {
-		log.Info("Token parsing failed", "err", err)
+	// We explicitly set only HS256 allowed, and also disables the
+	// claim-check: the RegisteredClaims internally requires 'iat' to
+	// be no later than 'now', but we allow for a bit of drift.
+	token, err := jwt.ParseWithClaims(strToken, &claims, handler.keyFunc,
+		jwt.WithValidMethods([]string{"HS256"}),
+		jwt.WithoutClaimsValidation())
+
+	switch {
+	case err != nil:
 		http.Error(out, err.Error(), http.StatusForbidden)
-		return
-	}
-	if !t.Valid {
+	case !token.Valid:
 		http.Error(out, "invalid token", http.StatusForbidden)
-		return
+	case !claims.VerifyExpiresAt(time.Now(), false): // optional
+		http.Error(out, "token is expired", http.StatusForbidden)
+	case claims.IssuedAt == nil:
+		http.Error(out, "missing issued-at", http.StatusForbidden)
+	case time.Since(claims.IssuedAt.Time) > 5*time.Second:
+		http.Error(out, "stale token", http.StatusForbidden)
+	case time.Until(claims.IssuedAt.Time) > 5*time.Second:
+		http.Error(out, "future token", http.StatusForbidden)
+	default:
+		handler.next.ServeHTTP(out, r)
 	}
-	handler.next.ServeHTTP(out, r)
 }
