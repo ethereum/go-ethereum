@@ -373,6 +373,7 @@ func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSe
 	return newGzipHandler(handler)
 }
 
+// NewWSHandlerStack returns a wrapped ws-related handler.
 func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
 	if len(jwtSecret) != 0 {
 		return newJWTHandler(jwtSecret, srv)

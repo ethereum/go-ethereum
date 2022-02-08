@@ -304,39 +304,79 @@ type tokenTest struct {
 	expFail []string
 }
 
-func TestJWT(t *testing.T) {
+type testClaim map[string]interface{}
 
-	makeToken := func() string {
-		mySigningKey := []byte("secret")
-		// Create the Claims
-		claims := &jwt.RegisteredClaims{
-			IssuedAt: jwt.NewNumericDate(time.Now()),
+func (testClaim) Valid() error {
+	return nil
+}
+
+func TestJWT(t *testing.T) {
+	var secret = []byte("secret")
+	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
+		if method == nil {
+			method = jwt.SigningMethodHS256
 		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		ss, _ := token.SignedString(mySigningKey)
+		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
 		return ss
 	}
-	tests := []originTest{
+	tests := []tokenTest{
 		{
-			//expFail: []string{"Bearer ", "Bearer: abc", "Baxonk hello there"},
 			expOk: []string{
-				fmt.Sprintf("Bearer %v", makeToken()),
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4})),
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 4})),
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+					"iat": time.Now().Unix(),
+					"exp": time.Now().Unix() + 2,
+				})),
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+					"iat": time.Now().Unix(),
+					"bar": "baz",
+				})),
+			},
+			expFail: []string{
+				// future
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 6})),
+				// stale
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 6})),
+				// wrong algo
+				fmt.Sprintf("Bearer %v", issueToken(secret, jwt.SigningMethodHS512, testClaim{"iat": time.Now().Unix() + 4})),
+				// expired
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix(), "exp": time.Now().Unix()})),
+				// missing mandatory iat
+				fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{})),
+				// wrong secret
+				fmt.Sprintf("Bearer %v", issueToken([]byte("wrong"), nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer %v", issueToken([]byte{}, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer %v", issueToken(nil, nil, testClaim{"iat": time.Now().Unix()})),
+				// Various malformed syntax
+				fmt.Sprintf("%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
+				fmt.Sprintf("Bearer:\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
 			true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
-		url := fmt.Sprintf("ws://%v", srv.listenAddr())
+		wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
+		htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 		for i, token := range tc.expOk {
-			if err := wsRequest(t, url, "Authorization", token); err != nil {
-				t.Errorf("test %d, token '%v': expected ok, got %v", i, token, err)
+			if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
+				t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
+			}
+			if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
+				t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
 			}
 		}
 		for i, token := range tc.expFail {
-			if err := wsRequest(t, url, "Authorization", token); err == nil {
-				t.Errorf("tc %d, token '%v': expected not to allow,  got ok", i, token)
+			if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
+				t.Errorf("tc %d-ws, token '%v': expected not to allow,  got ok", i, token)
+			}
+			if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 403 {
+				t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 			}
 		}
 		srv.stop()

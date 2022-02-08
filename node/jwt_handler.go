@@ -19,35 +19,19 @@ package node
 import (
 	"net/http"
 
-	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/golang-jwt/jwt/v4"
 	"strings"
 	"time"
 )
-
-// customClaim implements claims.Claim.
-type customClaim struct {
-	// the `iat` (Issued At) claim. See https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6
-	IssuedAt int64 `json:"iat,omitempty"`
-}
-
-// Valid implements claims.Claim, and checks that the iat is present and valid.
-func (c customClaim) Valid() error {
-	if time.Now().Unix()-5 < c.IssuedAt {
-		return errors.New("token issuance (iat) is too old")
-	}
-	if time.Now().Unix()+5 > c.IssuedAt {
-		return errors.New("token issuance (iat) is too far in the future")
-	}
-	return nil
-}
 
 type jwtHandler struct {
 	keyFunc func(token *jwt.Token) (interface{}, error)
 	next    http.Handler
 }
 
-// MakeJWTValidator creates a validator for jwt tokens.
+// newJWTHandler creates a http.Handler with jwt authentication support.
 func newJWTHandler(secret []byte, next http.Handler) http.Handler {
 	return &jwtHandler{
 		keyFunc: func(token *jwt.Token) (interface{}, error) {
@@ -57,6 +41,30 @@ func newJWTHandler(secret []byte, next http.Handler) http.Handler {
 	}
 }
 
+// customClaim is basically a standard RegisteredClaim, but we override the
+// Valid method to be more lax in allowing some time skew.
+type customClaim jwt.RegisteredClaims
+
+// Valid implements jwt.Claim. This method only validates the (optional) expiry-time.
+func (c customClaim) Valid() error {
+	now := jwt.TimeFunc()
+	rc := jwt.RegisteredClaims(c)
+	if !rc.VerifyExpiresAt(now, false) { // optional
+		return fmt.Errorf("token is expired")
+	}
+	if c.IssuedAt == nil {
+		return fmt.Errorf("missing issued-at")
+	}
+	if time.Since(c.IssuedAt.Time) > 5*time.Second {
+		return fmt.Errorf("stale token")
+	}
+	if time.Until(c.IssuedAt.Time) > 5*time.Second {
+		return fmt.Errorf("future token")
+	}
+	return nil
+}
+
+// ServeHTTP implements http.Handler
 func (handler *jwtHandler) ServeHTTP(out http.ResponseWriter, r *http.Request) {
 	var token string
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
@@ -67,13 +75,13 @@ func (handler *jwtHandler) ServeHTTP(out http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var claims customClaim
-	t, err := jwt.ParseWithClaims(token, claims, handler.keyFunc, jwt.WithValidMethods([]string{"HS256"}))
+	t, err := jwt.ParseWithClaims(token, &claims, handler.keyFunc, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
+		log.Info("Token parsing failed", "err", err)
 		http.Error(out, err.Error(), http.StatusForbidden)
 		return
 	}
 	if !t.Valid {
-		// This should not happen, but better safe than sorry if the implementation changes.
 		http.Error(out, "invalid token", http.StatusForbidden)
 		return
 	}
