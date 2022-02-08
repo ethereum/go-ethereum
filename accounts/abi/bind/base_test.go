@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,10 +76,10 @@ func (mt *mockTransactor) SendTransaction(ctx context.Context, tx *types.Transac
 }
 
 type mockCaller struct {
-	codeAtBlockNumber         *big.Int
-	callContractBlockNumber   *big.Int
-	pendingCodeAtCalled       bool
-	pendingCallContractCalled bool
+	codeAtBlockNumber             *big.Int
+	callContractBlockNumberOrHash rpc.BlockNumberOrHash
+	pendingCodeAtCalled           bool
+	pendingCallContractCalled     bool
 }
 
 func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
@@ -86,8 +87,8 @@ func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, block
 	return []byte{1, 2, 3}, nil
 }
 
-func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
-	mc.callContractBlockNumber = blockNumber
+func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumberOrHash rpc.BlockNumberOrHash) ([]byte, error) {
+	mc.callContractBlockNumberOrHash = blockNumberOrHash
 	return nil, nil
 }
 
@@ -117,7 +118,7 @@ func TestPassingBlockNumber(t *testing.T) {
 
 	bc.Call(&bind.CallOpts{BlockNumber: blockNumber}, nil, "something")
 
-	if mc.callContractBlockNumber != blockNumber {
+	if *mc.callContractBlockNumberOrHash.BlockNumber != rpc.BlockNumber(blockNumber.Int64()) {
 		t.Fatalf("CallContract() was not passed the block number")
 	}
 
@@ -127,7 +128,7 @@ func TestPassingBlockNumber(t *testing.T) {
 
 	bc.Call(&bind.CallOpts{}, nil, "something")
 
-	if mc.callContractBlockNumber != nil {
+	if mc.callContractBlockNumberOrHash.BlockNumber != nil {
 		t.Fatalf("CallContract() was passed a block number when it should not have been")
 	}
 

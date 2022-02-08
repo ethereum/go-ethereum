@@ -525,7 +525,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
 	// CallContract
-	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
+	if _, err := ec.CallContract(context.Background(), msg, rpc.BlockNumberOrHashWithNumber(1)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// PendingCallCOntract

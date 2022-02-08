@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // EthereumClient provides access to the Ethereum APIs.
@@ -280,9 +281,9 @@ func (ec *EthereumClient) GetPendingTransactionCount(ctx *Context) (count int, _
 // blocks might not be available.
 func (ec *EthereumClient) CallContract(ctx *Context, msg *CallMsg, number int64) (output []byte, _ error) {
 	if number < 0 {
-		return ec.client.CallContract(ctx.context, msg.msg, nil)
+		return ec.client.CallContract(ctx.context, msg.msg, rpc.BlockNumberOrHash{})
 	}
-	return ec.client.CallContract(ctx.context, msg.msg, big.NewInt(number))
+	return ec.client.CallContract(ctx.context, msg.msg, rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(number)))
 }
 
 // PendingCallContract executes a message call transaction using the EVM.
