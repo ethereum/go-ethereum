@@ -51,7 +51,7 @@ type ContractCaller interface {
 
 	// CallContract executes an Ethereum contract call with the specified data as the
 	// input.
-	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber rpc.BlockNumberOrHash) ([]byte, error)
+	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumberOrHash rpc.BlockNumberOrHash) ([]byte, error)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.
