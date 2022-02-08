@@ -70,7 +70,9 @@ func TestReproduceTree(t *testing.T) {
 	}
 
 	proof, Cs, zis, yis := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
-	verkle.VerifyVerkleProof(proof, Cs, zis, yis, verkle.GetConfig())
+	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, verkle.GetConfig()) {
+		t.Fatal("could not verify proof")
+	}
 
 	t.Log("commitments returned by proof:")
 	for i, c := range Cs {
