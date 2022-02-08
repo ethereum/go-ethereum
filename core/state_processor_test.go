@@ -17,11 +17,11 @@
 package core
 
 import (
-	"bytes"
+	//"bytes"
 	"crypto/ecdsa"
-	"fmt"
+	//"fmt"
 	"math/big"
-	"os"
+	//"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	//"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
@@ -394,12 +394,13 @@ func TestProcessStateless(t *testing.T) {
 		gen.AddTx(tx)
 	})
 
-	f, _ := os.Create("block2.rlp")
-	defer f.Close()
-	var buf bytes.Buffer
-	rlp.Encode(&buf, chain[1])
-	f.Write(buf.Bytes())
-	fmt.Printf("%x\n", chain[0].Root())
+	// Uncomment to extract block #2
+	//f, _ := os.Create("block2.rlp")
+	//defer f.Close()
+	//var buf bytes.Buffer
+	//rlp.Encode(&buf, chain[1])
+	//f.Write(buf.Bytes())
+	//fmt.Printf("root= %x\n", chain[0].Root())
 
 	_, err := blockchain.InsertChain(chain)
 	if err != nil {
