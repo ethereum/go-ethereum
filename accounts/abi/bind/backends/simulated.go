@@ -419,7 +419,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	defer b.mu.Unlock()
 
 	currentBlock := b.blockchain.CurrentBlock()
-	if (blockNumberOrHash.BlockHash != nil && *blockNumberOrHash.BlockHash != currentBlock.Hash()) || (blockNumberOrHash.BlockNumber != nil && *blockNumberOrHash.BlockNumber != (rpc.BlockNumber(currentBlock.Number().Int64()))) {
+	if (blockNumberOrHash.BlockHash != nil && *blockNumberOrHash.BlockHash != currentBlock.Hash()) || (blockNumberOrHash.BlockNumber != nil && *blockNumberOrHash.BlockNumber != rpc.BlockNumber(currentBlock.Number().Int64())) {
 		return nil, errBlockNumberUnsupported
 	}
 	stateDB, err := b.blockchain.State()
