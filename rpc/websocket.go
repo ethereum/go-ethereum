@@ -43,6 +43,57 @@ const (
 
 var wsBufferPool = new(sync.Pool)
 
+type websocketTransport struct {
+	d       *websocket.Dialer
+	headers http.Header
+	ctx     context.Context
+}
+
+type WebsocketTransportOption func(*websocketTransport) error
+
+func WithDialHeaders(h http.Header) WebsocketTransportOption {
+	return func(t *websocketTransport) error {
+		for k, vals := range h {
+			for _, v := range vals {
+				t.headers.Add(k, v)
+			}
+		}
+		return nil
+	}
+}
+
+func WithBasicAuth(endpoint, origin string) WebsocketTransportOption {
+	return func(t *websocketTransport) error {
+		endpointURL, err := url.Parse(endpoint)
+		if err != nil {
+			return err
+		}
+		if origin != "" {
+			t.headers.Add("origin", origin)
+		}
+		if endpointURL.User != nil {
+			b64auth := base64.StdEncoding.EncodeToString([]byte(endpointURL.User.String()))
+			t.headers.Add("authorization", "Basic "+b64auth)
+			endpointURL.User = nil
+		}
+		return nil
+	}
+}
+
+func WithDialContext(ctx context.Context) WebsocketTransportOption {
+	return func(t *websocketTransport) error {
+		t.ctx = ctx
+		return nil
+	}
+}
+
+func WithDialer(d *websocket.Dialer) WebsocketTransportOption {
+	return func(t *websocketTransport) error {
+		t.d = d
+		return nil
+	}
+}
+
 // WebsocketHandler returns a handler that serves JSON-RPC to WebSocket connections.
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
@@ -181,11 +232,27 @@ func parseOriginURL(origin string) (string, string, string, error) {
 	return scheme, hostname, port, nil
 }
 
-// DialWebsocketWithHeaders creates a new RPC client that communicates with a JSON-RPC server
-// that is listening on the given endpoint using the provided dialer.
-func DialWebsocketWithHeaders(ctx context.Context, endpoint string, header http.Header, dialer websocket.Dialer) (*Client, error) {
-	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
-		conn, resp, err := dialer.DialContext(ctx, endpoint, header)
+func newWebsocketTransport(endpoint string) *websocketTransport {
+	dialer := &websocket.Dialer{
+		ReadBufferSize:  wsReadBuffer,
+		WriteBufferSize: wsWriteBuffer,
+		WriteBufferPool: wsBufferPool,
+	}
+	return &websocketTransport{
+		d:       dialer,
+		headers: http.Header{},
+	}
+}
+
+func DialWebsocketWithOptions(endpoint string, options ...WebsocketTransportOption) (*Client, error) {
+	transport := newWebsocketTransport(endpoint)
+	for _, option := range options {
+		if err := option(transport); err != nil {
+			return nil, err
+		}
+	}
+	return newClient(transport.ctx, func(ctx context.Context) (ServerCodec, error) {
+		conn, resp, err := transport.d.DialContext(ctx, endpoint, transport.headers)
 		if err != nil {
 			hErr := wsHandshakeError{err: err}
 			if resp != nil {
@@ -193,18 +260,14 @@ func DialWebsocketWithHeaders(ctx context.Context, endpoint string, header http.
 			}
 			return nil, hErr
 		}
-		return newWebsocketCodec(conn, endpoint, header), nil
+		return newWebsocketCodec(conn, endpoint, transport.headers), nil
 	})
 }
 
 // DialWebsocketWithDialer creates a new RPC client that communicates with a JSON-RPC server
 // that is listening on the given endpoint using the provided dialer.
 func DialWebsocketWithDialer(ctx context.Context, endpoint, origin string, dialer websocket.Dialer) (*Client, error) {
-	endpoint, header, err := wsClientHeaders(endpoint, origin)
-	if err != nil {
-		return nil, err
-	}
-	return DialWebsocketWithHeaders(ctx, endpoint, header, dialer)
+	return DialWebsocketWithOptions(endpoint, WithBasicAuth(endpoint, origin), WithDialer(&dialer), WithDialContext(ctx))
 }
 
 // DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
@@ -213,29 +276,7 @@ func DialWebsocketWithDialer(ctx context.Context, endpoint, origin string, diale
 // The context is used for the initial connection establishment. It does not
 // affect subsequent interactions with the client.
 func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error) {
-	dialer := websocket.Dialer{
-		ReadBufferSize:  wsReadBuffer,
-		WriteBufferSize: wsWriteBuffer,
-		WriteBufferPool: wsBufferPool,
-	}
-	return DialWebsocketWithDialer(ctx, endpoint, origin, dialer)
-}
-
-func wsClientHeaders(endpoint, origin string) (string, http.Header, error) {
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		return endpoint, nil, err
-	}
-	header := make(http.Header)
-	if origin != "" {
-		header.Add("origin", origin)
-	}
-	if endpointURL.User != nil {
-		b64auth := base64.StdEncoding.EncodeToString([]byte(endpointURL.User.String()))
-		header.Add("authorization", "Basic "+b64auth)
-		endpointURL.User = nil
-	}
-	return endpointURL.String(), header, nil
+	return DialWebsocketWithOptions(endpoint, WithBasicAuth(endpoint, origin), WithDialContext(ctx))
 }
 
 type websocketCodec struct {

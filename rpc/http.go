@@ -48,6 +48,24 @@ type httpConn struct {
 	headers   http.Header
 }
 
+type HTTPTransportOption func(*httpConn)
+
+// WithHeaders merges the default headers with the headers provided.
+func WithHeaders(headers map[string]string) HTTPTransportOption {
+	return func(h *httpConn) {
+		for k, v := range headers {
+			h.headers.Set(k, v)
+		}
+	}
+}
+
+// WithHTTPClient sets the http client on the HTTP Transport
+func WithHTTPClient(c *http.Client) HTTPTransportOption {
+	return func(h *httpConn) {
+		h.client = c
+	}
+}
+
 // httpConn implements ServerCodec, but it is treated specially by Client
 // and some methods don't work. The panic() stubs here exist to ensure
 // this special treatment is correct.
@@ -112,30 +130,43 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
+	return DialHTTPWithOptions(endpoint, WithHTTPClient(client))
+}
+
+func newHttpTransport(endpoint string) (*httpConn, error) {
 	// Sanity check URL so we don't end up with a client that will fail every request.
 	_, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
-
-	initctx := context.Background()
 	headers := make(http.Header, 2)
 	headers.Set("accept", contentType)
 	headers.Set("content-type", contentType)
-	return newClient(initctx, func(context.Context) (ServerCodec, error) {
-		hc := &httpConn{
-			client:  client,
-			headers: headers,
-			url:     endpoint,
-			closeCh: make(chan interface{}),
-		}
-		return hc, nil
-	})
+
+	return &httpConn{
+		client:  &http.Client{},
+		headers: headers,
+		url:     endpoint,
+		closeCh: make(chan interface{}),
+	}, nil
 }
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
 func DialHTTP(endpoint string) (*Client, error) {
 	return DialHTTPWithClient(endpoint, new(http.Client))
+}
+
+func DialHTTPWithOptions(endpoint string, options ...HTTPTransportOption) (*Client, error) {
+	hc, err := newHttpTransport(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	for _, opt := range options {
+		opt(hc)
+	}
+	return newClient(context.Background(), func(context.Context) (ServerCodec, error) {
+		return hc, nil
+	})
 }
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
