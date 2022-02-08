@@ -4,35 +4,35 @@ permalink: docs/getting-started
 sort_key: A
 ---
 
-To use Geth, you need to install it first. You can install Geth in a variety of ways that you can find in the “Install and Build” section. 
+To use Geth, you need to install it first. You can install Geth in a variety of ways that you can find in the “[Install and Build](install-and-build/installing-geth)” section. 
 These include installing it via your favorite package manager, downloading a standalone pre-built binary, running it as a docker container, or building it yourself.
 
 For this guide, we assume you have Geth installed and are ready to find out how to use it. 
 The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
-This guide uses Clef, which is our preferred tool for signing transactions with Geth, and will replace Geth’s account management.
+This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, and will replace Geth’s account management.
 
 ### Two Important terms in geth:
 
 - Network
 - Sync modes
 
-Networks
-You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, a private network you create, and three test networks that use different consensus algorithms:
+### Networks
+You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net)you create, and three test networks that use different consensus algorithms:
 
 -   Ropsten: Proof-of-work test network
 -   Rinkeby: Proof-of-authority test network
 -   Görli: Proof-of-authority test network
 
 For this guide, you will use the Görli network. The default port is 8545, so you need to enable at least outgoing access from your node to that port.
-Sync modes
-You can start Geth in one of three different sync modes using the --syncmode "<mode>" argument that determines what sort of node it is in the network.
+### Sync modes
+You can start Geth in one of three different sync modes using the `--syncmode "<mode>"` argument that determines what sort of node it is in the network.
 These are:
 
 - Full: Downloads all blocks (including headers, transactions, and receipts) and generates the state of the blockchain incrementally by executing every block.
 - Snap (Default): Same functionality as fast, but with a faster algorithm.
 - Light: Downloads all block headers, block data, and verifies some randomly.
 
-For this tutorial, you will use a light sync:
+For this tutorial, you will use a `light` sync:
 
 ### Prerequisites:
 
@@ -116,8 +116,8 @@ Note: keep this terminal open.
 A crypto faucet is a web application that rewards you with small amounts of cryptocurrencies for completing easy tasks. The reward is small, that's why it is called faucets. The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
 The following sites gives free goerli faucets:
 
-- https://faucets.chain.link/goerli
-- https://fauceth.komputing.org/?chain=5
+- [faucet 1](https://faucets.chain.link/goerli)
+- [faucet 2](https://fauceth.komputing.org/?chain=5)
 
 ## Step 6: Interact with Geth via IPC or RPC
 
@@ -126,7 +126,7 @@ You can interact with Geth in two ways: Directly with the node using the JavaScr
 - IPC (Inter-Process Communication):
     allows you to do more, especially when creating and interacting with accounts, but you need direct access to the node.
 - RPC (Remote Procedure Call):
-     allows remote applications to access your node but has limitations and security considerations, and by default, only allows access to methods in the eth and shh namespaces. Find out how to override this setting in the RPC docs.
+     allows remote applications to access your node but has limitations and security considerations, and by default, only allows access to methods in the eth and shh namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server).
 
 ## Step 7: Using IPC
 
