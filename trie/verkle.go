@@ -68,11 +68,15 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
 	var nonce [32]byte
-	binary.BigEndian.PutUint64(nonce[:], acc.Nonce)
+	binary.LittleEndian.PutUint64(nonce[24:], acc.Nonce)
 	if err = t.TryUpdate(utils.GetTreeKeyNonce(key), nonce[:]); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
-	if err = t.TryUpdate(utils.GetTreeKeyBalance(key), acc.Balance.Bytes()); err != nil {
+	var balance [32]byte
+	for i, b := range acc.Balance.Bytes() {
+		balance[31-i] = b
+	}
+	if err = t.TryUpdate(utils.GetTreeKeyBalance(key), balance[:]); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
 	if err = t.TryUpdate(utils.GetTreeKeyCodeKeccak(key), acc.CodeHash); err != nil {
