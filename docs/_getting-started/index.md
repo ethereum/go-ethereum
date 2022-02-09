@@ -11,13 +11,10 @@ For this guide, we assume you have Geth installed and are ready to find out how 
 The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
 This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, and will replace Geth’s account management.
 
-### Two Important terms in geth:
-
-- Network
-- Sync modes
+## Two Important terms in geth:
 
 ### Networks
-You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net)you create, and three test networks that use different consensus algorithms:
+You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net) you create, and three test networks that use different consensus algorithms:
 
 -   Ropsten: Proof-of-work test network
 -   Rinkeby: Proof-of-authority test network
@@ -43,36 +40,25 @@ For this tutorial, you will use a `light` sync:
 ## Step 1: Open Terminal
 You will need your system terminal to run the commands for this tutorial.
 
-![Create new account command](../../static/images/open_terminal.png){:width="70%"}
-
-### Steps to open your system terminal:
-**Mac book:**
-Press the Command + Space button on your keyboard to open spotlight search, type terminal, and hit return.
-
-**Windows:**
-Type cmd in the search box, press Enter to open the Command Prompt shortcut highlighted, and then hit the enter button. 
-
-**Linux:**
-To quickly open a Terminal window at any time, press Ctrl+Alt+T.
-
+![Create new account command](../../static/images/open_terminal.png)
 ## Step 2: Create accounts
 
-use the command below to create an account 
+Use the command below to create an account 
 > **Note:** you will need to create two accounts for this guide
 
 ```shell
 clef newaccount --keystore geth-tutorial/keystore
 ```
 
-it will give you the result below:
+It will give you the result below:
 
-![Create new account command](../../static/images/create_account.png){:width="70%"}
+![Create new account command](../../static/images/create_account.png)
 
 Enter “ok” and hit the enter key. Next, the system will request the below action.
-Please enter a password for the new account to be created (attempt 0 of 3)
+**Please enter a password for the new account to be created (attempt 0 of 3)**
 Enter your desired password and hit the enter key to get the result below:
 
-![Create new account command](../../static/images/createaccount2.png){:width="70%"}
+![Create new account command](../../static/images/createaccount2.png)
 
 Copy and save your password and generated account somewhere safe; you will need it later in this tutorial.
 
@@ -82,19 +68,19 @@ Copy and save your password and generated account somewhere safe; you will need 
 ```
 ## Step 3:  Start Clef
 
-To start clef, open a new terminal and run the command below. It would be best if you did not close this terminal, always keep it running while working.
+To start clef, open a new terminal and run the command below. Keeping clef running is required for the other steps to work.
 
 ```shell
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 ```
 
-Note:  geth-tutorial folder is the directory holding your keystore
+> Note:  geth-tutorial folder is the directory holding your keystore
 
 after running the command above, the system will request you to type “ok” to proceed
 
 A successful call will give you the result below:
 
-![Create new account command](../../static/images/startchef.png){:width="70%"}
+![Create new account command](../../static/images/startchef.png)
 
 > **Note:** keep this terminal open.
 
@@ -108,15 +94,16 @@ geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syn
 
 A successful call will give you the result below:
 
-![Create new account command](../../static/images/startgeth.png){:width="70%"}
+![Create new account command](../../static/images/startgeth.png)
 
 > **Note:** keep this terminal open.
 
 
 
-## Step 5:  Get Free Goerli Faucets
+## Step 5:  Get Goerli Testet Ether
 
-A crypto faucet is a web application that rewards you with small amounts of cryptocurrencies for completing easy tasks. The reward is small, that's why it is called faucets. The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
+The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
+
 The following sites gives free goerli faucets:
 
 - [faucet 1](https://faucets.chain.link/goerli)
@@ -143,7 +130,7 @@ geth attach http://127.0.0.1:8545
 
 Result after running the above command: 
 
-![Create new account command](../../static/images/ipc.png){:width="70%"}
+![Create new account command](../../static/images/ipc.png)
 
 
 **→ Check account balance**
@@ -155,7 +142,7 @@ Result after running the above command:
 web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 ```
 
-run the command below to check your account balance
+Run the command below to check your account balance
 
 ```
 web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"),"ether")
@@ -163,7 +150,7 @@ web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"),"ether
 
 **Result:**
 
-![Create new account command](../../static/images/accountresult.png){:width="70%"}
+![Create new account command](../../static/images/accountresult.png)
 
 
 **→ Check list of accounts**
@@ -174,23 +161,24 @@ Run the command below to get the list of accounts in your keystore
  eth.accounts
  ```
 
-**step 2:**
-Accept request in your Clef terminal 
-the command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
+**step 2:** Accept request in your Clef terminal 
 
-![Create new account command](../../static/images/ipclistaccounts.png){:width="70%"}
+The command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
+
+![Create new account command](../../static/images/ipclistaccounts.png)
 
 
-approve the request by typing “y” and hit the enter key.
+Approve the request by typing “y” and hit the enter key.
 
 **Result:**
 
-![Create new account command](../../static/images/ipclistaccountsresult.png){:width="70%"}
+![Create new account command](../../static/images/ipclistaccountsresult.png)
 
 
 **→ Send ETH to account**
 
 Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created.
+
 **Syntax:**
 
 ```shell
@@ -198,26 +186,32 @@ eth.sendTransaction({from:"<ADDRESS_1>",to:"<ADDRESS_2>", value: web3.toWei(0.01
 ```
 
 **step 1:** 
-run the command below to transfer 0.01ether to the other account you created
+Run the command below to transfer 0.01 ether to the other account you created
+
 ```javscript
-eth.sendTransaction({from:"0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",to:"0x8EB19d8DF81a8B43a178207E23E9a57ff8cA61B1", value: web3.toWei(0.01,"ether")})
+eth.sendTransaction({
+    from:"0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
+    to:"0x8EB19d8DF81a8B43a178207E23E9a57ff8cA61B1", 
+    value: web3.toWei(0.01,"ether")
+    })
 ```
 
 **step 2:**
-accept request in your Clef terminal 
-The command in step 1 will need approval from the terminal running clef, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from. If the password is correct, Geth proceeds with the transaction.
+Accept request in your Clef terminal 
 
-![Create new account command](../../static/images/ipcsendeth.png){:width="70%"}
+After running in step 1 command, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from; if the password is correct, Geth proceeds with the transaction.
+
+![Create new account command](../../static/images/ipcsendeth.png)
 
 
 After approving the transaction you will see the below screen in the Clef terminal
 
-![Create new account command](../../static/images/ipcsclef.png){:width="70%"}
+![Create new account command](../../static/images/ipcsclef.png)
 
 
 **Step 1** Terminal Result, it will return a response that includes the transaction hash:
 
-![Create new account command](../../static/images/ipcsclefresult.png){:width="70%"}
+![Create new account command](../../static/images/ipcsclefresult.png)
 
 
 **→ Check Transaction hash**
@@ -236,9 +230,9 @@ Run the command below.
 eth.getTransaction("0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187")
 ```
 
-if successful, you will get the below response 
+If successful, you will get the below response 
 
-![Create new account command](../../static/images/ipchash.png){:width="70%"}
+![Create new account command](../../static/images/ipchash.png)
 
 ## Step 7: Using RPC
 
@@ -247,7 +241,7 @@ if successful, you will get the below response
 **Syntax:**
 
 ```shell
-    curl -X POST http://<GETH_IP_ADDRESS>:8545 \
+    curl -X POST http://http://127.0.0.1:8545 \
         -H "Content-Type: application/json" \
        --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
@@ -264,14 +258,15 @@ if successful, you will get the below response
 
 A successful call will return a response below:
 
-![Create new account command](../../static/images/rpcbalanceresult.png){:width="70%"}
+![Create new account command](../../static/images/rpcbalanceresult.png)
 
 
-so Geth returns the value without invoking Clef. Note that the value returned is in hexadecimal and WEI. To get the ETH value, convert to decimal and divide by 10^18.
+So Geth returns the value without invoking Clef. Note that the value returned is in hexadecimal and WEI. To get the ETH value, convert to decimal and divide by 10^18.
 
 **→ Check list of accounts**
 
 Run the command below to get all the accounts.
+
 ```shell
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
@@ -282,26 +277,23 @@ Follow the same step as the IPC Check account balance
 
 A successful call will return a response below:
 
-![Create new account command](../../static/images/rpclistaccounts.png){:width="70%"}
+![Create new account command](../../static/images/rpclistaccounts.png)
 
 
 **→ Send ETH to accounts**
 
 **Syntax:**
 ```shell
-    curl -X POST http://<GETH_IP_ADDRESS>:8545 \
+    curl -X POST http://http://127.0.0.1:8545 \
         -H "Content-Type: application/json" \
        --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_1>","to": "<ADDRESS_2>","value": "0x9184e72a"}], "id":1}'
 ```
 
-**step 1:** convert value from Eth to Wei decimal
-Use this link to do the conversation: [Eth converter](https://eth-converter.com/)
-
-**step 2:** convert decimal to Hexadecimal
-Use this link to do the conversion: [Rapidtable](https://www.rapidtables.com/convert/number/decimal-to-hex.html) and add 0x at the begging of the number.
-Example:  from 2386F26FC10000 to 0x2386F26FC10000
+You need to convert eth to wei and get the hex value to send a transaction.
+For example:  0.0241 ether is 24100000000000000 wei, and would be encoded as the hex string "0x559ed283164000" in the JSON-RPC API.
 
 **step 3:** Run the command below
+
 ```shell
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
@@ -310,5 +302,5 @@ curl -X POST http://127.0.0.1:8545 \
 
 A successful call will return a response below:
 
-![Create new account command](../../static/images/rpcsendeth.png){:width="70%"}
+![Create new account command](../../static/images/rpcsendeth.png)
 
