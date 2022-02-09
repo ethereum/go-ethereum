@@ -550,16 +550,12 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	}
 
 	// Delete the account from the trie
+	// Post-verkle, the only case where this can occur is a static call
+	// to a non-existent account which creates an empty stateObject
 	if !s.trie.IsVerkle() {
 		addr := obj.Address()
 		if err := s.trie.TryDelete(addr[:]); err != nil {
 			s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
-		}
-	} else {
-		for i := byte(0); i <= 255; i++ {
-			if err := s.trie.TryDelete(trieUtils.GetTreeKeyAccountLeaf(obj.Address().Bytes(), i)); err != nil {
-				s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", obj.Address(), err))
-			}
 		}
 	}
 }
