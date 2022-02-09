@@ -527,7 +527,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 	if gas != 21000 {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
-	block, err := ec.BlockByNumber(context.Background(), big.NewInt(1))
+	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
 	if err != nil {
 		t.Fatalf("BlockByNumber error: %v", err)
 	}
