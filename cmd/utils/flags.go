@@ -1649,9 +1649,6 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNoVerifyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerifyFlag.Name)
 	}
-	if ctx.IsSet(LegacyMinerGasTargetFlag.Name) {
-		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
-	}
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
