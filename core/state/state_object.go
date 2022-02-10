@@ -365,10 +365,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			}
 			s.db.StorageDeleted += 1
 		} else {
+			// Encoding []byte cannot fail, ok to ignore the error.
+			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 			if !tr.IsVerkle() {
-				// Encoding []byte cannot fail, ok to ignore the error.
-				v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-
 				s.setError(tr.TryUpdate(key[:], v))
 			} else {
 				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
