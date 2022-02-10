@@ -294,13 +294,13 @@ After running in step 1 command, Clef will prompt you to approve the transaction
 
 ```terminal
 --------- Transaction request-------------
-to:    0x1f7a76611939fbAcf7d2dAD2F864F6184BDCD690
+to:    0xCe8dBA5e4157c2B284d8853afEEea259344C1653
 from:               0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC [chksum ok]
 value:              10000000000000000 wei
 gas:                0x5208 (21000)
-maxFeePerGas:          1500000014 wei
-maxPriorityFeePerGas:  1500000000 wei
-nonce:    0x2 (2)
+maxFeePerGas:          2425000057 wei
+maxPriorityFeePerGas:  2424999967 wei
+nonce:    0x3 (3)
 chainid:  0x5
 Accesslist
 
@@ -324,22 +324,24 @@ After approving the transaction you will see the below screen in the Clef termin
 
 ```terminal
 Transaction signed:
+-----------------------
+Transaction signed:
  {
     "type": "0x2",
-    "nonce": "0x1",
+    "nonce": "0x3",
     "gasPrice": null,
-    "maxPriorityFeePerGas": "0x59682f00",
-    "maxFeePerGas": "0x59682f0e",
+    "maxPriorityFeePerGas": "0x908a901f",
+    "maxFeePerGas": "0x908a9079",
     "gas": "0x5208",
     "value": "0x2386f26fc10000",
     "input": "0x",
     "v": "0x0",
-    "r": "0xa54c83161e959bf8a03e30a5ed42a71563b0162fb4f9e5fc1bc426f312ef09e6",
-    "s": "0x16cffa4d71274c6aa68c538d892a0b9a455ed28c504fa12f6b9fefc2ad92bfd0",
-    "to": "0x8eb19d8df81a8b43a178207e23e9a57ff8ca61b1",
+    "r": "0x66e5d23ad156e04363e68b986d3a09e879f7fe6c84993cef800bc3b7ba8af072",
+    "s": "0x647ff82be943ea4738600c831c4a19879f212eb77e32896c05055174045da1bc",
+    "to": "0xce8dba5e4157c2b284d8853afeeea259344c1653",
     "chainId": "0x5",
     "accessList": [],
-    "hash": "0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187"
+    "hash": "0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb"
   }
 
 ```
@@ -348,7 +350,7 @@ Transaction signed:
 **Step 1** Terminal Result, it will return a response that includes the transaction hash:
 
 ```terminal
-"Oxa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187"
+"0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb"
 ```
 
 
@@ -373,21 +375,21 @@ If successful, you will get the below response
 ```terminal
 {
   accessList: [],
-  blockHash: "0xf4e7f0a54dbc18e6777840a1fbdff8634b3e4923d09a62d7636ff923ebf280a8",
-  blockNumber: 6336793,
+  blockHash: "0x1c5d3f8dd997b302935391b57dc3e4fffd1fa2088ef2836d51f844f993eb39c4",
+  blockNumber: 6355150,
   chainId: "0x5",
-  from: "0x92ac6226ccdb0d12003884c74d42a2436ebeb928",
+  from: "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
   gas: 21000,
-  gasPrice: 1500000007,
-  hash: "0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187",
+  gasPrice: 2425000023,
+  hash: "0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb",
   input: "0x",
-  maxFeePerGas: 1500000014,
-  maxPriorityFeePerGas: 1500000000,
-  nonce: 0,
-  r: "0x71480ea5bba6aa2f9c36568848db5afde0762a3ec7b45994139f06dbd137a6a7",
-  s: "0x111979270ccfb300a7790a815b204a7913ba53ff23e469b4a2ae82b920fc565",
-  to: "0x8eb19d8df81a8b43a178207e23e9a57ff8ca61b1",
-  transactionIndex: 12,
+  maxFeePerGas: 2425000057,
+  maxPriorityFeePerGas: 2424999967,
+  nonce: 3,
+  r: "0x66e5d23ad156e04363e68b986d3a09e879f7fe6c84993cef800bc3b7ba8af072",
+  s: "0x647ff82be943ea4738600c831c4a19879f212eb77e32896c05055174045da1bc",
+  to: "0xce8dba5e4157c2b284d8853afeeea259344c1653",
+  transactionIndex: 630,
   type: "0x2",
   v: "0x0",
   value: 10000000000000000
