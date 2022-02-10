@@ -1,4 +1,5 @@
-module github.com/ethereum/go-ethereum
+module github.com/xpaymentsorg/go-xpayments
+// module github.com/ethereum/go-ethereum
 
 go 1.15
 
