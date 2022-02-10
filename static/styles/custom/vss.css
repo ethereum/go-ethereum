@@ -1,5 +1,5 @@
-.highlight .hll { background-color: #080808 }
-.highlight  { background: #030303; color:aliceblue; }
+.highlight .hll { background-color: #ffffcc }
+.highlight  { background: #ffffff; }
 .highlight .c { color: #008000 } /* Comment */
 .highlight .err { border: 1px solid #FF0000 } /* Error */
 .highlight .k { color: #0000ff } /* Keyword */
@@ -36,3 +36,4 @@
 .highlight .sr { color: #a31515 } /* Literal.String.Regex */
 .highlight .s1 { color: #a31515 } /* Literal.String.Single */
 .highlight .ss { color: #a31515 } /* Literal.String.Symbol */
+.language-terminal .highlight{background: #030303; color: #ffffff;}

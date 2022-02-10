@@ -31,44 +31,38 @@ These are:
 
 For this tutorial, you will use a `light` sync:
 
-### Prerequisites:
+### Requirement:
 
-- Curl experience 
-- Command line
-- Basic Blockchain Knowledge
+- Experience using the command line
+- Basic knowledge about Ethereum and testnets
+- Basic knowledge about HTTP and JavaScript
 
-## Step 1: Open Terminal
-
-You will need your system terminal to run the commands for this tutorial,
-
-Use the command below to create an account 
-
-![Create new account command](../../static/images/open_terminal.png)
-## Step 2: Create accounts
+## Step 1: Create accounts
 
 Use the command below to create an account 
 > **Note:** you will need to create two accounts for this guide
 
-```javscript
+```shell
 clef newaccount --keystore geth-tutorial/keystore
 ```
 
 It will give you the result below:
 
-```
-WARNING! 
-Clef is an account management tool. It may, like any software, contain bugs. 
+```terminal
+WARNING!
 
-Please take care to 
-— backup your keystore files,
- — verify that the keystore(s) can be opened with your password. 
+Clef is an account management tool. It may, like any software, contain bugs.
 
-Clef is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details. 
+Please take care to
+- backup your keystore files,
+- verify that the keystore(s) can be opened with your password.
 
-Enter 'ok' to proceed: 
-> ok 
+Clef is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+Enter 'ok' to proceed:
+> 
 ```
 
 Enter “ok” and hit the enter key. Next, the system will request the below action.
@@ -77,26 +71,27 @@ Enter “ok” and hit the enter key. Next, the system will request the below ac
 
 Enter your desired password and hit the enter key to get the result below:
 
-```
-INFO [02-07118:19:57.914] Your new key was generated                                       address=0xca57F3b40842FCce3c3713881848ca5260ce72EC
-WAN. [02-07118:19:57.915] Please backup your key file, b40642fcce3c37b8d18adbca5260ca72ec  path=Users/wIsdommokochanocuments/LitHub/GethExample/getb-tutortalikeystore/UTC-2022-02-07717-19-58.5175380002—Ca57f3 
-WAN! [02-07118:19:57.915] Please remember your password! 
-Generated account 0xca57F3b40842FCce3c3713881848ca5260ce72EC 
-wisdomnwokocha@wisdoms-MacBook-Pro GethExample %
+```terminal
+-----------------------
+DEBUG[02-10|13:46:46.436] FS scan times                            list="92.081µs" set="12.629µs" diff="2.129µs"
+INFO [02-10|13:46:46.592] Your new key was generated               address=0xCe8dBA5e4157c2B284d8853afEEea259344C1653
+WARN [02-10|13:46:46.595] Please backup your key file!             path=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/keystore/UTC--2022-02-10T12-46-45.265592000Z--ce8dba5e4157c2b284d8853afeeea259344c1653
+WARN [02-10|13:46:46.595] Please remember your password! 
+Generated account 0xCe8dBA5e4157c2B284d8853afEEea259344C1653
 ```
 
 Copy and save your password with the generated account somewhere safe; you will need it later in this tutorial.
 
 **The Generated account:**
 
-```javscript
-0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
+```shell
+0xCe8dBA5e4157c2B284d8853afEEea259344C1653
 ```
-## Step 3:  Start Clef
+## Step 2:  Start Clef
 
 To start clef, open a new terminal and run the command below. Keeping clef running is required for the other steps to work.
 
-```javscript
+```shell
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 ```
 
@@ -106,57 +101,66 @@ after running the command above, the system will request you to type “ok” to
 
 A successful call will give you the result below:
 
-```
-INFO 102-07123:21:07.325] Using CLI as UI -channel 
-INFO [02-07123:21:07.464] Loaded 4byte database                        embeds=146,841 locals=0 local=./4byte-custom.json 
-NAM [02-07123:21:07.464] Failed to open master, rules disabled         err="failed stat on geth-tutorial/clef/masterseed.json: stat geth-tutorial/clef/masterseed.json no such file or directory"
-INFO [02-07123:21:07.464] Starting signer                              chainld=5 keystore=geth-tutorial/keystore light-kdf=false advanced=false 
-DEBUG[02-07123:21:07.4651 FS scan times                                 list=1.217485ms set="11.021ps. dIff=.3.3374s" 
-DEBUG[02-07123:21:07.487] Ledger support enabled 
-DEBUG[02-07123:21:07.489] Trezor support enabled via HID 
-DEBUG[02-07123:21:07.492] Trezor support enabled via Nebusg 
-INFO [02-07123:21:07.492] Audit logs configured                        file=audit.log 
-DEBUG[02-07123:21:07.493] IPCs registered                              namespaces=account 
-INFO [02-07123:21:07.494] IPC endpoint opened                          url=geth-tutorial/clef/clef.ipc   
------- Signer info -------- 
-* extapi_version : 6.1.0 
+```terminal
+INFO [02-10|13:55:30.812] Using CLI as UI-channel 
+INFO [02-10|13:55:30.946] Loaded 4byte database                    embeds=146,841 locals=0 local=./4byte-custom.json
+WARN [02-10|13:55:30.947] Failed to open master, rules disabled    err="failed stat on geth-tutorial/clef/masterseed.json: stat geth-tutorial/clef/masterseed.json: no such file or directory"
+INFO [02-10|13:55:30.947] Starting signer                          chainid=5 keystore=geth-tutorial/keystore light-kdf=false advanced=false
+DEBUG[02-10|13:55:30.948] FS scan times                            list="133.35µs" set="5.692µs" diff="3.262µs"
+DEBUG[02-10|13:55:30.970] Ledger support enabled 
+DEBUG[02-10|13:55:30.973] Trezor support enabled via HID 
+DEBUG[02-10|13:55:30.976] Trezor support enabled via WebUSB 
+INFO [02-10|13:55:30.978] Audit logs configured                    file=audit.log
+DEBUG[02-10|13:55:30.981] IPCs registered                          namespaces=account
+INFO [02-10|13:55:30.984] IPC endpoint opened                      url=geth-tutorial/clef/clef.ipc
+------- Signer info -------
+* intapi_version : 7.0.1
+* extapi_version : 6.1.0
 * extapi_http : n/a
 * extapi_ipc : geth-tutorial/clef/clef.ipc
-* intapi_version : 7.0.1 
 ```
 
 > **Note:** keep this terminal open.
 
-## Step 4:  Start Geth
+## Step 3:  Start Geth
 To start geth, open a new terminal and run the command below. It would be best if you did not close this terminal, always keep it running while working.
 
-```javscript
+```shell
 geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode light --http
 ```
 
 
 A successful call will give you the result below:
 
-```
-
-INFO (02-07 23:25:35.508] Starting Geth on Görli testnet...
-INFO (02-07 123:25:35.508] Dropping default light client cache             provided=1024 updated=128 
-INFO (02-07 23:25:35.510) Maximum peer count                               ETH=0 LES=10 total=50 
-INFO (02-07 23:25:35.511] Using external signer                            url=geth-tutorial/clef/clef.ipc 
-INFO (02-07 23:25:35.511] Set global gas cap                               cap=50,000,000
-INFO (02-07 23:25:35.512] Allocated cache and file handles                 database=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/geth/lightchaindata cache=64.00MiB handles=5120 
-INFO [02-07 23:25:35.546] Allocated cache and file handles                 database=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/geth/les.client cache=16.00MiB handles=16
-INFO (02-07123:25:35.578) Writing custom genesis block 
-INFO [02-07 23:25:35.584) Persisted trie from memory database              nodes=361 size=51.17KiB time=1.417193ms gcnodes=o gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [02-07 23:25:35.585] Initialised chain configuration                  config="{ChainID: 5 Homestead: 0 DAO: <nil> DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0
+```terminal
+INFO [02-10|13:59:06.649] Starting Geth on Görli testnet... 
+INFO [02-10|13:59:06.649] Dropping default light client cache      provided=1024 updated=128
+INFO [02-10|13:59:06.652] Maximum peer count                       ETH=0 LES=10 total=50
+INFO [02-10|13:59:06.655] Using external signer                    url=geth-tutorial/clef/clef.ipc
+INFO [02-10|13:59:06.660] Set global gas cap                       cap=50,000,000
+INFO [02-10|13:59:06.661] Allocated cache and file handles         database=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/geth/lightchaindata cache=64.00MiB handles=5120
+INFO [02-10|13:59:06.794] Allocated cache and file handles         database=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/geth/les.client cache=16.00MiB handles=16
+INFO [02-10|13:59:06.855] Persisted trie from memory database      nodes=361 size=51.17KiB time="643.54µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [02-10|13:59:06.855] Initialised chain configuration          config="{ChainID: 5 Homestead: 0 DAO: <nil> DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 1561651, Muir Glacier: <nil>, Berlin: 4460644, London: 5062605, Arrow Glacier: <nil>, MergeFork: <nil>, Engine: clique}"
+INFO [02-10|13:59:06.862] Added trusted checkpoint                 block=5,799,935 hash=2de018..c32427
+INFO [02-10|13:59:06.863] Loaded most recent local header          number=6,340,934 hash=483cf5..858315 td=9,321,576 age=2d9h29m
+INFO [02-10|13:59:06.867] Configured checkpoint oracle             address=0x18CA0E045F0D772a851BC7e48357Bcaab0a0795D signers=5 threshold=2
+INFO [02-10|13:59:06.867] Gasprice oracle is ignoring threshold set threshold=2
+WARN [02-10|13:59:06.869] Unclean shutdown detected                booted=2022-02-08T04:25:08+0100 age=2d9h33m
+INFO [02-10|13:59:06.870] Starting peer-to-peer node               instance=Geth/v1.10.15-stable/darwin-amd64/go1.17.5
+INFO [02-10|13:59:06.995] New local node record                    seq=1,644,272,735,880 id=d4ffcd252d322a89 ip=127.0.0.1 udp=30303 tcp=30303
+INFO [02-10|13:59:06.996] Started P2P networking                   self=enode://4b80ebd341b5308f7a6b61d91aa0ea31bd5fc9e0a6a5483e59fd4ea84e0646b13ecd289e31e00821ccedece0bf4b9189c474371af7393093138f546ac23ef93e@127.0.0.1:30303
+INFO [02-10|13:59:06.997] IPC endpoint opened                      url=/Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/geth.ipc
+INFO [02-10|13:59:06.998] HTTP server started                      endpoint=127.0.0.1:8545 prefix= cors= vhosts=localhost
+WARN [02-10|13:59:06.998] Light client mode is an experimental feature 
+WARN [02-10|13:59:06.999] Failed to open wallet                    url=extapi://geth-tutorial/clef/cle.. err="operation not supported on external signers"
+INFO [02-10|13:59:08.793] Block synchronisation started 
 
 ```
 
 > **Note:** keep this terminal open.
 
-
-
-## Step 5:  Get Goerli Testet Ether
+## Step 4:  Get Goerli Testet Ether
 
 The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
 
@@ -165,7 +169,7 @@ The following sites gives free goerli faucets:
 - [faucet 1](https://faucets.chain.link/goerli)
 - [faucet 2](https://fauceth.komputing.org/?chain=5)
 
-## Step 6: Interact with Geth via IPC or RPC
+## Step 5: Interact with Geth via IPC or RPC
 
 You can interact with Geth in two ways: Directly with the node using the JavaScript console over IPC or connecting to the node remotely over HTTP using RPC.
 
@@ -174,23 +178,24 @@ You can interact with Geth in two ways: Directly with the node using the JavaScr
 - RPC (Remote Procedure Call):
      allows remote applications to access your node but has limitations and security considerations, and by default, only allows access to methods in the eth and shh namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server).
 
-## Step 7: Using IPC
+## Step 6: Using IPC
 
 **→ Connect to console**
 Connect to the IPC console on a node from another terminal window, this will open the Geth javascript console
 run the command below
 
-```javscript
+```shell
 geth attach http://127.0.0.1:8545
 ```
 
 Result after running the above command: 
 
-```
+```terminal
 Welcome to the Geth JavaScript console!
-instance: Geth/v1.10.15-stable/darwin-amd64/go1.17.5 
-at block: 6339763 (Mon Feb 07 2022 23:37:06 GMT+0100 (WAT) 
-  modules: eth:1.0 net:1.0 rpc:1.0 web3:1.0
+
+instance: Geth/v1.10.15-stable/darwin-amd64/go1.17.5
+at block: 6354736 (Thu Feb 10 2022 14:01:46 GMT+0100 (WAT))
+ modules: eth:1.0 net:1.0 rpc:1.0 web3:1.0
 
 To exit, press ctrl-d or type exit
 ```
@@ -201,21 +206,20 @@ To exit, press ctrl-d or type exit
 > **Note:** the value comes in wei
 **Syntax:**
 
-```javscript
+```javascript
 web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 ```
 
 Run the command below to check your account balance
 
-```javscript
-web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"),"ether")
+```javascript
+web3.fromWei(eth.getBalance("0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"),"ether")
 ```
 
 **Result:**
 
-```
+```terminal
 > 0.1
-
 ```
 
 
@@ -232,19 +236,22 @@ Run the command below to get the list of accounts in your keystore
 
 The command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
 
-```
--------- List Account request---- 
+```terminal
+-------- List Account request--------------
 A request has been made to list all accounts. 
-You can select which accounts the caller can see 
-  [x] Oxca57F3b40B42FCce3c37B8D18aDBca5260ca72EC,
-    URL: keystore:///Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/keystore/UTC--2022-02-07T17–19–56.517538000z--ca57f3b40b42fcce3c37b8d18adbca5260ca72ec!
-------------------------------------------
+You can select which accounts the caller can see
+  [x] 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
+    URL: keystore:///Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/keystore/UTC--2022-02-07T17-19-56.517538000Z--ca57f3b40b42fcce3c37b8d18adbca5260ca72ec
+  [x] 0xCe8dBA5e4157c2B284d8853afEEea259344C1653
+    URL: keystore:///Users/wisdomnwokocha/Documents/GitHub/GethExample/geth-tutorial/keystore/UTC--2022-02-10T12-46-45.265592000Z--ce8dba5e4157c2b284d8853afeeea259344c1653
+-------------------------------------------
 Request context:
         NA -> ipc -> NA
+
 Additional HTTP header data, provided by the external caller:
-         User-Agent: ""
-         Origin: "I 
-Approve? [y/N]: 
+        User-Agent: ""
+        Origin: ""
+Approve? [y/N]:
 > y
 
 ```
@@ -254,8 +261,8 @@ Approve the request by typing “y” and hit the enter key.
 
 **Result:**
 
-```
-["0x92ac6226ccdb0d12003884c74d42a2436ebeb928"]
+```terminal
+["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec", "0xce8dba5e4157c2b284d8853afeeea259344c1653"]
 ```
 
 
@@ -265,17 +272,17 @@ Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to 
 
 **Syntax:**
 
-```javscript
+```javascript
 eth.sendTransaction({from:"<ADDRESS_1>",to:"<ADDRESS_2>", value: web3.toWei(0.01,"ether")})
 ```
 
 **step 1:** 
 Run the command below to transfer 0.01 ether to the other account you created
 
-```javscript
+```javascript
 eth.sendTransaction({
     from:"0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
-    to:"0x8EB19d8DF81a8B43a178207E23E9a57ff8cA61B1", 
+    to:"0xce8dba5e4157c2b284d8853afeeea259344c1653", 
     value: web3.toWei(0.01,"ether")
     })
 ```
@@ -285,7 +292,7 @@ Accept request in your Clef terminal
 
 After running in step 1 command, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from; if the password is correct, Geth proceeds with the transaction.
 
-```
+```terminal
 --------- Transaction request-------------
 to:    0x1f7a76611939fbAcf7d2dAD2F864F6184BDCD690
 from:               0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC [chksum ok]
@@ -310,13 +317,12 @@ Approve? [y/N]:
 
 Please enter the password for account 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
 > 
-
 ```
 
 
 After approving the transaction you will see the below screen in the Clef terminal
 
-```
+```terminal
 Transaction signed:
  {
     "type": "0x2",
@@ -341,9 +347,8 @@ Transaction signed:
 
 **Step 1** Terminal Result, it will return a response that includes the transaction hash:
 
-```
+```terminal
 "Oxa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187"
-
 ```
 
 
@@ -351,7 +356,7 @@ Transaction signed:
 
 **Syntax:**
 
-```javscript
+```javascript
 eth.getTransaction("hash id")
 ```
 
@@ -359,13 +364,13 @@ A Transaction Hash (Tx Hash) is a record of successful transaction in a blockcha
 
 Run the command below.
 
-```javscript
+```javascript
 eth.getTransaction("0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187")
 ```
 
 If successful, you will get the below response 
 
-```
+```terminal
 {
   accessList: [],
   blockHash: "0xf4e7f0a54dbc18e6777840a1fbdff8634b3e4923d09a62d7636ff923ebf280a8",
@@ -387,8 +392,6 @@ If successful, you will get the below response
   v: "0x0",
   value: 10000000000000000
 }
-
-
 ```
 
 ## Step 7: Using RPC
@@ -397,7 +400,7 @@ If successful, you will get the below response
 
 **Syntax:**
 
-```javscript
+```
     curl -X POST http://http://127.0.0.1:8545 \
         -H "Content-Type: application/json" \
        --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
@@ -407,7 +410,7 @@ If successful, you will get the below response
  
  To check your account balance use the command below.
 
- ```javscript
+ ```
   curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
    --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","latest"], "id":5}'
@@ -415,7 +418,7 @@ If successful, you will get the below response
 
 A successful call will return a response below:
 
-```
+```terminal
 {"jsonrpc":"2.0","id":5,"result":"0xcc445d3d4b89390"}
 ```
 
@@ -426,7 +429,7 @@ So Geth returns the value without invoking Clef. Note that the value returned is
 
 Run the command below to get all the accounts.
 
-```javscript
+```
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
    --data '{"jsonrpc":"2.0", "method":"eth_accounts","params":[], "id":5}'
@@ -436,7 +439,7 @@ Follow the same step as the IPC Check account balance
 
 A successful call will return a response below:
 
-```
+```terminal
 {"jsonrpc":"2.0","id":5,"result":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"]}
 ```
 
@@ -444,7 +447,7 @@ A successful call will return a response below:
 **→ Send ETH to accounts**
 
 **Syntax:**
-```javscript
+```
     curl -X POST http://http://127.0.0.1:8545 \
         -H "Content-Type: application/json" \
        --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_1>","to": "<ADDRESS_2>","value": "0x9184e72a"}], "id":1}'
@@ -456,7 +459,7 @@ You need to convert eth to wei and get the hex value to send a transaction.
 
 **step 3:** Run the command below
 
-```javscript
+```
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
    --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0x1f7a76611939fbAcf7d2dAD2F864F6184BDCD690","value": "0x2386F26FC10000"}], "id":5}'
@@ -464,7 +467,7 @@ curl -X POST http://127.0.0.1:8545 \
 
 A successful call will return a response below:
 
-```
+```terminal
 {"jsonrpc":"2.0","id":5,"result":"0xac8b347d70a82805edb85fc136fc2c4e77d31677c2f9e4e7950e0342f0dc7e7c"}
 ```
 
