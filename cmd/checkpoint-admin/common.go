@@ -14,21 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/external"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/accounts/abi/bind"
+	"github.com/xpaymentsorg/go-xpayments/accounts/external"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/contracts/checkpointoracle"
+	"github.com/xpaymentsorg/go-xpayments/ethclient"
+	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/accounts"
+	// "github.com/ethereum/go-ethereum/accounts/abi/bind"
+	// "github.com/ethereum/go-ethereum/accounts/external"
+	// "github.com/ethereum/go-ethereum/cmd/utils"
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/contracts/checkpointoracle"
+	// "github.com/ethereum/go-ethereum/ethclient"
+	// "github.com/ethereum/go-ethereum/params"
+	// "github.com/ethereum/go-ethereum/rpc"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 // newClient creates a client with specified remote URL.

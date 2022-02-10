@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // This file contains the implementation for interacting with the Trezor hardware
 // wallets. The wire protocol spec can be found on the SatoshiLabs website:
 // https://wiki.trezor.io/Developers_guide-Message_Workflows
@@ -51,6 +54,7 @@ import (
 	"reflect"
 
 	"github.com/golang/protobuf/proto"
+	// "github.com/golang/protobuf/proto"
 )
 
 // Type returns the protocol buffer type number of a specific message. If the

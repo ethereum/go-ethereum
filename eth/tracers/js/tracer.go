@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // package js is a collection of tracers written in javascript.
+
 package js
 
 import (
@@ -28,15 +32,24 @@ import (
 	"unicode"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	tracers2 "github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
+	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	tracers2 "github.com/xpaymentsorg/go-xpayments/eth/tracers"
+	"github.com/xpaymentsorg/go-xpayments/eth/tracers/js/internal/tracers"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"gopkg.in/olebedev/go-duktape.v3"
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/common/hexutil"
+	// "github.com/ethereum/go-ethereum/core"
+	// "github.com/ethereum/go-ethereum/core/vm"
+	// "github.com/ethereum/go-ethereum/crypto"
+	// tracers2 "github.com/ethereum/go-ethereum/eth/tracers"
+	// "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
+	// "github.com/ethereum/go-ethereum/log"
+	// "gopkg.in/olebedev/go-duktape.v3"
 )
 
 // camel converts a snake cased input string into a camel cased output.

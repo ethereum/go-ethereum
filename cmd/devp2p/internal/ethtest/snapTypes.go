@@ -1,6 +1,11 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package ethtest
 
-import "github.com/ethereum/go-ethereum/eth/protocols/snap"
+import "github.com/xpaymentsorg/go-xpayments/eth/protocols/snap"
+
+// import "github.com/ethereum/go-ethereum/eth/protocols/snap"
 
 // GetAccountRange represents an account range query.
 type GetAccountRange snap.GetAccountRangePacket

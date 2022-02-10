@@ -14,9 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package downloader
 
-import "github.com/ethereum/go-ethereum/core/types"
+import "github.com/xpaymentsorg/go-xpayments/core/types"
+
+// import "github.com/ethereum/go-ethereum/core/types"
 
 type DoneEvent struct {
 	Latest *types.Header

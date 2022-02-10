@@ -27,6 +27,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package ecies
 
 // This file contains parameters for ECIES encryption, specifying the
@@ -42,7 +45,8 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	ethcrypto "github.com/xpaymentsorg/go-xpayments/crypto"
+	// ethcrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
 var (

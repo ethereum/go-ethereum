@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -22,11 +25,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/console"
+	"github.com/xpaymentsorg/go-xpayments/node"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/cmd/utils"
+	// "github.com/ethereum/go-ethereum/console"
+	// "github.com/ethereum/go-ethereum/node"
+	// "github.com/ethereum/go-ethereum/rpc"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var (

@@ -10,6 +10,9 @@
 // trigram_tracer.js (1.788kB)
 // unigram_tracer.js (1.469kB)
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package tracers
 
 import (

@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // geth is the official command-line client for Ethereum.
+
 package main
 
 import (
@@ -25,26 +29,44 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/eth"
+	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
+	"github.com/xpaymentsorg/go-xpayments/ethclient"
+	"github.com/xpaymentsorg/go-xpayments/internal/debug"
+	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
+	"github.com/xpaymentsorg/go-xpayments/internal/flags"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/xpaymentsorg/go-xpayments/node"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/xpaymentsorg/go-xpayments/eth/tracers/js"
+	_ "github.com/xpaymentsorg/go-xpayments/eth/tracers/native"
 
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/accounts"
+	// "github.com/ethereum/go-ethereum/accounts/keystore"
+	// "github.com/ethereum/go-ethereum/cmd/utils"
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/console/prompt"
+	// "github.com/ethereum/go-ethereum/eth"
+	// "github.com/ethereum/go-ethereum/eth/downloader"
+	// "github.com/ethereum/go-ethereum/ethclient"
+	// "github.com/ethereum/go-ethereum/internal/debug"
+	// "github.com/ethereum/go-ethereum/internal/ethapi"
+	// "github.com/ethereum/go-ethereum/internal/flags"
+	// "github.com/ethereum/go-ethereum/log"
+	// "github.com/ethereum/go-ethereum/metrics"
+	// "github.com/ethereum/go-ethereum/node"
+	// // Force-load the tracer engines to trigger registration
+	// _ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	// _ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 const (

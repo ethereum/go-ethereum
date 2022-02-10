@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package les
 
 import (
@@ -21,10 +24,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
+	"github.com/xpaymentsorg/go-xpayments/common/mclock"
+	vfs "github.com/xpaymentsorg/go-xpayments/les/vflux/server"
+	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	// "github.com/ethereum/go-ethereum/common/hexutil"
+	// "github.com/ethereum/go-ethereum/common/mclock"
+	// vfs "github.com/ethereum/go-ethereum/les/vflux/server"
+	// "github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 var (

@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package t8ntool
 
 import (
@@ -22,6 +25,7 @@ import (
 	"os"
 
 	"gopkg.in/urfave/cli.v1"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 // readFile reads the json-data in the provided path and marshals into dest.

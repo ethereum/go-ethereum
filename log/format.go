@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package log
 
 import (
@@ -24,7 +27,8 @@ const (
 
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
-	"github.com/ethereum/go-ethereum/",
+	"github.com/xpaymentsorg/go-xpayments/",
+	// "github.com/ethereum/go-ethereum/",
 }
 
 // PrintOrigins sets or unsets log location (file:line) printing for terminal

@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package console
 
 import (
@@ -25,12 +28,19 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/accounts/scwallet"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/xpaymentsorg/go-xpayments/accounts/scwallet"
+	"github.com/xpaymentsorg/go-xpayments/accounts/usbwallet"
+	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
+	// "github.com/dop251/goja"
+	// "github.com/ethereum/go-ethereum/accounts/scwallet"
+	// "github.com/ethereum/go-ethereum/accounts/usbwallet"
+	// "github.com/ethereum/go-ethereum/common/hexutil"
+	// "github.com/ethereum/go-ethereum/console/prompt"
+	// "github.com/ethereum/go-ethereum/internal/jsre"
+	// "github.com/ethereum/go-ethereum/rpc"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime

@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -9,8 +12,11 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
+	"github.com/xpaymentsorg/go-xpayments/cmd/evm/internal/t8ntool"
+	"github.com/xpaymentsorg/go-xpayments/internal/cmdtest"
+	// "github.com/docker/docker/pkg/reexec"
+	// "github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	// "github.com/ethereum/go-ethereum/internal/cmdtest"
 )
 
 func TestMain(m *testing.M) {

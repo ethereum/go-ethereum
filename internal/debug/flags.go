@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package debug
 
 import (
@@ -24,13 +27,20 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/xpaymentsorg/go-xpayments/metrics/exp"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/log"
+	// "github.com/ethereum/go-ethereum/metrics"
+	// "github.com/ethereum/go-ethereum/metrics/exp"
+	// "github.com/fjl/memsize/memsizeui"
+	// "github.com/mattn/go-colorable"
+	// "github.com/mattn/go-isatty"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var Memsize memsizeui.Handler

@@ -17,6 +17,9 @@
 // signFile reads the contents of an input file and signs it (in armored format)
 // with the key provided, placing the signature into the output file.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package build
 
 import (
@@ -25,6 +28,7 @@ import (
 	"os"
 
 	"golang.org/x/crypto/openpgp"
+	// "golang.org/x/crypto/openpgp"
 )
 
 // PGPSignFile parses a PGP private key from the specified string and creates a

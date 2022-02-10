@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package enode
 
 import (
@@ -26,13 +29,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
+	// "github.com/ethereum/go-ethereum/rlp"
+	// "github.com/syndtr/goleveldb/leveldb"
+	// "github.com/syndtr/goleveldb/leveldb/errors"
+	// "github.com/syndtr/goleveldb/leveldb/iterator"
+	// "github.com/syndtr/goleveldb/leveldb/opt"
+	// "github.com/syndtr/goleveldb/leveldb/storage"
+	// "github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // Keys in the node database.

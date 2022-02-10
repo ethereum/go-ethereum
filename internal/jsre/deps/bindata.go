@@ -3,6 +3,9 @@
 // bignumber.js (17.273kB)
 // web3.js (402.466kB)
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package deps
 
 import (

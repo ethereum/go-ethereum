@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -28,10 +31,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/terminal"
+	// "github.com/ethereum/go-ethereum/log"
+	// "golang.org/x/crypto/ssh"
+	// "golang.org/x/crypto/ssh/agent"
+	// "golang.org/x/crypto/ssh/terminal"
 )
 
 // sshClient is a small wrapper around Go's SSH client with a few utility methods

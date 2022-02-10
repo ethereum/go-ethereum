@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 /*
 Package native is a collection of tracers written in go.
 
@@ -37,7 +40,8 @@ package native
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/xpaymentsorg/go-xpayments/eth/tracers"
+	// "github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // init registers itself this packages as a lookup for tracers.

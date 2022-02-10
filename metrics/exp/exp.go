@@ -1,5 +1,9 @@
 // Hook go-metrics into expvar
 // on any /debug/metrics request, load all vars from the registry into expvar, and execute regular expvar handler
+
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package exp
 
 import (
@@ -8,9 +12,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/prometheus"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/xpaymentsorg/go-xpayments/metrics/prometheus"
+	// "github.com/ethereum/go-ethereum/log"
+	// "github.com/ethereum/go-ethereum/metrics"
+	// "github.com/ethereum/go-ethereum/metrics/prometheus"
 )
 
 type exp struct {

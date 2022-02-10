@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package abi
 
 import (
@@ -22,7 +25,9 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	// "github.com/davecgh/go-spew/spew"
+	// "github.com/ethereum/go-ethereum/common"
 )
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement

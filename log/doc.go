@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 /*
 Package log15 provides an opinionated, simple toolkit for best-practice logging that is
 both human and machine readable. It is modeled after the standard library's io and net/http

@@ -14,16 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/xpaymentsorg/go-xpayments/cmd/devp2p/internal/v5test"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/p2p/discover"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var (

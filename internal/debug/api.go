@@ -14,10 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Package debug interfaces Go runtime debugging facilities.
 // This package is mostly glue code making these facilities available
 // through the CLI and RPC subsystem. If you want to use them from Go code,
 // use package runtime instead.
+
 package debug
 
 import (
@@ -35,8 +39,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/hashicorp/go-bexpr"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	// "github.com/ethereum/go-ethereum/log"
+	// "github.com/hashicorp/go-bexpr"
 )
 
 // Handler is the global debugging handler.

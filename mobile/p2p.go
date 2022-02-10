@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Contains wrappers for the p2p package.
 
 package geth
@@ -21,7 +24,8 @@ package geth
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/xpaymentsorg/go-xpayments/p2p"
+	// "github.com/ethereum/go-ethereum/p2p"
 )
 
 // NodeInfo represents pi short summary of the information known about the host.

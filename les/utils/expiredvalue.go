@@ -14,13 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package utils
 
 import (
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/xpaymentsorg/go-xpayments/common/mclock"
+	// "github.com/ethereum/go-ethereum/common/mclock"
 )
 
 // ExpiredValue is a scalar value that is continuously expired (decreased

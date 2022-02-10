@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package geth
 
 import (
@@ -26,6 +29,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	// "github.com/cespare/cp"
 )
 
 // androidTestClass is a Java class to do some lightweight tests against the Android

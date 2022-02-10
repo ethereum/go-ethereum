@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // puppeth is a command to assemble and maintain private networks.
+
 package main
 
 import (
@@ -23,8 +27,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/log"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 // main is just a boring entry point to set up the CLI app.

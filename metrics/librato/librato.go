@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package librato
 
 import (
@@ -7,7 +10,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	// "github.com/ethereum/go-ethereum/metrics"
 )
 
 // a regexp for extracting the unit from time.Duration.String

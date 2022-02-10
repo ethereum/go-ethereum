@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package log
 
 import (
@@ -6,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-stack/stack"
+	// "github.com/go-stack/stack"
 )
 
 const timeKey = "t"

@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Package rlpx implements the RLPx transport protocol.
+
 package rlpx
 
 import (
@@ -34,11 +38,16 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/crypto/ecies"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"golang.org/x/crypto/sha3"
+	// "github.com/ethereum/go-ethereum/crypto"
+	// "github.com/ethereum/go-ethereum/crypto/ecies"
+	// "github.com/ethereum/go-ethereum/rlp"
+	// "github.com/golang/snappy"
+	// "golang.org/x/crypto/sha3"
 )
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The

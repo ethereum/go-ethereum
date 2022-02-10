@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 /*
 Package vm implements the Ethereum Virtual Machine.
 
@@ -21,4 +24,5 @@ The vm package implements one EVM, a byte code VM. The BC (Byte Code) VM loops
 over a set of bytes and executes them according to the set of rules defined
 in the Ethereum yellow paper.
 */
+
 package vm

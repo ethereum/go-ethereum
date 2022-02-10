@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Adapted from: https://golang.org/src/crypto/cipher/xor.go
 
 // Package bitutil implements fast bitwise operations.
+
 package bitutil
 
 import (

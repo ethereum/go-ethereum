@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Package utesting provides a standalone replacement for package testing.
 //
 // This package exists because package testing cannot easily be embedded into a
 // standalone go program. It provides an API that mirrors the standard library
 // testing API.
+
 package utesting
 
 import (

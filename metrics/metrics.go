@@ -3,6 +3,10 @@
 // <https://github.com/rcrowley/go-metrics>
 //
 // Coda Hale's original work: <https://github.com/codahale/metrics>
+
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package metrics
 
 import (
@@ -11,7 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	// "github.com/ethereum/go-ethereum/log"
 )
 
 // Enabled is checked by the constructor functions for all of the

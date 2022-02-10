@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package bls12381
 
 import (
@@ -6,7 +9,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	// "github.com/ethereum/go-ethereum/common"
 )
 
 func (g *G2) one() *PointG2 {

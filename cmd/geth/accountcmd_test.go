@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -24,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/cespare/cp"
+	// "github.com/cespare/cp"
 )
 
 // These tests are 'smoke tests' for the account related

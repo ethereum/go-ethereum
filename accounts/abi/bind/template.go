@@ -14,9 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package bind
 
-import "github.com/ethereum/go-ethereum/accounts/abi"
+import "github.com/xpaymentsorg/go-xpayments/accounts/abi"
+
+// import "github.com/ethereum/go-ethereum/accounts/abi"
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {

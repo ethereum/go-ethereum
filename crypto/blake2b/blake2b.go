@@ -14,6 +14,10 @@
 //
 // BLAKE2X is a construction to compute hash values larger than 64 bytes. It
 // can produce hash values between 0 and 4 GiB.
+
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package blake2b
 
 import (

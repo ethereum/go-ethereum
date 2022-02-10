@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // p2psim provides a command-line client for a simulation HTTP API.
 //
 // Here is an example of creating a 2 node network with the first node
@@ -45,13 +48,20 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/p2p"
+	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/simulations"
+	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/crypto"
+	// "github.com/ethereum/go-ethereum/p2p"
+	// "github.com/ethereum/go-ethereum/p2p/enode"
+	// "github.com/ethereum/go-ethereum/p2p/simulations"
+	// "github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	// "github.com/ethereum/go-ethereum/rpc"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var client *simulations.Client

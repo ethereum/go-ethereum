@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -25,8 +28,11 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/xpaymentsorg/go-xpayments/internal/cmdtest"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
+	// "github.com/docker/docker/pkg/reexec"
+	// "github.com/ethereum/go-ethereum/internal/cmdtest"
+	// "github.com/ethereum/go-ethereum/rpc"
 )
 
 func tmpdir(t *testing.T) string {

@@ -14,18 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // checkpoint-admin is a utility that can be used to query checkpoint information
 // and register stable checkpoints into an oracle contract.
+
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
+	"github.com/xpaymentsorg/go-xpayments/internal/flags"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/common/fdlimit"
+	// "github.com/ethereum/go-ethereum/internal/flags"
+	// "github.com/ethereum/go-ethereum/log"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var (

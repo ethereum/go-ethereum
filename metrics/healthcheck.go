@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package metrics
 
 // Healthchecks hold an error value describing an arbitrary up/down status.

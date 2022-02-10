@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package catalyst
 
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/core/beacon"
+	"github.com/xpaymentsorg/go-xpayments/core/beacon"
+	// "github.com/ethereum/go-ethereum/core/beacon"
 )
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution

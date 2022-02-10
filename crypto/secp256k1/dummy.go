@@ -12,6 +12,9 @@
 //
 // See this issue for reference: https://github.com/golang/go/issues/26366
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package secp256k1
 
 import (

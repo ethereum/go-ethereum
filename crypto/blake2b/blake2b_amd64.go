@@ -2,12 +2,17 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 //go:build !go1.7 && amd64 && !gccgo && !appengine
 // +build !go1.7,amd64,!gccgo,!appengine
 
 package blake2b
 
 import "golang.org/x/sys/cpu"
+
+// import "golang.org/x/sys/cpu"
 
 func init() {
 	useSSE4 = cpu.X86.HasSSE41

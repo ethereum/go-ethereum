@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package prometheus
 
 import (
@@ -5,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	// "github.com/ethereum/go-ethereum/metrics"
 )
 
 func TestMain(m *testing.M) {

@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package v5test
 
 import (
@@ -22,10 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/xpaymentsorg/go-xpayments/internal/utesting"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover/v5wire"
+	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
+	// "github.com/ethereum/go-ethereum/internal/utesting"
+	// "github.com/ethereum/go-ethereum/p2p/discover/v5wire"
+	// "github.com/ethereum/go-ethereum/p2p/enode"
+	// "github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 // Suite is the discv5 test suite.

@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // secp256k1_context_create_sign_verify creates a context for signing and signature verification.
 static secp256k1_context* secp256k1_context_create_sign_verify() {
 	return secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);

@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // Package jsre provides execution environment for JavaScript.
+
 package jsre
 
 import (
@@ -28,7 +32,9 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	// "github.com/dop251/goja"
+	// "github.com/ethereum/go-ethereum/common"
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.

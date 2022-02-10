@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -22,8 +25,10 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/asm"
+	"github.com/xpaymentsorg/go-xpayments/core/asm"
 	"gopkg.in/urfave/cli.v1"
+	// "github.com/ethereum/go-ethereum/core/asm"
+	// "gopkg.in/urfave/cli.v1"
 )
 
 var disasmCommand = cli.Command{

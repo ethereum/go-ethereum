@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package common
 
 import (
@@ -28,8 +31,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"golang.org/x/crypto/sha3"
+	// "github.com/ethereum/go-ethereum/common/hexutil"
+	// "golang.org/x/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.

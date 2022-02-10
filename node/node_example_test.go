@@ -14,13 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package node_test
 
 import (
 	"fmt"
 	"log"
 
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/xpaymentsorg/go-xpayments/node"
+	// "github.com/ethereum/go-ethereum/node"
 )
 
 // SampleLifecycle is a trivial network service that can be attached to a node for

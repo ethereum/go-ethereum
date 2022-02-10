@@ -2,6 +2,9 @@
 // sources:
 // faucet.html (11.276kB)
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (

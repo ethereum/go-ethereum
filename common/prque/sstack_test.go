@@ -6,6 +6,9 @@
 // toolbox may be used in accordance with the terms and conditions contained
 // in a signed written agreement between you and the author(s).
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package prque
 
 import (

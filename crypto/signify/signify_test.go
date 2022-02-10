@@ -17,6 +17,9 @@
 // signFile reads the contents of an input file and signs it (in armored format)
 // with the key provided, placing the signature into the output file.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package signify
 
 import (
@@ -27,6 +30,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/go-minisign"
+	// "github.com/jedisct1/go-minisign"
 )
 
 var (

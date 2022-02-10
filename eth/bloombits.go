@@ -14,13 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package eth
 
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/xpaymentsorg/go-xpayments/common/bitutil"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
+	// "github.com/ethereum/go-ethereum/common/bitutil"
+	// "github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 const (
