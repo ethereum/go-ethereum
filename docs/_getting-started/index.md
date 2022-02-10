@@ -95,7 +95,7 @@ To start clef, open a new terminal and run the command below. Keeping clef runni
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 ```
 
-> Note:  geth-tutorial folder is the directory holding your keystore
+> Note:  geth-tutorial folder is holding your keystore
 
 after running the command above, the system will request you to type “ok” to proceed
 
