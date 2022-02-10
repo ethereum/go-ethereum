@@ -160,11 +160,11 @@ INFO [02-10|13:59:08.793] Block synchronisation started
 
 > **Note:** keep this terminal open.
 
-## Step 4:  Get Goerli Testet Ether
+## Step 4:  Get Goerli Testnet Ether
 
 The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
 
-The following sites gives free goerli faucets:
+The following sites gives free goerli ether:
 
 - [faucet 1](https://faucets.chain.link/goerli)
 - [faucet 2](https://fauceth.komputing.org/?chain=5)
@@ -204,6 +204,7 @@ To exit, press ctrl-d or type exit
 **→ Check account balance**
 
 > **Note:** the value comes in wei
+
 **Syntax:**
 
 ```javascript
