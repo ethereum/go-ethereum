@@ -31,7 +31,7 @@ These are:
 
 For this tutorial, you will use a `light` sync:
 
-### Requirement:
+### Requirements:
 
 - Experience using the command line
 - Basic knowledge about Ethereum and testnets
@@ -437,7 +437,7 @@ curl -X POST http://127.0.0.1:8545 \
    --data '{"jsonrpc":"2.0", "method":"eth_accounts","params":[], "id":5}'
 ```
 
-Follow the same step as the IPC Check account balance
+Follow the same step as the IPC Check account balance.
 
 A successful call will return a response below:
 
@@ -464,7 +464,7 @@ You need to convert eth to wei and get the hex value to send a transaction.
 ```
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
-   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0x1f7a76611939fbAcf7d2dAD2F864F6184BDCD690","value": "0x2386F26FC10000"}], "id":5}'
+   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0xce8dba5e4157c2b284d8853afeeea259344c1653","value": "0x2386F26FC10000"}], "id":5}'
 ```
 
 A successful call will return a response below:
