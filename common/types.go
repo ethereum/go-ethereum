@@ -350,7 +350,7 @@ func (a *Address) Scan(src interface{}) error {
 
 // Value implements valuer for database/sql.
 func (a Address) Value() (driver.Value, error) {
-	return a[:], nil
+	return a.String(), nil
 }
 
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.

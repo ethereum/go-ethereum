@@ -426,7 +426,7 @@ func TestAddress_Value(t *testing.T) {
 		{
 			name:    "Working value",
 			a:       usedA,
-			want:    b,
+			want:    "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
 			wantErr: false,
 		},
 	}
