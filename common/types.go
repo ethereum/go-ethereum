@@ -151,20 +151,27 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 
 // Scan implements Scanner for database/sql.
 func (h *Hash) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
+	switch v := src.(type) {
+	case string:
+		if len(v) > HashLength*2+2 {
+			return fmt.Errorf("can't scan string of len %d into Hash, want not more %d", len(v), HashLength*2+2)
+		}
+		*h = HexToHash(v)
+		return nil
+	case []byte:
+		if len(v) != HashLength {
+			return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(v), HashLength)
+		}
+		copy(h[:], v)
+		return nil
+	default:
 		return fmt.Errorf("can't scan %T into Hash", src)
 	}
-	if len(srcB) != HashLength {
-		return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(srcB), HashLength)
-	}
-	copy(h[:], srcB)
-	return nil
 }
 
 // Value implements valuer for database/sql.
 func (h Hash) Value() (driver.Value, error) {
-	return h[:], nil
+	return h.String(), nil
 }
 
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.
@@ -323,20 +330,27 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 
 // Scan implements Scanner for database/sql.
 func (a *Address) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
+	switch v := src.(type) {
+	case string:
+		if len(v) > AddressLength*2+2 {
+			return fmt.Errorf("can't scan string of len %d into Address, want not more %d", len(v), AddressLength*2+2)
+		}
+		*a = HexToAddress(v)
+		return nil
+	case []byte:
+		if len(v) != AddressLength {
+			return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(v), AddressLength)
+		}
+		copy(a[:], v)
+		return nil
+	default:
 		return fmt.Errorf("can't scan %T into Address", src)
 	}
-	if len(srcB) != AddressLength {
-		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
-	}
-	copy(a[:], srcB)
-	return nil
 }
 
 // Value implements valuer for database/sql.
 func (a Address) Value() (driver.Value, error) {
-	return a[:], nil
+	return a.String(), nil
 }
 
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.
