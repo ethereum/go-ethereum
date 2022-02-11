@@ -39,8 +39,8 @@ For this tutorial, you will use a `light` sync:
 
 ## Step 1: Create accounts
 
-Use the command below to create an account 
-> **Note:** you will need to create two accounts for this guide
+Use the command below to create an account.
+> **Note:** you will need to create two accounts for this guide.
 
 ```shell
 clef newaccount --keystore geth-tutorial/keystore
@@ -95,9 +95,9 @@ To start clef, open a new terminal and run the command below. Keeping clef runni
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 ```
 
-> Note:  geth-tutorial folder is holding your keystore
+> Note:  geth-tutorial folder is holding your keystore.
 
-after running the command above, the system will request you to type “ok” to proceed
+after running the command above, the system will request you to type “ok” to proceed.
 
 A successful call will give you the result below:
 
@@ -123,7 +123,7 @@ INFO [02-10|13:55:30.984] IPC endpoint opened                      url=geth-tuto
 > **Note:** keep this terminal open.
 
 ## Step 3:  Start Geth
-To start geth, open a new terminal and run the command below. It would be best if you did not close this terminal, always keep it running while working.
+To start geth, open a new terminal and run the command below. Keeping geth running is required for the other steps to work.
 
 ```shell
 geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode light --http
@@ -155,7 +155,6 @@ INFO [02-10|13:59:06.998] HTTP server started                      endpoint=127.
 WARN [02-10|13:59:06.998] Light client mode is an experimental feature 
 WARN [02-10|13:59:06.999] Failed to open wallet                    url=extapi://geth-tutorial/clef/cle.. err="operation not supported on external signers"
 INFO [02-10|13:59:08.793] Block synchronisation started 
-
 ```
 
 > **Note:** keep this terminal open.
@@ -181,8 +180,9 @@ You can interact with Geth in two ways: Directly with the node using the JavaScr
 ## Step 6: Using IPC
 
 **→ Connect to console**
+
 Connect to the IPC console on a node from another terminal window, this will open the Geth javascript console
-run the command below
+run the command below.
 
 ```shell
 geth attach http://127.0.0.1:8545
@@ -203,7 +203,7 @@ To exit, press ctrl-d or type exit
 
 **→ Check account balance**
 
-> **Note:** the value comes in wei
+> **Note:** the value comes in wei.
 
 **Syntax:**
 
@@ -211,7 +211,7 @@ To exit, press ctrl-d or type exit
 web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 ```
 
-Run the command below to check your account balance
+Run the command below to check your account balance.
 
 ```javascript
 web3.fromWei(eth.getBalance("0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"),"ether")
@@ -227,13 +227,15 @@ web3.fromWei(eth.getBalance("0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"),"ether
 **→ Check list of accounts**
 
 **step 1:**
-Run the command below to get the list of accounts in your keystore
+
+Run the command below to get the list of accounts in your keystore.
 
  ```javascript
  eth.accounts
  ```
 
-**step 2:** Accept request in your Clef terminal 
+**step 2:** 
+Accept request in your Clef terminal. 
 
 The command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
 
@@ -278,7 +280,8 @@ eth.sendTransaction({from:"<ADDRESS_1>",to:"<ADDRESS_2>", value: web3.toWei(0.01
 ```
 
 **step 1:** 
-Run the command below to transfer 0.01 ether to the other account you created
+
+Run the command below to transfer 0.01 ether to the other account you created.
 
 ```javascript
 eth.sendTransaction({
@@ -288,8 +291,7 @@ eth.sendTransaction({
     })
 ```
 
-**step 2:**
-Accept request in your Clef terminal 
+**step 2:** Accept request in your Clef terminal.
 
 After running in step 1 command, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from; if the password is correct, Geth proceeds with the transaction.
 
@@ -321,7 +323,7 @@ Please enter the password for account 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
 ```
 
 
-After approving the transaction you will see the below screen in the Clef terminal
+After approving the transaction you will see the below screen in the Clef terminal.
 
 ```terminal
 Transaction signed:
@@ -371,7 +373,7 @@ Run the command below.
 eth.getTransaction("0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187")
 ```
 
-If successful, you will get the below response 
+If successful, you will get the below response.
 
 ```terminal
 {
@@ -409,7 +411,7 @@ If successful, you will get the below response
        --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
  
- > **Note:** http://127.0.0.1:8545 this is the default address
+ > **Note:** http://127.0.0.1:8545 this is the default address.
  
  To check your account balance use the command below.
 
