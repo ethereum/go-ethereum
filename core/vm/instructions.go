@@ -608,7 +608,6 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 
 	if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
 		index := trieUtils.GetTreeKeyStorageSlot(scope.Contract.Address().Bytes(), loc)
-		// TODO SSTORE write events
 		interpreter.evm.Accesses.SetLeafValue(index, val.Bytes())
 	}
 	loc.SetBytes(val.Bytes())

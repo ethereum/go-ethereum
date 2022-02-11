@@ -52,6 +52,12 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		value := common.Hash(y.Bytes32())
 
+		if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
+			addr := contract.Address()
+			index := trieUtils.GetTreeKeyStorageSlot(addr[:], x)
+			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(index)
+		}
+
 		if current == value { // noop (1)
 			// EIP 2200 original clause:
 			//		return params.SloadGasEIP2200, nil
