@@ -28,12 +28,16 @@ import (
 )
 
 type testIter struct {
+	closed bool
 	waitCh chan struct{}
 	nodeCh chan *enode.Node
 	node   *enode.Node
 }
 
 func (i *testIter) Next() bool {
+	if i.closed {
+		return false
+	}
 	i.waitCh <- struct{}{}
 	i.node = <-i.nodeCh
 	return i.node != nil
@@ -43,7 +47,19 @@ func (i *testIter) Node() *enode.Node {
 	return i.node
 }
 
-func (i *testIter) Close() {}
+func (i *testIter) Close() {
+	for {
+		select {
+		case <-i.nodeCh:
+		case <-i.waitCh:
+		default:
+			i.closed = true
+			close(i.nodeCh)
+			close(i.waitCh)
+			return
+		}
+	}
+}
 
 func (i *testIter) push() {
 	var id enode.ID
