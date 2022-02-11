@@ -605,13 +605,13 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
-	loc.SetBytes(val.Bytes())
 
 	if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
 		index := trieUtils.GetTreeKeyStorageSlot(scope.Contract.Address().Bytes(), loc)
 		// TODO SSTORE write events
 		interpreter.evm.Accesses.SetLeafValue(index, val.Bytes())
 	}
+	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
 
