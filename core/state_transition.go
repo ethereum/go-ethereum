@@ -324,7 +324,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndComputeGas(originAddr.Bytes(), msg.Value().Sign() != 0)
 		if !tryConsumeGas(&st.gas, statelessGasOrigin) {
-			return nil, ErrInsufficientBalanceWitness
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 		}
 		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
 		originNonce := st.evm.StateDB.GetNonce(originAddr)
@@ -334,7 +334,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if msg.To() != nil {
 			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value().Sign() != 0)
 			if !tryConsumeGas(&st.gas, statelessGasDest) {
-				return nil, ErrInsufficientBalanceWitness
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 			}
 			targetBalance = st.evm.StateDB.GetBalanceLittleEndian(*targetAddr)
 			targetNonce = st.evm.StateDB.GetNonceLittleEndian(*targetAddr)
@@ -347,12 +347,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		} else {
 			contractAddr := crypto.CreateAddress(originAddr, originNonce)
 			if !tryConsumeGas(&st.gas, st.evm.Accesses.TouchAndChargeContractCreateInit(contractAddr.Bytes(), msg.Value().Sign() != 0)) {
-				return nil, ErrInsufficientBalanceWitness
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 			}
 		}
 
 		if st.gas < gas {
-			return nil, fmt.Errorf("Insufficient funds to cover witness access costs for transaction: have %d, want %d", st.gas, gas)
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 		}
 	}
 	st.gas -= gas
