@@ -153,8 +153,8 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 func (h *Hash) Scan(src interface{}) error {
 	switch v := src.(type) {
 	case string:
-		if len(v) > HashLength * 2 + 2 {
-			return fmt.Errorf("can't scan string of len %d into Hash, want not more %d", len(v), HashLength * 2 + 2)
+		if len(v) > HashLength*2+2 {
+			return fmt.Errorf("can't scan string of len %d into Hash, want not more %d", len(v), HashLength*2+2)
 		}
 		*h = HexToHash(v)
 		return nil
@@ -332,8 +332,8 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 func (a *Address) Scan(src interface{}) error {
 	switch v := src.(type) {
 	case string:
-		if len(v) > AddressLength * 2 + 2 {
-			return fmt.Errorf("can't scan string of len %d into Address, want not more %d", len(v), AddressLength * 2 + 2)
+		if len(v) > AddressLength*2+2 {
+			return fmt.Errorf("can't scan string of len %d into Address, want not more %d", len(v), AddressLength*2+2)
 		}
 		*a = HexToAddress(v)
 		return nil

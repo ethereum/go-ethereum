@@ -262,18 +262,18 @@ func TestHashString_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Working scan",
-			args: args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c"},
+			name:    "Working scan",
+			args:    args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c"},
 			wantErr: false,
 		},
 		{
-			name: "Working scan small string",
-			args: args{src: "0x2"},
+			name:    "Working scan small string",
+			args:    args{src: "0x2"},
 			wantErr: false,
 		},
 		{
-			name: "Invalid length scan",
-			args: args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c1"},
+			name:    "Invalid length scan",
+			args:    args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c1"},
 			wantErr: true,
 		},
 	}
@@ -385,18 +385,18 @@ func TestAddressString_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Working scan",
-			args: args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"},
+			name:    "Working scan",
+			args:    args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"},
 			wantErr: false,
 		},
 		{
-			name: "Working scan small string",
-			args: args{src: "0x2"},
+			name:    "Working scan small string",
+			args:    args{src: "0x2"},
 			wantErr: false,
 		},
 		{
-			name: "Invalid length scan",
-			args: args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc21"},
+			name:    "Invalid length scan",
+			args:    args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc21"},
 			wantErr: true,
 		},
 	}
