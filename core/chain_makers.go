@@ -340,12 +340,19 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			// building the proof. Ultimately, node
 			// resolution can be done with a prefetcher
 			// or from GetCommitmentsAlongPath.
+			kvs := statedb.Witness().KeyVals()
 			keys := statedb.Witness().Keys()
 			for _, key := range keys {
-				vtr.TryGet(key)
+				// XXX workaround - there is a problem in the witness creation
+				// so fix the witness creation as well.
+				v, err := vtr.TryGet(key)
+				if err != nil {
+					panic(err)
+				}
+				kvs[string(key)] = v
 			}
 			vtr.Hash()
-			p, k, err := vtr.ProveAndSerialize(keys, statedb.Witness().KeyVals())
+			p, k, err := vtr.ProveAndSerialize(keys, kvs)
 			block.SetVerkleProof(p, k)
 			if err != nil {
 				panic(err)

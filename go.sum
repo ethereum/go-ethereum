@@ -167,6 +167,10 @@ github.com/gballet/go-verkle v0.0.0-20220127081734-1fca5295178c h1:EoP3VKIxU+29c
 github.com/gballet/go-verkle v0.0.0-20220127081734-1fca5295178c/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
 github.com/gballet/go-verkle v0.0.0-20220128155149-95499dfcd74a h1:0GpdT+zyEoa8OTBtJk5EdZm7nF4HXzU+blG3io0pm5A=
 github.com/gballet/go-verkle v0.0.0-20220128155149-95499dfcd74a/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
+github.com/gballet/go-verkle v0.0.0-20220208130546-d368c16aca2f h1:E/dsnBev33ojJlYjBVnh/uJ2tvFB5juYKyOP854fwTE=
+github.com/gballet/go-verkle v0.0.0-20220208130546-d368c16aca2f/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
+github.com/gballet/go-verkle v0.0.0-20220209120303-88a3fa537cf1 h1:mkoUQjsrx/6hH3b3/tCfNhe1IJyErvNqG5k4XxWpuNs=
+github.com/gballet/go-verkle v0.0.0-20220209120303-88a3fa537cf1/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
@@ -567,6 +571,8 @@ golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e h1:fLOSk5Q00efkSvAm+4xcoXD+R
 golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 h1:XfKQ4OlFl8okEOr5UvAqFRVj8pY/4yfcXrddB8qAbU0=
 golang.org/x/sys v0.0.0-20220114195835-da31bd327af9/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220207234003-57398862261d h1:Bm7BNOQt2Qv7ZqysjeLjgCBanX+88Z/OtdvsrEv1Djc=
+golang.org/x/sys v0.0.0-20220207234003-57398862261d/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 h1:v+OssWQX+hTHEmOBgwxdZxK4zHq3yOs8F9J7mk0PY8E=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=

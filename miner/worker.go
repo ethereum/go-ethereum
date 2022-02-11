@@ -1043,7 +1043,18 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	}
 	if tr := w.current.original.GetTrie(); tr.IsVerkle() {
 		vtr := tr.(*trie.VerkleTrie)
-		// Generate the proof if we are using a verkle tree
+		keys := s.Witness().Keys()
+		kvs := s.Witness().KeyVals()
+		for _, key := range keys {
+			// XXX workaround - there is a problem in the witness creation
+			// so fix the witness creation as well.
+			v, err := vtr.TryGet(key)
+			if err != nil {
+				panic(err)
+			}
+			kvs[string(key)] = v
+		}
+		vtr.Hash()
 		p, k, err := vtr.ProveAndSerialize(s.Witness().Keys(), s.Witness().KeyVals())
 		if err != nil {
 			return err

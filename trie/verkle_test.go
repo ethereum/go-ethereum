@@ -84,5 +84,5 @@ func TestReproduceTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("serialized: %x", p)
-	t.Logf("tree: %s", verkle.ToDot(root))
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
 }
