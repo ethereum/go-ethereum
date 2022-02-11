@@ -906,10 +906,15 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
 	hash := vote.Hash()
 	peers := pm.peers.PeersWithoutVote(hash)
-	for _, peer := range peers {
-		peer.SendVote(vote)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendVote(vote)
+			if err != nil {
+				log.Error("[BroadcastVote] Fail to broadcast vote message", "NumberOfPeers", len(peers), "peerId", peer.id, "vote", vote, "Error", err)
+			}
+		}
+		log.Info("Propagated Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
 	}
-	log.Info("Propagated Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
 }
 
 // BroadcastTimeout will propagate a Timeout to all peers which are not known to
@@ -917,10 +922,15 @@ func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
 func (pm *ProtocolManager) BroadcastTimeout(timeout *utils.Timeout) {
 	hash := timeout.Hash()
 	peers := pm.peers.PeersWithoutTimeout(hash)
-	for _, peer := range peers {
-		peer.SendTimeout(timeout)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendTimeout(timeout)
+			if err != nil {
+				log.Error("[BroadcastTimeout] Fail to broadcast timeout message", "NumberOfPeers", len(peers), "peerId", peer.id, "timeout", timeout, "Error", err)
+			}
+		}
+		log.Trace("Propagated Timeout", "hash", hash, "recipients", len(peers))
 	}
-	log.Trace("Propagated Timeout", "hash", hash, "recipients", len(peers))
 }
 
 // BroadcastSyncInfo will propagate a SyncInfo to all peers which are not known to
@@ -928,10 +938,16 @@ func (pm *ProtocolManager) BroadcastTimeout(timeout *utils.Timeout) {
 func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *utils.SyncInfo) {
 	hash := syncInfo.Hash()
 	peers := pm.peers.PeersWithoutSyncInfo(hash)
-	for _, peer := range peers {
-		peer.SendSyncInfo(syncInfo)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendSyncInfo(syncInfo)
+			if err != nil {
+				log.Error("[BroadcastSyncInfo] Fail to broadcast syncInfo message", "NumberOfPeers", len(peers), "peerId", peer.id, "syncInfo", syncInfo, "Error", err)
+			}
+		}
+		log.Trace("Propagated SyncInfo", "hash", hash, "recipients", len(peers))
 	}
-	log.Trace("Propagated SyncInfo", "hash", hash, "recipients", len(peers))
+
 }
 
 // OrderBroadcastTx will propagate a transaction to all peers which are not known to
