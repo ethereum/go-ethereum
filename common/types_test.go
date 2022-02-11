@@ -197,7 +197,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 
 }
 
-func TestHash_Scan(t *testing.T) {
+func TestHashBytes_Scan(t *testing.T) {
 	type args struct {
 		src interface{}
 	}
@@ -252,6 +252,41 @@ func TestHash_Scan(t *testing.T) {
 	}
 }
 
+func TestHashString_Scan(t *testing.T) {
+	type args struct {
+		src string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "Working scan",
+			args: args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c"},
+			wantErr: false,
+		},
+		{
+			name: "Working scan small string",
+			args: args{src: "0x2"},
+			wantErr: false,
+		},
+		{
+			name: "Invalid length scan",
+			args: args{src: "0x9c0fd6d99db9c664d0759622135de52ee862efa636c4f60a014fdba1eb364b9c1"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Hash{}
+			if err := h.Scan(tt.args.src); (err != nil) != tt.wantErr {
+				t.Errorf("Hash.Scan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestHash_Value(t *testing.T) {
 	b := []byte{
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
@@ -270,7 +305,7 @@ func TestHash_Value(t *testing.T) {
 		{
 			name:    "Working value",
 			h:       usedH,
-			want:    b,
+			want:    "0xb26f2b342aab24bcf63ea218c6a9274d30ab9a15a218c6a9274d30ab9a151000",
 			wantErr: false,
 		},
 	}
@@ -288,7 +323,7 @@ func TestHash_Value(t *testing.T) {
 	}
 }
 
-func TestAddress_Scan(t *testing.T) {
+func TestAddressBytes_Scan(t *testing.T) {
 	type args struct {
 		src interface{}
 	}
@@ -335,6 +370,41 @@ func TestAddress_Scan(t *testing.T) {
 						)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestAddressString_Scan(t *testing.T) {
+	type args struct {
+		src string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "Working scan",
+			args: args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"},
+			wantErr: false,
+		},
+		{
+			name: "Working scan small string",
+			args: args{src: "0x2"},
+			wantErr: false,
+		},
+		{
+			name: "Invalid length scan",
+			args: args{src: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc21"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Address{}
+			if err := a.Scan(tt.args.src); (err != nil) != tt.wantErr {
+				t.Errorf("Address.Scan() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
