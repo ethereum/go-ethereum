@@ -340,10 +340,10 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	}
 	var masterNodes []common.Address
 	if isEpochSwitch {
-		if x.config.XDPoSV2Block.Cmp(parent.Number) == 0 {
-			snap, err := x.getSnapshot(chain, x.config.XDPoSV2Block.Uint64())
+		if x.config.V2.SwitchBlock.Cmp(parent.Number) == 0 {
+			snap, err := x.getSnapshot(chain, x.config.V2.SwitchBlock.Uint64())
 			if err != nil {
-				log.Error("[YourTurn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.XDPoSV2Block.Uint64())
+				log.Error("[YourTurn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
 				return false, err
 			}
 			// the initial snapshot of v1->v2 switch containes penalites node
@@ -351,7 +351,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 		} else {
 			snap, err := x.getSnapshot(chain, parent.Number.Uint64()+1)
 			if err != nil {
-				log.Error("[YourTurn] Cannot find snapshot at gap block", "err", err, "number", x.config.XDPoSV2Block.Uint64())
+				log.Error("[YourTurn] Cannot find snapshot at gap block", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
 				return false, err
 			}
 			masterNodes = snap.NextEpochMasterNodes
@@ -873,7 +873,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
 	proposedBlockHeader := blockChainReader.GetHeaderByHash(quorumCert.ProposedBlockInfo.Hash)
-	if proposedBlockHeader.Number.Cmp(x.config.XDPoSV2Block) > 0 {
+	if proposedBlockHeader.Number.Cmp(x.config.V2.SwitchBlock) > 0 {
 		// Extra field contain parent information
 		var decodedExtraField utils.ExtraFields_v2
 		err := utils.DecodeBytesExtraFields(proposedBlockHeader.Extra, &decodedExtraField)
@@ -1093,7 +1093,7 @@ func (x *XDPoS_v2) getSyncInfo() *utils.SyncInfo {
 //Find parent and grandparent, check round number, if so, commit grandparent(grandGrandParent of currentBlock)
 func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round) (bool, error) {
 	// XDPoS v1.0 switch to v2.0, skip commit
-	if big.NewInt(0).Sub(proposedBlockHeader.Number, big.NewInt(2)).Cmp(x.config.XDPoSV2Block) <= 0 {
+	if big.NewInt(0).Sub(proposedBlockHeader.Number, big.NewInt(2)).Cmp(x.config.V2.SwitchBlock) <= 0 {
 		return false, nil
 	}
 	// Find the last two parent block and check their rounds are the continuous
@@ -1199,7 +1199,7 @@ func (x *XDPoS_v2) GetMasternodesFromEpochSwitchHeader(epochSwitchHeader *types.
 
 func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 	// Return true directly if we are examing the last v1 block. This could happen if the calling function is examing parent block
-	if header.Number.Cmp(x.config.XDPoSV2Block) == 0 {
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		log.Info("[IsEpochSwitch] examing last v1 block 👯‍♂️")
 		return true, header.Number.Uint64() / x.config.Epoch, nil
 	}
@@ -1213,10 +1213,10 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 	parentRound := decodedExtraField.QuorumCert.ProposedBlockInfo.Round
 	round := decodedExtraField.Round
 	epochStartRound := round - round%utils.Round(x.config.Epoch)
-	epochNum := x.config.XDPoSV2Block.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
-	if decodedExtraField.QuorumCert.ProposedBlockInfo.Number.Cmp(x.config.XDPoSV2Block) == 0 {
-		log.Info("[IsEpochSwitch] true, parent equals XDPoSV2Block", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
+	if decodedExtraField.QuorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
 		return true, epochNum, nil
 	}
 	log.Info("[IsEpochSwitch]", "parent round", parentRound, "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
@@ -1225,9 +1225,9 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 
 // IsEpochSwitchAtRound() is used by miner to check whether it mines a block in the same epoch with parent
 func (x *XDPoS_v2) IsEpochSwitchAtRound(round utils.Round, parentHeader *types.Header) (bool, uint64, error) {
-	epochNum := x.config.XDPoSV2Block.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
-	if parentHeader.Number.Cmp(x.config.XDPoSV2Block) == 0 {
+	if parentHeader.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		return true, epochNum, nil
 	}
 	var decodedExtraField utils.ExtraFields_v2
@@ -1263,7 +1263,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		log.Debug("[getEpochSwitchInfo] header is epoch switch", "hash", hash.Hex(), "number", h.Number.Uint64())
 		var epochSwitchInfo *utils.EpochSwitchInfo
 		// Special case, in case of last v1 block, we manually build the epoch switch info
-		if h.Number.Cmp(x.config.XDPoSV2Block) == 0 {
+		if h.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 			masternodes := decodeMasternodesFromHeaderExtra(h)
 			epochSwitchInfo = &utils.EpochSwitchInfo{
 				Masternodes: masternodes,
@@ -1325,6 +1325,6 @@ func (x *XDPoS_v2) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, block
 	}
 
 	currentCheckpointNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
-	epochNum := x.config.XDPoSV2Block.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
 	return currentCheckpointNumber, epochNum, nil
 }

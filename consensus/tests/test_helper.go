@@ -354,7 +354,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	// Insert initial blocks
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
-		roundNumber := int64(i) - chainConfig.XDPoS.XDPoSV2Block.Int64()
+		roundNumber := int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()
 		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn)
 
 		err = blockchain.InsertBlock(block)
@@ -392,7 +392,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 	var header *types.Header
 
-	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.XDPoSV2Block) == 1 { // Build engine v2 compatible extra data field
+	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 1 { // Build engine v2 compatible extra data field
 		var extraField utils.ExtraFields_v2
 		var round utils.Round
 		err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
@@ -435,9 +435,9 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 			Extra:      extraInBytes,
 			Validator:  signedHash,
 		}
-		if int64(blockNumber) == (chainConfig.XDPoS.XDPoSV2Block.Int64() + 1) { // This is the first v2 block, we need to copy the last v1 epoch master node list and inject into v2 validators
+		if int64(blockNumber) == (chainConfig.XDPoS.V2.SwitchBlock.Int64() + 1) { // This is the first v2 block, we need to copy the last v1 epoch master node list and inject into v2 validators
 			// Get last master node list from last v1 block
-			lastv1Block := blockchain.GetBlockByNumber(chainConfig.XDPoS.XDPoSV2Block.Uint64())
+			lastv1Block := blockchain.GetBlockByNumber(chainConfig.XDPoS.V2.SwitchBlock.Uint64())
 			masternodesFromV1LastEpoch := decodeMasternodesFromHeaderExtra(lastv1Block.Header())
 			for _, v := range masternodesFromV1LastEpoch {
 				header.Validators = append(header.Validators, v[:]...)
@@ -454,7 +454,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 		}
 
 		// Inject the hardcoded master node list for the last v1 epoch block
-		if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.XDPoSV2Block) == 0 {
+		if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 0 {
 			// reset extra
 			header.Extra = []byte{}
 			if len(header.Extra) < utils.ExtraVanity {

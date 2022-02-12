@@ -65,22 +65,25 @@ type XDPoS struct {
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
+	log.Info("[New] initial conensus engines")
 	// Set any missing consensus parameters to their defaults
-	conf := *config
-	if conf.Epoch == 0 {
-		conf.Epoch = utils.EpochLength
+	if config.Epoch == 0 {
+		config.Epoch = utils.EpochLength
 	}
+
+	// TODO: This shall be configurable or replaced
+	config.V2 = params.DevnetXDPoSV2Config
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
 
 	return &XDPoS{
-		config: &conf,
+		config: config,
 		db:     db,
 
 		signingTxsCache: signingTxsCache,
-		EngineV1:        engine_v1.New(&conf, db),
-		EngineV2:        engine_v2.New(&conf, db),
+		EngineV1:        engine_v1.New(config, db),
+		EngineV2:        engine_v2.New(config, db),
 	}
 }
 
@@ -300,8 +303,10 @@ func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber 
 }
 
 func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
-	if parent.Number.Cmp(x.config.XDPoSV2Block) == 0 {
-		x.initialV2(chain, parent)
+	if x.config.V2.SwitchBlock != nil && parent.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		err := x.initialV2(chain, parent)
+		log.Error("[YourTurn] Error when initialise v2", "Error", err, "ParentBlock", parent)
+		return false, err
 	}
 	switch x.config.BlockConsensusVersion(big.NewInt(parent.Number.Int64() + 1)) {
 	case params.ConsensusEngineVersion2:
