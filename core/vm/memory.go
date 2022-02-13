@@ -91,7 +91,11 @@ func (m *Memory) GetPtr(offset, size int64) []byte {
 	}
 
 	if len(m.store) > int(offset) {
-		return m.store[offset : offset+size]
+		if len(m.store) >= int(offset+size) {
+			return m.store[offset : offset+size]
+		} else {
+			return m.store[offset:]
+		}
 	}
 
 	return nil
