@@ -4,14 +4,12 @@ permalink: docs/getting-started
 sort_key: A
 ---
 
-To use Geth, you need to install it first. You can install Geth in a variety of ways that you can find in the “[Install and Build](install-and-build/installing-geth)” section. 
-These include installing it via your favorite package manager, downloading a standalone pre-built binary, running it as a docker container, or building it yourself.
 
-For this guide, we assume you have Geth installed and are ready to find out how to use it. 
-The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
-This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, and will replace Geth’s account management.
+To use Geth, you need to install it first. You can install Geth in various ways that you can find in the “[Install and Build](install-and-build/installing-geth)” section. These include installing it via your favorite package manager, downloading a standalone pre-built binary, running it as a docker container, or building it yourself.
 
-## Two Important terms in geth:
+We assume you have Geth installed for this guide and are ready to find out how to use it. The guide shows you how to create accounts, sync to a network, and send transactions between accounts. This guide uses [Clef](clef/tutorial), our preferred tool for signing transactions with Geth, and will replace Geth's account management.
+
+## Two Important Terms In Geth:
 
 ### Networks
 You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net) you create, and three test networks that use different consensus algorithms:
@@ -37,9 +35,9 @@ For this tutorial, you will use a `light` sync:
 - Basic knowledge about Ethereum and testnets
 - Basic knowledge about HTTP and JavaScript
 
-## Step 1: Create accounts
+## Step 1: Generate account
 
-Use the command below to create an account.
+Use the command below to generate an account.
 > **Note:** you will need to create two accounts for this guide.
 
 ```shell
@@ -80,7 +78,7 @@ WARN [02-10|13:46:46.595] Please remember your password!
 Generated account 0xCe8dBA5e4157c2B284d8853afEEea259344C1653
 ```
 
-Copy and save your password with the generated account somewhere safe; you will need it later in this tutorial.
+Save your password and the generated account because you will need them later in this tutorial.
 
 **The Generated account:**
 
@@ -97,7 +95,7 @@ clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 
 
 > Note:  geth-tutorial folder is holding your keystore.
 
-after running the command above, the system will request you to type “ok” to proceed.
+After running the command above, clef will request you to type “ok” to proceed.
 
 A successful call will give you the result below:
 
@@ -161,9 +159,7 @@ INFO [02-10|13:59:08.793] Block synchronisation started
 
 ## Step 4:  Get Goerli Testnet Ether
 
-The primary purpose of the faucet is to fund your testnet account to pay for gas fees for testing your project. 
-
-The following sites gives free goerli ether:
+The following sites give free goerli ether:
 
 - [faucet 1](https://faucets.chain.link/goerli)
 - [faucet 2](https://fauceth.komputing.org/?chain=5)
@@ -173,22 +169,20 @@ The following sites gives free goerli ether:
 You can interact with Geth in two ways: Directly with the node using the JavaScript console over IPC or connecting to the node remotely over HTTP using RPC.
 
 - IPC (Inter-Process Communication):
-    allows you to do more, especially when creating and interacting with accounts, but you need direct access to the node.
+    This allows you to do more, especially when creating and interacting with accounts, but you need direct access to the node.
 - RPC (Remote Procedure Call):
-     allows remote applications to access your node but has limitations and security considerations, and by default, only allows access to methods in the eth and shh namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server).
+    This allows remote applications to access your node but has limitations and security considerations. By default, it only allows access to the eth and shh namespaces methods. Find out how to override this setting [in the RPC docs](rpc/server#http-server).
 
 ## Step 6: Using IPC
 
 **→ Connect to console**
 
-Connect to the IPC console on a node from another terminal window, this will open the Geth javascript console
-run the command below.
+To connect to the IPC console, open a new terminal and run the command below. 
 
 ```shell
 geth attach http://127.0.0.1:8545
 ```
-
-Result after running the above command: 
+This will open the Geth javascript console and give you the result below.
 
 ```terminal
 Welcome to the Geth JavaScript console!
@@ -237,7 +231,7 @@ Run the command below to get the list of accounts in your keystore.
 **step 2:** 
 Accept request in your Clef terminal. 
 
-The command in step 1 will need approval from the terminal running clef, before showing the list of accounts.
+The command in step 1 will request approval from the clef terminal before showing the list of accounts.
 
 ```terminal
 -------- List Account request--------------
@@ -259,9 +253,6 @@ Approve? [y/N]:
 
 ```
 
-
-Approve the request by typing “y” and hit the enter key.
-
 **Result:**
 
 ```terminal
@@ -271,7 +262,7 @@ Approve the request by typing “y” and hit the enter key.
 
 **→ Send ETH to account**
 
-Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created.
+Send 0.01 ETH from the account you added the free eth to the second account you created.
 
 **Syntax:**
 
@@ -293,7 +284,7 @@ eth.sendTransaction({
 
 **step 2:** Accept request in your Clef terminal.
 
-After running in step 1 command, Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from; if the password is correct, Geth proceeds with the transaction.
+Clef will prompt you to approve the transaction, and when you do, it will ask you for the password for the account you are sending the ETH from; if the password is correct, Geth proceeds with the transaction.
 
 ```terminal
 --------- Transaction request-------------
@@ -323,7 +314,7 @@ Please enter the password for account 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
 ```
 
 
-After approving the transaction you will see the below screen in the Clef terminal.
+After approving the transaction, you will see the below screen in the Clef terminal.
 
 ```terminal
 Transaction signed:
@@ -350,7 +341,8 @@ Transaction signed:
 ```
 
 
-**Step 1** Terminal Result, it will return a response that includes the transaction hash:
+**Step 3** Your Terminal Result, 
+You will get a transaction hash as a response after approving the transaction in the clef terminal.
 
 ```terminal
 "0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb"
@@ -365,9 +357,7 @@ Transaction signed:
 eth.getTransaction("hash id")
 ```
 
-A Transaction Hash (Tx Hash) is a record of successful transaction in a blockchain that can be accessed with unique address.
-
-Run the command below.
+To get the transaction hash, Run the command below.
 
 ```javascript
 eth.getTransaction("0xa2b547d8742e345fa5f86f017d9da38c4a19cacee91e85191a57c0c7e420d187")
