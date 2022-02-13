@@ -53,7 +53,8 @@ type XDPoS_v2 struct {
 	highestTimeoutCert *utils.TimeoutCert
 	highestCommitBlock *utils.BlockInfo
 
-	HookReward func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookPenalty func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error)
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
@@ -204,14 +205,15 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 		return err
 	}
 	if isEpochSwitchBlock {
-		snap, err := x.getSnapshot(chain, number)
+		masterNodes, penalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
 		if err != nil {
 			return err
 		}
-		masternodes := snap.NextEpochMasterNodes
-		//TODO: remove penalty nodes and add comeback nodes, or change this logic into yourturn function
-		for _, v := range masternodes {
+		for _, v := range masterNodes {
 			header.Validators = append(header.Validators, v[:]...)
+		}
+		for _, v := range penalties {
+			header.Penalties = append(header.Penalties, v[:]...)
 		}
 	}
 
@@ -366,16 +368,14 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 				log.Error("[YourTurn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
 				return false, err
 			}
-			// the initial snapshot of v1->v2 switch containes penalites node
+			// the initial master nodes of v1->v2 switch contains penalties node
 			masterNodes = snap.NextEpochMasterNodes
 		} else {
-			snap, err := x.getSnapshot(chain, parent.Number.Uint64()+1)
+			masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
 			if err != nil {
-				log.Error("[YourTurn] Cannot find snapshot at gap block", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
+				log.Error("[YourTurn] Cannot calcMasternodes at gap num ", "err", err, "parent number", parent.Number)
 				return false, err
 			}
-			masterNodes = snap.NextEpochMasterNodes
-			// TODO: calculate master nodes with penalty and comback
 		}
 	} else {
 		// this block and parent belong to the same epoch
@@ -1189,6 +1189,13 @@ func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
 	x.currentRound = newRound
 }
 
+// for test only
+func (x *XDPoS_v2) ProcessQC(chain consensus.ChainReader, qc *utils.QuorumCert) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+	return x.processQC(chain, qc)
+}
+
 // Utils for test to check currentRound value
 func (x *XDPoS_v2) GetCurrentRound() utils.Round {
 	x.lock.RLock()
@@ -1347,4 +1354,51 @@ func (x *XDPoS_v2) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, block
 	currentCheckpointNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
 	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
 	return currentCheckpointNumber, epochNum, nil
+}
+
+func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
+	snap, err := x.getSnapshot(chain, blockNum.Uint64())
+	if err != nil {
+		log.Error("[calcMasternodes] Adaptor v2 getSnapshot has error", "err", err)
+		return nil, nil, err
+	}
+	candidates := snap.NextEpochMasterNodes
+	if x.HookPenalty != nil {
+		penalties, err := x.HookPenalty(chain, blockNum, parentHash, candidates)
+		if err != nil {
+			log.Error("[calcMasternodes] Adaptor v2 HookPenalty has error", "err", err)
+			return nil, nil, err
+		}
+		masternodes := common.RemoveItemFromArray(candidates, penalties)
+		return masternodes, penalties, nil
+	}
+	return candidates, []common.Address{}, nil
+}
+
+// Given hash, get master node from the epoch switch block of the epoch
+func (x *XDPoS_v2) GetMasternodesByHash(chain consensus.ChainReader, hash common.Hash) []common.Address {
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, hash)
+	if err != nil {
+		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+		return []common.Address{}
+	}
+	return epochSwitchInfo.Masternodes
+}
+
+// Given hash, get master node from the epoch switch block of the previous `limit` epoch
+func (x *XDPoS_v2) GetPreviousPenaltyByHash(chain consensus.ChainReader, hash common.Hash, limit int) []common.Address {
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, hash)
+	if err != nil {
+		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+		return []common.Address{}
+	}
+	for i := 0; i < limit; i++ {
+		epochSwitchInfo, err = x.getEpochSwitchInfo(chain, nil, epochSwitchInfo.EpochSwitchParentBlockInfo.Hash)
+		if err != nil {
+			log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+			return []common.Address{}
+		}
+	}
+	header := chain.GetHeaderByHash(epochSwitchInfo.EpochSwitchBlockInfo.Hash)
+	return common.ExtractAddressFromBytes(header.Penalties)
 }

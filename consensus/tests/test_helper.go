@@ -21,6 +21,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/contracts"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	. "github.com/XinFinOrg/XDPoSChain/core"
@@ -229,6 +230,21 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	return signedTX, nil
 }
 
+func signingTx(header *types.Header, nonce uint64, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) (*types.Transaction, error) {
+	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
+	s := types.NewEIP155Signer(big.NewInt(chainID))
+	h := s.Hash(tx)
+	sig, err := signFn(accounts.Account{Address: signer}, h[:])
+	if err != nil {
+		return nil, err
+	}
+	signedTx, err := tx.WithSignature(s, sig)
+	if err != nil {
+		return nil, err
+	}
+	return signedTx, nil
+}
+
 func UpdateSigner(bc *BlockChain) error {
 	err := bc.UpdateM1()
 	return err
@@ -354,8 +370,12 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	// Insert initial blocks
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
+		// for v2 blocks, fill in correct coinbase
+		if int64(i) > chainConfig.XDPoS.V2.SwitchBlock.Int64() {
+			blockCoinBase = signer.Hex()
+		}
 		roundNumber := int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()
-		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn)
+		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, nil)
 
 		err = blockchain.InsertBlock(block)
 		if err != nil {
@@ -370,7 +390,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 
 			forkedBlockRoundNumber := roundNumber + int64(numOfForkedBlocks)
 
-			forkedBlock := CreateBlock(blockchain, chainConfig, currentForkBlock, i, forkedBlockRoundNumber, forkedBlockCoinBase, signer, signFn)
+			forkedBlock := CreateBlock(blockchain, chainConfig, currentForkBlock, i, forkedBlockRoundNumber, forkedBlockCoinBase, signer, signFn, nil)
 
 			blockchain.InsertBlock(forkedBlock)
 			currentForkBlock = forkedBlock
@@ -387,7 +407,58 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	return blockchain, backend, currentBlock, signer, signFn, currentForkBlock
 }
 
-func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) *types.Block {
+// V2 concensus engine, compared to PrepareXDCTestBlockChainForV2Engine: (1) no forking (2) add penalty
+func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
+	// Preparation
+	var err error
+	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
+	if err != nil {
+		t.Fatal("Error while creating simulated wallet for generating singer address and signer fn: ", err)
+	}
+	backend := getCommonBackend(t, chainConfig)
+	blockchain := backend.GetBlockChain()
+	blockchain.Client = backend
+
+	// Authorise
+	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
+
+	currentBlock := blockchain.Genesis()
+
+	go func() {
+		for range core.CheckpointCh {
+			checkpointChanMsg := <-core.CheckpointCh
+			log.Info("[V2] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		}
+	}()
+
+	// Insert initial blocks
+	for i := 1; i <= numOfBlocks; i++ {
+		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
+		// for v2 blocks, fill in correct coinbase
+		if int64(i) > chainConfig.XDPoS.V2.SwitchBlock.Int64() {
+			blockCoinBase = signer.Hex()
+		}
+		roundNumber := int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()
+		// use signer itself as penalty
+		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, signer[:])
+
+		err = blockchain.InsertBlock(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		currentBlock = block
+	}
+
+	// Update Signer as there is no previous signer assigned
+	err = UpdateSigner(blockchain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return blockchain, backend, currentBlock, signer, signFn
+}
+
+func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte) *types.Block {
 	currentBlock := startingBlock
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 	var header *types.Header
@@ -442,8 +513,18 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 			for _, v := range masternodesFromV1LastEpoch {
 				header.Validators = append(header.Validators, v[:]...)
 			}
+		} else if roundNumber%int64(chainConfig.XDPoS.Epoch) == 0 {
+			// epoch switch blocks, copy the master node list and inject into v2 validators
+			// Get last master node list from last v1 block
+			lastv1Block := blockchain.GetBlockByNumber(chainConfig.XDPoS.V2.SwitchBlock.Uint64())
+			masternodesFromV1LastEpoch := decodeMasternodesFromHeaderExtra(lastv1Block.Header())
+			for _, v := range masternodesFromV1LastEpoch {
+				header.Validators = append(header.Validators, v[:]...)
+			}
+			if penalties != nil {
+				header.Penalties = penalties
+			}
 		}
-
 	} else {
 		// V1 block
 		header = &types.Header{
@@ -531,6 +612,7 @@ func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*ty
 		Extra:       customHeader.Extra,
 		Validator:   customHeader.Validator,
 		Validators:  customHeader.Validators,
+		Penalties:   customHeader.Penalties,
 	}
 	var block *types.Block
 	if len(txs) == 0 {

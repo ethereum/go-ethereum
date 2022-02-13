@@ -178,7 +178,7 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil)
 
 	// block 901 is the first v2 block, and is treated as epoch switch block
 	blockchain.InsertBlock(currentBlock)
@@ -187,7 +187,7 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 	masternodes1ByNumber := adaptor.GetMasternodesByNumber(blockchain, currentBlock.NumberU64())
 	assert.True(t, reflect.DeepEqual(masternodes1, masternodes1ByNumber), "at block number", blockNum)
 	for blockNum = 902; blockNum < 915; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil)
 		blockchain.InsertBlock(currentBlock)
 		masternodes2 := adaptor.GetMasternodes(blockchain, currentBlock.Header())
 		assert.True(t, reflect.DeepEqual(masternodes1, masternodes2), "at block number", blockNum)
@@ -209,7 +209,7 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	// V2
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil)
 	blockchain.InsertBlock(currentBlock)
 	currentCheckpointNumber, epochNum, err = adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
 	assert.Nil(t, err)
@@ -217,7 +217,7 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	assert.Equal(t, uint64(1), epochNum)
 
 	for blockNum = 902; blockNum < 915; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil)
 
 		blockchain.InsertBlock(currentBlock)
 		currentCheckpointNumber, epochNum, err := adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
