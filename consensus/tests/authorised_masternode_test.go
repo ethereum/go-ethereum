@@ -3,6 +3,7 @@ package tests
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -73,11 +74,11 @@ func TestIsAuthorisedMNForConsensusV1(t *testing.T) {
 
 func TestIsAuthorisedMNForConsensusV2(t *testing.T) {
 	// we skip test for v1 since it's hard to make a real genesis block
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 10, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
-	blockNum := 11
+	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
 	blockchain.InsertBlock(currentBlock)
 
 	// As long as the address is in the master node list, they are all valid
@@ -93,16 +94,22 @@ func TestIsAuthorisedMNForConsensusV2(t *testing.T) {
 
 func TestIsYourTurnConsensusV2(t *testing.T) {
 	// we skip test for v1 since it's hard to make a real genesis block
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 10, params.TestXDPoSMockChainConfigWithV2Engine, 0)
-
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, 0)
+	minePeriod := params.TestXDPoSV2Config.MinePeriod
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
-	blockNum := 11
+	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn)
 	blockchain.InsertBlock(currentBlock)
 
-	// The first address is valid
+	// Less then Mine Period
 	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
+	assert.Nil(t, err)
+	assert.False(t, isYourTurn)
+
+	time.Sleep(time.Duration(minePeriod) * time.Second)
+	// The first address is valid
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.Nil(t, err)
 	assert.True(t, isYourTurn)
 
@@ -115,9 +122,10 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	assert.False(t, isYourTurn)
 
 	// We continue to grow the chain which will increase the round number
-	blockNum = 12
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, int64(blockNum-10), blockCoinBase, signer, signFn)
+	blockNum = 902
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn)
 	blockchain.InsertBlock(currentBlock)
+	time.Sleep(time.Duration(minePeriod) * time.Second)
 
 	adaptor.EngineV2.SetNewRoundFaker(1, false)
 	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))

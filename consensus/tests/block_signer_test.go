@@ -625,7 +625,7 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 /*
 // Pending for creating cross version blocks
 func TestV2UpdateSignerListIfVotedBeforeGap(t *testing.T) {
-	config := params.TestXDPoSMockChainConfigWithV2EngineEpochSwitch
+	config := params.TestXDPoSMockChainConfig
 	blockchain, backend, parentBlock, _ := PrepareXDCTestBlockChain(t, int(config.XDPoS.Epoch)+GAP-2, config)
 	// Insert first Block 1349
 	t.Logf("Inserting block with propose at 1349...")

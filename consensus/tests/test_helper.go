@@ -527,7 +527,7 @@ func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*ty
 		Difficulty:  difficulty,
 		Number:      customHeader.Number,
 		GasLimit:    1200000000,
-		Time:        big.NewInt(customHeader.Number.Int64() * 10),
+		Time:        big.NewInt(time.Now().Unix()),
 		Extra:       customHeader.Extra,
 		Validator:   customHeader.Validator,
 		Validators:  customHeader.Validators,

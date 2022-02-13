@@ -38,7 +38,9 @@ type XDPoS_v2 struct {
 	lock     sync.RWMutex    // Protects the signer fields
 	signLock sync.RWMutex    // Protects the signer fields
 
-	BroadcastCh   chan interface{}
+	BroadcastCh  chan interface{}
+	waitPeriodCh chan int
+
 	timeoutWorker *countdown.CountdownTimer // Timer to generate broadcast timeout msg if threashold reached
 
 	timeoutPool       *utils.Pool
@@ -54,7 +56,7 @@ type XDPoS_v2 struct {
 	HookReward func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
 }
 
-func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
+func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
 	// Setup Timer
 	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Second
 	timer := countdown.NewCountDown(duration)
@@ -74,8 +76,10 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v2 {
 		epochSwitches: epochSwitches,
 		timeoutWorker: timer,
 		BroadcastCh:   make(chan interface{}),
-		timeoutPool:   timeoutPool,
-		votePool:      votePool,
+		waitPeriodCh:  waitPeriodCh,
+
+		timeoutPool: timeoutPool,
+		votePool:    votePool,
 
 		highestTimeoutCert: &utils.TimeoutCert{
 			Round:      utils.Round(0),
@@ -144,6 +148,16 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 	snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), x.currentRound, x.highestQuorumCert, masternodes)
 	x.snapshots.Add(snap.Hash, snap)
 	storeSnapshot(snap, x.db)
+
+	// Initial timeout
+	log.Info("[Initial] miner wait period", "period", x.config.WaitPeriod)
+
+	// avoid deadlock
+	go func() {
+		x.waitPeriodCh <- x.config.V2.WaitPeriod
+	}()
+
+	log.Info("[Initial] finish initialisation")
 	return nil
 }
 
@@ -331,6 +345,12 @@ func (x *XDPoS_v2) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
 	x.lock.RLock()
 	defer x.lock.RUnlock()
+
+	waitedTime := time.Now().Unix() - parent.Time.Int64()
+	if waitedTime < int64(x.config.V2.MinePeriod) {
+		log.Trace("[YourTurn] wait after mine period", "minePeriod", x.config.V2.MinePeriod, "waitedTime", waitedTime)
+		return false, nil
+	}
 
 	round := x.currentRound
 	isEpochSwitch, _, err := x.IsEpochSwitchAtRound(round, parent)

@@ -58,10 +58,6 @@ const (
 	chainHeadChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
-	// timeout waiting for M1
-	waitPeriod = 10
-	// timeout for checkpoint.
-	waitPeriodCheckpoint = 20
 
 	txMatchGasLimit = 40000000
 )
@@ -269,7 +265,14 @@ func (self *worker) update() {
 	}
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
-	timeout := time.NewTimer(waitPeriod * time.Second)
+
+	// timeout waiting for v1 inital value
+	// TODO: Read value from config after we decide where is the config
+	waitPeriod := 10
+	WaitPeriodCh := self.engine.(*XDPoS.XDPoS).WaitPeriodCh
+	defer close(WaitPeriodCh)
+
+	timeout := time.NewTimer(time.Duration(waitPeriod) * time.Second)
 	c := make(chan struct{})
 	finish := make(chan struct{})
 	defer close(finish)
@@ -288,24 +291,31 @@ func (self *worker) update() {
 	for {
 		// A real event arrived, process interesting content
 		select {
+		case v := <-WaitPeriodCh:
+			log.Info("[worker] update mine period", "period", v)
+			waitPeriod = v
+			timeout.Reset(time.Duration(waitPeriod) * time.Second)
+
 		case <-c:
 			if atomic.LoadInt32(&self.mining) == 1 {
 				self.commitNewWork()
 			}
-			timeout.Reset(waitPeriod * time.Second)
-			// Handle ChainHeadEvent
+			timeout.Reset(time.Duration(waitPeriod) * time.Second)
+
+		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
-			timeout.Reset(waitPeriod * time.Second)
+			timeout.Reset(time.Duration(waitPeriod) * time.Second)
 
-			// Handle ChainSideEvent
+		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
 			if self.config.XDPoS == nil {
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
 			}
-			// Handle TxPreEvent
+
+		// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
@@ -322,8 +332,10 @@ func (self *worker) update() {
 					self.commitNewWork()
 				}
 			}
+
 		case <-self.chainHeadSub.Err():
 			return
+
 		case <-self.chainSideSub.Err():
 			return
 		}

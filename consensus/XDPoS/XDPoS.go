@@ -53,6 +53,9 @@ type XDPoS struct {
 	// Transaction cache, only make sense for adaptor level
 	signingTxsCache *lru.Cache
 
+	// Share Channel
+	WaitPeriodCh chan int // Miner wait Period Channel
+
 	// Trading and lending service
 	GetXDCXService    func() utils.TradingService
 	GetLendingService func() utils.LendingService
@@ -71,6 +74,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		config.Epoch = utils.EpochLength
 	}
 
+	waitPeriodCh := make(chan int)
 	// TODO: This shall be configurable or replaced
 	config.V2 = params.DevnetXDPoSV2Config
 
@@ -81,9 +85,11 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		config: config,
 		db:     db,
 
+		WaitPeriodCh: waitPeriodCh,
+
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.New(config, db),
-		EngineV2:        engine_v2.New(config, db),
+		EngineV2:        engine_v2.New(config, db, waitPeriodCh),
 	}
 }
 
@@ -97,18 +103,23 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		conf = chainConfig.XDPoS
 	}
 
+	waitPeriodCh := make(chan int)
+
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
 
 	fakeEngine = &XDPoS{
-		config:            conf,
-		db:                db,
+		config: conf,
+		db:     db,
+
+		WaitPeriodCh: waitPeriodCh,
+
 		GetXDCXService:    func() utils.TradingService { return nil },
 		GetLendingService: func() utils.LendingService { return nil },
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.NewFaker(db, conf),
-		EngineV2:        engine_v2.New(conf, db),
+		EngineV2:        engine_v2.New(conf, db, waitPeriodCh),
 	}
 	return fakeEngine
 }
@@ -305,8 +316,10 @@ func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber 
 func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
 	if x.config.V2.SwitchBlock != nil && parent.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		err := x.initialV2(chain, parent)
-		log.Error("[YourTurn] Error when initialise v2", "Error", err, "ParentBlock", parent)
-		return false, err
+		if err != nil {
+			log.Error("[YourTurn] Error when initialise v2", "Error", err, "ParentBlock", parent)
+			return false, err
+		}
 	}
 	switch x.config.BlockConsensusVersion(big.NewInt(parent.Number.Int64() + 1)) {
 	case params.ConsensusEngineVersion2:

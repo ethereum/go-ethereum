@@ -11,8 +11,8 @@ import (
 )
 
 func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
-	// Block 11 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	// Block 901 is the first v2 block with starting round of 0
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2
@@ -38,12 +38,12 @@ func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 	assert.Equal(t, utils.Round(5), round)
 	assert.Equal(t, extraField.QuorumCert, highestQuorumCert)
 	assert.Equal(t, utils.Round(2), highestCommitBlock.Round)
-	assert.Equal(t, big.NewInt(12), highestCommitBlock.Number)
+	assert.Equal(t, big.NewInt(902), highestCommitBlock.Number)
 }
 
 func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
-	// Block 11 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	// Block 901 is the first v2 block with starting round of 0
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2

@@ -16,7 +16,7 @@ import (
 
 // VoteHandler
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *testing.T) {
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -78,13 +78,13 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 }
 
 func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
 		Hash:   currentBlock.Hash(),
 		Round:  utils.Round(5),
-		Number: big.NewInt(15),
+		Number: big.NewInt(905),
 	}
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 
@@ -152,13 +152,13 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
 	// Check round has now changed from 5 to 6
 	assert.Equal(t, utils.Round(6), currentRound)
-	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 13 with round 3
+	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 903 with round 3
 	assert.Equal(t, utils.Round(3), highestCommitBlock.Round)
-	assert.Equal(t, big.NewInt(13), highestCommitBlock.Number)
+	assert.Equal(t, big.NewInt(903), highestCommitBlock.Number)
 }
 
 func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testing.T) {
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &utils.BlockInfo{
@@ -192,7 +192,7 @@ func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testi
 }
 
 func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 5
@@ -202,7 +202,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	blockInfo := &utils.BlockInfo{
 		Hash:   currentBlock.Hash(),
 		Round:  utils.Round(5),
-		Number: big.NewInt(11),
+		Number: big.NewInt(901),
 	}
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 	// Create two vote message which will not reach vote pool threshold
@@ -305,18 +305,18 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 }
 
 func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 15, params.TestXDPoSMockChainConfigWithV2Engine, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Create a new block but don't inject it into the chain yet
-	blockNum := 16
+	blockNum := 906
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
-	block := CreateBlock(blockchain, params.TestXDPoSMockChainConfigWithV2Engine, currentBlock, blockNum, 6, blockCoinBase, signer, signFn)
+	block := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 6, blockCoinBase, signer, signFn)
 
 	blockInfo := &utils.BlockInfo{
 		Hash:   block.Header().Hash(),
 		Round:  utils.Round(6),
-		Number: big.NewInt(16),
+		Number: big.NewInt(906),
 	}
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 
@@ -370,7 +370,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	// The highestQC proposedBlockInfo shall be the same as the one from its votes
 	assert.Equal(t, highestQuorumCert.ProposedBlockInfo, voteMsg.ProposedBlockInfo)
 	assert.Equal(t, utils.Round(7), currentRound)
-	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 14 with round 4
+	// Should trigger ProcessQC and trying to commit from blockNum of 16's grandgrandparent which is blockNum 904 with round 4
 	assert.Equal(t, utils.Round(4), highestCommitBlock.Round)
-	assert.Equal(t, big.NewInt(14), highestCommitBlock.Number)
+	assert.Equal(t, big.NewInt(904), highestCommitBlock.Number)
 }
