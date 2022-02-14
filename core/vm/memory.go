@@ -90,15 +90,12 @@ func (m *Memory) GetPtr(offset, size int64) []byte {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
-		if len(m.store) >= int(offset+size) {
-			return m.store[offset : offset+size]
-		} else {
-			return m.store[offset:]
-		}
+	if len(m.store) >= int(offset+size) {
+		return m.store[offset : offset+size]
+	} else {
+		panic("invalid memory: get out of bound")
 	}
 
-	return nil
 }
 
 // Len returns the length of the backing slice
