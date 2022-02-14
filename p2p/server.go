@@ -942,17 +942,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return errServerStopped
 	}
 
-	// If dialing, figure out the remote public key.
-	var dialPubkey *ecdsa.PublicKey
-	if dialDest != nil {
-		dialPubkey = new(ecdsa.PublicKey)
-		if err := dialDest.Load((*enode.Secp256k1)(dialPubkey)); err != nil {
-			err = errors.New("dial destination doesn't have a secp256k1 public key")
-			srv.log.Trace("Setting up connection failed", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
-			return err
-		}
-	}
-
 	// Run the RLPx handshake.
 	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
 	if err != nil {
