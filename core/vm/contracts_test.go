@@ -391,3 +391,18 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 	}
 	benchmarkPrecompiled("0f", testcase, b)
 }
+
+// TestEcrecover2 uses input from
+// https://github.com/ethereum/go-ethereum/issues/24037#issuecomment-1005641824
+func TestEcrecover2(t *testing.T) {
+	ec := &ecrecover{}
+	input := []byte{187, 96, 219, 168, 155, 3, 169, 4, 121, 177, 81, 151, 52, 171, 4, 70, 63, 107, 57, 13, 239, 31, 227, 245, 37, 152, 194, 136, 190, 12, 160, 188, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 175, 213, 44, 44, 157, 70, 98, 170, 123, 13, 188, 240, 91, 160, 47, 101, 215, 183, 32, 89, 157, 103, 110, 15, 33, 90, 222, 137, 70, 187, 65, 238, 26, 171, 201, 10, 15, 215, 197, 247, 232, 145, 134, 173, 164, 40, 30, 36, 208, 100, 103, 222, 129, 78, 22, 77, 104, 166, 49, 40, 31, 50, 80, 147}
+	fmt.Printf("input: %d %x\n", len(input), input)
+	out, err := ec.Run(input)
+	if err != nil {
+		t.Fatal("expected no error")
+	}
+	if len(out) != 0 {
+		fmt.Printf("expected no output")
+	}
+}
