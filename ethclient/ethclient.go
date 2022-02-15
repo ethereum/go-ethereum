@@ -456,7 +456,8 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 	return hex, nil
 }
 
-// CallContractAtHash is almost the same as CallContract except that it selects the block by block hash instead of block height.
+// CallContractAtHash is almost the same as CallContract except that it selects
+// the block by block hash instead of block height.
 func (ec *Client) CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) ([]byte, error) {
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), rpc.BlockNumberOrHashWithHash(blockHash, false))
