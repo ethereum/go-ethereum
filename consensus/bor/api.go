@@ -54,7 +54,7 @@ type BlockSigners struct {
 
 // GetSnapshotProposerSequence retrieves the in-turn signers of all sprints in a span
 func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigners, error) {
-
+	*number -= 1
 	var difficulties = make(map[common.Address]uint64)
 	snap, err := api.GetSnapshot(number)
 	if err != nil {
