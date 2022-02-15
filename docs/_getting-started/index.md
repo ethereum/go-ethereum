@@ -14,20 +14,20 @@ We assume you have Geth installed for this guide and are ready to find out how t
 ### Networks
 You can connect a Geth node to several different networks using the network name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net) you create, and three test networks that use different consensus algorithms:
 
--   Ropsten: Proof-of-work test network
--   Rinkeby: Proof-of-authority test network
--   Görli: Proof-of-authority test network
+-   **Ropsten:** Proof-of-work test network
+-   **Rinkeby:** Proof-of-authority test network
+-   **Görli:** Proof-of-authority test network
 
-For this guide, you will use the Görli network. The default port is 8545, so you need to enable at least outgoing access from your node to that port.
+For this guide, you will use the Görli network and the default port is 8545, so you need to enable at least outgoing access from your node to that port.
 ### Sync modes
 You can start Geth in one of three different sync modes using the `--syncmode "<mode>"` argument that determines what sort of node it is in the network.
 These are:
 
-- Full: Downloads all blocks (including headers, transactions, and receipts) and generates the state of the blockchain incrementally by executing every block.
-- Snap (Default): Same functionality as fast, but with a faster algorithm.
-- Light: Downloads all block headers, block data, and verifies some randomly.
+- **Full:** Downloads all blocks (including headers, transactions, and receipts) and generates the state of the blockchain incrementally by executing every block.
+- **Snap:** (Default): Same functionality as fast, but with a faster algorithm.
+- **Light:** When using the "light" synchronization, the node only downloads a few recent block headers, block data and syncs quickly..
 
-For this tutorial, you will use a `light` sync:
+For this guide, you will use a `light` sync:
 
 ### Requirements:
 
@@ -63,7 +63,7 @@ Enter 'ok' to proceed:
 > 
 ```
 
-Enter “ok” and hit the enter key. Next, the system will request the below action.
+Enter “ok” and press the enter key. Next, the system will request the below action.
 
 **Please enter a password for the new account to be created (attempt 0 of 3)**
 
@@ -87,7 +87,7 @@ Save your password and the generated account because you will need them later in
 ```
 ## Step 2:  Start Clef
 
-To start clef, open a new terminal and run the command below. Keeping clef running is required for the other steps to work.
+To start clef, open a new terminal and run the command below. Keeping clef running is required for the other steps because it signs transactions.
 
 ```shell
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
@@ -118,10 +118,8 @@ INFO [02-10|13:55:30.984] IPC endpoint opened                      url=geth-tuto
 * extapi_ipc : geth-tutorial/clef/clef.ipc
 ```
 
-> **Note:** keep this terminal open.
-
 ## Step 3:  Start Geth
-To start geth, open a new terminal and run the command below. Keeping geth running is required for the other steps to work.
+To start geth, open a new terminal and run the command below. Keeping geth running is required for the other steps because the command below starts the HTTP server.
 
 ```shell
 geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode light --http
@@ -182,7 +180,7 @@ To connect to the IPC console, open a new terminal and run the command below.
 ```shell
 geth attach http://127.0.0.1:8545
 ```
-This will open the Geth javascript console and give you the result below.
+This will open the Geth javascript console as shown below.
 
 ```terminal
 Welcome to the Geth JavaScript console!
@@ -403,7 +401,7 @@ If successful, you will get the below response.
  
  > **Note:** http://127.0.0.1:8545 this is the default address.
  
- To check your account balance use the command below.
+ To check your account balance, use the command below.
 
  ```
   curl -X POST http://127.0.0.1:8545 \
