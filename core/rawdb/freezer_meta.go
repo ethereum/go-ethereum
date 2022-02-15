@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -175,7 +176,7 @@ func upgradeTableIndex(index *os.File, version uint16) (*os.File, *freezerTableM
 			return nil, nil, err
 		}
 	default:
-		return nil, nil, errors.New("unknown freezer table index")
+		return nil, nil, errors.New("unknown freezer table version")
 	}
 	// Reopen the upgraded index file and load the metadata from it
 	index, err := os.Open(index.Name())
@@ -205,7 +206,7 @@ func repairTableIndex(index *os.File) (*os.File, *freezerTableMeta, error) {
 			return nil, nil, err
 		}
 		// Shift file cursor to the end for next write operation
-		_, err = index.Seek(0, 2)
+		_, err = index.Seek(0, io.SeekEnd)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -406,6 +406,17 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	if existing <= items {
 		return nil
 	}
+	// Calculate the relative offset between the new head and tail, use
+	// it to access the corresponding index entry. If the requested target
+	// is even below the freezer tail, reject it.
+	var (
+		itemOffset = atomic.LoadUint64(&t.itemOffset)
+		itemHidden = atomic.LoadUint64(&t.itemHidden)
+		tail       = itemOffset + itemHidden
+	)
+	if items < tail {
+		return errors.New("truncation below tail")
+	}
 	// We need to truncate, save the old size for metrics tracking
 	oldSize, err := t.sizeNolock()
 	if err != nil {
@@ -418,28 +429,16 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	}
 	log("Truncating freezer table", "items", existing, "limit", items)
 
-	// Calculate the relative offset between the new head and tail, use
-	// it to access the corresponding index entry. If the requested target
-	// is even below the freezer tail, reject it.
-	var (
-		itemOffset = atomic.LoadUint64(&t.itemOffset)
-		itemHidden = atomic.LoadUint64(&t.itemHidden)
-		tail       = itemOffset + itemHidden
-	)
-	if items < tail {
-		return errors.New("truncation below tail")
-	}
-	offset := items - itemOffset
-
-	if err := truncateFreezerFile(t.index, int64(offset)*indexEntrySize+metaLength); err != nil {
+	length := items - itemOffset
+	if err := truncateFreezerFile(t.index, int64(length)*indexEntrySize+metaLength); err != nil {
 		return err
 	}
 	// Calculate the new expected size of the data file and truncate it
 	var expected *indexEntry
-	if offset == 0 {
+	if length == 0 {
 		expected = &indexEntry{filenum: t.tailId, offset: 0}
 	} else {
-		expected, err = t.getIndex(int64(offset-1), 0)
+		expected, err = t.getIndex(int64(length-1), 0)
 		if err != nil {
 			return err
 		}
@@ -498,7 +497,7 @@ func (t *freezerTable) truncateIndexFile(originDeleted, deleted, hidden uint64, 
 	return nil
 }
 
-// truncateHead discards any recent data before the provided threshold number.
+// truncateTail discards any recent data before the provided threshold number.
 func (t *freezerTable) truncateTail(items uint64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -515,18 +514,31 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if head < items {
 		return errors.New("truncation above head")
 	}
-	// Load the index of new tail item after the deletion.
-	newTail, err := t.getIndex(int64(items-deleted), 0)
+	// Load the file number of new tail item after the deletion.
+	count, err := t.indexLen()
 	if err != nil {
 		return err
 	}
-	// Freezer only supports deletion by file, just mark the entries as hidden
-	if t.tailId == newTail.filenum {
-		atomic.StoreUint64(&t.itemHidden, items-deleted)
-		return storeMetadata(t.index, newMetadata(t.tailId, deleted, items-deleted))
+	var (
+		tailId uint32
+		delLen = items - deleted
+	)
+	if uint64(count) == delLen {
+		tailId = t.headId
+	} else {
+		newTail, err := t.getIndex(int64(delLen), 0)
+		if err != nil {
+			return err
+		}
+		tailId = newTail.filenum
 	}
-	if t.tailId > newTail.filenum {
-		return fmt.Errorf("invalid index, tail-file %d, item-file %d", t.tailId, newTail.filenum)
+	// Freezer only supports deletion by file, just mark the entries as hidden
+	if t.tailId == tailId {
+		atomic.StoreUint64(&t.itemHidden, delLen)
+		return storeMetadata(t.index, newMetadata(t.tailId, deleted, delLen))
+	}
+	if t.tailId > tailId {
+		return fmt.Errorf("invalid index, tail-file %d, item-file %d", t.tailId, tailId)
 	}
 	// We need to truncate, save the old size for metrics tracking
 	oldSize, err := t.sizeNolock()
@@ -540,16 +552,16 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		if err != nil {
 			return err
 		}
-		if cur.filenum != newTail.filenum {
+		if cur.filenum != tailId {
 			break
 		}
 		newDeleted = current
 	}
-	if err := t.truncateIndexFile(deleted, newDeleted, items-newDeleted, newTail.filenum); err != nil {
+	if err := t.truncateIndexFile(deleted, newDeleted, items-newDeleted, tailId); err != nil {
 		return err
 	}
 	// Release any files before the current tail
-	t.tailId = newTail.filenum
+	t.tailId = tailId
 	atomic.StoreUint64(&t.itemOffset, newDeleted)
 	atomic.StoreUint64(&t.itemHidden, items-newDeleted)
 	t.releaseFilesBefore(t.tailId, true)

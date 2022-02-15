@@ -760,7 +760,7 @@ func TestTruncateTail(t *testing.T) {
 	})
 
 	// truncate all, the entire freezer should be deleted
-	f.truncateTail(6)
+	f.truncateTail(7)
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
@@ -768,13 +768,11 @@ func TestTruncateTail(t *testing.T) {
 		3: errOutOfBounds,
 		4: errOutOfBounds,
 		5: errOutOfBounds,
-	})
-	checkRetrieve(t, f, map[uint64][]byte{
-		6: getChunk(20, 0x11),
+		6: errOutOfBounds,
 	})
 }
 
-func TestTruncateHeadBelowTail(t *testing.T) {
+func TestTruncateHead(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("truncate-head-blow-tail-%d", rand.Uint64())
@@ -821,12 +819,6 @@ func TestTruncateHeadBelowTail(t *testing.T) {
 		4: getChunk(20, 0xbb),
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
-	})
-
-	f.truncateTail(5) // Lazy deleted the item-4, it's hidden
-	f.truncateHead(5) // New head is reset to item-4
-	checkRetrieveError(t, f, map[uint64]error{
-		4: errOutOfBounds, // Hidden item
 	})
 }
 
