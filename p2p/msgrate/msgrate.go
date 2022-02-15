@@ -35,7 +35,7 @@ import (
 // measurementImpact is the impact a single measurement has on a peer's final
 // capacity value. A value closer to 0 reacts slower to sudden network changes,
 // but it is also more stable against temporary hiccups. 0.1 worked well for
-// most of Ethereum's existence, so might as well go with it.
+// most of xPayments's existence, so might as well go with it.
 const measurementImpact = 0.1
 
 // capacityOverestimation is the ratio of items to over-estimate when retrieving
@@ -44,7 +44,7 @@ const measurementImpact = 0.1
 const capacityOverestimation = 1.01
 
 // qosTuningPeers is the number of best peers to tune round trip times based on.
-// An Ethereum node doesn't need hundreds of connections to operate correctly,
+// An xPayments node doesn't need hundreds of connections to operate correctly,
 // so instead of lowering our download speed to the median of potentially many
 // bad nodes, we can target a smaller set of vey good nodes. At worse this will
 // result in less nodes to sync from, but that's still better than some hogging
@@ -133,7 +133,7 @@ type Tracker struct {
 	//
 	// Callers of course are free to use the item counter as a byte counter if
 	// or when their protocol of choise if capped by bytes instead of items.
-	// (eg. eth.getHeaders vs snap.getAccountRange).
+	// (eg. xps.getHeaders vs snap.getAccountRange).
 	capacity map[uint64]float64
 
 	// roundtrip is the latency a peer in general responds to data requests.

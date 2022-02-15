@@ -41,7 +41,7 @@ which can
 
 The idea is to specify the behaviour of this binary very _strict_, so that other
 node implementors can build replicas based on their own state-machines, and the
-state generators can swap between a \`geth\`-based implementation and a \`parityvm\`-based
+state generators can swap between a \`gpay\`-based implementation and a \`parityvm\`-based
 implementation.
 
 ### Command line params
@@ -118,7 +118,7 @@ Mining rewards and ommer rewards might need to be added. This is how those are a
 To make \`state_t8n\` apply these, the following inputs are required:
 
 - \`state.reward\`
-  - For ethash, it is \`5000000000000000000\` \`wei\`,
+  - For xpsash, it is \`5000000000000000000\` \`wei\`,
   - If this is not defined, mining rewards are not applied,
   - A value of \`0\` is valid, and causes accounts to be 'touched'.
 - For each ommer, the tool needs to be given an \`address\` and a \`delta\`. This

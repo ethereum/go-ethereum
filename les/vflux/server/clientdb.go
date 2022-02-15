@@ -27,11 +27,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/les/utils"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/ethdb"
@@ -67,7 +67,7 @@ var (
 )
 
 type nodeDB struct {
-	db            ethdb.KeyValueStore
+	db            xpsdb.KeyValueStore
 	cache         *lru.Cache
 	auxbuf        []byte                                              // 37-byte auxiliary buffer for key encoding
 	verbuf        [2]byte                                             // 2-byte auxiliary buffer for db version
@@ -77,7 +77,7 @@ type nodeDB struct {
 	cleanupHook   func() // Test hook used for testing
 }
 
-func newNodeDB(db ethdb.KeyValueStore, clock mclock.Clock) *nodeDB {
+func newNodeDB(db xpsdb.KeyValueStore, clock mclock.Clock) *nodeDB {
 	cache, _ := lru.New(balanceCacheLimit)
 	ndb := &nodeDB{
 		db:      db,

@@ -19,7 +19,7 @@
 
 // Contains all the wrappers from the math/big package.
 
-package geth
+package gpay
 
 import (
 	"errors"

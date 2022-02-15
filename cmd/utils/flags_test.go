@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-xpayments commands.
 
 package utils
 

@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/xpaymentsorg/go-xpayments/cmd/devp2p/internal/ethtest"
+	"github.com/xpaymentsorg/go-xpayments/cmd/devp2p/internal/xpstest"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/internal/utesting"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
@@ -45,7 +45,7 @@ var (
 		Usage: "RLPx Commands",
 		Subcommands: []cli.Command{
 			rlpxPingCommand,
-			rlpxEthTestCommand,
+			rlpxXpsTestCommand,
 			rlpxSnapTestCommand,
 		},
 	}
@@ -54,11 +54,11 @@ var (
 		Usage:  "ping <node>",
 		Action: rlpxPing,
 	}
-	rlpxEthTestCommand = cli.Command{
-		Name:      "eth-test",
+	rlpxXpsTestCommand = cli.Command{
+		Name:      "xps-test",
 		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
-		Action:    rlpxEthTest,
+		Action:    rlpxXpsTest,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
@@ -94,7 +94,7 @@ func rlpxPing(ctx *cli.Context) error {
 	}
 	switch code {
 	case 0:
-		var h ethtest.Hello
+		var h xpstest.Hello
 		if err := rlp.DecodeBytes(data, &h); err != nil {
 			return fmt.Errorf("invalid handshake: %v", err)
 		}
@@ -111,21 +111,21 @@ func rlpxPing(ctx *cli.Context) error {
 	return nil
 }
 
-// rlpxEthTest runs the eth protocol test suite.
-func rlpxEthTest(ctx *cli.Context) error {
+// rlpxXpsTest runs the xps protocol test suite.
+func rlpxXpsTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+	suite, err := xpstest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
 	if err != nil {
 		exit(err)
 	}
-	// check if given node supports eth66, and if so, run eth66 protocol tests as well
+	// check if given node supports xps66, and if so, run xps66 protocol tests as well
 	is66Failed, _ := utesting.Run(utesting.Test{Name: "Is_66", Fn: suite.Is_66})
 	if is66Failed {
-		return runTests(ctx, suite.EthTests())
+		return runTests(ctx, suite.XpsTests())
 	}
-	return runTests(ctx, suite.AllEthTests())
+	return runTests(ctx, suite.AllXpsTests())
 }
 
 // rlpxSnapTest runs the snap protocol test suite.
@@ -133,7 +133,7 @@ func rlpxSnapTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+	suite, err := xpstest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
 	if err != nil {
 		exit(err)
 	}

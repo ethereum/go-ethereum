@@ -29,7 +29,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
-	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
+	"github.com/xpaymentsorg/go-xpayments/internal/xpsapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
 	// "github.com/ethereum/go-ethereum/console/prompt"
@@ -242,7 +242,7 @@ func (ui *CommandlineUI) ShowInfo(message string) {
 	fmt.Printf("## Info \n%s\n", message)
 }
 
-func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+func (ui *CommandlineUI) OnApprovedTx(tx xpsapi.SignTransactionResult) {
 	fmt.Printf("Transaction signed:\n ")
 	if jsn, err := json.MarshalIndent(tx.Tx, "  ", "  "); err != nil {
 		fmt.Printf("WARN: marshalling error %v\n", err)

@@ -37,11 +37,11 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/tests"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
@@ -100,7 +100,7 @@ type input struct {
 }
 
 func Transition(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
+	// Configure the go-xpayments logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)

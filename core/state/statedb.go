@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package state provides a caching layer atop the Ethereum state trie.
+// Package state provides a caching layer atop the xPayments state trie.
 
 package state
 
@@ -69,7 +69,7 @@ func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
-// StateDB structs within the ethereum protocol are used to store anything
+// StateDB structs within the xpayments protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
 // * Contracts
@@ -618,7 +618,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //   1. sends funds to sha(account ++ (nonce + 1))
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
-// Carrying over the balance ensures that Ether doesn't disappear.
+// Carrying over the balance ensures that Xpser doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {

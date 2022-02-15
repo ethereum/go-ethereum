@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/log"
@@ -36,7 +36,7 @@ import (
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
-func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
+func ReadDatabaseVersion(db xpsdb.KeyValueReader) *uint64 {
 	var version uint64
 
 	enc, _ := db.Get(databaseVersionKey)
@@ -51,7 +51,7 @@ func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 }
 
 // WriteDatabaseVersion stores the version number of the database
-func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
+func WriteDatabaseVersion(db xpsdb.KeyValueWriter, version uint64) {
 	enc, err := rlp.EncodeToBytes(version)
 	if err != nil {
 		log.Crit("Failed to encode database version", "err", err)
@@ -62,7 +62,7 @@ func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 }
 
 // ReadChainConfig retrieves the consensus settings based on the given genesis hash.
-func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainConfig {
+func ReadChainConfig(db xpsdb.KeyValueReader, hash common.Hash) *params.ChainConfig {
 	data, _ := db.Get(configKey(hash))
 	if len(data) == 0 {
 		return nil
@@ -76,7 +76,7 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainCon
 }
 
 // WriteChainConfig writes the chain config settings to the database.
-func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.ChainConfig) {
+func WriteChainConfig(db xpsdb.KeyValueWriter, hash common.Hash, cfg *params.ChainConfig) {
 	if cfg == nil {
 		return
 	}
@@ -102,7 +102,7 @@ const crashesToKeep = 10
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
+func PushUncleanShutdownMarker(db xpsdb.KeyValueStore) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -130,7 +130,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 }
 
 // PopUncleanShutdownMarker removes the last unclean shutdown marker
-func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
+func PopUncleanShutdownMarker(db xpsdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -148,7 +148,7 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 }
 
 // UpdateUncleanShutdownMarker updates the last marker's timestamp to now.
-func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
+func UpdateUncleanShutdownMarker(db xpsdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
@@ -169,15 +169,15 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	}
 }
 
-// ReadTransitionStatus retrieves the eth2 transition status from the database
-func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
+// ReadTransitionStatus retrieves the xps2 transition status from the database
+func ReadTransitionStatus(db xpsdb.KeyValueReader) []byte {
 	data, _ := db.Get(transitionStatusKey)
 	return data
 }
 
-// WriteTransitionStatus stores the eth2 transition status to the database
-func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
+// WriteTransitionStatus stores the xps2 transition status to the database
+func WriteTransitionStatus(db xpsdb.KeyValueWriter, data []byte) {
 	if err := db.Put(transitionStatusKey, data); err != nil {
-		log.Crit("Failed to store the eth2 transition status", "err", err)
+		log.Crit("Failed to store the xps2 transition status", "err", err)
 	}
 }

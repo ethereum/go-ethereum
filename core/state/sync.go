@@ -24,9 +24,9 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/trie"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/ethdb"
@@ -35,7 +35,7 @@ import (
 )
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(paths [][]byte, leaf []byte) error) *trie.Sync {
+func NewStateSync(root common.Hash, database xpsdb.KeyValueReader, onLeaf func(paths [][]byte, leaf []byte) error) *trie.Sync {
 	// Register the storage slot callback if the external callback is specified.
 	var onSlot func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error
 	if onLeaf != nil {

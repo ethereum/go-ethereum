@@ -45,7 +45,7 @@ var (
 var app *cli.App
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
+	app = flags.NewApp(gitCommit, gitDate, "xpayments checkpoint helper tool")
 	app.Commands = []cli.Command{
 		commandStatus,
 		commandDeploy,
@@ -80,7 +80,7 @@ var (
 	nodeURLFlag = cli.StringFlag{
 		Name:  "rpc",
 		Value: "http://localhost:8545",
-		Usage: "The rpc endpoint of a local or remote geth node",
+		Usage: "The rpc endpoint of a local or remote gpay node",
 	}
 	clefURLFlag = cli.StringFlag{
 		Name:  "clef",

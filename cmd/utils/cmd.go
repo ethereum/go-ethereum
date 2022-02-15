@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-xpayments commands.
 
 package utils
 
@@ -39,12 +39,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core"
@@ -93,7 +93,7 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 
-		minFreeDiskSpace := ethconfig.Defaults.TrieDirtyCache
+		minFreeDiskSpace := xpsconfig.Defaults.TrieDirtyCache
 		if ctx.GlobalIsSet(MinFreeDiskSpaceFlag.Name) {
 			minFreeDiskSpace = ctx.GlobalInt(MinFreeDiskSpaceFlag.Name)
 		} else if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
@@ -141,11 +141,11 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 			break
 		}
 		if freeSpace < freeDiskSpaceCritical {
-			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace))
+			log.Error("Low disk space. Gracefully shutting down Gpay to prevent database corruption.", "available", common.StorageSize(freeSpace))
 			sigc <- syscall.SIGTERM
 			break
 		} else if freeSpace < 2*freeDiskSpaceCritical {
-			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
+			log.Warn("Disk space is running low. Gpay will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
 		}
 		time.Sleep(60 * time.Second)
 	}
@@ -305,7 +305,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
 // It's a part of the deprecated functionality, should be removed in the future.
-func ImportPreimages(db ethdb.Database, fn string) error {
+func ImportPreimages(db xpsdb.Database, fn string) error {
 	log.Info("Importing preimages", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -353,7 +353,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 // ExportPreimages exports all known hash preimages into the specified file,
 // truncating any data already present in the file.
 // It's a part of the deprecated functionality, should be removed in the future.
-func ExportPreimages(db ethdb.Database, fn string) error {
+func ExportPreimages(db xpsdb.Database, fn string) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -387,20 +387,20 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 // should be bumped.
 // If the importer sees a higher version, it should reject the import.
 type exportHeader struct {
-	Magic    string // Always set to 'gethdbdump' for disambiguation
+	Magic    string // Always set to 'gpaydbdump' for disambiguation
 	Version  uint64
 	Kind     string
 	UnixTime uint64
 }
 
-const exportMagic = "gethdbdump"
+const exportMagic = "gpaydbdump"
 const (
 	OpBatchAdd = 0
 	OpBatchDel = 1
 )
 
 // ImportLDBData imports a batch of snapshot data into the database
-func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
+func ImportLDBData(db xpsdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
 	log.Info("Importing leveldb data", "file", f)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -469,7 +469,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		default:
 			return fmt.Errorf("unknown op %d\n", op)
 		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
+		if batch.ValueSize() > xpsdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return err
 			}

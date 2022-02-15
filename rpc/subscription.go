@@ -204,7 +204,7 @@ func (s *Subscription) MarshalJSON() ([]byte, error) {
 }
 
 // ClientSubscription is a subscription established through the Client's Subscribe or
-// EthSubscribe methods.
+// XpsSubscribe methods.
 type ClientSubscription struct {
 	client    *Client
 	etype     reflect.Type

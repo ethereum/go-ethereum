@@ -51,7 +51,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		BerlinBlock:             original.BerlinBlock,
 		LondonBlock:             original.LondonBlock,
 		TerminalTotalDifficulty: original.TerminalTotalDifficulty,
-		Ethash:                  original.Ethash,
+		Xpsash:                  original.Xpsash,
 		Clique:                  original.Clique,
 	}
 }

@@ -25,8 +25,8 @@ import (
 
 const (
 	VersionMajor = 1          // Major version component of the current release
-	VersionMinor = 10         // Minor version component of the current release
-	VersionPatch = 16         // Patch version component of the current release
+	VersionMinor = 1          // Minor version component of the current release
+	VersionPatch = 1          // Patch version component of the current release
 	VersionMeta  = "unstable" // Version metadata to append to the version string
 )
 
@@ -44,7 +44,7 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
-// ArchiveVersion holds the textual version string used for Geth archives.
+// ArchiveVersion holds the textual version string used for Gpay archives.
 // e.g. "1.8.11-dea1ce05" for stable releases, or
 //      "1.8.13-unstable-21c059b6" for unstable releases
 func ArchiveVersion(gitCommit string) string {

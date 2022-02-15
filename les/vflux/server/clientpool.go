@@ -25,13 +25,13 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/les/utils"
 	"github.com/xpaymentsorg/go-xpayments/les/vflux"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/p2p/nodestate"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/les/utils"
@@ -93,7 +93,7 @@ type clientPeer interface {
 }
 
 // NewClientPool creates a new client pool
-func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
+func NewClientPool(balanceDb xpsdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
 	setup := newServerSetup()
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	cp := &ClientPool{

@@ -31,12 +31,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 	"github.com/xpaymentsorg/go-xpayments/core/forkid"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/eth/protocols/eth"
 	"github.com/xpaymentsorg/go-xpayments/les/downloader"
 	"github.com/xpaymentsorg/go-xpayments/light"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps/protocols/xps"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/core/forkid"
@@ -57,7 +57,7 @@ type clientHandler struct {
 	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
 	downloader *downloader.Downloader
-	backend    *LightEthereum
+	backend    *LightxPayments
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
@@ -67,7 +67,7 @@ type clientHandler struct {
 	syncEnd   func(header *types.Header) // Hook called when the syncing is done
 }
 
-func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
+func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightxPayments) *clientHandler {
 	handler := &clientHandler{
 		forkFilter: forkid.NewFilter(backend.blockchain),
 		checkpoint: checkpoint,
@@ -121,12 +121,12 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	if h.backend.peers.len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
-	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
+	p.Log().Debug("Light xPayments peer connected", "name", p.Name())
 
 	// Execute the LES handshake
 	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.CurrentHeader().Number.Uint64())
 	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), forkid, h.forkFilter); err != nil {
-		p.Log().Debug("Light Ethereum handshake failed", "err", err)
+		p.Log().Debug("Light xPayments handshake failed", "err", err)
 		return err
 	}
 	// Register peer with the server pool
@@ -144,7 +144,7 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	}
 	// Register the peer locally
 	if err := h.backend.peers.register(p); err != nil {
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
+		p.Log().Error("Light xPayments peer registration failed", "err", err)
 		return err
 	}
 
@@ -170,7 +170,7 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	// Spawn a main loop to handle all incoming messages.
 	for {
 		if err := h.handleMsg(p); err != nil {
-			p.Log().Debug("Light Ethereum message handling failed", "err", err)
+			p.Log().Debug("Light xPayments message handling failed", "err", err)
 			p.fcServer.DumpLogs()
 			return err
 		}
@@ -185,7 +185,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	if err != nil {
 		return err
 	}
-	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
+	p.Log().Trace("Light xPayments message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	if msg.Size > ProtocolMaxMsgSize {
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
@@ -494,7 +494,7 @@ func (d *downloaderPeerNotify) registerPeer(p *serverPeer) {
 		handler: h,
 		peer:    p,
 	}
-	h.downloader.RegisterLightPeer(p.id, eth.ETH66, pc)
+	h.downloader.RegisterLightPeer(p.id, xps.XPS66, pc)
 }
 
 func (d *downloaderPeerNotify) unregisterPeer(p *serverPeer) {

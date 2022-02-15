@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements xPayments block creation and mining.
 
 package miner
 
@@ -33,10 +33,10 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/trie"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/memorydb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/consensus/clique"
 	// "github.com/ethereum/go-ethereum/core"
@@ -217,9 +217,9 @@ func TestCloseMiner(t *testing.T) {
 	waitForMiningState(t, miner, false)
 }
 
-// TestMinerSetEtherbase checks that etherbase becomes set even if mining isn't
+// TestMinerSetXpserbase checks that xpserbase becomes set even if mining isn't
 // possible at the moment
-func TestMinerSetEtherbase(t *testing.T) {
+func TestMinerSetXpserbase(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 	// Start with a 'bad' mining address
@@ -257,9 +257,9 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 }
 
 func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
-	// Create Ethash config
+	// Create Xpsash config
 	config := Config{
-		Etherbase: common.HexToAddress("123456789"),
+		Xpserbase: common.HexToAddress("123456789"),
 	}
 	// Create chainConfig
 	memdb := memorydb.New()
@@ -271,7 +271,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	}
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
-	// Create Ethereum backend
+	// Create xPayments backend
 	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)

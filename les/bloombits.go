@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// bloomServiceThreads is the number of goroutines used globally by an Ethereum
+	// bloomServiceThreads is the number of goroutines used globally by an xPayments
 	// instance to service bloombits lookups for all running filters.
 	bloomServiceThreads = 16
 
@@ -48,19 +48,19 @@ const (
 
 // startBloomHandlers starts a batch of goroutines to accept bloom bit database
 // retrievals from possibly a range of filters and serving the data to satisfy.
-func (eth *LightEthereum) startBloomHandlers(sectionSize uint64) {
+func (xps *LightxPayments) startBloomHandlers(sectionSize uint64) {
 	for i := 0; i < bloomServiceThreads; i++ {
 		go func() {
-			defer eth.wg.Done()
+			defer xps.wg.Done()
 			for {
 				select {
-				case <-eth.closeCh:
+				case <-xps.closeCh:
 					return
 
-				case request := <-eth.bloomRequests:
+				case request := <-xps.bloomRequests:
 					task := <-request
 					task.Bitsets = make([][]byte, len(task.Sections))
-					compVectors, err := light.GetBloomBits(task.Context, eth.odr, task.Bit, task.Sections)
+					compVectors, err := light.GetBloomBits(task.Context, xps.odr, task.Bit, task.Sections)
 					if err == nil {
 						for i := range task.Sections {
 							if blob, err := bitutil.DecompressBytes(compVectors[i], int(sectionSize/8)); err == nil {

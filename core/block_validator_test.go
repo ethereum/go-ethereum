@@ -30,7 +30,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/consensus/beacon"
 	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
@@ -55,14 +55,14 @@ func TestHeaderVerification(t *testing.T) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -70,10 +70,10 @@ func TestHeaderVerification(t *testing.T) {
 			var results <-chan error
 
 			if valid {
-				engine := ethash.NewFaker()
+				engine := xpsash.NewFaker()
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			} else {
-				engine := ethash.NewFakeFailer(headers[i].Number.Uint64())
+				engine := xpsash.NewFakeFailer(headers[i].Number.Uint64())
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			}
 			// Wait for the verification result
@@ -97,9 +97,9 @@ func TestHeaderVerification(t *testing.T) {
 }
 
 func TestHeaderVerificationForMergingClique(t *testing.T) { testHeaderVerificationForMerging(t, true) }
-func TestHeaderVerificationForMergingEthash(t *testing.T) { testHeaderVerificationForMerging(t, false) }
+func TestHeaderVerificationForMergingXpsash(t *testing.T) { testHeaderVerificationForMerging(t, false) }
 
-// Tests the verification for eth1/2 merging, including pre-merge and post-merge
+// Tests the verification for xps1/2 merging, including pre-merge and post-merge
 func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	var (
 		testdb      = rawdb.NewMemoryDatabase()
@@ -150,7 +150,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	} else {
 		gspec := &Genesis{Config: params.TestChainConfig}
 		genesis := gspec.MustCommit(testdb)
-		genEngine := beacon.New(ethash.NewFaker())
+		genEngine := beacon.New(xpsash.NewFaker())
 
 		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
 		td := 0
@@ -163,7 +163,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
 
 		chainConfig = &config
-		runEngine = beacon.New(ethash.NewFaker())
+		runEngine = beacon.New(xpsash.NewFaker())
 	}
 
 	preHeaders := make([]*types.Header, len(preBlocks))
@@ -273,7 +273,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
@@ -292,11 +292,11 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		var results <-chan error
 
 		if valid {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFaker(), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}
@@ -345,7 +345,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 1024, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 1024, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
@@ -359,7 +359,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	defer runtime.GOMAXPROCS(old)
 
 	// Start the verifications and immediately abort
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	abort, results := chain.engine.VerifyHeaders(chain, headers, seals)

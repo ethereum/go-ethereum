@@ -19,7 +19,7 @@
 
 // Contains all the wrappers from the params package.
 
-package geth
+package gpay
 
 import (
 	"encoding/json"
@@ -32,7 +32,7 @@ import (
 	// "github.com/ethereum/go-ethereum/params"
 )
 
-// MainnetGenesis returns the JSON spec to use for the main Ethereum network. It
+// MainnetGenesis returns the JSON spec to use for the main xPayments network. It
 // is actually empty since that defaults to the hard coded binary genesis block.
 func MainnetGenesis() string {
 	return ""

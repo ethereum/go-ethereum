@@ -56,7 +56,7 @@ const (
 // all registered services.
 type Config struct {
 	// Name sets the instance name of the node. It must not contain the / character and is
-	// used in the devp2p node identifier. The instance name of geth is "geth". If no
+	// used in the devp2p node identifier. The instance name of gpay is "gpay". If no
 	// value is specified, the basename of the current executable is used.
 	Name string `toml:"-"`
 
@@ -195,7 +195,7 @@ type Config struct {
 
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
-	oldGethResourceWarning bool
+	oldGpayResourceWarning bool
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
@@ -285,9 +285,9 @@ func (c *Config) ExtRPCEnabled() bool {
 // NodeName returns the devp2p node identifier.
 func (c *Config) NodeName() string {
 	name := c.name()
-	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
-	if name == "geth" || name == "geth-testnet" {
-		name = "Geth"
+	// Backwards compatibility: previous versions used title-cased "Gpay", keep that.
+	if name == "gpay" || name == "gpay-testnet" {
+		name = "Gpay"
 	}
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
@@ -311,8 +311,8 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for "geth" instances.
-var isOldGethResource = map[string]bool{
+// These resources are resolved differently for "gpay" instances.
+var isOldGpayResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
@@ -329,15 +329,15 @@ func (c *Config) ResolvePath(path string) string {
 		return ""
 	}
 	// Backwards-compatibility: ensure that data directory files created
-	// by geth 1.4 are used if they exist.
-	if warn, isOld := isOldGethResource[path]; isOld {
+	// by gpay 1.4 are used if they exist.
+	if warn, isOld := isOldGpayResource[path]; isOld {
 		oldpath := ""
-		if c.name() == "geth" {
+		if c.name() == "gpay" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
 			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+				c.warnOnce(&c.oldGpayResourceWarning, "Using deprecated resource file %s, please move this file to the 'gpay' subdirectory of datadir.", oldpath)
 			}
 			return oldpath
 		}
@@ -465,7 +465,7 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 	isEphemeral := false
 	if keydir == "" {
 		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		keydir, err = ioutil.TempDir("", "go-xpayments-keystore")
 		isEphemeral = true
 	}
 

@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
@@ -160,7 +160,7 @@ func (api *ExternalSigner) Derive(path accounts.DerivationPath, pin bool) (accou
 	return accounts.Account{}, fmt.Errorf("operation not supported on external signers")
 }
 
-func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
+func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain xpayments.ChainStateReader) {
 	log.Error("operation SelfDerive not supported on external signers")
 }
 
@@ -196,8 +196,8 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 	}
 	if signature[64] == 27 || signature[64] == 28 {
 		// If clef is used as a backend, it may already have transformed
-		// the signature to ethereum-type signature.
-		signature[64] -= 27 // Transform V from Ethereum-legacy to 0/1
+		// the signature to xpayments-type signature.
+		signature[64] -= 27 // Transform V from xPayments-legacy to 0/1
 	}
 	return signature, nil
 }

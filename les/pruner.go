@@ -25,8 +25,8 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common/math"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common/math"
 	// "github.com/ethereum/go-ethereum/core"
 	// "github.com/ethereum/go-ethereum/ethdb"
@@ -35,14 +35,14 @@ import (
 
 // pruner is responsible for pruning historical light chain data.
 type pruner struct {
-	db       ethdb.Database
+	db       xpsdb.Database
 	indexers []*core.ChainIndexer
 	closeCh  chan struct{}
 	wg       sync.WaitGroup
 }
 
 // newPruner returns a light chain pruner instance.
-func newPruner(db ethdb.Database, indexers ...*core.ChainIndexer) *pruner {
+func newPruner(db xpsdb.Database, indexers ...*core.ChainIndexer) *pruner {
 	pruner := &pruner{
 		db:       db,
 		indexers: indexers,
@@ -60,7 +60,7 @@ func (p *pruner) close() {
 }
 
 // loop periodically queries the status of chain indexers and prunes useless
-// historical chain data. Notably, whenever Geth restarts, it will iterate
+// historical chain data. Notably, whenever Gpay restarts, it will iterate
 // all historical sections even they don't exist at all(below checkpoint) so
 // that light client can prune cached chain data that was ODRed after pruning
 // that section.
@@ -73,7 +73,7 @@ func (p *pruner) loop() {
 
 	// pruning finds the sections that have been processed by all indexers
 	// and deletes all historical chain data.
-	// Note, if some indexers don't support pruning(e.g. eth.BloomIndexer),
+	// Note, if some indexers don't support pruning(e.g. xps.BloomIndexer),
 	// pruning operations can be silently ignored.
 	pruning := func() {
 		min := uint64(math.MaxUint64)

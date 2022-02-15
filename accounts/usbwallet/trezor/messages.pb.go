@@ -101,17 +101,17 @@ const (
 	MessageType_MessageType_DebugLinkMemory      MessageType = 111
 	MessageType_MessageType_DebugLinkMemoryWrite MessageType = 112
 	MessageType_MessageType_DebugLinkFlashErase  MessageType = 113
-	// Ethereum
-	MessageType_MessageType_EthereumGetPublicKey     MessageType = 450
-	MessageType_MessageType_EthereumPublicKey        MessageType = 451
-	MessageType_MessageType_EthereumGetAddress       MessageType = 56
-	MessageType_MessageType_EthereumAddress          MessageType = 57
-	MessageType_MessageType_EthereumSignTx           MessageType = 58
-	MessageType_MessageType_EthereumTxRequest        MessageType = 59
-	MessageType_MessageType_EthereumTxAck            MessageType = 60
-	MessageType_MessageType_EthereumSignMessage      MessageType = 64
-	MessageType_MessageType_EthereumVerifyMessage    MessageType = 65
-	MessageType_MessageType_EthereumMessageSignature MessageType = 66
+	// xPayments
+	MessageType_MessageType_xPaymentsGetPublicKey     MessageType = 450
+	MessageType_MessageType_xPaymentsPublicKey        MessageType = 451
+	MessageType_MessageType_xPaymentsGetAddress       MessageType = 56
+	MessageType_MessageType_xPaymentsAddress          MessageType = 57
+	MessageType_MessageType_xPaymentsSignTx           MessageType = 58
+	MessageType_MessageType_xPaymentsTxRequest        MessageType = 59
+	MessageType_MessageType_xPaymentsTxAck            MessageType = 60
+	MessageType_MessageType_xPaymentsSignMessage      MessageType = 64
+	MessageType_MessageType_xPaymentsVerifyMessage    MessageType = 65
+	MessageType_MessageType_xPaymentsMessageSignature MessageType = 66
 	// NEM
 	MessageType_MessageType_NEMGetAddress       MessageType = 67
 	MessageType_MessageType_NEMAddress          MessageType = 68
@@ -311,16 +311,16 @@ var MessageType_name = map[int32]string{
 	111: "MessageType_DebugLinkMemory",
 	112: "MessageType_DebugLinkMemoryWrite",
 	113: "MessageType_DebugLinkFlashErase",
-	450: "MessageType_EthereumGetPublicKey",
-	451: "MessageType_EthereumPublicKey",
-	56:  "MessageType_EthereumGetAddress",
-	57:  "MessageType_EthereumAddress",
-	58:  "MessageType_EthereumSignTx",
-	59:  "MessageType_EthereumTxRequest",
-	60:  "MessageType_EthereumTxAck",
-	64:  "MessageType_EthereumSignMessage",
-	65:  "MessageType_EthereumVerifyMessage",
-	66:  "MessageType_EthereumMessageSignature",
+	450: "MessageType_xPaymentsGetPublicKey",
+	451: "MessageType_xPaymentsPublicKey",
+	56:  "MessageType_xPaymentsGetAddress",
+	57:  "MessageType_xPaymentsAddress",
+	58:  "MessageType_xPaymentsSignTx",
+	59:  "MessageType_xPaymentsTxRequest",
+	60:  "MessageType_xPaymentsTxAck",
+	64:  "MessageType_xPaymentsSignMessage",
+	65:  "MessageType_xPaymentsVerifyMessage",
+	66:  "MessageType_xPaymentsMessageSignature",
 	67:  "MessageType_NEMGetAddress",
 	68:  "MessageType_NEMAddress",
 	69:  "MessageType_NEMSignTx",
@@ -507,16 +507,16 @@ var MessageType_value = map[string]int32{
 	"MessageType_DebugLinkMemory":                           111,
 	"MessageType_DebugLinkMemoryWrite":                      112,
 	"MessageType_DebugLinkFlashErase":                       113,
-	"MessageType_EthereumGetPublicKey":                      450,
-	"MessageType_EthereumPublicKey":                         451,
-	"MessageType_EthereumGetAddress":                        56,
-	"MessageType_EthereumAddress":                           57,
-	"MessageType_EthereumSignTx":                            58,
-	"MessageType_EthereumTxRequest":                         59,
-	"MessageType_EthereumTxAck":                             60,
-	"MessageType_EthereumSignMessage":                       64,
-	"MessageType_EthereumVerifyMessage":                     65,
-	"MessageType_EthereumMessageSignature":                  66,
+	"MessageType_xPaymentsGetPublicKey":                      450,
+	"MessageType_xPaymentsPublicKey":                         451,
+	"MessageType_xPaymentsGetAddress":                        56,
+	"MessageType_xPaymentsAddress":                           57,
+	"MessageType_xPaymentsSignTx":                            58,
+	"MessageType_xPaymentsTxRequest":                         59,
+	"MessageType_xPaymentsTxAck":                             60,
+	"MessageType_xPaymentsSignMessage":                       64,
+	"MessageType_xPaymentsVerifyMessage":                     65,
+	"MessageType_xPaymentsMessageSignature":                  66,
 	"MessageType_NEMGetAddress":                             67,
 	"MessageType_NEMAddress":                                68,
 	"MessageType_NEMSignTx":                                 69,

@@ -27,9 +27,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/trie"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	"golang.org/x/crypto/sha3"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core/state"
@@ -418,7 +418,7 @@ func (s *stateSync) loop() (err error) {
 }
 
 func (s *stateSync) commit(force bool) error {
-	if !force && s.bytesUncommitted < ethdb.IdealBatchSize {
+	if !force && s.bytesUncommitted < xpsdb.IdealBatchSize {
 		return nil
 	}
 	start := time.Now()
@@ -452,7 +452,7 @@ func (s *stateSync) assignTasks() {
 			req.peer.log.Trace("Requesting batch of state data", "nodes", len(nodes), "codes", len(codes), "root", s.root)
 			select {
 			case s.d.trackStateReq <- req:
-				req.peer.FetchNodeData(append(nodes, codes...)) // Unified retrieval under eth/6x
+				req.peer.FetchNodeData(append(nodes, codes...)) // Unified retrieval under xps/6x
 			case <-s.cancel:
 			case <-s.d.cancelCh:
 			}

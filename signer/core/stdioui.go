@@ -22,7 +22,7 @@ package core
 import (
 	"context"
 
-	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
+	"github.com/xpaymentsorg/go-xpayments/internal/xpsapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 	// "github.com/ethereum/go-ethereum/internal/ethapi"
@@ -103,7 +103,7 @@ func (ui *StdIOUI) ShowInfo(message string) {
 		log.Info("Error calling 'ui_showInfo'", "exc", err.Error(), "msg", message)
 	}
 }
-func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+func (ui *StdIOUI) OnApprovedTx(tx xpsapi.SignTransactionResult) {
 	err := ui.notify("ui_onApprovedTx", tx)
 	if err != nil {
 		log.Info("Error calling 'ui_onApprovedTx'", "exc", err.Error(), "tx", tx)

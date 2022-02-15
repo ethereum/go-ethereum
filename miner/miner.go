@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements xPayments block creation and mining.
 
 package miner
 
@@ -33,10 +33,10 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
 	// "github.com/ethereum/go-ethereum/consensus"
@@ -59,15 +59,15 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
-	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	Xpserbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in xpsash).
 	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
 	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
 	GasFloor   uint64         // Target gas floor for mined blocks.
 	GasCeil    uint64         // Target gas ceiling for mined blocks.
 	GasPrice   *big.Int       // Minimum gas price for mining a transaction
 	Recommit   time.Duration  // The time interval for miner to re-create mining work.
-	Noverify   bool           // Disable remote mining solution verification(only useful in ethash).
+	Noverify   bool           // Disable remote mining solution verification(only useful in xpsash).
 }
 
 // Miner creates blocks and searches for proof-of-work values.
@@ -75,7 +75,7 @@ type Miner struct {
 	mux      *event.TypeMux
 	worker   *worker
 	coinbase common.Address
-	eth      Backend
+	xps      Backend
 	engine   consensus.Engine
 	exitCh   chan struct{}
 	startCh  chan common.Address
@@ -84,15 +84,15 @@ type Miner struct {
 	wg sync.WaitGroup
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(header *types.Header) bool) *Miner {
+func New(xps Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(header *types.Header) bool) *Miner {
 	miner := &Miner{
-		eth:     eth,
+		xps:     xps,
 		mux:     mux,
 		engine:  engine,
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		worker:  newWorker(config, chainConfig, engine, xps, mux, isLocalBlock, true),
 	}
 	miner.wg.Add(1)
 	go miner.update()
@@ -137,20 +137,20 @@ func (miner *Miner) update() {
 			case downloader.FailedEvent:
 				canStart = true
 				if shouldStart {
-					miner.SetEtherbase(miner.coinbase)
+					miner.SetXpserbase(miner.coinbase)
 					miner.worker.start()
 				}
 			case downloader.DoneEvent:
 				canStart = true
 				if shouldStart {
-					miner.SetEtherbase(miner.coinbase)
+					miner.SetXpserbase(miner.coinbase)
 					miner.worker.start()
 				}
 				// Stop reacting to downloader events
 				events.Unsubscribe()
 			}
 		case addr := <-miner.startCh:
-			miner.SetEtherbase(addr)
+			miner.SetXpserbase(addr)
 			if canStart {
 				miner.worker.start()
 			}
@@ -221,9 +221,9 @@ func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return miner.worker.pendingBlockAndReceipts()
 }
 
-func (miner *Miner) SetEtherbase(addr common.Address) {
+func (miner *Miner) SetXpserbase(addr common.Address) {
 	miner.coinbase = addr
-	miner.worker.setEtherbase(addr)
+	miner.worker.setXpserbase(addr)
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.

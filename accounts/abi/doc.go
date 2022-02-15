@@ -17,10 +17,10 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package abi implements the Ethereum ABI (Application Binary
+// Package abi implements the xPayments ABI (Application Binary
 // Interface).
 //
-// The Ethereum ABI is strongly typed, known at compile time
+// The xPayments ABI is strongly typed, known at compile time
 // and static. This ABI will handle basic type casting; unsigned
 // to signed and visa versa. It does not handle slice casting such
 // as unsigned slice to signed slice. Bit size type casting is also

@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package les implements the Light Ethereum Subprotocol.
+// Package les implements the Light xPayments Subprotocol.
 
 package les
 
@@ -34,12 +34,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/bloombits"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
-	"github.com/xpaymentsorg/go-xpayments/eth/filters"
-	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
 	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/internal/shutdowncheck"
+	"github.com/xpaymentsorg/go-xpayments/internal/xpsapi"
 	"github.com/xpaymentsorg/go-xpayments/les/downloader"
 	"github.com/xpaymentsorg/go-xpayments/les/vflux"
 	vfc "github.com/xpaymentsorg/go-xpayments/les/vflux/client"
@@ -52,6 +49,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xps/filters"
+	"github.com/xpaymentsorg/go-xpayments/xps/gasprice"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
 	// "github.com/ethereum/go-ethereum/accounts"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
@@ -81,7 +81,7 @@ import (
 	// "github.com/ethereum/go-ethereum/rpc"
 )
 
-type LightEthereum struct {
+type LightxPayments struct {
 	lesCommons
 
 	peers              *serverPeerSet
@@ -104,7 +104,7 @@ type LightEthereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-	netRPCService  *ethapi.PublicNetAPI
+	netRPCService  *xpsapi.PublicNetAPI
 
 	p2pServer  *p2p.Server
 	p2pConfig  *p2p.Config
@@ -114,12 +114,12 @@ type LightEthereum struct {
 }
 
 // New creates an instance of the light client.
-func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
-	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
+func New(stack *node.Node, config *xpsconfig.Config) (*LightxPayments, error) {
+	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "xps/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
-	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/lesclient/", false)
+	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "xps/db/lesclient/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 
 	peers := newServerPeerSet()
 	merger := consensus.NewMerger(chainDb)
-	leth := &LightEthereum{
+	lxps := &LightxPayments{
 		lesCommons: lesCommons{
 			genesis:     genesisHash,
 			config:      config,
@@ -146,7 +146,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		reqDist:         newRequestDistributor(peers, &mclock.System{}),
 		accountManager:  stack.AccountManager(),
 		merger:          merger,
-		engine:          ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
+		engine:          xpsconfig.CreateConsensusEngine(stack, chainConfig, &config.Xpsash, nil, false, chainDb),
 		bloomRequests:   make(chan chan *bloombits.Retrieval),
 		bloomIndexer:    core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:       stack.Server(),
@@ -156,19 +156,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 
 	var prenegQuery vfc.QueryFunc
-	if leth.udpEnabled {
-		prenegQuery = leth.prenegQuery
+	if lxps.udpEnabled {
+		prenegQuery = lxps.prenegQuery
 	}
-	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
-	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
+	lxps.serverPool, lxps.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
+	lxps.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
-	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
-	leth.relay = newLesTxRelay(peers, leth.retriever)
+	lxps.retriever = newRetrieveManager(peers, lxps.reqDist, lxps.serverPool.GetTimeout)
+	lxps.relay = newLesTxRelay(peers, lxps.retriever)
 
-	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.peers, leth.retriever)
-	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations, config.LightNoPrune)
-	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency, config.LightNoPrune)
-	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
+	lxps.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, lxps.peers, lxps.retriever)
+	lxps.chtIndexer = light.NewChtIndexer(chainDb, lxps.odr, params.CHTFrequency, params.HelperTrieConfirmations, config.LightNoPrune)
+	lxps.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, lxps.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency, config.LightNoPrune)
+	lxps.odr.SetIndexers(lxps.chtIndexer, lxps.bloomTrieIndexer, lxps.bloomIndexer)
 
 	checkpoint := config.Checkpoint
 	if checkpoint == nil {
@@ -176,58 +176,58 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint); err != nil {
+	if lxps.blockchain, err = light.NewLightChain(lxps.odr, lxps.chainConfig, lxps.engine, checkpoint); err != nil {
 		return nil, err
 	}
-	leth.chainReader = leth.blockchain
-	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
+	lxps.chainReader = lxps.blockchain
+	lxps.txPool = light.NewTxPool(lxps.chainConfig, lxps.blockchain, lxps.relay)
 
 	// Set up checkpoint oracle.
-	leth.oracle = leth.setupOracle(stack, genesisHash, config)
+	lxps.oracle = lxps.setupOracle(stack, genesisHash, config)
 
 	// Note: AddChildIndexer starts the update process for the child
-	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
-	leth.chtIndexer.Start(leth.blockchain)
-	leth.bloomIndexer.Start(leth.blockchain)
+	lxps.bloomIndexer.AddChildIndexer(lxps.bloomTrieIndexer)
+	lxps.chtIndexer.Start(lxps.blockchain)
+	lxps.bloomIndexer.Start(lxps.blockchain)
 
 	// Start a light chain pruner to delete useless historical data.
-	leth.pruner = newPruner(chainDb, leth.chtIndexer, leth.bloomTrieIndexer)
+	lxps.pruner = newPruner(chainDb, lxps.chtIndexer, lxps.bloomTrieIndexer)
 
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		leth.blockchain.SetHead(compat.RewindTo)
+		lxps.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, leth, nil}
+	lxps.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, lxps, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+	lxps.ApiBackend.gpo = gasprice.NewOracle(lxps.ApiBackend, gpoParams)
 
-	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, leth)
-	if leth.handler.ulc != nil {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.keys), "minTrustedFraction", leth.handler.ulc.fraction)
-		leth.blockchain.DisableCheckFreq()
+	lxps.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, lxps)
+	if lxps.handler.ulc != nil {
+		log.Warn("Ultra light client is enabled", "trustedNodes", len(lxps.handler.ulc.keys), "minTrustedFraction", lxps.handler.ulc.fraction)
+		lxps.blockchain.DisableCheckFreq()
 	}
 
-	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
+	lxps.netRPCService = xpsapi.NewPublicNetAPI(lxps.p2pServer, lxps.config.NetworkId)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(leth.APIs())
-	stack.RegisterProtocols(leth.Protocols())
-	stack.RegisterLifecycle(leth)
+	stack.RegisterAPIs(lxps.APIs())
+	stack.RegisterProtocols(lxps.Protocols())
+	stack.RegisterLifecycle(lxps)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	leth.shutdownTracker.MarkStartup()
+	lxps.shutdownTracker.MarkStartup()
 
-	return leth, nil
+	return lxps, nil
 }
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses
-func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
+func (s *LightxPayments) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
 	if !s.udpEnabled {
 		return nil
 	}
@@ -242,7 +242,7 @@ func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.R
 
 // vfxVersion returns the version number of the "les" service subdomain of the vflux UDP
 // service, as advertised in the ENR record
-func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
+func (s *LightxPayments) vfxVersion(n *enode.Node) uint {
 	if n.Seq() == 0 {
 		var err error
 		if !s.udpEnabled {
@@ -266,7 +266,7 @@ func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
 
 // prenegQuery sends a capacity query to the given server node to determine whether
 // a connection slot is immediately available
-func (s *LightEthereum) prenegQuery(n *enode.Node) int {
+func (s *LightxPayments) prenegQuery(n *enode.Node) int {
 	if s.vfxVersion(n) < 1 {
 		// UDP query not supported, always try TCP connection
 		return 1
@@ -290,12 +290,12 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 
 type LightDummyAPI struct{}
 
-// Etherbase is the address that mining rewards will be send to
-func (s *LightDummyAPI) Etherbase() (common.Address, error) {
+// Xpserbase is the address that mining rewards will be send to
+func (s *LightDummyAPI) Xpserbase() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
+// Coinbase is the address that mining rewards will be send to (alias for Xpserbase)
 func (s *LightDummyAPI) Coinbase() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
 }
@@ -310,24 +310,24 @@ func (s *LightDummyAPI) Mining() bool {
 	return false
 }
 
-// APIs returns the collection of RPC services the ethereum package offers.
+// APIs returns the collection of RPC services the xpayments package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *LightEthereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.ApiBackend)
+func (s *LightxPayments) APIs() []rpc.API {
+	apis := xpsapi.GetAPIs(s.ApiBackend)
 	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
 	return append(apis, []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "xps",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "xps",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "xps",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true, 5*time.Minute),
 			Public:    true,
@@ -350,20 +350,20 @@ func (s *LightEthereum) APIs() []rpc.API {
 	}...)
 }
 
-func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
+func (s *LightxPayments) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *LightEthereum) Merger() *consensus.Merger          { return s.merger }
+func (s *LightxPayments) BlockChain() *light.LightChain      { return s.blockchain }
+func (s *LightxPayments) TxPool() *light.TxPool              { return s.txPool }
+func (s *LightxPayments) Engine() consensus.Engine           { return s.engine }
+func (s *LightxPayments) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
+func (s *LightxPayments) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *LightxPayments) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *LightxPayments) Merger() *consensus.Merger          { return s.merger }
 
 // Protocols returns all the currently configured network protocols to start.
-func (s *LightEthereum) Protocols() []p2p.Protocol {
+func (s *LightxPayments) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
 		if p := s.peers.peer(id.String()); p != nil {
 			return p.Info()
@@ -373,8 +373,8 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
-// light ethereum protocol implementation.
-func (s *LightEthereum) Start() error {
+// light xpayments protocol implementation.
+func (s *LightxPayments) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
 	// Regularly update shutdown marker
@@ -399,8 +399,8 @@ func (s *LightEthereum) Start() error {
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
-// Ethereum protocol.
-func (s *LightEthereum) Stop() error {
+// xPayments protocol.
+func (s *LightxPayments) Stop() error {
 	close(s.closeCh)
 	s.serverPool.Stop()
 	s.peers.close()
@@ -421,6 +421,6 @@ func (s *LightEthereum) Stop() error {
 	s.chainDb.Close()
 	s.lesDb.Close()
 	s.wg.Wait()
-	log.Info("Light ethereum stopped")
+	log.Info("Light xpayments stopped")
 	return nil
 }

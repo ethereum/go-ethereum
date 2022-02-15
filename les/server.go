@@ -25,8 +25,6 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/les/flowcontrol"
 	vfs "github.com/xpaymentsorg/go-xpayments/les/vflux/server"
 	"github.com/xpaymentsorg/go-xpayments/light"
@@ -37,6 +35,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/core"
 	// "github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -60,11 +60,11 @@ var (
 
 const defaultConnectedBias = time.Minute * 3
 
-type ethBackend interface {
+type xpsBackend interface {
 	ArchiveMode() bool
 	BlockChain() *core.BlockChain
 	BloomIndexer() *core.ChainIndexer
-	ChainDb() ethdb.Database
+	ChainDb() xpsdb.Database
 	Synced() bool
 	TxPool() *core.TxPool
 }
@@ -72,7 +72,7 @@ type ethBackend interface {
 type LesServer struct {
 	lesCommons
 
-	archiveMode bool // Flag whether the ethereum node runs in archive mode.
+	archiveMode bool // Flag whether the xpayments node runs in archive mode.
 	handler     *serverHandler
 	peers       *clientPeerSet
 	serverset   *serverSet
@@ -93,8 +93,8 @@ type LesServer struct {
 	p2pSrv *p2p.Server
 }
 
-func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
-	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/lesserver/", false)
+func NewLesServer(node *node.Node, e xpsBackend, config *xpsconfig.Config) (*LesServer, error) {
+	lesDb, err := node.OpenDatabase("les.server", 0, 0, "xps/db/lesserver/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	srv.clientPool = vfs.NewClientPool(lesDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, issync)
 	srv.clientPool.Start()
 	srv.clientPool.SetDefaultFactors(defaultPosFactors, defaultNegFactors)
-	srv.vfluxServer.Register(srv.clientPool, "les", "Ethereum light client service")
+	srv.vfluxServer.Register(srv.clientPool, "les", "xPayments light client service")
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {

@@ -39,22 +39,22 @@ type lesEntry struct {
 
 func (lesEntry) ENRKey() string { return "les" }
 
-// ethEntry is the "eth" ENR entry. This is redeclared here to avoid depending on package eth.
-type ethEntry struct {
+// xpsEntry is the "xps" ENR entry. This is redeclared here to avoid depending on package eth.
+type xpsEntry struct {
 	ForkID forkid.ID
 	Tail   []rlp.RawValue `rlp:"tail"`
 }
 
-func (ethEntry) ENRKey() string { return "eth" }
+func (xpsEntry) ENRKey() string { return "xps" }
 
-// setupDiscovery creates the node discovery source for the eth protocol.
-func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
+// setupDiscovery creates the node discovery source for the xps protocol.
+func (xps *LightxPayments) setupDiscovery() (enode.Iterator, error) {
 	it := enode.NewFairMix(0)
 
 	// Enable DNS discovery.
-	if len(eth.config.EthDiscoveryURLs) != 0 {
+	if len(xps.config.XpsDiscoveryURLs) != 0 {
 		client := dnsdisc.NewClient(dnsdisc.Config{})
-		dns, err := client.NewIterator(eth.config.EthDiscoveryURLs...)
+		dns, err := client.NewIterator(xps.config.XpsDiscoveryURLs...)
 		if err != nil {
 			return nil, err
 		}
@@ -62,11 +62,11 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 	}
 
 	// Enable DHT.
-	if eth.udpEnabled {
-		it.AddSource(eth.p2pServer.DiscV5.RandomNodes())
+	if xps.udpEnabled {
+		it.AddSource(xps.p2pServer.DiscV5.RandomNodes())
 	}
 
-	forkFilter := forkid.NewFilter(eth.blockchain)
+	forkFilter := forkid.NewFilter(xps.blockchain)
 	iterator := enode.Filter(it, func(n *enode.Node) bool { return nodeIsServer(forkFilter, n) })
 	return iterator, nil
 }
@@ -74,6 +74,6 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 // nodeIsServer checks whether n is an LES server node.
 func nodeIsServer(forkFilter forkid.Filter, n *enode.Node) bool {
 	var les lesEntry
-	var eth ethEntry
-	return n.Load(&les) == nil && n.Load(&eth) == nil && forkFilter(eth.ForkID) == nil
+	var xps xpsEntry
+	return n.Load(&les) == nil && n.Load(&xps) == nil && forkFilter(xps.ForkID) == nil
 }

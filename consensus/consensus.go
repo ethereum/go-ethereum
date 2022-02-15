@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package consensus implements different Ethereum consensus engines.
+// Package consensus implements different xPayments consensus engines.
 
 package consensus
 
@@ -69,7 +69,7 @@ type ChainReader interface {
 
 // Engine is an algorithm agnostic consensus engine.
 type Engine interface {
-	// Author retrieves the Ethereum address of the account that minted the given
+	// Author retrieves the xPayments address of the account that minted the given
 	// block, which may be different from the header's coinbase if a consensus
 	// engine is based on signatures.
 	Author(header *types.Header) (common.Address, error)

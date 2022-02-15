@@ -19,7 +19,7 @@
 
 // Contains initialization code for the mobile library.
 
-package geth
+package gpay
 
 import (
 	"os"

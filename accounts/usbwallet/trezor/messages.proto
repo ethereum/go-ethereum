@@ -107,17 +107,17 @@ enum MessageType {
     MessageType_DebugLinkMemoryWrite = 112 [(wire_debug_in) = true];
     MessageType_DebugLinkFlashErase = 113 [(wire_debug_in) = true];
 
-    // Ethereum
-    MessageType_EthereumGetPublicKey = 450 [(wire_in) = true];
-    MessageType_EthereumPublicKey = 451 [(wire_out) = true];
-    MessageType_EthereumGetAddress = 56 [(wire_in) = true];
-    MessageType_EthereumAddress = 57 [(wire_out) = true];
-    MessageType_EthereumSignTx = 58 [(wire_in) = true];
-    MessageType_EthereumTxRequest = 59 [(wire_out) = true];
-    MessageType_EthereumTxAck = 60 [(wire_in) = true];
-    MessageType_EthereumSignMessage = 64 [(wire_in) = true];
-    MessageType_EthereumVerifyMessage = 65 [(wire_in) = true];
-    MessageType_EthereumMessageSignature = 66 [(wire_out) = true];
+    // xPayments
+    MessageType_xPaymentsGetPublicKey = 450 [(wire_in) = true];
+    MessageType_xPaymentsPublicKey = 451 [(wire_out) = true];
+    MessageType_xPaymentsGetAddress = 56 [(wire_in) = true];
+    MessageType_xPaymentsAddress = 57 [(wire_out) = true];
+    MessageType_xPaymentsSignTx = 58 [(wire_in) = true];
+    MessageType_xPaymentsTxRequest = 59 [(wire_out) = true];
+    MessageType_xPaymentsTxAck = 60 [(wire_in) = true];
+    MessageType_xPaymentsSignMessage = 64 [(wire_in) = true];
+    MessageType_xPaymentsVerifyMessage = 65 [(wire_in) = true];
+    MessageType_xPaymentsMessageSignature = 66 [(wire_out) = true];
 
     // NEM
     MessageType_NEMGetAddress = 67 [(wire_in) = true];

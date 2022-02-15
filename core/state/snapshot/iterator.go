@@ -26,7 +26,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core/rawdb"
 	// "github.com/ethereum/go-ethereum/ethdb"
@@ -169,7 +169,7 @@ func (it *diffAccountIterator) Release() {}
 // contained within a disk layer.
 type diskAccountIterator struct {
 	layer *diskLayer
-	it    ethdb.Iterator
+	it    xpsdb.Iterator
 }
 
 // AccountIterator creates an account iterator over a disk layer.
@@ -338,7 +338,7 @@ func (it *diffStorageIterator) Release() {}
 type diskStorageIterator struct {
 	layer   *diskLayer
 	account common.Hash
-	it      ethdb.Iterator
+	it      xpsdb.Iterator
 }
 
 // StorageIterator creates a storage iterator over a disk layer.

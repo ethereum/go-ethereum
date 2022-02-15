@@ -20,7 +20,7 @@
 // Contains all the wrappers from the golang.org/x/net/context package to support
 // client side context management on mobile platforms.
 
-package geth
+package gpay
 
 import (
 	"context"

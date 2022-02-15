@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
 	"github.com/xpaymentsorg/go-xpayments/les/utils"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
 	"github.com/xpaymentsorg/go-xpayments/p2p/nodestate"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/memorydb"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -54,13 +54,13 @@ func (client balanceTestClient) FreeClientId() string { return "" }
 
 type balanceTestSetup struct {
 	clock *mclock.Simulated
-	db    ethdb.KeyValueStore
+	db    xpsdb.KeyValueStore
 	ns    *nodestate.NodeStateMachine
 	setup *serverSetup
 	bt    *balanceTracker
 }
 
-func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpirer) *balanceTestSetup {
+func newBalanceTestSetup(db xpsdb.KeyValueStore, posExp, negExp utils.ValueExpirer) *balanceTestSetup {
 	// Initialize and customize the setup for the balance testing
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()

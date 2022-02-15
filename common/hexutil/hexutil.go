@@ -19,7 +19,7 @@
 
 /*
 Package hexutil implements hex encoding with 0x prefix.
-This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
+This encoding is used by the xPayments RPC API to transport binary data in JSON payloads.
 
 Encoding Rules
 

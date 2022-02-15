@@ -23,7 +23,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -102,7 +102,7 @@ func testTableDatabase(t *testing.T, prefix string) {
 		}
 	}
 
-	check := func(iter ethdb.Iterator, expCount, index int) {
+	check := func(iter xpsdb.Iterator, expCount, index int) {
 		count := 0
 		for iter.Next() {
 			key, value := iter.Key(), iter.Value()

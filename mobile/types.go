@@ -19,7 +19,7 @@
 
 // Contains all the wrappers from the core/types package.
 
-package geth
+package gpay
 
 import (
 	"encoding/json"
@@ -89,7 +89,7 @@ func (b *Bloom) String() string {
 	return b.GetHex()
 }
 
-// Header represents a block header in the Ethereum blockchain.
+// Header represents a block header in the xPayments blockchain.
 type Header struct {
 	header *types.Header
 }
@@ -165,7 +165,7 @@ func (h *Headers) Get(index int) (header *Header, _ error) {
 	return &Header{h.headers[index]}, nil
 }
 
-// Block represents an entire block in the Ethereum blockchain.
+// Block represents an entire block in the xPayments blockchain.
 type Block struct {
 	block *types.Block
 }
@@ -231,7 +231,7 @@ func (b *Block) GetTransaction(hash *Hash) *Transaction {
 	return &Transaction{b.block.Transaction(hash.hash)}
 }
 
-// Transaction represents a single Ethereum transaction.
+// Transaction represents a single xPayments transaction.
 type Transaction struct {
 	tx *types.Transaction
 }

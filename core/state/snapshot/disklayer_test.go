@@ -28,10 +28,10 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/leveldb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/leveldb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/memorydb"
 	// "github.com/VictoriaMetrics/fastcache"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core/rawdb"
@@ -528,7 +528,7 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	var db ethdb.Database
+	var db xpsdb.Database
 
 	if dir, err := ioutil.TempDir("", "disklayer-test"); err != nil {
 		t.Fatal(err)

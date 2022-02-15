@@ -39,7 +39,7 @@ const (
 	// signature and no receive function is specified.
 	Fallback
 	// Receive represents the receive function.
-	// This function is executed on plain Ether transfers.
+	// This function is executed on plain Xpser transfers.
 	Receive
 	// Function represents a normal function.
 	Function

@@ -32,19 +32,19 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/miner"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/fdlimit"
 	// "github.com/ethereum/go-ethereum/consensus/ethash"
@@ -75,10 +75,10 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	// Pre-generate the ethash mining DAG so we don't race
-	ethash.MakeDataset(1, ethconfig.Defaults.Ethash.DatasetDir)
+	// Pre-generate the xpsash mining DAG so we don't race
+	xpsash.MakeDataset(1, xpsconfig.Defaults.Xpsash.DatasetDir)
 
-	// Create an Ethash network based off of the Ropsten config
+	// Create an Xpsash network based off of the Ropsten config
 	genesis := makeGenesis(faucets)
 
 	// Handle interrupts.
@@ -87,12 +87,12 @@ func main() {
 
 	var (
 		stacks []*node.Node
-		nodes  []*eth.Ethereum
+		nodes  []*xps.xPayments
 		enodes []*enode.Node
 	)
 	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := makeMiner(genesis)
+		stack, xpsBackend, err := makeMiner(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -106,7 +106,7 @@ func main() {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
-		nodes = append(nodes, ethBackend)
+		nodes = append(nodes, xpsBackend)
 		enodes = append(enodes, stack.Server().Self())
 	}
 
@@ -210,12 +210,12 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	})
 }
 
-// makeGenesis creates a custom Ethash genesis block based on some pre-defined
+// makeGenesis creates a custom Xpsash genesis block based on some pre-defined
 // faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis := core.DefaultRopstenGenesisBlock()
 
-	genesis.Config = params.AllEthashProtocolChanges
+	genesis.Config = params.AllXpsashProtocolChanges
 	genesis.Config.LondonBlock = londonBlock
 	genesis.Difficulty = params.MinimumDifficulty
 
@@ -239,12 +239,12 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
-	// Define the basic configurations for the Ethereum node
+func makeMiner(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
+	// Define the basic configurations for the xPayments node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
-		Name:    "geth",
+		Name:    "gpay",
 		Version: params.Version,
 		DataDir: datadir,
 		P2P: p2p.Config{
@@ -254,22 +254,22 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		},
 		UseLightweightKDF: true,
 	}
-	// Create the node and configure a full Ethereum node on it
+	// Create the node and configure a full xPayments node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err
 	}
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	xpsBackend, err := xps.New(stack, &xpsconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
-		GPO:             ethconfig.Defaults.GPO,
-		Ethash:          ethconfig.Defaults.Ethash,
+		GPO:             xpsconfig.Defaults.GPO,
+		Xpsash:          xpsconfig.Defaults.Xpsash,
 		Miner: miner.Config{
-			Etherbase: common.Address{1},
+			Xpserbase: common.Address{1},
 			GasCeil:   genesis.GasLimit * 11 / 10,
 			GasPrice:  big.NewInt(1),
 			Recommit:  time.Second,
@@ -279,5 +279,5 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		return nil, nil, err
 	}
 	err = stack.Start()
-	return stack, ethBackend, err
+	return stack, xpsBackend, err
 }

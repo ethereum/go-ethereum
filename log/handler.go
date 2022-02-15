@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/go-stack/stack"
+	// "github.com/go-stack/stack"
 )
 
 // Handler defines where and how log records are written.

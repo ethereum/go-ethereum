@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-package geth
+package gpay
 
 import (
 	"fmt"
@@ -38,7 +38,7 @@ func TestInterfaceGetSet(t *testing.T) {
 		{"Bool", true, true},
 		{"Bool", false, false},
 		{"Bools", &Bools{[]bool{false, true}}, &Bools{[]bool{false, true}}},
-		{"String", "go-ethereum", "go-ethereum"},
+		{"String", "go-xpayments", "go-xpayments"},
 		{"Strings", &Strings{strs: []string{"hello", "world"}}, &Strings{strs: []string{"hello", "world"}}},
 		{"Binary", []byte{0x01, 0x02}, []byte{0x01, 0x02}},
 		{"Binaries", &Binaries{[][]byte{{0x01, 0x02}, {0x03, 0x04}}}, &Binaries{[][]byte{{0x01, 0x02}, {0x03, 0x04}}}},

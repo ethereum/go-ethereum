@@ -142,7 +142,7 @@ var jsonTypedData = `
       },
       "primaryType": "Mail",
       "domain": {
-        "name": "Ether Mail",
+        "name": "Xpser Mail",
         "version": "1",
         "chainId": "1",
         "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
@@ -165,7 +165,7 @@ var jsonTypedData = `
 const primaryType = "Mail"
 
 var domainStandard = apitypes.TypedDataDomain{
-	Name:              "Ether Mail",
+	Name:              "Xpser Mail",
 	Version:           "1",
 	ChainId:           math.NewHexOrDecimal256(1),
 	VerifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
@@ -486,7 +486,7 @@ var gnosisTx = `
       "executor": null,
       "isExecuted": false,
       "isSuccessful": null,
-      "ethGasPrice": null,
+      "xpsGasPrice": null,
       "gasUsed": null,
       "fee": null,
       "origin": null,
@@ -604,7 +604,7 @@ var gnosisTxWithChainId = `
 	"executor": "0xbc2BB26a6d821e69A38016f3858561a1D80d4182",
 	"isExecuted": true,
 	"isSuccessful": true,
-	"ethGasPrice": "2500000009",
+	"xpsGasPrice": "2500000009",
 	"gasUsed": 82902,
 	"fee": "207255000746118",
 	"chainId": "4",

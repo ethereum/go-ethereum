@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
 
-
 //go:build none
 // +build none
 
@@ -69,7 +68,7 @@ var (
 		"cmd/internal/browser",
 		"common/bitutil/bitutil",
 		"common/prque/",
-		"consensus/ethash/xor.go",
+		"consensus/xpsash/xor.go",
 		"crypto/bn256/",
 		"crypto/ecies/",
 		"graphql/graphiql.go",

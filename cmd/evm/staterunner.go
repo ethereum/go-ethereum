@@ -28,9 +28,9 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/tests"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/core/state"
 	// "github.com/ethereum/go-ethereum/core/vm"
@@ -61,7 +61,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("path-to-test argument required")
 	}
-	// Configure the go-ethereum logger
+	// Configure the go-xpayments logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)

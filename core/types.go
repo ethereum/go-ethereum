@@ -42,7 +42,7 @@ type Validator interface {
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
 type Prefetcher interface {
-	// Prefetch processes the state changes according to the Ethereum rules by running
+	// Prefetch processes the state changes according to the xPayments rules by running
 	// the transaction messages using the statedb, but any changes are discarded. The
 	// only goal is to pre-cache transaction signatures and state trie nodes.
 	Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32)
@@ -50,7 +50,7 @@ type Prefetcher interface {
 
 // Processor is an interface for processing blocks using a given initial state.
 type Processor interface {
-	// Process processes the state changes according to the Ethereum rules by running
+	// Process processes the state changes according to the xPayments rules by running
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
 	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error)

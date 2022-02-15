@@ -20,7 +20,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Run the app if we've been exec'd as "ethkey-test" in runEthkey.
+	// Run the app if we've been exec'd as "xpskey-test" in runXpskey.
 	reexec.Register("evm-test", func() {
 		if err := app.Run(os.Args); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -355,9 +355,9 @@ type b11rInput struct {
 	inOmmersRlp string
 	inTxsRlp    string
 	inClique    string
-	ethash      bool
-	ethashMode  string
-	ethashDir   string
+	xpsash      bool
+	xpsashMode  string
+	xpsashDir   string
 }
 
 func (args *b11rInput) get(base string) []string {
@@ -378,15 +378,15 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, "--seal.clique")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
-	if args.ethash {
-		out = append(out, "--seal.ethash")
+	if args.xpsash {
+		out = append(out, "--seal.xpsash")
 	}
-	if opt := args.ethashMode; opt != "" {
-		out = append(out, "--seal.ethash.mode")
+	if opt := args.xpsashMode; opt != "" {
+		out = append(out, "--seal.xpsash.mode")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
-	if opt := args.ethashDir; opt != "" {
-		out = append(out, "--seal.ethash.dir")
+	if opt := args.xpsashDir; opt != "" {
+		out = append(out, "--seal.xpsash.dir")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	out = append(out, "--output.block")
@@ -412,7 +412,7 @@ func TestB11r(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
-		{ // ethash test seal
+		{ // xpsash test seal
 			base: "./testdata/21",
 			input: b11rInput{
 				inEnv:       "header.json",

@@ -202,7 +202,7 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 
 /////////// Address
 
-// Address represents the 20 byte address of an Ethereum account.
+// Address represents the 20 byte address of an xPayments account.
 type Address [AddressLength]byte
 
 // BytesToAddress returns Address with value b.
@@ -222,7 +222,7 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
-// Ethereum address or not.
+// xPayments address or not.
 func IsHexAddress(s string) bool {
 	if has0xPrefix(s) {
 		s = s[2:]

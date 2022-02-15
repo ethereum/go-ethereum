@@ -24,18 +24,18 @@ import (
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/beacon"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/les"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/trie"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/consensus/ethash"
 	// "github.com/ethereum/go-ethereum/core"
@@ -55,7 +55,7 @@ var (
 	// testKey is a private key to use for funding a tester account.
 	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-	// testAddr is the Ethereum address of the tester account.
+	// testAddr is the xPayments address of the tester account.
 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 
 	testBalance = big.NewInt(2e18)
@@ -63,7 +63,7 @@ var (
 
 func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
-	config := params.AllEthashProtocolChanges
+	config := params.AllXpsashProtocolChanges
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
@@ -72,7 +72,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Bloc
 		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := xpsash.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, nil)
 	totalDifficulty := big.NewInt(0)
 
@@ -175,20 +175,20 @@ func TestExecutePayloadV1(t *testing.T) {
 	}
 }
 
-func TestEth2DeepReorg(t *testing.T) {
-	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
+func TestXps2DeepReorg(t *testing.T) {
+	// TODO (MariusVanDerWijden) TestXps2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold
 	/*
 		genesis, preMergeBlocks := generatePreMergeChain(core.TriesInMemory * 2)
-		n, ethservice := startEthService(t, genesis, preMergeBlocks)
+		n, xpsservice := startXpsService(t, genesis, preMergeBlocks)
 		defer n.Close()
 
 		var (
-			api    = NewConsensusAPI(ethservice, nil)
+			api    = NewConsensusAPI(xpsservice, nil)
 			parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
-			head   = ethservice.BlockChain().CurrentBlock().NumberU64()
+			head   = xpsservice.BlockChain().CurrentBlock().NumberU64()
 		)
-		if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
+		if xpsservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
 			t.Errorf("Block %d not pruned", parent.NumberU64())
 		}
 		for i := 0; i < 10; i++ {
@@ -199,7 +199,7 @@ func TestEth2DeepReorg(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create the executable data %v", err)
 			}
-			block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+			block, err := ExecutableDataToBlock(xpsservice.BlockChain().Config(), parent.Header(), *execData)
 			if err != nil {
 				t.Fatalf("Failed to convert executable data to block %v", err)
 			}
@@ -207,13 +207,13 @@ func TestEth2DeepReorg(t *testing.T) {
 			if err != nil || newResp.Status != "VALID" {
 				t.Fatalf("Failed to insert block: %v", err)
 			}
-			if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
+			if xpsservice.BlockChain().CurrentBlock().NumberU64() != head {
 				t.Fatalf("Chain head shouldn't be updated")
 			}
 			if err := api.setHead(block.Hash()); err != nil {
 				t.Fatalf("Failed to set head: %v", err)
 			}
-			if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
+			if xpsservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
 				t.Fatalf("Chain head should be updated")
 			}
 			parent, head = block, block.NumberU64()
@@ -221,25 +221,25 @@ func TestEth2DeepReorg(t *testing.T) {
 	*/
 }
 
-// startEthService creates a full node instance for testing.
-func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Header) (*node.Node, *les.LightEthereum) {
+// startXpsService creates a full node instance for testing.
+func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Header) (*node.Node, *les.LightxPayments) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{})
 	if err != nil {
 		t.Fatal("can't create node:", err)
 	}
-	ethcfg := &ethconfig.Config{
+	xpscfg := &xpsconfig.Config{
 		Genesis:        genesis,
-		Ethash:         ethash.Config{PowMode: ethash.ModeFake},
+		Xpsash:         xpsash.Config{PowMode: xpsash.ModeFake},
 		SyncMode:       downloader.LightSync,
 		TrieDirtyCache: 256,
 		TrieCleanCache: 256,
 		LightPeers:     10,
 	}
-	lesService, err := les.New(n, ethcfg)
+	lesService, err := les.New(n, xpscfg)
 	if err != nil {
-		t.Fatal("can't create eth service:", err)
+		t.Fatal("can't create xps service:", err)
 	}
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)

@@ -84,7 +84,7 @@ func (oracle *CheckpointOracle) LookupCheckpointEvents(blockLogs [][]*types.Log,
 // RegisterCheckpoint registers the checkpoint with a batch of associated signatures
 // that are collected off-chain and sorted by lexicographical order.
 //
-// Notably all signatures given should be transformed to "ethereum style" which transforms
+// Notably all signatures given should be transformed to "xpayments style" which transforms
 // v from 0/1 to 27/28 according to the yellow paper.
 func (oracle *CheckpointOracle) RegisterCheckpoint(opts *bind.TransactOpts, index uint64, hash []byte, rnum *big.Int, rhash [32]byte, sigs [][]byte) (*types.Transaction, error) {
 	var (

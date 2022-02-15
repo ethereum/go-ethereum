@@ -31,7 +31,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
 	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -85,9 +85,9 @@ type bbInput struct {
 	TxRlp     string       `json:"txs,omitempty"`
 	Clique    *cliqueInput `json:"clique,omitempty"`
 
-	Ethash    bool                 `json:"-"`
-	EthashDir string               `json:"-"`
-	PowMode   ethash.Mode          `json:"-"`
+	Xpsash    bool                 `json:"-"`
+	XpsashDir string               `json:"-"`
+	PowMode   xpsash.Mode          `json:"-"`
 	Txs       []*types.Transaction `json:"-"`
 	Ommers    []*types.Header      `json:"-"`
 }
@@ -172,8 +172,8 @@ func (i *bbInput) ToBlock() *types.Block {
 // SealBlock seals the given block using the configured engine.
 func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 	switch {
-	case i.Ethash:
-		return i.sealEthash(block)
+	case i.Xpsash:
+		return i.sealXpsash(block)
 	case i.Clique != nil:
 		return i.sealClique(block)
 	default:
@@ -181,21 +181,21 @@ func (i *bbInput) SealBlock(block *types.Block) (*types.Block, error) {
 	}
 }
 
-// sealEthash seals the given block using ethash.
-func (i *bbInput) sealEthash(block *types.Block) (*types.Block, error) {
+// sealXpsash seals the given block using xpsash.
+func (i *bbInput) sealXpsash(block *types.Block) (*types.Block, error) {
 	if i.Header.Nonce != nil {
-		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
+		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with xpsash will overwrite provided nonce"))
 	}
-	ethashConfig := ethash.Config{
+	xpsashConfig := xpsash.Config{
 		PowMode:        i.PowMode,
-		DatasetDir:     i.EthashDir,
-		CacheDir:       i.EthashDir,
+		DatasetDir:     i.XpsashDir,
+		CacheDir:       i.XpsashDir,
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 		CachesInMem:    2,
 		CachesOnDisk:   3,
 	}
-	engine := ethash.New(ethashConfig, nil, true)
+	engine := xpsash.New(xpsashConfig, nil, true)
 	defer engine.Close()
 	// Use a buffered chan for results.
 	// If the testmode is used, the sealer will return quickly, and complain
@@ -249,7 +249,7 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 
 // BuildBlock constructs a block from the given inputs.
 func BuildBlock(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
+	// Configure the go-xpayments logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
@@ -276,26 +276,26 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		ommersStr  = ctx.String(InputOmmersFlag.Name)
 		txsStr     = ctx.String(InputTxsRlpFlag.Name)
 		cliqueStr  = ctx.String(SealCliqueFlag.Name)
-		ethashOn   = ctx.Bool(SealEthashFlag.Name)
-		ethashDir  = ctx.String(SealEthashDirFlag.Name)
-		ethashMode = ctx.String(SealEthashModeFlag.Name)
+		xpsashOn   = ctx.Bool(SealXpsashFlag.Name)
+		xpsashDir  = ctx.String(SealXpsashDirFlag.Name)
+		xpsashMode = ctx.String(SealXpsashModeFlag.Name)
 		inputData  = &bbInput{}
 	)
-	if ethashOn && cliqueStr != "" {
-		return nil, NewError(ErrorConfig, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
+	if xpsashOn && cliqueStr != "" {
+		return nil, NewError(ErrorConfig, fmt.Errorf("both xpsash and clique sealing specified, only one may be chosen"))
 	}
-	if ethashOn {
-		inputData.Ethash = ethashOn
-		inputData.EthashDir = ethashDir
-		switch ethashMode {
+	if xpsashOn {
+		inputData.Xpsash = xpsashOn
+		inputData.XpsashDir = xpsashDir
+		switch xpsashMode {
 		case "normal":
-			inputData.PowMode = ethash.ModeNormal
+			inputData.PowMode = xpsash.ModeNormal
 		case "test":
-			inputData.PowMode = ethash.ModeTest
+			inputData.PowMode = xpsash.ModeTest
 		case "fake":
-			inputData.PowMode = ethash.ModeFake
+			inputData.PowMode = xpsash.ModeFake
 		default:
-			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, fake, normal", ethashMode))
+			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, fake, normal", xpsashMode))
 		}
 	}
 	if headerStr == stdinSelector || ommersStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {

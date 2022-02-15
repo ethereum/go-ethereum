@@ -17,9 +17,9 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package ethereum defines interfaces for interacting with Ethereum.
+// Package xpayments defines interfaces for interacting with xPayments.
 
-package ethereum
+package xpayments
 
 import (
 	"context"

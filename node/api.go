@@ -346,7 +346,7 @@ func (s *publicWeb3API) ClientVersion() string {
 	return s.stack.Server().Name
 }
 
-// Sha3 applies the ethereum sha3 implementation on the input.
+// Sha3 applies the xpayments sha3 implementation on the input.
 // It assumes the input is hex encoded.
 func (s *publicWeb3API) Sha3(input hexutil.Bytes) hexutil.Bytes {
 	return crypto.Keccak256(input)

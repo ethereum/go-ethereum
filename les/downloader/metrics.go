@@ -27,23 +27,23 @@ import (
 )
 
 var (
-	headerInMeter      = metrics.NewRegisteredMeter("eth/downloader/headers/in", nil)
-	headerReqTimer     = metrics.NewRegisteredTimer("eth/downloader/headers/req", nil)
-	headerDropMeter    = metrics.NewRegisteredMeter("eth/downloader/headers/drop", nil)
-	headerTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headers/timeout", nil)
+	headerInMeter      = metrics.NewRegisteredMeter("xps/downloader/headers/in", nil)
+	headerReqTimer     = metrics.NewRegisteredTimer("xps/downloader/headers/req", nil)
+	headerDropMeter    = metrics.NewRegisteredMeter("xps/downloader/headers/drop", nil)
+	headerTimeoutMeter = metrics.NewRegisteredMeter("xps/downloader/headers/timeout", nil)
 
-	bodyInMeter      = metrics.NewRegisteredMeter("eth/downloader/bodies/in", nil)
-	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
-	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)
-	bodyTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bodies/timeout", nil)
+	bodyInMeter      = metrics.NewRegisteredMeter("xps/downloader/bodies/in", nil)
+	bodyReqTimer     = metrics.NewRegisteredTimer("xps/downloader/bodies/req", nil)
+	bodyDropMeter    = metrics.NewRegisteredMeter("xps/downloader/bodies/drop", nil)
+	bodyTimeoutMeter = metrics.NewRegisteredMeter("xps/downloader/bodies/timeout", nil)
 
-	receiptInMeter      = metrics.NewRegisteredMeter("eth/downloader/receipts/in", nil)
-	receiptReqTimer     = metrics.NewRegisteredTimer("eth/downloader/receipts/req", nil)
-	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
-	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
+	receiptInMeter      = metrics.NewRegisteredMeter("xps/downloader/receipts/in", nil)
+	receiptReqTimer     = metrics.NewRegisteredTimer("xps/downloader/receipts/req", nil)
+	receiptDropMeter    = metrics.NewRegisteredMeter("xps/downloader/receipts/drop", nil)
+	receiptTimeoutMeter = metrics.NewRegisteredMeter("xps/downloader/receipts/timeout", nil)
 
-	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
-	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+	stateInMeter   = metrics.NewRegisteredMeter("xps/downloader/states/in", nil)
+	stateDropMeter = metrics.NewRegisteredMeter("xps/downloader/states/drop", nil)
 
-	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	throttleCounter = metrics.NewRegisteredCounter("xps/downloader/throttle", nil)
 )

@@ -25,8 +25,8 @@ import (
 	"errors"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/rlp"
@@ -118,10 +118,10 @@ type NodeIterator interface {
 	// reading from disk. In those cases, this resolver allows short circuiting
 	// accesses and returning them from memory.
 	//
-	// Before adding a similar mechanism to any other place in Geth, consider
+	// Before adding a similar mechanism to any other place in Gpay, consider
 	// making trie.Database an interface and wrapping at that level. It's a huge
 	// refactor, but it could be worth it if another occurrence arises.
-	AddResolver(ethdb.KeyValueReader)
+	AddResolver(xpsdb.KeyValueReader)
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -140,7 +140,7 @@ type nodeIterator struct {
 	path  []byte               // Path to the current node
 	err   error                // Failure set in case of an internal error in the iterator
 
-	resolver ethdb.KeyValueReader // Optional intermediate resolver above the disk layer
+	resolver xpsdb.KeyValueReader // Optional intermediate resolver above the disk layer
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -165,7 +165,7 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 	return it
 }
 
-func (it *nodeIterator) AddResolver(resolver ethdb.KeyValueReader) {
+func (it *nodeIterator) AddResolver(resolver xpsdb.KeyValueReader) {
 	it.resolver = resolver
 }
 
@@ -555,7 +555,7 @@ func (it *differenceIterator) Path() []byte {
 	return it.b.Path()
 }
 
-func (it *differenceIterator) AddResolver(resolver ethdb.KeyValueReader) {
+func (it *differenceIterator) AddResolver(resolver xpsdb.KeyValueReader) {
 	panic("not implemented")
 }
 
@@ -666,7 +666,7 @@ func (it *unionIterator) Path() []byte {
 	return (*it.items)[0].Path()
 }
 
-func (it *unionIterator) AddResolver(resolver ethdb.KeyValueReader) {
+func (it *unionIterator) AddResolver(resolver xpsdb.KeyValueReader) {
 	panic("not implemented")
 }
 

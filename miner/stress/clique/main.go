@@ -37,15 +37,15 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/miner"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
+	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
 	// "github.com/ethereum/go-ethereum/accounts/keystore"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/fdlimit"
@@ -85,12 +85,12 @@ func main() {
 
 	var (
 		stacks []*node.Node
-		nodes  []*eth.Ethereum
+		nodes  []*xps.xPayments
 		enodes []*enode.Node
 	)
 	for _, sealer := range sealers {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := makeSealer(genesis)
+		stack, xpsBackend, err := makeSealer(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -105,7 +105,7 @@ func main() {
 		}
 		// Start tracking the node and its enode
 		stacks = append(stacks, stack)
-		nodes = append(nodes, ethBackend)
+		nodes = append(nodes, xpsBackend)
 		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
@@ -200,12 +200,12 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
-	// Define the basic configurations for the Ethereum node
+func makeSealer(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
+	// Define the basic configurations for the xPayments node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
-		Name:    "geth",
+		Name:    "gpay",
 		Version: params.Version,
 		DataDir: datadir,
 		P2P: p2p.Config{
@@ -214,20 +214,20 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			MaxPeers:    25,
 		},
 	}
-	// Start the node and configure a full Ethereum node on it
+	// Start the node and configure a full xPayments node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Create and register the backend
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	xpsBackend, err := xps.New(stack, &xpsconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
-		GPO:             ethconfig.Defaults.GPO,
+		GPO:             xpsconfig.Defaults.GPO,
 		Miner: miner.Config{
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
@@ -239,5 +239,5 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	}
 
 	err = stack.Start()
-	return stack, ethBackend, err
+	return stack, xpsBackend, err
 }

@@ -49,9 +49,9 @@ type ChainReader interface {
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
-// chain(the fork choice used in the eth1) and the external fork choice (the fork
-// choice used in the eth2). This main goal of this ForkChoice is not only for
-// offering fork choice during the eth1/2 merge phase, but also keep the compatibility
+// chain(the fork choice used in the xps1) and the external fork choice (the fork
+// choice used in the xps2). This main goal of this ForkChoice is not only for
+// offering fork choice during the xps1/2 merge phase, but also keep the compatibility
 // for all other proof-of-work networks.
 type ForkChoice struct {
 	chain ChainReader

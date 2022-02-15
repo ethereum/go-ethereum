@@ -35,10 +35,10 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/contracts/checkpointoracle"
 	"github.com/xpaymentsorg/go-xpayments/contracts/checkpointoracle/contract"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethclient"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xpsclient"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/accounts"
 	// "github.com/ethereum/go-ethereum/cmd/utils"
@@ -175,7 +175,7 @@ func sign(ctx *cli.Context) error {
 		reqCtx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelFn()
 
-		head, err := ethclient.NewClient(node).HeaderByNumber(reqCtx, nil)
+		head, err := xpsclient.NewClient(node).HeaderByNumber(reqCtx, nil)
 		if err != nil {
 			return err
 		}
@@ -298,12 +298,12 @@ func publish(ctx *cli.Context) error {
 	reqCtx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelFn()
 
-	head, err := ethclient.NewClient(client).HeaderByNumber(reqCtx, nil)
+	head, err := xpsclient.NewClient(client).HeaderByNumber(reqCtx, nil)
 	if err != nil {
 		return err
 	}
 	num := head.Number.Uint64()
-	recent, err := ethclient.NewClient(client).HeaderByNumber(reqCtx, big.NewInt(int64(num-128)))
+	recent, err := xpsclient.NewClient(client).HeaderByNumber(reqCtx, big.NewInt(int64(num-128)))
 	if err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ var (
 	gitDate   string
 	app       = &cli.App{
 		Name:        filepath.Base(os.Args[0]),
-		Usage:       "go-ethereum devp2p tool",
+		Usage:       "go-xpayments devp2p tool",
 		Version:     params.VersionWithCommit(gitCommit, gitDate),
 		Writer:      os.Stdout,
 		HideVersion: true,

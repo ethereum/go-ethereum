@@ -17,7 +17,7 @@
 // Copyright 2021-2022 The go-xpayments Authors
 // This file is part of go-xpayments.
 
-// Package catalyst implements the temporary eth1/eth2 RPC integration.
+// Package catalyst implements the temporary xps1/xps2 RPC integration.
 
 package catalyst
 
@@ -40,7 +40,7 @@ import (
 )
 
 // Register adds catalyst APIs to the light client.
-func Register(stack *node.Node, backend *les.LightEthereum) error {
+func Register(stack *node.Node, backend *les.LightxPayments) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
@@ -54,12 +54,12 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 }
 
 type ConsensusAPI struct {
-	les *les.LightEthereum
+	les *les.LightxPayments
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
+func NewConsensusAPI(les *les.LightxPayments) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
 		panic("Catalyst started without valid total difficulty")
 	}
@@ -109,7 +109,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 	return nil, &beacon.GenericServerError
 }
 
-// ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+// ExecutePayloadV1 creates an Xps1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
@@ -118,7 +118,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if !api.les.BlockChain().HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		/*
 			TODO (MariusVanDerWijden) reenable once sync is merged
-			if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), block.Header()); err != nil {
+			if err := api.xps.Downloader().BeaconSync(api.xps.SyncMode(), block.Header()); err != nil {
 				return SYNCING, err
 			}
 		*/

@@ -28,9 +28,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/contracts/checkpointoracle"
-	"github.com/xpaymentsorg/go-xpayments/ethclient"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xpsclient"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/accounts"
 	// "github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -45,10 +45,10 @@ import (
 )
 
 // newClient creates a client with specified remote URL.
-func newClient(ctx *cli.Context) *ethclient.Client {
-	client, err := ethclient.Dial(ctx.GlobalString(nodeURLFlag.Name))
+func newClient(ctx *cli.Context) *xpsclient.Client {
+	client, err := xpsclient.Dial(ctx.GlobalString(nodeURLFlag.Name))
 	if err != nil {
-		utils.Fatalf("Failed to connect to Ethereum node: %v", err)
+		utils.Fatalf("Failed to connect to xPayments node: %v", err)
 	}
 	return client
 }
@@ -57,7 +57,7 @@ func newClient(ctx *cli.Context) *ethclient.Client {
 func newRPCClient(url string) *rpc.Client {
 	client, err := rpc.Dial(url)
 	if err != nil {
-		utils.Fatalf("Failed to connect to Ethereum node: %v", err)
+		utils.Fatalf("Failed to connect to xPayments node: %v", err)
 	}
 	return client
 }
@@ -116,7 +116,7 @@ func newContract(client *rpc.Client) (common.Address, *checkpointoracle.Checkpoi
 	if addr == (common.Address{}) {
 		utils.Fatalf("No specified registrar contract address")
 	}
-	contract, err := checkpointoracle.NewCheckpointOracle(addr, ethclient.NewClient(client))
+	contract, err := checkpointoracle.NewCheckpointOracle(addr, xpsclient.NewClient(client))
 	if err != nil {
 		utils.Fatalf("Failed to setup registrar contract %s: %v", addr, err)
 	}

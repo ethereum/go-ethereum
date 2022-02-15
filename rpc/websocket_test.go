@@ -175,7 +175,7 @@ func TestClientWebsocketPing(t *testing.T) {
 	defer client.Close()
 
 	resultChan := make(chan int)
-	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
+	sub, err := client.XpsSubscribe(ctx, resultChan, "foo")
 	if err != nil {
 		t.Fatalf("client subscribe error: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestClientWebsocketSevered(t *testing.T) {
 	defer client.Close()
 
 	resultChan := make(chan int)
-	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
+	sub, err := client.XpsSubscribe(ctx, resultChan, "foo")
 	if err != nil {
 		t.Fatalf("client subscribe error: %v", err)
 	}
@@ -324,10 +324,10 @@ func wsPingTestServer(t *testing.T, sendPing <-chan struct{}) *http.Server {
 }
 
 func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-chan struct{}) {
-	// Canned responses for the eth_subscribe call in TestClientWebsocketPing.
+	// Canned responses for the xps_subscribe call in TestClientWebsocketPing.
 	const (
 		subResp   = `{"jsonrpc":"2.0","id":1,"result":"0x00"}`
-		subNotify = `{"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0x00","result":1}}`
+		subNotify = `{"jsonrpc":"2.0","method":"xps_subscription","params":{"subscription":"0x00","result":1}}`
 	)
 
 	// Handle subscribe request.

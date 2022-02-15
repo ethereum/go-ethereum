@@ -36,12 +36,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
 
 	// force-load js tracers to trigger registration
-	_ "github.com/xpaymentsorg/go-xpayments/eth/tracers/js"
+	_ "github.com/xpaymentsorg/go-xpayments/xps/tracers/js"
 	// "github.com/ethereum/go-ethereum/accounts/abi"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/consensus"

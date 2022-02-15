@@ -34,7 +34,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
 	// "github.com/ethereum/go-ethereum/core"
 	// "github.com/ethereum/go-ethereum/core/rawdb"
 	// "github.com/ethereum/go-ethereum/core/types"
@@ -207,7 +207,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			if config.IsLondon(new(big.Int)) {
 				baseFee = t.json.Env.BaseFee
 				if baseFee == nil {
-					// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
+					// Retestxps uses `0x10` for genesis baseFee. Therefore, it defaults to
 					// parent - 2 : 0xa as the basefee for 'this' context.
 					baseFee = big.NewInt(0x0a)
 				}

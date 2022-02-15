@@ -39,9 +39,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/core/vm/runtime"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
 	"gopkg.in/urfave/cli.v1"
 	// "github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	// "github.com/ethereum/go-ethereum/cmd/utils"
@@ -248,7 +248,7 @@ func runCmd(ctx *cli.Context) error {
 	if chainConfig != nil {
 		runtimeConfig.ChainConfig = chainConfig
 	} else {
-		runtimeConfig.ChainConfig = params.AllEthashProtocolChanges
+		runtimeConfig.ChainConfig = params.AllXpsashProtocolChanges
 	}
 
 	var hexInput []byte

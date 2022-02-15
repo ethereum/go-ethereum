@@ -29,9 +29,9 @@ import (
 	"sync"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/log"
@@ -46,7 +46,7 @@ var stPool = sync.Pool{
 	},
 }
 
-func stackTrieFromPool(db ethdb.KeyValueWriter) *StackTrie {
+func stackTrieFromPool(db xpsdb.KeyValueWriter) *StackTrie {
 	st := stPool.Get().(*StackTrie)
 	st.db = db
 	return st
@@ -65,11 +65,11 @@ type StackTrie struct {
 	val      []byte               // value contained by this node if it's a leaf
 	key      []byte               // key chunk covered by this (leaf|ext) node
 	children [16]*StackTrie       // list of children (for branch and exts)
-	db       ethdb.KeyValueWriter // Pointer to the commit db, can be nil
+	db       xpsdb.KeyValueWriter // Pointer to the commit db, can be nil
 }
 
 // NewStackTrie allocates and initializes an empty trie.
-func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
+func NewStackTrie(db xpsdb.KeyValueWriter) *StackTrie {
 	return &StackTrie{
 		nodeType: emptyNode,
 		db:       db,
@@ -77,7 +77,7 @@ func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
 }
 
 // NewFromBinary initialises a serialized stacktrie with the given db.
-func NewFromBinary(data []byte, db ethdb.KeyValueWriter) (*StackTrie, error) {
+func NewFromBinary(data []byte, db xpsdb.KeyValueWriter) (*StackTrie, error) {
 	var st StackTrie
 	if err := st.UnmarshalBinary(data); err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 	return nil
 }
 
-func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
+func (st *StackTrie) setDb(db xpsdb.KeyValueWriter) {
 	st.db = db
 	for _, child := range st.children {
 		if child != nil {
@@ -162,7 +162,7 @@ func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
 	}
 }
 
-func newLeaf(key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
+func newLeaf(key, val []byte, db xpsdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = leafNode
 	st.key = append(st.key, key...)
@@ -170,7 +170,7 @@ func newLeaf(key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
 	return st
 }
 
-func newExt(key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
+func newExt(key []byte, child *StackTrie, db xpsdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = extNode
 	st.key = append(st.key, key...)

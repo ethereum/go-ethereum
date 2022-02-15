@@ -27,11 +27,11 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/les/utils"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 	// "github.com/ethereum/go-ethereum/common/mclock"
 	// "github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/les/utils"
@@ -140,7 +140,7 @@ type ValueTracker struct {
 	clock        mclock.Clock
 	lock         sync.Mutex
 	quit         chan chan struct{}
-	db           ethdb.KeyValueStore
+	db           xpsdb.KeyValueStore
 	connected    map[enode.ID]*NodeValueTracker
 	reqTypeCount int
 
@@ -181,7 +181,7 @@ type RequestInfo struct {
 
 // NewValueTracker creates a new ValueTracker and loads its previously saved state from
 // the database if possible.
-func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []RequestInfo, updatePeriod time.Duration, transferRate, statsExpRate, offlineExpRate float64) *ValueTracker {
+func NewValueTracker(db xpsdb.KeyValueStore, clock mclock.Clock, reqInfo []RequestInfo, updatePeriod time.Duration, transferRate, statsExpRate, offlineExpRate float64) *ValueTracker {
 	now := clock.Now()
 
 	initRefBasket := requestBasket{items: make([]basketItem, len(reqInfo))}

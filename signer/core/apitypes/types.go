@@ -88,7 +88,7 @@ func (v *ValidationMessages) GetWarnings() error {
 }
 
 // SendTxArgs represents the arguments to submit a transaction
-// This struct is identical to ethapi.TransactionArgs, except for the usage of
+// This struct is identical to xpsapi.TransactionArgs, except for the usage of
 // common.MixedcaseAddress in From and To
 type SendTxArgs struct {
 	From                 common.MixedcaseAddress  `json:"from"`
