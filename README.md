@@ -14,18 +14,17 @@ archives are published at https://geth.ethereum.org/downloads/.
 
 ## Hardware Requirements
 Minimum:
-
-CPU with 2+ cores
-4GB RAM
-500GB free storage space to sync the Mainnet
-8 MBit/sec download Internet service
+* CPU with 2+ cores
+* 4GB RAM
+* 500GB free storage space to sync the Mainnet
+* 8 MBit/sec download Internet service
 
 Recommended:
 
-Fast CPU with 4+ cores
-16GB+ RAM
-High Performance SSD with at least 500GB free space
-25+ MBit/sec download Internet service
+* Fast CPU with 4+ cores
+* 16GB+ RAM
+* High Performance SSD with at least 500GB free space
+* 25+ MBit/sec download Internet service
 
 ## Building the source
 
