@@ -97,6 +97,22 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	return nil, errMemorydbNotFound
 }
 
+// Get looks up the given key. If it's present in the key-value store, then
+// the onValueFn is invoked. At this point, the data is 'raw' -- not copied, so
+// the method must not modify the backing slice.
+func (db *Database) GetDo(key []byte, onValueFn func([]byte)) error {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+	if db.db == nil {
+		return errMemorydbClosed
+	}
+	if entry, ok := db.db[string(key)]; ok {
+		onValueFn(entry)
+		return nil
+	}
+	return errMemorydbNotFound
+}
+
 // Put inserts the given value into the key-value store.
 func (db *Database) Put(key []byte, value []byte) error {
 	db.lock.Lock()

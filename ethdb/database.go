@@ -28,6 +28,12 @@ type KeyValueReader interface {
 	Get(key []byte) ([]byte, error)
 }
 
+type KeyValueMemReader interface {
+	KeyValueReader
+
+	GetDo(key []byte, onValue func([]byte)) error
+}
+
 // KeyValueWriter wraps the Put method of a backing data store.
 type KeyValueWriter interface {
 	// Put inserts the given value into the key-value data store.
