@@ -180,7 +180,7 @@ To connect to the IPC console, open a new terminal and run the command below.
 ```shell
 geth attach http://127.0.0.1:8545
 ```
-This will open the Geth javascript console as shown below.
+The `attach` subcommand attaches to the console to an already-running geth instance and open the Geth javascript console as shown below.
 
 ```terminal
 Welcome to the Geth JavaScript console!
