@@ -470,6 +470,10 @@ func (l *loggingDb) NewBatch() ethdb.Batch {
 	return l.backend.NewBatch()
 }
 
+func (l *loggingDb) NewBatchWithSize(size int) ethdb.Batch {
+	return l.backend.NewBatchWithSize(size)
+}
+
 func (l *loggingDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	fmt.Printf("NewIterator\n")
 	return l.backend.NewIterator(prefix, start)
