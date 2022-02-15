@@ -525,3 +525,54 @@ func TestNodeIteratorLargeTrie(t *testing.T) {
 		t.Fatalf("Too many lookups during seek, have %d want %d", have, want)
 	}
 }
+
+func TestIteratorNodeBlob(t *testing.T) {
+	var (
+		db      = memorydb.New()
+		triedb  = NewDatabase(db)
+		trie, _ = New(common.Hash{}, triedb)
+	)
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	all := make(map[string]string)
+	for _, val := range vals {
+		all[val.k] = val.v
+		trie.Update([]byte(val.k), []byte(val.v))
+	}
+	trie.Commit(nil)
+	triedb.Cap(0)
+
+	found := make(map[common.Hash][]byte)
+	it := trie.NodeIterator(nil)
+	for it.Next(true) {
+		if it.Hash() == (common.Hash{}) {
+			continue
+		}
+		found[it.Hash()] = it.NodeBlob()
+	}
+
+	dbIter := db.NewIterator(nil, nil)
+	defer dbIter.Release()
+
+	var count int
+	for dbIter.Next() {
+		got, present := found[common.BytesToHash(dbIter.Key())]
+		if !present {
+			t.Fatalf("Miss trie node %v", dbIter.Key())
+		}
+		if !bytes.Equal(got, dbIter.Value()) {
+			t.Fatalf("Unexpected trie node want %v got %v", dbIter.Value(), got)
+		}
+		count += 1
+	}
+	if count != len(found) {
+		t.Fatal("Find extra trie node via iterator")
+	}
+}
