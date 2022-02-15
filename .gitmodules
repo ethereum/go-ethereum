@@ -1,6 +1,6 @@
 [submodule "tests"]
 	path = tests/testdata
-	url = https://github.com/ethereum/tests
+	url = https://github.com/xpaymentsorg/tests
 	shallow = true
 [submodule "evm-benchmarks"]
 	path = tests/evm-benchmarks

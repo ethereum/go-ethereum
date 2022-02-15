@@ -102,13 +102,13 @@ type ChainStateReader interface {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the Ethereum network.
+// the xPayments network.
 type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at
 	HighestBlock  uint64 // Highest alleged block number in the chain
 
-	// "fast sync" fields. These used to be sent by geth, but are no longer used
+	// "fast sync" fields. These used to be sent by gpay, but are no longer used
 	// since version v1.10.
 	PulledStates uint64 // Number of state trie entries already downloaded
 	KnownStates  uint64 // Total number of state trie entries known about
@@ -160,7 +160,7 @@ type ContractCaller interface {
 
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
-	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
+	BlockHash *common.Hash     // used by xps_getLogs, return logs only from block with this hash
 	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
 	ToBlock   *big.Int         // end of the range, nil means latest block
 	Addresses []common.Address // restricts matches to events created by specific contracts

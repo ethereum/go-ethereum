@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/xpaymentsorg/go-xpayments
 sudo: false
 jobs:
   allow_failures:
@@ -20,7 +20,7 @@ jobs:
       env:
         - lint
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       script:
         - go run build/ci.go lint
 
@@ -37,11 +37,11 @@ jobs:
       services:
         - docker
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload xpayments/client-go
 
     - stage: build
       if: type = push
@@ -54,11 +54,11 @@ jobs:
       services:
         - docker
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload xpayments/client-go
 
     # This builder does the Ubuntu PPA upload
     - stage: build
@@ -70,7 +70,7 @@ jobs:
         - ubuntu-ppa
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       addons:
         apt:
           packages:
@@ -82,7 +82,7 @@ jobs:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload xpayments/xpayments -sftp-user gpay-ci -signer "Go xPayments Linux Builder <gpay-ci@xpayments.org>"
 
     # This builder does the Linux Azure uploads
     - stage: build
@@ -95,7 +95,7 @@ jobs:
         - azure-linux
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       addons:
         apt:
           packages:
@@ -103,22 +103,22 @@ jobs:
       script:
         # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install -dlgo
-        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
         - go run build/ci.go install -dlgo -arch 386
-        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
         - GOARM=5 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
         - GOARM=6 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
         - GOARM=7 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabihf-gcc
-        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
-        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
 
     # This builder does the Android Maven and Azure uploads
     - stage: build
@@ -134,7 +134,7 @@ jobs:
         - maven-android
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       before_install:
         # Install Android and it's dependencies manually, Travis is stale
         - export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
@@ -154,9 +154,9 @@ jobs:
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
-        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gethstore/builds
+        - mkdir -p $GOPATH/src/github.com/xpaymentsorg
+        - ln -s `pwd` $GOPATH/src/github.com/xpaymentsorg/go-xpayments
+        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gpaystore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - stage: build
@@ -169,10 +169,10 @@ jobs:
         - cocoapods-ios
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       script:
         - go run build/ci.go install -dlgo
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gpaystore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a -x
@@ -187,7 +187,7 @@ jobs:
 
         # Workaround for https://github.com/golang/go/issues/23749
         - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
-        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -signify SIGNIFY_KEY -deploy trunk -upload gethstore/builds
+        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -signify SIGNIFY_KEY -deploy trunk -upload gpaystore/builds
 
     # These builders run the tests
     - stage: build
@@ -230,9 +230,9 @@ jobs:
         - azure-purge
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false # avoid cloning xpayments/tests
       script:
-        - go run build/ci.go purge -store gethstore/builds -days 14
+        - go run build/ci.go purge -store gpaystore/builds -days 14
 
     # This builder executes race tests
     - stage: build

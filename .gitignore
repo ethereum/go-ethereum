@@ -10,7 +10,7 @@
 *un~
 .DS_Store
 */**/.DS_Store
-.ethtest
+.xpstest
 */**/*tx_database*
 */**/*dapps*
 build/_vendor/pkg
@@ -26,7 +26,7 @@ build/_vendor/pkg
 /build/_workspace/
 /build/cache/
 /build/bin/
-/geth*.zip
+/gpay*.zip
 
 # travis
 profile.tmp

@@ -1,6 +1,6 @@
 ---
 name: Report a bug
-about: Something with go-ethereum is not working as expected
+about: Something with go-xpayments is not working as expected
 title: ''
 labels: 'type:bug'
 assignees: ''
@@ -8,7 +8,7 @@ assignees: ''
 
 #### System information
 
-Geth version: `geth version`
+Gpay version: `gpay version`
 OS & Version: Windows/Linux/OSX
 Commit hash : (if `develop`)
 
