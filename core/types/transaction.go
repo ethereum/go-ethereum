@@ -134,7 +134,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}
 		return err
-	case kind == rlp.String:
+	default:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
@@ -145,9 +145,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(inner, len(b))
 		}
 		return err
-	default:
-		// Expects the EIP-2718 transaction as default.
-		return rlp.ErrExpectedString
 	}
 }
 
