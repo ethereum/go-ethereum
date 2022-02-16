@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 // build +gofuzz
 
 package secp256k1
@@ -22,8 +25,11 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	fuzz "github.com/google/gofuzz"
+	"github.com/xpaymentsorg/go-xpayments/crypto/secp256k1"
+	// "github.com/btcsuite/btcd/btcec"
+	// "github.com/ethereum/go-ethereum/crypto/secp256k1"
+	// fuzz "github.com/google/gofuzz"
 )
 
 func Fuzz(input []byte) int {
@@ -44,7 +50,7 @@ func Fuzz(input []byte) int {
 	resBX, resBY := curveB.Add(x1, y1, x2, y2)
 	if resAX.Cmp(resBX) != 0 || resAY.Cmp(resBY) != 0 {
 		fmt.Printf("%s %s %s %s\n", x1, y1, x2, y2)
-		panic(fmt.Sprintf("Addition failed: geth: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
+		panic(fmt.Sprintf("Addition failed: gpay: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
 	}
 	return 0
 }

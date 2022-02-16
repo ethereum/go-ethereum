@@ -29,8 +29,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/beacon"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-
-	//"github.com/xpaymentsorg/go-xpayments/xps"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/rpc"

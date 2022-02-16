@@ -67,6 +67,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/xps"
+	xpscatalyst "github.com/xpaymentsorg/go-xpayments/xps/catalyst"
 	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
 	"github.com/xpaymentsorg/go-xpayments/xps/gasprice"
 	"github.com/xpaymentsorg/go-xpayments/xps/tracers"

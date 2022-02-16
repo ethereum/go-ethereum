@@ -1,3 +1,6 @@
+// Copyright 2021-2022 The go-xpayments Authors
+// This file is part of go-xpayments.
+
 package main
 
 import (
@@ -5,7 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/stacktrie"
+	"github.com/xpaymentsorg/go-xpayments/tests/fuzzers/stacktrie"
+	// "github.com/ethereum/go-ethereum/tests/fuzzers/stacktrie"
 )
 
 func main() {

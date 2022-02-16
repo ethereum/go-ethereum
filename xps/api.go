@@ -62,7 +62,7 @@ type PublicxPaymentsAPI struct {
 }
 
 // NewPublicxPaymentsAPI creates a new xPayments protocol API for full nodes.
-func NewPublicXpsereumAPI(e *xPayments) *PublicxPaymentsAPI {
+func NewPublicxPaymentsAPI(e *xPayments) *PublicxPaymentsAPI {
 	return &PublicxPaymentsAPI{e}
 }
 

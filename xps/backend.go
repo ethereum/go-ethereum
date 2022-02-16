@@ -463,7 +463,7 @@ func (s *xPayments) shouldPreserve(header *types.Header) bool {
 }
 
 // SetXpserbase sets the mining reward address.
-func (s *xPayments) SetXpserbase(Xpserbase common.Address) {
+func (s *xPayments) SetXpserbase(xpserbase common.Address) {
 	s.lock.Lock()
 	s.xpserbase = xpserbase
 	s.lock.Unlock()
