@@ -532,3 +532,283 @@ func TestGnosisCustomData(t *testing.T) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
 	}
 }
+
+var gnosisTypedDataWithChainId = `
+{
+	"types": {
+    "EIP712Domain": [
+        { "type": "uint256", "name": "chainId" },
+        { "type": "address", "name": "verifyingContract" }
+    ],
+		"SafeTx": [
+			{ "type": "address", "name": "to" },
+			{ "type": "uint256", "name": "value" },
+			{ "type": "bytes", "name": "data" },
+			{ "type": "uint8", "name": "operation" },
+			{ "type": "uint256", "name": "safeTxGas" },
+			{ "type": "uint256", "name": "baseGas" },
+			{ "type": "uint256", "name": "gasPrice" },
+			{ "type": "address", "name": "gasToken" },
+			{ "type": "address", "name": "refundReceiver" },
+			{ "type": "uint256", "name": "nonce" }
+		]
+	},
+	"domain": {
+		"verifyingContract": "0x111dAE35D176A9607053e0c46e91F36AFbC1dc57",
+		"chainId": "4"
+	},
+	"primaryType": "SafeTx",
+	"message": {
+		"to": "0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa",
+		"value": "0",
+		"data": "0xa9059cbb00000000000000000000000099d580d3a7fe7bd183b2464517b2cd7ce5a8f15a0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+		"operation": 0,
+		"safeTxGas": 0,
+		"baseGas": 0,
+		"gasPrice": "0",
+		"gasToken": "0x0000000000000000000000000000000000000000",
+		"refundReceiver": "0x0000000000000000000000000000000000000000",
+		"nonce": 15
+	}
+}`
+
+var gnosisTxWithChainId = `
+{
+	"safe": "0x111dAE35D176A9607053e0c46e91F36AFbC1dc57",
+	"to": "0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa",
+	"value": "0",
+	"data": "0xa9059cbb00000000000000000000000099d580d3a7fe7bd183b2464517b2cd7ce5a8f15a0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+	"operation": 0,
+	"gasToken": "0x0000000000000000000000000000000000000000",
+	"safeTxGas": 0,
+	"baseGas": 0,
+	"gasPrice": "0",
+	"refundReceiver": "0x0000000000000000000000000000000000000000",
+	"nonce": 15,
+	"executionDate": "2022-01-10T20:00:12Z",
+	"submissionDate": "2022-01-10T19:59:59.689989Z",
+	"modified": "2022-01-10T20:00:31.903635Z",
+	"blockNumber": 9968802,
+	"transactionHash": "0xc9fef30499ee8984974ab9dddd9d15c2a97c1a4393935dceed5efc3af9fc41a4",
+	"safeTxHash": "0x6619dab5401503f2735256e12b898e69eb701d6a7e0d07abf1be4bb8aebfba29",
+	"executor": "0xbc2BB26a6d821e69A38016f3858561a1D80d4182",
+	"isExecuted": true,
+	"isSuccessful": true,
+	"ethGasPrice": "2500000009",
+	"gasUsed": 82902,
+	"fee": "207255000746118",
+	"chainId": "4",
+	"origin": null,
+	"dataDecoded": {
+		"method": "transfer",
+		"parameters": [
+				{
+				"name": "to",
+				"type": "address",
+				"value": "0x99D580d3a7FE7BD183b2464517B2cD7ce5A8F15A"
+				},
+				{
+				"name": "value",
+				"type": "uint256",
+				"value": "1000000000000000000"
+				}
+		]
+	},
+	"confirmationsRequired": 1,
+	"confirmations": [
+		{
+		"owner": "0xbc2BB26a6d821e69A38016f3858561a1D80d4182",
+		"submissionDate": "2022-01-10T19:59:59.722500Z",
+		"transactionHash": null,
+		"signature": "0x5ca34641bcdee06e7b99143bfe34778195ca41022bd35837b96c204c7786be9d6dfa6dba43b53cd92da45ac728899e1561b232d28f38ba82df45f164caba38be1b",
+		"signatureType": "EOA"
+		}
+	],
+	"signatures": "0x5ca34641bcdee06e7b99143bfe34778195ca41022bd35837b96c204c7786be9d6dfa6dba43b53cd92da45ac728899e1561b232d28f38ba82df45f164caba38be1b"
+}
+`
+
+func TestGnosisTypedDataWithChainId(t *testing.T) {
+	var td apitypes.TypedData
+	err := json.Unmarshal([]byte(gnosisTypedDataWithChainId), &td)
+	if err != nil {
+		t.Fatalf("unmarshalling failed '%v'", err)
+	}
+	_, sighash, err := sign(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expSigHash := common.FromHex("0x6619dab5401503f2735256e12b898e69eb701d6a7e0d07abf1be4bb8aebfba29")
+	if !bytes.Equal(expSigHash, sighash) {
+		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
+	}
+}
+
+// TestGnosisCustomData tests the scenario where a user submits only the gnosis-safe
+// specific data, and we fill the TypedData struct on our side
+func TestGnosisCustomDataWithChainId(t *testing.T) {
+	var tx core.GnosisSafeTx
+	err := json.Unmarshal([]byte(gnosisTxWithChainId), &tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var td = tx.ToTypedData()
+	_, sighash, err := sign(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expSigHash := common.FromHex("0x6619dab5401503f2735256e12b898e69eb701d6a7e0d07abf1be4bb8aebfba29")
+	if !bytes.Equal(expSigHash, sighash) {
+		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
+	}
+}
+
+var complexTypedData = `
+{
+    "types": {
+        "EIP712Domain": [
+            {
+                "name": "chainId",
+                "type": "uint256"
+            },
+            {
+                "name": "name",
+                "type": "string"
+            },
+            {
+                "name": "verifyingContract",
+                "type": "address"
+            },
+            {
+                "name": "version",
+                "type": "string"
+            }
+        ],
+        "Action": [
+            {
+                "name": "action",
+                "type": "string"
+            },
+            {
+                "name": "params",
+                "type": "string"
+            }
+        ],
+        "Cell": [
+            {
+                "name": "capacity",
+                "type": "string"
+            },
+            {
+                "name": "lock",
+                "type": "string"
+            },
+            {
+                "name": "type",
+                "type": "string"
+            },
+            {
+                "name": "data",
+                "type": "string"
+            },
+            {
+                "name": "extraData",
+                "type": "string"
+            }
+        ],
+        "Transaction": [
+            {
+                "name": "DAS_MESSAGE",
+                "type": "string"
+            },
+            {
+                "name": "inputsCapacity",
+                "type": "string"
+            },
+            {
+                "name": "outputsCapacity",
+                "type": "string"
+            },
+            {
+                "name": "fee",
+                "type": "string"
+            },
+            {
+                "name": "action",
+                "type": "Action"
+            },
+            {
+                "name": "inputs",
+                "type": "Cell[]"
+            },
+            {
+                "name": "outputs",
+                "type": "Cell[]"
+            },
+            {
+                "name": "digest",
+                "type": "bytes32"
+            }
+        ]
+    },
+    "primaryType": "Transaction",
+    "domain": {
+        "chainId": "56",
+        "name": "da.systems",
+        "verifyingContract": "0x0000000000000000000000000000000020210722",
+        "version": "1"
+    },
+    "message": {
+        "DAS_MESSAGE": "SELL mobcion.bit FOR 100000 CKB",
+        "inputsCapacity": "1216.9999 CKB",
+        "outputsCapacity": "1216.9998 CKB",
+        "fee": "0.0001 CKB",
+        "digest": "0x53a6c0f19ec281604607f5d6817e442082ad1882bef0df64d84d3810dae561eb",
+        "action": {
+            "action": "start_account_sale",
+            "params": "0x00"
+        },
+        "inputs": [
+            {
+                "capacity": "218 CKB",
+                "lock": "das-lock,0x01,0x051c152f77f8efa9c7c6d181cc97ee67c165c506...",
+                "type": "account-cell-type,0x01,0x",
+                "data": "{ account: mobcion.bit, expired_at: 1670913958 }",
+                "extraData": "{ status: 0, records_hash: 0x55478d76900611eb079b22088081124ed6c8bae21a05dd1a0d197efcc7c114ce }"
+            }
+        ],
+        "outputs": [
+            {
+                "capacity": "218 CKB",
+                "lock": "das-lock,0x01,0x051c152f77f8efa9c7c6d181cc97ee67c165c506...",
+                "type": "account-cell-type,0x01,0x",
+                "data": "{ account: mobcion.bit, expired_at: 1670913958 }",
+                "extraData": "{ status: 1, records_hash: 0x55478d76900611eb079b22088081124ed6c8bae21a05dd1a0d197efcc7c114ce }"
+            },
+            {
+                "capacity": "201 CKB",
+                "lock": "das-lock,0x01,0x051c152f77f8efa9c7c6d181cc97ee67c165c506...",
+                "type": "account-sale-cell-type,0x01,0x",
+                "data": "0x1209460ef3cb5f1c68ed2c43a3e020eec2d9de6e...",
+                "extraData": ""
+            }
+        ]
+    }
+}
+`
+
+func TestComplexTypedData(t *testing.T) {
+	var td apitypes.TypedData
+	err := json.Unmarshal([]byte(complexTypedData), &td)
+	if err != nil {
+		t.Fatalf("unmarshalling failed '%v'", err)
+	}
+	_, sighash, err := sign(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expSigHash := common.FromHex("0x42b1aca82bb6900ff75e90a136de550a58f1a220a071704088eabd5e6ce20446")
+	if !bytes.Equal(expSigHash, sighash) {
+		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
+	}
+}

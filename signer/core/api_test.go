@@ -256,6 +256,9 @@ func TestSignTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(list) == 0 {
+		t.Fatal("Unexpected empty list")
+	}
 	a := common.NewMixedcaseAddress(list[0])
 
 	methodSig := "test(uint)"

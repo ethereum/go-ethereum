@@ -406,7 +406,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 }
 
 // hasRightElement returns the indicator whether there exists more elements
-// in the right side of the given path. The given path can point to an existent
+// on the right side of the given path. The given path can point to an existent
 // key or a non-existent one. This function has the assumption that the whole
 // path should already be resolved.
 func hasRightElement(node node, key []byte) bool {
@@ -505,7 +505,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		if val != nil || hasRightElement(root, firstKey) {
 			return false, errors.New("more entries available")
 		}
-		return hasRightElement(root, firstKey), nil
+		return false, nil
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
@@ -563,7 +563,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if tr.Hash() != rootHash {
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
-	return hasRightElement(root, keys[len(keys)-1]), nil
+	return hasRightElement(tr.root, keys[len(keys)-1]), nil
 }
 
 // get returns the child of the given node. Return nil if the

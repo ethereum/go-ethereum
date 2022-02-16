@@ -48,6 +48,7 @@ func TestBuildSchema(t *testing.T) {
 	conf := node.DefaultConfig
 	conf.DataDir = ddir
 	stack, err := node.New(&conf)
+	defer stack.Close()
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
