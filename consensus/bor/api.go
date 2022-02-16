@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math"
 	"math/big"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -47,9 +48,27 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 }
 
 type BlockSigners struct {
-	Signers map[common.Address]uint64
+	Signers []difficultiesKV
 	Diff    int
 	Author  common.Address
+}
+
+type difficultiesKV struct {
+	Signer     common.Address
+	Difficulty uint64
+}
+
+func rankMapDifficulties(values map[common.Address]uint64) []difficultiesKV {
+
+	var ss []difficultiesKV
+	for k, v := range values {
+		ss = append(ss, difficultiesKV{k, v})
+	}
+	sort.Slice(ss, func(i, j int) bool {
+		return ss[i].Difficulty > ss[j].Difficulty
+	})
+
+	return ss
 }
 
 // GetSnapshotProposerSequence retrieves the in-turn signers of all sprints in a span
@@ -72,13 +91,15 @@ func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigne
 		difficulties[signers[i]] = uint64(len(signers) - (tempIndex - proposerIndex))
 	}
 
+	difficulties2 := rankMapDifficulties(difficulties)
+
 	author, err := api.GetAuthor(number)
 	if err != nil {
 		return BlockSigners{}, err
 	}
 	diff := int(difficulties[*author])
 	blockSigners := &BlockSigners{
-		Signers: difficulties,
+		Signers: difficulties2,
 		Diff:    diff,
 		Author:  *author,
 	}
