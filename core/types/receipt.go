@@ -182,7 +182,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		r.Type = LegacyTxType
 		return r.setFromRLP(dec)
-	case kind == rlp.String:
+	default:
 		// It's an EIP-2718 typed tx receipt.
 		b, err := s.Bytes()
 		if err != nil {
@@ -200,9 +200,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return r.setFromRLP(dec)
 		}
 		return ErrTxTypeNotSupported
-	default:
-		// Expects the EIP-2718 transaction as default.
-		return rlp.ErrExpectedString
 	}
 }
 
