@@ -7,7 +7,7 @@ You can enable autocompletion in geth just running a bash script (Linux/MacOS) o
 
 ### Linux/MacOS
 
-1.  Creates a bash script file with the content below and save as `geth-autocompletion` anywhere in your computer (i.e. `/bin/geth-autocompletion`):
+1.  Create a bash script file with the content below and save as `geth-autocompletion` anywhere in your computer (i.e. `/bin/geth-autocompletion`):
 
     ```bash
     #! /bin/bash
