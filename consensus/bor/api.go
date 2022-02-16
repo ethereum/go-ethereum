@@ -91,7 +91,7 @@ func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigne
 		difficulties[signers[i]] = uint64(len(signers) - (tempIndex - proposerIndex))
 	}
 
-	difficulties2 := rankMapDifficulties(difficulties)
+	rankedDifficulties := rankMapDifficulties(difficulties)
 
 	author, err := api.GetAuthor(number)
 	if err != nil {
@@ -99,7 +99,7 @@ func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigne
 	}
 	diff := int(difficulties[*author])
 	blockSigners := &BlockSigners{
-		Signers: difficulties2,
+		Signers: rankedDifficulties,
 		Diff:    diff,
 		Author:  *author,
 	}
