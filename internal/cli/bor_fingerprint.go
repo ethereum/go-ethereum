@@ -73,34 +73,15 @@ func convertBytesToGB(bytesValue uint64) float64 {
 	return math.Floor(float64(bytesValue)/(1024*1024*1024)*100) / 100
 }
 
-// Install fio on the node if it does not exist
-func (c *FingerprintCommand) installFio() error {
+// Checks if fio exists on the node
+func (c *FingerprintCommand) checkFio() error {
 
 	cmd := exec.Command("/bin/sh", "-c", "fio -v")
 
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		c.UI.Output("fio not installed\nInstalling Fio...")
-
-		cmd := exec.Command("/bin/sh", "-c", "sudo apt-get update && sudo apt-get install fio -y")
-		_, err := cmd.CombinedOutput()
-		if err == nil {
-			return nil
-		}
-
-		cmd = exec.Command("/bin/sh", "-c", "sudo yum install fio -y")
-		_, err = cmd.CombinedOutput()
-		if err == nil {
-			return nil
-		}
-
-		cmd = exec.Command("/bin/sh", "-c", "sudo dnf install fio -y")
-		_, err = cmd.CombinedOutput()
-		if err == nil {
-			return nil
-		}
-
-		c.UI.Output("Unable to install fio")
+		message := "\nFio package not installed. Install Fio for IOPS Benchmarking :\n\nDebianOS  :  'sudo apt-get update && sudo apt-get install fio -y'\nAWS AMI/CentOS  :  'sudo yum install fio -y'\nOracle LinuxOS  :  'sudo dnf install fio -y'\n"
+		c.UI.Output(message)
 		return err
 	}
 
@@ -110,9 +91,9 @@ func (c *FingerprintCommand) installFio() error {
 // Run the IOPS benchmark for the node
 func (c *FingerprintCommand) benchmark() error {
 	var b []byte
-	err := c.installFio()
+	err := c.checkFio()
 	if err != nil {
-		return err
+		return nil
 	}
 
 	c.UI.Output("\nRunning a 10 second test...\n")
