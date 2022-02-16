@@ -44,7 +44,7 @@ You can enable autocompletion in geth just running a bash script (Linux/MacOS) o
 
 ### Windows
 
-1.  Creates a powershell script file with the content below and save as `geth.ps1` anywhere in your computer.
+1.  Create a powershell script file with the content below and save as `geth.ps1` anywhere in your computer.
 
     ```bash
     $fn = $($MyInvocation.MyCommand.Name)
