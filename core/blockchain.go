@@ -143,6 +143,40 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 }
 
+type BlockChainConfig struct {
+	CacheConfig *CacheConfig
+	ChainConfig *params.ChainConfig
+	VmConfig    vm.Config
+}
+type BcConfigOpt func(*BlockChainConfig)
+
+func SetCacheConfig(cacheConfig *CacheConfig) BcConfigOpt {
+	return func(bcConfig *BlockChainConfig) {
+		bcConfig.CacheConfig = cacheConfig
+	}
+}
+func SetChainConfig(chainConfig *params.ChainConfig) BcConfigOpt {
+	return func(bcConfig *BlockChainConfig) {
+		bcConfig.ChainConfig = chainConfig
+	}
+}
+func SetVmConfig(vmConfig vm.Config) BcConfigOpt {
+	return func(bcConfig *BlockChainConfig) {
+		bcConfig.VmConfig = vmConfig
+	}
+}
+func NewChainConfig(opt ...BcConfigOpt) BlockChainConfig {
+	bcConfig := &BlockChainConfig{
+		CacheConfig: defaultCacheConfig,
+		ChainConfig: nil,
+		VmConfig:    vm.Config{},
+	}
+	for _, configOpt := range opt {
+		configOpt(bcConfig)
+	}
+	return *bcConfig
+}
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -214,16 +248,16 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
-	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
-	}
+func NewBlockChain(db ethdb.Database, bcConfig BlockChainConfig, engine consensus.Engine, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	chainConfig := bcConfig.ChainConfig
+	cacheConfig := bcConfig.CacheConfig
+	vmConfig := bcConfig.VmConfig
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
