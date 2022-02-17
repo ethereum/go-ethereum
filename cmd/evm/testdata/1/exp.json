@@ -1,14 +1,14 @@
 {
   "alloc": {
-    "0x8a8eafb1cf62bfbeb1741769dae1a9dd47996192": {
+    "0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192": {
       "balance": "0xfeed1a9d",
       "nonce": "0x1"
     },
-    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+    "0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B": {
       "balance": "0x5ffd4878be161d74",
       "nonce": "0xac"
     },
-    "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+    "0xc94f5374fCe5eDBc8e2a8697C15331677E6EBF0B": {
       "balance": "0xa410"
     }
   },

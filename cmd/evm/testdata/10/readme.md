@@ -15,11 +15,11 @@ Output:
    "balance": "0x10000000000",
    "nonce": "0x1"
   },
-  "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+  "0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B": {
    "balance": "0x10000000000",
    "nonce": "0x1"
   },
-  "0xd02d72e067e77158444ef2020ff2d325f929b363": {
+  "0xd02d72E067e77158444ef2020Ff2d325f929B363": {
    "balance": "0xff5beffffc95",
    "nonce": "0x4"
   }

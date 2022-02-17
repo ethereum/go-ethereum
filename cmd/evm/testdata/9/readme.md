@@ -9,7 +9,7 @@ following code: `0x58585454`: `PC; PC; SLOAD; SLOAD`.
 
 Essentialy, this contract does `SLOAD(0)` and `SLOAD(1)`.
 
-The alloc also contains some funds on `0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b`. 
+The alloc also contains some funds on `0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B`. 
 
 ## Transactions
 
@@ -43,10 +43,10 @@ $ dir=./testdata/9 && ./evm t8n --state.fork=London --input.alloc=$dir/alloc.jso
    "balance": "0x3",
    "nonce": "0x1"
   },
-  "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+  "0x2ADC25665018Aa1FE0E6BC666DaC8Fc2697fF9bA": {
    "balance": "0xbfc02677a000"
   },
-  "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+  "0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B": {
    "balance": "0xff104fcfea7800",
    "nonce": "0x2"
   }

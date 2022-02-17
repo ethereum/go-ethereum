@@ -16,7 +16,7 @@ INFO [07-21|19:03:50.276] Trie dumping started                     root=e05f81..
 INFO [07-21|19:03:50.276] Trie dumping complete                    accounts=1 elapsed="39.549µs"
 {
  "alloc": {
-  "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+  "0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B": {
    "balance": "0x501bd00"
   }
  },

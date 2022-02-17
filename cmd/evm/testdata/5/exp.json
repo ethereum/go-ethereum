@@ -1,12 +1,12 @@
 {
   "alloc": {
-    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+    "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa": {
       "balance": "0x88"
     },
-    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+    "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB": {
       "balance": "0x70"
     },
-    "0xcccccccccccccccccccccccccccccccccccccccc": {
+    "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC": {
       "balance": "0x60"
     }
   },

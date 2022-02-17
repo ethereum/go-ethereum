@@ -39,7 +39,7 @@ import (
 
 const (
 	testInstance = "console-tester"
-	testAddress  = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	testAddress  = "0x8605CdbbDb6D264Aa742e77020dCbc58FcDCe182"
 )
 
 // hookedPrompter implements UserPrompter to simulate use input via channels.

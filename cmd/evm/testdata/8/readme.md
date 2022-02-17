@@ -9,7 +9,7 @@ following code: `0x5854505854`: `PC ;SLOAD; POP; PC; SLOAD`.
 
 Essentialy, this contract does `SLOAD(0)` and `SLOAD(3)`.
 
-The alloc also contains some funds on `0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b`. 
+The alloc also contains some funds on `0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B`. 
 
 ## Transactions
 
