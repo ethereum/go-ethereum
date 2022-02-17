@@ -144,9 +144,11 @@ var defaultCacheConfig = &CacheConfig{
 }
 
 type BlockChainConfig struct {
-	CacheConfig *CacheConfig
-	ChainConfig *params.ChainConfig
-	VmConfig    vm.Config
+	CacheConfig    *CacheConfig
+	ChainConfig    *params.ChainConfig
+	VmConfig       vm.Config
+	ShouldPreserve func(*types.Header) bool
+	TxLookupLimit  *uint64
 }
 type BcConfigOpt func(*BlockChainConfig)
 
@@ -165,11 +167,18 @@ func SetVmConfig(vmConfig vm.Config) BcConfigOpt {
 		bcConfig.VmConfig = vmConfig
 	}
 }
+func SetTxLookupLimit(txLookupLimit *uint64) BcConfigOpt {
+	return func(bcConfig *BlockChainConfig) {
+		bcConfig.TxLookupLimit = txLookupLimit
+	}
+}
 func NewChainConfig(opt ...BcConfigOpt) BlockChainConfig {
 	bcConfig := &BlockChainConfig{
-		CacheConfig: defaultCacheConfig,
-		ChainConfig: nil,
-		VmConfig:    vm.Config{},
+		CacheConfig:    defaultCacheConfig,
+		ChainConfig:    nil,
+		ShouldPreserve: nil,
+		TxLookupLimit:  nil,
+		VmConfig:       vm.Config{},
 	}
 	for _, configOpt := range opt {
 		configOpt(bcConfig)
@@ -248,16 +257,20 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, bcConfig BlockChainConfig, engine consensus.Engine, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, engine consensus.Engine, configOpts ...BcConfigOpt) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+
+	bcConfig := NewChainConfig(configOpts...)
 	chainConfig := bcConfig.ChainConfig
 	cacheConfig := bcConfig.CacheConfig
 	vmConfig := bcConfig.VmConfig
+	shouldPreserve := bcConfig.ShouldPreserve
+	txLookupLimit := bcConfig.TxLookupLimit
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
