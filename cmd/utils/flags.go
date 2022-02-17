@@ -1811,10 +1811,14 @@ func SetupMetrics(ctx *cli.Context) {
 			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
 		}
 
-		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
+		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) || ctx.GlobalIsSet(MetricsPortFlag.Name) {
 			address := fmt.Sprintf("%s:%d", ctx.GlobalString(MetricsHTTPFlag.Name), ctx.GlobalInt(MetricsPortFlag.Name))
 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
 			exp.Setup(address)
+		} else {
+                        address := fmt.Sprintf("%s:%d", MetricsHTTPFlag.Value, MetricsPortFlag.Value)
+                        log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+                        exp.Setup(address)
 		}
 	}
 }
