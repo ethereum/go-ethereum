@@ -43,7 +43,6 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 		}
 		os.Remove(fname)
 	}()
-
 	// Apply the given function if it's not nil before we copy
 	// the content from the src.
 	if before != nil {
@@ -77,6 +76,44 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 	f = nil
 
 	if err := os.Rename(fname, destPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// openFreezerFileForAppend opens a freezer table file and seeks to the end
+func openFreezerFileForAppend(filename string) (*os.File, error) {
+	// Open the file without the O_APPEND flag
+	// because it has differing behaviour during Truncate operations
+	// on different OS's
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	// Seek to end for append
+	if _, err = file.Seek(0, io.SeekEnd); err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
+// openFreezerFileForReadOnly opens a freezer table file for read only access
+func openFreezerFileForReadOnly(filename string) (*os.File, error) {
+	return os.OpenFile(filename, os.O_RDONLY, 0644)
+}
+
+// openFreezerFileTruncated opens a freezer table making sure it is truncated
+func openFreezerFileTruncated(filename string) (*os.File, error) {
+	return os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+}
+
+// truncateFreezerFile resizes a freezer table file and seeks to the end
+func truncateFreezerFile(file *os.File, size int64) error {
+	if err := file.Truncate(size); err != nil {
+		return err
+	}
+	// Seek to end for append
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
 		return err
 	}
 	return nil

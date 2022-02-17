@@ -17,53 +17,45 @@
 package rawdb
 
 import (
-	"errors"
 	"io/ioutil"
 	"os"
 	"testing"
 )
 
-func TestStoreLoadFreezerTableMeta(t *testing.T) {
-	var cases = []struct {
-		version   uint16
-		deleted   uint64
-		hidden    uint64
-		expectErr error
-	}{
-		{
-			freezerVersion, 100, 200, nil,
-		},
-		{
-			0, 100, 200, errIncompatibleVersion, // legacy version
-		},
+func TestReadWriteFreezerTableMeta(t *testing.T) {
+	f, err := ioutil.TempFile(os.TempDir(), "*")
+	if err != nil {
+		t.Fatalf("Failed to create file %v", err)
 	}
-	for _, c := range cases {
-		f, err := ioutil.TempFile(os.TempDir(), "*")
-		if err != nil {
-			t.Fatalf("Failed to create file %v", err)
-		}
-		err = storeMetadata(f, &freezerTableMeta{
-			version: c.version,
-			deleted: c.deleted,
-			hidden:  c.hidden,
-		})
-		if err != nil {
-			t.Fatalf("Failed to store metadata %v", err)
-		}
-		meta, err := loadMetadata(f)
-		if !errors.Is(err, c.expectErr) {
-			t.Fatalf("Unexpected error %v", err)
-		}
-		if c.expectErr == nil {
-			if meta.version != c.version {
-				t.Fatalf("Unexpected version field")
-			}
-			if meta.deleted != c.deleted {
-				t.Fatalf("Unexpected deleted field")
-			}
-			if meta.hidden != c.hidden {
-				t.Fatalf("Unexpected hidden field")
-			}
-		}
+	err = writeMetadata(f, newMetadata(100))
+	if err != nil {
+		t.Fatalf("Failed to write metadata %v", err)
+	}
+	meta, err := readMetadata(f)
+	if err != nil {
+		t.Fatalf("Failed to read metadata %v", err)
+	}
+	if meta.version != freezerVersion {
+		t.Fatalf("Unexpected version field")
+	}
+	if meta.VirtualTail != uint64(100) {
+		t.Fatalf("Unexpected virtual tail field")
+	}
+}
+
+func TestInitializeFreezerTableMeta(t *testing.T) {
+	f, err := ioutil.TempFile(os.TempDir(), "*")
+	if err != nil {
+		t.Fatalf("Failed to create file %v", err)
+	}
+	meta, err := loadMetadata(f, uint64(0))
+	if err != nil {
+		t.Fatalf("Failed to read metadata %v", err)
+	}
+	if meta.version != freezerVersion {
+		t.Fatalf("Unexpected version field")
+	}
+	if meta.VirtualTail != uint64(0) {
+		t.Fatalf("Unexpected virtual tail field")
 	}
 }

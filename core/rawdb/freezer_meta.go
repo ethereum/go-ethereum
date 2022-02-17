@@ -17,210 +17,119 @@
 package rawdb
 
 import (
-	"bytes"
+	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	freezerVersion = 1    // The version tag of freezer table structure
-	metaLength     = 1024 // The number of bytes allocated for the freezer table metadata
-)
-
-var errIncompatibleVersion = errors.New("incompatible version")
-
-type incompatibleError struct {
-	version uint16
-	expect  uint16
-	err     error
-}
-
-func newIncompatibleError(version uint16) *incompatibleError {
-	return &incompatibleError{
-		version: version,
-		expect:  freezerVersion,
-		err:     errIncompatibleVersion,
-	}
-}
-
-// Unwrap returns the internal evm error which allows us for further
-// analysis outside.
-func (err *incompatibleError) Unwrap() error {
-	return err.err
-}
-
-func (err *incompatibleError) Error() string {
-	return fmt.Sprintf("%v, get %d, expect %d", err.err, err.version, err.expect)
-}
+const freezerVersion = 1 // The initial version tag of freezer table metadata
 
 // freezerTableMeta wraps all the metadata of the freezer table.
 type freezerTableMeta struct {
-	version uint16 // Freezer table version descriptor
-	tailId  uint32 // The number of the earliest file
-	deleted uint64 // The number of items that have been removed from the table
-	hidden  uint64 // The number of items that have been hidden in the table
+	// version is the versioning descriptor of the freezer table.
+	version uint16
+
+	// VirtualTail indicates how many items have been marked as deleted.
+	// Its value is equal to the number of items removed from the table
+	// plus the number of items hidden in the table, so it should never
+	// be lower than the "actual tail".
+	VirtualTail uint64
 }
 
-// newMetadata initializes the metadata object with the given parameters.
-func newMetadata(tailId uint32, deleted uint64, hidden uint64) *freezerTableMeta {
+// newMetadata initializes the metadata object with the given virtual tail.
+func newMetadata(tail uint64) *freezerTableMeta {
 	return &freezerTableMeta{
-		version: freezerVersion,
-		tailId:  tailId,
-		deleted: deleted,
-		hidden:  hidden,
+		version:     freezerVersion,
+		VirtualTail: tail,
 	}
 }
 
-// encodeMetadata encodes the given parameters as the freezer table metadata.
-func encodeMetadata(meta *freezerTableMeta) ([]byte, error) {
-	buffer := new(bytes.Buffer)
-	if err := rlp.Encode(buffer, meta.version); err != nil {
-		return nil, err
-	}
-	if err := rlp.Encode(buffer, meta.tailId); err != nil {
-		return nil, err
-	}
-	if err := rlp.Encode(buffer, meta.deleted); err != nil {
-		return nil, err
-	}
-	if err := rlp.Encode(buffer, meta.hidden); err != nil {
-		return nil, err
-	}
-	buffer.Write(make([]byte, metaLength-buffer.Len())) // Right pad zero bytes to the specified length
-	return buffer.Bytes(), nil
-}
-
-// decodeMetadata decodes the freezer-table metadata from the given
-// rlp stream.
-func decodeMetadata(r *rlp.Stream) (*freezerTableMeta, error) {
-	var version uint16
-	if err := r.Decode(&version); err != nil {
-		return nil, err
-	}
-	if version != freezerVersion {
-		return nil, newIncompatibleError(version)
-	}
-	var tailId uint32
-	if err := r.Decode(&tailId); err != nil {
-		return nil, err
-	}
-	var deleted, hidden uint64
-	if err := r.Decode(&deleted); err != nil {
-		return nil, err
-	}
-	if err := r.Decode(&hidden); err != nil {
-		return nil, err
-	}
-	return newMetadata(tailId, deleted, hidden), nil
-}
-
-// storeMetadata stores the metadata of the freezer table into the
-// given index file.
-func storeMetadata(index *os.File, meta *freezerTableMeta) error {
-	encoded, err := encodeMetadata(meta)
-	if err != nil {
-		return err
-	}
-	if _, err := index.WriteAt(encoded, 0); err != nil {
-		return err
-	}
-	return nil
-}
-
-// loadMetadata loads the metadata of the freezer table from the
-// given index file. Return the error if the version of loaded
-// metadata is not expected.
-func loadMetadata(index *os.File) (*freezerTableMeta, error) {
-	stat, err := index.Stat()
+// readMetadata reads the metadata of the freezer table from the
+// given metadata file.
+func readMetadata(file *os.File) (*freezerTableMeta, error) {
+	_, err := file.Seek(0, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
-	if stat.Size() < metaLength {
-		return nil, newIncompatibleError(0)
-	}
-	buffer := make([]byte, metaLength)
-	if _, err := index.ReadAt(buffer, 0); err != nil {
+	// load the first 2 bytes, resolve the version tag
+	var buf [2]byte
+	_, err = file.Read(buf[:2])
+	if err != nil {
 		return nil, err
 	}
-	return decodeMetadata(rlp.NewStream(bytes.NewReader(buffer), 0))
-}
-
-// upgradeV0TableIndex extracts the indexes from version-0 index file and
-// encodes/stores them into the latest version index file.
-func upgradeV0TableIndex(index *os.File) error {
-	// Close the origin index file.
-	if err := index.Close(); err != nil {
-		return err
-	}
-	return copyFrom(index.Name(), index.Name(), indexEntrySize, func(f *os.File) error {
-		encoded, err := encodeMetadata(newMetadata(0, 0, 0))
-		if err != nil {
-			return err
-		}
-		_, err = f.Write(encoded)
-		return err
-	})
-}
-
-// upgradeTableIndex upgrades the legacy index file to the latest version.
-// This function should be responsible for closing the origin index file
-// and return the re-opened one.
-func upgradeTableIndex(index *os.File, version uint16) (*os.File, *freezerTableMeta, error) {
+	version := binary.BigEndian.Uint16(buf[:])
 	switch version {
-	case 0:
-		if err := upgradeV0TableIndex(index); err != nil {
-			return nil, nil, err
+	case freezerVersion:
+		var meta freezerTableMeta
+		if err := rlp.Decode(file, &meta); err != nil {
+			return nil, err
 		}
+		meta.version = freezerVersion
+		return &meta, nil
 	default:
-		return nil, nil, errors.New("unknown freezer table version")
+		return nil, errors.New("undefined version")
 	}
-	// Reopen the upgraded index file and load the metadata from it
-	index, err := os.Open(index.Name())
-	if err != nil {
-		return nil, nil, err
-	}
-	meta, err := loadMetadata(index)
-	if err != nil {
-		return nil, nil, err
-	}
-	return index, meta, nil
 }
 
-// repairTableIndex repairs the given index file of freezer table and returns
-// the stored metadata inside. If the index file is to be rewritten, the function
-// should be responsible for closing the origin one and returning the new handler.
-// If the table is empty, commit the empty metadata;
-// If the table is legacy, upgrade it to the latest version;
-func repairTableIndex(index *os.File) (*os.File, *freezerTableMeta, error) {
-	stat, err := index.Stat()
+// writeMetadata writes the metadata of the freezer table into the
+// given metadata file.
+func writeMetadata(file *os.File, meta *freezerTableMeta) error {
+	_, err := file.Seek(0, io.SeekStart)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
+	var buf [2]byte
+	binary.BigEndian.PutUint16(buf[:], meta.version)
+	_, err = file.Write(buf[:])
+	if err != nil {
+		return err
+	}
+	encoded, err := rlp.EncodeToBytes(meta)
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(encoded)
+	return err
+}
+
+// loadMetadata loads the metadata from the given metadata file.
+// Initializes the metadata file with the given "actual tail" if
+// it's empty.
+func loadMetadata(file *os.File, tail uint64) (*freezerTableMeta, error) {
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	// Write the metadata with the given actual tail into metadata file
+	// if it's non-existent. There are two possible scenarios here:
+	// - the freezer table is empty
+	// - the freezer table is legacy
+	// In both cases, write the meta into the file with the actual tail
+	// as the virtual tail.
 	if stat.Size() == 0 {
-		meta := newMetadata(0, 0, 0)
-		if err := storeMetadata(index, meta); err != nil {
-			return nil, nil, err
+		m := newMetadata(tail)
+		if err := writeMetadata(file, m); err != nil {
+			return nil, err
 		}
-		// Shift file cursor to the end for next write operation
-		_, err = index.Seek(0, io.SeekEnd)
-		if err != nil {
-			return nil, nil, err
-		}
-		return index, meta, nil
+		return m, nil
 	}
-	meta, err := loadMetadata(index)
+	m, err := readMetadata(file)
 	if err != nil {
-		if !errors.Is(err, errIncompatibleVersion) {
-			return nil, nil, err
+		return nil, err
+	}
+	// Update the virtual tail with the given actual tail if it's even
+	// lower than it. Theoretically it shouldn't happen at all, print
+	// a warning here.
+	if m.VirtualTail < tail {
+		log.Warn("Updated virtual tail", "have", m.VirtualTail, "now", tail)
+		m.VirtualTail = tail
+		if err := writeMetadata(file, m); err != nil {
+			return nil, err
 		}
-		index, meta, err = upgradeTableIndex(index, err.(*incompatibleError).version)
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-	return index, meta, nil
+	return m, nil
 }

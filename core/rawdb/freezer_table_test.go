@@ -19,7 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -204,8 +203,8 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 		t.Fatalf("Failed to open index file: %v", err)
 	}
 	// Remove everything but the first item, and leave data unaligned
-	// metadata, 1-indexEntry, corrupt-indexEntry
-	idxFile.Truncate(metaLength + indexEntrySize + indexEntrySize/2)
+	// 0-indexEntry, 1-indexEntry, corrupt-indexEntry
+	idxFile.Truncate(2*indexEntrySize + indexEntrySize/2)
 	idxFile.Close()
 
 	// Now open it again
@@ -560,23 +559,27 @@ func TestFreezerOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		indexBuf := make([]byte, 6*indexEntrySize+metaLength)
+		indexBuf := make([]byte, 7*indexEntrySize)
 		indexFile.Read(indexBuf)
 
 		// Update the index file, so that we store
-		// [ file = 2, deleted = 4, hidden = 0 ] as meta
-		blob, err := encodeMetadata(newMetadata(2, 4, 0))
-		if err != nil {
-			t.Fatal(err)
+		// [ file = 2, offset = 4 ] at index zero
+
+		zeroIndex := indexEntry{
+			filenum: uint32(2), // First file is 2
+			offset:  uint32(4), // We have removed four items
 		}
-		copy(indexBuf, blob)
+		buf := zeroIndex.append(nil)
+
+		// Overwrite index zero
+		copy(indexBuf, buf)
 
 		// Remove the four next indices by overwriting
-		copy(indexBuf[metaLength:], indexBuf[metaLength+indexEntrySize*4:])
+		copy(indexBuf[indexEntrySize:], indexBuf[indexEntrySize*5:])
 		indexFile.WriteAt(indexBuf, 0)
 
 		// Need to truncate the moved index items
-		indexFile.Truncate(indexEntrySize*2 + metaLength)
+		indexFile.Truncate(indexEntrySize * (1 + 2))
 		indexFile.Close()
 	}
 
@@ -615,22 +618,21 @@ func TestFreezerOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		indexBuf := make([]byte, 2*indexEntrySize+metaLength)
+		indexBuf := make([]byte, 3*indexEntrySize)
 		indexFile.Read(indexBuf)
 
 		// Update the index file, so that we store
-		// [ file = 2, deleted = 1M, hidden = 0 ] as meta
-		blob, err := encodeMetadata(newMetadata(2, 1000000, 0))
-		if err != nil {
-			t.Fatal(err)
+		// [ file = 2, offset = 1M ] at index zero
+
+		zeroIndex := indexEntry{
+			offset:  uint32(1000000), // We have removed 1M items
+			filenum: uint32(2),       // First file is 2
 		}
-		copy(indexBuf, blob)
+		buf := zeroIndex.append(nil)
 
-		// Remove the four 2 indices by overwriting
-		copy(indexBuf[metaLength:], indexBuf[metaLength+indexEntrySize*2:])
+		// Overwrite index zero
+		copy(indexBuf, buf)
 		indexFile.WriteAt(indexBuf, 0)
-
-		indexFile.Truncate(indexEntrySize*2 + metaLength)
 		indexFile.Close()
 	}
 
@@ -820,41 +822,6 @@ func TestTruncateHead(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
-}
-
-func TestUpgradeLegacyFreezerTable(t *testing.T) {
-	f, err := ioutil.TempFile("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-
-	index := &indexEntry{
-		filenum: 0,
-		offset:  0,
-	}
-	encoded := index.append(nil)
-	f.Write(encoded)
-
-	newf, meta, err := repairTableIndex(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if newf.Name() != f.Name() {
-		t.Fatal("Unexpected file name")
-	}
-	if meta.tailId != 0 {
-		t.Fatal("Unexpected tail file", meta.tailId)
-	}
-	if meta.deleted != 0 {
-		t.Fatal("Unexpected deleted items")
-	}
-	if meta.hidden != 0 {
-		t.Fatal("Unexpected hidden items")
-	}
-	if meta.version != freezerVersion {
-		t.Fatal("Unexpected freezer version")
-	}
 }
 
 func checkRetrieve(t *testing.T, f *freezerTable, items map[uint64][]byte) {
