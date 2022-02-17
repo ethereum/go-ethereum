@@ -46,7 +46,9 @@ For this guide, we will use `light` sync.
 
 ## Step 1: Generate accounts
 
-Use the command below to generate an account.
+Use the command below to generate an account. When you create a new account with Clef, it
+will generate a new private key, encrypt it according to the [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition),
+and store it in the keystore directory.
 
 ```shell
 clef newaccount --keystore geth-tutorial/keystore
@@ -100,7 +102,8 @@ need to supply your own account address in all command invocations.
 
 ## Step 2:  Start Clef
 
-To start clef, open a new terminal and run the command below. Keeping clef running is required for the other steps because it signs transactions.
+To start clef, open a new terminal and run the command below. Keeping clef running is
+required for the other steps because it signs transactions.
 
 ```shell
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
