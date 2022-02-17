@@ -1816,9 +1816,9 @@ func SetupMetrics(ctx *cli.Context) {
 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
 			exp.Setup(address)
 		} else {
-                        address := fmt.Sprintf("%s:%d", MetricsHTTPFlag.Value, MetricsPortFlag.Value)
-                        log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-                        exp.Setup(address)
+			address := fmt.Sprintf("%s:%d", MetricsHTTPFlag.Value, MetricsPortFlag.Value)
+			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+			exp.Setup(address)
 		}
 	}
 }
