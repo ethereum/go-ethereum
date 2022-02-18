@@ -379,8 +379,9 @@ func (f *freezer) repair() error {
 		if head > items {
 			head = items
 		}
-		if table.tail() > tail {
-			tail = table.tail()
+		hidden := atomic.LoadUint64(&table.itemHidden)
+		if hidden > tail {
+			tail = hidden
 		}
 	}
 	for _, table := range f.tables {

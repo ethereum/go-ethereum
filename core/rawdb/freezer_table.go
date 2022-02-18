@@ -371,13 +371,6 @@ func (t *freezerTable) preopen() (err error) {
 	return err
 }
 
-// tail returns the index of the first stored item in the freezer table.
-// It can also be interpreted as the number of items marked as deleted
-// from the tail.
-func (t *freezerTable) tail() uint64 {
-	return atomic.LoadUint64(&t.itemHidden)
-}
-
 // truncateHead discards any recent data above the provided threshold number.
 func (t *freezerTable) truncateHead(items uint64) error {
 	t.lock.Lock()
@@ -822,7 +815,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 // has returns an indicator whether the specified number data is still accessible
 // in the freezer table.
 func (t *freezerTable) has(number uint64) bool {
-	return atomic.LoadUint64(&t.items) > number && t.tail() <= number
+	return atomic.LoadUint64(&t.items) > number && atomic.LoadUint64(&t.itemHidden) <= number
 }
 
 // size returns the total data size in the freezer table.
