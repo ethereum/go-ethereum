@@ -596,6 +596,7 @@ type Message struct {
 	gasTipCap  *big.Int
 	data       []byte
 	accessList AccessList
+	dataHashes []common.Hash
 	isFake     bool
 }
 
@@ -638,17 +639,18 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address   { return m.from }
-func (m Message) To() *common.Address    { return m.to }
-func (m Message) GasPrice() *big.Int     { return m.gasPrice }
-func (m Message) GasFeeCap() *big.Int    { return m.gasFeeCap }
-func (m Message) GasTipCap() *big.Int    { return m.gasTipCap }
-func (m Message) Value() *big.Int        { return m.amount }
-func (m Message) Gas() uint64            { return m.gasLimit }
-func (m Message) Nonce() uint64          { return m.nonce }
-func (m Message) Data() []byte           { return m.data }
-func (m Message) AccessList() AccessList { return m.accessList }
-func (m Message) IsFake() bool           { return m.isFake }
+func (m Message) From() common.Address      { return m.from }
+func (m Message) To() *common.Address       { return m.to }
+func (m Message) GasPrice() *big.Int        { return m.gasPrice }
+func (m Message) GasFeeCap() *big.Int       { return m.gasFeeCap }
+func (m Message) GasTipCap() *big.Int       { return m.gasTipCap }
+func (m Message) Value() *big.Int           { return m.amount }
+func (m Message) Gas() uint64               { return m.gasLimit }
+func (m Message) Nonce() uint64             { return m.nonce }
+func (m Message) Data() []byte              { return m.data }
+func (m Message) AccessList() AccessList    { return m.accessList }
+func (m Message) DataHashes() []common.Hash { return m.dataHashes }
+func (m Message) IsFake() bool              { return m.isFake }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {
