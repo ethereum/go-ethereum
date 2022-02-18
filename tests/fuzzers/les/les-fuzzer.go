@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	l "github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/params"
@@ -80,7 +79,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
 			txHashes = append(txHashes, tx.Hash())
 		})
-	bc, _ = core.NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	bc, _ = core.NewBlockChain(db, ethash.NewFaker(), core.SetChainConfig(gspec.Config))
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

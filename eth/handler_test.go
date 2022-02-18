@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -138,7 +137,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}).MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, ethash.NewFaker(), core.SetChainConfig(params.TestChainConfig))
 
 	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), db, blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {

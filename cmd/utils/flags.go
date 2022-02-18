@@ -1932,7 +1932,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb,
+		engine,
+		core.SetCacheConfig(cache),
+		core.SetChainConfig(config),
+		core.SetVmConfig(vmcfg))
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

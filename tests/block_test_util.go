@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -127,7 +126,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, engine, core.SetCacheConfig(cache), core.SetChainConfig(config))
 	if err != nil {
 		return err
 	}

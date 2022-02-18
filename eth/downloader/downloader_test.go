@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/event"
@@ -66,7 +65,7 @@ func newTester() *downloadTester {
 	}
 	core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
 
-	chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, ethash.NewFaker(), core.SetChainConfig(params.TestChainConfig))
 	if err != nil {
 		panic(err)
 	}

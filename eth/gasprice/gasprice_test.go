@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -144,7 +143,10 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec.Config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb,
+		engine,
+		core.SetCacheConfig(&core.CacheConfig{TrieCleanNoPrefetch: true}),
+		core.SetChainConfig(gspec.Config))
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}

@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -79,7 +78,10 @@ func getChain() *core.BlockChain {
 		SnapshotWait:        true,
 	}
 	trieRoot = blocks[len(blocks)-1].Root()
-	bc, _ := core.NewBlockChain(db, cacheConf, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	bc, _ := core.NewBlockChain(db,
+		ethash.NewFaker(),
+		core.SetCacheConfig(cacheConf),
+		core.SetChainConfig(gspec.Config))
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

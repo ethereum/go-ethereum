@@ -196,7 +196,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb,
+		eth.engine,
+		core.SetCacheConfig(cacheConfig),
+		core.SetChainConfig(chainConfig),
+		core.SetVmConfig(vmConfig),
+		core.SetShouldPreserveHandler(eth.shouldPreserve),
+		core.SetTxLookupLimit(&config.TxLookupLimit))
 	if err != nil {
 		return nil, err
 	}

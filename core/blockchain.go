@@ -172,6 +172,12 @@ func SetTxLookupLimit(txLookupLimit *uint64) BcConfigOpt {
 		bcConfig.TxLookupLimit = txLookupLimit
 	}
 }
+func SetShouldPreserveHandler(shouldPreserve func(*types.Header) bool) BcConfigOpt {
+	return func(bcConfig *BlockChainConfig) {
+		bcConfig.ShouldPreserve = shouldPreserve
+	}
+
+}
 func NewChainConfig(opt ...BcConfigOpt) BlockChainConfig {
 	bcConfig := &BlockChainConfig{
 		CacheConfig:    defaultCacheConfig,
