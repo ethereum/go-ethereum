@@ -206,10 +206,16 @@ func (s *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log 
 }
 
 func (s *StateDB) Logs() []*types.Log {
-	var logs []*types.Log
+	n := 0
+	for _, r := range s.logs {
+		n += len(r)
+	}
+
+	logs := make([]*types.Log, 0, n)
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)
 	}
+
 	return logs
 }
 
