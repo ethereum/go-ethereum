@@ -164,6 +164,10 @@ const (
 	MaxBlobsPerTx        = 2
 	MaxBlobsPerBlock     = 16
 	FieldElementsPerBlob = 4096 // each field element is 32 bytes
+
+	BlobVerificationGas      uint64 = 1800000
+	BlobCommitmentVersionKZG uint64 = 0x01
+	PointEvaluationGas       uint64 = 50000
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

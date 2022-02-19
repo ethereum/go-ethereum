@@ -3,6 +3,8 @@ package kzg
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/crypto/blake2b"
+	"github.com/ethereum/go-ethereum/params"
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
 )
@@ -31,6 +33,12 @@ func VerifyKzgProof(commitment bls.G1Point, x bls.Fr, y bls.Fr, proof bls.G1Poin
 
 func ComputeProof(polyCoeff []bls.Fr, x uint64) *bls.G1Point {
 	return kzg_settings.ComputeProofSingle(polyCoeff, x)
+}
+
+func KzgToVersionedHash(commitment bls.G1Point) [32]byte {
+	h := blake2b.Sum256(bls.ToCompressedG1(&commitment))
+	h[0] = byte(params.BlobCommitmentVersionKZG)
+	return h
 }
 
 // Initialize KZG subsystem (load the trusted setup data)
