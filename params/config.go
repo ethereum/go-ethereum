@@ -47,7 +47,7 @@ var (
 		SwitchBlock:           big.NewInt(900),
 	}
 	DevnetXDPoSV2Config = &V2{
-		SwitchBlock:           big.NewInt(9999999), // Temporary set it to very high
+		SwitchBlock:           big.NewInt(7218000),
 		TimeoutWorkerDuration: 50,
 		CertThreshold:         6,
 		WaitPeriod:            2,

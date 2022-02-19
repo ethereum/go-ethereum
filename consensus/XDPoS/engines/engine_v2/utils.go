@@ -68,3 +68,12 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 	}
 	return masternodes
 }
+
+func isEmptyHash(hash common.Hash) bool {
+	for _, b := range hash {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}

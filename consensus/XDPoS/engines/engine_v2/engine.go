@@ -119,7 +119,7 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, masternodes []common.Address) error {
 	log.Info("[Initial] initial v2 related parameters")
 
-	if x.highestQuorumCert.ProposedBlockInfo.Round != 0 { // already initialized
+	if !isEmptyHash(x.highestQuorumCert.ProposedBlockInfo.Hash) { // already initialized
 		log.Warn("[Initial] Already initialized")
 		return nil
 	}
@@ -156,11 +156,13 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 
 	// Initial timeout
 	log.Info("[Initial] miner wait period", "period", x.config.WaitPeriod)
-
 	// avoid deadlock
 	go func() {
 		x.waitPeriodCh <- x.config.V2.WaitPeriod
 	}()
+
+	// Kick-off the countdown timer
+	x.timeoutWorker.Reset()
 
 	log.Info("[Initial] finish initialisation")
 	return nil
@@ -434,7 +436,11 @@ func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *type
 		}
 	}
 
-	log.Warn("Not authorised address", "Address", address, "MN", masterNodes, "Hash", header.Hash())
+	log.Warn("Not authorised address", "Address", address.Hex(), "Hash", header.Hash())
+	for index, mn := range masterNodes {
+		log.Warn("Master node list item", "mn", mn.Hex(), "index", index)
+	}
+
 	return false
 }
 
