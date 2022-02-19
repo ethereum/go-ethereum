@@ -139,7 +139,7 @@ var (
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
 	// XDPoS config with v2 engine after block 901
-	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2: TestXDPoSV2Config}}
+	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2: TestXDPoSV2Config, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"), Reward: 250}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))

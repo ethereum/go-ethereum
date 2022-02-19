@@ -22,7 +22,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	blockInfo := &utils.BlockInfo{
 		Hash:   currentBlock.Hash(),
 		Round:  utils.Round(1),
-		Number: big.NewInt(11),
+		Number: big.NewInt(901),
 	}
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 

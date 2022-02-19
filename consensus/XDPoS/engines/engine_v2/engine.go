@@ -53,7 +53,7 @@ type XDPoS_v2 struct {
 	highestTimeoutCert *utils.TimeoutCert
 	highestCommitBlock *utils.BlockInfo
 
-	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error)
 }
 
@@ -235,13 +235,14 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 // rewards given, and returns the final block.
 func (x *XDPoS_v2) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, parentState *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
-	number := header.Number.Uint64()
-	rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 
-	// _ = c.CacheData(header, txs, receipts)
-
-	if x.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewards := x.HookReward(chain, state, parentState, header)
+	isEpochSwitch, _, err := x.IsEpochSwitch(header)
+	if err != nil {
+		log.Error("[Finalize] IsEpochSwitch bug!", "err", err)
+		return nil, err
+	}
+	if x.HookReward != nil && isEpochSwitch {
+		rewards, err := x.HookReward(chain, state, parentState, header)
 		if err != nil {
 			return nil, err
 		}
@@ -1385,19 +1386,29 @@ func (x *XDPoS_v2) GetMasternodesByHash(chain consensus.ChainReader, hash common
 	return epochSwitchInfo.Masternodes
 }
 
-// Given hash, get master node from the epoch switch block of the previous `limit` epoch
-func (x *XDPoS_v2) GetPreviousPenaltyByHash(chain consensus.ChainReader, hash common.Hash, limit int) []common.Address {
+// get epoch switch of the previous `limit` epoch
+func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader, hash common.Hash, limit int) (*utils.EpochSwitchInfo, error) {
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, hash)
 	if err != nil {
-		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
-		return []common.Address{}
+		log.Error("[getPreviousEpochSwitchInfoByHash] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+		return nil, err
 	}
 	for i := 0; i < limit; i++ {
 		epochSwitchInfo, err = x.getEpochSwitchInfo(chain, nil, epochSwitchInfo.EpochSwitchParentBlockInfo.Hash)
 		if err != nil {
-			log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
-			return []common.Address{}
+			log.Error("[getPreviousEpochSwitchInfoByHash] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+			return nil, err
 		}
+	}
+	return epochSwitchInfo, nil
+}
+
+// Given hash, get master node from the epoch switch block of the previous `limit` epoch
+func (x *XDPoS_v2) GetPreviousPenaltyByHash(chain consensus.ChainReader, hash common.Hash, limit int) []common.Address {
+	epochSwitchInfo, err := x.getPreviousEpochSwitchInfoByHash(chain, hash, limit)
+	if err != nil {
+		log.Error("[GetPreviousPenaltyByHash] Adaptor v2 getPreviousEpochSwitchInfoByHash has error, potentially bug", "err", err)
+		return []common.Address{}
 	}
 	header := chain.GetHeaderByHash(epochSwitchInfo.EpochSwitchBlockInfo.Hash)
 	return common.ExtractAddressFromBytes(header.Penalties)

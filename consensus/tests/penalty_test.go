@@ -71,7 +71,7 @@ func TestHookPenaltyV2Comeback(t *testing.T) {
 	assert.Equal(t, 4, len(penalty))
 	header6285 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch*7 - common.MergeSignRange)
 	// forcely insert signing tx into cache, to cancel comeback. since no comeback, penalty is 3
-	tx, err := signingTx(header6285, 0, signer, signFn)
+	tx, err := signingTxWithSignerFn(header6285, 0, signer, signFn)
 	assert.Nil(t, err)
 	adaptor.CacheSigningTxs(header6285.Hash(), []*types.Transaction{tx})
 	penalty, err = adaptor.EngineV2.HookPenalty(blockchain, big.NewInt(int64(config.XDPoS.Epoch*7)), header6300.ParentHash, masternodes)

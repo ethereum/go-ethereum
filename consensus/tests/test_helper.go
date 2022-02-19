@@ -230,11 +230,26 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	return signedTX, nil
 }
 
-func signingTx(header *types.Header, nonce uint64, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) (*types.Transaction, error) {
+func signingTxWithSignerFn(header *types.Header, nonce uint64, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) (*types.Transaction, error) {
 	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
 	s := types.NewEIP155Signer(big.NewInt(chainID))
 	h := s.Hash(tx)
 	sig, err := signFn(accounts.Account{Address: signer}, h[:])
+	if err != nil {
+		return nil, err
+	}
+	signedTx, err := tx.WithSignature(s, sig)
+	if err != nil {
+		return nil, err
+	}
+	return signedTx, nil
+}
+
+func signingTxWithKey(header *types.Header, nonce uint64, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
+	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
+	s := types.NewEIP155Signer(big.NewInt(chainID))
+	h := s.Hash(tx)
+	sig, err := crypto.Sign(h[:], privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -534,8 +549,8 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 			Coinbase:   common.HexToAddress(blockCoinBase),
 		}
 
-		// Inject the hardcoded master node list for the last v1 epoch block
-		if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 0 {
+		// Inject the hardcoded master node list for the last v1 epoch block and all v1 epoch switch blocks (excluding genesis)
+		if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 0 || blockNumber%int(chainConfig.XDPoS.Epoch) == 0 {
 			// reset extra
 			header.Extra = []byte{}
 			if len(header.Extra) < utils.ExtraVanity {
