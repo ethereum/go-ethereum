@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
-	"github.com/protolambda/ztyp/codec"
 	"io"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/protolambda/ztyp/codec"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -628,6 +629,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
+		dataHashes: tx.BlobVersionedHashes(),
 		isFake:     false,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
