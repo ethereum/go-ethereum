@@ -28,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/protolambda/go-kzg/bls"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -1043,3 +1045,76 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
 }
+
+var PrecompiledContractsDanksharding = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{13}): &blobVerification{},
+	//	common.BytesToAddress([]byte{14}): &pointEvaluation{},
+}
+
+var (
+	errBlobVerificationInputLength = errors.New("invalid input length")
+	errInvalidVersionedHash        = errors.New("invalid versioned hash")
+	errInvalidChunk                = errors.New("invalid chunk")
+	errBadBlobCommitment           = errors.New("versioned hash did not match")
+)
+
+// DOCDOC
+type blobVerification struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *blobVerification) RequiredGas(input []byte) uint64 {
+	return params.BlobVerificationGas
+}
+
+func (c *blobVerification) Run(input []byte) ([]byte, error) {
+	if len(input) != 131104 { // 32 + 32 * CHUNKS_PER_BLOB
+		return nil, errBlobVerificationInputLength
+	}
+
+	var expected_versioned_hash [32]byte
+	copy(expected_versioned_hash[:], input[:32])
+	if expected_versioned_hash[0] != byte(params.BlobCommitmentVersionKZG) {
+		return nil, errInvalidVersionedHash
+	}
+
+	input = input[32:] // skip forward to the input points
+
+	inputPoints := make([]bls.Fr, kzg.CHUNKS_PER_BLOB, kzg.CHUNKS_PER_BLOB)
+	var inputPoint [32]byte
+	for i := 0; i < kzg.CHUNKS_PER_BLOB; i++ {
+		copy(inputPoint[:32], input[i*32:(i+1)*32])
+		ok := bls.FrFrom32(&inputPoints[i], inputPoint)
+		if ok != true {
+			return nil, errInvalidChunk
+		}
+	}
+
+	// Get versioned hash out of input points
+	commitment := kzg.BlobToKzg(inputPoints)
+	versioned_hash := kzg.KzgToVersionedHash(*commitment)
+
+	if versioned_hash != expected_versioned_hash {
+		return nil, errBadBlobCommitment
+	}
+
+	return []byte{}, nil
+}
+
+// // DOCDOC
+// type pointEvaluation struct{}
+
+// var (
+// 	errPointEvaluationInputLength = errors.New("invalid input length")
+// )
+
+// // RequiredGas returns the gas required to execute the pre-compiled contract.
+// func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
+// 	return params.pointEvaluationGas
+// }
+
+// func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
+// 	if len(input) != 192 {
+// 		return nil, errPointEvaluationInputLength
+// 	}
+
+// }
