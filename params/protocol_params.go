@@ -159,7 +159,7 @@ const (
 	RefundQuotientEIP3529 uint64 = 5
 
 	// Fixed cost for sending a data blob.
-	BlobGas uint64 = 100000
+	BlobGas uint64 = 120000
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
