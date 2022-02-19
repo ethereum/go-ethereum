@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/protolambda/ztyp/view"
 	"math/big"
 	"reflect"
 	"regexp"
@@ -100,6 +101,8 @@ type SendTxArgs struct {
 	// For non-legacy transactions
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 }
 
 func (args SendTxArgs) String() string {
@@ -128,6 +131,23 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 
 	var data types.TxData
 	switch {
+	case args.BlobVersionedHashes != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		msg := types.BlobTxMessage{}
+		msg.To.Address = (*types.AddressSSZ)(to)
+		msg.ChainID.SetFromBig((*big.Int)(args.ChainID))
+		msg.Nonce = view.Uint64View(args.Nonce)
+		msg.Gas = view.Uint64View(args.Gas)
+		msg.GasFeeCap.SetFromBig((*big.Int)(args.MaxFeePerGas))
+		msg.GasTipCap.SetFromBig((*big.Int)(args.MaxPriorityFeePerGas))
+		msg.Value.SetFromBig((*big.Int)(&args.Value))
+		msg.Data = input
+		msg.AccessList = types.AccessListView(al)
+		msg.BlobVersionedHashes = args.BlobVersionedHashes
+		data = &types.SignedBlobTx{Message: msg}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
