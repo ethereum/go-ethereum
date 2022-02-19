@@ -66,7 +66,7 @@ func TestGoKzg(t *testing.T) {
 }
 
 func TestKzg(t *testing.T) {
-	/// Test the geth KZG module
+	/// Test the geth KZG module (use our trusted setup instead of creating a new one)
 
 	// First let's do some go-kzg preparations to be able to convert polynomial between coefficient and evaluation form
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(kzg.CHUNKS_PER_BLOB)))
@@ -98,7 +98,7 @@ func TestKzg(t *testing.T) {
 	bls.EvalPolyAt(&value, polynomial, &x_fr)
 	t.Log("value\n", bls.FrStr(&value))
 
-	// Verifykzg proof
+	// Verify kzg proof
 	if kzg.VerifyKzgProof(*commitment, x_fr, value, *proof) != true {
 		panic("failed proof verification")
 	}

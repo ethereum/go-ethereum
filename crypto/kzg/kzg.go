@@ -2,23 +2,20 @@ package kzg
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"os"
 
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
 )
 
-const CHUNKS_PER_BLOB = 256
+const CHUNKS_PER_BLOB = 4096
 
-// XXX Do we also need the roots of unity in here?
 var kzg_settings gokzg.KZGSettings
 var lagrange_crs []bls.G1Point
 
 type JSONTrustedSetup struct {
-	SetupG1       []string
-	SetupG2       []string
-	SetupLagrange []string
+	SetupG1       []bls.G1Point
+	SetupG2       []bls.G2Point
+	SetupLagrange []bls.G1Point
 }
 
 func BlobToKzg(eval []bls.Fr) *bls.G1Point {
@@ -36,31 +33,17 @@ func ComputeProof(polyCoeff []bls.Fr, x uint64) *bls.G1Point {
 	return kzg_settings.ComputeProofSingle(polyCoeff, x)
 }
 
+// Initialize KZG subsystem (load the trusted setup data)
 func init() {
 	var parsedSetup = JSONTrustedSetup{}
 
-	// XXXX
-	jsonFile, err := os.Open("/home/f/Computers/eth/go-ethereum/crypto/kzg/kzg_trusted_setup.json")
-	if err != nil {
-		panic(err)
-	}
-	defer jsonFile.Close()
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-
-	err = json.Unmarshal(byteValue, &parsedSetup)
+	// TODO: This is dirty. KZG setup should be loaded using an actual config file directive
+	err := json.Unmarshal([]byte(KZGSetupStr), &parsedSetup)
 	if err != nil {
 		panic(err)
 	}
 
-	// for i := uint64(0); i < CHUNKS_PER_BLOB; i++ {
-	// 	var tmpG1 bls.G1Point
-	// 	var tmpG2 bls.G2Point
-	// 	tmpG1.SetString(parsedSetup.SetupG1[i])
-	// 	tmpG2.SetString(parsedSetup.SetupG2[i])
-	// 	kzg_settings.SecretG1 = append(kzg_settings.SecretG1, tmpG1)
-	// 	kzg_settings.SecretG2 = append(kzg_settings.SecretG2, tmpG2)
-	// 	tmpG1.SetString(parsedSetup.SetupLagrange[i])
-	// 	lagrange_crs = append(lagrange_crs, tmpG1)
-	// }
+	kzg_settings.SecretG1 = parsedSetup.SetupG1
+	kzg_settings.SecretG2 = parsedSetup.SetupG2
+	lagrange_crs = parsedSetup.SetupLagrange
 }

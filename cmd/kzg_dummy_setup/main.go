@@ -12,33 +12,36 @@ import (
 	"io/ioutil"
 	"math"
 
-	"github.com/ethereum/go-ethereum/crypto/kzg"
-
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
 )
 
 const CHUNKS_PER_BLOB = 4096
 
+type JSONTrustedSetup struct {
+	SetupG1       []bls.G1Point
+	SetupG2       []bls.G2Point
+	SetupLagrange []bls.G1Point
+}
+
 func main() {
 	// Generate roots of unity
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(CHUNKS_PER_BLOB)))
 
-	// Create a CRS with `n` elements for `s`
+	// Create a CRS for `s` with CHUNKS_PER_BLOB elements
 	s := "1927409816240961209460912649124"
 	kzg_setup_g1, kzg_setup_g2 := gokzg.GenerateTestingSetup(s, CHUNKS_PER_BLOB)
 
+	// Also create the lagrange CRS
 	kzg_setup_lagrange, err := fs.FFTG1(kzg_setup_g1[:CHUNKS_PER_BLOB], true)
 	if err != nil {
 		panic(err)
 	}
 
-	var trusted_setup = kzg.JSONTrustedSetup{}
-	for i := uint64(0); i < CHUNKS_PER_BLOB; i++ {
-		trusted_setup.SetupG1 = append(trusted_setup.SetupG1, bls.StrG1(&kzg_setup_g1[i]))
-		trusted_setup.SetupG2 = append(trusted_setup.SetupG2, bls.StrG2(&kzg_setup_g2[i]))
-		trusted_setup.SetupLagrange = append(trusted_setup.SetupLagrange, bls.StrG1(&kzg_setup_lagrange[i]))
-	}
+	var trusted_setup = JSONTrustedSetup{}
+	trusted_setup.SetupG1 = kzg_setup_g1
+	trusted_setup.SetupG2 = kzg_setup_g2
+	trusted_setup.SetupLagrange = kzg_setup_lagrange
 
 	json_trusted_setup, _ := json.Marshal(trusted_setup)
 
@@ -46,5 +49,4 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 }
