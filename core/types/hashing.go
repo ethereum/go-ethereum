@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"github.com/protolambda/ztyp/tree"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,6 +55,19 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
+// prefixedSSZHash writes the prefix into the hasher before SSZ hash-tree-root-ing x.
+// It's used for typed transactions.
+func prefixedSSZHash(prefix byte, x tree.HTR) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write([]byte{prefix})
+	htr := x.HashTreeRoot(tree.GetHashFn())
+	sha.Write(htr[:])
 	sha.Read(h[:])
 	return h
 }

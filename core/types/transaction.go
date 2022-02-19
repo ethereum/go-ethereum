@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"github.com/protolambda/ztyp/codec"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -45,6 +46,8 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	// 4 is reserved
+	BlobTxType = 5
 )
 
 // Transaction is an Ethereum transaction.
@@ -172,6 +175,14 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+func DecodeSSZ(data []byte, dest codec.Deserializable) error {
+	return dest.Deserialize(codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
+}
+
+func EncodeSSZ(w io.Writer, obj codec.Serializable) error {
+	return obj.Serialize(codec.NewEncodingWriter(w))
+}
+
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	if len(b) == 0 {
@@ -185,6 +196,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case BlobTxType:
+		var inner SignedBlobTx
+		err := DecodeSSZ(b[1:], &inner)
 		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -396,6 +411,14 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
+}
+
+func (tx *Transaction) BlobVersionedHashes() []common.Hash {
+	blobTx, ok := tx.inner.(*SignedBlobTx)
+	if !ok {
+		return nil
+	}
+	return blobTx.Message.BlobVersionedHashes
 }
 
 // Transactions implements DerivableList for transactions.
