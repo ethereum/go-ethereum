@@ -119,7 +119,7 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, masternodes []common.Address) error {
 	log.Info("[Initial] initial v2 related parameters")
 
-	if x.highestQuorumCert.ProposedBlockInfo.Round != 0 { //already initialized
+	if x.highestQuorumCert.ProposedBlockInfo.Round != 0 { // already initialized
 		log.Warn("[Initial] Already initialized")
 		return nil
 	}
@@ -128,7 +128,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 	defer x.lock.Unlock()
 	// Check header if it is the first consensus v2 block, if so, assign initial values to current round and highestQC
 
-	log.Info("[Initial] highest QC for consensus v2 first block", "Block Num", header.Number.String(), "BlockHash", header.Hash())
+	log.Info("[Initial] highest QC for consensus v2 first block", "BlockNum", header.Number.String(), "BlockHash", header.Hash())
 	// Generate new parent blockInfo and put it into QC
 	blockInfo := &utils.BlockInfo{
 		Hash:   header.Hash(),
@@ -148,7 +148,11 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 
 	snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), x.currentRound, x.highestQuorumCert, masternodes)
 	x.snapshots.Add(snap.Hash, snap)
-	storeSnapshot(snap, x.db)
+	err := storeSnapshot(snap, x.db)
+	if err != nil {
+		log.Error("[Initial] Error while storo snapshot", "error", err)
+		return err
+	}
 
 	// Initial timeout
 	log.Info("[Initial] miner wait period", "period", x.config.WaitPeriod)

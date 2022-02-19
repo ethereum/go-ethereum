@@ -314,11 +314,15 @@ func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber 
 }
 
 func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
-	if x.config.V2.SwitchBlock != nil && parent.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
-		err := x.initialV2(chain, parent)
-		if err != nil {
-			log.Error("[YourTurn] Error when initialise v2", "Error", err, "ParentBlock", parent)
-			return false, err
+	if x.config.V2.SwitchBlock != nil && parent.Number.Cmp(x.config.V2.SwitchBlock) != -1 {
+		if parent.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+			err := x.initialV2FromLastV1(chain, parent)
+			if err != nil {
+				log.Error("[YourTurn] Error while initilising first v2 block from the last v1 block", "ParentBlockHash", parent.Hash(), "Error", err)
+				return false, err
+			}
+		} else if parent.Number.Cmp(x.config.V2.SwitchBlock) == 1 { // TODO: XIN-147
+			log.Info("[YourTurn] Initilising v2 after sync or restarted", "currentBlockNum", chain.CurrentHeader().Number, "currentBlockHash", chain.CurrentHeader().Hash())
 		}
 	}
 	switch x.config.BlockConsensusVersion(big.NewInt(parent.Number.Int64() + 1)) {
@@ -481,12 +485,15 @@ func (x *XDPoS) GetCachedSigningTxs(hash common.Hash) (interface{}, bool) {
 	return x.signingTxsCache.Get(hash)
 }
 
-//V2
-func (x *XDPoS) initialV2(chain consensus.ChainReader, header *types.Header) error {
+// V2 specific helper function to initilise consensus engine variables
+func (x *XDPoS) initialV2FromLastV1(chain consensus.ChainReader, header *types.Header) error {
 	checkpointBlockNumber := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch
 	checkpointHeader := chain.GetHeaderByNumber(checkpointBlockNumber)
 	masternodes := x.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
-	x.EngineV2.Initial(chain, header, masternodes)
+	err := x.EngineV2.Initial(chain, header, masternodes)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
