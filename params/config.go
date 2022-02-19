@@ -45,6 +45,7 @@ var (
 		WaitPeriod:            1,
 		MinePeriod:            2,
 		SwitchBlock:           big.NewInt(900),
+		SkipV2Validation:      true,
 	}
 	DevnetXDPoSV2Config = &V2{
 		SwitchBlock:           big.NewInt(7218000),
@@ -139,7 +140,7 @@ var (
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
 	// XDPoS config with v2 engine after block 901
-	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2: TestXDPoSV2Config, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"), Reward: 250}}
+	TestXDPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XDPoSConfig{Epoch: 900, Gap: 450, SkipV1Validation: true, V2: TestXDPoSV2Config, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"), Reward: 250}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -202,7 +203,7 @@ type XDPoSConfig struct {
 	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
 	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
 	WaitPeriod          int            `json:"waitPeriod"`          // Miner wait period
-	SkipValidation      bool           //Skip Block Validation for testing purpose
+	SkipV1Validation    bool           //Skip Block Validation for testing purpose, V1 consensus only
 	V2                  *V2            `json:"v2"`
 }
 
@@ -212,6 +213,7 @@ type V2 struct {
 	SwitchBlock           *big.Int `json:"switchBlock"`           // v1 to v2 switch block number
 	TimeoutWorkerDuration int64    `json:"timeoutWorkerDuration"` // Duration in ms
 	CertThreshold         int      `json:"certificateThreshold"`  // Necessary number of messages from master nodes to form a certificate
+	SkipV2Validation      bool     //Skip Block Validation for testing purpose, V2 consensus only
 }
 
 // String implements the stringer interface, returning the consensus engine details.

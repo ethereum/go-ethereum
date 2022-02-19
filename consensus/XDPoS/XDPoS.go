@@ -153,7 +153,7 @@ func (x *XDPoS) Author(header *types.Header) (common.Address, error) {
 func (x *XDPoS) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
 	switch x.config.BlockConsensusVersion(header.Number) {
 	case params.ConsensusEngineVersion2:
-		return nil
+		return x.EngineV2.VerifyHeader(chain, header, fullVerify)
 	default: // Default "v1"
 		return x.EngineV1.VerifyHeader(chain, header, fullVerify)
 	}

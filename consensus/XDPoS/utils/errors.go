@@ -77,6 +77,12 @@ var (
 	ErrWaitTransactions = errors.New("waiting for transactions")
 
 	ErrInvalidCheckpointValidators = errors.New("invalid validators list on checkpoint block")
+
+	ErrEmptyEpochSwitchValidators = errors.New("empty validators list on epoch switch block")
+
+	ErrInvalidV2Extra     = errors.New("Invalid v2 extra in the block")
+	ErrInvalidQC          = errors.New("Invalid QC content")
+	ErrEmptyBlockInfoHash = errors.New("BlockInfo hash is empty")
 )
 
 type ErrIncomingMessageRoundNotEqualCurrentRound struct {

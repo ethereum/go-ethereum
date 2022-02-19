@@ -148,7 +148,7 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 // a batch of new headers.
 func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	// If we're running a engine faking, accept any block as valid
-	if x.config.SkipValidation {
+	if x.config.SkipV1Validation {
 		return nil
 	}
 	if common.IsTestnet {
@@ -482,12 +482,7 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 			if s, err := loadSnapshot(x.config, x.signatures, x.db, hash); err == nil {
 				log.Trace("Loaded voting snapshot form disk", "number", number, "hash", hash)
 				snap = s
-				if len(snap.Signers) > 0 {
-					break
-				} else {
-					log.Warn("skip this snapshot, len of snap signer is 0")
-					snap = nil
-				}
+				break
 			}
 		}
 		// If we're at block zero, make a snapshot
@@ -934,7 +929,7 @@ func (x *XDPoS_v1) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
 	// If we're running a engine faking, skip calculation
-	if x.config.SkipValidation {
+	if x.config.SkipV1Validation {
 		return big.NewInt(1)
 	}
 	len, preIndex, curIndex, _, err := x.yourTurn(chain, parent, signer)
