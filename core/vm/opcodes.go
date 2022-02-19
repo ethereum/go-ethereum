@@ -117,6 +117,8 @@ const (
 	GAS      OpCode = 0x5a
 	JUMPDEST OpCode = 0x5b
 	PUSH0    OpCode = 0x5f
+	TLOAD    OpCode = 0xb3
+	TSTORE   OpCode = 0xb4
 )
 
 // 0x60 range - pushes.
@@ -463,6 +465,8 @@ var stringToOp = map[string]OpCode{
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
 	"PUSH0":          PUSH0,
+	"TLOAD":          TLOAD,
+	"TSTORE":         TSTORE,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
 	"PUSH3":          PUSH3,
