@@ -148,7 +148,11 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 		msg.AccessList = types.AccessListView(al)
 		wrapData := types.BlobTxWrapData{}
 		for _, bl := range args.Blobs {
-			commitment := bl.ComputeCommitment()
+			commitment, ok := bl.ComputeCommitment()
+			if !ok {
+				// invalid BLS blob data (e.g. element not within field element range)
+				continue // can't error, so ignore the malformed blob
+			}
 			versionedHash := commitment.ComputeVersionedHash()
 			msg.BlobVersionedHashes = append(msg.BlobVersionedHashes, versionedHash)
 			wrapData.BlobKzgs = append(wrapData.BlobKzgs, commitment)

@@ -2,8 +2,8 @@ package kzg
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/params"
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
@@ -34,7 +34,7 @@ func ComputeProof(polyCoeff []bls.Fr, x uint64) *bls.G1Point {
 }
 
 func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
-	h := blake2b.Sum256(bls.ToCompressedG1(commitment))
+	h := crypto.Keccak256Hash(bls.ToCompressedG1(commitment))
 	h[0] = byte(params.BlobCommitmentVersionKZG)
 	return h
 }

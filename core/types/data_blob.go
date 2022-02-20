@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
 	kbls "github.com/kilic/bls12-381"
+	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 	"io"
@@ -74,9 +76,9 @@ func (p *KZGCommitment) Point() (*kbls.PointG1, error) {
 }
 
 func (kzg KZGCommitment) ComputeVersionedHash() common.Hash {
-	h := crypto.Keccak256(kzg[:])
+	h := crypto.Keccak256Hash(kzg[:])
 	h[0] = BLOB_COMMITMENT_VERSION_KZG
-	return common.BytesToHash(h)
+	return h
 }
 
 type BLSFieldElement [32]byte
@@ -140,8 +142,18 @@ func (blob Blob) copy() Blob {
 	return cpy
 }
 
-func (blob Blob) ComputeCommitment() KZGCommitment {
-	return KZGCommitment{} // TODO George
+func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
+	frs := make([]bls.Fr, len(blob))
+	for i, elem := range blob {
+		if !bls.FrFrom32(&frs[i], elem) {
+			return KZGCommitment{}, false
+		}
+	}
+	// data is presented in eval form
+	commitmentG1 := kzg.BlobToKzg(frs)
+	var out KZGCommitment
+	copy(out[:], bls.ToCompressedG1(commitmentG1))
+	return out, true
 }
 
 type BlobKzgs []KZGCommitment
@@ -278,7 +290,9 @@ func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
 	// TODO: george/dankrad: faster check if kzg commitment matches blob data, Dankrad: "Instead of executing
 	// this per blob, it should ideally be taking a random linear combination on each side."
 	for i, c := range b.BlobKzgs {
-		if computed := b.Blobs[i].ComputeCommitment(); computed != c {
+		if computed, ok := b.Blobs[i].ComputeCommitment(); !ok {
+			return fmt.Errorf("failed to parse blob %d to compute commitment for verification", i)
+		} else if computed != c {
 			return fmt.Errorf("kzg commitment %d supposedly %s but does not match computed %s", i, c, computed)
 		}
 	}
