@@ -161,16 +161,16 @@ func (tdv *TxDataView) UnmarshalText(text []byte) error {
 	return conv.DynamicBytesUnmarshalText((*[]byte)(tdv), text[:])
 }
 
-func ReadHashes(dr *codec.DecodingReader, roots *[]common.Hash, length uint64) error {
-	if uint64(len(*roots)) != length {
+func ReadHashes(dr *codec.DecodingReader, hashes *[]common.Hash, length uint64) error {
+	if uint64(len(*hashes)) != length {
 		// re-use space if available (for recycling old state objects)
-		if uint64(cap(*roots)) >= length {
-			*roots = (*roots)[:length]
+		if uint64(cap(*hashes)) >= length {
+			*hashes = (*hashes)[:length]
 		} else {
-			*roots = make([]common.Hash, length, length)
+			*hashes = make([]common.Hash, length, length)
 		}
 	}
-	dst := *roots
+	dst := *hashes
 	for i := uint64(0); i < length; i++ {
 		if _, err := dr.Read(dst[i][:]); err != nil {
 			return err
@@ -179,21 +179,21 @@ func ReadHashes(dr *codec.DecodingReader, roots *[]common.Hash, length uint64) e
 	return nil
 }
 
-func ReadHashesLimited(dr *codec.DecodingReader, roots *[]common.Hash, limit uint64) error {
+func ReadHashesLimited(dr *codec.DecodingReader, hashes *[]common.Hash, limit uint64) error {
 	scope := dr.Scope()
 	if scope%32 != 0 {
-		return fmt.Errorf("bad deserialization scope, cannot decode roots list")
+		return fmt.Errorf("bad deserialization scope, cannot decode hashes list")
 	}
 	length := scope / 32
 	if length > limit {
-		return fmt.Errorf("too many roots: %d > %d", length, limit)
+		return fmt.Errorf("too many hashes: %d > %d", length, limit)
 	}
-	return ReadHashes(dr, roots, length)
+	return ReadHashes(dr, hashes, length)
 }
 
-func WriteHashes(ew *codec.EncodingWriter, roots []common.Hash) error {
-	for i := range roots {
-		if err := ew.Write(roots[i][:]); err != nil {
+func WriteHashes(ew *codec.EncodingWriter, hashes []common.Hash) error {
+	for i := range hashes {
+		if err := ew.Write(hashes[i][:]); err != nil {
 			return err
 		}
 	}
@@ -225,7 +225,7 @@ func (vhv VersionedHashesView) HashTreeRoot(hFn tree.HashFn) tree.Root {
 			return (*tree.Root)(&vhv[i])
 		}
 		return nil
-	}, length, MAX_ACCESS_LIST_STORAGE_KEYS)
+	}, length, MAX_VERSIONED_HASHES_LIST_SIZE)
 }
 
 type StorageKeysView []common.Hash
