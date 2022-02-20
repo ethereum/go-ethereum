@@ -572,6 +572,10 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *utils.Vo
 					- Use the above xdc address to check against the master node list from step 1(For the running epoch)
 			4. Broadcast(Not part of consensus)
 	*/
+	err := x.VerifyBlockInfo(chain, vote.ProposedBlockInfo)
+	if err != nil {
+		return false, err
+	}
 	snapshot, err := x.getSnapshot(chain, vote.ProposedBlockInfo.Number.Uint64())
 	if err != nil {
 		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "BlockNum", vote.ProposedBlockInfo.Number, "Hash", vote.ProposedBlockInfo.Hash, "Error", err.Error())
@@ -821,11 +825,41 @@ func (x *XDPoS_v2) ProposedBlockHandler(blockChainReader consensus.ChainReader, 
 */
 
 // To be used by different message verification. Verify local DB block info against the received block information(i.e hash, blockNum, round)
-func (x *XDPoS_v2) VerifyBlockInfo(blockInfo *utils.BlockInfo) error {
+func (x *XDPoS_v2) VerifyBlockInfo(blockChainReader consensus.ChainReader, blockInfo *utils.BlockInfo) error {
 	/*
 		1. Check if is able to get header by hash from the chain
 		2. Check the header from step 1 matches what's in the blockInfo. This includes the block number and the round
 	*/
+	blockHeader := blockChainReader.GetHeaderByHash(blockInfo.Hash)
+	if blockHeader == nil {
+		log.Warn("[VerifyBlockInfo] No such header in the chain", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "currentHeaderNum", blockChainReader.CurrentHeader().Number)
+		return fmt.Errorf("[VerifyBlockInfo] header doesn't exist for the received blockInfo at hash: %v", blockInfo.Hash.Hex())
+	}
+	if blockHeader.Number.Cmp(blockInfo.Number) != 0 {
+		log.Warn("[VerifyBlockInfo] Block Number mismatch", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number)
+		return fmt.Errorf("[VerifyBlockInfo] chain header number does not match for the received blockInfo at hash: %v", blockInfo.Hash.Hex())
+	}
+
+	// Switch block is a v1 block, there is no valid extra to decode, nor its round
+	if blockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		if blockInfo.Round != 0 {
+			log.Error("[VerifyBlockInfo] Switch block round is not 0", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number)
+			return fmt.Errorf("[VerifyBlockInfo] switch block round have to be 0")
+		}
+		return nil
+	}
+	// Check round
+	var decodedExtraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(blockHeader.Extra, &decodedExtraField)
+	if err != nil {
+		log.Error("[VerifyBlockInfo] Fail to decode extra field", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number)
+		return err
+	}
+	if decodedExtraField.Round != blockInfo.Round {
+		log.Warn("[VerifyBlockInfo] Block extra round mismatch with blockInfo", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number, "blockRound", decodedExtraField.Round)
+		return fmt.Errorf("[VerifyBlockInfo] chain block's round does not match from blockInfo at hash: %v and block round: %v, blockInfo Round: %v", blockInfo.Hash.Hex(), decodedExtraField.Round, blockInfo.Round)
+	}
+
 	return nil
 }
 
@@ -870,7 +904,7 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		return haveError
 	}
 
-	return x.VerifyBlockInfo(quorumCert.ProposedBlockInfo)
+	return x.VerifyBlockInfo(blockChainReader, quorumCert.ProposedBlockInfo)
 }
 
 // TODO: Unhold, wait till proposal finalise
