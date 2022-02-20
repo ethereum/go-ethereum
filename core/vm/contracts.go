@@ -1067,7 +1067,7 @@ func (c *blobVerification) RequiredGas(input []byte) uint64 {
 }
 
 func (c *blobVerification) Run(input []byte) ([]byte, error) {
-	if len(input) != 131104 { // 32 + 32 * CHUNKS_PER_BLOB
+	if len(input) != 32+(32*params.FieldElementsPerBlob) {
 		return nil, errBlobVerificationInputLength
 	}
 
@@ -1079,9 +1079,9 @@ func (c *blobVerification) Run(input []byte) ([]byte, error) {
 
 	input = input[32:] // skip forward to the input points
 
-	inputPoints := make([]bls.Fr, kzg.CHUNKS_PER_BLOB, kzg.CHUNKS_PER_BLOB)
+	inputPoints := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
 	var inputPoint [32]byte
-	for i := 0; i < kzg.CHUNKS_PER_BLOB; i++ {
+	for i := 0; i < params.FieldElementsPerBlob; i++ {
 		copy(inputPoint[:32], input[i*32:(i+1)*32])
 		ok := bls.FrFrom32(&inputPoints[i], inputPoint)
 		if ok != true {
@@ -1091,7 +1091,7 @@ func (c *blobVerification) Run(input []byte) ([]byte, error) {
 
 	// Get versioned hash out of input points
 	commitment := kzg.BlobToKzg(inputPoints)
-	versioned_hash := kzg.KzgToVersionedHash(*commitment)
+	versioned_hash := kzg.KzgToVersionedHash(commitment)
 
 	if versioned_hash != expected_versioned_hash {
 		return nil, errBadBlobCommitment
@@ -1124,10 +1124,10 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 		return nil, errPointEvaluationInputLength
 	}
 
-	var versioned_hash [32]byte
-	copy(versioned_hash[:], input[:32])
+	var versionedHash common.Hash
+	copy(versionedHash[:], input[:32])
 	// XXX Should we version check the hash?
-	if versioned_hash[0] != byte(params.BlobCommitmentVersionKZG) {
+	if versionedHash[0] != byte(params.BlobCommitmentVersionKZG) {
 		return nil, errInvalidVersionedHash
 	}
 
@@ -1146,23 +1146,21 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 		return nil, errPointEvaluationInvalidY
 	}
 
-	var data_kzg bls.G1Point
-	err := data_kzg.UnmarshalBinary(input[96:144])
+	dataKzg, err := bls.FromCompressedG1(input[96:144])
 	if err != nil {
 		return nil, errPointEvaluationInvalidKzg
 	}
 
-	if kzg.KzgToVersionedHash(data_kzg) != versioned_hash {
+	if kzg.KzgToVersionedHash(dataKzg) != versionedHash {
 		return nil, errPointEvaluationMismatchVersionedHash
 	}
 
-	var proof bls.G1Point
-	err = proof.UnmarshalBinary(input[144:192])
+	proof, err := bls.FromCompressedG1(input[144:192])
 	if err != nil {
 		return nil, errPointEvaluationInvalidProof
 	}
 
-	if kzg.VerifyKzgProof(data_kzg, x, y, proof) != true {
+	if kzg.VerifyKzgProof(dataKzg, &x, &y, proof) != true {
 		return nil, errPointEvaluationBadProof
 	}
 

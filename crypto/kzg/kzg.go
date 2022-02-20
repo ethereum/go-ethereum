@@ -9,8 +9,6 @@ import (
 	"github.com/protolambda/go-kzg/bls"
 )
 
-const CHUNKS_PER_BLOB = 4096
-
 var kzg_settings gokzg.KZGSettings
 var lagrange_crs []bls.G1Point
 
@@ -27,16 +25,16 @@ func BlobToKzg(eval []bls.Fr) *bls.G1Point {
 	return bls.LinCombG1(lagrange_crs, eval)
 }
 
-func VerifyKzgProof(commitment bls.G1Point, x bls.Fr, y bls.Fr, proof bls.G1Point) bool {
-	return kzg_settings.CheckProofSingle(&commitment, &proof, &x, &y)
+func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1Point) bool {
+	return kzg_settings.CheckProofSingle(commitment, proof, x, y)
 }
 
 func ComputeProof(polyCoeff []bls.Fr, x uint64) *bls.G1Point {
 	return kzg_settings.ComputeProofSingle(polyCoeff, x)
 }
 
-func KzgToVersionedHash(commitment bls.G1Point) [32]byte {
-	h := blake2b.Sum256(bls.ToCompressedG1(&commitment))
+func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
+	h := blake2b.Sum256(bls.ToCompressedG1(commitment))
 	h[0] = byte(params.BlobCommitmentVersionKZG)
 	return h
 }
