@@ -160,6 +160,10 @@ const (
 
 	// Fixed cost for sending a data blob.
 	BlobGas uint64 = 120000
+
+	MaxBlobsPerTx        = 2
+	MaxBlobsPerBlock     = 16
+	FieldElementsPerBlob = 4096 // each field element is 32 bytes
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

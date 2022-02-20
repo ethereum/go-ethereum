@@ -30,8 +30,9 @@ const maxTrackedPayloads = 10
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
-	id      beacon.PayloadID
-	payload *beacon.ExecutableDataV1
+	id       beacon.PayloadID
+	payload  *beacon.ExecutableDataV1
+	wrapData *beacon.ExecutionWrapperV1
 }
 
 // payloadQueue tracks the latest handful of constructed payloads to be retrieved
@@ -50,14 +51,15 @@ func newPayloadQueue() *payloadQueue {
 }
 
 // put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id beacon.PayloadID, data *beacon.ExecutableDataV1) {
+func (q *payloadQueue) put(id beacon.PayloadID, execData *beacon.ExecutableDataV1, wrapData *beacon.ExecutionWrapperV1) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	copy(q.payloads[1:], q.payloads)
 	q.payloads[0] = &payloadQueueItem{
-		id:      id,
-		payload: data,
+		id:       id,
+		payload:  execData,
+		wrapData: wrapData,
 	}
 }
 

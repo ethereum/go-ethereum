@@ -40,6 +40,17 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
+type BlobDetailsV1 struct {
+	KZG  types.KZGCommitment `json:"kzg"`
+	Blob types.Blob          `json:"blob"`
+}
+
+// ExecutionWrapperV1 is data around the execution payload, to be retrieved separately
+type ExecutionWrapperV1 struct {
+	// Blob details by versioned hash. Values may be nil if the wrapping blob data was removed/unavailable.
+	Blobs map[common.Hash]*BlobDetailsV1 `json:"blobs"`
+}
+
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
 
 // ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/src/engine/specification.md
@@ -127,7 +138,7 @@ type ForkchoiceStateV1 struct {
 func encodeTransactions(txs []*types.Transaction) [][]byte {
 	var enc = make([][]byte, len(txs))
 	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
+		enc[i], _ = tx.MarshalMinimal()
 	}
 	return enc
 }
@@ -182,10 +193,27 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	return block, nil
 }
 
-// BlockToExecutableData constructs the executableDataV1 structure by filling the
+// BlockToWrappedExecutableData constructs the executableDataV1 structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
-	return &ExecutableDataV1{
+// Additional wrapper contents are provided as well.
+func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *ExecutionWrapperV1) {
+	txs := encodeTransactions(block.Transactions())
+	wrapData := &ExecutionWrapperV1{Blobs: make(map[common.Hash]*BlobDetailsV1)}
+	for _, tx := range block.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			versionedHashes, kzgs, blobs := tx.BlobWrapData()
+			for i, h := range versionedHashes {
+				if len(blobs) < i || len(kzgs) < i {
+					// oh no, we lost our wrapper data for the versioned hash,
+					// we set it to nil and hope the caller builds a new block.
+					wrapData.Blobs[h] = nil
+				} else {
+					wrapData.Blobs[h] = &BlobDetailsV1{Blob: blobs[i], KZG: kzgs[i]}
+				}
+			}
+		}
+	}
+	execData := &ExecutableDataV1{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
 		FeeRecipient:  block.Coinbase(),
@@ -197,8 +225,9 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Timestamp:     block.Time(),
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
+		Transactions:  txs,
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
+	return execData, wrapData
 }

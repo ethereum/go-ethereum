@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/protolambda/ztyp/view"
 	"math/big"
 
@@ -49,6 +50,8 @@ type txJSON struct {
 
 	// Blob transaction fields:
 	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+	Blobs               Blobs         `json:"blobs,omitempty"`
+	BlobKzgs            BlobKzgs      `json:"blobKzgs,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -113,6 +116,11 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
 		enc.BlobVersionedHashes = tx.Message.BlobVersionedHashes
+		if t.wrapData == nil {
+			return nil, fmt.Errorf("expected wrap-data for blob tx")
+		}
+		enc.Blobs = t.wrapData.blobs()
+		enc.BlobKzgs = t.wrapData.kzgs()
 	}
 	return json.Marshal(&enc)
 }
@@ -338,7 +346,14 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
-
+		t.wrapData = &BlobTxWrapData{
+			BlobKzgs: dec.BlobKzgs,
+			Blobs:    dec.Blobs,
+		}
+		// Verify that versioned hashes match kzgs, and kzgs match blobs.
+		if err := t.wrapData.checkWrapping(&itx); err != nil {
+			return fmt.Errorf("blob wrapping data is invalid: %v", err)
+		}
 	default:
 		return ErrTxTypeNotSupported
 	}

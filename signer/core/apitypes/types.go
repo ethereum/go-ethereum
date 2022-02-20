@@ -102,7 +102,7 @@ type SendTxArgs struct {
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
-	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+	Blobs []types.Blob `json:"blobs,omitempty"`
 }
 
 func (args SendTxArgs) String() string {
@@ -131,7 +131,7 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 
 	var data types.TxData
 	switch {
-	case args.BlobVersionedHashes != nil:
+	case args.Blobs != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -146,8 +146,16 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 		msg.Value.SetFromBig((*big.Int)(&args.Value))
 		msg.Data = input
 		msg.AccessList = types.AccessListView(al)
-		msg.BlobVersionedHashes = args.BlobVersionedHashes
+		wrapData := types.BlobTxWrapData{}
+		for _, bl := range args.Blobs {
+			commitment := bl.ComputeCommitment()
+			versionedHash := commitment.ComputeVersionedHash()
+			msg.BlobVersionedHashes = append(msg.BlobVersionedHashes, versionedHash)
+			wrapData.BlobKzgs = append(wrapData.BlobKzgs, commitment)
+			wrapData.Blobs = append(wrapData.Blobs, bl)
+		}
 		data = &types.SignedBlobTx{Message: msg}
+		return types.NewTxWrapped(data, &wrapData)
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {

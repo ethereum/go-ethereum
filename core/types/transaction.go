@@ -60,6 +60,12 @@ type Transaction struct {
 	hash atomic.Value
 	size atomic.Value
 	from atomic.Value
+
+	// sizeWrapData, 0 if there is no wrapData
+	sizeWrapData atomic.Value
+
+	// For network propagation and disk, not embedded in the execution payload
+	wrapData TxWrapData
 }
 
 // NewTx creates a new transaction.
@@ -67,6 +73,23 @@ func NewTx(inner TxData) *Transaction {
 	tx := new(Transaction)
 	tx.setDecoded(inner.copy(), 0)
 	return tx
+}
+
+func NewTxWrapped(inner TxData, wrapData TxWrapData) *Transaction {
+	tx := new(Transaction)
+	tx.setDecoded(inner.copy(), 0)
+	tx.wrapData = wrapData.copy()
+	return tx
+}
+
+type TxWrapData interface {
+	copy() TxWrapData
+	kzgs() BlobKzgs
+	blobs() Blobs
+	encodeTyped(w io.Writer, txdata TxData) error
+	sizeWrapData() common.StorageSize
+	// check if the wrap data is valid for the given tx data
+	checkWrapping(inner TxData) error
 }
 
 // TxData is the underlying data of a transaction.
@@ -106,9 +129,19 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, buf.Bytes())
 }
 
-// encodeTyped writes the canonical encoding of a typed transaction to w.
-func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(tx.Type())
+// encodeTyped writes the canonical encoding of a typed transaction to w, including wrapper data.
+func (tx *Transaction) encodeTyped(w io.Writer) error {
+	if tx.wrapData != nil {
+		return tx.wrapData.encodeTyped(w, tx.inner)
+	} else {
+		return tx.encodeTypedMinimal(w)
+	}
+}
+
+func (tx *Transaction) encodeTypedMinimal(w io.Writer) error {
+	if _, err := w.Write([]byte{tx.Type()}); err != nil {
+		return err
+	}
 	return rlp.Encode(w, tx.inner)
 }
 
@@ -121,6 +154,16 @@ func (tx *Transaction) MarshalBinary() ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	err := tx.encodeTyped(&buf)
+	return buf.Bytes(), err
+}
+
+// MarshalMinimal returns the minimal unwrapped encoding of the transaction.
+func (tx *Transaction) MarshalMinimal() ([]byte, error) {
+	if tx.Type() == LegacyTxType {
+		return rlp.EncodeToBytes(tx.inner)
+	}
+	var buf bytes.Buffer
+	err := tx.encodeTypedMinimal(&buf)
 	return buf.Bytes(), err
 }
 
@@ -144,9 +187,10 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		if b, err = s.Bytes(); err != nil {
 			return err
 		}
-		inner, err := tx.decodeTyped(b)
+		inner, wrapData, err := tx.decodeTyped(b)
 		if err == nil {
 			tx.setDecoded(inner, len(b))
+			tx.wrapData = wrapData
 		}
 		return err
 	default:
@@ -168,11 +212,28 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
-	inner, err := tx.decodeTyped(b)
+	inner, wrapData, err := tx.decodeTyped(b)
 	if err != nil {
 		return err
 	}
 	tx.setDecoded(inner, len(b))
+	tx.wrapData = wrapData
+	return nil
+}
+
+// UnmarshalMinimal decodes the minimal encoding of transactions.
+// It supports legacy RLP transactions and EIP2718 typed transactions.
+func (tx *Transaction) UnmarshalMinimal(b []byte) error {
+	if len(b) > 0 && b[0] > 0x7f {
+		return tx.UnmarshalBinary(b)
+	}
+	// It's an EIP2718 typed transaction envelope.
+	inner, err := tx.decodeTypedMinimal(b)
+	if err != nil {
+		return err
+	}
+	tx.setDecoded(inner, len(b))
+	tx.wrapData = nil
 	return nil
 }
 
@@ -185,7 +246,23 @@ func EncodeSSZ(w io.Writer, obj codec.Serializable) error {
 }
 
 // decodeTyped decodes a typed transaction from the canonical format.
-func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
+func (tx *Transaction) decodeTyped(b []byte) (TxData, TxWrapData, error) {
+	if len(b) == 0 {
+		return nil, nil, errEmptyTypedTx
+	}
+	switch b[0] {
+	case BlobTxType:
+		var wrapped BlobTxWrapper
+		err := DecodeSSZ(b[1:], &wrapped)
+		return &wrapped.Tx, &BlobTxWrapData{BlobKzgs: wrapped.BlobKzgs, Blobs: wrapped.Blobs}, err
+	default:
+		minimal, err := tx.decodeTypedMinimal(b)
+		return minimal, nil, err
+	}
+}
+
+// decodeTyped decodes a typed transaction from the canonical format.
+func (tx *Transaction) decodeTypedMinimal(b []byte) (TxData, error) {
 	if len(b) == 0 {
 		return nil, errEmptyTypedTx
 	}
@@ -392,6 +469,7 @@ func (tx *Transaction) Hash() common.Hash {
 
 // Size returns the true RLP encoded storage size of the transaction, either by
 // encoding and returning it, or returning a previously cached value.
+// This *excludes* wrap-data.
 func (tx *Transaction) Size() common.StorageSize {
 	if size := tx.size.Load(); size != nil {
 		return size.(common.StorageSize)
@@ -400,6 +478,36 @@ func (tx *Transaction) Size() common.StorageSize {
 	rlp.Encode(&c, &tx.inner)
 	tx.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
+}
+
+func (tx *Transaction) WrapDataSize() common.StorageSize {
+	if size := tx.sizeWrapData.Load(); size != nil {
+		return size.(common.StorageSize)
+	}
+	var size common.StorageSize
+	if tx.wrapData != nil {
+		size = tx.wrapData.sizeWrapData()
+	}
+	tx.sizeWrapData.Store(size)
+	return size
+}
+
+func (tx *Transaction) CheckWrapData() error {
+	if tx.wrapData != nil {
+		return tx.wrapData.checkWrapping(tx.inner)
+	}
+	return nil
+}
+
+// BlobWrapData returns the blob and kzg data, if any.
+// kzgs and blobs may be empty if the transaction is not wrapped.
+func (tx *Transaction) BlobWrapData() (versionedHashes []common.Hash, kzgs BlobKzgs, blobs Blobs) {
+	if blobWrap, ok := tx.wrapData.(*BlobTxWrapData); ok {
+		if signedBlobTx, ok := tx.inner.(*SignedBlobTx); ok {
+			return signedBlobTx.Message.BlobVersionedHashes, blobWrap.BlobKzgs, blobWrap.Blobs
+		}
+	}
+	return nil, nil, nil
 }
 
 // WithSignature returns a new transaction with the given signature.

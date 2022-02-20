@@ -51,6 +51,10 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+
+	// txWrapDataMax is the maximum size for the additional wrapper data,
+	// enough to encode a blob-transaction wrapper data (48 bytes for commitment, 4 for offset, 48 for a commitment)
+	txWrapDataMax = 4 + 4 + params.MaxBlobsPerTx*(params.FieldElementsPerBlob*32+48)
 )
 
 var (
@@ -85,6 +89,9 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrBadWrapData is returned if wrap data is not valid for the transaction
+	ErrBadWrapData = errors.New("bad wrap data")
 )
 
 var (
@@ -243,6 +250,8 @@ type TxPool struct {
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
+
+	eipDataBlobs bool // Fork indicator whether we are using data blobs (mini danksharding)
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -592,8 +601,17 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
 		return ErrTxTypeNotSupported
 	}
-	// Reject transactions over defined size to prevent DOS attacks
+	// Reject data blob transactions until data blob EIP activates.
+	if !pool.eipDataBlobs && tx.Type() == types.BlobTxType {
+		return ErrTxTypeNotSupported
+	}
+	// Reject transactions over defined size to prevent DOS attacks.
+	// Even if it is a blob-tx, the tx without blob-data still needs to be under the strict txMaxSize limit.
 	if uint64(tx.Size()) > txMaxSize {
+		return ErrOversizedData
+	}
+	// Reject transactions that have too much wrap data to prevent DOS attacks.
+	if uint64(tx.WrapDataSize()) > txWrapDataMax {
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -641,6 +659,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
+	}
+	// Check if wrap data is valid
+	if err := tx.CheckWrapData(); err != nil {
+		return ErrBadWrapData
 	}
 	return nil
 }
@@ -1304,6 +1326,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
+	pool.eipDataBlobs = pool.chainconfig.IsSharding(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

@@ -261,6 +261,11 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
+	for i, tx := range eb.Txs {
+		if tx.wrapData != nil {
+			return fmt.Errorf("transactions in blocks must not contain wrap-data, tx %d is bad", i)
+		}
+	}
 	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
