@@ -124,7 +124,7 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, masternodes []common.Address) error {
 	log.Info("[Initial] initial v2 related parameters")
 
-	if !isEmptyHash(x.highestQuorumCert.ProposedBlockInfo.Hash) { // already initialized
+	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
 		log.Error("[Initial] Already initialized", "blockNum", header.Number, "Hash", header.Hash())
 		return nil
 	}
@@ -573,7 +573,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrInvalidQC
 	}
 
-	if isEmptyHash(quorumCert.ProposedBlockInfo.Hash) {
+	if quorumCert.ProposedBlockInfo.Hash == (common.Hash{}) {
 		return utils.ErrEmptyBlockInfoHash
 	}
 
