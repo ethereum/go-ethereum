@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -29,9 +31,10 @@ type XDPoS_v2 struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
-	snapshots     *lru.ARCCache // Snapshots for gap block
-	signatures    *lru.ARCCache // Signatures of recent blocks to speed up mining
-	epochSwitches *lru.ARCCache // infos of epoch: master nodes, epoch switch block info, parent of that info
+	snapshots       *lru.ARCCache // Snapshots for gap block
+	signatures      *lru.ARCCache // Signatures of recent blocks to speed up mining
+	epochSwitches   *lru.ARCCache // infos of epoch: master nodes, epoch switch block info, parent of that info
+	verifiedHeaders *lru.ARCCache
 
 	signer   common.Address  // Ethereum address of the signing key
 	signFn   clique.SignerFn // Signer function to authorize hashes with
@@ -66,6 +69,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 	snapshots, _ := lru.NewARC(utils.InmemorySnapshots)
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	epochSwitches, _ := lru.NewARC(int(utils.InmemoryEpochs))
+	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 
 	votePool := utils.NewPool(config.V2.CertThreshold)
 	engine := &XDPoS_v2{
@@ -73,11 +77,12 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 		db:         db,
 		signatures: signatures,
 
-		snapshots:     snapshots,
-		epochSwitches: epochSwitches,
-		timeoutWorker: timer,
-		BroadcastCh:   make(chan interface{}),
-		waitPeriodCh:  waitPeriodCh,
+		verifiedHeaders: verifiedHeaders,
+		snapshots:       snapshots,
+		epochSwitches:   epochSwitches,
+		timeoutWorker:   timer,
+		BroadcastCh:     make(chan interface{}),
+		waitPeriodCh:    waitPeriodCh,
 
 		timeoutPool: timeoutPool,
 		votePool:    votePool,
@@ -119,8 +124,8 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, masternodes []common.Address) error {
 	log.Info("[Initial] initial v2 related parameters")
 
-	if x.highestQuorumCert.ProposedBlockInfo.Round != 0 { //already initialized
-		log.Warn("[Initial] Already initialized")
+	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
+		log.Error("[Initial] Already initialized", "blockNum", header.Number, "Hash", header.Hash())
 		return nil
 	}
 
@@ -128,7 +133,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 	defer x.lock.Unlock()
 	// Check header if it is the first consensus v2 block, if so, assign initial values to current round and highestQC
 
-	log.Info("[Initial] highest QC for consensus v2 first block", "Block Num", header.Number.String(), "BlockHash", header.Hash())
+	log.Info("[Initial] highest QC for consensus v2 first block", "BlockNum", header.Number.String(), "BlockHash", header.Hash())
 	// Generate new parent blockInfo and put it into QC
 	blockInfo := &utils.BlockInfo{
 		Hash:   header.Hash(),
@@ -148,15 +153,21 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 
 	snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), x.currentRound, x.highestQuorumCert, masternodes)
 	x.snapshots.Add(snap.Hash, snap)
-	storeSnapshot(snap, x.db)
+	err := storeSnapshot(snap, x.db)
+	if err != nil {
+		log.Error("[Initial] Error while storo snapshot", "error", err)
+		return err
+	}
 
 	// Initial timeout
 	log.Info("[Initial] miner wait period", "period", x.config.WaitPeriod)
-
 	// avoid deadlock
 	go func() {
 		x.waitPeriodCh <- x.config.V2.WaitPeriod
 	}()
+
+	// Kick-off the countdown timer
+	x.timeoutWorker.Reset()
 
 	log.Info("[Initial] finish initialisation")
 	return nil
@@ -430,7 +441,11 @@ func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *type
 		}
 	}
 
-	log.Warn("Not authorised address", "Address", address, "MN", masterNodes, "Hash", header.Hash())
+	log.Warn("Not authorised address", "Address", address.Hex(), "Hash", header.Hash())
+	for index, mn := range masterNodes {
+		log.Warn("Master node list item", "mn", mn.Hex(), "index", index)
+	}
+
 	return false
 }
 
@@ -483,7 +498,11 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 	snap := newSnapshot(number, header.Hash(), x.currentRound, x.highestQuorumCert, masterNodes)
 	x.lock.RUnlock()
 
-	storeSnapshot(snap, x.db)
+	err := storeSnapshot(snap, x.db)
+	if err != nil {
+		log.Error("[UpdateMasternodes] Error while store snashot", "hash", header.Hash(), "currentRound", x.currentRound, "error", err)
+		return err
+	}
 	x.snapshots.Add(snap.Hash, snap)
 
 	nm := []string{}
@@ -496,20 +515,122 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 }
 
 func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
-	return nil
+	err := x.verifyHeader(chain, header, nil, fullVerify)
+	if err != nil {
+		log.Warn("[VerifyHeader] Fail to verify header", "fullVerify", fullVerify, "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
+	}
+	return err
 }
 
-// TODO: Yet to be implemented XIN-135
+// Verify a list of headers
 func (x *XDPoS_v2) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, fullVerifies []bool, abort <-chan struct{}, results chan<- error) {
 	go func() {
-		for range headers {
+		for i, header := range headers {
+			err := x.verifyHeader(chain, header, headers[:i], fullVerifies[i])
+			log.Warn("[VerifyHeaders] Fail to verify header", "fullVerify", fullVerifies[i], "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
 			select {
 			case <-abort:
 				return
-			case results <- nil:
+			case results <- err:
 			}
 		}
 	}()
+}
+
+// Verify individual header
+func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+	// If we're running a engine faking, accept any block as valid
+	if x.config.V2.SkipV2Validation {
+		return nil
+	}
+	_, check := x.verifiedHeaders.Get(header.Hash())
+	if check {
+		return nil
+	}
+
+	if header.Number == nil {
+		return utils.ErrUnknownBlock
+	}
+
+	if fullVerify {
+		if len(header.Validator) == 0 {
+			return consensus.ErrNoValidatorSignature
+		}
+		// Don't waste time checking blocks from the future
+		if header.Time.Int64() > time.Now().Unix() {
+			return consensus.ErrFutureBlock
+		}
+	}
+
+	// Verify this is truely a v2 block first
+	var decodedExtraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
+	if err != nil {
+		return utils.ErrInvalidV2Extra
+	}
+	quorumCert := decodedExtraField.QuorumCert
+	if quorumCert == nil || quorumCert.Signatures == nil || len(quorumCert.Signatures) == 0 {
+		return utils.ErrInvalidQC
+	}
+
+	if quorumCert.ProposedBlockInfo.Hash == (common.Hash{}) {
+		return utils.ErrEmptyBlockInfoHash
+	}
+
+	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
+	if !bytes.Equal(header.Nonce[:], utils.NonceAuthVote) && !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
+		return utils.ErrInvalidVote
+	}
+	// Ensure that the mix digest is zero as we don't have fork protection currently
+	if header.MixDigest != (common.Hash{}) {
+		return utils.ErrInvalidMixDigest
+	}
+	// Ensure that the block doesn't contain any uncles which are meaningless in XDPoS_v1
+	if header.UncleHash != utils.UncleHash {
+		return utils.ErrInvalidUncleHash
+	}
+
+	// Verify v2 block that is on the epoch switch
+	if header.Validators != nil {
+		// Skip if it's the first v2 block as it wil inherit from last v1 epoch block
+		if header.Number.Uint64() > x.config.V2.SwitchBlock.Uint64()+1 && header.Coinbase != (common.Address{}) {
+			return utils.ErrInvalidCheckpointBeneficiary
+		}
+		if !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
+			return utils.ErrInvalidCheckpointVote
+		}
+		if len(header.Validators) == 0 {
+			return utils.ErrEmptyEpochSwitchValidators
+		}
+		if len(header.Validators)%common.AddressLength != 0 {
+			return utils.ErrInvalidCheckpointSigners
+		}
+	}
+
+	// If all checks passed, validate any special fields for hard forks
+	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
+		return err
+	}
+
+	// Ensure that the block's timestamp isn't too close to it's parent
+	var parent *types.Header
+	number := header.Number.Uint64()
+
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+		return consensus.ErrUnknownAncestor
+	}
+	if parent.Time.Uint64()+uint64(x.config.V2.MinePeriod) > header.Time.Uint64() {
+		return utils.ErrInvalidTimestamp
+	}
+	// TODO: verifySeal XIN-135
+
+	x.verifiedHeaders.Add(header.Hash(), true)
+	return nil
 }
 
 // Utils for test to get current Pool size

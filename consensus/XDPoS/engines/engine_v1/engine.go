@@ -148,7 +148,7 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 // a batch of new headers.
 func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	// If we're running a engine faking, accept any block as valid
-	if x.config.SkipValidation {
+	if x.config.SkipV1Validation {
 		return nil
 	}
 	if common.IsTestnet {
@@ -929,7 +929,7 @@ func (x *XDPoS_v1) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
 	// If we're running a engine faking, skip calculation
-	if x.config.SkipValidation {
+	if x.config.SkipV1Validation {
 		return big.NewInt(1)
 	}
 	len, preIndex, curIndex, _, err := x.yourTurn(chain, parent, signer)
