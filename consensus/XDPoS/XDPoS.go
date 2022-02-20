@@ -180,10 +180,10 @@ func (x *XDPoS) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 	}
 
 	if v1headers != nil {
-		x.EngineV1.VerifyHeaders(chain, headers, fullVerifies, abort, results)
+		x.EngineV1.VerifyHeaders(chain, v1headers, fullVerifies, abort, results)
 	}
 	if v2headers != nil {
-		x.EngineV2.VerifyHeaders(chain, headers, fullVerifies, abort, results)
+		x.EngineV2.VerifyHeaders(chain, v2headers, fullVerifies, abort, results)
 	}
 
 	return abort, results

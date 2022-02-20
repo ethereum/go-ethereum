@@ -551,13 +551,13 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if header.Number == nil {
 		return utils.ErrUnknownBlock
 	}
-	number := header.Number.Uint64()
+
 	if fullVerify {
 		if len(header.Validator) == 0 {
 			return consensus.ErrNoValidatorSignature
 		}
 		// Don't waste time checking blocks from the future
-		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+		if header.Time.Int64() > time.Now().Unix() {
 			return consensus.ErrFutureBlock
 		}
 	}
@@ -593,7 +593,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// Verify v2 block that is on the epoch switch
 	if header.Validators != nil {
 		// Skip if it's the first v2 block as it wil inherit from last v1 epoch block
-		if header.Number.Cmp(new(big.Int).Add(x.config.V2.SwitchBlock, big.NewInt(1))) == 1 && header.Coinbase != (common.Address{}) {
+		if header.Number.Uint64() > x.config.V2.SwitchBlock.Uint64()+1 && header.Coinbase != (common.Address{}) {
 			return utils.ErrInvalidCheckpointBeneficiary
 		}
 		if !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
@@ -614,6 +614,8 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 
 	// Ensure that the block's timestamp isn't too close to it's parent
 	var parent *types.Header
+	number := header.Number.Uint64()
+
 	if len(parents) > 0 {
 		parent = parents[len(parents)-1]
 	} else {
