@@ -1,7 +1,10 @@
 package tests
 
 import (
+	"encoding/hex"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg"
@@ -102,4 +105,23 @@ func TestKzg(t *testing.T) {
 	if kzg.VerifyKzgProof(*commitment, x_fr, value, *proof) != true {
 		panic("failed proof verification")
 	}
+}
+
+func TestBlobVerificationTestVector(t *testing.T) {
+	data := []byte(strings.Repeat("HELPMELOVEME ", 10083))[:kzg.CHUNKS_PER_BLOB*32]
+
+	inputPoints := make([]bls.Fr, kzg.CHUNKS_PER_BLOB, kzg.CHUNKS_PER_BLOB)
+
+	var inputPoint [32]byte
+	for i := 0; i < kzg.CHUNKS_PER_BLOB; i++ {
+		copy(inputPoint[:32], data[i*32:(i+1)*32])
+		bls.FrFrom32(&inputPoints[i], inputPoint)
+	}
+
+	commitment := kzg.BlobToKzg(inputPoints)
+	versioned_hash := kzg.KzgToVersionedHash(*commitment)
+
+	test_vector = append(versioned_hash[:], data[:]...)
+	fmt.Printf("%s\n", hex.EncodeToString(test_vector))
+	fmt.Printf("%d\n", len(test_vector))
 }
