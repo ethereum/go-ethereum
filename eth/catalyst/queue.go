@@ -64,17 +64,17 @@ func (q *payloadQueue) put(id beacon.PayloadID, execData *beacon.ExecutableDataV
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
+func (q *payloadQueue) get(id beacon.PayloadID) (*beacon.ExecutableDataV1, *beacon.ExecutionWrapperV1) {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
 	for _, item := range q.payloads {
 		if item == nil {
-			return nil // no more items
+			return nil, nil // no more items
 		}
 		if item.id == id {
-			return item.payload
+			return item.payload, item.wrapData
 		}
 	}
-	return nil
+	return nil, nil
 }

@@ -113,11 +113,25 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.preparedBlocks.get(payloadID)
+	data, _ := api.preparedBlocks.get(payloadID)
 	if data == nil {
 		return nil, &beacon.UnknownPayload
 	}
 	return data, nil
+}
+
+// GetBlobV1 returns a cached blob by payload id and versioned hash.
+func (api *ConsensusAPI) GetBlobV1(payloadID beacon.PayloadID, versionedHash common.Hash) (*beacon.BlobDetailsV1, error) {
+	log.Trace("Engine API request received", "method", "GetBlob", "versioned_hash", versionedHash)
+	_, execWrap := api.preparedBlocks.get(payloadID)
+	if execWrap == nil {
+		return nil, &beacon.UnknownPayload
+	}
+	blob, ok := execWrap.Blobs[versionedHash]
+	if !ok {
+		return nil, fmt.Errorf("unknown versioned hash: %s", versionedHash)
+	}
+	return blob, nil
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
