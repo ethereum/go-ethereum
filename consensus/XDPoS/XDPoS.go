@@ -501,7 +501,3 @@ func (x *XDPoS) VerifyTimeout(*utils.Timeout) error {
 func (x *XDPoS) VerifySyncInfo(*utils.SyncInfo) error {
 	return nil
 }
-
-func (x *XDPoS) VerifyBlockInfo(*utils.BlockInfo) error {
-	return nil
-}
