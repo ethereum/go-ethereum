@@ -121,7 +121,63 @@ func TestBlobVerificationTestVector(t *testing.T) {
 	commitment := kzg.BlobToKzg(inputPoints)
 	versioned_hash := kzg.KzgToVersionedHash(*commitment)
 
-	test_vector = append(versioned_hash[:], data[:]...)
+	test_vector := append(versioned_hash[:], data[:]...)
+	fmt.Printf("%s\n", hex.EncodeToString(test_vector))
+	fmt.Printf("%d\n", len(test_vector))
+}
+
+func TestPointEvaluationTestVector(t *testing.T) {
+	fs := gokzg.NewFFTSettings(uint8(math.Log2(kzg.CHUNKS_PER_BLOB)))
+
+	// Create testing polynomial
+	polynomial := make([]bls.Fr, kzg.CHUNKS_PER_BLOB, kzg.CHUNKS_PER_BLOB)
+	for i := uint64(0); i < kzg.CHUNKS_PER_BLOB; i++ {
+		bls.CopyFr(&polynomial[i], bls.RandomFr())
+	}
+
+	// Get polynomial in evaluation form
+	evalPoly, err := fs.FFT(polynomial, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a commitment
+	commitment := kzg.BlobToKzg(evalPoly)
+
+	// Create proof for testing
+	x := uint64(0x42)
+	proof := kzg.ComputeProof(polynomial, x)
+
+	// Get actual evaluation at x
+	var x_fr bls.Fr
+	bls.AsFr(&x_fr, x)
+	var y bls.Fr
+	bls.EvalPolyAt(&y, polynomial, &x_fr)
+
+	// Verify kzg proof
+	if kzg.VerifyKzgProof(*commitment, x_fr, y, *proof) != true {
+		panic("failed proof verification")
+	}
+
+	versioned_hash := kzg.KzgToVersionedHash(*commitment)
+
+	commitment_bytes, err := commitment.MarshalBinary()
+	if err != nil {
+		panic("failed to marshal commitment")
+	}
+
+	proof_bytes, err := proof.MarshalBinary()
+	if err != nil {
+		panic("failed to marshal proof")
+	}
+
+	x_bytes := bls.FrTo32(&x_fr)
+	y_bytes := bls.FrTo32(&y)
+
+	test_vector := append(versioned_hash[:], x_bytes[:]...)
+	test_vector = append(test_vector, y_bytes[:]...)
+	test_vector = append(test_vector, commitment_bytes...)
+	test_vector = append(test_vector, proof_bytes...)
 	fmt.Printf("%s\n", hex.EncodeToString(test_vector))
 	fmt.Printf("%d\n", len(test_vector))
 }
