@@ -1047,8 +1047,8 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 var PrecompiledContractsDanksharding = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{13}): &blobVerification{},
-	//	common.BytesToAddress([]byte{14}): &pointEvaluation{},
+	common.BytesToAddress([]byte{0x13}): &blobVerification{},
+	common.BytesToAddress([]byte{0x14}): &pointEvaluation{},
 }
 
 var (
@@ -1100,21 +1100,71 @@ func (c *blobVerification) Run(input []byte) ([]byte, error) {
 	return []byte{}, nil
 }
 
-// // DOCDOC
-// type pointEvaluation struct{}
+// DOCDOC
+type pointEvaluation struct{}
 
-// var (
-// 	errPointEvaluationInputLength = errors.New("invalid input length")
-// )
+var (
+	errPointEvaluationInputLength           = errors.New("invalid input length")
+	errPointEvaluationInvalidVersionedHash  = errors.New("invalid versioned hash")
+	errPointEvaluationInvalidX              = errors.New("invalid evaluation point")
+	errPointEvaluationInvalidY              = errors.New("invalid expected output")
+	errPointEvaluationInvalidKzg            = errors.New("invalid data kzg")
+	errPointEvaluationInvalidProof          = errors.New("invalid proof")
+	errPointEvaluationMismatchVersionedHash = errors.New("mismatched versioned hash")
+	errPointEvaluationBadProof              = errors.New("bad proof")
+)
 
-// // RequiredGas returns the gas required to execute the pre-compiled contract.
-// func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
-// 	return params.pointEvaluationGas
-// }
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
+	return params.PointEvaluationGas
+}
 
-// func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
-// 	if len(input) != 192 {
-// 		return nil, errPointEvaluationInputLength
-// 	}
+func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
+	if len(input) != 192 {
+		return nil, errPointEvaluationInputLength
+	}
 
-// }
+	var versioned_hash [32]byte
+	copy(versioned_hash[:], input[:32])
+	// XXX Should we version check the hash?
+	if versioned_hash[0] != byte(params.BlobCommitmentVersionKZG) {
+		return nil, errInvalidVersionedHash
+	}
+
+	var x bls.Fr
+	var data [32]byte
+	copy(data[:], input[32:64])
+	ok := bls.FrFrom32(&x, data)
+	if ok != true {
+		return nil, errPointEvaluationInvalidX
+	}
+
+	var y bls.Fr
+	copy(data[:], input[64:96])
+	ok = bls.FrFrom32(&y, data)
+	if ok != true {
+		return nil, errPointEvaluationInvalidY
+	}
+
+	var data_kzg bls.G1Point
+	err := data_kzg.UnmarshalBinary(input[96:144])
+	if err != nil {
+		return nil, errPointEvaluationInvalidKzg
+	}
+
+	if kzg.KzgToVersionedHash(data_kzg) != versioned_hash {
+		return nil, errPointEvaluationMismatchVersionedHash
+	}
+
+	var proof bls.G1Point
+	err = proof.UnmarshalBinary(input[144:192])
+	if err != nil {
+		return nil, errPointEvaluationInvalidProof
+	}
+
+	if kzg.VerifyKzgProof(data_kzg, x, y, proof) != true {
+		return nil, errPointEvaluationBadProof
+	}
+
+	return []byte{}, nil
+}
