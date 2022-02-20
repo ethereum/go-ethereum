@@ -66,7 +66,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
 	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, 0, create, isHomestead, isIstanbul)
 	if err != nil {
 		return
 	}

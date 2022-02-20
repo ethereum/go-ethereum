@@ -4,13 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/conv"
 	"github.com/protolambda/ztyp/tree"
 	. "github.com/protolambda/ztyp/view"
-	"math/big"
 )
 
 type ECDSASignature struct {
@@ -432,6 +433,6 @@ func (stx *SignedBlobTx) rawSignatureValues() (v, r, s *big.Int) {
 func (stx *SignedBlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	(*uint256.Int)(&stx.Message.ChainID).SetFromBig(chainID)
 	stx.Signature.V = Uint8View(v.Uint64())
-	(*uint256.Int)(&stx.Signature.R).SetFromBig(chainID)
-	(*uint256.Int)(&stx.Signature.S).SetFromBig(chainID)
+	(*uint256.Int)(&stx.Signature.R).SetFromBig(r)
+	(*uint256.Int)(&stx.Signature.S).SetFromBig(s)
 }
