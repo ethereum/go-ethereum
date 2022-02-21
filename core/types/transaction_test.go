@@ -21,6 +21,9 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -412,14 +415,15 @@ func TestTransactionCoding(t *testing.T) {
 		t.Fatalf("could not generate key: %v", err)
 	}
 	var (
-		signer    = NewEIP2930Signer(common.Big1)
+		signer    = NewDankSigner(common.Big1)
 		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
 		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 		accesses  = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}
 	)
-	for i := uint64(0); i < 500; i++ {
+	for i := uint64(0); i < 700; i++ {
 		var txdata TxData
-		switch i % 5 {
+		var wrapData TxWrapData
+		switch i % 7 {
 		case 0:
 			// Legacy tx.
 			txdata = &LegacyTx{
@@ -467,8 +471,33 @@ func TestTransactionCoding(t *testing.T) {
 				GasPrice:   big.NewInt(10),
 				AccessList: accesses,
 			}
+		case 5:
+			txdata = &DynamicFeeTx{
+				ChainID:    big.NewInt(1),
+				Nonce:      i,
+				Gas:        123457,
+				GasTipCap:  big.NewInt(42),
+				GasFeeCap:  big.NewInt(10),
+				AccessList: accesses,
+			}
+		case 6:
+			txdata = &SignedBlobTx{
+				Message: BlobTxMessage{
+					ChainID:             view.Uint256View(*uint256.NewInt(1)),
+					Nonce:               view.Uint64View(i),
+					Gas:                 view.Uint64View(123457),
+					GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
+					GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
+					AccessList:          AccessListView(accesses),
+					BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x01624652859a6e98ffc1608e2af0147ca4e86e1ce27672d8d3f3c9d4ffd6ef7e")},
+				},
+			}
+			wrapData = &BlobTxWrapData{
+				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
+				Blobs:    Blobs{make(Blob, params.FieldElementsPerBlob)},
+			}
 		}
-		tx, err := SignNewTx(key, signer, txdata)
+		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))
 		if err != nil {
 			t.Fatalf("could not sign transaction: %v", err)
 		}

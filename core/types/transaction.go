@@ -80,9 +80,13 @@ func NewTx(inner TxData, options ...TxOption) *Transaction {
 	return tx
 }
 
+// WithTxWrapData is a TxOption to add additional data to a transaction.
+// wrapData may be nil to downgrade a transaction to a minimal tx.
 func WithTxWrapData(wrapData TxWrapData) TxOption {
 	return func(tx *Transaction) {
-		tx.wrapData = wrapData.copy()
+		if wrapData != nil {
+			tx.wrapData = wrapData.copy()
+		}
 	}
 }
 
