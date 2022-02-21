@@ -29,6 +29,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 )
 
@@ -72,6 +73,7 @@ type StructLog struct {
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
+	ExtraData     *types.ExtraData            `json:"extraData"`
 	Err           error                       `json:"-"`
 }
 
@@ -106,6 +108,7 @@ func (s *StructLog) ErrorString() string {
 type EVMLogger interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
+	CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	CaptureExit(output []byte, gasUsed uint64, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
@@ -177,7 +180,10 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		}
 	}
 	// Copy a snapshot of the current storage to a new container
-	var storage Storage
+	var (
+		storage   Storage
+		extraData *types.ExtraData
+	)
 	if !l.cfg.DisableStorage && (op == SLOAD || op == SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
@@ -200,6 +206,11 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 			)
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
+
+			extraData = types.NewExtraData()
+			if err := traceStorageProof(l, scope, extraData); err != nil {
+				log.Warn("Failed to get proof", "contract address", contract.Address().String(), "key", address.String(), "err", err)
+			}
 		}
 	}
 	var rdata []byte
@@ -207,8 +218,32 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		rdata = make([]byte, len(rData))
 		copy(rdata, rData)
 	}
+
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), extraData, err}
+	l.logs = append(l.logs, log)
+}
+
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (l *StructLogger) CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+	// check if already accumulated the specified number of logs
+	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
+		return
+	}
+
+	execFuncList, ok := OpcodeExecs[op]
+	if !ok {
+		return
+	}
+	extraData := types.NewExtraData()
+	// execute trace func list.
+	for _, exec := range execFuncList {
+		if err = exec(l, scope, extraData); err != nil {
+			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
+		}
+	}
+
+	log := StructLog{pc, op, gas, cost, nil, scope.Memory.Len(), nil, nil, nil, depth, l.env.StateDB.GetRefund(), extraData, err}
 	l.logs = append(l.logs, log)
 }
 
@@ -345,6 +380,10 @@ func (t *mdLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *S
 	}
 }
 
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (t *mdLogger) CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+}
+
 func (t *mdLogger) CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
@@ -371,26 +410,30 @@ func FormatLogs(logs []StructLog) []types.StructLogRes {
 			Depth:   trace.Depth,
 			Error:   trace.ErrorString(),
 		}
-		if trace.Stack != nil {
+		if len(trace.Stack) != 0 {
 			stack := make([]string, len(trace.Stack))
 			for i, stackValue := range trace.Stack {
 				stack[i] = stackValue.Hex()
 			}
 			formatted[index].Stack = &stack
 		}
-		if trace.Memory != nil {
+		if len(trace.Memory) != 0 {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+				bytes := new(big.Int).SetBytes(trace.Memory[i : i+32]).Bytes()
+				memory = append(memory, hexutil.Encode(bytes))
 			}
 			formatted[index].Memory = &memory
 		}
-		if trace.Storage != nil {
+		if len(trace.Storage) != 0 {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
 				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 			}
 			formatted[index].Storage = &storage
+		}
+		if trace.ExtraData != nil {
+			formatted[index].ExtraData = trace.ExtraData.SealExtraData()
 		}
 	}
 	return formatted

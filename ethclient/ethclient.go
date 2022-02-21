@@ -325,10 +325,10 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// BlockResultByHash returns the blockResult.
-func (ec *Client) BlockResultByHash(ctx context.Context, blockHash common.Hash) (*types.BlockResult, error) {
+// GetBlockResultByHash returns the blockResult.
+func (ec *Client) GetBlockResultByHash(ctx context.Context, blockHash common.Hash) (*types.BlockResult, error) {
 	var blockResult types.BlockResult
-	if err := ec.c.CallContext(ctx, &blockResult, "eth_blockResultByHash", blockHash); err != nil {
+	if err := ec.c.CallContext(ctx, &blockResult, "eth_getBlockResultByHash", blockHash); err != nil {
 		return nil, err
 	}
 	return &blockResult, nil

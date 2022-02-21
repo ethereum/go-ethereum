@@ -30,6 +30,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/mclock"
 	"github.com/scroll-tech/go-ethereum/common/prque"
 	"github.com/scroll-tech/go-ethereum/consensus"
@@ -84,13 +85,14 @@ var (
 )
 
 const (
-	bodyCacheLimit      = 256
-	blockCacheLimit     = 256
-	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 1024
-	maxFutureBlocks     = 256
-	maxTimeFutureBlocks = 30
-	TriesInMemory       = 128
+	bodyCacheLimit        = 256
+	blockCacheLimit       = 256
+	receiptsCacheLimit    = 32
+	txLookupCacheLimit    = 1024
+	maxFutureBlocks       = 256
+	maxTimeFutureBlocks   = 30
+	TriesInMemory         = 128
+	blockResultCacheLimit = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -191,13 +193,14 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
+	stateCache       state.Database // State database to reuse between imports (contains state cache)
+	bodyCache        *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache    *lru.Cache     // Cache for the most recent receipts per block
+	blockCache       *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache    *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
+	blockResultCache *lru.Cache     // Cache for the most recent block results.
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -226,6 +229,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	blockResultCache, _ := lru.New(blockResultCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -237,17 +241,18 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:           make(chan struct{}),
-		chainmu:        syncx.NewClosableMutex(),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		quit:             make(chan struct{}),
+		chainmu:          syncx.NewClosableMutex(),
+		shouldPreserve:   shouldPreserve,
+		bodyCache:        bodyCache,
+		bodyRLPCache:     bodyRLPCache,
+		receiptsCache:    receiptsCache,
+		blockCache:       blockCache,
+		txLookupCache:    txLookupCache,
+		futureBlocks:     futureBlocks,
+		blockResultCache: blockResultCache,
+		engine:           engine,
+		vmConfig:         vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1215,7 +1220,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WriteBlockResult(blockBatch, block.Hash(), blockResult)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1314,6 +1318,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	bc.futureBlocks.Remove(block.Hash())
 
+	// Fill blockResult content
+	if blockResult != nil {
+		bc.writeBlockResult(state, block, blockResult)
+		bc.blockResultCache.Add(block.Hash(), blockResult)
+	}
+
 	if status == CanonStatTy {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs, BlockResult: blockResult})
 		if len(logs) > 0 {
@@ -1331,6 +1341,35 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
+}
+
+// Fill blockResult content
+func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block, blockResult *types.BlockResult) {
+	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block)
+	for i, tx := range block.Transactions() {
+		evmTrace := blockResult.ExecutionResults[i]
+		// Get the sender's address.
+		from, _ := types.Sender(types.MakeSigner(bc.chainConfig, block.Number()), tx)
+		// Get account's proof.
+		proof, err := state.GetProof(from)
+		if err != nil {
+			log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", from.String(), "err", err)
+		} else {
+			evmTrace.Proof = make([]string, len(proof))
+			for i := range proof {
+				evmTrace.Proof[i] = hexutil.Encode(proof[i])
+			}
+		}
+		// Contract is called
+		if len(tx.Data()) != 0 && tx.To() != nil {
+			evmTrace.ByteCode = hexutil.Encode(state.GetCode(*tx.To()))
+			// Get tx.to address's code hash.
+			codeHash := state.GetCodeHash(*tx.To())
+			evmTrace.CodeHash = &codeHash
+		} else if tx.To() == nil { // Contract is created.
+			evmTrace.ByteCode = hexutil.Encode(tx.Data())
+		}
+	}
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get

@@ -794,7 +794,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	w.current.receipts = append(w.current.receipts, receipt)
 	w.current.executionResults = append(w.current.executionResults, &types.ExecutionResult{
 		Gas:         receipt.GasUsed,
-		Failed:      receipt.Status == types.ReceiptStatusSuccessful,
+		Failed:      receipt.Status != types.ReceiptStatusSuccessful,
 		ReturnValue: fmt.Sprintf("%x", receipt.ReturnValue),
 		StructLogs:  vm.FormatLogs(tracer.StructLogs()),
 	})

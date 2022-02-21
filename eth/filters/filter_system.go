@@ -371,8 +371,10 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	for _, f := range filters[BlocksSubscription] {
 		f.headers <- ev.Block.Header()
 	}
-	for _, f := range filters[BlockResultsSubscription] {
-		f.blockResults <- ev.BlockResult
+	if ev.BlockResult != nil {
+		for _, f := range filters[BlockResultsSubscription] {
+			f.blockResults <- ev.BlockResult
+		}
 	}
 	if es.lightMode && len(filters[LogsSubscription]) > 0 {
 		es.lightFilterNewHead(ev.Block.Header(), func(header *types.Header, remove bool) {

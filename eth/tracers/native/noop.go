@@ -51,6 +51,10 @@ func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (t *noopTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+}
+
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
 func (t *noopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }

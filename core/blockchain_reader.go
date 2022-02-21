@@ -158,6 +158,13 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	return bc.GetBlock(hash, *number)
 }
 
+func (bc *BlockChain) GetBlockResultByHash(blockHash common.Hash) *types.BlockResult {
+	if blockResult, ok := bc.blockResultCache.Get(blockHash); ok {
+		return blockResult.(*types.BlockResult)
+	}
+	return nil
+}
+
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {

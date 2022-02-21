@@ -236,7 +236,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	b.genesis.MustCommit(db2)
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true})}, nil, nil)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.

@@ -21,7 +21,9 @@ import (
 	"testing"
 
 	"github.com/holiman/uint256"
+
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/params"
 )
@@ -42,6 +44,14 @@ func (d *dummyContractRef) SetBalance(*big.Int)        {}
 func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
+// makeTestState create a sample test state to test node-wise reconstruction.
+func makeTestState() *state.StateDB {
+	// Create an empty state
+	db := state.NewDatabase(rawdb.NewMemoryDatabase())
+	stateDb, _ := state.New(common.Hash{}, db, nil)
+	return stateDb
+}
+
 type dummyStatedb struct {
 	state.StateDB
 }
@@ -50,7 +60,7 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{})
+		env      = NewEVM(BlockContext{}, TxContext{}, makeTestState(), params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
 		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
 		scope    = &ScopeContext{
