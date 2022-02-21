@@ -35,8 +35,8 @@ import (
 )
 
 var (
-	testdb  = rawdb.NewMemoryDatabase()
-	genesis = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
+	testdb     = rawdb.NewMemoryDatabase()
+	_, genesis = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.

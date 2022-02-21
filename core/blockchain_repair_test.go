@@ -1770,7 +1770,8 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Initialize a fresh chain
 	var (
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		gspec   = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}
+		genesis = gspec.MustCommit(db)
 		engine  = ethash.NewFullFaker()
 		config  = &CacheConfig{
 			TrieCleanLimit: 256,
@@ -1784,7 +1785,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, gspec, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1837,7 +1838,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	defer db.Close()
 
-	newChain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	newChain, err := NewBlockChain(db, gspec, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -1898,7 +1899,8 @@ func TestIssue23496(t *testing.T) {
 
 	// Initialize a fresh chain
 	var (
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		gspec   = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}
+		genesis = gspec.MustCommit(db)
 		engine  = ethash.NewFullFaker()
 		config  = &CacheConfig{
 			TrieCleanLimit: 256,
@@ -1908,7 +1910,7 @@ func TestIssue23496(t *testing.T) {
 			SnapshotWait:   true,
 		}
 	)
-	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, gspec, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1952,7 +1954,7 @@ func TestIssue23496(t *testing.T) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err = NewBlockChain(db, gspec, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

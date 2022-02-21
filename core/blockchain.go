@@ -181,7 +181,12 @@ type BlockChain struct {
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+
+	// The earliest block and the corresponding state.
+	// Once the historical chain pruning is enabled, it
+	// should be replaced with tail block and tail state.
+	genesisBlock *types.Block
+	genesis      *Genesis
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -214,7 +219,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, genesis *Genesis, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -229,6 +234,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
 		db:          db,
+		genesis:     genesis,
 		triegc:      prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
@@ -542,6 +548,17 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						}
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
+						// Recommit the genesis state into disk in case the rewinding destination
+						// is genesis. In the future this rewinding destination can be the earliest
+						// block stored in the chain if the historical chain pruning is enabled.
+						// In that case the logic needs to be improved here.
+						if newHeadBlock.NumberU64() == 0 {
+							if bc.genesis == nil {
+								log.Crit("Genesis is not existent, no complete state to rewind")
+							}
+							bc.genesis.ToBlock(bc.db)
+							log.Debug("Recommitted genesis state to disk")
+						}
 						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
 					}

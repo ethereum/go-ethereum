@@ -154,13 +154,13 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, *Genesis, common.Hash, error) {
 	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideArrowGlacier, overrideTerminalTotalDifficulty *big.Int) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideArrowGlacier, overrideTerminalTotalDifficulty *big.Int) (*params.ChainConfig, *Genesis, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
-		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
+		return params.AllEthashProtocolChanges, genesis, common.Hash{}, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
@@ -173,9 +173,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		block, err := genesis.Commit(db)
 		if err != nil {
-			return genesis.Config, common.Hash{}, err
+			return genesis.Config, genesis, common.Hash{}, err
 		}
-		return genesis.Config, block.Hash(), nil
+		return genesis.Config, genesis, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
@@ -187,19 +187,19 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
+			return genesis.Config, genesis, hash, &GenesisMismatchError{stored, hash}
 		}
 		block, err := genesis.Commit(db)
 		if err != nil {
-			return genesis.Config, hash, err
+			return genesis.Config, genesis, hash, err
 		}
-		return genesis.Config, block.Hash(), nil
+		return genesis.Config, genesis, block.Hash(), nil
 	}
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
+			return genesis.Config, genesis, hash, &GenesisMismatchError{stored, hash}
 		}
 	}
 	// Get the existing chain configuration.
@@ -211,32 +211,32 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
-		return newcfg, common.Hash{}, err
+		return newcfg, genesis, common.Hash{}, err
 	}
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
-		return newcfg, stored, nil
+		return newcfg, genesis, stored, nil
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
-		return storedcfg, stored, nil
+		return storedcfg, genesis, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
 	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
 	if height == nil {
-		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
+		return newcfg, genesis, stored, fmt.Errorf("missing block number for head header hash")
 	}
 	compatErr := storedcfg.CheckCompatible(newcfg, *height)
 	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
-		return newcfg, stored, compatErr
+		return newcfg, genesis, stored, compatErr
 	}
 	rawdb.WriteChainConfig(db, stored, newcfg)
-	return newcfg, stored, nil
+	return newcfg, genesis, stored, nil
 }
 
 func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
@@ -349,12 +349,12 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) (*Genesis, *types.Block) {
 	g := Genesis{
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	return g.MustCommit(db)
+	return &g, g.MustCommit(db)
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
