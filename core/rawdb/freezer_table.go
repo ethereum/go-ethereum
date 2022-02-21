@@ -509,6 +509,11 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		}
 		newDeleted = current
 	}
+	// Commit the changes of metadata file first before manipulating
+	// the indexes file.
+	if err := t.meta.Sync(); err != nil {
+		return err
+	}
 	// Truncate the deleted index entries from the index file.
 	err = copyFrom(t.index.Name(), t.index.Name(), indexEntrySize*(newDeleted-deleted+1), func(f *os.File) error {
 		tailIndex := indexEntry{
@@ -521,6 +526,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if err != nil {
 		return err
 	}
+	// Reopen the modified index file to load the changes
 	if err := t.index.Close(); err != nil {
 		return err
 	}
@@ -552,6 +558,11 @@ func (t *freezerTable) Close() error {
 		errs = append(errs, err)
 	}
 	t.index = nil
+
+	if err := t.meta.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	t.meta = nil
 
 	for _, f := range t.files {
 		if err := f.Close(); err != nil {
@@ -858,6 +869,9 @@ func (t *freezerTable) advanceHead() error {
 // operation, so use it with care.
 func (t *freezerTable) Sync() error {
 	if err := t.index.Sync(); err != nil {
+		return err
+	}
+	if err := t.meta.Sync(); err != nil {
 		return err
 	}
 	return t.head.Sync()
