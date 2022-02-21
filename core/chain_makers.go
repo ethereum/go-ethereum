@@ -343,14 +343,24 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			kvs := statedb.Witness().KeyVals()
 			keys := statedb.Witness().Keys()
 			for _, key := range keys {
-				// XXX workaround - there is a problem in the witness creation
-				// so fix the witness creation as well.
-				v, err := vtr.TryGet(key)
+				_, err := vtr.TryGet(key)
 				if err != nil {
 					panic(err)
 				}
-				kvs[string(key)] = v
+
+				// Sanity check: ensure all flagged addresses have an associated
+				// value: keys is built from Chunks and kvs from InitialValue.
+				if _, exists := kvs[string(key)]; !exists {
+					panic(fmt.Sprintf("address not in access witness: %x", key))
+				}
 			}
+
+			// sanity check: ensure all values correspond to a flagged key by
+			// comparing the lengths of both structures: they should be equal
+			if len(kvs) != len(keys) {
+				panic("keys without a value in witness")
+			}
+
 			vtr.Hash()
 			p, k, err := vtr.ProveAndSerialize(keys, kvs)
 			block.SetVerkleProof(p, k)

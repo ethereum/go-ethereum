@@ -36,7 +36,7 @@ var (
 	HeaderStorageOffset = uint256.NewInt(64)
 	CodeOffset          = uint256.NewInt(128)
 	MainStorageOffset   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
-	VerkleNodeWidth     = uint256.NewInt(8)
+	VerkleNodeWidth     = uint256.NewInt(256)
 	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 )
 

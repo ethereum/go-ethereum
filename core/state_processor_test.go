@@ -381,17 +381,27 @@ func TestProcessStateless(t *testing.T) {
 	genesis := gspec.MustCommit(db)
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
+
+	code := common.FromHex(`6060604052600a8060106000396000f360606040526008565b00`)
 	txCost1 := params.WitnessBranchWriteCost*2 + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*3 + params.WitnessChunkReadCost*10 + params.TxGas
 	txCost2 := params.WitnessBranchWriteCost + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*2 + params.WitnessChunkReadCost*10 + params.TxGas
-	blockGasUsedExpected := txCost1*2 + txCost2
+	intrinsic, _ := IntrinsicGas(code, nil, true, true, true)
+	contractCreationCost := intrinsic + (2*params.WitnessChunkReadCost+params.WitnessChunkWriteCost)*10 + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + uint64(3639) // standard cost of executing the contract
+	blockGasUsagesExpected := []uint64{txCost1*2 + txCost2, txCost1*2 + txCost2 + contractCreationCost}
 	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, gen *BlockGen) {
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{1, 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{byte(i), 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
 		tx, _ = types.SignTx(types.NewTransaction(uint64(i)*3+1, common.Address{}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
 		tx, _ = types.SignTx(types.NewTransaction(uint64(i)*3+2, common.Address{}, big.NewInt(0), txCost2, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
+
+		// Add a contract creation in block #2
+		if i == 1 {
+			tx, _ = types.SignTx(types.NewContractCreation(6, big.NewInt(16), 3000000, big.NewInt(875000000), code), signer, testKey)
+			gen.AddTx(tx)
+		}
 	})
 
 	// Uncomment to extract block #2
@@ -412,8 +422,8 @@ func TestProcessStateless(t *testing.T) {
 		if b == nil {
 			t.Fatalf("expected block %d to be present in chain", i+1)
 		}
-		if b.GasUsed() != blockGasUsedExpected {
-			t.Fatalf("expected block txs to use %d, got %d\n", blockGasUsedExpected, b.GasUsed())
+		if b.GasUsed() != blockGasUsagesExpected[i] {
+			t.Fatalf("expected block txs to use %d, got %d\n", blockGasUsagesExpected[i], b.GasUsed())
 		}
 	}
 }

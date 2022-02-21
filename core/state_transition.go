@@ -17,7 +17,6 @@
 package core
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
@@ -317,7 +316,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
-		var targetBalance, targetNonce, targetCodeSize, targetCodeKeccak, originBalance, originNonceBytes []byte
+		var originBalance, originNonceBytes []byte
 
 		targetAddr := msg.To()
 		originAddr := msg.From()
@@ -329,21 +328,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
 		originNonce := st.evm.StateDB.GetNonce(originAddr)
 		originNonceBytes = st.evm.StateDB.GetNonceLittleEndian(originAddr)
-		st.evm.Accesses.SetTxOriginTouchedLeaves(originAddr.Bytes(), originBalance, originNonceBytes)
+		st.evm.Accesses.SetTxOriginTouchedLeaves(originAddr.Bytes(), originBalance, originNonceBytes, st.evm.StateDB.GetCodeSize(originAddr))
 
 		if msg.To() != nil {
 			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value().Sign() != 0)
 			if !tryConsumeGas(&st.gas, statelessGasDest) {
 				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 			}
-			targetBalance = st.evm.StateDB.GetBalanceLittleEndian(*targetAddr)
-			targetNonce = st.evm.StateDB.GetNonceLittleEndian(*targetAddr)
-			targetCodeKeccak = st.evm.StateDB.GetCodeHash(*targetAddr).Bytes()
 
-			codeSize := uint64(st.evm.StateDB.GetCodeSize(*targetAddr))
-			var codeSizeBytes [32]byte
-			binary.LittleEndian.PutUint64(codeSizeBytes[:8], codeSize)
-			st.evm.Accesses.SetTxExistingTouchedLeaves(targetAddr.Bytes(), targetBalance, targetNonce, targetCodeSize, targetCodeKeccak)
+			// ensure the code size ends up in the access witness
+			st.evm.StateDB.GetCodeSize(*targetAddr)
 		} else {
 			contractAddr := crypto.CreateAddress(originAddr, originNonce)
 			if !tryConsumeGas(&st.gas, st.evm.Accesses.TouchAndChargeContractCreateInit(contractAddr.Bytes(), msg.Value().Sign() != 0)) {

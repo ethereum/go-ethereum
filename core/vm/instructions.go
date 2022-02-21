@@ -347,7 +347,6 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
 		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
 		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(index)
-		interpreter.evm.Accesses.SetLeafValue(index, uint256.NewInt(cs).Bytes())
 		scope.Contract.UseGas(statelessGas)
 	}
 	slot.SetUint64(cs)
@@ -398,7 +397,6 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 		startOffset         uint64
 		endOffset           uint64
 		numLeaves           uint64
-		index               [32]byte
 	)
 	// startLeafOffset, endLeafOffset is the evm code offset of the first byte in the first leaf touched
 	// and the evm code offset of the last byte in the last leaf touched
@@ -410,25 +408,12 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 	}
 	endLeafOffset = endOffset + (endOffset % 31)
 	numLeaves = (endLeafOffset - startLeafOffset) / 31
-	chunkOffset := new(uint256.Int)
-	treeIndex := new(uint256.Int)
 
 	for i := 0; i < int(numLeaves); i++ {
-		chunkOffset.Add(trieUtils.CodeOffset, uint256.NewInt(uint64(i)))
-		treeIndex.Div(chunkOffset, trieUtils.VerkleNodeWidth)
-		var subIndex byte
-		subIndexMod := chunkOffset.Mod(chunkOffset, trieUtils.VerkleNodeWidth).Bytes()
-		if len(subIndexMod) == 0 {
-			subIndex = 0
-		} else {
-			subIndex = subIndexMod[0]
-		}
-		treeKey := trieUtils.GetTreeKey(address, treeIndex, subIndex)
-		copy(index[0:31], treeKey)
-		index[31] = subIndex
+		index := trieUtils.GetTreeKeyCodeChunk(address, uint256.NewInt(uint64(i)))
 
 		// TODO safe-add here to catch overflow
-		statelessGasCharged += accesses.TouchAddressOnReadAndComputeGas(index[:])
+		statelessGasCharged += accesses.TouchAddressOnReadAndComputeGas(index)
 		var value []byte
 		if code != nil && len(code) > 0 {
 			// the offset into the leaf that the first PUSH occurs

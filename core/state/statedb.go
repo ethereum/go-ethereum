@@ -607,13 +607,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			}
 		}
 
-		// NOTE: Do not touch the addresses here, kick the can down the
-		// road. That is because I don't want to change the interface
-		// to getDeletedStateObject at this stage, as the PR would then
-		// have a huge footprint.
-		// The alternative is to make accesses available via the state
-		// db instead of the evm. This requires a significant rewrite,
-		// that isn't currently warranted.
 	}
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
