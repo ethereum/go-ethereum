@@ -500,6 +500,11 @@ func (tx *Transaction) WrapDataSize() common.StorageSize {
 	return size
 }
 
+// IsIncomplete returns true if the transaction can be wrapped but is not.
+func (tx *Transaction) IsIncomplete() bool {
+	return tx.Type() == BlobTxType && tx.wrapData == nil
+}
+
 func (tx *Transaction) CheckWrapData() error {
 	if tx.wrapData != nil {
 		return tx.wrapData.checkWrapping(tx.inner)

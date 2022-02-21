@@ -1293,6 +1293,16 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
+					// transactions that contained blobs might not have the wrapData anymore
+					// if not retrieved from block cache since wrap data is not persisted. Discord those.
+					j := 0
+					for _, tx := range discarded {
+						if !tx.IsIncomplete() {
+							discarded[j] = tx
+							j++
+						}
+					}
+					discarded = discarded[:j]
 					included = append(included, add.Transactions()...)
 					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
