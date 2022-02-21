@@ -92,22 +92,8 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 	return h
 }
 
-func NewHandler(connCtx context.Context, reg *serviceRegistry) *handler {
-	rootCtx, cancelRoot := context.WithCancel(connCtx)
-	h := &handler{
-		reg:            reg,
-		idgen:          randomIDGenerator(),
-		conn:           nil,
-		respWait:       make(map[string]*requestOp),
-		clientSubs:     make(map[string]*ClientSubscription),
-		rootCtx:        rootCtx,
-		cancelRoot:     cancelRoot,
-		allowSubscribe: true,
-		serverSubs:     make(map[ID]*Subscription),
-		log:            log.Root(),
-	}
-	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
-	return h
+func NewHandler(connCtx context.Context, conn jsonWriter, reg *serviceRegistry) *handler {
+	return newHandler(connCtx, conn, randomIDGenerator(), reg)
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
@@ -310,7 +296,7 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 }
 
 // handleCallMsg executes a call message and returns the answer.
-func (h *handler) HandleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	start := time.Now()
 	switch {
 	case msg.isNotification():
@@ -336,6 +322,10 @@ func (h *handler) HandleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	default:
 		return errorMessage(&invalidRequestError{"invalid request"})
 	}
+}
+
+func (h *handler) HandleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+	return h.handleCallMsg(ctx, msg)
 }
 
 // handleCall processes method calls.

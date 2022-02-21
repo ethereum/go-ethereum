@@ -26,7 +26,7 @@ func open_database(datadir *C.char) C.int {
 		return C.int(-1)
 	}
 	go_datadir := C.GoString(datadir)
-	stack, _ = makeFullNode(go_datadir)
+	stack, _ = makeReadOnlyNode(go_datadir)
 	if err := startNode(stack, false); err != nil {
 		return C.int(-1)
 	}
@@ -38,7 +38,8 @@ func wrapper_call(cargs *C.char, clen C.int) (*C.char, C.int) {
 	rawData := C.GoBytes(unsafe.Pointer(cargs), clen)
 	server, _ := stack.RPCHandler()
 	msg, _ := rpc.ParseMessage(rawData)
-	h := rpc.NewHandler(context.Background(), server.Services())
+	var test = rpc.NewFuncCodec(nil, nil, nil)
+	h := rpc.NewHandler(context.Background(), test, server.Services())
 	tmp := h.HandleCallMsg(rpc.DefaultCallProc(), msg[0]).String()
 	res := C.CString(tmp)
 	return res, C.int(len(tmp))
@@ -51,9 +52,10 @@ func close_database() {
 
 func startNode(stack *node.Node, isConsole bool) error {
 	debug.Memsize.Add("node", stack)
-	StartNode(stack, isConsole)
+	StartNode(stack)
 	return nil
 }
 
 func main() {
+
 }
