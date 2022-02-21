@@ -18,13 +18,18 @@ package rawdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sync/atomic"
 	"testing"
+	"testing/quick"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
@@ -1078,5 +1083,214 @@ func TestFreezerReadonly(t *testing.T) {
 	}
 	if writeErr == nil {
 		t.Fatalf("Writing to readonly table should fail")
+	}
+}
+
+// randTest performs random freezer table operations.
+// Instances of this test are created by Generate.
+type randTest []randTestStep
+
+type randTestStep struct {
+	op     int
+	items  []uint64 // for append and retrieve
+	blobs  [][]byte // for append
+	target uint64   // for truncate(head/tail)
+	err    error    // for debugging
+}
+
+const (
+	opReload = iota
+	opAppend
+	opRetrieve
+	opTruncateHead
+	opTruncateHeadAll
+	opTruncateTail
+	opTruncateTailAll
+	opCheckAll
+	opMax // boundary value, not an actual op
+)
+
+func getVals(first uint64, n int) [][]byte {
+	var ret [][]byte
+	for i := 0; i < n; i++ {
+		val := make([]byte, 8)
+		binary.BigEndian.PutUint64(val, first+uint64(i))
+		ret = append(ret, val)
+	}
+	return ret
+}
+
+func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
+	var (
+		deleted uint64   // The number of deleted items from tail
+		items   []uint64 // The index of entries in table
+
+		// getItems retrieves the indexes for items in table.
+		getItems = func(n int) []uint64 {
+			length := len(items)
+			if length == 0 {
+				return nil
+			}
+			var ret []uint64
+			index := rand.Intn(length)
+			for i := index; len(ret) < n && i < length; i++ {
+				ret = append(ret, items[i])
+			}
+			return ret
+		}
+
+		// addItems appends the given length items into the table.
+		addItems = func(n int) []uint64 {
+			var first = deleted
+			if len(items) != 0 {
+				first = items[len(items)-1] + 1
+			}
+			var ret []uint64
+			for i := 0; i < n; i++ {
+				ret = append(ret, first+uint64(i))
+			}
+			items = append(items, ret...)
+			return ret
+		}
+	)
+
+	var steps randTest
+	for i := 0; i < size; i++ {
+		step := randTestStep{op: r.Intn(opMax)}
+		switch step.op {
+		case opReload, opCheckAll:
+		case opAppend:
+			num := r.Intn(3)
+			step.items = addItems(num)
+			if len(step.items) == 0 {
+				step.blobs = nil
+			} else {
+				step.blobs = getVals(step.items[0], num)
+			}
+		case opRetrieve:
+			step.items = getItems(r.Intn(3))
+		case opTruncateHead:
+			if len(items) == 0 {
+				step.target = deleted
+			} else {
+				index := r.Intn(len(items))
+				items = items[:index]
+				step.target = deleted + uint64(index)
+			}
+		case opTruncateHeadAll:
+			step.target = deleted
+			items = items[:0]
+		case opTruncateTail:
+			if len(items) == 0 {
+				step.target = deleted
+			} else {
+				index := r.Intn(len(items))
+				items = items[index:]
+				deleted += uint64(index)
+				step.target = deleted
+			}
+		case opTruncateTailAll:
+			step.target = deleted + uint64(len(items))
+			items = items[:0]
+			deleted = step.target
+		}
+		steps = append(steps, step)
+	}
+	return reflect.ValueOf(steps)
+}
+
+func runRandTest(rt randTest) bool {
+	fname := fmt.Sprintf("randtest-%d", rand.Uint64())
+	f, err := newTable(os.TempDir(), fname, metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+	if err != nil {
+		panic("failed to initialize table")
+	}
+	var values [][]byte
+	for i, step := range rt {
+		switch step.op {
+		case opReload:
+			f.Close()
+			f, err = newTable(os.TempDir(), fname, metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true, false)
+			if err != nil {
+				rt[i].err = fmt.Errorf("failed to reload table %v", err)
+			}
+		case opCheckAll:
+			tail := atomic.LoadUint64(&f.itemHidden)
+			head := atomic.LoadUint64(&f.items)
+
+			if tail == head {
+				continue
+			}
+			got, err := f.RetrieveItems(atomic.LoadUint64(&f.itemHidden), head-tail, 100000)
+			if err != nil {
+				rt[i].err = err
+			} else {
+				if !reflect.DeepEqual(got, values) {
+					rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v", got, values)
+				}
+			}
+
+		case opAppend:
+			batch := f.newBatch()
+			for i := 0; i < len(step.items); i++ {
+				batch.AppendRaw(step.items[i], step.blobs[i])
+			}
+			batch.commit()
+			values = append(values, step.blobs...)
+
+		case opRetrieve:
+			var blobs [][]byte
+			if len(step.items) == 0 {
+				continue
+			}
+			tail := atomic.LoadUint64(&f.itemHidden)
+			for i := 0; i < len(step.items); i++ {
+				blobs = append(blobs, values[step.items[i]-tail])
+			}
+			got, err := f.RetrieveItems(step.items[0], uint64(len(step.items)), 100000)
+			if err != nil {
+				rt[i].err = err
+			} else {
+				if !reflect.DeepEqual(got, blobs) {
+					rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v %v", got, blobs, step.items)
+				}
+			}
+
+		case opTruncateHead:
+			f.truncateHead(step.target)
+
+			length := atomic.LoadUint64(&f.items) - atomic.LoadUint64(&f.itemHidden)
+			values = values[:length]
+
+		case opTruncateHeadAll:
+			f.truncateHead(step.target)
+			values = nil
+
+		case opTruncateTail:
+			prev := atomic.LoadUint64(&f.itemHidden)
+			f.truncateTail(step.target)
+
+			truncated := atomic.LoadUint64(&f.itemHidden) - prev
+			values = values[truncated:]
+
+		case opTruncateTailAll:
+			f.truncateTail(step.target)
+			values = nil
+		}
+		// Abort the test on error.
+		if rt[i].err != nil {
+			return false
+		}
+	}
+	f.Close()
+	return true
+}
+
+func TestRandom(t *testing.T) {
+	if err := quick.Check(runRandTest, nil); err != nil {
+		if cerr, ok := err.(*quick.CheckError); ok {
+			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
+		}
+		t.Fatal(err)
 	}
 }
