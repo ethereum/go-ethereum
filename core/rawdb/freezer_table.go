@@ -515,15 +515,8 @@ func (t *freezerTable) truncateTail(items uint64) error {
 			filenum: newTailId,
 			offset:  uint32(newDeleted),
 		}
-		encoded := tailIndex.append(nil)
-		n, err := f.Write(encoded)
-		if err != nil {
-			return err
-		}
-		if n != len(encoded) {
-			return fmt.Errorf("faield to write zero index %d %d", len(encoded), n)
-		}
-		return nil
+		_, err := f.Write(tailIndex.append(nil))
+		return err
 	})
 	if err != nil {
 		return err
@@ -531,12 +524,10 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if err := t.index.Close(); err != nil {
 		return err
 	}
-	offsets, err := openFreezerFileForAppend(t.index.Name())
+	t.index, err = openFreezerFileForAppend(t.index.Name())
 	if err != nil {
 		return err
 	}
-	t.index = offsets
-
 	// Release any files before the current tail
 	t.tailId = newTailId
 	atomic.StoreUint64(&t.itemOffset, newDeleted)

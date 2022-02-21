@@ -88,12 +88,7 @@ func writeMetadata(file *os.File, meta *freezerTableMeta) error {
 	if err != nil {
 		return err
 	}
-	encoded, err := rlp.EncodeToBytes(meta)
-	if err != nil {
-		return err
-	}
-	_, err = file.Write(encoded)
-	return err
+	return rlp.Encode(file, meta)
 }
 
 // loadMetadata loads the metadata from the given metadata file.

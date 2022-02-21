@@ -48,14 +48,14 @@ func TestInitializeFreezerTableMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create file %v", err)
 	}
-	meta, err := loadMetadata(f, uint64(0))
+	meta, err := loadMetadata(f, uint64(100))
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
 	}
 	if meta.version != freezerVersion {
 		t.Fatalf("Unexpected version field")
 	}
-	if meta.VirtualTail != uint64(0) {
+	if meta.VirtualTail != uint64(100) {
 		t.Fatalf("Unexpected virtual tail field")
 	}
 }
