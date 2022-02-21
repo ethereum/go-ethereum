@@ -159,30 +159,31 @@ func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
 type BlobKzgs []KZGCommitment
 
 func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
-	*li = make([]KZGCommitment, MAX_TX_WRAP_KZG_COMMITMENTS, MAX_TX_WRAP_KZG_COMMITMENTS)
-	return dr.Vector(func(i uint64) codec.Deserializable {
+	return dr.List(func() codec.Deserializable {
+		i := len(*li)
+		*li = append(*li, KZGCommitment{})
 		return &(*li)[i]
 	}, 48, MAX_TX_WRAP_KZG_COMMITMENTS)
 }
 
-func (a BlobKzgs) Serialize(w *codec.EncodingWriter) error {
-	return w.Vector(func(i uint64) codec.Serializable {
-		return &a[i]
-	}, 48, MAX_TX_WRAP_KZG_COMMITMENTS)
+func (li BlobKzgs) Serialize(w *codec.EncodingWriter) error {
+	return w.List(func(i uint64) codec.Serializable {
+		return &li[i]
+	}, 48, uint64(len(li)))
 }
 
-func (a BlobKzgs) ByteLength() uint64 {
-	return MAX_TX_WRAP_KZG_COMMITMENTS * 48
+func (li BlobKzgs) ByteLength() uint64 {
+	return uint64(len(li)) * 48
 }
 
-func (a *BlobKzgs) FixedLength() uint64 {
-	return MAX_TX_WRAP_KZG_COMMITMENTS * 48
+func (li *BlobKzgs) FixedLength() uint64 {
+	return 0
 }
 
 func (li BlobKzgs) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.ComplexVectorHTR(func(i uint64) tree.HTR {
+	return hFn.ComplexListHTR(func(i uint64) tree.HTR {
 		return &li[i]
-	}, MAX_TX_WRAP_KZG_COMMITMENTS)
+	}, uint64(len(li)), MAX_TX_WRAP_KZG_COMMITMENTS)
 }
 
 func (li BlobKzgs) copy() BlobKzgs {
@@ -315,6 +316,9 @@ func (b *BlobTxWrapData) blobs() Blobs {
 }
 
 func (b *BlobTxWrapData) encodeTyped(w io.Writer, txdata TxData) error {
+	if _, err := w.Write([]byte{BlobTxType}); err != nil {
+		return err
+	}
 	blobTx, ok := txdata.(*SignedBlobTx)
 	if !ok {
 		return fmt.Errorf("expected signed blob tx, got %T", txdata)

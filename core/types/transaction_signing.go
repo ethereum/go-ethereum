@@ -106,8 +106,8 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 }
 
 // SignNewTx creates a transaction and signs it.
-func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, error) {
-	tx := NewTx(txdata)
+func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData, options ...TxOption) (*Transaction, error) {
+	tx := NewTx(txdata, options...)
 	h := s.Hash(tx)
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
@@ -118,8 +118,8 @@ func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, er
 
 // MustSignNewTx creates a transaction and signs it.
 // This panics if the transaction cannot be signed.
-func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction {
-	tx, err := SignNewTx(prv, s, txdata)
+func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData, options ...TxOption) *Transaction {
+	tx, err := SignNewTx(prv, s, txdata, options...)
 	if err != nil {
 		panic(err)
 	}

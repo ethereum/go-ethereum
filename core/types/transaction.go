@@ -68,18 +68,22 @@ type Transaction struct {
 	wrapData TxWrapData
 }
 
+type TxOption func(tx *Transaction)
+
 // NewTx creates a new transaction.
-func NewTx(inner TxData) *Transaction {
+func NewTx(inner TxData, options ...TxOption) *Transaction {
 	tx := new(Transaction)
 	tx.setDecoded(inner.copy(), 0)
+	for _, txOpt := range options {
+		txOpt(tx)
+	}
 	return tx
 }
 
-func NewTxWrapped(inner TxData, wrapData TxWrapData) *Transaction {
-	tx := new(Transaction)
-	tx.setDecoded(inner.copy(), 0)
-	tx.wrapData = wrapData.copy()
-	return tx
+func WithTxWrapData(wrapData TxWrapData) TxOption {
+	return func(tx *Transaction) {
+		tx.wrapData = wrapData.copy()
+	}
 }
 
 type TxWrapData interface {
@@ -519,7 +523,11 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	}
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
-	return &Transaction{inner: cpy, time: tx.time}, nil
+	out := &Transaction{inner: cpy, time: tx.time}
+	if tx.wrapData != nil {
+		out.wrapData = tx.wrapData.copy()
+	}
+	return out, nil
 }
 
 func (tx *Transaction) BlobVersionedHashes() []common.Hash {
