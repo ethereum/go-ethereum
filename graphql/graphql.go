@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -280,6 +281,33 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 		return nil, nil
 	case types.DynamicFeeTxType:
 		return (*hexutil.Big)(tx.GasTipCap()), nil
+	default:
+		return nil, nil
+	}
+}
+
+func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+	header, err := t.block.resolveHeader(ctx)
+	if err != nil || header == nil {
+		return nil, err
+	}
+	if header.BaseFee == nil {
+		return (*hexutil.Big)(tx.GasPrice()), nil
+	}
+
+	switch tx.Type() {
+	case types.AccessListTxType:
+		return nil, nil
+	case types.DynamicFeeTxType:
+		tip, err := tx.EffectiveGasTip(header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		return (*hexutil.Big)(tip), nil
 	default:
 		return nil, nil
 	}
@@ -596,6 +624,19 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 		return nil, nil
 	}
 	return (*hexutil.Big)(header.BaseFee), nil
+}
+
+func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.BaseFee == nil {
+		return nil, nil
+	}
+	chaincfg := b.backend.ChainConfig()
+	nextBaseFee := misc.CalcBaseFee(chaincfg, header)
+	return (*hexutil.Big)(nextBaseFee), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {

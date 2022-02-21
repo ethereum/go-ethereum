@@ -98,6 +98,8 @@ const schema string = `
 		maxFeePerGas: BigInt
         # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei. 
 		maxPriorityFeePerGas: BigInt
+        # EffectiveTip is the actual amount of reward going to miner after considering the max fee cap.
+        effectiveTip: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
         gas: Long!
         # InputData is the data supplied to the target of the transaction.
@@ -187,8 +189,10 @@ const schema string = `
         gasLimit: Long!
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
-        # BaseFeePerGas is the fee perunit of gas burned by the protocol in this block.
+        # BaseFeePerGas is the fee per unit of gas burned by the protocol in this block.
 		baseFeePerGas: BigInt
+		# NextBaseFeePerGas is the fee per unit of gas which needs to be burned in the next block.
+		nextBaseFeePerGas: BigInt
         # Timestamp is the unix timestamp at which this block was mined.
         timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
