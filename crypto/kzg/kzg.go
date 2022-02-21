@@ -2,41 +2,53 @@ package kzg
 
 import (
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/params"
-	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
 )
 
-var kzg_settings gokzg.KZGSettings
-var lagrange_crs []bls.G1Point
+var crsG2 []bls.G2Point
+var crsLagrange []bls.G1Point
+var CrsG1 []bls.G1Point // only used in tests (for proof creation)
 
-type JSONTrustedSetup struct {
-	SetupG1       []bls.G1Point
-	SetupG2       []bls.G2Point
-	SetupLagrange []bls.G1Point
-}
-
+// Convert polynomial in evaluation form to KZG commitment
 func BlobToKzg(eval []bls.Fr) *bls.G1Point {
-	// Convert polynomial in evaluation form to KZG commitment
-
-	// XXX evaluation points?
-	return bls.LinCombG1(lagrange_crs, eval)
+	return bls.LinCombG1(crsLagrange, eval)
 }
 
+// Verify a KZG proof
 func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1Point) bool {
-	return kzg_settings.CheckProofSingle(commitment, proof, x, y)
-}
+	// Verify the pairing equation
+	var xG2 bls.G2Point
+	bls.MulG2(&xG2, &bls.GenG2, x)
+	var sMinuxX bls.G2Point
+	bls.SubG2(&sMinuxX, &crsG2[1], &xG2)
+	var yG1 bls.G1Point
+	bls.MulG1(&yG1, &bls.GenG1, y)
+	var commitmentMinusY bls.G1Point
+	bls.SubG1(&commitmentMinusY, commitment, &yG1)
 
-func ComputeProof(polyCoeff []bls.Fr, x uint64) *bls.G1Point {
-	return kzg_settings.ComputeProofSingle(polyCoeff, x)
+	// This trick may be applied in the BLS-lib specific code:
+	//
+	// e([commitment - y], [1]) = e([proof],  [s - x])
+	//    equivalent to
+	// e([commitment - y]^(-1), [1]) * e([proof],  [s - x]) = 1_T
+	//
+	return bls.PairingsVerify(&commitmentMinusY, &bls.GenG2, proof, &sMinuxX)
 }
 
 func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
 	h := crypto.Keccak256Hash(bls.ToCompressedG1(commitment))
 	h[0] = byte(params.BlobCommitmentVersionKZG)
 	return h
+}
+
+type JSONTrustedSetup struct {
+	SetupG1       []bls.G1Point
+	SetupG2       []bls.G2Point
+	SetupLagrange []bls.G1Point
 }
 
 // Initialize KZG subsystem (load the trusted setup data)
@@ -49,7 +61,7 @@ func init() {
 		panic(err)
 	}
 
-	kzg_settings.SecretG1 = parsedSetup.SetupG1
-	kzg_settings.SecretG2 = parsedSetup.SetupG2
-	lagrange_crs = parsedSetup.SetupLagrange
+	crsG2 = parsedSetup.SetupG2
+	crsLagrange = parsedSetup.SetupLagrange
+	CrsG1 = parsedSetup.SetupG1
 }
