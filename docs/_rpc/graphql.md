@@ -3,23 +3,52 @@ title: GraphQL Server
 sort_key: C
 ---
 
-In addition to the [JSON-RPC APIs](../rpc/server), Geth supports the GraphQL API as specified by [EIP-1767](eip-1767). GraphQL lets you specify which fields of an objects you need as part of the query, eliminating the extra load on the client for filling in fields which are not needed. It also allows for combining several traditional JSON-RPC requests into one query which translates into less overhead and more performance.
+In addition to the [JSON-RPC APIs](../rpc/server), Geth supports the GraphQL API as specified by [EIP-1767](eip-1767). 
+GraphQL lets you specify which fields of an object you need as part of the query eliminating 
+the extra load on the client for filling in fields that are not needed. It also allows for 
+combining several traditional JSON-RPC requests into one query, resulting in less overhead 
+and more performance.
 
-The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence you'll have to enable and configure the relevant `--http` flags, and the `--graphql` flag itself:
+
+This flag `--graphql` enables GraphQL and GraphQL UI on the HTTP-RPC server. The geth graphql
+listens to `http://127.0.0.1:8545/graphql` as default IP and port and 
+you can access the graphql UI via `http://127.0.0.1:8545/graphql/ui`, see the image below.
 
 ```bash
 geth --http --graphql
 ```
 
-Now you can start querying against `http://localhost:8545/graphql`. To change the port, you'll need to provide `--http.port`, e.g.:
+Now you can start querying against `http://localhost:8545/graphql`. 
+
+![GraphQl UI](../../static/images/graphqlui.png)
+
+
+> Starting an HTTP server is required to enable GraphQL and GraphQL UI.
+
+
+If you want to enable access to the API from a web page,
+you must configure geth graphql server to accept Cross-Origin 
+requests with the `--graphql.corsdomain flag`. Also, you can add 
+more than one domain to accept cross-origin requests by separating them with a comma (,).
 
 ```bash
-geth --http --http.port 9545 --graphql
+geth --http --graphql --http.corsdomain "*"
+```
+
+To enable access to the virtual hostnames from a server,
+you will configure geth graphql server to accept requests 
+from that hostname with the `--graphql.vhosts` flag. Also, 
+you can add more than one hostname using the flag.
+
+```bash
+geth --http --graphql.vhosts http://localhost:9002/
 ```
 
 ### GraphiQL
 
-An easy way to get started right away and try out queries is the GraphiQL interface shipped with Geth. To open it visit `http://localhost:8545/graphql/ui`. To see how this works let's read the sender, recipient and value of all transactions in block number 6000000. Try this out in GraphiQL:
+An easy way to get started and try out queries is the GraphiQL interface shipped with Geth.
+To open it, visit `http://localhost:8545/graphql/ui`. To see how this works, read the sender, 
+recipient, and value of all transactions in block number 6000000. Then, try this out in GraphiQL:
 
 ```graphql
 query txInfo {
@@ -27,11 +56,18 @@ query txInfo {
 }
 ```
 
-GraphiQL also provides a way to explore the schema Geth provides to help you formulate your queries, which you can see on the right sidebar. Under the title `Root Types` click on `Query` to see the high-level types and their fields.
+GraphiQL also provides a way to explore Geth's schema to help you formulate your queries,
+which you can see on the right sidebar. For example, click on `Query` under the title `Root
+Types` to see the high-level types and their fields.
 
 ### Query
 
-Reading out data from Geth is the biggest use-case for GraphQL. However after trying out queries in the UI you may want to do it programmatically. You can consult the official [docs](graphql-code) to find bindings for your language. Or use your favorite tool for sending HTTP requests. For sake of completeness we briefly touch on two approaches here. First via cURL, and second via a JS script.
+Reading out data from Geth is the most significant use-case for GraphQL.
+However, after trying out queries in the graphql UI, you may want to do 
+it programmatically. For example, you can consult the official [docs](graphql-code) to 
+find bindings for your language. Or use your favorite tool for sending 
+HTTP requests. For completeness, we briefly touch on two approaches here: **cURL** and a **JS script**.
+
 
 Here's how you'd get the latest block's number via cURL. Note the use of a JSON object for the data section:
 
