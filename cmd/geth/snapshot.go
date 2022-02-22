@@ -314,8 +314,7 @@ func traverseState(ctx *cli.Context) error {
 			}
 		}
 		if !bytes.Equal(acc.CodeHash, emptyCode) {
-			code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-			if len(code) == 0 {
+			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
 				return errors.New("missing code")
 			}
@@ -433,8 +432,7 @@ func traverseRawState(ctx *cli.Context) error {
 				}
 			}
 			if !bytes.Equal(acc.CodeHash, emptyCode) {
-				code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-				if len(code) == 0 {
+				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
 					return errors.New("missing code")
 				}
