@@ -256,6 +256,9 @@ js:
           type: 'GET',
           error: function() {
             alert("Failed to load releases!");
+            // Remove the modal blocker, so the user can at least access the things which have loaded
+            $('#loader, .modal-backdrop').remove();
+            $('body').removeClass('modal-open');
           },
           dataType: 'xml',
           timeout: 3 * 60 * 1000,
