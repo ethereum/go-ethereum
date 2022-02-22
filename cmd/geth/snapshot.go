@@ -386,11 +386,10 @@ func traverseRawState(ctx *cli.Context) error {
 		nodes += 1
 		node := accIter.Hash()
 
+		// Check the present for non-empty hash node(embedded node doesn't
+		// have their own hash).
 		if node != (common.Hash{}) {
-			// Check the present for non-empty hash node(embedded node doesn't
-			// have their own hash).
-			blob := rawdb.ReadTrieNode(chaindb, node)
-			if len(blob) == 0 {
+			if !rawdb.HasTrieNode(chaindb, node) {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
 			}
