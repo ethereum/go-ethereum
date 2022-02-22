@@ -109,38 +109,6 @@ access to these methods increases the attack surface.
 
     geth --ws --ws.port 3334 --ws.api eth,net,web3
 
-### GraphQl
-
-This flag enables GraphQL and GraphQL UI on the HTTP-RPC server. The geth graphql
-listens to `http://127.0.0.1:8545/graphql` as default IP and port and 
-you can access the graphql UI via `http://127.0.0.1:8545/graphql/ui`, see the image below.
-
-     geth --graphql
-
-
-![GraphQl UI](../../static/images/graphqlui.png)
-
-
-> Starting an HTTP server is required to enable GraphQL and GraphQL UI.
-
-
-If you want to enable access to the API from a web page,
-you must configure geth graphql server to accept Cross-Origin 
-requests with the `--graphql.corsdomain flag`. Also, you can add 
-more than one domain to accept cross-origin requests by separating them with a comma (,).
-
-    geth --http --graphql --http.corsdomain "*"
-
-
-To enable access to the virtual hostnames from a server,
-you will configure geth graphql server to accept requests 
-from that hostname with the `--graphql.vhosts` flag. Also, 
-you can add more than one hostname using the flag.
-
-
-    geth --http --graphql.vhosts http://localhost:9002/
-
-
 ### RPC Server
 
   
