@@ -400,8 +400,10 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// checked for potential assignment or reassignment
 			peerid := event.peer.id
 			if event.join {
+				log.Debug("Joining skeleton peer", "id", peerid)
 				s.idles[peerid] = event.peer
 			} else {
+				log.Debug("Leaving skeleton peer", "id", peerid)
 				s.revertRequests(peerid)
 				delete(s.idles, peerid)
 			}
@@ -763,8 +765,8 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 			// is correct too, deliver for storage
 			for i := 0; i < len(headers)-1; i++ {
 				if headers[i].ParentHash != headers[i+1].Hash() {
-					peer.log.Debug("Invalid genesis header count", "have", len(headers), "want", headers[0].Number.Uint64())
-					res.Done <- errors.New("not enough genesis headers delivered")
+					peer.log.Debug("Invalid hash progression", "index", i, "wantparenthash", headers[i].ParentHash, "haveparenthash", headers[i+1].Hash())
+					res.Done <- errors.New("invalid hash progression")
 					s.scheduleRevertRequest(req)
 					return
 				}
