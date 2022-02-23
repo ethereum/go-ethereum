@@ -29,6 +29,9 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test: all
+	# genesis test
+	cd ${PWD}/cmd/geth; go test -test.run TestCustomGenesis
+	# module test
 	$(GORUN) build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie
 
 lint: ## Run linters.

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"os/exec"
 	"regexp"
@@ -34,6 +35,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 func NewTestCmd(t *testing.T, data interface{}) *TestCmd {
@@ -165,7 +167,7 @@ func (tt *TestCmd) ExpectRegexp(regex string) (*regexp.Regexp, []string) {
 	)
 	tt.withKillTimeout(func() { matches = re.FindReaderSubmatchIndex(rtee) })
 	output := rtee.buf.Bytes()
-	if matches == nil {
+	if matches == nil && !bigCmp(string(output), regex) {
 		tt.Fatalf("Output did not match:\n---------------- (stdout text)\n%s\n---------------- (regular expression)\n%s",
 			output, regex)
 		return re, nil
@@ -177,6 +179,22 @@ func (tt *TestCmd) ExpectRegexp(regex string) (*regexp.Regexp, []string) {
 		submatches = append(submatches, submatch)
 	}
 	return re, submatches
+}
+
+// Scientific notation compare with Hexadecimal string
+// e.g. 9.04625697166532776746648320380374280103671755200316906558262375061821325312e+74 compare with 0x200000000000000000000000000000000000000000000000000000000000000
+func bigCmp(val, content string) bool {
+	val = strings.Trim(val, "\n")
+	flt, _, err := big.ParseFloat(val, 10, 0, big.ToNearestAway)
+	if err != nil {
+		return false
+	}
+	bigData := new(big.Int).SetBytes(common.FromHex(content))
+
+	compare := new(big.Float)
+	compare.SetInt(bigData)
+
+	return compare.Cmp(flt) == 0
 }
 
 // ExpectExit expects the child process to exit within 5s without
