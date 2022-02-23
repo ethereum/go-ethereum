@@ -352,7 +352,6 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 		if len(jwtSecret) == 32 {
 			return jwtSecret, nil
 		}
-		log.Warn("Discarding provided jwt secret", "size", len(jwtSecret))
 	}
 	jwtFile := n.ResolvePath(datadirJWTKey)
 	log.Debug("Reading jwt-key", "path", jwtFile)
