@@ -62,6 +62,8 @@ type EVMInterpreter struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	transient *transientStore // Transient Storage
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
@@ -102,8 +104,9 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 
 	return &EVMInterpreter{
-		evm: evm,
-		cfg: cfg,
+		evm:       evm,
+		cfg:       cfg,
+		transient: NewTransientStore(),
 	}
 }
 

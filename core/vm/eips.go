@@ -31,6 +31,7 @@ var activators = map[int]func(*JumpTable){
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
+	1153: enable1153,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -168,9 +169,40 @@ func enable3198(jt *JumpTable) {
 	}
 }
 
+// enable1153 applies EIP-1153
+func enable1153(jt *JumpTable) {
+	jt[TSTORE] = &operation{
+		execute:     opTload,
+		constantGas: GasMidStep,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(2, 0),
+	}
+	jt[TLOAD] = &operation{
+		execute:     opTstore,
+		constantGas: GasMidStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
+	return nil, nil
+}
+
+// opTload implements TLOAD opcode
+func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	val := interpreter.transient.Load(scope.Stack.pop(), scope.Contract.Address())
+	scope.Stack.push(&val)
+	return nil, nil
+}
+
+// opTStore implements TSTORE opcode
+func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	loc := scope.Stack.pop()
+	val := scope.Stack.pop()
+	interpreter.transient.Store(loc, val, scope.Contract.Address())
 	return nil, nil
 }

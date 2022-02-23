@@ -175,6 +175,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
+	evm.interpreter.transient.Call()
 	p, isPrecompile := evm.precompile(addr)
 
 	if !evm.StateDB.Exist(addr) {
@@ -234,12 +235,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.interpreter.transient.Revert()
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
+	} else {
+		evm.interpreter.transient.Commit()
 	}
 	return ret, gas, err
 }
@@ -264,6 +268,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		return nil, gas, ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
+	evm.interpreter.transient.Call()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Debug {
@@ -287,9 +292,12 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.interpreter.transient.Revert()
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
+	} else {
+		evm.interpreter.transient.Commit()
 	}
 	return ret, gas, err
 }
@@ -305,6 +313,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
+	evm.interpreter.transient.Call()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Debug {
@@ -327,9 +336,12 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.interpreter.transient.Revert()
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
+	} else {
+		evm.interpreter.transient.Commit()
 	}
 	return ret, gas, err
 }
@@ -349,6 +361,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
+	evm.interpreter.transient.Call()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -383,9 +396,12 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.interpreter.transient.Revert()
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
+	} else {
+		evm.interpreter.transient.Commit()
 	}
 	return ret, gas, err
 }
