@@ -100,6 +100,14 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 }
 
 func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
+	// Ask transaction pool for the nonce which includes pending transactions
+	if blockNr, ok := a.blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		nonce, err := a.backend.GetPoolNonce(ctx, a.address)
+		if err != nil {
+			return 0, err
+		}
+		return hexutil.Uint64(nonce), nil
+	}
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
@@ -372,6 +380,9 @@ func (t *Transaction) Status(ctx context.Context) (*Long, error) {
 	if err != nil || receipt == nil {
 		return nil, err
 	}
+	if len(receipt.PostState) != 0 {
+		return nil, nil
+	}
 	ret := Long(receipt.Status)
 	return &ret, nil
 }
@@ -596,21 +607,18 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
-	// If the block header hasn't been fetched, and we'll need it, fetch it.
-	if b.numberOrHash == nil && b.header == nil {
-		if _, err := b.resolveHeader(ctx); err != nil {
-			return nil, err
-		}
+	if _, err := b.resolveHeader(ctx); err != nil {
+		return nil, err
 	}
-	if b.header != nil && b.header.Number.Uint64() > 0 {
-		num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
-		return &Block{
-			backend:      b.backend,
-			numberOrHash: &num,
-			hash:         b.header.ParentHash,
-		}, nil
+	if b.header == nil || b.header.Number.Uint64() < 1 {
+		return nil, nil
 	}
-	return nil, nil
+	num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
+	return &Block{
+		backend:      b.backend,
+		numberOrHash: &num,
+		hash:         b.header.ParentHash,
+	}, nil
 }
 
 func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
@@ -1110,10 +1118,21 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	ret := make([]*Block, 0, to-from+1)
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
-		ret = append(ret, &Block{
+		block := &Block{
 			backend:      r.backend,
 			numberOrHash: &numberOrHash,
-		})
+		}
+		// Resolve the header to check for existence.
+		// Note we don't resolve block directly here since it will require an
+		// additional network request for light client.
+		h, err := block.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		} else if h == nil {
+			// Blocks after must be non-existent too, break.
+			break
+		}
+		ret = append(ret, block)
 	}
 	return ret, nil
 }

@@ -31,6 +31,7 @@ type GnosisSafeTx struct {
 	SafeTxGas      big.Int                 `json:"safeTxGas"`
 	Nonce          big.Int                 `json:"nonce"`
 	InputExpHash   common.Hash             `json:"safeTxHash"`
+	ChainId        *math.HexOrDecimal256   `json:"chainId,omitempty"`
 }
 
 // ToTypedData converts the tx to a EIP-712 Typed Data structure for signing
@@ -39,9 +40,14 @@ func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 	if tx.Data != nil {
 		data = *tx.Data
 	}
+	var domainType = []apitypes.Type{{Name: "verifyingContract", Type: "address"}}
+	if tx.ChainId != nil {
+		domainType = append([]apitypes.Type{{Name: "chainId", Type: "uint256"}}, domainType[0])
+	}
+
 	gnosisTypedData := apitypes.TypedData{
 		Types: apitypes.Types{
-			"EIP712Domain": []apitypes.Type{{Name: "verifyingContract", Type: "address"}},
+			"EIP712Domain": domainType,
 			"SafeTx": []apitypes.Type{
 				{Name: "to", Type: "address"},
 				{Name: "value", Type: "uint256"},
@@ -57,6 +63,7 @@ func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 		},
 		Domain: apitypes.TypedDataDomain{
 			VerifyingContract: tx.Safe.Address().Hex(),
+			ChainId:           tx.ChainId,
 		},
 		PrimaryType: "SafeTx",
 		Message: apitypes.TypedDataMessage{
@@ -88,6 +95,7 @@ func (tx *GnosisSafeTx) ArgsForValidation() *apitypes.SendTxArgs {
 		Nonce:    hexutil.Uint64(tx.Nonce.Uint64()),
 		Data:     tx.Data,
 		Input:    nil,
+		ChainID:  (*hexutil.Big)(tx.ChainId),
 	}
 	return args
 }

@@ -252,6 +252,10 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
+	// Sanity check, to not `panic` in state_transition
+	if prestate.Env.Random != nil && !chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
+		return NewError(ErrorConfig, errors.New("can only apply RANDOM on top of London chainrules"))
+	}
 	if env := prestate.Env; env.Difficulty == nil {
 		// If difficulty was not provided by caller, we need to calculate it.
 		switch {

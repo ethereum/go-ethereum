@@ -1067,3 +1067,36 @@ func nonRandomTrie(n int) (*Trie, map[string]*kv) {
 	}
 	return trie, vals
 }
+
+func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
+	keys := [][]byte{
+		common.Hex2Bytes("aa10000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("aa20000000000000000000000000000000000000000000000000000000000000"),
+	}
+	vals := [][]byte{
+		common.Hex2Bytes("02"),
+		common.Hex2Bytes("03"),
+	}
+	trie := new(Trie)
+	for i, key := range keys {
+		trie.Update(key, vals[i])
+	}
+	root := trie.Hash()
+	proof := memorydb.New()
+	start := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	end := common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	if err := trie.Prove(start, 0, proof); err != nil {
+		t.Fatalf("failed to prove start: %v", err)
+	}
+	if err := trie.Prove(end, 0, proof); err != nil {
+		t.Fatalf("failed to prove end: %v", err)
+	}
+
+	more, err := VerifyRangeProof(root, start, end, keys, vals, proof)
+	if err != nil {
+		t.Fatalf("failed to verify range proof: %v", err)
+	}
+	if more != false {
+		t.Error("expected more to be false")
+	}
+}

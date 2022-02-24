@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -166,6 +168,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
+func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
@@ -197,7 +202,7 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, consensus.NewMerger(rawdb.NewMemoryDatabase()))
+	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
 }
@@ -382,7 +387,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
-	var taskCh = make(chan struct{})
+	var taskCh = make(chan struct{}, 3)
 
 	taskIndex := 0
 	w.newTaskHook = func(task *task) {
@@ -519,5 +524,146 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("interval reset timeout")
+	}
+}
+
+func TestGetSealingWorkEthash(t *testing.T) {
+	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker(), false)
+}
+
+func TestGetSealingWorkClique(t *testing.T) {
+	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), false)
+}
+
+func TestGetSealingWorkPostMerge(t *testing.T) {
+	local := new(params.ChainConfig)
+	*local = *ethashChainConfig
+	local.TerminalTotalDifficulty = big.NewInt(0)
+	testGetSealingWork(t, local, ethash.NewFaker(), true)
+}
+
+func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, postMerge bool) {
+	defer engine.Close()
+
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	defer w.close()
+
+	w.setExtra([]byte{0x01, 0x02})
+	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
+
+	w.skipSealHook = func(task *task) bool {
+		return true
+	}
+	w.fullTaskHook = func() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	timestamp := uint64(time.Now().Unix())
+	assertBlock := func(block *types.Block, number uint64, coinbase common.Address, random common.Hash) {
+		if block.Time() != timestamp {
+			// Sometime the timestamp will be mutated if the timestamp
+			// is even smaller than parent block's. It's OK.
+			t.Logf("Invalid timestamp, want %d, get %d", timestamp, block.Time())
+		}
+		if len(block.Uncles()) != 0 {
+			t.Error("Unexpected uncle block")
+		}
+		_, isClique := engine.(*clique.Clique)
+		if !isClique {
+			if len(block.Extra()) != 0 {
+				t.Error("Unexpected extra field")
+			}
+			if block.Coinbase() != coinbase {
+				t.Errorf("Unexpected coinbase got %x want %x", block.Coinbase(), coinbase)
+			}
+		} else {
+			if block.Coinbase() != (common.Address{}) {
+				t.Error("Unexpected coinbase")
+			}
+		}
+		if !isClique {
+			if block.MixDigest() != random {
+				t.Error("Unexpected mix digest")
+			}
+		}
+		if block.Nonce() != 0 {
+			t.Error("Unexpected block nonce")
+		}
+		if block.NumberU64() != number {
+			t.Errorf("Mismatched block number, want %d got %d", number, block.NumberU64())
+		}
+	}
+	var cases = []struct {
+		parent       common.Hash
+		coinbase     common.Address
+		random       common.Hash
+		expectNumber uint64
+		expectErr    bool
+	}{
+		{
+			b.chain.Genesis().Hash(),
+			common.HexToAddress("0xdeadbeef"),
+			common.HexToHash("0xcafebabe"),
+			uint64(1),
+			false,
+		},
+		{
+			b.chain.CurrentBlock().Hash(),
+			common.HexToAddress("0xdeadbeef"),
+			common.HexToHash("0xcafebabe"),
+			b.chain.CurrentBlock().NumberU64() + 1,
+			false,
+		},
+		{
+			b.chain.CurrentBlock().Hash(),
+			common.Address{},
+			common.HexToHash("0xcafebabe"),
+			b.chain.CurrentBlock().NumberU64() + 1,
+			false,
+		},
+		{
+			b.chain.CurrentBlock().Hash(),
+			common.Address{},
+			common.Hash{},
+			b.chain.CurrentBlock().NumberU64() + 1,
+			false,
+		},
+		{
+			common.HexToHash("0xdeadbeef"),
+			common.HexToAddress("0xdeadbeef"),
+			common.HexToHash("0xcafebabe"),
+			0,
+			true,
+		},
+	}
+
+	// This API should work even when the automatic sealing is not enabled
+	for _, c := range cases {
+		block, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random)
+		if c.expectErr {
+			if err == nil {
+				t.Error("Expect error but get nil")
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+		}
+	}
+
+	// This API should work even when the automatic sealing is enabled
+	w.start()
+	for _, c := range cases {
+		block, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random)
+		if c.expectErr {
+			if err == nil {
+				t.Error("Expect error but get nil")
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+		}
 	}
 }
