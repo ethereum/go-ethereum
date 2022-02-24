@@ -94,6 +94,9 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+	case *WithdrawalTx:
+		enc.To = t.To()
+		enc.Value = (*hexutil.Big)(tx.Value)
 	}
 	return json.Marshal(&enc)
 }
@@ -263,6 +266,17 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
+	case WithdrawalTxType:
+		var itx WithdrawalTx
+		inner = &itx
+		if dec.To == nil {
+			return errors.New("missing required field 'to' in transaction")
+		}
+		itx.To = dec.To
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		itx.Value = (*big.Int)(dec.Value)
 	default:
 		return ErrTxTypeNotSupported
 	}

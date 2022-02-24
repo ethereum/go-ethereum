@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -46,9 +47,53 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 	return validator
 }
 
+func validateOnlyWithdrawalTransactions(txs []*types.Transaction) bool {
+	for _, tx := range txs {
+		if tx.Type() != types.WithdrawalTxType {
+			return false
+		}
+	}
+	return true
+}
+
+func validateNoWithdrawalTransactions(txs []*types.Transaction) bool {
+	for _, tx := range txs {
+		if tx.Type() == types.WithdrawalTxType {
+			return false
+		}
+	}
+	return true
+}
+
+// Return an error if the `block` fails EIP-4863 transaction ordering validation, or `nil` otherwise.
+func validateCorrectTransactionOrdering(block *types.Block) error {
+	firstUserTx := -1
+	txs := block.Transactions()
+	for i, tx := range txs {
+		if tx.Type() != types.WithdrawalTxType {
+			firstUserTx = i
+			break
+		}
+	}
+	if firstUserTx == -1 {
+		return nil
+	} else {
+		hasCorrectWithdrawalTx := validateOnlyWithdrawalTransactions(txs[:firstUserTx])
+		if !hasCorrectWithdrawalTx {
+			return errors.New("has user transactions where only withdrawal transactions should be in block body")
+		}
+		hasCorrectUserTx := validateNoWithdrawalTransactions(txs[firstUserTx:])
+		if !hasCorrectUserTx {
+			return errors.New("has withdrawal transactions where only user transactions should be in block body")
+		}
+	}
+
+	return nil
+}
+
 // ValidateBody validates the given block's uncles and verifies the block
-// header's transaction and uncle roots. The headers are assumed to be already
-// validated at this point.
+// header's transaction and uncle roots, along with transaction ordering.
+// The headers are assumed to be already validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
@@ -71,7 +116,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		return consensus.ErrPrunedAncestor
 	}
-	return nil
+	// Ensure any withdrawal transactions are before any other type of transaction.
+	return validateCorrectTransactionOrdering(block)
 }
 
 // ValidateState validates the various changes that happen after a state

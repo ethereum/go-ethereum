@@ -92,13 +92,32 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
+func applyWithdrawalTx(tx *types.Transaction, statedb *state.StateDB) (*ExecutionResult, error) {
+	statedb.AddBalance(*tx.To(), tx.Value())
+
+	// TODO emit logs?
+	// statedb.AddLog(...)
+
+	return &ExecutionResult{
+		UsedGas:    0,
+		Err:        nil,
+		ReturnData: nil,
+	}, nil
+}
+
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	var result *ExecutionResult
+	var err error
+	if config.IsShanghai(blockNumber) && tx.Type() == types.WithdrawalTxType {
+		result, err = applyWithdrawalTx(tx, statedb)
+	} else {
+		result, err = ApplyMessage(evm, msg, gp)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"container/heap"
+	"encoding/binary"
 	"errors"
 	"io"
 	"math/big"
@@ -45,6 +46,7 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	WithdrawalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -102,10 +104,27 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, buf.Bytes())
 }
 
+func encodeWithdrawalTxSSZ(w *bytes.Buffer, tx TxData) error {
+	to := tx.to()
+	_, err := w.Write(to[:])
+	if err != nil {
+		return err
+	}
+
+	value := tx.value()
+	valueBuf := make([]byte, 32)
+	value.FillBytes(valueBuf)
+	return binary.Write(w, binary.LittleEndian, valueBuf)
+}
+
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 	w.WriteByte(tx.Type())
-	return rlp.Encode(w, tx.inner)
+	if tx.Type() == WithdrawalTxType {
+		return encodeWithdrawalTxSSZ(w, tx.inner)
+	} else {
+		return rlp.Encode(w, tx.inner)
+	}
 }
 
 // MarshalBinary returns the canonical encoding of the transaction.
@@ -172,6 +191,25 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+func decodeWithdrawalTxSSZ(b []byte, tx *WithdrawalTx) error {
+	if len(b) != 52 {
+		return errors.New("withdrawal tx data is incorrectly sized")
+	}
+
+	to := common.BytesToAddress(b[:20])
+	tx.To = &to
+
+	buf := bytes.NewReader(b[20:])
+	valueBuf := make([]byte, 32)
+	err := binary.Read(buf, binary.LittleEndian, &valueBuf)
+	if err != nil {
+		return err
+	}
+
+	tx.Value = new(big.Int).SetBytes(valueBuf)
+	return nil
+}
+
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	if len(b) == 0 {
@@ -185,6 +223,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case WithdrawalTxType:
+		var inner WithdrawalTx
+		err := decodeWithdrawalTxSSZ(b[1:], &inner)
 		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
