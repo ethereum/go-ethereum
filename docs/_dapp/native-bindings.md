@@ -90,7 +90,7 @@ on the testnet to demonstrate calling contract methods. It is deployed at the ad
 `0x21e6fc92f93c8a1bb41e2be64b4e1f88a54d3576`.
 
 To run the snippet below, please ensure a Geth instance is running and attached to the
-Morden test network where the above mentioned contract was deployed. Also please update
+Modern test network where the above mentioned contract was deployed. Also please update
 the path to the IPC socket below to the one reported by your own local Geth node.
 
 ```go
