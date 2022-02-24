@@ -1355,15 +1355,15 @@ func TestLowGasTxNotBeingMined(t *testing.T) {
 	defer sim.Close()
 
 	var testCases = []struct {
-		name     string
-		txType	 byte
+		name   string
+		txType byte
 	}{
 		{
-			name: "LegacyTx",
+			name:   "LegacyTx",
 			txType: types.LegacyTxType,
 		},
 		{
-			name: "dynamicTx",
+			name:   "dynamicTx",
 			txType: types.DynamicFeeTxType,
 		},
 	}
@@ -1414,7 +1414,7 @@ func TestLowGasTxNotBeingMined(t *testing.T) {
 			// expect nonce be the same because low gas fee tx will not be mined
 			nonce, err := sim.PendingNonceAt(bgCtx, testAddr)
 			require.NoError(t, err)
-			assert.Equal(t,  uint64(i), nonce)
+			assert.Equal(t, uint64(i), nonce)
 
 			// send tx with higher gas fee
 			sufficientGasFeeTx := types.NewTx(&types.LegacyTx{
@@ -1440,7 +1440,7 @@ func TestLowGasTxNotBeingMined(t *testing.T) {
 			// expect nonce has increased
 			nonce, err = sim.PendingNonceAt(bgCtx, testAddr)
 			require.NoError(t, err)
-			assert.Equal(t, uint64(i) + 1, nonce)
+			assert.Equal(t, uint64(i)+1, nonce)
 		})
 	}
 }
@@ -1454,15 +1454,15 @@ func TestLowGasTxNotBeingMined(t *testing.T) {
 // 4. Check tx get mined
 func TestLowGasTxGetMinedOnceGasFeeDropped(t *testing.T) {
 	var testCases = []struct {
-		name     string
-		txType	 byte
+		name   string
+		txType byte
 	}{
 		{
-			name: "LegacyTx",
+			name:   "LegacyTx",
 			txType: types.LegacyTxType,
 		},
 		{
-			name: "dynamicTx",
+			name:   "dynamicTx",
 			txType: types.DynamicFeeTxType,
 		},
 	}
@@ -1528,7 +1528,7 @@ func TestLowGasTxGetMinedOnceGasFeeDropped(t *testing.T) {
 			// nonce has increased
 			pendingNonce, err = sim.PendingNonceAt(bgCtx, testAddr)
 			require.NoError(t, err)
-			assert.Equal(t, uint64(i) + 1, pendingNonce)
+			assert.Equal(t, uint64(i)+1, pendingNonce)
 
 			// the transaction should have been mined
 			_, isPending, err := sim.TransactionByHash(bgCtx, signedTx.Hash())
