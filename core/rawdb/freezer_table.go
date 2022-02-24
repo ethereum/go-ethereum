@@ -896,7 +896,7 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 		fmt.Fprintf(w, "Failed to decode freezer table %v\n", err)
 		return
 	}
-	fmt.Fprintf(w, "Version %d deleted %d, hidden %d\n", meta.version, atomic.LoadUint64(&t.itemOffset), atomic.LoadUint64(&t.itemHidden))
+	fmt.Fprintf(w, "Version %d deleted %d, hidden %d\n", meta.Version, atomic.LoadUint64(&t.itemOffset), atomic.LoadUint64(&t.itemHidden))
 
 	buf := make([]byte, indexEntrySize)
 

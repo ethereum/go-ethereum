@@ -35,7 +35,7 @@ func TestReadWriteFreezerTableMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
 	}
-	if meta.version != freezerVersion {
+	if meta.Version != freezerVersion {
 		t.Fatalf("Unexpected version field")
 	}
 	if meta.VirtualTail != uint64(100) {
@@ -52,7 +52,7 @@ func TestInitializeFreezerTableMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
 	}
-	if meta.version != freezerVersion {
+	if meta.Version != freezerVersion {
 		t.Fatalf("Unexpected version field")
 	}
 	if meta.VirtualTail != uint64(100) {

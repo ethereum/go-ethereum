@@ -17,8 +17,6 @@
 package rawdb
 
 import (
-	"encoding/binary"
-	"errors"
 	"io"
 	"os"
 
@@ -30,8 +28,8 @@ const freezerVersion = 1 // The initial version tag of freezer table metadata
 
 // freezerTableMeta wraps all the metadata of the freezer table.
 type freezerTableMeta struct {
-	// version is the versioning descriptor of the freezer table.
-	version uint16
+	// Version is the versioning descriptor of the freezer table.
+	Version uint16
 
 	// VirtualTail indicates how many items have been marked as deleted.
 	// Its value is equal to the number of items removed from the table
@@ -43,7 +41,7 @@ type freezerTableMeta struct {
 // newMetadata initializes the metadata object with the given virtual tail.
 func newMetadata(tail uint64) *freezerTableMeta {
 	return &freezerTableMeta{
-		version:     freezerVersion,
+		Version:     freezerVersion,
 		VirtualTail: tail,
 	}
 }
@@ -55,36 +53,17 @@ func readMetadata(file *os.File) (*freezerTableMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	// load the first 2 bytes, resolve the version tag
-	var buf [2]byte
-	_, err = file.Read(buf[:2])
-	if err != nil {
+	var meta freezerTableMeta
+	if err := rlp.Decode(file, &meta); err != nil {
 		return nil, err
 	}
-	version := binary.BigEndian.Uint16(buf[:])
-	switch version {
-	case freezerVersion:
-		var meta freezerTableMeta
-		if err := rlp.Decode(file, &meta); err != nil {
-			return nil, err
-		}
-		meta.version = freezerVersion
-		return &meta, nil
-	default:
-		return nil, errors.New("undefined version")
-	}
+	return &meta, nil
 }
 
 // writeMetadata writes the metadata of the freezer table into the
 // given metadata file.
 func writeMetadata(file *os.File, meta *freezerTableMeta) error {
 	_, err := file.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	var buf [2]byte
-	binary.BigEndian.PutUint16(buf[:], meta.version)
-	_, err = file.Write(buf[:])
 	if err != nil {
 		return err
 	}
