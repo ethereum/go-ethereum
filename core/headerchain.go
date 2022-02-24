@@ -231,7 +231,11 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 			hash = header.Hash()
 		}
 		number := header.Number.Uint64()
+		old := new(big.Int).Set(newTD)
 		newTD.Add(newTD, header.Difficulty)
+		if hc.config.TerminalTotalDifficulty != nil && old.Cmp(hc.config.TerminalTotalDifficulty) < 0 && newTD.Cmp(hc.config.TerminalTotalDifficulty) >= 0 {
+			rawdb.WriteTerminalBlockHash(hc.chainDb, header.Hash())
+		}
 
 		// If the parent was not present, store it
 		// If the header is already known, skip it, otherwise store

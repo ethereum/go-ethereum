@@ -39,6 +39,9 @@ var (
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 
+	// headTerminalBlockKey tracks the latest known terminal hash.
+	headTerminalBlockKey = []byte("LastTerminal")
+
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
 	lastPivotKey = []byte("LastPivot")
 

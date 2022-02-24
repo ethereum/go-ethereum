@@ -49,6 +49,22 @@ func (bc *BlockChain) CurrentFastBlock() *types.Block {
 	return bc.currentFastBlock.Load().(*types.Block)
 }
 
+// CurrentTerminalHeader retrieves the current terminal header of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentTerminalHeader() *types.Header {
+	if head := rawdb.ReadTerminalBlockHash(bc.db); head != (common.Hash{}) {
+		if header := bc.GetHeaderByHash(head); header != nil {
+			return header
+		}
+	}
+	return nil
+}
+
+// SetTerminalBlock sets the current terminal block.
+func (bc *BlockChain) SetTerminalBlock(header *types.Header) {
+	rawdb.WriteTerminalBlockHash(bc.db, header.Hash())
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {

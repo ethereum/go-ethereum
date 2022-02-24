@@ -21,9 +21,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -204,6 +206,25 @@ func (api *ConsensusAPI) validFCU(id *beacon.PayloadID) beacon.ForkChoiceRespons
 		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},
 		PayloadID:     id,
 	}
+}
+
+func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.TransitionConfigurationV1) (*beacon.TransitionConfigurationV1, error) {
+	if config.TerminalBlockNumber != 0 {
+		return nil, fmt.Errorf("invalid terminal block number: %v", config.TerminalBlockNumber)
+	}
+	if config.TerminalTotalDifficulty == nil {
+		return nil, errors.New("invalid terminal total difficulty")
+	}
+	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
+	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) == 0 {
+		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", ttd, config.TerminalTotalDifficulty)
+	}
+	terminalBlock := api.eth.BlockChain().CurrentTerminalHeader()
+	return &beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(ttd),
+		TerminalBlockHash:       terminalBlock.Hash(),
+		TerminalBlockNumber:     hexutil.Uint64(terminalBlock.Number.Uint64()),
+	}, nil
 }
 
 // GetPayloadV1 returns a cached payload by id.

@@ -216,6 +216,22 @@ func WriteHeadFastBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadTerminalBlockHash retrieves the hash of the current terminal block.
+func ReadTerminalBlockHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(headTerminalBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// WriteTerminalBlockHash stores the hash of the current fast-sync head block.
+func WriteTerminalBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(headTerminalBlockKey, hash.Bytes()); err != nil {
+		log.Crit("Failed to store last terminal block hash", "err", err)
+	}
+}
+
 // ReadLastPivotNumber retrieves the number of the last pivot block. If the node
 // full synced, the last pivot will always be nil.
 func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {

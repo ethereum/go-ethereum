@@ -49,7 +49,7 @@ type ExecutableDataV1 struct {
 	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
 	ReceiptsRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
 	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
-	Random        common.Hash    `json:"random"        gencodec:"required"`
+	Random        common.Hash    `json:"prevRandao"    gencodec:"required"`
 	Number        uint64         `json:"blockNumber"   gencodec:"required"`
 	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
@@ -76,6 +76,12 @@ type PayloadStatusV1 struct {
 	Status          string       `json:"status"`
 	LatestValidHash *common.Hash `json:"latestValidHash"`
 	ValidationError *string      `json:"validationError"`
+}
+
+type TransitionConfigurationV1 struct {
+	TerminalTotalDifficulty *hexutil.Big   `json:"terminalTotalDifficulty"`
+	TerminalBlockHash       common.Hash    `json:"terminalBlockHash"`
+	TerminalBlockNumber     hexutil.Uint64 `json:"terminalBlockNumber"`
 }
 
 // PayloadID is an identifier of the payload build process

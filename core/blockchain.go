@@ -473,6 +473,9 @@ func (bc *BlockChain) loadLastState() error {
 	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
+	if terminalHeader := bc.CurrentTerminalHeader(); terminalHeader != nil {
+		log.Info("Loaded terminal block", "number", terminalHeader.Number, "hash", terminalHeader.Hash())
+	}
 	return nil
 }
 
