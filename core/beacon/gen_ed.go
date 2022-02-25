@@ -19,9 +19,9 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 		ParentHash    common.Hash     `json:"parentHash"    gencodec:"required"`
 		FeeRecipient  common.Address  `json:"feeRecipient"  gencodec:"required"`
 		StateRoot     common.Hash     `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  common.Hash     `json:"receiptsRoot"   gencodec:"required"`
+		ReceiptsRoot  common.Hash     `json:"receiptsRoot"  gencodec:"required"`
 		LogsBloom     hexutil.Bytes   `json:"logsBloom"     gencodec:"required"`
-		Random        common.Hash     `json:"random"        gencodec:"required"`
+		Random        common.Hash     `json:"prevRandao"    gencodec:"required"`
 		Number        hexutil.Uint64  `json:"blockNumber"   gencodec:"required"`
 		GasLimit      hexutil.Uint64  `json:"gasLimit"      gencodec:"required"`
 		GasUsed       hexutil.Uint64  `json:"gasUsed"       gencodec:"required"`
@@ -60,9 +60,9 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		ParentHash    *common.Hash    `json:"parentHash"    gencodec:"required"`
 		FeeRecipient  *common.Address `json:"feeRecipient"  gencodec:"required"`
 		StateRoot     *common.Hash    `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  *common.Hash    `json:"receiptsRoot"   gencodec:"required"`
+		ReceiptsRoot  *common.Hash    `json:"receiptsRoot"  gencodec:"required"`
 		LogsBloom     *hexutil.Bytes  `json:"logsBloom"     gencodec:"required"`
-		Random        *common.Hash    `json:"random"        gencodec:"required"`
+		Random        *common.Hash    `json:"prevRandao"    gencodec:"required"`
 		Number        *hexutil.Uint64 `json:"blockNumber"   gencodec:"required"`
 		GasLimit      *hexutil.Uint64 `json:"gasLimit"      gencodec:"required"`
 		GasUsed       *hexutil.Uint64 `json:"gasUsed"       gencodec:"required"`
@@ -97,7 +97,7 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 	}
 	e.LogsBloom = *dec.LogsBloom
 	if dec.Random == nil {
-		return errors.New("missing required field 'random' for ExecutableDataV1")
+		return errors.New("missing required field 'prevRandao' for ExecutableDataV1")
 	}
 	e.Random = *dec.Random
 	if dec.Number == nil {

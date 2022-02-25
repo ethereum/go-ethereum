@@ -209,22 +209,36 @@ func (api *ConsensusAPI) validFCU(id *beacon.PayloadID) beacon.ForkChoiceRespons
 }
 
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.TransitionConfigurationV1) (*beacon.TransitionConfigurationV1, error) {
-	if config.TerminalBlockNumber != 0 {
-		return nil, fmt.Errorf("invalid terminal block number: %v", config.TerminalBlockNumber)
-	}
 	if config.TerminalTotalDifficulty == nil {
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) == 0 {
+	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", ttd, config.TerminalTotalDifficulty)
 	}
-	terminalBlock := api.eth.BlockChain().CurrentTerminalHeader()
-	return &beacon.TransitionConfigurationV1{
-		TerminalTotalDifficulty: (*hexutil.Big)(ttd),
-		TerminalBlockHash:       terminalBlock.Hash(),
-		TerminalBlockNumber:     hexutil.Uint64(terminalBlock.Number.Uint64()),
-	}, nil
+	terminalHeader := api.eth.BlockChain().CurrentTerminalHeader()
+	if terminalHeader != nil {
+
+		if config.TerminalBlockNumber != 0 && uint64(config.TerminalBlockNumber) != terminalHeader.Number.Uint64() {
+			return nil, fmt.Errorf("invalid terminal block number, got %v want %v", config.TerminalBlockNumber, terminalHeader.Number)
+		}
+
+		if config.TerminalBlockHash != (common.Hash{}) && config.TerminalBlockHash != terminalHeader.Hash() {
+			return nil, fmt.Errorf("invalid terminal block hash, got %v want %v", config.TerminalBlockHash, terminalHeader.Hash())
+		}
+		// TODO (MariusVanDerWijden): Here we used to return the correct terminal hash + number
+		// but according to the spec we should return the hash + number set by the user.
+		// Since we have no way of setting hash + number yet, just return TTD.
+		return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
+	}
+	if config.TerminalBlockNumber != 0 {
+		return nil, fmt.Errorf("invalid terminal block number: %v", config.TerminalBlockNumber)
+	}
+
+	if config.TerminalBlockHash != (common.Hash{}) {
+		return nil, fmt.Errorf("invalid terminal block hash, no terminal header set")
+	}
+	return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
 
 // GetPayloadV1 returns a cached payload by id.
