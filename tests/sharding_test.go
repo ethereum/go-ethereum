@@ -3,16 +3,75 @@ package tests
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg"
 
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
 )
+
+// Helper: invert the divisor, then multiply
+func polyFactorDiv(dst *bls.Fr, a *bls.Fr, b *bls.Fr) {
+	// TODO: use divmod instead.
+	var tmp bls.Fr
+	bls.InvModFr(&tmp, b)
+	bls.MulModFr(dst, &tmp, a)
+}
+
+// Helper: Long polynomial division for two polynomials in coefficient form
+func polyLongDiv(dividend []bls.Fr, divisor []bls.Fr) []bls.Fr {
+	a := make([]bls.Fr, len(dividend), len(dividend))
+	for i := 0; i < len(a); i++ {
+		bls.CopyFr(&a[i], &dividend[i])
+	}
+	aPos := len(a) - 1
+	bPos := len(divisor) - 1
+	diff := aPos - bPos
+	out := make([]bls.Fr, diff+1, diff+1)
+	for diff >= 0 {
+		quot := &out[diff]
+		polyFactorDiv(quot, &a[aPos], &divisor[bPos])
+		var tmp, tmp2 bls.Fr
+		for i := bPos; i >= 0; i-- {
+			// In steps: a[diff + i] -= b[i] * quot
+			// tmp =  b[i] * quot
+			bls.MulModFr(&tmp, quot, &divisor[i])
+			// tmp2 = a[diff + i] - tmp
+			bls.SubModFr(&tmp2, &a[diff+i], &tmp)
+			// a[diff + i] = tmp2
+			bls.CopyFr(&a[diff+i], &tmp2)
+		}
+		aPos -= 1
+		diff -= 1
+	}
+	return out
+}
+
+// Helper: Compute proof for polynomial
+func ComputeProof(poly []bls.Fr, x uint64, crsG1 []bls.G1Point) *bls.G1Point {
+	// divisor = [-x, 1]
+	divisor := [2]bls.Fr{}
+	var tmp bls.Fr
+	bls.AsFr(&tmp, x)
+	bls.SubModFr(&divisor[0], &bls.ZERO, &tmp)
+	bls.CopyFr(&divisor[1], &bls.ONE)
+	//for i := 0; i < 2; i++ {
+	//	fmt.Printf("div poly %d: %s\n", i, FrStr(&divisor[i]))
+	//}
+	// quot = poly / divisor
+	quotientPolynomial := polyLongDiv(poly, divisor[:])
+	//for i := 0; i < len(quotientPolynomial); i++ {
+	//	fmt.Printf("quot poly %d: %s\n", i, FrStr(&quotientPolynomial[i]))
+	//}
+
+	// evaluate quotient poly at shared secret, in G1
+	return bls.LinCombG1(crsG1[:len(quotientPolynomial)], quotientPolynomial)
+}
 
 func TestGoKzg(t *testing.T) {
 	/// Test the go-kzg library for correctness
@@ -55,7 +114,7 @@ func TestGoKzg(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := kzgSettings.ComputeProofSingle(polynomial, x)
+	proof := ComputeProof(polynomial, x, kzg.CrsG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
@@ -93,7 +152,7 @@ func TestKzg(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := kzg.ComputeProof(polynomial, x)
+	proof := ComputeProof(polynomial, x, kzg.CrsG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
@@ -147,7 +206,7 @@ func TestPointEvaluationTestVector(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(0x42)
-	proof := kzg.ComputeProof(polynomial, x)
+	proof := ComputeProof(polynomial, x, kzg.CrsG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
