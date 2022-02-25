@@ -346,33 +346,42 @@ func (n *Node) closeDataDir() {
 // or from the default location. If neither of those are present, it generates
 // a new secret and stores to the default location.
 func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
-	// If one was provided via cli flags, use that
+	var fileName string
 	if len(cliParam) > 0 {
+		// If a plaintext secret was provided via cli flags, use that
 		jwtSecret := common.FromHex(cliParam)
-		if len(jwtSecret) == 32 {
+		if len(jwtSecret) == 32 && strings.HasPrefix(string(cliParam), "0x") {
+			log.Warn("Plaintext JWT secret provided, please consider passing via file")
 			return jwtSecret, nil
 		}
+		// path provided
+		fileName = cliParam
+	} else {
+		// no path provided, use default
+		fileName = n.ResolvePath(datadirJWTKey)
 	}
-	jwtFile := n.ResolvePath(datadirJWTKey)
-	log.Debug("Reading jwt-key", "path", jwtFile)
-	if data, err := os.ReadFile(jwtFile); err == nil {
+	// try reading from file
+	log.Debug("Reading jwt-key", "path", fileName)
+	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(string(data))
 		if len(jwtSecret) == 32 {
 			return jwtSecret, nil
 		}
+		log.Error("Invalid jwt key", "path", fileName, "length", len(jwtSecret))
+		return nil, errors.New("invalid jwt key")
 	}
 	// Need to generate one
 	jwtSecret := make([]byte, 32)
 	crand.Read(jwtSecret)
 	// if we're in --dev mode, don't bother saving, just show it
-	if jwtFile == "" {
+	if fileName == "" {
 		log.Info("Generated ephemeral secret", "jwt-secret", hexutil.Encode(jwtSecret))
 		return jwtSecret, nil
 	}
-	if err := os.WriteFile(jwtFile, []byte(hexutil.Encode(jwtSecret)), 0700); err != nil {
+	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0700); err != nil {
 		return nil, err
 	}
-	log.Info("Generated jwt-key", "path", jwtFile)
+	log.Info("Generated jwt-key", "path", fileName)
 	return jwtSecret, nil
 }
 
