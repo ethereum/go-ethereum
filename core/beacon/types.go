@@ -31,7 +31,7 @@ import (
 // PayloadAttributesV1 structure described at https://github.com/ethereum/execution-apis/pull/74
 type PayloadAttributesV1 struct {
 	Timestamp             uint64         `json:"timestamp"     gencodec:"required"`
-	Random                common.Hash    `json:"random"        gencodec:"required"`
+	Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
 	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 }
 
