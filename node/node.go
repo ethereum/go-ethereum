@@ -443,7 +443,7 @@ func (n *Node) startRPC() error {
 		}
 		// Configure authenticated HTTP (if needed).
 		if len(open) != len(all) {
-			if err := initHttp(n.httpAuth, all, 8551, jwtSecret); err != nil {
+			if err := initHttp(n.httpAuth, all, n.config.AuthPort, jwtSecret); err != nil {
 				return err
 			}
 		}
@@ -456,7 +456,7 @@ func (n *Node) startRPC() error {
 		}
 		// authenticated
 		if len(open) != len(all) {
-			if err := initWS(all, 8551, jwtSecret); err != nil {
+			if err := initWS(all, n.config.AuthPort, jwtSecret); err != nil {
 				return err
 			}
 		}

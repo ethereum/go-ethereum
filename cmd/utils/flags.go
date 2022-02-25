@@ -520,7 +520,7 @@ var (
 	}
 	JWTSecretFlag = cli.StringFlag{
 		Name:  "jwt-secret",
-		Usage: "JWT secret to use for authenticated RPC endpoints",
+		Usage: "JWT secret (or path to a jwt secret) to use for authenticated RPC endpoints",
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -557,6 +557,11 @@ var (
 		Name:  "http.port",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
+	}
+	HTTPAuthPortFlag = cli.IntFlag{
+		Name:  "http.authport",
+		Usage: "HTTP-RPC server listening port for authenticated api's",
+		Value: node.DefaultAuthPort,
 	}
 	HTTPCORSDomainFlag = cli.StringFlag{
 		Name:  "http.corsdomain",
@@ -953,6 +958,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(HTTPPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(HTTPAuthPortFlag.Name) {
+		cfg.AuthPort = ctx.GlobalInt(HTTPAuthPortFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
