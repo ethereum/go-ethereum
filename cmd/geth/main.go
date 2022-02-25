@@ -164,6 +164,7 @@ var (
 		utils.HTTPListenAddrFlag,
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,
+		utils.HTTPAuthPortFlag,
 		utils.JWTSecretFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
