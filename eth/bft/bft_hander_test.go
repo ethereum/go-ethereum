@@ -54,9 +54,9 @@ func TestSequentialVotes(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 10
 
-	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
-		return nil
+		return true, nil
 	}
 
 	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
@@ -91,9 +91,9 @@ func TestDuplicateVotes(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 1
 
-	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
-		return nil
+		return true, nil
 	}
 
 	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
@@ -124,8 +124,8 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 0
 
-	tester.bfter.consensus.verifyVote = func(vote *utils.Vote) error {
-		return fmt.Errorf("This is invalid vote")
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
+		return false, fmt.Errorf("This is invalid vote")
 	}
 
 	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {

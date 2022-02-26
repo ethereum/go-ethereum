@@ -1,6 +1,8 @@
 package bft
 
 import (
+	"fmt"
+
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
@@ -32,7 +34,7 @@ type Bfter struct {
 }
 
 type ConsensusFns struct {
-	verifyVote  func(*utils.Vote) error
+	verifyVote  func(chain consensus.ChainReader, vote *utils.Vote) (bool, error)
 	voteHandler func(consensus.ChainReader, *utils.Vote) error
 
 	verifyTimeout  func(*utils.Timeout) error
@@ -68,7 +70,7 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 	b.broadcastCh = e.EngineV2.BroadcastCh
 	b.consensus = ConsensusFns{
 		verifySyncInfo: e.VerifySyncInfo,
-		verifyVote:     e.VerifyVote,
+		verifyVote:     e.EngineV2.VerifyVoteMessage,
 		verifyTimeout:  e.VerifyTimeout,
 
 		voteHandler:     e.EngineV2.VoteHandler,
@@ -85,11 +87,16 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 		return nil
 	}
 
-	err := b.consensus.verifyVote(vote)
-	if err != nil {
-		log.Error("Verify BFT Vote", "error", err)
+	verified, err := b.consensus.verifyVote(b.blockChainReader, vote)
+
+	if err != nil || !verified {
+		log.Error("Verify BFT Vote", "error", err, "verified", verified)
+		if !verified {
+			return fmt.Errorf("Fail to verify vote")
+		}
 		return err
 	}
+
 	b.broadcastCh <- vote
 
 	err = b.consensus.voteHandler(b.blockChainReader, vote)

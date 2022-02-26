@@ -368,8 +368,10 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 	blockchain := backend.GetBlockChain()
 	blockchain.Client = backend
 
+	engine := blockchain.Engine().(*XDPoS.XDPoS)
+
 	// Authorise
-	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
+	engine.Authorize(signer, signFn)
 
 	currentBlock := blockchain.Genesis()
 
@@ -410,6 +412,19 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 			blockchain.InsertBlock(forkedBlock)
 			currentForkBlock = forkedBlock
 		}
+
+		// First v2 block
+		if (int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()) == 1 {
+			lastv1BlockNumber := block.Header().Number.Uint64() - 1
+			checkpointBlockNumber := lastv1BlockNumber - lastv1BlockNumber%chainConfig.XDPoS.Epoch
+			checkpointHeader := blockchain.GetHeaderByNumber(checkpointBlockNumber)
+			masternodes := engine.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
+			err := engine.EngineV2.Initial(blockchain, block.Header(), masternodes)
+			if err != nil {
+				panic(err)
+			}
+		}
+
 		currentBlock = block
 	}
 

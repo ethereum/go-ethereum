@@ -374,3 +374,35 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	assert.Equal(t, utils.Round(4), highestCommitBlock.Round)
 	assert.Equal(t, big.NewInt(904), highestCommitBlock.Number)
 }
+
+func TestVerifyVoteMsg(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	blockInfo := &utils.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  utils.Round(15),
+		Number: big.NewInt(915),
+	}
+
+	// Invalid vote msg
+	voteMsg := &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         []byte{1},
+	}
+
+	verified, err := engineV2.VerifyVoteMessage(blockchain, voteMsg)
+	assert.False(t, verified)
+	assert.NotNil(t, err)
+
+	// Valid vote message from a master node
+	signHash, _ := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(blockInfo).Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signHash,
+	}
+
+	verified, err = engineV2.VerifyVoteMessage(blockchain, voteMsg)
+	assert.True(t, verified)
+	assert.Nil(t, err)
+}
