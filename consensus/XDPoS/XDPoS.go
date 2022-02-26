@@ -445,6 +445,19 @@ func (x *XDPoS) GetAuthorisedSignersFromSnapshot(chain consensus.ChainReader, he
 	}
 }
 
+func (x *XDPoS) FindParentBlockToAssign(chain consensus.ChainReader, currentBlock *types.Block) *types.Block {
+	switch x.config.BlockConsensusVersion(currentBlock.Number()) {
+	case params.ConsensusEngineVersion2:
+		block := x.EngineV2.FindParentBlockToAssign(chain)
+		if block == nil {
+			return currentBlock
+		}
+		return block
+	default: // Default "v1"
+		return currentBlock
+	}
+}
+
 /**
 Caching
 */
@@ -502,7 +515,7 @@ func (x *XDPoS) initialV2FromLastV1(chain consensus.ChainReader, header *types.H
 	checkpointBlockNumber := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch
 	checkpointHeader := chain.GetHeaderByNumber(checkpointBlockNumber)
 	masternodes := x.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
-	err := x.EngineV2.Initial(chain, header, masternodes)
+	err := x.EngineV2.Initial(chain, masternodes)
 	if err != nil {
 		return err
 	}

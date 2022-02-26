@@ -527,7 +527,15 @@ func (self *worker) commitNewWork() {
 	defer self.currentMu.Unlock()
 
 	tstart := time.Now()
-	parent := self.chain.CurrentBlock()
+
+	c := self.engine.(*XDPoS.XDPoS)
+	var parent *types.Block
+	if c != nil {
+		parent = c.FindParentBlockToAssign(self.chain, self.chain.CurrentBlock())
+	} else {
+		parent = self.chain.CurrentBlock()
+	}
+
 	var signers map[common.Address]struct{}
 	if parent.Hash().Hex() == self.lastParentBlockCommit {
 		return
@@ -540,7 +548,6 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
 		if self.config.XDPoS != nil {
-			c := self.engine.(*XDPoS.XDPoS)
 			ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)

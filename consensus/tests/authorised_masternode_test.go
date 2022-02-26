@@ -103,18 +103,18 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	blockchain.InsertBlock(currentBlock)
 
 	// Less then Mine Period
-	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
+	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
 
 	time.Sleep(time.Duration(minePeriod) * time.Second)
-	// The first address is valid
-	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
+	// The second address is valid as the round starting from 1
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.Nil(t, err)
 	assert.True(t, isYourTurn)
 
-	// The second and third address are not valid
-	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
+	// The first and third address are not valid
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
 	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
@@ -127,14 +127,14 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	blockchain.InsertBlock(currentBlock)
 	time.Sleep(time.Duration(minePeriod) * time.Second)
 
-	adaptor.EngineV2.SetNewRoundFaker(1, false)
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
+	adaptor.EngineV2.SetNewRoundFaker(2, false)
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.False(t, isYourTurn)
 
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
 	assert.True(t, isYourTurn)
 
-	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc71562b71999873DB5b286dF957af199Ec94617F7"))
+	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc5F74529C0338546f82389402a01c31fB52c6f434"))
 	assert.False(t, isYourTurn)
 
 }

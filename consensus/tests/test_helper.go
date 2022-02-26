@@ -419,7 +419,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 			checkpointBlockNumber := lastv1BlockNumber - lastv1BlockNumber%chainConfig.XDPoS.Epoch
 			checkpointHeader := blockchain.GetHeaderByNumber(checkpointBlockNumber)
 			masternodes := engine.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
-			err := engine.EngineV2.Initial(blockchain, block.Header(), masternodes)
+			err := engine.EngineV2.Initial(blockchain, masternodes)
 			if err != nil {
 				panic(err)
 			}
@@ -513,8 +513,12 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 		if err != nil {
 			panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 		}
+		// Sign from acc 1, 2, 3
+		acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
+		acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
+		acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
 		var signatures []utils.Signature
-		signatures = append(signatures, signedHash)
+		signatures = append(signatures, signedHash, acc1SignedHash, acc2SignedHash, acc3SignedHash)
 		quorumCert := &utils.QuorumCert{
 			ProposedBlockInfo: proposedBlockInfo,
 			Signatures:        signatures,

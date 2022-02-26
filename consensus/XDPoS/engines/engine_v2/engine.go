@@ -121,11 +121,11 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 	return sigHash(header)
 }
 
-func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, masternodes []common.Address) error {
+func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Address) error {
 	log.Info("[Initial] initial v2 related parameters")
 
 	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
-		log.Error("[Initial] Already initialized", "blockNum", header.Number, "Hash", header.Hash())
+		log.Error("[Initial] Already initialized", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash)
 		return nil
 	}
 
@@ -133,12 +133,14 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 	defer x.lock.Unlock()
 	// Check header if it is the first consensus v2 block, if so, assign initial values to current round and highestQC
 
-	log.Info("[Initial] highest QC for consensus v2 first block", "BlockNum", header.Number.String(), "BlockHash", header.Hash())
+	log.Info("[Initial] highest QC for consensus v2 first block")
 	// Generate new parent blockInfo and put it into QC
+	// TODO: XIN-147 to initilise V2 engine in a more dynamic way
+	firstV2BlockHeader := chain.GetHeaderByNumber(x.config.V2.SwitchBlock.Uint64())
 	blockInfo := &utils.BlockInfo{
-		Hash:   header.Hash(),
+		Hash:   firstV2BlockHeader.Hash(),
 		Round:  utils.Round(0),
-		Number: header.Number,
+		Number: firstV2BlockHeader.Number,
 	}
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
@@ -148,7 +150,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header, ma
 	x.highestQuorumCert = quorumCert
 
 	// Initial snapshot
-	lastGapNum := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch - x.config.Gap
+	lastGapNum := firstV2BlockHeader.Number.Uint64() - firstV2BlockHeader.Number.Uint64()%x.config.Epoch - x.config.Gap
 	lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
 
 	snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), x.currentRound, x.highestQuorumCert, masternodes)
@@ -183,6 +185,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	x.lock.RUnlock()
 
 	if header.ParentHash != highestQC.ProposedBlockInfo.Hash {
+		log.Warn("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
 		return consensus.ErrNotReadyToPropose
 	}
 
@@ -569,14 +572,11 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrInvalidV2Extra
 	}
 	quorumCert := decodedExtraField.QuorumCert
-	if quorumCert == nil || quorumCert.Signatures == nil || len(quorumCert.Signatures) == 0 {
-		return utils.ErrInvalidQC
+	err = x.verifyQC(chain, quorumCert)
+	if err != nil {
+		log.Warn("[verifyHeader] fail to verify QC", "QCNumber", quorumCert.ProposedBlockInfo.Number, "QCsigLength", len(quorumCert.Signatures))
+		return err
 	}
-
-	if quorumCert.ProposedBlockInfo.Hash == (common.Hash{}) {
-		return utils.ErrEmptyBlockInfoHash
-	}
-
 	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
 	if !bytes.Equal(header.Nonce[:], utils.NonceAuthVote) && !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
 		return utils.ErrInvalidVote
@@ -590,20 +590,24 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrInvalidUncleHash
 	}
 
-	// Verify v2 block that is on the epoch switch
-	if header.Validators != nil {
-		// Skip if it's the first v2 block as it wil inherit from last v1 epoch block
-		if header.Number.Uint64() > x.config.V2.SwitchBlock.Uint64()+1 && header.Coinbase != (common.Address{}) {
-			return utils.ErrInvalidCheckpointBeneficiary
-		}
+	isEpochSwitch, _, err := x.IsEpochSwitch(header) // Verify v2 block that is on the epoch switch
+	if err != nil {
+		log.Error("[verifyHeader] error when checking if header is epoch switch header", "Hash", header.Hash(), "Number", header.Number, "Error", err)
+		return err
+	}
+	if isEpochSwitch {
 		if !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
 			return utils.ErrInvalidCheckpointVote
 		}
-		if len(header.Validators) == 0 {
+		if header.Validators == nil || len(header.Validators) == 0 {
 			return utils.ErrEmptyEpochSwitchValidators
 		}
 		if len(header.Validators)%common.AddressLength != 0 {
 			return utils.ErrInvalidCheckpointSigners
+		}
+	} else {
+		if header.Validators != nil {
+			return utils.ErrInvalidFieldInNonEpochSwitch
 		}
 	}
 
@@ -1000,6 +1004,15 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		return fmt.Errorf("Fail to verify QC due to failure in getting epoch switch info")
 	}
 
+	if quorumCert == nil {
+		log.Warn("[verifyQC] QC is Nil")
+		return utils.ErrInvalidQC
+	} else if (quorumCert.ProposedBlockInfo.Number.Uint64() > x.config.V2.SwitchBlock.Uint64()) && (quorumCert.Signatures == nil || (len(quorumCert.Signatures) < x.config.V2.CertThreshold)) {
+		//First V2 Block QC, QC Signatures is initial nil
+		log.Warn("[verifyHeader] Invalid QC Signature is nil or empty", "QC", quorumCert, "QCNumber", quorumCert.ProposedBlockInfo.Number, "Signatures len", len(quorumCert.Signatures))
+		return utils.ErrInvalidQC
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(len(quorumCert.Signatures))
 	var haveError error
@@ -1049,6 +1062,10 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
 	proposedBlockHeader := blockChainReader.GetHeaderByHash(quorumCert.ProposedBlockInfo.Hash)
+	if proposedBlockHeader == nil {
+		log.Error("[processQC] Block not found using the QC", "quorumCert.ProposedBlockInfo.Hash", quorumCert.ProposedBlockInfo.Hash, "quorumCert.ProposedBlockInfo.Number", quorumCert.ProposedBlockInfo.Number)
+		return fmt.Errorf("Block not found, number: %v, hash: %v", quorumCert.ProposedBlockInfo.Number, quorumCert.ProposedBlockInfo.Hash)
+	}
 	if proposedBlockHeader.Number.Cmp(x.config.V2.SwitchBlock) > 0 {
 		// Extra field contain parent information
 		var decodedExtraField utils.ExtraFields_v2
@@ -1567,4 +1584,12 @@ func (x *XDPoS_v2) GetPreviousPenaltyByHash(chain consensus.ChainReader, hash co
 	}
 	header := chain.GetHeaderByHash(epochSwitchInfo.EpochSwitchBlockInfo.Hash)
 	return common.ExtractAddressFromBytes(header.Penalties)
+}
+
+func (x *XDPoS_v2) FindParentBlockToAssign(chain consensus.ChainReader) *types.Block {
+	parent := chain.GetBlock(x.highestQuorumCert.ProposedBlockInfo.Hash, x.highestQuorumCert.ProposedBlockInfo.Number.Uint64())
+	if parent == nil {
+		log.Error("[FindParentBlockToAssign] Can not find parent block from highestQC proposedBlockInfo", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash, "x.highestQuorumCert.ProposedBlockInfo.Number", x.highestQuorumCert.ProposedBlockInfo.Number.Uint64())
+	}
+	return parent
 }
