@@ -1,0 +1,25 @@
+{
+ "exe": "/home/jwgcarlyle/geth/bin/geth",
+ "key": "private.pem",
+ "debug": true,
+ "heapSize": 512,
+ "executableHeap": false,
+ "productID": 1,
+ "securityVersion": 1,
+ "mounts": [
+    {
+        "source": "/home/jwgcarlyle/geth",
+        "target": "/geth",
+        "type": "hostfs",
+        "readOnly": false
+    },
+    {
+        "source": "/tmp",
+        "target": "/tmp",
+        "type": "hostfs",
+        "readOnly": false
+    }
+],
+ "env": null,
+ "files": null
+}
