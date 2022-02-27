@@ -44,6 +44,12 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+// Various checks on genesis extradata
+var (
+	extraVanity = 32                     // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal   = crypto.SignatureLength // Fixed number of extra-data suffix bytes reserved for signer seal
+)
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
@@ -324,8 +330,13 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	if config.Clique != nil && len(block.Extra()) == 0 {
-		return nil, errors.New("can't start clique chain without signers")
+	if config.Clique != nil {
+		if len(block.Extra()) < extraVanity {
+			return nil, errors.New("extra-data 32 byte vanity prefix missing")
+		}
+		if len(block.Extra()) < extraVanity+extraSeal {
+			return nil, errors.New("extra-data 65 byte signature suffix missing")
+		}
 	}
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
