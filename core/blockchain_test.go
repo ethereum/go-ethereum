@@ -969,7 +969,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	ancient.SetHead(remove - 1)
 	assert(t, "ancient", ancient, 0, 0, 0)
 
-	if frozen, err := ancientDb.Ancients(); err != nil || frozen != 1 {
+	if frozen, err := ancientDb.Ancients(rawdb.ChainFreezer); err != nil || frozen != 1 {
 		t.Fatalf("failed to truncate ancient store, want %v, have %v", 1, frozen)
 	}
 	// Import the chain as a light node and ensure all pointers are updated
@@ -1856,7 +1856,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 	if ancientChain.CurrentFastBlock().NumberU64() != 0 {
 		t.Fatalf("failed to rollback ancient data, want %d, have %d", 0, ancientChain.CurrentFastBlock().NumberU64())
 	}
-	if frozen, err := ancientChain.db.Ancients(); err != nil || frozen != 1 {
+	if frozen, err := ancientChain.db.Ancients(rawdb.ChainFreezer); err != nil || frozen != 1 {
 		t.Fatalf("failed to truncate ancient data, frozen index is %d", frozen)
 	}
 
@@ -1868,7 +1868,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 	if ancientChain.CurrentFastBlock().NumberU64() != canonblocks[len(canonblocks)-1].NumberU64() {
 		t.Fatalf("failed to insert ancient recept chain after rollback")
 	}
-	if frozen, _ := ancientChain.db.Ancients(); frozen != uint64(len(canonblocks))+1 {
+	if frozen, _ := ancientChain.db.Ancients(rawdb.ChainFreezer); frozen != uint64(len(canonblocks))+1 {
 		t.Fatalf("wrong ancients count %d", frozen)
 	}
 }

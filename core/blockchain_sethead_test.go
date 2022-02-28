@@ -2024,7 +2024,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64) error
-		Ancients() (uint64, error)
+		Ancients(string) (uint64, error)
 	}
 	db.(freezer).Freeze(tt.freezeThreshold)
 
@@ -2050,7 +2050,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}
-	if frozen, err := db.(freezer).Ancients(); err != nil {
+	if frozen, err := db.(freezer).Ancients(rawdb.ChainFreezer); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
 	} else if int(frozen) != tt.expFrozen {
 		t.Errorf("Frozen block count mismatch: have %d, want %d", frozen, tt.expFrozen)

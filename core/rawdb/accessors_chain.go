@@ -36,7 +36,7 @@ import (
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		data, _ = reader.Ancient(freezerHashTable, number)
 		if len(data) == 0 {
 			// Get it by hash from leveldb
@@ -298,7 +298,7 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 		// It's ok to request block 0, 1 item
 		count = number + 1
 	}
-	limit, _ := db.Ancients()
+	limit, _ := db.Ancients(ChainFreezer)
 	// First read live blocks
 	if i >= limit {
 		// If we need to read live blocks, we need to figure out the hash first
@@ -319,7 +319,7 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 	}
 	// read remaining from ancients
 	max := count * 700
-	data, err := db.AncientRange(freezerHeaderTable, i+1-count, count, max)
+	data, err := db.AncientRange(ChainFreezer, freezerHeaderTable, i+1-count, count, max)
 	if err == nil && uint64(len(data)) == count {
 		// the data is on the order [h, h+1, .., n] -- reordering needed
 		for i := range data {
@@ -332,7 +332,7 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		// First try to look up the data in ancient database. Extra hash
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
@@ -409,10 +409,20 @@ func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number
 	}
 }
 
+// isCanonOp is an internal utility method, to check whether the given number/hash
+// is part of the ancient (canon) set.
+func isCanonOp(reader ethdb.AncientReadOp, number uint64, hash common.Hash) bool {
+	h, err := reader.Ancient(freezerHashTable, number)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(h, hash[:])
+}
+
 // isCanon is an internal utility method, to check whether the given number/hash
 // is part of the ancient (canon) set.
 func isCanon(reader ethdb.AncientReader, number uint64, hash common.Hash) bool {
-	h, err := reader.Ancient(freezerHashTable, number)
+	h, err := reader.Ancient(ChainFreezer, freezerHashTable, number)
 	if err != nil {
 		return false
 	}
@@ -425,9 +435,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
+		if isCanonOp(reader, number, hash) {
 			data, _ = reader.Ancient(freezerBodiesTable, number)
 			return nil
 		}
@@ -442,7 +452,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 // block at number, in RLP encoding.
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		data, _ = reader.Ancient(freezerBodiesTable, number)
 		if len(data) > 0 {
 			return nil
@@ -508,9 +518,9 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
+		if isCanonOp(reader, number, hash) {
 			data, _ = reader.Ancient(freezerDifficultyTable, number)
 			return nil
 		}
@@ -568,9 +578,9 @@ func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
 func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	db.ReadAncients(ChainFreezer, func(reader ethdb.AncientReadOp) error {
 		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
+		if isCanonOp(reader, number, hash) {
 			data, _ = reader.Ancient(freezerReceiptTable, number)
 			return nil
 		}
@@ -782,7 +792,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 		tdSum      = new(big.Int).Set(td)
 		stReceipts []*types.ReceiptForStorage
 	)
-	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	return db.ModifyAncients(ChainFreezer, func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			// Convert receipts to storage format and sum up total difficulty.
 			stReceipts = stReceipts[:0]

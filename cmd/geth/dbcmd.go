@@ -708,7 +708,7 @@ func showMetaData(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	ancients, err := db.Ancients()
+	ancients, err := db.Ancients(rawdb.ChainFreezer)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
 	}

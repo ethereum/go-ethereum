@@ -72,6 +72,58 @@ type KeyValueStore interface {
 type AncientReader interface {
 	// HasAncient returns an indicator whether the specified data exists in the
 	// ancient store.
+	HasAncient(typ string, kind string, number uint64) (bool, error)
+
+	// Ancient retrieves an ancient binary blob from the append-only immutable files.
+	Ancient(typ string, kind string, number uint64) ([]byte, error)
+
+	// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
+	// It will return
+	//  - at most 'count' items,
+	//  - at least 1 item (even if exceeding the maxBytes), but will otherwise
+	//   return as many items as fit into maxBytes.
+	AncientRange(typ string, kind string, start, count, maxBytes uint64) ([][]byte, error)
+
+	// Ancients returns the ancient item numbers in the ancient store.
+	Ancients(typ string) (uint64, error)
+
+	// Tail returns the number of first stored item in the freezer.
+	Tail(typ string) (uint64, error)
+
+	// AncientSize returns the ancient size of the specified category.
+	AncientSize(typ string, kind string) (uint64, error)
+
+	// ReadAncients runs the given read operation while ensuring that no writes take place
+	// on the underlying freezer.
+	ReadAncients(typ string, fn func(AncientReadOp) error) (err error)
+}
+
+// AncientWriter contains the methods required to write to immutable ancient data.
+type AncientWriter interface {
+	// ModifyAncients runs a write operation on the ancient store.
+	// If the function returns an error, any changes to the underlying store are reverted.
+	// The integer return value is the total size of the written data.
+	ModifyAncients(typ string, fn func(AncientWriteOp) error) (int64, error)
+
+	// TruncateHead discards all but the first n ancient data from the ancient store.
+	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
+	TruncateHead(typ string, n uint64) error
+
+	// TruncateTail discards the first n ancient data from the ancient store. The already
+	// deleted items are ignored. After the truncation, the earliest item can be accessed
+	// is item_n(start from 0). The deleted items may not be removed from the ancient store
+	// immediately, but only when the accumulated deleted data reach the threshold then
+	// will be removed all together.
+	TruncateTail(typ string, n uint64) error
+
+	// Sync flushes all in-memory ancient store data to disk.
+	Sync(typ string) error
+}
+
+// AncientReadOp is given to the function argument of ReadAncients.
+type AncientReadOp interface {
+	// HasAncient returns an indicator whether the specified data exists in the
+	// ancient store.
 	HasAncient(kind string, number uint64) (bool, error)
 
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
@@ -88,42 +140,10 @@ type AncientReader interface {
 	Ancients() (uint64, error)
 
 	// Tail returns the number of first stored item in the freezer.
-	// This number can also be interpreted as the total deleted item numbers.
 	Tail() (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
-}
-
-// AncientBatchReader is the interface for 'batched' or 'atomic' reading.
-type AncientBatchReader interface {
-	AncientReader
-
-	// ReadAncients runs the given read operation while ensuring that no writes take place
-	// on the underlying freezer.
-	ReadAncients(fn func(AncientReader) error) (err error)
-}
-
-// AncientWriter contains the methods required to write to immutable ancient data.
-type AncientWriter interface {
-	// ModifyAncients runs a write operation on the ancient store.
-	// If the function returns an error, any changes to the underlying store are reverted.
-	// The integer return value is the total size of the written data.
-	ModifyAncients(func(AncientWriteOp) error) (int64, error)
-
-	// TruncateHead discards all but the first n ancient data from the ancient store.
-	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
-	TruncateHead(n uint64) error
-
-	// TruncateTail discards the first n ancient data from the ancient store. The already
-	// deleted items are ignored. After the truncation, the earliest item can be accessed
-	// is item_n(start from 0). The deleted items may not be removed from the ancient store
-	// immediately, but only when the accumulated deleted data reach the threshold then
-	// will be removed all together.
-	TruncateTail(n uint64) error
-
-	// Sync flushes all in-memory ancient store data to disk.
-	Sync() error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
@@ -139,7 +159,7 @@ type AncientWriteOp interface {
 // immutable ancient data.
 type Reader interface {
 	KeyValueReader
-	AncientBatchReader
+	AncientReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -152,7 +172,7 @@ type Writer interface {
 // AncientStore contains all the methods required to allow handling different
 // ancient data stores backing immutable chain data store.
 type AncientStore interface {
-	AncientBatchReader
+	AncientReader
 	AncientWriter
 	io.Closer
 }
