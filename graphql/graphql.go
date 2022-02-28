@@ -299,19 +299,11 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
 
-	// TODO: What to return for non-dynamicfee tx types?
-	switch tx.Type() {
-	case types.AccessListTxType:
-		return nil, nil
-	case types.DynamicFeeTxType:
-		tip, err := tx.EffectiveGasTip(header.BaseFee)
-		if err != nil {
-			return nil, err
-		}
-		return (*hexutil.Big)(tip), nil
-	default:
-		return nil, nil
+	tip, err := tx.EffectiveGasTip(header.BaseFee)
+	if err != nil {
+		return nil, err
 	}
+	return (*hexutil.Big)(tip), nil
 }
 
 func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
