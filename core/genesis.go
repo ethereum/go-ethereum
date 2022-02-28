@@ -120,13 +120,36 @@ func (ga *GenesisAlloc) write(db ethdb.KeyValueWriter, hash common.Hash) error {
 // CommitGenesisState loads the stored genesis state with the given block
 // hash and commits them into the given database handler.
 func CommitGenesisState(db ethdb.Database, hash common.Hash) error {
-	blob := rawdb.ReadGenesisState(db, hash)
-	if len(blob) == 0 {
-		return errors.New("not found")
-	}
 	var alloc GenesisAlloc
-	if err := alloc.UnmarshalJSON(blob); err != nil {
-		return err
+	blob := rawdb.ReadGenesisState(db, hash)
+	if len(blob) != 0 {
+		if err := alloc.UnmarshalJSON(blob); err != nil {
+			return err
+		}
+	} else {
+		// Genesis allocation is missing and there are several possibilities:
+		// the node is legacy which doesn't persist the genesis allocation or
+		// the persisted allocation is just lost.
+		// - supported networks(mainnet, testnets), recover with defined allocations
+		// - private network, can't recover
+		var genesis *Genesis
+		switch hash {
+		case params.MainnetGenesisHash:
+			genesis = DefaultGenesisBlock()
+		case params.RopstenGenesisHash:
+			genesis = DefaultRopstenGenesisBlock()
+		case params.RinkebyGenesisHash:
+			genesis = DefaultRinkebyGenesisBlock()
+		case params.GoerliGenesisHash:
+			genesis = DefaultGoerliGenesisBlock()
+		case params.SepoliaGenesisHash:
+			genesis = DefaultSepoliaGenesisBlock()
+		}
+		if genesis != nil {
+			alloc = genesis.Alloc
+		} else {
+			return errors.New("not found")
+		}
 	}
 	_, err := alloc.flush(db)
 	return err
