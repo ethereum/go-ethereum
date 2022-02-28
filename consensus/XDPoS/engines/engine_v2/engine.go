@@ -169,7 +169,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Add
 	}()
 
 	// Kick-off the countdown timer
-	x.timeoutWorker.Reset()
+	x.timeoutWorker.Reset(chain)
 
 	log.Info("[Initial] finish initialisation")
 	return nil
@@ -682,7 +682,7 @@ func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *utils.
 	if err != nil {
 		return err
 	}
-	return x.processTC(syncInfo.HighestTimeoutCert)
+	return x.processTC(chain, syncInfo.HighestTimeoutCert)
 }
 
 /*
@@ -801,7 +801,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		log.Error("Error while processing QC in the Vote handler after reaching pool threshold, ", err)
 		return err
 	}
-	log.Info("🗳 Successfully processed the vote and produced QC!")
+	log.Info("Successfully processed the vote and produced QC!", "QcRound", quorumCert.ProposedBlockInfo.Round, "QcNumOfSig", len(quorumCert.Signatures), "QcHash", quorumCert.ProposedBlockInfo.Hash, "QcNumber", quorumCert.ProposedBlockInfo.Number.Uint64())
 	// clean up vote at the same poolKey. and pookKey is proposed block hash
 	x.votePool.ClearPoolKeyByObj(currentVoteMsg)
 	return nil
@@ -822,7 +822,10 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg *utils.Timeout) (bool, error) {
 
 	masternodes := x.GetMasternodesAtRound(chain, timeoutMsg.Round, chain.CurrentHeader())
-	return x.verifyMsgSignature(utils.TimeoutSigHash(&timeoutMsg.Round), timeoutMsg.Signature, masternodes)
+	return x.verifyMsgSignature(utils.TimeoutSigHash(&utils.TimeoutForSign{
+		Round:     timeoutMsg.Round,
+		GapNumber: timeoutMsg.GapNumber,
+	}), timeoutMsg.Signature, masternodes)
 }
 
 /*
@@ -831,13 +834,13 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg 
 	2. Collect timeout
 	3. Once timeout pool reached threshold, it will trigger the call to the function "onTimeoutPoolThresholdReached"
 */
-func (x *XDPoS_v2) TimeoutHandler(timeout *utils.Timeout) error {
+func (x *XDPoS_v2) TimeoutHandler(blockChainReader consensus.ChainReader, timeout *utils.Timeout) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
-	return x.timeoutHandler(timeout)
+	return x.timeoutHandler(blockChainReader, timeout)
 }
 
-func (x *XDPoS_v2) timeoutHandler(timeout *utils.Timeout) error {
+func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeout *utils.Timeout) error {
 	// 1. checkRoundNumber
 	if timeout.Round != x.currentRound {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
@@ -851,12 +854,12 @@ func (x *XDPoS_v2) timeoutHandler(timeout *utils.Timeout) error {
 	// Threshold reached
 	if isThresholdReached {
 		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))
-		err := x.onTimeoutPoolThresholdReached(pooledTimeouts, timeout)
+		err := x.onTimeoutPoolThresholdReached(blockChainReader, pooledTimeouts, timeout, timeout.GapNumber)
 		if err != nil {
 			return err
 		}
-		// clean up timeout message at the same poolKey. and pookKey is proposed block hash
-		x.timeoutPool.ClearPoolKeyByObj(timeout)
+		// clean up timeout message, regardless its GapNumber or round
+		x.timeoutPool.Clear()
 	}
 	return nil
 }
@@ -868,7 +871,7 @@ func (x *XDPoS_v2) timeoutHandler(timeout *utils.Timeout) error {
 		2. processTC()
 		3. generateSyncInfo()
 */
-func (x *XDPoS_v2) onTimeoutPoolThresholdReached(pooledTimeouts map[common.Hash]utils.PoolObj, currentTimeoutMsg utils.PoolObj) error {
+func (x *XDPoS_v2) onTimeoutPoolThresholdReached(blockChainReader consensus.ChainReader, pooledTimeouts map[common.Hash]utils.PoolObj, currentTimeoutMsg utils.PoolObj, gapNumber uint64) error {
 	signatures := []utils.Signature{}
 	for _, v := range pooledTimeouts {
 		signatures = append(signatures, v.(*utils.Timeout).Signature)
@@ -877,18 +880,19 @@ func (x *XDPoS_v2) onTimeoutPoolThresholdReached(pooledTimeouts map[common.Hash]
 	timeoutCert := &utils.TimeoutCert{
 		Round:      currentTimeoutMsg.(*utils.Timeout).Round,
 		Signatures: signatures,
+		GapNumber:  gapNumber,
 	}
 	// Process TC
-	err := x.processTC(timeoutCert)
+	err := x.processTC(blockChainReader, timeoutCert)
 	if err != nil {
-		log.Error("Error while processing TC in the Timeout handler after reaching pool threshold, ", err.Error())
+		log.Error("Error while processing TC in the Timeout handler after reaching pool threshold", "TcRound", timeoutCert.Round, "NumberOfTcSig", len(timeoutCert.Signatures), "GapNumber", gapNumber, "Error", err)
 		return err
 	}
 	// Generate and broadcast syncInfo
 	syncInfo := x.getSyncInfo()
 	x.broadcastToBftChannel(syncInfo)
 
-	log.Info("⏰ Successfully processed the timeout message and produced TC & SyncInfo!")
+	log.Info("Successfully processed the timeout message and produced TC & SyncInfo!", "TcRound", timeoutCert.Round, "NumberOfTcSig", len(timeoutCert.Signatures))
 	return nil
 }
 
@@ -1041,10 +1045,10 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	return x.VerifyBlockInfo(blockChainReader, quorumCert.ProposedBlockInfo)
 }
 
-// TODO: Unhold, wait till proposal finalise
 func (x *XDPoS_v2) verifyTC(timeoutCert *utils.TimeoutCert) error {
 	/*
-		1. Get epoch master node list by round/number with chain's current header
+		1. Get epoch master node list by gapNumber
+		2. Check number of signatures > threshold, as well as it's format. (Same as verifyQC)
 		2. Verify signer signature: (List of signatures)
 					- Use ecRecover to get the public key
 					- Use the above public key to find out the xdc address
@@ -1087,7 +1091,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	}
 	// 4. Set new round
 	if quorumCert.ProposedBlockInfo.Round >= x.currentRound {
-		err := x.setNewRound(quorumCert.ProposedBlockInfo.Round + 1)
+		err := x.setNewRound(blockChainReader, quorumCert.ProposedBlockInfo.Round+1)
 		if err != nil {
 			log.Error("[processQC] Fail to setNewRound", "new round to set", quorumCert.ProposedBlockInfo.Round+1)
 			return err
@@ -1101,12 +1105,12 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	1. Update highestTC
 	2. Check TC round >= node's currentRound. If yes, call setNewRound
 */
-func (x *XDPoS_v2) processTC(timeoutCert *utils.TimeoutCert) error {
+func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert *utils.TimeoutCert) error {
 	if timeoutCert.Round > x.highestTimeoutCert.Round {
 		x.highestTimeoutCert = timeoutCert
 	}
 	if timeoutCert.Round >= x.currentRound {
-		err := x.setNewRound(timeoutCert.Round + 1)
+		err := x.setNewRound(blockChainReader, timeoutCert.Round+1)
 		if err != nil {
 			return err
 		}
@@ -1119,10 +1123,10 @@ func (x *XDPoS_v2) processTC(timeoutCert *utils.TimeoutCert) error {
 	2. Reset timer
 	3. Reset vote and timeout Pools
 */
-func (x *XDPoS_v2) setNewRound(round utils.Round) error {
+func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round utils.Round) error {
 	x.currentRound = round
 	//TODO: tell miner now it's a new round and start mine if it's leader
-	x.timeoutWorker.Reset()
+	x.timeoutWorker.Reset(blockChainReader)
 	//TODO: vote pools
 	x.timeoutPool.Clear()
 	return nil
@@ -1197,18 +1201,44 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 	2. Sign the signature
 	3. send to broadcast channel
 */
-func (x *XDPoS_v2) sendTimeout() error {
-	signedHash, err := x.signSignature(utils.TimeoutSigHash(&x.currentRound))
+func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
+	// Construct the gapNumber
+	var gapNumber uint64
+	currentBlockHeader := chain.CurrentHeader()
+	isEpochSwitch, epochNum, err := x.IsEpochSwitchAtRound(x.currentRound, currentBlockHeader)
 	if err != nil {
-		log.Error("signSignature when sending out TC", "Error", err)
+		log.Error("[sendTimeout] Error while checking if the currentBlock is epoch switch", "currentRound", x.currentRound, "currentBlockNum", currentBlockHeader.Number, "currentBlockHash", currentBlockHeader.Hash(), "epochNum", epochNum)
+		return err
+	}
+	if isEpochSwitch {
+		// Notice this +1 is because we expect a block whos is the child of currentHeader
+		currentNumber := currentBlockHeader.Number.Uint64() + 1
+		gapNumber := currentNumber - currentNumber%x.config.Epoch - x.config.Gap
+		log.Debug("[sendTimeout] is epoch switch when sending out timeout message", "currentNumber", currentNumber, "gapNumber", gapNumber)
+	} else {
+		epochSwitchInfo, err := x.getEpochSwitchInfo(chain, currentBlockHeader, currentBlockHeader.Hash())
+		if err != nil {
+			log.Error("[sendTimeout] Error when trying to get current epoch switch info for a non-epoch block", "currentRound", x.currentRound, "currentBlockNum", currentBlockHeader.Number, "currentBlockHash", currentBlockHeader.Hash(), "epochNum", epochNum)
+		}
+		gapNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64() - epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()%x.config.Epoch - x.config.Gap
+		log.Debug("[sendTimeout] non-epoch-switch block found its epoch block and calculated the gapNumber", "epochSwitchInfo.EpochSwitchBlockInfo.Number", epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64(), "gapNumber", gapNumber)
+	}
+
+	signedHash, err := x.signSignature(utils.TimeoutSigHash(&utils.TimeoutForSign{
+		Round:     x.currentRound,
+		GapNumber: gapNumber,
+	}))
+	if err != nil {
+		log.Error("[sendTimeout] signSignature when sending out TC", "Error", err)
 		return err
 	}
 	timeoutMsg := &utils.Timeout{
 		Round:     x.currentRound,
 		Signature: signedHash,
+		GapNumber: gapNumber,
 	}
-
-	err = x.timeoutHandler(timeoutMsg)
+	log.Info("[sendTimeout] Timeout message generated, ready to send!", "timeoutMsgRound", timeoutMsg.Round, "timeoutMsgGapNumber", timeoutMsg.GapNumber)
+	err = x.timeoutHandler(chain, timeoutMsg)
 	if err != nil {
 		log.Error("TimeoutHandler error", "TimeoutRound", timeoutMsg.Round, "Error", err)
 		return err
@@ -1254,11 +1284,11 @@ func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signat
 	Function that will be called by timer when countdown reaches its threshold.
 	In the engine v2, we would need to broadcast timeout messages to other peers
 */
-func (x *XDPoS_v2) OnCountdownTimeout(time time.Time) error {
+func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 	x.lock.Lock()
 	defer x.lock.Unlock()
 
-	err := x.sendTimeout()
+	err := x.sendTimeout(chain.(consensus.ChainReader))
 	if err != nil {
 		log.Error("Error while sending out timeout message at time: ", time)
 		return err
@@ -1321,7 +1351,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 			Hash:   grandParentBlock.Hash(),
 			Round:  decodedExtraField.Round,
 		}
-		log.Debug("👴 Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
+		log.Debug("Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
 		return true, nil
 	}
 	// Everything else, fail to commit
@@ -1352,12 +1382,12 @@ func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReade
 	Testing tools
 */
 
-func (x *XDPoS_v2) SetNewRoundFaker(newRound utils.Round, resetTimer bool) {
+func (x *XDPoS_v2) SetNewRoundFaker(blockChainReader consensus.ChainReader, newRound utils.Round, resetTimer bool) {
 	x.lock.Lock()
 	defer x.lock.Unlock()
 	// Reset a bunch of things
 	if resetTimer {
-		x.timeoutWorker.Reset()
+		x.timeoutWorker.Reset(blockChainReader)
 	}
 	x.currentRound = newRound
 }

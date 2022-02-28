@@ -62,7 +62,13 @@ func TestHashAndSigHash(t *testing.T) {
 		t.Fatalf("SigHash of two block info shouldn't equal")
 	}
 	round2 := Round(999)
-	if TimeoutSigHash(&round) == TimeoutSigHash(&round2) {
+	if TimeoutSigHash(&TimeoutForSign{
+		Round:     round,
+		GapNumber: 450,
+	}) == TimeoutSigHash(&TimeoutForSign{
+		Round:     round2,
+		GapNumber: 450,
+	}) {
 		t.Fatalf("SigHash of two round shouldn't equal")
 	}
 }

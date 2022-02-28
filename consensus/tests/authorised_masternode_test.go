@@ -127,7 +127,7 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	blockchain.InsertBlock(currentBlock)
 	time.Sleep(time.Duration(minePeriod) * time.Second)
 
-	adaptor.EngineV2.SetNewRoundFaker(2, false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, 2, false)
 	isYourTurn, _ = adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.False(t, isYourTurn)
 

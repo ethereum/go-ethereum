@@ -27,7 +27,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 5
-	engineV2.SetNewRoundFaker(utils.Round(1), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(1), false)
 	// Create two vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
@@ -89,7 +89,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 5
-	engineV2.SetNewRoundFaker(utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
 	// Create two vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
@@ -168,7 +168,7 @@ func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testi
 	}
 
 	// Set round to 7
-	engineV2.SetNewRoundFaker(utils.Round(7), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(7), false)
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
@@ -180,11 +180,11 @@ func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testi
 	assert.Equal(t, "vote message round number: 6 is too far away from currentRound: 7", err.Error())
 
 	// Set round to 5, it's 1 round away, should not trigger failure
-	engineV2.SetNewRoundFaker(utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 
-	engineV2.SetNewRoundFaker(utils.Round(4), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(4), false)
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.NotNil(t, err)
 	assert.Equal(t, "vote message round number: 6 is too far away from currentRound: 4", err.Error())
@@ -196,7 +196,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 5
-	engineV2.SetNewRoundFaker(utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
 
 	// Start with vote messages
 	blockInfo := &utils.BlockInfo{
@@ -254,7 +254,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Signature: []byte{1},
 	}
 
-	err = engineV2.TimeoutHandler(timeoutMsg)
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.NotNil(t, err)
 	assert.Equal(t, "timeout message round number: 5 does not match currentRound: 6", err.Error())
 
@@ -264,7 +264,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Signature: []byte{1},
 	}
 
-	err = engineV2.TimeoutHandler(timeoutMsg)
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(6), currentRound)
@@ -272,7 +272,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Round:     utils.Round(6),
 		Signature: []byte{2},
 	}
-	err = engineV2.TimeoutHandler(timeoutMsg)
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _ = engineV2.GetProperties()
 	assert.Equal(t, utils.Round(6), currentRound)
@@ -283,7 +283,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Signature: []byte{3},
 	}
 
-	err = engineV2.TimeoutHandler(timeoutMsg)
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 
 	syncInfoMsg := <-engineV2.BroadcastCh
@@ -321,7 +321,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	voteSigningHash := utils.VoteSigHash(blockInfo)
 
 	// Set round to 6
-	engineV2.SetNewRoundFaker(utils.Round(6), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(6), false)
 	// Create two vote messages which will not reach vote pool threshold
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,

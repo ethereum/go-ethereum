@@ -15,7 +15,7 @@ type CountdownTimer struct {
 	initilised      bool
 	timeoutDuration time.Duration
 	// Triggered when the countdown timer timeout for the `timeoutDuration` period, it will pass current timestamp to the callback function
-	OnTimeoutFn func(time time.Time) error
+	OnTimeoutFn func(time time.Time, i interface{}) error
 }
 
 func NewCountDown(duration time.Duration) *CountdownTimer {
@@ -35,17 +35,17 @@ func (t *CountdownTimer) StopTimer() {
 }
 
 // Reset will start the countdown timer if it's already stopped, or simply reset the countdown time back to the defual `duration`
-func (t *CountdownTimer) Reset() {
+func (t *CountdownTimer) Reset(i interface{}) {
 	if !t.isInitilised() {
 		t.setInitilised(true)
-		go t.startTimer()
+		go t.startTimer(i)
 	} else {
 		t.resetc <- 0
 	}
 }
 
 // A long running process that
-func (t *CountdownTimer) startTimer() {
+func (t *CountdownTimer) startTimer(i interface{}) {
 	// Make sure we mark Initilised to false when we quit the countdown
 	defer t.setInitilised(false)
 	timer := time.NewTimer(t.timeoutDuration)
@@ -58,7 +58,7 @@ func (t *CountdownTimer) startTimer() {
 			return
 		case <-timer.C:
 			log.Debug("Countdown time reached!")
-			err := t.OnTimeoutFn(time.Now())
+			err := t.OnTimeoutFn(time.Now(), i)
 			if err != nil {
 				log.Error("OnTimeoutFn error", err)
 			}

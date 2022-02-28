@@ -35,6 +35,7 @@ func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
 	}
 	return false, numOfItems, objListKeyed
 }
+
 func (p *Pool) Size(obj PoolObj) int {
 	poolKey := obj.PoolKey()
 	objListKeyed, ok := p.objList[poolKey]

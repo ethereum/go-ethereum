@@ -160,7 +160,7 @@ func TestTimeoutHandler(t *testing.T) {
 		return nil
 	}
 
-	tester.bfter.consensus.timeoutHandler = func(timeout *utils.Timeout) error {
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
@@ -190,7 +190,7 @@ func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 		return nil
 	}
 
-	tester.bfter.consensus.timeoutHandler = func(timeout *utils.Timeout) error {
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
 			Type:          "timeout",
 			IncomingRound: utils.Round(1),

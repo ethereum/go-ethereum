@@ -34,11 +34,11 @@ type Bfter struct {
 }
 
 type ConsensusFns struct {
-	verifyVote  func(chain consensus.ChainReader, vote *utils.Vote) (bool, error)
+	verifyVote  func(consensus.ChainReader, *utils.Vote) (bool, error)
 	voteHandler func(consensus.ChainReader, *utils.Vote) error
 
 	verifyTimeout  func(*utils.Timeout) error
-	timeoutHandler func(*utils.Timeout) error
+	timeoutHandler func(consensus.ChainReader, *utils.Timeout) error
 
 	verifySyncInfo  func(*utils.SyncInfo) error
 	syncInfoHandler func(consensus.ChainReader, *utils.SyncInfo) error
@@ -123,7 +123,7 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 	}
 	b.broadcastCh <- timeout
 
-	err = b.consensus.timeoutHandler(timeout)
+	err = b.consensus.timeoutHandler(b.blockChainReader, timeout)
 	if err != nil {
 		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
 			log.Warn("timeout round not equal", "error", err)

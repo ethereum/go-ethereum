@@ -94,7 +94,7 @@ func TestHookPenaltyV2Jump(t *testing.T) {
 	masternodes := adaptor.GetMasternodesFromCheckpointHeader(header901)
 	assert.Equal(t, 4, len(masternodes))
 	header6285 := blockchain.GetHeaderByNumber(uint64(end))
-	adaptor.EngineV2.SetNewRoundFaker(utils.Round(config.XDPoS.Epoch*7), false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(config.XDPoS.Epoch*7), false)
 	// round 6285-6300 miss blocks, penalty should work as usual
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, header6285.Number, header6285.ParentHash, masternodes)
 	assert.Nil(t, err)

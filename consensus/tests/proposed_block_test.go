@@ -175,7 +175,7 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 5
-	engineV2.SetNewRoundFaker(utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
 
 	var extraField utils.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
@@ -205,7 +205,7 @@ func TestShouldNotSetNewRound(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 6
-	engineV2.SetNewRoundFaker(utils.Round(6), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(6), false)
 
 	var extraField utils.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
@@ -229,7 +229,7 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 5
-	engineV2.SetNewRoundFaker(utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
 
 	err := engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
 	if err != nil {
@@ -267,7 +267,7 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 8
-	engineV2.SetNewRoundFaker(utils.Round(8), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(8), false)
 
 	var extraField utils.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
@@ -316,7 +316,7 @@ func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
 
 	// Find the first forked block at block 14th
 	firstForkedBlock := blockchain.GetBlockByHash(blockchain.GetBlockByHash(forkedBlock.ParentHash()).ParentHash())
-	engineV2.SetNewRoundFaker(utils.Round(7), false)
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(7), false)
 	err = engineV2.ProposedBlockHandler(blockchain, firstForkedBlock.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
