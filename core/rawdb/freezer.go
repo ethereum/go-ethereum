@@ -248,7 +248,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 
 // ReadAncients runs the given read operation while ensuring that no writes take place
 // on the underlying freezer.
-func (f *freezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *freezer) ReadAncients(fn func(op ethdb.AncientReadOp) error) (err error) {
 	f.writeLock.RLock()
 	defer f.writeLock.RUnlock()
 	return fn(f)

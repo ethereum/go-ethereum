@@ -727,7 +727,7 @@ func showMetaData(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true)
-	ancients, err := db.Ancients()
+	ancients, err := db.Ancients(rawdb.ChainFreezer)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
 	}
@@ -781,7 +781,7 @@ func freezerMigrate(ctx *cli.Context) error {
 	defer db.Close()
 
 	// Check first block for legacy receipt format
-	numAncients, err := db.Ancients()
+	numAncients, err := db.Ancients(rawdb.ChainFreezer)
 	if err != nil {
 		return err
 	}
@@ -801,7 +801,7 @@ func freezerMigrate(ctx *cli.Context) error {
 
 	log.Info("Starting migration", "ancients", numAncients, "firstLegacy", firstIdx)
 	start := time.Now()
-	if err := db.MigrateTable("receipts", types.ConvertLegacyStoredReceipts); err != nil {
+	if err := db.MigrateTable(rawdb.ChainFreezer, "receipts", types.ConvertLegacyStoredReceipts); err != nil {
 		return err
 	}
 	if err := db.Close(); err != nil {
@@ -817,7 +817,7 @@ func freezerMigrate(ctx *cli.Context) error {
 // the second return parameter.
 func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, error) {
 	// Check first block for legacy receipt format
-	numAncients, err := db.Ancients()
+	numAncients, err := db.Ancients(rawdb.ChainFreezer)
 	if err != nil {
 		return false, 0, err
 	}
@@ -836,7 +836,7 @@ func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, erro
 	// the index is not already provided.
 	if firstIdx == 0 {
 		for i := uint64(0); i < numAncients; i++ {
-			blob, err = db.Ancient("receipts", i)
+			blob, err = db.Ancient(rawdb.ChainFreezer, "receipts", i)
 			if err != nil {
 				return false, 0, err
 			}
@@ -850,7 +850,7 @@ func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, erro
 		}
 	}
 	// Is first non-empty receipt legacy?
-	first, err := db.Ancient("receipts", firstIdx)
+	first, err := db.Ancient(rawdb.ChainFreezer, "receipts", firstIdx)
 	if err != nil {
 		return false, 0, err
 	}

@@ -135,6 +135,11 @@ var FreezerNoSnappy = map[string]bool{
 	freezerDifficultyTable: true,
 }
 
+const (
+	// ChainFreezer indicates the name of ancient chain freezer
+	ChainFreezer = "chain"
+)
+
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
