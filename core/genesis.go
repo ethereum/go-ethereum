@@ -328,7 +328,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 		if len(block.Extra()) < 32 {
 			return nil, errors.New("extra-data 32 byte vanity prefix missing")
 		}
-		if len(block.Extra()) < 32+crypto.SignatureLen {
+		if len(block.Extra()) < 32+crypto.SignatureLength {
 			return nil, errors.New("extra-data 65 byte signature suffix missing")
 		}
 	}
