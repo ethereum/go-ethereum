@@ -88,9 +88,7 @@ func AzureBlobstoreList(config AzureBlobstoreConfig) ([]*azblob.BlobItemInternal
 	var allBlobs []*azblob.BlobItemInternal
 	for pager.NextPage(context.Background()) {
 		res := pager.PageResponse()
-		for _, blob := range res.ContainerListBlobFlatSegmentResult.Segment.BlobItems {
-			allBlobs = append(allBlobs, blob)
-		}
+		allBlobs = append(allBlobs, res.ContainerListBlobFlatSegmentResult.Segment.BlobItems...)
 	}
 
 	return allBlobs, nil
