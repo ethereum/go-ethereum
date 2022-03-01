@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 
@@ -88,12 +86,13 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 	case *verkle.LeafNode:
 		// Look for the next non-empty value
-		for i := it.stack[len(it.stack)-1].Index + 1; i < 256; i++ {
+		for i := it.stack[len(it.stack)-1].Index; i < 256; i++ {
 			if node.Value(i) != nil {
-				it.stack[len(it.stack)-1].Index = i
+				it.stack[len(it.stack)-1].Index = i + 1
 				return true
 			}
 		}
+
 		// go back to parent to get the next leaf
 		it.stack = it.stack[:len(it.stack)-1]
 		it.current = it.stack[len(it.stack)-1].Node
@@ -116,7 +115,6 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
 		return true
 	default:
-		fmt.Println(node)
 		panic("invalid node type")
 	}
 }
@@ -163,7 +161,7 @@ func (it *verkleNodeIterator) LeafKey() []byte {
 		panic("Leaf() called on an verkle node iterator not at a leaf location")
 	}
 
-	return leaf.Key(it.stack[len(it.stack)-1].Index)
+	return leaf.Key(it.stack[len(it.stack)-1].Index - 1)
 }
 
 // LeafBlob returns the content of the leaf. The method panics if the iterator
@@ -175,7 +173,7 @@ func (it *verkleNodeIterator) LeafBlob() []byte {
 		panic("LeafBlob() called on an verkle node iterator not at a leaf location")
 	}
 
-	return leaf.Value(it.stack[len(it.stack)-1].Index)
+	return leaf.Value(it.stack[len(it.stack)-1].Index - 1)
 }
 
 // LeafProof returns the Merkle proof of the leaf. The method panics if the
