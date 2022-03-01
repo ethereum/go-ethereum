@@ -4,16 +4,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
-	kbls "github.com/kilic/bls12-381"
 	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
-	"io"
 )
 
 const BLOB_COMMITMENT_VERSION_KZG byte = 0x01
@@ -62,8 +62,8 @@ func (p *KZGCommitment) UnmarshalText(text []byte) error {
 	return hexutil.UnmarshalFixedText("KZGCommitment", text, p[:])
 }
 
-func (p *KZGCommitment) Point() (*kbls.PointG1, error) {
-	return kbls.NewG1().FromCompressed(p[:])
+func (p *KZGCommitment) Point() (*bls.G1Point, error) {
+	return bls.FromCompressedG1(p[:])
 }
 
 func (kzg KZGCommitment) ComputeVersionedHash() common.Hash {
@@ -181,6 +181,19 @@ func (blob *Blob) UnmarshalText(text []byte) error {
 
 type BlobKzgs []KZGCommitment
 
+// Extract the crypto material underlying these commitments
+func (li BlobKzgs) Commitments() ([]*bls.G1Point, error) {
+	var points []*bls.G1Point
+	for _, c := range li {
+		p, err := c.Point()
+		if err != nil {
+			return nil, errors.New("internal error commitments")
+		}
+		points = append(points, p)
+	}
+	return points, nil
+}
+
 func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
 	return dr.List(func() codec.Deserializable {
 		i := len(*li)
@@ -216,6 +229,28 @@ func (li BlobKzgs) copy() BlobKzgs {
 }
 
 type Blobs []Blob
+
+// Extract the crypto material underlying these blobs
+func (blobs Blobs) Blobs() ([][]bls.Fr, error) {
+	var result [][]bls.Fr
+
+	// Iterate over every blob
+	for _, b := range blobs {
+		var blob []bls.Fr
+		// Iterate over each chunk of the blob and parse it into an Fr
+		for _, chunk := range b {
+			var chunkFr bls.Fr
+			ok := bls.FrFrom32(&chunkFr, chunk)
+			if ok != true {
+				return nil, errors.New("internal error commitments")
+			}
+			blob = append(blob, chunkFr)
+		}
+		// Add each individiual blob to the result
+		result = append(result, blob)
+	}
+	return result, nil
+}
 
 func (a *Blobs) Deserialize(dr *codec.DecodingReader) error {
 	return dr.List(func() codec.Deserializable {
