@@ -117,7 +117,7 @@ func TestGoKzg(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := ComputeProof(polynomial, x, kzg.CrsG1)
+	proof := ComputeProof(polynomial, x, kzg.KzgSetupG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
@@ -155,7 +155,7 @@ func TestKzg(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := ComputeProof(polynomial, x, kzg.CrsG1)
+	proof := ComputeProof(polynomial, x, kzg.KzgSetupG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
@@ -281,7 +281,7 @@ func TestPointEvaluationTestVector(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(0x42)
-	proof := ComputeProof(polynomial, x, kzg.CrsG1)
+	proof := ComputeProof(polynomial, x, kzg.KzgSetupG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr

@@ -10,13 +10,18 @@ import (
 	"github.com/protolambda/go-kzg/bls"
 )
 
-var crsG2 []bls.G2Point
-var crsLagrange []bls.G1Point
-var CrsG1 []bls.G1Point // only used in tests (for proof creation)
+// KZG CRS for G2
+var kzgSetupG2 []bls.G2Point
+
+// KZG CRS for commitment computation
+var kzgSetupLagrange []bls.G1Point
+
+// KZG CRS for G1 (only used in tests (for proof creation))
+var KzgSetupG1 []bls.G1Point
 
 // Convert polynomial in evaluation form to KZG commitment
 func BlobToKzg(eval []bls.Fr) *bls.G1Point {
-	return bls.LinCombG1(crsLagrange, eval)
+	return bls.LinCombG1(kzgSetupLagrange, eval)
 }
 
 // Verify a KZG proof
@@ -25,7 +30,7 @@ func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1
 	var xG2 bls.G2Point
 	bls.MulG2(&xG2, &bls.GenG2, x)
 	var sMinuxX bls.G2Point
-	bls.SubG2(&sMinuxX, &crsG2[1], &xG2)
+	bls.SubG2(&sMinuxX, &kzgSetupG2[1], &xG2)
 	var yG1 bls.G1Point
 	bls.MulG1(&yG1, &bls.GenG1, y)
 	var commitmentMinusY bls.G1Point
@@ -91,7 +96,7 @@ func VerifyBlobs(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 			bls.AddModFr(&sum, &sum, &tmp)
 		}
 		lScalars[c] = sum
-		lPoints[c] = crsLagrange[c]
+		lPoints[c] = kzgSetupLagrange[c]
 	}
 
 	// Build right-side MSM: r_0 * C_0 + r_1 * C_1 + r_2 * C_2 + ...
@@ -129,7 +134,7 @@ func init() {
 		panic(err)
 	}
 
-	crsG2 = parsedSetup.SetupG2
-	crsLagrange = parsedSetup.SetupLagrange
-	CrsG1 = parsedSetup.SetupG1
+	kzgSetupG2 = parsedSetup.SetupG2
+	kzgSetupLagrange = parsedSetup.SetupLagrange
+	KzgSetupG1 = parsedSetup.SetupG1
 }
