@@ -355,16 +355,17 @@ func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
 			return fmt.Errorf("versioned hash %d supposedly %s but does not match computed %s", i, h, computed)
 		}
 	}
-	// TODO: george/dankrad: faster check if kzg commitment matches blob data, Dankrad: "Instead of executing
-	// this per blob, it should ideally be taking a random linear combination on each side."
-	for i, c := range b.BlobKzgs {
-		if computed, ok := b.Blobs[i].ComputeCommitment(); !ok {
-			return fmt.Errorf("failed to parse blob %d to compute commitment for verification", i)
-		} else if computed != c {
-			return fmt.Errorf("kzg commitment %d supposedly %s but does not match computed %s", i, c, computed)
-		}
+
+	// Extract cryptographic material out of our types and pass them to the crypto layer
+	commitments, err := b.BlobKzgs.Commitments()
+	if err != nil {
+		return fmt.Errorf("internal commitment error")
 	}
-	return nil
+	blobs, err := b.Blobs.Blobs()
+	if err != nil {
+		return fmt.Errorf("internal blobs error")
+	}
+	return kzg.VerifyBlobs(commitments, blobs)
 }
 
 func (b *BlobTxWrapData) copy() TxWrapData {
