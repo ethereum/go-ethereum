@@ -12,22 +12,6 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 Automated builds are available for stable releases and the unstable master branch. Binary
 archives are published at https://geth.ethereum.org/downloads/.
 
-## Hardware Requirements
-
-Minimum:
-
-* CPU with 2+ cores
-* 4GB RAM
-* 500GB free storage space to sync the Mainnet
-* 8 MBit/sec download Internet service
-
-Recommended:
-
-* Fast CPU with 4+ cores
-* 16GB+ RAM
-* High Performance SSD with at least 500GB free space
-* 25+ MBit/sec download Internet service
-
 ## Building the source
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/install-and-build/installing-geth).
@@ -67,6 +51,22 @@ Going through all the possible command line flags is out of scope here (please c
 [CLI Wiki page](https://geth.ethereum.org/docs/interface/command-line-options)),
 but we've enumerated a few common parameter combos to get you up to speed quickly
 on how you can run your own `geth` instance.
+
+### Hardware Requirements
+
+Minimum:
+
+* CPU with 2+ cores
+* 4GB RAM
+* 500GB free storage space to sync the Mainnet
+* 8 MBit/sec download Internet service
+
+Recommended:
+
+* Fast CPU with 4+ cores
+* 16GB+ RAM
+* High Performance SSD with at least 500GB free space
+* 25+ MBit/sec download Internet service
 
 ### Full node on the main Ethereum network
 
