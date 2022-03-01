@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -154,7 +153,7 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := frlp.Encode(&h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
 
@@ -169,7 +168,7 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	h.tmp.Reset()
 	// Generate the RLP encoding of the node
-	if err := n.EncodeRLP(&h.tmp); err != nil {
+	if err := frlp.Encode(&h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
 

@@ -376,7 +376,7 @@ func (st *StackTrie) hash() {
 
 	switch st.nodeType {
 	case branchNode:
-		var nodes [17]node
+		var nodes rawFullNode
 		for i, child := range st.children {
 			if child == nil {
 				nodes[i] = nilValueNode
@@ -395,7 +395,7 @@ func (st *StackTrie) hash() {
 		h = newHasher(false)
 		defer returnHasherToPool(h)
 		h.tmp.Reset()
-		if err := rlp.Encode(&h.tmp, nodes); err != nil {
+		if err := frlp.Encode(&h.tmp, nodes); err != nil {
 			panic(err)
 		}
 	case extNode:
@@ -409,14 +409,11 @@ func (st *StackTrie) hash() {
 		} else {
 			valuenode = hashNode(st.children[0].val)
 		}
-		n := struct {
-			Key []byte
-			Val node
-		}{
+		n := &rawShortNode{
 			Key: hexToCompact(st.key),
 			Val: valuenode,
 		}
-		if err := rlp.Encode(&h.tmp, n); err != nil {
+		if err := frlp.Encode(&h.tmp, n); err != nil {
 			panic(err)
 		}
 		returnToPool(st.children[0])
