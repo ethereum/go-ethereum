@@ -37,10 +37,10 @@ type ConsensusFns struct {
 	verifyVote  func(consensus.ChainReader, *utils.Vote) (bool, error)
 	voteHandler func(consensus.ChainReader, *utils.Vote) error
 
-	verifyTimeout  func(*utils.Timeout) error
+	verifyTimeout  func(consensus.ChainReader, *utils.Timeout) (bool, error)
 	timeoutHandler func(consensus.ChainReader, *utils.Timeout) error
 
-	verifySyncInfo  func(*utils.SyncInfo) error
+	verifySyncInfo  func(consensus.ChainReader, *utils.SyncInfo) error
 	syncInfoHandler func(consensus.ChainReader, *utils.SyncInfo) error
 }
 
@@ -69,9 +69,9 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 	e := engine.(*XDPoS.XDPoS)
 	b.broadcastCh = e.EngineV2.BroadcastCh
 	b.consensus = ConsensusFns{
-		verifySyncInfo: e.VerifySyncInfo,
+		verifySyncInfo: e.EngineV2.VerifySyncInfoMessage,
 		verifyVote:     e.EngineV2.VerifyVoteMessage,
-		verifyTimeout:  e.VerifyTimeout,
+		verifyTimeout:  e.EngineV2.VerifyTimeoutMessage,
 
 		voteHandler:     e.EngineV2.VoteHandler,
 		timeoutHandler:  e.EngineV2.TimeoutHandler,
@@ -116,10 +116,14 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 		log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
 		return nil
 	}
-	err := b.consensus.verifyTimeout(timeout)
+	verified, err := b.consensus.verifyTimeout(b.blockChainReader, timeout)
 	if err != nil {
 		log.Error("Verify BFT Timeout", "error", err)
 		return err
+	}
+	if !verified {
+		log.Warn("Timeout message failed to verify", "timeoutRound", timeout.Round, "timeoutGapNum", timeout.GapNumber)
+		return fmt.Errorf("Fail to verify the received timeout message")
 	}
 	b.broadcastCh <- timeout
 
@@ -140,7 +144,7 @@ func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 		log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
 		return nil
 	}
-	err := b.consensus.verifySyncInfo(syncInfo)
+	err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
 	if err != nil {
 		log.Error("Verify BFT SyncInfo", "error", err)
 		return err

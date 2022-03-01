@@ -82,6 +82,7 @@ var (
 
 	ErrInvalidV2Extra               = errors.New("Invalid v2 extra in the block")
 	ErrInvalidQC                    = errors.New("Invalid QC content")
+	ErrInvalidTC                    = errors.New("Invalid TC content")
 	ErrEmptyBlockInfoHash           = errors.New("BlockInfo hash is empty")
 	ErrInvalidFieldInNonEpochSwitch = errors.New("Invalid field exist in a non-epoch swtich block")
 )

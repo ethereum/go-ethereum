@@ -66,17 +66,18 @@ func TestUpdateMasterNodes(t *testing.T) {
 	snap, err := x.GetSnapshot(blockchain, currentBlock.Header())
 
 	assert.Nil(t, err)
-	assert.Equal(t, int(snap.Number), 450)
+	assert.Equal(t, 450, int(snap.Number))
 
 	// Insert block 1350
 	t.Logf("Inserting block with propose at 1350...")
 	blockCoinbaseA := "0xaaa0000000000000000000000000000000001350"
-	tx, err := voteTX(37117, 0, acc1Addr.String())
+	// NOTE: voterAddr never exist in the Masternode list, but all acc1,2,3 already does
+	tx, err := voteTX(37117, 0, voterAddr.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	//Get from block validator error message
-	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
+	merkleRoot := "ef9198eb14b003774a505033f6cdcea2d357cbf7a7e7b004d8034d4e2a9770ee"
 	header := &types.Header{
 		Root:       common.HexToHash(merkleRoot),
 		Number:     big.NewInt(int64(1350)),
@@ -90,7 +91,11 @@ func TestUpdateMasterNodes(t *testing.T) {
 	}
 	parentBlock, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx})
 	assert.Nil(t, err)
-	blockchain.InsertBlock(parentBlock)
+	err = blockchain.InsertBlock(parentBlock)
+	assert.Nil(t, err)
+	// 1350 is a gap block, need to update the snapshot
+	err = blockchain.UpdateM1()
+	assert.Nil(t, err)
 	t.Logf("Inserting block from 1351 to 1800...")
 	for i := 1351; i <= 1800; i++ {
 		blockCoinbase := fmt.Sprintf("0xaaa000000000000000000000000000000000%4d", i)
@@ -117,8 +122,7 @@ func TestUpdateMasterNodes(t *testing.T) {
 	snap, err = x.GetSnapshot(blockchain, parentBlock.Header())
 
 	assert.Nil(t, err)
-	assert.False(t, snap.IsMasterNodes(acc3Addr))
-	assert.True(t, snap.IsMasterNodes(acc1Addr))
+	assert.True(t, snap.IsMasterNodes(voterAddr))
 	assert.Equal(t, int(snap.Number), 1350)
 }
 

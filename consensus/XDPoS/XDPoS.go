@@ -521,15 +521,3 @@ func (x *XDPoS) initialV2FromLastV1(chain consensus.ChainReader, header *types.H
 	}
 	return nil
 }
-
-func (x *XDPoS) VerifyVote(*utils.Vote) error {
-	return nil
-}
-
-func (x *XDPoS) VerifyTimeout(*utils.Timeout) error {
-	return nil
-}
-
-func (x *XDPoS) VerifySyncInfo(*utils.SyncInfo) error {
-	return nil
-}

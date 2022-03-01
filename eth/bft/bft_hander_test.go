@@ -155,9 +155,9 @@ func TestTimeoutHandler(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 1
 
-	tester.bfter.consensus.verifyTimeout = func(timeout *utils.Timeout) error {
+	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *utils.Timeout) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
-		return nil
+		return true, nil
 	}
 
 	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
@@ -186,8 +186,8 @@ func TestTimeoutHandler(t *testing.T) {
 func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 	tester := newTester()
 
-	tester.bfter.consensus.verifyTimeout = func(timeout *utils.Timeout) error {
-		return nil
+	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *utils.Timeout) (bool, error) {
+		return true, nil
 	}
 
 	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
