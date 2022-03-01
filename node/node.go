@@ -350,7 +350,7 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 	if len(cliParam) > 0 {
 		// If a plaintext secret was provided via cli flags, use that
 		jwtSecret := common.FromHex(cliParam)
-		if len(jwtSecret) == 32 && strings.HasPrefix(string(cliParam), "0x") {
+		if len(jwtSecret) == 32 && strings.HasPrefix(cliParam, "0x") {
 			log.Warn("Plaintext JWT secret provided, please consider passing via file")
 			return jwtSecret, nil
 		}
