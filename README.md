@@ -13,7 +13,9 @@ Automated builds are available for stable releases and the unstable master branc
 archives are published at https://geth.ethereum.org/downloads/.
 
 ## Hardware Requirements
+
 Minimum:
+
 * CPU with 2+ cores
 * 4GB RAM
 * 500GB free storage space to sync the Mainnet
