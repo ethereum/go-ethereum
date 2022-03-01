@@ -36,24 +36,19 @@ func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1
 	var commitmentMinusY bls.G1Point
 	bls.SubG1(&commitmentMinusY, commitment, &yG1)
 
-	// This trick may be applied in the BLS-lib specific code:
-	//
-	// e([commitment - y], [1]) = e([proof],  [s - x])
-	//    equivalent to
-	// e([commitment - y]^(-1), [1]) * e([proof],  [s - x]) = 1_T
-	//
 	return bls.PairingsVerify(&commitmentMinusY, &bls.GenG2, proof, &sMinuxX)
 }
 
+// Return versioned hash that corresponds to KZG commitment
 func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
 	h := crypto.Keccak256Hash(bls.ToCompressedG1(commitment))
 	h[0] = byte(params.BlobCommitmentVersionKZG)
 	return h
 }
 
-// Verify that the list of `blobs` map to the list of `commitments`
+// Verify that the list of `commitments` maps to the list of `blobs`
 //
-// This is an optimization over the naive approach (written in the EIP) of iteratively checking each blob against each
+// This is an optimization over the naive approach (found in the EIP) of iteratively checking each blob against each
 // commitment.  The naive approach requires n*l scalar multiplications where `n` is the number of blobs and `l` is
 // FIELD_ELEMENTS_PER_BLOB to compute the commitments for all blobs.
 //
@@ -66,8 +61,8 @@ func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
 // In the above, `r` are the random scalars of the linear combination, `b0` is the zero blob, `L` are the elements
 // of the KZG_SETUP_LAGRANGE and `C` are the commitments provided.
 //
-// By re-grouping the above equation around the `L` points we can reduce the amount of scalar multiplications further
-// (down to just `n` scalar multiplications) by making the MSM look like this:
+// By regrouping the above equation around the `L` points we can reduce the length of the MSM further
+// (down to just `n` scalar multiplications) by making it look like this:
 //     (r_0*b0_0 + r_1*b1_0 + r_2*b2_0) * L_0 + (r_0*b0_1 + r_1*b1_1 + r_2*b2_1) * L_1
 func VerifyBlobs(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 	// Prepare objects to hold our two MSMs

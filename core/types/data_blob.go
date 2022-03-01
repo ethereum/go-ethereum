@@ -356,10 +356,11 @@ func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
 		}
 	}
 
-	// Extract cryptographic material out of our types and pass them to the crypto layer
+	// Time to verify that the KZG commitments match the included blobs:
+	// first extract crypto material out of our types and pass them to the crypto layer
 	commitments, err := b.BlobKzgs.Commitments()
 	if err != nil {
-		return fmt.Errorf("internal commitment error")
+		return fmt.Errorf("internal commitments error")
 	}
 	blobs, err := b.Blobs.Blobs()
 	if err != nil {

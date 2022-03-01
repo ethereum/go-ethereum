@@ -76,10 +76,9 @@ func ComputeProof(poly []bls.Fr, x uint64, crsG1 []bls.G1Point) *bls.G1Point {
 	return bls.LinCombG1(crsG1[:len(quotientPolynomial)], quotientPolynomial)
 }
 
+// Test the go-kzg library for correctness
+// Do the trusted setup, generate a polynomial, commit to it, make proof, verify proof.
 func TestGoKzg(t *testing.T) {
-	/// Test the go-kzg library for correctness
-	/// Do the trusted setup, generate a polynomial, commit to it, make proof, verify proof.
-
 	// Generate roots of unity
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
@@ -131,9 +130,8 @@ func TestGoKzg(t *testing.T) {
 	}
 }
 
+// Test the geth KZG module (use our trusted setup instead of creating a new one)
 func TestKzg(t *testing.T) {
-	/// Test the geth KZG module (use our trusted setup instead of creating a new one)
-
 	// First let's do some go-kzg preparations to be able to convert polynomial between coefficient and evaluation form
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
@@ -175,6 +173,7 @@ type JSONTestdataBlobs struct {
 	KzgBlob2 string
 }
 
+// Test the optimized VerifyBlobs function
 func TestVerifyBlobs(t *testing.T) {
 	data, err := ioutil.ReadFile("kzg_testdata/kzg_blobs.json")
 	if err != nil {
@@ -242,6 +241,7 @@ func TestVerifyBlobs(t *testing.T) {
 	}
 }
 
+// Helper: Create test vector for the BlobVerification precompile
 func TestBlobVerificationTestVector(t *testing.T) {
 	data := []byte(strings.Repeat("HELPMELOVEME ", 10083))[:params.FieldElementsPerBlob*32]
 
@@ -261,6 +261,7 @@ func TestBlobVerificationTestVector(t *testing.T) {
 	fmt.Printf("%d\n", len(testVector))
 }
 
+// Helper: Create test vector for the PointEvaluation precompile
 func TestPointEvaluationTestVector(t *testing.T) {
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
