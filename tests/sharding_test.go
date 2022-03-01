@@ -2,11 +2,14 @@ package tests
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg"
@@ -164,6 +167,78 @@ func TestKzg(t *testing.T) {
 	// Verify kzg proof
 	if kzg.VerifyKzgProof(commitment, &xFr, &value, proof) != true {
 		panic("failed proof verification")
+	}
+}
+
+type JSONTestdataBlobs struct {
+	KzgBlob1 string
+	KzgBlob2 string
+}
+
+func TestVerifyBlobs(t *testing.T) {
+	data, err := ioutil.ReadFile("kzg_testdata/kzg_blobs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var jsonBlobs JSONTestdataBlobs
+	err = json.Unmarshal(data, &jsonBlobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pack all those bytes into two blobs
+	var blob1 types.Blob
+	var blob2 types.Blob
+	for i := 0; i < params.FieldElementsPerBlob; i++ {
+		var tmp [32]byte
+		// Be conservative and only pack 31 bytes per Fr element
+		copy(tmp[:32], []byte(jsonBlobs.KzgBlob1[i*31:(i+1)*31]))
+		blob1 = append(blob1, tmp)
+		copy(tmp[:32], []byte(jsonBlobs.KzgBlob2[i*31:(i+1)*31]))
+		blob2 = append(blob2, tmp)
+	}
+
+	// Compute KZG commitments for both of the blobs above
+	kzg1, ok1 := blob1.ComputeCommitment()
+	kzg2, ok2 := blob2.ComputeCommitment()
+	if ok1 == false || ok2 == false {
+		panic("failed to compute commitments")
+	}
+
+	// Create the dummy object with all that data we prepared
+	blob_data := types.BlobTxWrapData{
+		BlobKzgs: []types.KZGCommitment{kzg1, kzg2},
+		Blobs:    []types.Blob{blob1, blob2},
+	}
+
+	// Extract cryptographic material out of the blobs/commitments
+	commitments, err := blob_data.BlobKzgs.Commitments()
+	if err != nil {
+		panic("internal commitments")
+	}
+	blobs, err := blob_data.Blobs.Blobs()
+	if err != nil {
+		panic("internal blobs")
+	}
+
+	// Verify the blobs against the commitments!!
+	err = kzg.VerifyBlobs(commitments, blobs)
+	if err != nil {
+		panic("bad verifyBlobs")
+	}
+
+	// Now let's do a bad case:
+	// mutate a single chunk of a single blob and VerifyBlobs() must fail
+	blob1[42][1] = 0x42
+	blobs, err = blob_data.Blobs.Blobs()
+	if err != nil {
+		panic("internal blobs")
+	}
+
+	err = kzg.VerifyBlobs(commitments, blobs)
+	if err == nil {
+		panic("bad VerifyBlobs actually succeeded")
 	}
 }
 
