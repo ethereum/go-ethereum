@@ -143,6 +143,9 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 }
 
+// BlockChainConfig configuration contains values for the canonical blockchain
+//
+// This struct exists to simplify the NewBlockChain() function.
 type BlockChainConfig struct {
 	CacheConfig    *CacheConfig
 	ChainConfig    *params.ChainConfig
@@ -150,34 +153,53 @@ type BlockChainConfig struct {
 	ShouldPreserve func(*types.Header) bool
 	TxLookupLimit  *uint64
 }
+
+//BcConfigOpt is a function which modifies an instance of BlockChainConfig
 type BcConfigOpt func(*BlockChainConfig)
 
+// The Set functions are optional functions which can be passed to NewChainConfig() as an argument.
+//
+// SetCacheConfig returns a function which setus up cache configuration for pruning.
 func SetCacheConfig(cacheConfig *CacheConfig) BcConfigOpt {
 	return func(bcConfig *BlockChainConfig) {
 		bcConfig.CacheConfig = cacheConfig
 	}
 }
+
+// SetChainConfig returns a function which sets the blockchain's chain configuration
 func SetChainConfig(chainConfig *params.ChainConfig) BcConfigOpt {
 	return func(bcConfig *BlockChainConfig) {
 		bcConfig.ChainConfig = chainConfig
 	}
 }
+
+// SetVmConfig returns a function which sets ethereum virtual machine for the blockchain.
 func SetVmConfig(vmConfig vm.Config) BcConfigOpt {
 	return func(bcConfig *BlockChainConfig) {
 		bcConfig.VmConfig = vmConfig
 	}
 }
+
+// SetTxLookupLimit returns a function which sets the maximum number of blocks from head whose tx indices are reserved
 func SetTxLookupLimit(txLookupLimit *uint64) BcConfigOpt {
 	return func(bcConfig *BlockChainConfig) {
 		bcConfig.TxLookupLimit = txLookupLimit
 	}
 }
+
+// SetShouldPreserveHandler returns a function setting shouldPreserve for Blockchain
 func SetShouldPreserveHandler(shouldPreserve func(*types.Header) bool) BcConfigOpt {
 	return func(bcConfig *BlockChainConfig) {
 		bcConfig.ShouldPreserve = shouldPreserve
 	}
 
 }
+
+// NewChainConfig returns an instance of BlockChainConfig.
+//
+// For example NewChainConfig(SetChainConfig(params.TestChainConfig)) sets the chain fork configuration as TestChainConfig.
+//
+// NewChainConfig() with no arguments sets the BlockChainConfig instance with default values
 func NewChainConfig(opt ...BcConfigOpt) BlockChainConfig {
 	bcConfig := &BlockChainConfig{
 		CacheConfig:    defaultCacheConfig,
@@ -186,7 +208,9 @@ func NewChainConfig(opt ...BcConfigOpt) BlockChainConfig {
 		TxLookupLimit:  nil,
 		VmConfig:       vm.Config{},
 	}
+	// Range over the optional config functions
 	for _, configOpt := range opt {
+		// Apply the config function to the bcConfig instance.
 		configOpt(bcConfig)
 	}
 	return *bcConfig
