@@ -246,6 +246,10 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if err != nil || tx == nil {
 		return nil, err
 	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
+	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
 		return nil, err
@@ -290,6 +294,10 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return nil, err
+	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
 	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
