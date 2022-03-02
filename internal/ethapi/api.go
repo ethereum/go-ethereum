@@ -1075,14 +1075,31 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		return result.Failed(), result, nil
 	}
+
+	// Before starting the binary search execute the trasaction with the cap
+	// limit, and the again with the reported used gas, if that succeeds then
+	// we can return that value, otherwise we need to begin the binary search.
+	capFailed, capResult, capErr := executable(cap)
+	// If the error is not nil(consensus error), it means the provided message
+	// call or transaction will never be accepted no matter how much gas it is
+	// assigned. Return the error directly, don't struggle any more.
+	if capErr != nil {
+		return 0, capErr
+	}
+	if !capFailed {
+		failed, _, err := executable(capResult.UsedGas)
+		if err != nil {
+			return 0, err
+		}
+		if !failed {
+			return hexutil.Uint64(capResult.UsedGas), nil
+		}
+	}
+
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
 		failed, _, err := executable(mid)
-
-		// If the error is not nil(consensus error), it means the provided message
-		// call or transaction will never be accepted no matter how much gas it is
-		// assigned. Return the error directly, don't struggle any more.
 		if err != nil {
 			return 0, err
 		}
@@ -1092,18 +1109,14 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			hi = mid
 		}
 	}
-	// Reject the transaction as invalid if it still fails at the highest allowance
+	// Reject the transaction as invalid if it still failed at the highest allowance
 	if hi == cap {
-		failed, result, err := executable(hi)
-		if err != nil {
-			return 0, err
-		}
-		if failed {
-			if result != nil && result.Err != vm.ErrOutOfGas {
-				if len(result.Revert()) > 0 {
-					return 0, newRevertError(result)
+		if capFailed {
+			if capResult != nil && capResult.Err != vm.ErrOutOfGas {
+				if len(capResult.Revert()) > 0 {
+					return 0, newRevertError(capResult)
 				}
-				return 0, result.Err
+				return 0, capResult.Err
 			}
 			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
