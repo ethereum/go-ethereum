@@ -43,18 +43,16 @@ func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig)
 		fmt.Printf("would upload %q to %s/%s/%s\n", path, config.Account, config.Container, name)
 		return nil
 	}
-
 	// Create an authenticated client against the Azure cloud
 	credential, err := azblob.NewSharedKeyCredential(config.Account, config.Token)
 	if err != nil {
 		return err
 	}
-	u := fmt.Sprintf("https://%s.blob.core.windows.net", config.Account)
+	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return err
 	}
-
 	// Stream the file to upload into the designated blobstore container
 	in, err := os.Open(path)
 	if err != nil {
@@ -74,24 +72,21 @@ func AzureBlobstoreList(config AzureBlobstoreConfig) ([]*azblob.BlobItemInternal
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("https://%s.blob.core.windows.net", config.Account)
+	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	var maxResults int32 = 5000
 	pager := container.ListBlobsFlat(&azblob.ContainerListBlobFlatSegmentOptions{
 		Maxresults: &maxResults,
 	})
-
 	var allBlobs []*azblob.BlobItemInternal
 	for pager.NextPage(context.Background()) {
 		res := pager.PageResponse()
 		allBlobs = append(allBlobs, res.ContainerListBlobFlatSegmentResult.Segment.BlobItems...)
 	}
-
-	return allBlobs, nil
+	return allBlobs, pager.Err()
 }
 
 // AzureBlobstoreDelete iterates over a list of files to delete and removes them
@@ -103,19 +98,16 @@ func AzureBlobstoreDelete(config AzureBlobstoreConfig, blobs []*azblob.BlobItemI
 		}
 		return nil
 	}
-
 	// Create an authenticated client against the Azure cloud
 	credential, err := azblob.NewSharedKeyCredential(config.Account, config.Token)
 	if err != nil {
 		return err
 	}
-
-	u := fmt.Sprintf("https://%s.blob.core.windows.net", config.Account)
+	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return err
 	}
-
 	// Iterate over the blobs and delete them
 	for _, blob := range blobs {
 		blockblob := container.NewBlockBlobClient(*blob.Name)
