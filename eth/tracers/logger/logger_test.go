@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -70,5 +71,31 @@ func TestStoreCapture(t *testing.T) {
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.storage[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
+	}
+}
+
+// Tests that blank fields don't appear in logs when JSON marshalled, to reduce
+// logs bloat and confusion. See https://github.com/ethereum/go-ethereum/issues/24487
+func TestStructLogMarshalingOmitEmpty(t *testing.T) {
+	tests := []struct {
+		name string
+		log  *structLogMarshaling
+		want string
+	}{
+		{"empty err and no fields", &structLogMarshaling{ErrorString: ""}, `{}`},
+		{"with Gas cost only", &structLogMarshaling{GasCost: 10}, `{"GasCost":"0xa"}`},
+		{"with err", &structLogMarshaling{ErrorString: "this failed"}, `{"error":"this failed"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blob, err := json.Marshal(tt.log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if g, w := string(blob), tt.want; g != w {
+				t.Fatalf("Mismatched results\n\tGot:  %q\n\tWant: %q", g, w)
+			}
+		})
 	}
 }
