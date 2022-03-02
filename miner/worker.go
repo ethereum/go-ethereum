@@ -343,6 +343,11 @@ func (w *worker) pending() (*types.Block, *state.StateDB) {
 	if w.snapshotState == nil {
 		return nil, nil
 	}
+	snapshotStateCopy := w.snapshotState.Copy()
+	// Call Prepare to ensure that access logs from the previously applied
+	// transaction do not affect gas estimation for the any subsequently
+	// applied transactions.
+	snapshotStateCopy.Prepare(common.Hash{}, 0)
 	return w.snapshotBlock, w.snapshotState.Copy()
 }
 
