@@ -361,27 +361,27 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 		fileName = n.ResolvePath(datadirJWTKey)
 	}
 	// try reading from file
-	log.Debug("Reading jwt-key", "path", fileName)
+	log.Debug("Reading JWT secret", "path", fileName)
 	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(string(data))
 		if len(jwtSecret) == 32 {
 			return jwtSecret, nil
 		}
-		log.Error("Invalid jwt key", "path", fileName, "length", len(jwtSecret))
-		return nil, errors.New("invalid jwt key")
+		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
+		return nil, errors.New("invalid JWT secret")
 	}
 	// Need to generate one
 	jwtSecret := make([]byte, 32)
 	crand.Read(jwtSecret)
 	// if we're in --dev mode, don't bother saving, just show it
 	if fileName == "" {
-		log.Info("Generated ephemeral secret", "jwt-secret", hexutil.Encode(jwtSecret))
+		log.Info("Generated ephemeral JWT secret", "secret", hexutil.Encode(jwtSecret))
 		return jwtSecret, nil
 	}
-	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0700); err != nil {
+	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0600); err != nil {
 		return nil, err
 	}
-	log.Info("Generated jwt-key", "path", fileName)
+	log.Info("Generated JWT secret", "path", fileName)
 	return jwtSecret, nil
 }
 
@@ -402,17 +402,9 @@ func (n *Node) startRPC() error {
 	var (
 		servers   []*httpServer
 		open, all = n.GetAPIs()
-		jwtSecret []byte
 	)
-	if len(open) != len(all) {
-		if s, err := n.obtainJWTSecret(n.config.JwtSecret); err != nil {
-			return err
-		} else {
-			jwtSecret = s
-		}
-	}
 
-	initHttp := func(server *httpServer, apis []rpc.API, port int, secret []byte) error {
+	initHttp := func(server *httpServer, apis []rpc.API, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
 		}
@@ -421,22 +413,53 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-			jwtSecret:          secret,
 		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
 		return nil
 	}
-	initWS := func(apis []rpc.API, port int, secret []byte) error {
-		server := n.wsServerForPort(port, secret != nil)
+	initWS := func(apis []rpc.API, port int) error {
+		server := n.wsServerForPort(port, false)
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(n.rpcAPIs, wsConfig{
-			Modules:   n.config.WSModules,
-			Origins:   n.config.WSOrigins,
-			prefix:    n.config.WSPathPrefix,
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+			prefix:  n.config.WSPathPrefix,
+		}); err != nil {
+			return err
+		}
+		servers = append(servers, server)
+		return nil
+	}
+
+	initAuth := func(apis []rpc.API, port int, secret []byte) error {
+		// Enable auth via HTTP
+		server := n.httpAuth
+		if err := server.setListenAddr(DefaultAuthHost, port); err != nil {
+			return err
+		}
+		if err := server.enableRPC(apis, httpConfig{
+			CorsAllowedOrigins: DefaultAuthCors,
+			Vhosts:             DefaultAuthVhosts,
+			Modules:            DefaultAuthModules,
+			prefix:             DefaultAuthPrefix,
+			jwtSecret:          secret,
+		}); err != nil {
+			return err
+		}
+		servers = append(servers, server)
+		// Enable auth via WS
+		server = n.wsServerForPort(port, true)
+		if err := server.setListenAddr(DefaultAuthHost, port); err != nil {
+			return err
+		}
+		if err := server.enableWS(apis, wsConfig{
+			Modules:   DefaultAuthModules,
+			Origins:   DefaultAuthOrigins,
+			prefix:    DefaultAuthPrefix,
 			jwtSecret: secret,
 		}); err != nil {
 			return err
@@ -447,29 +470,28 @@ func (n *Node) startRPC() error {
 	// Set up HTTP.
 	if n.config.HTTPHost != "" {
 		// Configure legacy unauthenticated HTTP.
-		if err := initHttp(n.http, open, n.config.HTTPPort, nil); err != nil {
+		if err := initHttp(n.http, open, n.config.HTTPPort); err != nil {
 			return err
-		}
-		// Configure authenticated HTTP (if needed).
-		if len(open) != len(all) {
-			if err := initHttp(n.httpAuth, all, n.config.AuthPort, jwtSecret); err != nil {
-				return err
-			}
 		}
 	}
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
 		// legacy unauthenticated
-		if err := initWS(open, n.config.WSPort, nil); err != nil {
+		if err := initWS(open, n.config.WSPort); err != nil {
 			return err
 		}
-		// authenticated
-		if len(open) != len(all) {
-			if err := initWS(all, n.config.AuthPort, jwtSecret); err != nil {
-				return err
-			}
+	}
+	// Configure authenticated API
+	if len(open) != len(all) {
+		jwtSecret, err := n.obtainJWTSecret(n.config.JWTSecret)
+		if err != nil {
+			return err
+		}
+		if err := initAuth(all, n.config.AuthPort, jwtSecret); err != nil {
+			return err
 		}
 	}
+	// Start the servers
 	for _, server := range servers {
 		if err := server.start(); err != nil {
 			return err

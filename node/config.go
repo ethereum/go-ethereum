@@ -195,8 +195,8 @@ type Config struct {
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
 
-	// JwtSecret is the hex-encoded jwt secret.
-	JwtSecret string `toml:",omitempty"`
+	// JWTSecret is the hex-encoded jwt secret.
+	JWTSecret string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
