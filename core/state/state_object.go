@@ -263,6 +263,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
+		if s.db.GetTrie().IsVerkle() {
+			panic("verkle trees use the snapshot")
+		}
 		if meter != nil {
 			// If we already spent time checking the snapshot, account for it
 			// and reset the readStart
@@ -272,13 +275,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if !s.db.trie.IsVerkle() {
-			if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
-				s.setError(err)
-				return common.Hash{}
-			}
-		} else {
-			panic("verkle trees use the snapshot")
+		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+			s.setError(err)
+			return common.Hash{}
 		}
 	}
 	var value common.Hash
