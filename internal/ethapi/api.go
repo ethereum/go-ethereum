@@ -2250,6 +2250,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		return nil, errors.New("bundle missing blockNumber")
 	}
 
+	// ******** old tx stuff ********
 	var txs types.Transactions
 
 	for _, encodedTx := range args.Txs {
@@ -2259,13 +2260,16 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		}
 		txs = append(txs, tx)
 	}
+	// ******** old tx stuff ********
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
+	// default timeout
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
 	}
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	// grab given header, add default?
 	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -2280,6 +2284,8 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	if args.Coinbase != nil {
 		coinbase = common.HexToAddress(*args.Coinbase)
 	}
+	// fields not used in EstimateGasBundle
+	// in EstimateGasBundle, these fields are pulled in from `parent`
 	difficulty := parent.Difficulty
 	if args.Difficulty != nil {
 		difficulty = args.Difficulty
@@ -2294,6 +2300,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumber.Int64())) {
 		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
 	}
+	// fields not used in EstimateGasBundle
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     blockNumber,
@@ -2326,13 +2333,19 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	coinbaseBalanceBefore := state.GetBalance(coinbase)
 
 	bundleHash := sha3.NewLegacyKeccak256()
+	// want to get rid of this
 	signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
+
+	// loop over transactions and pass them into evm
+	// return the intermediate state
 	for i, tx := range txs {
+		// we may not need this?
 		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
 		state.Prepare(tx.Hash(), i)
 
+		// we need ApplyTransactionWithResult to return tracing results
 		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, tx, &header.GasUsed, vmconfig)
 		if err != nil {
 			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())

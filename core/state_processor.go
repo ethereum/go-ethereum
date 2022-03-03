@@ -164,6 +164,13 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 		return nil, nil, err
 	}
 
+	traceResult := result.Return()
+	returnVal := fmt.Sprintf("%x", traceResult)
+	fmt.Println(returnVal)
+
+	if err != nil {
+		return nil, nil, err
+	}
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -221,8 +228,14 @@ func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, aut
 	if err != nil {
 		return nil, nil, err
 	}
+	var (
+		tracer vm.EVMLogger
+	)
+	// Add tracer native go tracer, code from eth/tracers/api.go
+	tracer = custom.NewCallTracer(statedb)
+
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	return applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, tx, usedGas, vmenv)
 }
