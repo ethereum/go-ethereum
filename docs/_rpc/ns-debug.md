@@ -374,8 +374,9 @@ In addition to the hash of the transaction you may give it a secondary *optional
 specifies the options for this specific call. The possible options are:
 
 * `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
-* `disableMemory`: `BOOL`. Setting this to true will disable memory capture (default = false).
 * `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
+* `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
+* `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
 * `tracer`: `STRING`. Setting this will enable JavaScript-based transaction tracing, described below. If set, the previous four arguments will be ignored.
 * `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 
