@@ -270,6 +270,7 @@ func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSen
 	if createSendsValue {
 		gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(addr[:]))
 	}
+	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyCodeKeccak(addr[:]))
 	return gas
 }
 

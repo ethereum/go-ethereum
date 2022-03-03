@@ -173,6 +173,8 @@ github.com/gballet/go-verkle v0.0.0-20220209120303-88a3fa537cf1 h1:mkoUQjsrx/6hH
 github.com/gballet/go-verkle v0.0.0-20220209120303-88a3fa537cf1/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
 github.com/gballet/go-verkle v0.0.0-20220217102726-664ad58b43cd h1:kvZpVdKgiVfxi+8Wvlm9FknyA4b+T5bp3ajZEMlp6N0=
 github.com/gballet/go-verkle v0.0.0-20220217102726-664ad58b43cd/go.mod h1:NhFaKv4U1IBG8QkKCsKh4xBMmdori0B0eZjdywcrktE=
+github.com/gballet/go-verkle v0.0.0-20220228192133-5773319d4d56 h1:Zucd5Snqq+pzzpOuuj675QgOKvfWxpnouTqug4trGIA=
+github.com/gballet/go-verkle v0.0.0-20220228192133-5773319d4d56/go.mod h1:mxWdGqfhWGZ0ckAEg+zHM8u4p1Tsw9mAsbSBtXb9AQE=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
@@ -577,6 +579,10 @@ golang.org/x/sys v0.0.0-20220207234003-57398862261d h1:Bm7BNOQt2Qv7ZqysjeLjgCBan
 golang.org/x/sys v0.0.0-20220207234003-57398862261d/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220209214540-3681064d5158 h1:rm+CHSpPEEW2IsXUib1ThaHIjuBVZjxNgSKmBLFfD4c=
 golang.org/x/sys v0.0.0-20220209214540-3681064d5158/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7 h1:BXxu8t6QN0G1uff4bzZzSkpsax8+ALqTGUtz08QrV00=
+golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 h1:nhht2DYV/Sn3qOayu8lM+cU1ii9sTLUeBQwQQfUHtrs=
+golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 h1:v+OssWQX+hTHEmOBgwxdZxK4zHq3yOs8F9J7mk0PY8E=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=

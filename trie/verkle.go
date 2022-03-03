@@ -206,7 +206,11 @@ func DeserializeAndVerifyVerkleProof(serialized []byte) (map[common.Hash]common.
 	if err != nil {
 		return nil, fmt.Errorf("could not deserialize proof: %w", err)
 	}
-	if !verkle.VerifyVerkleProof(proof, cis, indices, yis, verkle.GetConfig()) {
+	cfg, err := verkle.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	if !verkle.VerifyVerkleProof(proof, cis, indices, yis, cfg) {
 		return nil, errInvalidProof
 	}
 

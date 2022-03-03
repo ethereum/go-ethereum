@@ -248,6 +248,18 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			return common.Hash{}
 		}
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
+
+		// Capture the initial value of the location in the verkle proof witness
+		if s.db.GetTrie().IsVerkle() {
+			if err != nil {
+				s.setError(err)
+				return common.Hash{}
+			}
+			addr := s.Address()
+			loc := new(uint256.Int).SetBytes(key[:])
+			index := trieUtils.GetTreeKeyStorageSlot(addr[:], loc)
+			s.db.Witness().SetLeafValue(index, enc)
+		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {

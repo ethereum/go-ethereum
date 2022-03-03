@@ -70,7 +70,8 @@ func TestReproduceTree(t *testing.T) {
 	}
 
 	proof, Cs, zis, yis := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
-	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, verkle.GetConfig()) {
+	cfg, _ := verkle.GetConfig()
+	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
 		t.Fatal("could not verify proof")
 	}
 
