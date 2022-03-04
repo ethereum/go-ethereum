@@ -13,7 +13,7 @@ together with the subscription id.
 Example:
 
     // create subscription
-    >> {"id": 1, "method": "eth_subscribe", "params": ["newHeads", {}]}
+    >> {"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
     << {"jsonrpc":"2.0","id":1,"result":"0xcd0c3e8af590364c09d0fa6a1210faf5"}
 
     // incoming notifications
