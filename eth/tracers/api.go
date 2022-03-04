@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/eth/tracers/custom"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -880,7 +879,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			}
 		}
 		if *config.Tracer == "goCallTracer" {
-			tracer = custom.NewCallTracer(statedb)
+			tracer = NewCallTracer(statedb)
 		} else {
 			// Constuct the JavaScript tracer to execute with
 			if tracer, err = New(*config.Tracer, txctx); err != nil {
@@ -925,7 +924,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
-	case custom.TracerResult:
+	case TracerResult:
 		return tracer.GetResult()
 
 	case Tracer:

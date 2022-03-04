@@ -16,57 +16,49 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-
 	// "github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/log"
+	lru "github.com/hashicorp/golang-lru"
 	"sync"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
 	blockPeerMap *lru.Cache
-	txPeerMap    *lru.Cache
-	tsMap        *lru.Cache
-	peerIDMap    *sync.Map
+	txPeerMap *lru.Cache
+	tsMap *lru.Cache
+	peerIDMap *sync.Map
 )
 
 type peerInfo struct {
 	Enode string `json:"enode"`
-	ID    string `json:"id"`
+	ID string `json:"id"`
 }
+
 
 // SetBlockPeer is called when a block is received from a peer to track which
 // peer was the first to provide a given block
 func SetBlockPeer(hash common.Hash, peer string) {
 	log.Debug("Recording block peer", "hash", hash, "peer", peer)
-	if blockPeerMap == nil {
-		blockPeerMap, _ = lru.New(250)
-	}
-	if tsMap == nil {
-		tsMap, _ = lru.New(100000)
-	}
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	if _, ok := blockPeerMap.Get(hash); !ok {
 		blockPeerMap.Add(hash, peer)
 		tsMap.Add(hash, time.Now().UnixNano())
 	}
 }
 
+
 // SetTxPeer is called when a transaction is received from a peer to track
 // which peer was the first to provide a given transaction
 func SetTxPeer(hash common.Hash, peer string) {
-	if txPeerMap == nil {
-		txPeerMap, _ = lru.New(100000)
-	}
-	if tsMap == nil {
-		tsMap, _ = lru.New(100000)
-	}
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	if _, ok := txPeerMap.Get(hash); !ok {
 		txPeerMap.Add(hash, peer)
 		tsMap.Add(hash, time.Now().UnixNano())
@@ -106,9 +98,7 @@ func SubscribePeerIDs(srv *p2p.Server) {
 // messages we will get later will only include the truncated peer id, so the
 // full id and enode must be tracked based on connect / drop messages.
 func setPeerID(peerid, enode string) {
-	if peerIDMap == nil {
-		peerIDMap = &sync.Map{}
-	}
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	if _, ok := peerIDMap.Load(peerid); !ok {
 		peerIDMap.Store(peerid, peerInfo{ID: peerid, Enode: enode})
 	}
@@ -116,33 +106,26 @@ func setPeerID(peerid, enode string) {
 
 // dropPeerID cleans up records when a peer drops
 func dropPeerID(peerid string) {
-	if peerIDMap == nil {
-		return
-	}
+	if peerIDMap == nil { return }
 	peerIDMap.Delete(peerid)
 }
+
 
 // withPeer is a generic wrapper for different types of values distributed with
 // peer information.
 type withPeer struct {
-	Value   interface{} `json:"value"`
-	Peer    interface{} `json:"peer"`
-	Time    int64       `json:"ts"`
+	Value interface{} `json:"value"`
+	Peer interface{} `json:"peer"`
+	Time int64 `json:"ts"`
 	P2PTime interface{} `json:"p2pts,omitempty"`
 }
 
 // NewHeadsWithPeers send a notification each time a new (header) block is
 // appended to the chain, and includes the peer that first provided the block
 func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
-	if blockPeerMap == nil {
-		blockPeerMap, _ = lru.New(250)
-	}
-	if peerIDMap == nil {
-		peerIDMap = &sync.Map{}
-	}
-	if tsMap == nil {
-		tsMap, _ = lru.New(100000)
-	}
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -161,7 +144,7 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 				p2pts, _ := tsMap.Get(h.Hash())
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewHeadsWithPeers", "hash", h.Hash(), "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts})
+				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -179,15 +162,9 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 // transactions and receipts is appended to the chain, and includes the peer
 // that first provided the block
 func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Subscription, error) {
-	if blockPeerMap == nil {
-		blockPeerMap, _ = lru.New(250)
-	}
-	if peerIDMap == nil {
-		peerIDMap = &sync.Map{}
-	}
-	if tsMap == nil {
-		tsMap, _ = lru.New(100000)
-	}
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -209,7 +186,7 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 			case r := <-reorgs:
 				// Reverse the added blocks in the reorgs, excluding the latest block
 				// as it will be emitted on the newHeads channels.
-				hashes = make([]common.Hash, 0, len(r.Added)-1)
+				hashes = make([]common.Hash, 0, len(r.Added) - 1)
 				for i := len(r.Added) - 1; i > 0; i-- {
 					hashes = append(hashes, r.Added[i])
 				}
@@ -226,13 +203,9 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 				peerid, _ := blockPeerMap.Get(hash)
 
 				block, err := api.backend.BlockByHash(ctx, hash)
-				if err != nil {
-					continue
-				}
+				if err != nil { continue }
 				marshalBlock, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig())
-				if err != nil {
-					continue
-				}
+				if err != nil { continue }
 
 				marshalReceipts := make(map[common.Hash]map[string]interface{})
 				receipts, err := api.backend.GetReceipts(ctx, hash)
@@ -259,17 +232,15 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 					if reason, ok := core.GetRevertReason(receipt.TxHash, hash); ok {
 						fields["revertReason"] = reason
 					}
-					if trace, ok := core.GetTrace(receipt.TxHash, hash); ok {
-						fields["callTrace"] = trace
-					}
 					marshalReceipts[receipt.TxHash] = fields
 				}
 				marshalBlock["receipts"] = marshalReceipts
 
+
 				p2pts, _ := tsMap.Get(hash)
 				peer, _ := peerIDMap.Load(peerid)
 				log.Debug("NewFullBlocksWithPeers", "hash", hash, "peer", peerid, "peer", peer)
-				notifier.Notify(rpcSub.ID, withPeer{Value: marshalBlock, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts})
+				notifier.Notify(rpcSub.ID, withPeer{Value: marshalBlock, Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts} )
 			}
 		}
 	}()
@@ -281,15 +252,9 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 // each time a transaction enters the transaction pool, and includes the peer
 // that first provided the transaction
 func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
-	if txPeerMap == nil {
-		txPeerMap, _ = lru.New(100000)
-	}
-	if peerIDMap == nil {
-		peerIDMap = &sync.Map{}
-	}
-	if tsMap == nil {
-		tsMap, _ = lru.New(100000)
-	}
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if tsMap == nil { tsMap, _ = lru.New(100000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -323,15 +288,12 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 	return rpcSub, nil
 }
 
+
 // NewTransactionReceipts creates a subscription that is triggered for each
 // receipt in a newly confirmed block.
 func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Subscription, error) {
-	if blockPeerMap == nil {
-		blockPeerMap, _ = lru.New(250)
-	}
-	if peerIDMap == nil {
-		peerIDMap = &sync.Map{}
-	}
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -348,7 +310,7 @@ func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Su
 			case h := <-headers:
 				receipts, _ := api.backend.GetReceipts(ctx, h.Hash())
 				for _, receipt := range receipts {
-					notifier.Notify(rpcSub.ID, receipt)
+					notifier.Notify(rpcSub.ID, receipt )
 				}
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
