@@ -145,6 +145,9 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
+func (*prestateTracer) CaptureTxStart() {}
+func (*prestateTracer) CaptureTxEnd()   {}
+
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *prestateTracer) GetResult() (json.RawMessage, error) {

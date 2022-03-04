@@ -302,6 +302,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
+	if st.evm.Config.Debug {
+		st.evm.Config.Tracer.CaptureTxStart()
+		defer st.evm.Config.Tracer.CaptureTxEnd()
+	}
 	st.gas -= gas
 
 	// Check clause 6

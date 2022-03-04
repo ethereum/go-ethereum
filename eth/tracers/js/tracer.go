@@ -679,6 +679,9 @@ func wrapError(context string, err error) error {
 	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
 
+func (*jsTracer) CaptureTxStart() {}
+func (*jsTracer) CaptureTxEnd()   {}
+
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	jst.env = env
