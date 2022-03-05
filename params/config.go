@@ -36,23 +36,25 @@ var (
 
 var (
 	XDPoSV2Config = &V2{
-		TimeoutWorkerDuration: 50,
-		CertThreshold:         common.MaxMasternodesV2*2/3 + 1,
+		TimeoutPeriod: 50,
+		CertThreshold: common.MaxMasternodesV2*2/3 + 1,
 	}
 	TestXDPoSV2Config = &V2{
-		TimeoutWorkerDuration: 10,
-		CertThreshold:         3,
-		WaitPeriod:            1,
-		MinePeriod:            2,
-		SwitchBlock:           big.NewInt(900),
-		SkipV2Validation:      true,
+		SwitchBlock:          big.NewInt(900),
+		CertThreshold:        3,
+		TimeoutSyncThreshold: 2,
+		TimeoutPeriod:        10,
+		WaitPeriod:           1,
+		MinePeriod:           2,
+		SkipV2Validation:     true,
 	}
 	DevnetXDPoSV2Config = &V2{
-		SwitchBlock:           big.NewInt(7218000),
-		TimeoutWorkerDuration: 50,
-		CertThreshold:         6,
-		WaitPeriod:            2,
-		MinePeriod:            10,
+		SwitchBlock:          big.NewInt(7218000),
+		CertThreshold:        6,
+		TimeoutSyncThreshold: 5,
+		TimeoutPeriod:        50,
+		WaitPeriod:           2,
+		MinePeriod:           10,
 	}
 
 	// XDPoSChain mainnet config
@@ -202,18 +204,18 @@ type XDPoSConfig struct {
 	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards.
 	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
 	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
-	WaitPeriod          int            `json:"waitPeriod"`          // Miner wait period
 	SkipV1Validation    bool           //Skip Block Validation for testing purpose, V1 consensus only
 	V2                  *V2            `json:"v2"`
 }
 
 type V2 struct {
-	WaitPeriod            int      `json:"waitPeriod"`            // Miner wait period to check mine event
-	MinePeriod            int      `json:"minePeriod"`            // Miner mine period to mine a block
-	SwitchBlock           *big.Int `json:"switchBlock"`           // v1 to v2 switch block number
-	TimeoutWorkerDuration int64    `json:"timeoutWorkerDuration"` // Duration in ms
-	CertThreshold         int      `json:"certificateThreshold"`  // Necessary number of messages from master nodes to form a certificate
-	SkipV2Validation      bool     //Skip Block Validation for testing purpose, V2 consensus only
+	WaitPeriod           int      `json:"waitPeriod"`           // Miner wait period to check mine event
+	MinePeriod           int      `json:"minePeriod"`           // Miner mine period to mine a block
+	SwitchBlock          *big.Int `json:"switchBlock"`          // v1 to v2 switch block number
+	TimeoutSyncThreshold int      `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
+	TimeoutPeriod        int      `json:"timeoutPeriod"`        // Duration in ms
+	CertThreshold        int      `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
+	SkipV2Validation     bool     //Skip Block Validation for testing purpose, V2 consensus only
 }
 
 // String implements the stringer interface, returning the consensus engine details.

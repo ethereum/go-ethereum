@@ -45,6 +45,7 @@ type XDPoS_v2 struct {
 	waitPeriodCh chan int
 
 	timeoutWorker *countdown.CountdownTimer // Timer to generate broadcast timeout msg if threashold reached
+	timeoutCount  int                       // number of timeout being sent
 
 	timeoutPool       *utils.Pool
 	votePool          *utils.Pool
@@ -62,7 +63,7 @@ type XDPoS_v2 struct {
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
 	// Setup Timer
-	duration := time.Duration(config.V2.TimeoutWorkerDuration) * time.Second
+	duration := time.Duration(config.V2.TimeoutPeriod) * time.Second
 	timer := countdown.NewCountDown(duration)
 	timeoutPool := utils.NewPool(config.V2.CertThreshold)
 
@@ -162,7 +163,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Add
 	}
 
 	// Initial timeout
-	log.Info("[Initial] miner wait period", "period", x.config.WaitPeriod)
+	log.Info("[Initial] miner wait period", "period", x.config.V2.WaitPeriod)
 	// avoid deadlock
 	go func() {
 		x.waitPeriodCh <- x.config.V2.WaitPeriod
@@ -1184,6 +1185,7 @@ func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert
 */
 func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round utils.Round) error {
 	x.currentRound = round
+	x.timeoutCount = 0
 	//TODO: tell miner now it's a new round and start mine if it's leader
 	x.timeoutWorker.Reset(blockChainReader)
 	//TODO: vote pools
@@ -1352,6 +1354,14 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 		log.Error("Error while sending out timeout message at time: ", time)
 		return err
 	}
+
+	x.timeoutCount++
+	if x.timeoutCount%x.config.V2.TimeoutSyncThreshold == 0 {
+		log.Info("[OnCountdownTimeout] timeout sync threadhold reached, send syncInfo message")
+		syncInfo := x.getSyncInfo()
+		x.broadcastToBftChannel(syncInfo)
+	}
+
 	return nil
 }
 
