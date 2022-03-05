@@ -1,6 +1,6 @@
 ---
 title: Connecting To The Network
-sort_key: B
+sort_key: C
 ---
 
 If you start geth without any flags, it will connect to the Ethereum mainnet. In addition to
