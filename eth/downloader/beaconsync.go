@@ -275,7 +275,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			}
 		}
 		// State sync still going, wait a bit for new headers and retry
-		log.Trace("Pivot not yet comitted, waiting...")
+		log.Trace("Pivot not yet committed, waiting...")
 		select {
 		case <-time.After(fsHeaderContCheck):
 		case <-d.cancelCh:

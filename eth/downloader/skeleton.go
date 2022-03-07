@@ -238,7 +238,7 @@ func (s *skeleton) startup() {
 
 	// Wait for startup or teardown. This wait might loop a few times if a beacon
 	// client requests sync head extensions, but not forced reorgs (i.e. they are
-	// giving us new payloads without setting a starting head intially).
+	// giving us new payloads without setting a starting head initially).
 	for {
 		select {
 		case errc := <-s.terminate:

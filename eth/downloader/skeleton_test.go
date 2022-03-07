@@ -71,7 +71,7 @@ func (hf *hookedBackfiller) resume() {
 }
 
 // skeletonTestPeer is a mock peer that can only serve header requests from a
-// pre-perated header chain (which may be arbitrarilly wrong for testing).
+// pre-perated header chain (which may be arbitrarily wrong for testing).
 //
 // Requesting anything else from these peers will hard panic. Note, do *not*
 // implement any other methods. We actually want to make sure that the skeleton
@@ -511,7 +511,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 
 		head     *types.Header       // New head header to announce to reorg to
 		peers    []*skeletonTestPeer // Initial peer set to start the sync with
-		midstate []*subchain         // Expected sync state after inital cycle
+		midstate []*subchain         // Expected sync state after initial cycle
 		midserve uint64              // Expected number of header retrievals after initial cycle
 		middrop  uint64              // Expectd number of peers dropped after initial cycle
 
