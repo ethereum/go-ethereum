@@ -1066,12 +1066,18 @@ func MakeDatabaseHandles(max int) int {
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if max != 0 && max < limit { // 0 is the default, don't warn in that case
-		if max < 64 {
-			log.Error("File descriptor limit invalid (<64)", "had", max, "updated", limit)
-		} else {
-			limit = max
-		}
+	switch {
+	case max == 0:
+		// User didn't specify a meaningful value, use system limits
+	case max < 128:
+		// User specified something unhealthy, just use system defaults
+		log.Error("File descriptor limit invalid (<128)", "had", max, "updated", limit)
+	case max > limit:
+		// User requested more than the OS allows, notify that we can't allocate it
+		log.Warn("Requested file descriptors denied by OS", "req", max, "limit", limit)
+	default:
+		// User limit is meaningful and within allowed range, use that
+		limit = max
 	}
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
