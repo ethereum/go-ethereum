@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -349,4 +350,25 @@ func TestShouldSendVoteMsg(t *testing.T) {
 		vote := <-engineV2.BroadcastCh
 		assert.Equal(t, round, vote.(*utils.Vote).ProposedBlockInfo.Round)
 	}
+}
+
+func TestProposedBlockMessageHandlerNotGenerateVoteIfSignerNotInMNlist(t *testing.T) {
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 906, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+	differentSigner, differentSignFn, err := backends.SimulateWalletAddressAndSignFn()
+	assert.Nil(t, err)
+	// Let's change the address
+	engineV2.Authorize(differentSigner, differentSignFn)
+
+	// Set current round to 5
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+
+	var extraField utils.ExtraFields_v2
+	err = utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
+	if err != nil {
+		t.Fatal("Fail to decode extra data", err)
+	}
+
+	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
+	assert.Equal(t, "Not in the master node list, not suppose to vote", err.Error())
 }

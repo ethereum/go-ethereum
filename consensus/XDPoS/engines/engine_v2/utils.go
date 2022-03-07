@@ -68,3 +68,19 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 	}
 	return masternodes
 }
+
+func UniqueSignatures(signatureSlice []utils.Signature) ([]utils.Signature, []utils.Signature) {
+	keys := make(map[string]bool)
+	list := []utils.Signature{}
+	duplicates := []utils.Signature{}
+	for _, signature := range signatureSlice {
+		hexOfSig := common.Bytes2Hex(signature)
+		if _, value := keys[hexOfSig]; !value {
+			keys[hexOfSig] = true
+			list = append(list, signature)
+		} else {
+			duplicates = append(duplicates, signature)
+		}
+	}
+	return list, duplicates
+}
