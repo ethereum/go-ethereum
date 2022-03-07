@@ -87,7 +87,7 @@ var (
 
 var (
 	// TriesInMemory  Keeps the latest 128 blocks when pruning.
-	TriesInMemory uint64 = 128
+	TriesInMemory = 128
 )
 
 const (
@@ -228,7 +228,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		cacheConfig = defaultCacheConfig
 	}
 	if cacheConfig.TriesInMemory != 0 {
-		TriesInMemory = uint64(cacheConfig.TriesInMemory)
+		TriesInMemory = cacheConfig.TriesInMemory
 	}
 	if TriesInMemory != 128 {
 		log.Warn("TriesInMemory isn't the default value(128), non-default values may cause system instability", "triesInMemory", TriesInMemory)
@@ -813,7 +813,7 @@ func (bc *BlockChain) Stop() {
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
 
-		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
+		for _, offset := range []uint64{0, 1, uint64(TriesInMemory) - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
 
@@ -1226,7 +1226,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		bc.triegc.Push(root, -int64(block.NumberU64()))
 
-		if current := block.NumberU64(); current > TriesInMemory {
+		if current := block.NumberU64(); current > uint64(TriesInMemory) {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
 				nodes, imgs = triedb.Size()
@@ -1236,7 +1236,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				triedb.Cap(limit - ethdb.IdealBatchSize)
 			}
 			// Find the next state trie we need to commit
-			chosen := current - TriesInMemory
+			chosen := current - uint64(TriesInMemory)
 
 			// If we exceeded out time allowance, flush an entire trie to disk
 			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
@@ -1248,7 +1248,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
-					if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+					if chosen < lastWrite+uint64(TriesInMemory) && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/float64(TriesInMemory))
 					}
 					// Flush an entire trie and restart the counters
