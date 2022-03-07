@@ -433,10 +433,9 @@ var (
 		Name:  "cache.preimages",
 		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
 	}
-	FdLimitFlag = cli.IntFlag{
+	FDLimitFlag = cli.IntFlag{
 		Name:  "fdlimit",
 		Usage: "Raise the open file descriptor resource limit (default = system fd limit)",
-		Value: math.MaxInt32,
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
@@ -1062,13 +1061,17 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles(userFdLimit int) int {
+func MakeDatabaseHandles(max int) int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if userFdLimit < limit {
-		limit = userFdLimit
+	if max != 0 && max < limit { // 0 is the default, don't warn in that case
+		if max < 64 {
+			log.Error("File descriptor limit invalid (<64)", "had", max, "updated", limit)
+		} else {
+			limit = max
+		}
 	}
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
@@ -1530,10 +1533,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	if ctx.GlobalIsSet(FdLimitFlag.Name) {
-		cfg.FdLimit = ctx.GlobalInt(FdLimitFlag.Name)
-	}
-	cfg.DatabaseHandles = MakeDatabaseHandles(cfg.FdLimit)
+	cfg.DatabaseHandles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 	if ctx.GlobalIsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.GlobalString(AncientFlag.Name)
 	}
@@ -1851,7 +1851,7 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles(ctx.GlobalInt(FdLimitFlag.Name))
+		handles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 
 		err     error
 		chainDb ethdb.Database

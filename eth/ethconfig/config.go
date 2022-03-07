@@ -18,7 +18,6 @@
 package ethconfig
 
 import (
-	"math"
 	"math/big"
 	"os"
 	"os/user"
@@ -84,7 +83,6 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
-	FdLimit:                 math.MaxInt32,
 	Miner: miner.Config{
 		GasCeil:  8000000,
 		GasPrice: big.NewInt(params.GWei),
@@ -170,9 +168,6 @@ type Config struct {
 	TrieTimeout             time.Duration
 	SnapshotCache           int
 	Preimages               bool
-
-	// FdLimit Tuning
-	FdLimit int
 
 	// Mining options
 	Miner miner.Config
