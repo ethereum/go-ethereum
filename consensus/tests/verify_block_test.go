@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,12 +23,19 @@ func TestShouldVerifyBlock(t *testing.T) {
 	// Skip the mining time validation by set mine time to 0
 	config.XDPoS.V2.MinePeriod = 0
 	// Block 901 is the first v2 block with round of 1
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, &config, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	// Happy path
-	err = adaptor.VerifyHeader(blockchain, currentBlock.Header(), true)
+	err = adaptor.VerifyHeader(blockchain, blockchain.GetBlockByNumber(901).Header(), true)
 	assert.Nil(t, err)
 
-	// TODO: unhappy path XIN-135: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/95944705/Verify+header
+	// Verify non-epoch switch block
+	err = adaptor.VerifyHeader(blockchain, blockchain.GetBlockByNumber(902).Header(), true)
+	assert.Nil(t, err)
+
+	nonEpochSwitchWithValidators := blockchain.GetBlockByNumber(902).Header()
+	nonEpochSwitchWithValidators.Validators = acc1Addr.Bytes()
+	err = adaptor.VerifyHeader(blockchain, nonEpochSwitchWithValidators, true)
+	assert.Equal(t, utils.ErrInvalidFieldInNonEpochSwitch, err)
 }

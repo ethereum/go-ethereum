@@ -612,7 +612,8 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 			return utils.ErrInvalidCheckpointSigners
 		}
 	} else {
-		if header.Validators != nil {
+		if len(header.Validators) != 0 {
+			log.Warn("[verifyHeader] Validators shall not have values in non-epochSwitch block", "Hash", header.Hash(), "Number", header.Number, "Validators", header.Validators)
 			return utils.ErrInvalidFieldInNonEpochSwitch
 		}
 	}
