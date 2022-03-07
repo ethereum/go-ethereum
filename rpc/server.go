@@ -26,6 +26,7 @@ import (
 )
 
 const MetadataApi = "rpc"
+const EngineApi = "engine"
 
 // CodecOption specifies which type of messages a codec supports.
 //

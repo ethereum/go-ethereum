@@ -36,6 +36,7 @@ import (
 
 const (
 	datadirPrivateKey      = "nodekey"            // Path within the datadir to the node's private key
+	datadirJWTKey          = "jwtsecret"          // Path within the datadir to the node's jwt secret
 	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
 	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
@@ -111,6 +112,9 @@ type Config struct {
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
+
+	// Authport is the port number on which the authenticated API is provided.
+	AuthPort int `toml:",omitempty"`
 
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
@@ -190,6 +194,9 @@ type Config struct {
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
+
+	// JWTSecret is the hex-encoded jwt secret.
+	JWTSecret string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -248,7 +255,7 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort, AuthPort: DefaultAuthPort}
 	return config.HTTPEndpoint()
 }
 

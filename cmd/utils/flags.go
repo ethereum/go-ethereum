@@ -518,6 +518,16 @@ var (
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
+	// Authenticated port settings
+	AuthPortFlag = cli.IntFlag{
+		Name:  "authrpc.port",
+		Usage: "Listening port for authenticated APIs",
+		Value: node.DefaultAuthPort,
+	}
+	JWTSecretFlag = cli.StringFlag{
+		Name:  "authrpc.jwtsecret",
+		Usage: "JWT secret (or path to a jwt secret) to use for authenticated RPC endpoints",
+	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
@@ -951,6 +961,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(AuthPortFlag.Name) {
+		cfg.AuthPort = ctx.GlobalInt(AuthPortFlag.Name)
+	}
+
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
@@ -1217,6 +1231,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	setDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
+
+	if ctx.GlobalIsSet(JWTSecretFlag.Name) {
+		cfg.JWTSecret = ctx.GlobalString(JWTSecretFlag.Name)
+	}
 
 	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)

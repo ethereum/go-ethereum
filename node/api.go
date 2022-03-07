@@ -274,11 +274,12 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	}
 
 	// Enable WebSocket on the server.
-	server := api.node.wsServerForPort(*port)
+	server := api.node.wsServerForPort(*port, false)
 	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	if err := server.enableWS(api.node.rpcAPIs, config); err != nil {
+	openApis, _ := api.node.GetAPIs()
+	if err := server.enableWS(openApis, config); err != nil {
 		return false, err
 	}
 	if err := server.start(); err != nil {
