@@ -162,3 +162,39 @@ func TestHTTPErrorResponse(t *testing.T) {
 		t.Error("unexpected error message", errMsg)
 	}
 }
+
+func TestHTTPPeerInfo(t *testing.T) {
+	s := newTestServer()
+	defer s.Stop()
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+
+	c, err := Dial(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.SetHeader("user-agent", "ua-testing")
+	c.SetHeader("origin", "origin.example.com")
+
+	// Request peer information.
+	var info PeerInfo
+	if err := c.Call(&info, "test_peerInfo"); err != nil {
+		t.Fatal(err)
+	}
+
+	if info.RemoteAddr == "" {
+		t.Error("RemoteAddr not set")
+	}
+	if info.Transport != "http" {
+		t.Errorf("wrong Transport %q", info.Transport)
+	}
+	if info.HTTP.Version != "HTTP/1.1" {
+		t.Errorf("wrong HTTP.Version %q", info.HTTP.Version)
+	}
+	if info.HTTP.UserAgent != "ua-testing" {
+		t.Errorf("wrong HTTP.UserAgent %q", info.HTTP.UserAgent)
+	}
+	if info.HTTP.Origin != "origin.example.com" {
+		t.Errorf("wrong HTTP.Origin %q", info.HTTP.UserAgent)
+	}
+}

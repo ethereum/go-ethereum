@@ -3,19 +3,20 @@ package eth
 import (
 	"context"
 	"fmt"
-	"github.com/DeBankDeFi/eth/txtrace"
+	"hash"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	txtrace "github.com/DeBankDeFi/etherlib/pkg/txtracev1"
+	// "github.com/DeBankDeFi/eth/txtrace"
 	"golang.org/x/crypto/sha3"
-	"hash"
-	"math/big"
 )
 
 type helpHash struct {
@@ -137,10 +138,10 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 }
 
 // TraceTransaction tracing pre-exec transaction object.
-func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, config *tracers.TraceConfig) (interface{}, error) {
+func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) (interface{}, error) {
 	var (
 		bc     = api.e.blockchain
-		tracer vm.EVMLogger
+		tracer *txtrace.OeTracer
 		err    error
 	)
 	d, err := api.prepareData(ctx, origin)
@@ -150,7 +151,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	txContext := core.NewEVMTxContext(d.msg)
 	txIndex := 0
 
-	tracer = txtrace.NewTraceStructLogger(nil)
+	tracer = txtrace.NewOeTracer(nil)
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
 	vmenv.Context.BaseFee = big.NewInt(0)
@@ -158,43 +159,13 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx, 
 	// Call Prepare to clear out the statedb access list
 	d.stateDb.Prepare(d.tx.Hash(), txIndex)
 
-	// check if type of tracer is txtrace.StructLogger, in that case, fill info.
-	var traceLogger *txtrace.StructLogger
-	switch tracer.(type) {
-	case *txtrace.StructLogger:
-		traceLogger = tracer.(*txtrace.StructLogger)
-		traceLogger.SetFrom(d.msg.From())
-		traceLogger.SetTo(d.msg.To())
-		traceLogger.SetValue(*d.msg.Value())
-		traceLogger.SetGasUsed(d.tx.Gas())
-		traceLogger.SetBlockHash(d.block.Hash())
-		traceLogger.SetBlockNumber(d.block.Number())
-		traceLogger.SetTx(d.tx.Hash())
-		traceLogger.SetTxIndex(uint(txIndex))
-	}
+	tracer.SetMessage(d.block.Number(), d.block.Hash(), d.tx.Hash(), uint(txIndex), d.msg.From(), d.msg.To(), *d.msg.Value())
 
-	result, err := core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
+	_, err = core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
-	// Depending on the tracer type, format and return the output.
-	switch tracer := tracer.(type) {
-	case *vm.StructLogger:
-		// If the result contains a revert reason, return it.
-		returnVal := fmt.Sprintf("%x", result.Return())
-		if len(result.Revert()) > 0 {
-			returnVal = fmt.Sprintf("%x", result.Revert())
-		}
-		return &ethapi.ExecutionResult{
-			Gas:         result.UsedGas,
-			Failed:      result.Failed(),
-			ReturnValue: returnVal,
-			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
-		}, nil
-	case *txtrace.StructLogger:
-		tracer.Finalize()
-		return tracer.GetResult(), nil
-	default:
-		panic(fmt.Sprintf("bad tracer type %T", tracer))
-	}
+
+	tracer.Finalize()
+	return tracer.GetResult(), nil
 }

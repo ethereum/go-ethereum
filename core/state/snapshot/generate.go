@@ -48,13 +48,13 @@ var (
 	// accountCheckRange is the upper limit of the number of accounts involved in
 	// each range check. This is a value estimated based on experience. If this
 	// value is too large, the failure rate of range prove will increase. Otherwise
-	// the the value is too small, the efficiency of the state recovery will decrease.
+	// the value is too small, the efficiency of the state recovery will decrease.
 	accountCheckRange = 128
 
 	// storageCheckRange is the upper limit of the number of storage slots involved
 	// in each range check. This is a value estimated based on experience. If this
 	// value is too large, the failure rate of range prove will increase. Otherwise
-	// the the value is too small, the efficiency of the state recovery will decrease.
+	// the value is too small, the efficiency of the state recovery will decrease.
 	storageCheckRange = 1024
 
 	// errMissingTrie is returned if the target trie is missing while the generation
