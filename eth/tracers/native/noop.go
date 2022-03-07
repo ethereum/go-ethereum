@@ -18,7 +18,6 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -42,12 +41,10 @@ func newNoopTracer() tracers.Tracer {
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	fmt.Printf("start\n")
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	fmt.Printf("end\n")
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
