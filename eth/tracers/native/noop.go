@@ -67,11 +67,11 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (*noopTracer) CaptureTxStart() {
-	fmt.Printf("txstart\n")
+func (*noopTracer) CaptureTxStart(gasLimit uint64) {
+	fmt.Printf("txstart %d\n", gasLimit)
 }
-func (*noopTracer) CaptureTxEnd() {
-	fmt.Printf("txend\n")
+func (*noopTracer) CaptureTxEnd(remainingGas uint64, err error) {
+	fmt.Printf("txend %d %v\n", remainingGas, err)
 }
 
 // GetResult returns an empty json object.

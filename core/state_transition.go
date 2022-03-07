@@ -287,24 +287,32 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err := st.preCheck(); err != nil {
 		return nil, err
 	}
-	msg := st.msg
-	sender := vm.AccountRef(msg.From())
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
-	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
-	contractCreation := msg.To() == nil
+
+	var err error
+	if st.evm.Config.Debug {
+		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
+		defer func() {
+			st.evm.Config.Tracer.CaptureTxEnd(st.gas, err)
+		}()
+	}
+
+	var (
+		msg              = st.msg
+		sender           = vm.AccountRef(msg.From())
+		homestead        = st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
+		istanbul         = st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
+		london           = st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
+		contractCreation = msg.To() == nil
+		gas              uint64
+	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
+	gas, err = IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, err
 	}
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
-	}
-	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart()
-		defer st.evm.Config.Tracer.CaptureTxEnd()
 	}
 	st.gas -= gas
 

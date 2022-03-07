@@ -131,8 +131,8 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
 
-func (*fourByteTracer) CaptureTxStart() {}
-func (*fourByteTracer) CaptureTxEnd()   {}
+func (*fourByteTracer) CaptureTxStart(_ uint64)        {}
+func (*fourByteTracer) CaptureTxEnd(_ uint64, _ error) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

@@ -99,5 +99,5 @@ func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*JSONLogger) CaptureTxStart() {}
-func (*JSONLogger) CaptureTxEnd()   {}
+func (*JSONLogger) CaptureTxStart(_ uint64)        {}
+func (*JSONLogger) CaptureTxEnd(_ uint64, _ error) {}
