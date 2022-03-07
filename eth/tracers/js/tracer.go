@@ -419,6 +419,7 @@ type jsTracer struct {
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 	traceSteps        bool             // When true, will invoke step() on each opcode
 	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
+	gasLimit          uint64           // Amount of gas bought for the whole tx
 }
 
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
@@ -679,8 +680,11 @@ func wrapError(context string, err error) error {
 	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
 
-func (*jsTracer) CaptureTxStart(_ uint64)        {}
-func (*jsTracer) CaptureTxEnd(_ uint64, _ error) {}
+func (jst *jsTracer) CaptureTxStart(gasLimit uint64) {
+	jst.gasLimit = gasLimit
+}
+
+func (*jsTracer) CaptureTxEnd(remainingGas uint64, _ error) {}
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
@@ -711,6 +715,7 @@ func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 		return
 	}
 	jst.ctx["intrinsicGas"] = intrinsicGas
+	fmt.Printf("Computed intrinsicGas %d\tTrue intrinsic %d\n", intrinsicGas, jst.gasLimit-gas)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
