@@ -92,16 +92,3 @@ func TestDecodeFullNode(t *testing.T) {
 		t.Fatalf("decode full node err: %v", err)
 	}
 }
-
-func BenchmarkEncodeFullNode(b *testing.B) {
-	var buf sliceBuffer
-	var fn fullNode
-	for i := 0; i < 16; i++ {
-		fn.Children[i] = hashNode(randBytes(32))
-	}
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		rlp.Encode(&buf, &fn)
-	}
-}
