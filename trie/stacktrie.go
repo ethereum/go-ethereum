@@ -370,11 +370,16 @@ func (ctx *stackTrieHashContext) release() {
 	*ctx = stackTrieHashContext{}
 }
 
-func (ctx *stackTrieHashContext) encode(n node) []byte {
-	ctx.encbuf.Reset(nil)
-	n.encode(&ctx.encbuf)
+// encodedBytes returns the result of the last encoding operation
+// on ctx.encbuf. This exists because node.encode can only be inlined
+// when using a concrete receiver type.
+func (ctx *stackTrieHashContext) encodedBytes() []byte {
 	enc := ctx.encbuf.AppendToBytes(ctx.h.tmp[:0])
 	ctx.h.tmp = enc
+
+	// Reset the buffer here so the next encoding operation doesn't
+	// need to care about resetting.
+	ctx.encbuf.Reset(nil)
 	return enc
 }
 
@@ -427,19 +432,23 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 			st.children[i] = nil
 			returnToPool(child)
 		}
-		encodedNode = ctx.encode(nodes)
+
+		nodes.encode(&ctx.encbuf)
+		encodedNode = ctx.encodedBytes()
 
 	case extNode:
 		st.children[0].hashRec(ctx)
 
 		// TODO(fjl): can this use hexToCompactInPlace?
-		n := &rawShortNode{Key: hexToCompact(st.key)}
+		n := rawShortNode{Key: hexToCompact(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
 		} else {
 			n.Val = hashNode(st.children[0].val)
 		}
-		encodedNode = ctx.encode(n)
+
+		n.encode(&ctx.encbuf)
+		encodedNode = ctx.encodedBytes()
 
 		// Release child back to pool.
 		returnToPool(st.children[0])
@@ -448,15 +457,17 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 	case leafNode:
 		st.key = append(st.key, byte(16))
 		sz := hexToCompactInPlace(st.key)
-		n := &rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
-		encodedNode = ctx.encode(n)
+		n := rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
+
+		n.encode(&ctx.encbuf)
+		encodedNode = ctx.encodedBytes()
 
 	default:
 		panic("invalid node type")
 	}
 
-	st.key = st.key[:0]
 	st.nodeType = hashedNode
+	st.key = st.key[:0]
 	if len(encodedNode) < 32 {
 		st.val = common.CopyBytes(encodedNode)
 		return
