@@ -220,14 +220,6 @@ func (n *Node) Start() error {
 	return n.node.Start()
 }
 
-// Stop terminates a running node along with all its services. If the node was not started,
-// an error is returned. It is not possible to restart a stopped node.
-//
-// Deprecated: use Close()
-func (n *Node) Stop() error {
-	return n.node.Close()
-}
-
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.
 func (n *Node) GetEthereumClient() (client *EthereumClient, _ error) {
 	rpc, err := n.node.Attach()
