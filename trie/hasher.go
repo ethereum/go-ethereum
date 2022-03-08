@@ -165,8 +165,10 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	return h.hashData(enc)
 }
 
-// encodedBytes returns the result of the last encoding operation on h.encbuf. All node
-// encoding must be done like this:
+// encodedBytes returns the result of the last encoding operation on h.encbuf.
+// This also resets the encoder buffer.
+//
+// All node encoding must be done like this:
 //
 //     node.encode(h.encbuf)
 //     enc := h.encodedBytes()
