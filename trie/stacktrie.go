@@ -223,6 +223,7 @@ func (st *StackTrie) insert(key, value []byte) {
 	switch st.nodeType {
 	case branchNode: /* Branch */
 		idx := int(key[0])
+
 		// Unresolve elder siblings
 		for i := idx - 1; i >= 0; i-- {
 			if st.children[i] != nil {
@@ -232,12 +233,14 @@ func (st *StackTrie) insert(key, value []byte) {
 				break
 			}
 		}
+
 		// Add new child
 		if st.children[idx] == nil {
 			st.children[idx] = newLeaf(key[1:], value, st.db)
 		} else {
 			st.children[idx].insert(key[1:], value)
 		}
+
 	case extNode: /* Ext */
 		// Compare both key chunks and see where they differ
 		diffidx := st.getDiffIndex(key)
@@ -325,10 +328,9 @@ func (st *StackTrie) insert(key, value []byte) {
 			p = st.children[0]
 		}
 
-		// Create the two child leaves: the one containing the
-		// original value and the one containing the new value
-		// The child leave will be hashed directly in order to
-		// free up some memory.
+		// Create the two child leaves: one containing the original
+		// value and another containing the new value. The child leaf
+		// is hashed directly in order to free up some memory.
 		origIdx := st.key[diffidx]
 		p.children[origIdx] = newLeaf(st.key[diffidx+1:], st.val, st.db)
 		p.children[origIdx].hash()
@@ -340,12 +342,15 @@ func (st *StackTrie) insert(key, value []byte) {
 		// over to the children.
 		st.key = st.key[:diffidx]
 		st.val = nil
+
 	case emptyNode: /* Empty */
 		st.nodeType = leafNode
 		st.key = key
 		st.val = value
+
 	case hashedNode:
 		panic("trying to insert into hash")
+
 	default:
 		panic("invalid type")
 	}
