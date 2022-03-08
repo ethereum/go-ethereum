@@ -369,7 +369,7 @@ func (st *StackTrie) hash() {
 }
 
 func (st *StackTrie) hashRec(hasher *hasher) {
-	// The switch below sets this to the RLP-encoding of st.
+	// The switch below sets this to the RLP-encoding of this node.
 	var encodedNode []byte
 
 	switch st.nodeType {
