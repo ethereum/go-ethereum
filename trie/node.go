@@ -53,16 +53,9 @@ var nilValueNode = valueNode(nil)
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
-
-	for i, child := range &n.Children {
-		if child != nil {
-			nodes[i] = child
-		} else {
-			nodes[i] = nilValueNode
-		}
-	}
-	return rlp.Encode(w, nodes)
+	eb := rlp.NewEncoderBuffer(w)
+	n.encode(&eb)
+	return eb.Flush()
 }
 
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
