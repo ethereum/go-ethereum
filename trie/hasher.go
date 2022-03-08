@@ -144,7 +144,7 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // into compact form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
-	n.encode(&h.encbuf)
+	n.encode(h.encbuf)
 	enc := h.encodedBytes()
 
 	if len(enc) < 32 && !force {
@@ -156,7 +156,7 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 // shortnodeToHash is used to creates a hashNode from a set of hashNodes, (which
 // may contain nil values)
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
-	n.encode(&h.encbuf)
+	n.encode(h.encbuf)
 	enc := h.encodedBytes()
 
 	if len(enc) < 32 && !force {
@@ -165,13 +165,14 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	return h.hashData(enc)
 }
 
-// encodedBytes returns the result of the last encoding operation on h.encbuf. This exists
-// because node.encode can only be inlined when using a concrete receiver type. Basically,
-// all node encoding must be done like this:
+// encodedBytes returns the result of the last encoding operation on h.encbuf. All node
+// encoding must be done like this:
 //
-//     node.encode(&h.encbuf)
+//     node.encode(h.encbuf)
 //     enc := h.encodedBytes()
 //
+// This encoding convention exists because node.encode can only be inlined/escape-analyzed
+// when called on a concrete receiver type.
 func (h *hasher) encodedBytes() []byte {
 	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
 	// Reset the buffer here so the next encoding operation doesn't

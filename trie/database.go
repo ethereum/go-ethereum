@@ -114,7 +114,7 @@ func (n rawFullNode) fstring(ind string) string { panic("this should never end u
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	eb := rlp.NewEncoderBuffer(w)
-	n.encode(&eb)
+	n.encode(eb)
 	return eb.Flush()
 }
 

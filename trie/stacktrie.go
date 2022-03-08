@@ -402,7 +402,7 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 			returnToPool(child)
 		}
 
-		nodes.encode(&hasher.encbuf)
+		nodes.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()
 
 	case extNode:
@@ -416,7 +416,7 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 			n.Val = hashNode(st.children[0].val)
 		}
 
-		n.encode(&hasher.encbuf)
+		n.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()
 
 		// Release child back to pool.
@@ -428,7 +428,7 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 		sz := hexToCompactInPlace(st.key)
 		n := rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
 
-		n.encode(&hasher.encbuf)
+		n.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()
 
 	default:
