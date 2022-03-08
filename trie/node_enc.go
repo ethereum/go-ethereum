@@ -12,14 +12,6 @@ func nodeToBytes(n node) []byte {
 	return result
 }
 
-func appendEncodedNode(n node, dst []byte) []byte {
-	w := rlp.NewEncoderBuffer(nil)
-	n.encode(&w)
-	result := w.AppendToBytes(dst)
-	w.Flush()
-	return result
-}
-
 func (n *fullNode) encode(w *rlp.EncoderBuffer) {
 	offset := w.List()
 	for _, c := range n.Children {

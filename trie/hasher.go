@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -38,7 +39,8 @@ func (b *sliceBuffer) Reset() {
 // internal preallocated temp space
 type hasher struct {
 	sha      crypto.KeccakState
-	tmp      sliceBuffer
+	tmp      []byte
+	encbuf   rlp.EncoderBuffer
 	parallel bool // Whether to use paralallel threads when hashing
 }
 
@@ -46,8 +48,9 @@ type hasher struct {
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
-			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
+			tmp:    make([]byte, 0, 550), // cap is as large as a full fullNode.
+			sha:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
+			encbuf: rlp.NewEncoderBuffer(nil),
 		}
 	},
 }
@@ -152,23 +155,27 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // into compact form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
-	enc := appendEncodedNode(n, h.tmp[:0])
-	h.tmp = enc
-	if len(enc) < 32 && !force {
+	h.encbuf.Reset(nil)
+	n.encode(&h.encbuf)
+	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+
+	if len(h.tmp) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
+	return h.hashData(h.tmp)
 }
 
 // shortnodeToHash is used to creates a hashNode from a set of hashNodes, (which
 // may contain nil values)
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
-	enc := appendEncodedNode(n, h.tmp[:0])
-	h.tmp = enc
+	h.encbuf.Reset(nil)
+	n.encode(&h.encbuf)
+	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+
 	if len(h.tmp) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
+	return h.hashData(h.tmp)
 }
 
 // hashData hashes the provided data
