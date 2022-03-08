@@ -396,14 +396,13 @@ func (st *StackTrie) hash() {
 }
 
 func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
-	// Shortcut if node is already hashed.
-	if st.nodeType == hashedNode {
-		return
-	}
-
+	// The switch below sets this to the RLP-encoding of st.
 	var encodedNode []byte
 
 	switch st.nodeType {
+	case hashedNode:
+		return
+
 	case emptyNode:
 		st.val = emptyRoot.Bytes()
 		st.key = st.key[:0]
