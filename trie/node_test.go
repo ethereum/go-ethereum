@@ -105,16 +105,3 @@ func BenchmarkEncodeFullNode(b *testing.B) {
 		rlp.Encode(&buf, &fn)
 	}
 }
-
-func BenchmarkFastEncodeFullNode(b *testing.B) {
-	var buf sliceBuffer
-	var fn fullNode
-	for i := 0; i < 16; i++ {
-		fn.Children[i] = hashNode(randBytes(32))
-	}
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		frlp.Encode(&buf, &fn)
-	}
-}
