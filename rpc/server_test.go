@@ -130,25 +130,25 @@ func TestServerShortLivedConn(t *testing.T) {
 		deadline = time.Now().Add(10 * time.Second)
 	)
 	for i := 0; i < 20; i++ {
-		func() {
-			conn, err := net.Dial("tcp", listener.Addr().String())
-			if err != nil {
-				t.Fatal("can't dial:", err)
-			}
-			defer conn.Close()
-			conn.SetDeadline(deadline)
-			// Write the request, then half-close the connection so the server stops reading.
-			conn.Write([]byte(request))
-			conn.(*net.TCPConn).CloseWrite()
-			// Now try to get the response.
-			buf := make([]byte, 2000)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Fatal("read error:", err)
-			}
-			if !bytes.Equal(buf[:n], []byte(wantResp)) {
-				t.Fatalf("wrong response: %s", buf[:n])
-			}
-		}()
+		conn, err := net.Dial("tcp", listener.Addr().String())
+		if err != nil {
+			t.Fatal("can't dial:", err)
+		}
+
+		conn.SetDeadline(deadline)
+		// Write the request, then half-close the connection so the server stops reading.
+		conn.Write([]byte(request))
+		conn.(*net.TCPConn).CloseWrite()
+		// Now try to get the response.
+		buf := make([]byte, 2000)
+		n, err := conn.Read(buf)
+		conn.Close()		
+		
+		if err != nil {
+			t.Fatal("read error:", err)
+		}
+		if !bytes.Equal(buf[:n], []byte(wantResp)) {
+			t.Fatalf("wrong response: %s", buf[:n])
+		}
 	}
 }
