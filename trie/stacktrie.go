@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var ErrCommitDisabled = errors.New("no database for committing")
@@ -352,37 +351,6 @@ func (st *StackTrie) insert(key, value []byte) {
 	}
 }
 
-type stackTrieHashContext struct {
-	h      *hasher
-	encbuf rlp.EncoderBuffer
-}
-
-func newStackTrieHashContext() stackTrieHashContext {
-	return stackTrieHashContext{
-		h:      newHasher(false),
-		encbuf: rlp.NewEncoderBuffer(nil),
-	}
-}
-
-func (ctx *stackTrieHashContext) release() {
-	returnHasherToPool(ctx.h)
-	ctx.encbuf.Flush()
-	*ctx = stackTrieHashContext{}
-}
-
-// encodedBytes returns the result of the last encoding operation
-// on ctx.encbuf. This exists because node.encode can only be inlined
-// when using a concrete receiver type.
-func (ctx *stackTrieHashContext) encodedBytes() []byte {
-	enc := ctx.encbuf.AppendToBytes(ctx.h.tmp[:0])
-	ctx.h.tmp = enc
-
-	// Reset the buffer here so the next encoding operation doesn't
-	// need to care about resetting.
-	ctx.encbuf.Reset(nil)
-	return enc
-}
-
 // hash converts st into a 'hashedNode', if possible. Possible outcomes:
 //
 // 1. The rlp-encoded value was >= 32 bytes:
@@ -394,13 +362,13 @@ func (ctx *stackTrieHashContext) encodedBytes() []byte {
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
 func (st *StackTrie) hash() {
-	ctx := newStackTrieHashContext()
-	defer ctx.release()
+	h := newHasher(false)
+	defer returnHasherToPool(h)
 
-	st.hashRec(ctx)
+	st.hashRec(h)
 }
 
-func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
+func (st *StackTrie) hashRec(hasher *hasher) {
 	// The switch below sets this to the RLP-encoding of st.
 	var encodedNode []byte
 
@@ -421,7 +389,8 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 				nodes[i] = nilValueNode
 				continue
 			}
-			child.hashRec(ctx)
+
+			child.hashRec(hasher)
 			if len(child.val) < 32 {
 				nodes[i] = rawNode(child.val)
 			} else {
@@ -433,11 +402,11 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 			returnToPool(child)
 		}
 
-		nodes.encode(&ctx.encbuf)
-		encodedNode = ctx.encodedBytes()
+		nodes.encode(&hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
 
 	case extNode:
-		st.children[0].hashRec(ctx)
+		st.children[0].hashRec(hasher)
 
 		// TODO(fjl): can this use hexToCompactInPlace?
 		n := rawShortNode{Key: hexToCompact(st.key)}
@@ -447,8 +416,8 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 			n.Val = hashNode(st.children[0].val)
 		}
 
-		n.encode(&ctx.encbuf)
-		encodedNode = ctx.encodedBytes()
+		n.encode(&hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
 
 		// Release child back to pool.
 		returnToPool(st.children[0])
@@ -459,8 +428,8 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 		sz := hexToCompactInPlace(st.key)
 		n := rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
 
-		n.encode(&ctx.encbuf)
-		encodedNode = ctx.encodedBytes()
+		n.encode(&hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
 
 	default:
 		panic("invalid node type")
@@ -475,7 +444,7 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values
-	st.val = ctx.h.hashData(encodedNode)
+	st.val = hasher.hashData(encodedNode)
 	if st.db != nil {
 		// TODO! Is it safe to Put the slice here?
 		// Do all db implementations copy the value provided?
@@ -485,10 +454,10 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 
 // Hash returns the hash of the current node.
 func (st *StackTrie) Hash() (h common.Hash) {
-	ctx := newStackTrieHashContext()
-	defer ctx.release()
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
 
-	st.hashRec(ctx)
+	st.hashRec(hasher)
 	if len(st.val) == 32 {
 		copy(h[:], st.val)
 		return h
@@ -497,9 +466,9 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	// If the node's RLP isn't 32 bytes long, the node will not
 	// be hashed, and instead contain the  rlp-encoding of the
 	// node. For the top level node, we need to force the hashing.
-	ctx.h.sha.Reset()
-	ctx.h.sha.Write(st.val)
-	ctx.h.sha.Read(h[:])
+	hasher.sha.Reset()
+	hasher.sha.Write(st.val)
+	hasher.sha.Read(h[:])
 	return h
 }
 
@@ -515,10 +484,10 @@ func (st *StackTrie) Commit() (h common.Hash, err error) {
 		return common.Hash{}, ErrCommitDisabled
 	}
 
-	ctx := newStackTrieHashContext()
-	defer ctx.release()
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
 
-	st.hashRec(ctx)
+	st.hashRec(hasher)
 	if len(st.val) == 32 {
 		copy(h[:], st.val)
 		return h, nil
@@ -527,9 +496,9 @@ func (st *StackTrie) Commit() (h common.Hash, err error) {
 	// If the node's RLP isn't 32 bytes long, the node will not
 	// be hashed (and committed), and instead contain the  rlp-encoding of the
 	// node. For the top level node, we need to force the hashing+commit.
-	ctx.h.sha.Reset()
-	ctx.h.sha.Write(st.val)
-	ctx.h.sha.Read(h[:])
+	hasher.sha.Reset()
+	hasher.sha.Write(st.val)
+	hasher.sha.Read(h[:])
 	st.db.Put(h[:], st.val)
 	return h, nil
 }

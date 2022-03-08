@@ -155,27 +155,40 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // into compact form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
-	h.encbuf.Reset(nil)
 	n.encode(&h.encbuf)
-	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+	enc := h.encodedBytes()
 
-	if len(h.tmp) < 32 && !force {
+	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(h.tmp)
+	return h.hashData(enc)
 }
 
 // shortnodeToHash is used to creates a hashNode from a set of hashNodes, (which
 // may contain nil values)
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
-	h.encbuf.Reset(nil)
 	n.encode(&h.encbuf)
-	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+	enc := h.encodedBytes()
 
-	if len(h.tmp) < 32 && !force {
+	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(h.tmp)
+	return h.hashData(enc)
+}
+
+// encodedBytes returns the result of the last encoding operation on h.encbuf. This exists
+// because node.encode can only be inlined when using a concrete receiver type. Basically,
+// all node encoding must be done like this:
+//
+//     node.encode(&h.encbuf)
+//     enc := h.encodedBytes()
+//
+func (h *hasher) encodedBytes() []byte {
+	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+	// Reset the buffer here so the next encoding operation doesn't
+	// need to care about it.
+	h.encbuf.Reset(nil)
+	return h.tmp
 }
 
 // hashData hashes the provided data
