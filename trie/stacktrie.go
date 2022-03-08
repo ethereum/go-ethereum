@@ -404,6 +404,12 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 	var encodedNode []byte
 
 	switch st.nodeType {
+	case emptyNode:
+		st.val = emptyRoot.Bytes()
+		st.key = st.key[:0]
+		st.nodeType = hashedNode
+		return
+
 	case branchNode:
 		var nodes rawFullNode
 		for i, child := range st.children {
@@ -445,12 +451,6 @@ func (st *StackTrie) hashRec(ctx stackTrieHashContext) {
 		sz := hexToCompactInPlace(st.key)
 		n := &rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
 		encodedNode = ctx.encode(n)
-
-	case emptyNode:
-		st.val = emptyRoot.Bytes()
-		st.key = st.key[:0]
-		st.nodeType = hashedNode
-		return
 
 	default:
 		panic("invalid node type")
