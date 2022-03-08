@@ -171,8 +171,8 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 //     node.encode(h.encbuf)
 //     enc := h.encodedBytes()
 //
-// This encoding convention exists because node.encode can only be inlined/escape-analyzed
-// when called on a concrete receiver type.
+// This convention exists because node.encode can only be inlined/escape-analyzed when
+// called on a concrete receiver type.
 func (h *hasher) encodedBytes() []byte {
 	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
 	// Reset the buffer here so the next encoding operation doesn't
