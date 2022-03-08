@@ -397,7 +397,7 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 				nodes[i] = hashNode(child.val)
 			}
 
-			// Release children back to pool.
+			// Release child back to pool.
 			st.children[i] = nil
 			returnToPool(child)
 		}
@@ -408,8 +408,8 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 	case extNode:
 		st.children[0].hashRec(hasher)
 
-		// TODO(fjl): can this use hexToCompactInPlace?
-		n := rawShortNode{Key: hexToCompact(st.key)}
+		sz := hexToCompactInPlace(st.key)
+		n := rawShortNode{Key: st.key[:sz]}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
 		} else {
