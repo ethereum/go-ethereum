@@ -177,8 +177,6 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 // called on a concrete receiver type.
 func (h *hasher) encodedBytes() []byte {
 	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
-	// Reset the buffer here so the next encoding operation doesn't
-	// need to care about it.
 	h.encbuf.Reset(nil)
 	return h.tmp
 }
