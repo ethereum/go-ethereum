@@ -331,7 +331,7 @@ func (w *EncoderBuffer) ToBytes() []byte {
 	return w.buf.makeBytes()
 }
 
-// AppendToBytes appends the encoded value to dst.
+// AppendToBytes appends the encoded bytes to dst.
 func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
 	size := w.buf.size()
 	out := append(dst, make([]byte, size)...)
