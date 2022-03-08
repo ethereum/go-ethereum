@@ -38,8 +38,7 @@ var (
 	receiptStatusSuccessfulRLP = []byte{0x01}
 )
 
-// This error is returned when a typed receipt is decoded, but the string is empty.
-var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
+var errShortTypedReceipt = errors.New("typed receipt too short")
 
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
@@ -188,18 +187,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
-		if len(b) == 0 {
-			return errEmptyTypedReceipt
-		}
-		r.Type = b[0]
-		if r.Type == AccessListTxType || r.Type == DynamicFeeTxType {
-			var dec receiptRLP
-			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
-				return err
-			}
-			return r.setFromRLP(dec)
-		}
-		return ErrTxTypeNotSupported
+		return r.decodeTyped(b)
 	}
 }
 
@@ -222,8 +210,8 @@ func (r *Receipt) UnmarshalBinary(b []byte) error {
 
 // decodeTyped decodes a typed receipt from the canonical format.
 func (r *Receipt) decodeTyped(b []byte) error {
-	if len(b) == 0 {
-		return errEmptyTypedReceipt
+	if len(b) <= 1 {
+		return errShortTypedReceipt
 	}
 	switch b[0] {
 	case DynamicFeeTxType, AccessListTxType:
