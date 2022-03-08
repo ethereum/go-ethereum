@@ -63,8 +63,6 @@ type XDPoS struct {
 	// The exact consensus engine with different versions
 	EngineV1 *engine_v1.XDPoS_v1
 	EngineV2 *engine_v2.XDPoS_v2
-
-	isV2Initilised bool
 }
 
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
@@ -92,7 +90,6 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.New(config, db),
 		EngineV2:        engine_v2.New(config, db, waitPeriodCh),
-		isV2Initilised:  false,
 	}
 }
 
@@ -317,26 +314,6 @@ func (x *XDPoS) GetMasternodesByNumber(chain consensus.ChainReader, blockNumber 
 }
 
 func (x *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
-	if x.config.V2.SwitchBlock != nil && parent.Number.Cmp(x.config.V2.SwitchBlock) != -1 {
-		if parent.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
-			err := x.initialV2FromLastV1(chain, parent)
-			if err != nil {
-				log.Error("[YourTurn] Error while initilising first v2 block from the last v1 block", "ParentBlockHash", parent.Hash(), "Error", err)
-				return false, err
-			}
-			x.isV2Initilised = true
-		} else if parent.Number.Cmp(x.config.V2.SwitchBlock) == 1 && !x.isV2Initilised { // TODO: XIN-147, temporary solution for now
-			log.Info("[YourTurn] Initilising v2 after sync or restarted", "currentBlockNum", chain.CurrentHeader().Number, "currentBlockHash", chain.CurrentHeader().Hash())
-			lastv1BlockHeader := chain.GetHeaderByNumber(x.config.V2.SwitchBlock.Uint64())
-			err := x.initialV2FromLastV1(chain, lastv1BlockHeader)
-			if err != nil {
-				log.Error("[YourTurn] Temporary solution! Error when initialise v2", "lastv1BlockHeader", lastv1BlockHeader.Hash(), "Error", err)
-				return false, err
-			}
-			x.isV2Initilised = true
-		}
-
-	}
 	switch x.config.BlockConsensusVersion(big.NewInt(parent.Number.Int64() + 1)) {
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.YourTurn(chain, parent, signer)
@@ -353,6 +330,7 @@ func (x *XDPoS) GetValidator(creator common.Address, chain consensus.ChainReader
 }
 
 func (x *XDPoS) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []utils.Masternode) error {
+	// fmt.Println("UpdateMasternodes")
 	switch x.config.BlockConsensusVersion(header.Number) {
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.UpdateMasternodes(chain, header, ms)
@@ -508,16 +486,4 @@ func (x *XDPoS) CacheSigningTxs(hash common.Hash, txs []*types.Transaction) []*t
 
 func (x *XDPoS) GetCachedSigningTxs(hash common.Hash) (interface{}, bool) {
 	return x.signingTxsCache.Get(hash)
-}
-
-// V2 specific helper function to initilise consensus engine variables
-func (x *XDPoS) initialV2FromLastV1(chain consensus.ChainReader, header *types.Header) error {
-	checkpointBlockNumber := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch
-	checkpointHeader := chain.GetHeaderByNumber(checkpointBlockNumber)
-	masternodes := x.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
-	err := x.EngineV2.Initial(chain, masternodes)
-	if err != nil {
-		return err
-	}
-	return nil
 }

@@ -28,8 +28,9 @@ import (
 )
 
 type XDPoS_v2 struct {
-	config *params.XDPoSConfig // Consensus engine configuration parameters
-	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	config       *params.XDPoSConfig // Consensus engine configuration parameters
+	db           ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	isInitilised bool                // status of v2 variables
 
 	snapshots       *lru.ARCCache // Snapshots for gap block
 	signatures      *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -74,8 +75,10 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 
 	votePool := utils.NewPool(config.V2.CertThreshold)
 	engine := &XDPoS_v2{
-		config:     config,
-		db:         db,
+		config:       config,
+		db:           db,
+		isInitilised: false,
+
 		signatures: signatures,
 
 		verifiedHeaders: verifiedHeaders,
@@ -122,7 +125,7 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 	return sigHash(header)
 }
 
-func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Address) error {
+func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) error {
 	log.Info("[Initial] initial v2 related parameters")
 
 	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
@@ -130,36 +133,59 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Add
 		return nil
 	}
 
-	x.lock.Lock()
-	defer x.lock.Unlock()
-	// Check header if it is the first consensus v2 block, if so, assign initial values to current round and highestQC
+	var quorumCert *utils.QuorumCert
+	var err error
 
-	log.Info("[Initial] highest QC for consensus v2 first block")
-	// Generate new parent blockInfo and put it into QC
-	// TODO: XIN-147 to initilise V2 engine in a more dynamic way
-	firstV2BlockHeader := chain.GetHeaderByNumber(x.config.V2.SwitchBlock.Uint64())
-	blockInfo := &utils.BlockInfo{
-		Hash:   firstV2BlockHeader.Hash(),
-		Round:  utils.Round(0),
-		Number: firstV2BlockHeader.Number,
+	if header.Number.Int64() == x.config.V2.SwitchBlock.Int64() {
+		log.Info("[Initial] highest QC for consensus v2 first block")
+		blockInfo := &utils.BlockInfo{
+			Hash:   header.Hash(),
+			Round:  utils.Round(0),
+			Number: header.Number,
+		}
+		quorumCert = &utils.QuorumCert{
+			ProposedBlockInfo: blockInfo,
+			Signatures:        nil,
+		}
+
+		// can not call processQC because round is equal to default
+		x.currentRound = 1
+		x.highestQuorumCert = quorumCert
+
+	} else {
+		log.Info("[Initial] highest QC from current header")
+		quorumCert, _, _, err = x.getExtraFields(header)
+		if err != nil {
+			return err
+		}
+		err = x.processQC(chain, quorumCert)
+		if err != nil {
+			return err
+		}
 	}
-	quorumCert := &utils.QuorumCert{
-		ProposedBlockInfo: blockInfo,
-		Signatures:        nil,
-	}
-	x.currentRound = 1
-	x.highestQuorumCert = quorumCert
 
-	// Initial snapshot
-	lastGapNum := firstV2BlockHeader.Number.Uint64() - firstV2BlockHeader.Number.Uint64()%x.config.Epoch - x.config.Gap
-	lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
+	// Initial first v2 snapshot
+	if header.Number.Uint64() < x.config.V2.SwitchBlock.Uint64()+x.config.Gap {
 
-	snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), x.currentRound, x.highestQuorumCert, masternodes)
-	x.snapshots.Add(snap.Hash, snap)
-	err := storeSnapshot(snap, x.db)
-	if err != nil {
-		log.Error("[Initial] Error while storo snapshot", "error", err)
-		return err
+		checkpointBlockNumber := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch
+		checkpointHeader := chain.GetHeaderByNumber(checkpointBlockNumber)
+
+		lastGapNum := checkpointBlockNumber - x.config.Gap
+		lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
+
+		log.Info("[Initial] init first snapshot")
+		_, _, masternodes, err := x.getExtraFields(checkpointHeader)
+		if err != nil {
+			log.Error("[Initial] Error while get masternodes", "error", err)
+			return err
+		}
+		snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), masternodes)
+		x.snapshots.Add(snap.Hash, snap)
+		err = storeSnapshot(snap, x.db)
+		if err != nil {
+			log.Error("[Initial] Error while store snapshot", "error", err)
+			return err
+		}
 	}
 
 	// Initial timeout
@@ -173,6 +199,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, masternodes []common.Add
 	x.timeoutWorker.Reset(chain)
 
 	log.Info("[Initial] finish initialisation")
+
 	return nil
 }
 
@@ -186,6 +213,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	x.lock.RUnlock()
 
 	if header.ParentHash != highestQC.ProposedBlockInfo.Hash {
+		fmt.Println("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
 		log.Warn("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
 		return consensus.ErrNotReadyToPropose
 	}
@@ -303,32 +331,11 @@ func (x *XDPoS_v2) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	if number == 0 {
 		return nil, utils.ErrUnknownBlock
 	}
-	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	// checkpoint blocks have no tx
-	isEpochSwitch, _, err := x.IsEpochSwitch(header)
-	if err != nil {
-		log.Error("[Seal] Error while checking whether header is a epoch switch during sealing", "Header", header)
-	}
-	if x.config.Period == 0 && len(block.Transactions()) == 0 && !isEpochSwitch {
-		return nil, utils.ErrWaitTransactions
-	}
+
 	// Don't hold the signer fields for the entire sealing procedure
 	x.signLock.RLock()
 	signer, signFn := x.signer, x.signFn
 	x.signLock.RUnlock()
-
-	// Bail out if we're unauthorized to sign a block
-	masternodes := x.GetMasternodes(chain, header)
-	valid := false
-	for _, m := range masternodes {
-		if m == signer {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return nil, utils.ErrUnauthorized
-	}
 
 	select {
 	case <-stop:
@@ -364,6 +371,15 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	x.lock.RLock()
 	defer x.lock.RUnlock()
 
+	if !x.isInitilised {
+		err := x.Initial(chain, parent)
+		if err != nil {
+			log.Error("[YourTurn] Error while initialising last v2 variables", "ParentBlockHash", parent.Hash(), "Error", err)
+			return false, err
+		}
+		x.isInitilised = true
+	}
+
 	waitedTime := time.Now().Unix() - parent.Time.Int64()
 	if waitedTime < int64(x.config.V2.MinePeriod) {
 		log.Trace("[YourTurn] wait after mine period", "minePeriod", x.config.V2.MinePeriod, "waitedTime", waitedTime)
@@ -379,13 +395,12 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	var masterNodes []common.Address
 	if isEpochSwitch {
 		if x.config.V2.SwitchBlock.Cmp(parent.Number) == 0 {
-			snap, err := x.getSnapshot(chain, x.config.V2.SwitchBlock.Uint64(), false)
+			// the initial master nodes of v1->v2 switch contains penalties node
+			_, _, masterNodes, err = x.getExtraFields(parent)
 			if err != nil {
 				log.Error("[YourTurn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
 				return false, err
 			}
-			// the initial master nodes of v1->v2 switch contains penalties node
-			masterNodes = snap.NextEpochMasterNodes
 		} else {
 			masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
 			if err != nil {
@@ -400,36 +415,38 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 
 	if len(masterNodes) == 0 {
 		log.Error("[YourTurn] Fail to find any master nodes from current block round epoch", "Hash", parent.Hash(), "CurrentRound", round, "Number", parent.Number)
-		return false, errors.New("Masternodes not found")
+		return false, errors.New("masternodes not found")
 	}
-	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 
 	curIndex := utils.Position(masterNodes, signer)
-	if signer == x.signer {
-		log.Debug("[YourTurn] masterNodes cycle info", "number of masternodes", len(masterNodes), "current", signer, "position", curIndex, "parentBlock", parent)
+	if curIndex == -1 {
+		log.Debug("[YourTurn] Not authorised signer", "MN", masterNodes, "Hash", parent.Hash(), "signer", signer)
+		return false, nil
 	}
+
 	for i, s := range masterNodes {
 		log.Debug("[YourTurn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
 	}
 
-	if masterNodes[leaderIndex] == signer {
-		return true, nil
+	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
+	if masterNodes[leaderIndex] != signer {
+		log.Debug("[YourTurn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
+		return false, nil
 	}
-	log.Warn("[YourTurn] Not authorised signer", "signer", signer, "MN", masterNodes, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
-	return false, nil
+
+	return true, nil
 }
 
 func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {
 	x.lock.RLock()
 	defer x.lock.RUnlock()
 
-	var extraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(header.Extra, &extraField)
+	_, round, _, err := x.getExtraFields(header)
 	if err != nil {
 		log.Error("[IsAuthorisedAddress] Fail to decode v2 extra data", "Hash", header.Hash().Hex(), "Extra", header.Extra, "Error", err)
 		return false
 	}
-	blockRound := extraField.Round
+	blockRound := round
 
 	masterNodes := x.GetMasternodes(chain, header)
 
@@ -483,7 +500,7 @@ func (x *XDPoS_v2) getSnapshot(chain consensus.ChainReader, number uint64, isGap
 		return snap, nil
 	}
 	// If an on-disk checkpoint snapshot can be found, use that
-	snap, err := loadSnapshot(x.signatures, x.db, gapBlockHash)
+	snap, err := loadSnapshot(x.db, gapBlockHash)
 	if err != nil {
 		log.Error("Cannot find snapshot from last gap block", "err", err, "number", gapBlockNum, "hash", gapBlockHash)
 		return nil, err
@@ -504,7 +521,7 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 	}
 
 	x.lock.RLock()
-	snap := newSnapshot(number, header.Hash(), x.currentRound, x.highestQuorumCert, masterNodes)
+	snap := newSnapshot(number, header.Hash(), masterNodes)
 	x.lock.RUnlock()
 
 	err := storeSnapshot(snap, x.db)
@@ -572,12 +589,12 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Verify this is truely a v2 block first
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
+
+	quorumCert, _, _, err := x.getExtraFields(header)
 	if err != nil {
 		return utils.ErrInvalidV2Extra
 	}
-	quorumCert := decodedExtraField.QuorumCert
+
 	err = x.verifyQC(chain, quorumCert)
 	if err != nil {
 		log.Warn("[verifyHeader] fail to verify QC", "QCNumber", quorumCert.ProposedBlockInfo.Number, "QCsigLength", len(quorumCert.Signatures))
@@ -742,8 +759,9 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 
 	// Collect vote
 	thresholdReached, numberOfVotesInPool, pooledVotes := x.votePool.Add(voteMsg)
+	log.Info("[voteHandler] collect votes", "number", numberOfVotesInPool)
 	if thresholdReached {
-		log.Info(fmt.Sprintf("Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
+		log.Info(fmt.Sprintf("[voteHandler] Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 
 		// Check if the block already exist, otherwise we try luck with the next vote
 		proposedBlockHeader := chain.GetHeaderByHash(voteMsg.ProposedBlockInfo.Hash)
@@ -868,6 +886,8 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 	}
 	// Collect timeout, generate TC
 	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
+	log.Info("[timeoutHandler] collect timeout", "number", numberOfTimeoutsInPool)
+
 	// Threshold reached
 	if isThresholdReached {
 		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))
@@ -928,13 +948,10 @@ func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader
 		5. sendVote()
 	*/
 	// Get QC and Round from Extra
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(blockHeader.Extra, &decodedExtraField)
+	quorumCert, round, _, err := x.getExtraFields(blockHeader)
 	if err != nil {
 		return err
 	}
-	quorumCert := decodedExtraField.QuorumCert
-	round := decodedExtraField.Round
 
 	err = x.verifyQC(chain, quorumCert)
 	if err != nil {
@@ -1001,15 +1018,15 @@ func (x *XDPoS_v2) VerifyBlockInfo(blockChainReader consensus.ChainReader, block
 		return nil
 	}
 	// Check round
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(blockHeader.Extra, &decodedExtraField)
+
+	_, round, _, err := x.getExtraFields(blockHeader)
 	if err != nil {
 		log.Error("[VerifyBlockInfo] Fail to decode extra field", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number)
 		return err
 	}
-	if decodedExtraField.Round != blockInfo.Round {
-		log.Warn("[VerifyBlockInfo] Block extra round mismatch with blockInfo", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number, "blockRound", decodedExtraField.Round)
-		return fmt.Errorf("[VerifyBlockInfo] chain block's round does not match from blockInfo at hash: %v and block round: %v, blockInfo Round: %v", blockInfo.Hash.Hex(), decodedExtraField.Round, blockInfo.Round)
+	if round != blockInfo.Round {
+		log.Warn("[VerifyBlockInfo] Block extra round mismatch with blockInfo", "BlockInfoHash", blockInfo.Hash.Hex(), "BlockInfoNum", blockInfo.Number, "BlockInfoRound", blockInfo.Round, "blockHeaderNum", blockHeader.Number, "blockRound", round)
+		return fmt.Errorf("[VerifyBlockInfo] chain block's round does not match from blockInfo at hash: %v and block round: %v, blockInfo Round: %v", blockInfo.Hash.Hex(), round, blockInfo.Round)
 	}
 
 	return nil
@@ -1044,6 +1061,12 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		//First V2 Block QC, QC Signatures is initial nil
 		log.Warn("[verifyHeader] Invalid QC Signature is nil or empty", "QC", quorumCert, "QCNumber", quorumCert.ProposedBlockInfo.Number, "Signatures len", len(signatures))
 		return utils.ErrInvalidQC
+	}
+
+	epochInfo, err = x.getEpochSwitchInfo(blockChainReader, nil, quorumCert.ProposedBlockInfo.Hash)
+	if err != nil {
+		log.Error("[verifyQC] Error when getting epoch switch Info to verify QC", "Error", err)
+		return fmt.Errorf("Fail to verify QC due to failure in getting epoch switch info")
 	}
 
 	var wg sync.WaitGroup
@@ -1148,16 +1171,15 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert 
 	}
 	if proposedBlockHeader.Number.Cmp(x.config.V2.SwitchBlock) > 0 {
 		// Extra field contain parent information
-		var decodedExtraField utils.ExtraFields_v2
-		err := utils.DecodeBytesExtraFields(proposedBlockHeader.Extra, &decodedExtraField)
+		quorumCert, round, _, err := x.getExtraFields(proposedBlockHeader)
 		if err != nil {
 			return err
 		}
-		if x.lockQuorumCert == nil || decodedExtraField.QuorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round {
-			x.lockQuorumCert = decodedExtraField.QuorumCert
+		if x.lockQuorumCert == nil || quorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round {
+			x.lockQuorumCert = quorumCert
 		}
 
-		proposedBlockRound := &decodedExtraField.Round
+		proposedBlockRound := &round
 		// 3. Update commit block info
 		_, err = x.commitBlocks(blockChainReader, proposedBlockHeader, proposedBlockRound)
 		if err != nil {
@@ -1410,34 +1432,33 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 	// Find the last two parent block and check their rounds are the continuous
 	parentBlock := blockChainReader.GetHeaderByHash(proposedBlockHeader.ParentHash)
 
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(parentBlock.Extra, &decodedExtraField)
+	_, round, _, err := x.getExtraFields(parentBlock)
 	if err != nil {
 		log.Error("Fail to execute first DecodeBytesExtraFields for commiting block", "ProposedBlockHash", proposedBlockHeader.Hash())
 		return false, err
 	}
-	if *proposedBlockRound-1 != decodedExtraField.Round {
-		log.Debug("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", decodedExtraField.Round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+	if *proposedBlockRound-1 != round {
+		log.Debug("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 
 	// If parent round is continuous, we check grandparent
 	grandParentBlock := blockChainReader.GetHeaderByHash(parentBlock.ParentHash)
-	err = utils.DecodeBytesExtraFields(grandParentBlock.Extra, &decodedExtraField)
+	_, round, _, err = x.getExtraFields(grandParentBlock)
 	if err != nil {
 		log.Error("Fail to execute second DecodeBytesExtraFields for commiting block", "parentBlockHash", parentBlock.Hash())
 		return false, err
 	}
-	if *proposedBlockRound-2 != decodedExtraField.Round {
-		log.Debug("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", decodedExtraField.Round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+	if *proposedBlockRound-2 != round {
+		log.Debug("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 	// Commit the grandParent block
-	if x.highestCommitBlock == nil || (x.highestCommitBlock.Round < decodedExtraField.Round && x.highestCommitBlock.Number.Cmp(grandParentBlock.Number) == -1) {
+	if x.highestCommitBlock == nil || (x.highestCommitBlock.Round < round && x.highestCommitBlock.Number.Cmp(grandParentBlock.Number) == -1) {
 		x.highestCommitBlock = &utils.BlockInfo{
 			Number: grandParentBlock.Number,
 			Hash:   grandParentBlock.Hash(),
-			Round:  decodedExtraField.Round,
+			Round:  round,
 		}
 		log.Debug("Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
 		return true, nil
@@ -1522,18 +1543,16 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 		return true, header.Number.Uint64() / x.config.Epoch, nil
 	}
 
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
+	quorumCert, round, _, err := x.getExtraFields(header)
 	if err != nil {
 		log.Error("[IsEpochSwitch] decode header error", "err", err, "header", header, "extra", common.Bytes2Hex(header.Extra))
 		return false, 0, err
 	}
-	parentRound := decodedExtraField.QuorumCert.ProposedBlockInfo.Round
-	round := decodedExtraField.Round
+	parentRound := quorumCert.ProposedBlockInfo.Round
 	epochStartRound := round - round%utils.Round(x.config.Epoch)
 	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
-	if decodedExtraField.QuorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+	if quorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
 		return true, epochNum, nil
 	}
@@ -1548,13 +1567,13 @@ func (x *XDPoS_v2) IsEpochSwitchAtRound(round utils.Round, parentHeader *types.H
 	if parentHeader.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		return true, epochNum, nil
 	}
-	var decodedExtraField utils.ExtraFields_v2
-	err := utils.DecodeBytesExtraFields(parentHeader.Extra, &decodedExtraField)
+
+	_, round, _, err := x.getExtraFields(parentHeader)
 	if err != nil {
 		log.Error("[IsEpochSwitch] decode header error", "err", err, "header", parentHeader, "extra", common.Bytes2Hex(parentHeader.Extra))
 		return false, 0, err
 	}
-	parentRound := decodedExtraField.Round
+	parentRound := round
 	epochStartRound := round - round%utils.Round(x.config.Epoch)
 	return parentRound < epochStartRound, epochNum, nil
 }
@@ -1572,6 +1591,10 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 	if h == nil {
 		log.Debug("[getEpochSwitchInfo] header missing, get header", "hash", hash.Hex())
 		h = chain.GetHeaderByHash(hash)
+		if h == nil {
+			log.Warn("[getEpochSwitchInfo] can not find header from db", "hash", hash.Hex())
+			return nil, fmt.Errorf("[getEpochSwitchInfo] can not find header from db hash %v", hash.Hex())
+		}
 	}
 	isEpochSwitch, _, err := x.IsEpochSwitch(h)
 	if err != nil {
@@ -1579,36 +1602,20 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 	}
 	if isEpochSwitch {
 		log.Debug("[getEpochSwitchInfo] header is epoch switch", "hash", hash.Hex(), "number", h.Number.Uint64())
-		var epochSwitchInfo *utils.EpochSwitchInfo
-		// Special case, in case of last v1 block, we manually build the epoch switch info
-		if h.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
-			masternodes := decodeMasternodesFromHeaderExtra(h)
-			epochSwitchInfo = &utils.EpochSwitchInfo{
-				Masternodes: masternodes,
-				EpochSwitchBlockInfo: &utils.BlockInfo{
-					Hash:   hash,
-					Number: h.Number,
-					Round:  utils.Round(0),
-				},
-				EpochSwitchParentBlockInfo: nil,
-			}
-		} else { // v2 normal flow
-			masternodes := x.GetMasternodesFromEpochSwitchHeader(h)
-			// create the epoch switch info and cache it
-			var decodedExtraField utils.ExtraFields_v2
-			err = utils.DecodeBytesExtraFields(h.Extra, &decodedExtraField)
-			if err != nil {
-				return nil, err
-			}
-			epochSwitchInfo = &utils.EpochSwitchInfo{
-				Masternodes: masternodes,
-				EpochSwitchBlockInfo: &utils.BlockInfo{
-					Hash:   hash,
-					Number: h.Number,
-					Round:  decodedExtraField.Round,
-				},
-				EpochSwitchParentBlockInfo: decodedExtraField.QuorumCert.ProposedBlockInfo,
-			}
+		quorumCert, round, masternodes, err := x.getExtraFields(h)
+		if err != nil {
+			return nil, err
+		}
+		epochSwitchInfo := &utils.EpochSwitchInfo{
+			Masternodes: masternodes,
+			EpochSwitchBlockInfo: &utils.BlockInfo{
+				Hash:   hash,
+				Number: h.Number,
+				Round:  round,
+			},
+		}
+		if quorumCert != nil {
+			epochSwitchInfo.EpochSwitchParentBlockInfo = quorumCert.ProposedBlockInfo
 		}
 
 		x.epochSwitches.Add(hash, epochSwitchInfo)
@@ -1710,6 +1717,26 @@ func (x *XDPoS_v2) FindParentBlockToAssign(chain consensus.ChainReader) *types.B
 		log.Error("[FindParentBlockToAssign] Can not find parent block from highestQC proposedBlockInfo", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash, "x.highestQuorumCert.ProposedBlockInfo.Number", x.highestQuorumCert.ProposedBlockInfo.Number.Uint64())
 	}
 	return parent
+}
+
+func (x *XDPoS_v2) getExtraFields(header *types.Header) (*utils.QuorumCert, utils.Round, []common.Address, error) {
+
+	var masternodes []common.Address
+
+	// last v1 block
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		masternodes = decodeMasternodesFromHeaderExtra(header)
+		return nil, utils.Round(0), masternodes, nil
+	}
+
+	// v2 block
+	masternodes = x.GetMasternodesFromEpochSwitchHeader(header)
+	var decodedExtraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
+	if err != nil {
+		return nil, utils.Round(0), masternodes, err
+	}
+	return decodedExtraField.QuorumCert, decodedExtraField.Round, masternodes, nil
 }
 
 func (x *XDPoS_v2) allowedToSend(chain consensus.ChainReader, blockHeader *types.Header, sendType string) error {

@@ -4,16 +4,13 @@ import (
 	"encoding/json"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Snapshot is the state of the smart contract validator list
 // The validator list is used on next epoch master nodes
 // If we don't have the snapshot, then we have to trace back the gap block smart contract state which is very costly
 type SnapshotV2 struct {
-	Round  utils.Round `json:"round"`  // Round number
 	Number uint64      `json:"number"` // Block number where the snapshot was created
 	Hash   common.Hash `json:"hash"`   // Block hash where the snapshot was created
 
@@ -22,9 +19,8 @@ type SnapshotV2 struct {
 }
 
 // create new snapshot for next epoch to use
-func newSnapshot(number uint64, hash common.Hash, round utils.Round, qc *utils.QuorumCert, masternodes []common.Address) *SnapshotV2 {
+func newSnapshot(number uint64, hash common.Hash, masternodes []common.Address) *SnapshotV2 {
 	snap := &SnapshotV2{
-		Round:                round,
 		Number:               number,
 		Hash:                 hash,
 		NextEpochMasterNodes: masternodes,
@@ -33,8 +29,8 @@ func newSnapshot(number uint64, hash common.Hash, round utils.Round, qc *utils.Q
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*SnapshotV2, error) {
-	blob, err := db.Get(append([]byte("XDPoS-"), hash[:]...))
+func loadSnapshot(db ethdb.Database, hash common.Hash) (*SnapshotV2, error) {
+	blob, err := db.Get(append([]byte("XDPoS-V2-"), hash[:]...))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +48,7 @@ func storeSnapshot(s *SnapshotV2, db ethdb.Database) error {
 	if err != nil {
 		return err
 	}
-	return db.Put(append([]byte("XDPoS-"), s.Hash[:]...), blob)
+	return db.Put(append([]byte("XDPoS-V2-"), s.Hash[:]...), blob)
 }
 
 // retrieves master nodes list in map type

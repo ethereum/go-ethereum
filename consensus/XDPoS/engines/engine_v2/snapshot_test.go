@@ -6,14 +6,13 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/leveldb"
 )
 
 func TestGetMasterNodes(t *testing.T) {
 	masterNodes := []common.Address{{0x4}, {0x3}, {0x2}, {0x1}}
-	snap := newSnapshot(1, common.Hash{}, utils.Round(1), nil, masterNodes)
+	snap := newSnapshot(1, common.Hash{}, masterNodes)
 
 	for _, address := range masterNodes {
 		if _, ok := snap.GetMappedMasterNodes()[address]; !ok {
@@ -24,7 +23,7 @@ func TestGetMasterNodes(t *testing.T) {
 }
 
 func TestStoreLoadSnapshot(t *testing.T) {
-	snap := newSnapshot(1, common.Hash{0x1}, utils.Round(1), nil, nil)
+	snap := newSnapshot(1, common.Hash{0x1}, nil)
 	dir, err := ioutil.TempDir("", "snapshot-test")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
@@ -40,7 +39,7 @@ func TestStoreLoadSnapshot(t *testing.T) {
 		t.Error("store snapshot failed", err)
 	}
 
-	restoredSnapshot, err := loadSnapshot(nil, lddb, snap.Hash)
+	restoredSnapshot, err := loadSnapshot(lddb, snap.Hash)
 	if err != nil || restoredSnapshot.Hash != snap.Hash {
 		t.Error("load snapshot failed", err)
 	}

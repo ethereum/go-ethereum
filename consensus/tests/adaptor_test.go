@@ -236,7 +236,7 @@ func TestGetParentBlock(t *testing.T) {
 	assert.Equal(t, block, block900)
 
 	// Initialise
-	err := adaptor.EngineV2.Initial(blockchain, []common.Address{})
+	err := adaptor.EngineV2.Initial(blockchain, block.Header())
 	assert.Nil(t, err)
 
 	// V2

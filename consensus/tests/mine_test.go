@@ -16,7 +16,7 @@ import (
 
 func TestYourTurnInitialV2(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, parentBlock, _ := PrepareXDCTestBlockChain(t, int(config.XDPoS.Epoch)-1, config)
+	blockchain, _, parentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, 0)
 	minePeriod := config.XDPoS.V2.MinePeriod
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 

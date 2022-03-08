@@ -418,8 +418,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 			lastv1BlockNumber := block.Header().Number.Uint64() - 1
 			checkpointBlockNumber := lastv1BlockNumber - lastv1BlockNumber%chainConfig.XDPoS.Epoch
 			checkpointHeader := blockchain.GetHeaderByNumber(checkpointBlockNumber)
-			masternodes := engine.EngineV1.GetMasternodesFromCheckpointHeader(checkpointHeader)
-			err := engine.EngineV2.Initial(blockchain, masternodes)
+			err := engine.EngineV2.Initial(blockchain, checkpointHeader)
 			if err != nil {
 				panic(err)
 			}
