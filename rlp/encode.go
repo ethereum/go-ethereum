@@ -69,7 +69,7 @@ func Encode(w io.Writer, val interface{}) error {
 	if err := buf.encode(val); err != nil {
 		return err
 	}
-	return buf.toWriter(w)
+	return buf.writeTo(w)
 }
 
 // EncodeToBytes returns the RLP encoding of val.
@@ -81,7 +81,7 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 	if err := buf.encode(val); err != nil {
 		return nil, err
 	}
-	return buf.toBytes(), nil
+	return buf.makeBytes(), nil
 }
 
 // EncodeToReader returns a reader from which the RLP encoding of val

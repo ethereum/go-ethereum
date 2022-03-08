@@ -36,27 +36,31 @@ func (buf *encBuffer) size() int {
 	return len(buf.str) + buf.lhsize
 }
 
-// toBytes creates the encoder output.
-func (w *encBuffer) toBytes() []byte {
+// makeBytes creates the encoder output.
+func (w *encBuffer) makeBytes() []byte {
 	out := make([]byte, w.size())
+	w.copyTo(out)
+	return out
+}
+
+func (w *encBuffer) copyTo(dst []byte) {
 	strpos := 0
 	pos := 0
 	for _, head := range w.lheads {
 		// write string data before header
-		n := copy(out[pos:], w.str[strpos:head.offset])
+		n := copy(dst[pos:], w.str[strpos:head.offset])
 		pos += n
 		strpos += n
 		// write the header
-		enc := head.encode(out[pos:])
+		enc := head.encode(dst[pos:])
 		pos += len(enc)
 	}
 	// copy string data after the last list header
-	copy(out[pos:], w.str[strpos:])
-	return out
+	copy(dst[pos:], w.str[strpos:])
 }
 
-// toWriter writes the encoder output to w.
-func (buf *encBuffer) toWriter(w io.Writer) (err error) {
+// writeTo writes the encoder output to w.
+func (buf *encBuffer) writeTo(w io.Writer) (err error) {
 	strpos := 0
 	for _, head := range buf.lheads {
 		// write string data before header
@@ -303,7 +307,7 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 func (w *EncoderBuffer) Flush() error {
 	var err error
 	if w.dst != nil {
-		err = w.buf.toWriter(w.dst)
+		err = w.buf.writeTo(w.dst)
 	}
 	// Release the internal buffer.
 	if w.ownBuffer {
@@ -315,7 +319,15 @@ func (w *EncoderBuffer) Flush() error {
 
 // ToBytes returns the encoded bytes.
 func (w *EncoderBuffer) ToBytes() []byte {
-	return w.buf.toBytes()
+	return w.buf.makeBytes()
+}
+
+// AppendToBytes appends the encoded value to dst.
+func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
+	size := w.buf.size()
+	out := append(dst, make([]byte, size)...)
+	w.buf.copyTo(out[len(dst):])
+	return out
 }
 
 // Write appends b directly to the encoder output.
