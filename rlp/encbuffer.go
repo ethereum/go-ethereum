@@ -256,6 +256,19 @@ func (r *encReader) next() []byte {
 	}
 }
 
+func encBufferFromWriter(w io.Writer) *encBuffer {
+	switch w := w.(type) {
+	case EncoderBuffer:
+		return w.buf
+	case *EncoderBuffer:
+		return w.buf
+	case *encBuffer:
+		return w
+	default:
+		return nil
+	}
+}
+
 // EncoderBuffer is a buffer for incremental encoding.
 //
 // The zero value is NOT ready for use. To get a usable buffer,
@@ -283,12 +296,8 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 	// If the destination writer has an *encBuffer, use it.
 	// Note that w.ownBuffer is left false here.
 	if dst != nil {
-		if outer, ok := dst.(*encBuffer); ok {
+		if outer := encBufferFromWriter(dst); outer != nil {
 			*w = EncoderBuffer{outer, nil, false}
-			return
-		}
-		if outer, ok := dst.(EncoderBuffer); ok {
-			*w = EncoderBuffer{outer.buf, nil, false}
 			return
 		}
 	}
