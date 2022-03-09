@@ -51,7 +51,7 @@ func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 func TestGetBlockHeadersLes3(t *testing.T) { testGetBlockHeaders(t, 3) }
 func TestGetBlockHeadersLes4(t *testing.T) { testGetBlockHeaders(t, 4) }
 
-func testGetBlockHeaders(t *testing.T, protocol int) {
+func testGetBlockHeaders(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    downloader.MaxHeaderFetch + 15,
 		protocol:  protocol,
@@ -188,7 +188,7 @@ func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 func TestGetBlockBodiesLes3(t *testing.T) { testGetBlockBodies(t, 3) }
 func TestGetBlockBodiesLes4(t *testing.T) { testGetBlockBodies(t, 4) }
 
-func testGetBlockBodies(t *testing.T, protocol int) {
+func testGetBlockBodies(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    downloader.MaxHeaderFetch + 15,
 		protocol:  protocol,
@@ -274,7 +274,7 @@ func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 func TestGetCodeLes3(t *testing.T) { testGetCode(t, 3) }
 func TestGetCodeLes4(t *testing.T) { testGetCode(t, 4) }
 
-func testGetCode(t *testing.T, protocol int) {
+func testGetCode(t *testing.T, protocol uint) {
 	// Assemble the test environment
 	netconfig := testnetConfig{
 		blocks:    4,
@@ -314,7 +314,7 @@ func TestGetStaleCodeLes2(t *testing.T) { testGetStaleCode(t, 2) }
 func TestGetStaleCodeLes3(t *testing.T) { testGetStaleCode(t, 3) }
 func TestGetStaleCodeLes4(t *testing.T) { testGetStaleCode(t, 4) }
 
-func testGetStaleCode(t *testing.T, protocol int) {
+func testGetStaleCode(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    core.TriesInMemory + 4,
 		protocol:  protocol,
@@ -348,7 +348,7 @@ func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 func TestGetReceiptLes3(t *testing.T) { testGetReceipt(t, 3) }
 func TestGetReceiptLes4(t *testing.T) { testGetReceipt(t, 4) }
 
-func testGetReceipt(t *testing.T, protocol int) {
+func testGetReceipt(t *testing.T, protocol uint) {
 	// Assemble the test environment
 	netconfig := testnetConfig{
 		blocks:    4,
@@ -384,7 +384,7 @@ func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 func TestGetProofsLes3(t *testing.T) { testGetProofs(t, 3) }
 func TestGetProofsLes4(t *testing.T) { testGetProofs(t, 4) }
 
-func testGetProofs(t *testing.T, protocol int) {
+func testGetProofs(t *testing.T, protocol uint) {
 	// Assemble the test environment
 	netconfig := testnetConfig{
 		blocks:    4,
@@ -428,7 +428,7 @@ func TestGetStaleProofLes2(t *testing.T) { testGetStaleProof(t, 2) }
 func TestGetStaleProofLes3(t *testing.T) { testGetStaleProof(t, 3) }
 func TestGetStaleProofLes4(t *testing.T) { testGetStaleProof(t, 4) }
 
-func testGetStaleProof(t *testing.T, protocol int) {
+func testGetStaleProof(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    core.TriesInMemory + 4,
 		protocol:  protocol,
@@ -474,7 +474,7 @@ func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
 func TestGetCHTProofsLes3(t *testing.T) { testGetCHTProofs(t, 3) }
 func TestGetCHTProofsLes4(t *testing.T) { testGetCHTProofs(t, 4) }
 
-func testGetCHTProofs(t *testing.T, protocol int) {
+func testGetCHTProofs(t *testing.T, protocol uint) {
 	var (
 		config       = light.TestServerIndexerConfig
 		waitIndexers = func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -533,7 +533,7 @@ func TestGetBloombitsProofsLes3(t *testing.T) { testGetBloombitsProofs(t, 3) }
 func TestGetBloombitsProofsLes4(t *testing.T) { testGetBloombitsProofs(t, 4) }
 
 // Tests that bloombits proofs can be correctly retrieved.
-func testGetBloombitsProofs(t *testing.T, protocol int) {
+func testGetBloombitsProofs(t *testing.T, protocol uint) {
 	var (
 		config       = light.TestServerIndexerConfig
 		waitIndexers = func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -592,7 +592,7 @@ func TestTransactionStatusLes2(t *testing.T) { testTransactionStatus(t, lpv2) }
 func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, lpv3) }
 func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, lpv4) }
 
-func testTransactionStatus(t *testing.T, protocol int) {
+func testTransactionStatus(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		protocol:  protocol,
 		nopruning: true,
@@ -694,7 +694,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 func TestStopResumeLES3(t *testing.T) { testStopResume(t, lpv3) }
 func TestStopResumeLES4(t *testing.T) { testStopResume(t, lpv4) }
 
-func testStopResume(t *testing.T, protocol int) {
+func testStopResume(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		protocol:  protocol,
 		simClock:  true,

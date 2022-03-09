@@ -32,7 +32,7 @@ import (
 func TestULCAnnounceThresholdLes2(t *testing.T) { testULCAnnounceThreshold(t, 2) }
 func TestULCAnnounceThresholdLes3(t *testing.T) { testULCAnnounceThreshold(t, 3) }
 
-func testULCAnnounceThreshold(t *testing.T, protocol int) {
+func testULCAnnounceThreshold(t *testing.T, protocol uint) {
 	// todo figure out why it takes fetcher so longer to fetcher the announced header.
 	t.Skip("Sometimes it can failed")
 	var cases = []struct {
@@ -87,7 +87,7 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	}
 }
 
-func connect(server *serverHandler, serverId enode.ID, client *clientHandler, protocol int, noInitAnnounce bool) (*serverPeer, *clientPeer, error) {
+func connect(server *serverHandler, serverId enode.ID, client *clientHandler, protocol uint, noInitAnnounce bool) (*serverPeer, *clientPeer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -132,7 +132,7 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 }
 
 // newTestServerPeer creates server peer.
-func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
+func newTestServerPeer(t *testing.T, blocks int, protocol uint) (*testServer, *enode.Node, func()) {
 	netconfig := testnetConfig{
 		blocks:    blocks,
 		protocol:  protocol,
@@ -149,7 +149,7 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *en
 }
 
 // newTestLightPeer creates node with light sync mode
-func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
+func newTestLightPeer(t *testing.T, protocol uint, ulcServers []string, ulcFraction int) (*testClient, func()) {
 	netconfig := testnetConfig{
 		protocol:    protocol,
 		ulcServers:  ulcServers,

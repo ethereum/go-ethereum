@@ -66,7 +66,7 @@ func verifyChainHeight(t *testing.T, fetcher *lightFetcher, height uint64) {
 func TestSequentialAnnouncementsLes2(t *testing.T) { testSequentialAnnouncements(t, 2) }
 func TestSequentialAnnouncementsLes3(t *testing.T) { testSequentialAnnouncements(t, 3) }
 
-func testSequentialAnnouncements(t *testing.T, protocol int) {
+func testSequentialAnnouncements(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,
@@ -104,7 +104,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 func TestGappedAnnouncementsLes2(t *testing.T) { testGappedAnnouncements(t, 2) }
 func TestGappedAnnouncementsLes3(t *testing.T) { testGappedAnnouncements(t, 3) }
 
-func testGappedAnnouncements(t *testing.T, protocol int) {
+func testGappedAnnouncements(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,
@@ -151,7 +151,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 func TestTrustedAnnouncementsLes2(t *testing.T) { testTrustedAnnouncement(t, 2) }
 func TestTrustedAnnouncementsLes3(t *testing.T) { testTrustedAnnouncement(t, 3) }
 
-func testTrustedAnnouncement(t *testing.T, protocol int) {
+func testTrustedAnnouncement(t *testing.T, protocol uint) {
 	var (
 		servers   []*testServer
 		teardowns []func()
@@ -227,7 +227,7 @@ func TestInvalidAnnouncesLES2(t *testing.T) { testInvalidAnnounces(t, lpv2) }
 func TestInvalidAnnouncesLES3(t *testing.T) { testInvalidAnnounces(t, lpv3) }
 func TestInvalidAnnouncesLES4(t *testing.T) { testInvalidAnnounces(t, lpv4) }
 
-func testInvalidAnnounces(t *testing.T, protocol int) {
+func testInvalidAnnounces(t *testing.T, protocol uint) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,

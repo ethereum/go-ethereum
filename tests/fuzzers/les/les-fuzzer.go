@@ -266,7 +266,7 @@ func (f *fuzzer) doFuzz(msgCode uint64, packet interface{}) {
 		panic(err)
 	}
 	version := f.randomInt(3) + 2 // [LES2, LES3, LES4]
-	peer, closeFn := l.NewFuzzerPeer(version)
+	peer, closeFn := l.NewFuzzerPeer(uint(version))
 	defer closeFn()
 	fn, _, _, err := l.Les3[msgCode].Handle(dummyMsg{enc})
 	if err != nil {

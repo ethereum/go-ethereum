@@ -191,7 +191,7 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 }
 
 // testOdr tests odr requests whose validation guaranteed by block headers.
-func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn odrTestFn) {
+func testOdr(t *testing.T, protocol uint, expFail uint64, checkCached bool, fn odrTestFn) {
 	// Assemble the test environment
 	netconfig := testnetConfig{
 		blocks:    4,
@@ -258,7 +258,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 func TestGetTxStatusFromUnindexedPeersLES4(t *testing.T) { testGetTxStatusFromUnindexedPeers(t, lpv4) }
 
-func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
+func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol uint) {
 	var (
 		blocks    = 8
 		netconfig = testnetConfig{

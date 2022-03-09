@@ -41,7 +41,7 @@ func TestLegacyCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, lp
 // on a verified checkpoint.
 func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, lpv3, 2) }
 
-func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
+func testCheckpointSyncing(t *testing.T, protocol uint, syncMode int) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -137,7 +137,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 func TestMissOracleBackendLES3(t *testing.T)             { testMissOracleBackend(t, true, lpv3) }
 func TestMissOracleBackendNoCheckpointLES3(t *testing.T) { testMissOracleBackend(t, false, lpv3) }
 
-func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
+func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol uint) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -234,7 +234,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 
 func TestSyncFromConfiguredCheckpointLES3(t *testing.T) { testSyncFromConfiguredCheckpoint(t, lpv3) }
 
-func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
+func testSyncFromConfiguredCheckpoint(t *testing.T, protocol uint) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -318,7 +318,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 
 func TestSyncAll(t *testing.T) { testSyncAll(t, lpv3) }
 
-func testSyncAll(t *testing.T, protocol int) {
+func testSyncAll(t *testing.T, protocol uint) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {

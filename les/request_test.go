@@ -81,7 +81,7 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 	return &light.CodeRequest{Id: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
 }
 
-func testAccess(t *testing.T, protocol int, fn accessTestFn) {
+func testAccess(t *testing.T, protocol uint, fn accessTestFn) {
 	// Assemble the test environment
 	netconfig := testnetConfig{
 		blocks:    4,
