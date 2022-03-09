@@ -825,7 +825,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	}
 	// If the head fetch already found an ancestor, return
 	if hash != (common.Hash{}) {
-		if int64(number) <= floor {
+		if floor >= 0 && number <= uint64(floor) {
 			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
 			return 0, errInvalidAncestor
 		}
@@ -884,7 +884,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		hash = h
 	}
 	// Ensure valid ancestry and return
-	if int64(start) <= floor {
+	if floor >= 0 && start <= uint64(floor) {
 		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
 	}
