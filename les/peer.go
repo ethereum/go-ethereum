@@ -569,7 +569,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 	}
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
-		costUpdate := MRC.decode(ProtocolLengths[uint(p.version)])
+		costUpdate := MRC.decode(ProtocolLengths[p.version])
 		for code, cost := range costUpdate {
 			p.fcCosts[code] = cost
 		}
@@ -659,7 +659,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		}
 		p.fcParams = sParams
 		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
-		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
+		p.fcCosts = MRC.decode(ProtocolLengths[p.version])
 
 		recv.get("checkpoint/value", &p.checkpoint)
 		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
@@ -1078,7 +1078,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
 		}
 		*lists = (*lists).add("flowControl/MRC", costList)
-		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
+		p.fcCosts = costList.decode(ProtocolLengths[p.version])
 		p.fcParams = server.defParams
 
 		// Add advertised checkpoint and register block height which
