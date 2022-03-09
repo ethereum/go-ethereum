@@ -66,29 +66,11 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64
 	t.env = env
 	t.to = to
 
-	t.lookupAccount(t.from)
-	t.lookupAccount(to)
-
 	// The recipient balance includes the value transferred.
+	t.lookupAccount(to)
 	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
 	toBal = new(big.Int).Sub(toBal, t.value)
 	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
-
-	// The sender balance is after reducing: value, gasLimit, intrinsicGas.
-	// We need to re-add them to get the pre-tx balance.
-	intrinsicGas := t.gasLimit - gas
-	fromBal := hexutil.MustDecodeBig(t.prestate[t.from].Balance)
-	gasPrice := env.TxContext.GasPrice
-	consumedGas := new(big.Int).Mul(
-		gasPrice,
-		new(big.Int).Add(
-			new(big.Int).SetUint64(intrinsicGas),
-			new(big.Int).SetUint64(gas),
-		),
-	)
-	fromBal.Add(fromBal, new(big.Int).Add(t.value, consumedGas))
-	t.prestate[t.from].Balance = hexutil.EncodeBig(fromBal)
-	t.prestate[t.from].Nonce--
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -147,6 +129,7 @@ func (t *prestateTracer) CaptureTxStart(from common.Address, create bool, input 
 	t.input = input
 	t.gasLimit = gasLimit
 	t.value = value
+	t.lookupAccount(t.from)
 }
 
 func (*prestateTracer) CaptureTxEnd(remainingGas uint64, err error) {}
