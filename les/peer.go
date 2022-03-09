@@ -123,7 +123,7 @@ type peerCommons struct {
 	rw p2p.MsgReadWriter
 
 	id           string    // Peer identity.
-	version      int       // Protocol version negotiated.
+	version      uint      // Protocol version negotiated.
 	network      uint64    // Network ID being on.
 	frozen       uint32    // Flag whether the peer is frozen.
 	announceType uint64    // New block announcement type.
@@ -166,7 +166,7 @@ func (p *peerCommons) String() string {
 // PeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type PeerInfo struct {
-	Version    int      `json:"version"`    // Ethereum protocol version negotiated
+	Version    uint     `json:"version"`    // Ethereum protocol version negotiated
 	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
 	Head       string   `json:"head"`       // SHA3 hash of the peer's best owned block
 }
@@ -308,7 +308,7 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if rNetwork != p.network {
 		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
 	}
-	if int(rVersion) != p.version {
+	if rVersion != uint64(p.version) {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
 	// Check forkID if the protocol version is beyond the les4
@@ -363,7 +363,7 @@ type serverPeer struct {
 	hasBlockHook func(common.Hash, uint64, bool) bool // Used to determine whether the server has the specified block.
 }
 
-func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *serverPeer {
+func newServerPeer(version uint, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *serverPeer {
 	return &serverPeer{
 		peerCommons: peerCommons{
 			Peer:      p,
@@ -782,7 +782,7 @@ type clientPeer struct {
 	fcClient    *flowcontrol.ClientNode // Server side mirror token bucket.
 }
 
-func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
+func newClientPeer(version uint, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
 	return &clientPeer{
 		peerCommons: peerCommons{
 			Peer:      p,

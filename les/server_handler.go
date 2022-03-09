@@ -100,7 +100,7 @@ func (h *serverHandler) stop() {
 
 // runPeer is the p2p protocol run function for the given version.
 func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := newClientPeer(int(version), h.server.config.NetworkId, p, newMeteredMsgWriter(rw, int(version)))
+	peer := newClientPeer(version, h.server.config.NetworkId, p, newMeteredMsgWriter(rw, version))
 	defer peer.close()
 	h.wg.Add(1)
 	defer h.wg.Done()

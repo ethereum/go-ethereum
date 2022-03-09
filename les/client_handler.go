@@ -96,7 +96,7 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	if h.ulc != nil {
 		trusted = h.ulc.trusted(p.ID())
 	}
-	peer := newServerPeer(int(version), h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, int(version)))
+	peer := newServerPeer(version, h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, version))
 	defer peer.close()
 	h.wg.Add(1)
 	defer h.wg.Done()

@@ -573,7 +573,6 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	var (
 		start   uint64
 		end     uint64
-		delta   = int64(1)
 		lastLog time.Time
 		err     error
 	)
@@ -586,23 +585,25 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	if start == end {
 		return 0, fmt.Errorf("from and to needs to be different")
 	}
-	if start > end {
-		delta = -1
-	}
-	for i := int64(start); i != int64(end); i += delta {
+
+	for i := start; i != end; {
 		if time.Since(lastLog) > 8*time.Second {
 			log.Info("Finding roots", "from", start, "to", end, "at", i)
 			lastLog = time.Now()
 		}
-		if i < int64(pivot) {
-			continue
+		if i > pivot {
+			h := api.eth.BlockChain().GetHeaderByNumber(i)
+			if h == nil {
+				return 0, fmt.Errorf("missing header %d", i)
+			}
+			if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
+				return i, nil
+			}
 		}
-		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
-		if h == nil {
-			return 0, fmt.Errorf("missing header %d", i)
-		}
-		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
-			return uint64(i), nil
+		if start > end {
+			i--
+		} else {
+			i++
 		}
 	}
 	return 0, fmt.Errorf("No state found")

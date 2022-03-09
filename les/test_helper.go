@@ -400,7 +400,7 @@ func (p *testPeer) close() {
 	p.app.Close()
 }
 
-func newTestPeerPair(name string, version int, server *serverHandler, client *clientHandler, noInitAnnounce bool) (*testPeer, *testPeer, error) {
+func newTestPeerPair(name string, version uint, server *serverHandler, client *clientHandler, noInitAnnounce bool) (*testPeer, *testPeer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -460,7 +460,7 @@ type testClient struct {
 }
 
 // newRawPeer creates a new server peer connects to the server and do the handshake.
-func (client *testClient) newRawPeer(t *testing.T, name string, version int, recentTxLookup uint64) (*testPeer, func(), <-chan error) {
+func (client *testClient) newRawPeer(t *testing.T, name string, version uint, recentTxLookup uint64) (*testPeer, func(), <-chan error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -524,7 +524,7 @@ type testServer struct {
 }
 
 // newRawPeer creates a new client peer connects to the server and do the handshake.
-func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*testPeer, func(), <-chan error) {
+func (server *testServer) newRawPeer(t *testing.T, name string, version uint) (*testPeer, func(), <-chan error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -577,7 +577,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 // testnetConfig wraps all the configurations for testing network.
 type testnetConfig struct {
 	blocks      int
-	protocol    int
+	protocol    uint
 	indexFn     indexerCallback
 	ulcServers  []string
 	ulcFraction int
@@ -676,7 +676,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 // NewFuzzerPeer creates a client peer for test purposes, and also returns
 // a function to close the peer: this is needed to avoid goroutine leaks in the
 // exec queue.
-func NewFuzzerPeer(version int) (p *clientPeer, closer func()) {
+func NewFuzzerPeer(version uint) (p *clientPeer, closer func()) {
 	p = newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
 	return p, func() { p.peerCommons.close() }
 }

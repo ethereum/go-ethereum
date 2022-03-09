@@ -60,7 +60,7 @@ func TestChainIterator(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Number: new(big.Int).SetUint64(i)}, []*types.Transaction{tx}, nil, nil, newHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -138,7 +138,7 @@ func TestIndexTransactions(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Number: new(big.Int).SetUint64(i)}, []*types.Transaction{tx}, nil, nil, newHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}

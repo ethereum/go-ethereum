@@ -65,19 +65,20 @@ func init() {
 // Note, the returned slice uses the same memory area as the input arguments.
 // If those are duktape stack items, popping them off **will** make the slice
 // contents change.
-func makeSlice(ptr unsafe.Pointer, size uint) []byte {
+func makeSlice(ptr unsafe.Pointer, size int) []byte {
 	var sl = struct {
 		addr uintptr
 		len  int
 		cap  int
-	}{uintptr(ptr), int(size), int(size)}
+	}{uintptr(ptr), size, size}
 
 	return *(*[]byte)(unsafe.Pointer(&sl))
 }
 
 // popSlice pops a buffer off the JavaScript stack and returns it as a slice.
 func popSlice(ctx *duktape.Context) []byte {
-	blob := common.CopyBytes(makeSlice(ctx.GetBuffer(-1)))
+	ptr, size := ctx.GetBuffer(-1)
+	blob := common.CopyBytes(makeSlice(ptr, int(size)))
 	ctx.Pop()
 	return blob
 }
@@ -156,7 +157,7 @@ func (mw *memoryWrapper) pushObject(vm *duktape.Context) {
 		ctx.Pop2()
 
 		ptr := ctx.PushFixedBuffer(len(blob))
-		copy(makeSlice(ptr, uint(len(blob))), blob)
+		copy(makeSlice(ptr, len(blob)), blob)
 		return 1
 	})
 	vm.PutPropString(obj, "slice")
@@ -236,7 +237,7 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 		code := dw.db.GetCode(common.BytesToAddress(popSlice(ctx)))
 
 		ptr := ctx.PushFixedBuffer(len(code))
-		copy(makeSlice(ptr, uint(len(code))), code)
+		copy(makeSlice(ptr, len(code)), code)
 		return 1
 	})
 	vm.PutPropString(obj, "getCode")
@@ -249,7 +250,7 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 		state := dw.db.GetState(common.BytesToAddress(addr), common.BytesToHash(hash))
 
 		ptr := ctx.PushFixedBuffer(len(state))
-		copy(makeSlice(ptr, uint(len(state))), state[:])
+		copy(makeSlice(ptr, len(state)), state[:])
 		return 1
 	})
 	vm.PutPropString(obj, "getState")
@@ -300,7 +301,7 @@ func (cw *contractWrapper) pushObject(vm *duktape.Context) {
 		blob := cw.contract.Input
 
 		ptr := ctx.PushFixedBuffer(len(blob))
-		copy(makeSlice(ptr, uint(len(blob))), blob)
+		copy(makeSlice(ptr, len(blob)), blob)
 		return 1
 	})
 	vm.PutPropString(obj, "getInput")
@@ -463,7 +464,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	tracer.vm.PushGlobalGoFunction("toWord", func(ctx *duktape.Context) int {
 		var word common.Hash
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
-			word = common.BytesToHash(makeSlice(ptr, size))
+			word = common.BytesToHash(makeSlice(ptr, int(size)))
 		} else {
 			word = common.HexToHash(ctx.GetString(-1))
 		}
@@ -474,7 +475,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	tracer.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
 		var addr common.Address
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
-			addr = common.BytesToAddress(makeSlice(ptr, size))
+			addr = common.BytesToAddress(makeSlice(ptr, int(size)))
 		} else {
 			addr = common.HexToAddress(ctx.GetString(-1))
 		}
@@ -485,7 +486,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	tracer.vm.PushGlobalGoFunction("toContract", func(ctx *duktape.Context) int {
 		var from common.Address
 		if ptr, size := ctx.GetBuffer(-2); ptr != nil {
-			from = common.BytesToAddress(makeSlice(ptr, size))
+			from = common.BytesToAddress(makeSlice(ptr, int(size)))
 		} else {
 			from = common.HexToAddress(ctx.GetString(-2))
 		}
@@ -499,7 +500,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 	tracer.vm.PushGlobalGoFunction("toContract2", func(ctx *duktape.Context) int {
 		var from common.Address
 		if ptr, size := ctx.GetBuffer(-3); ptr != nil {
-			from = common.BytesToAddress(makeSlice(ptr, size))
+			from = common.BytesToAddress(makeSlice(ptr, int(size)))
 		} else {
 			from = common.HexToAddress(ctx.GetString(-3))
 		}
@@ -508,7 +509,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 		// Retrieve code slice from js stack
 		var code []byte
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
-			code = common.CopyBytes(makeSlice(ptr, size))
+			code = common.CopyBytes(makeSlice(ptr, int(size)))
 		} else {
 			code = common.FromHex(ctx.GetString(-1))
 		}
@@ -543,7 +544,7 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 			ctx.PushFixedBuffer(0)
 			return 1
 		}
-		copy(makeSlice(ctx.PushFixedBuffer(size), uint(size)), blob[start:end])
+		copy(makeSlice(ctx.PushFixedBuffer(size), size), blob[start:end])
 		return 1
 	})
 	// Push the JavaScript tracer as object #0 onto the JSVM stack and validate it
@@ -861,7 +862,7 @@ func pushValue(ctx *duktape.Context, val interface{}) {
 		ctx.PushString(val)
 	case []byte:
 		ptr := ctx.PushFixedBuffer(len(val))
-		copy(makeSlice(ptr, uint(len(val))), val)
+		copy(makeSlice(ptr, len(val)), val)
 	case common.Address:
 		ptr := ctx.PushFixedBuffer(20)
 		copy(makeSlice(ptr, 20), val[:])
