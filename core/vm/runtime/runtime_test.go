@@ -331,7 +331,7 @@ type stepCounter struct {
 	steps int
 }
 
-func (s *stepCounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (s *stepCounter) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 }
 
 func (s *stepCounter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {

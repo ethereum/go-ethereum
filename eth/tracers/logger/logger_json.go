@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type JSONLogger struct {
@@ -43,7 +44,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 	l.env = env
 }
 
@@ -99,5 +100,6 @@ func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*JSONLogger) CaptureTxStart(_ uint64)        {}
-func (*JSONLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (*JSONLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+}
+func (*JSONLogger) CaptureTxEnd(remainingGas uint64, err error) {}

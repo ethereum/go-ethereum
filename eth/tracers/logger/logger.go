@@ -134,7 +134,7 @@ func (l *StructLogger) Reset() {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 	l.env = env
 }
 
@@ -223,8 +223,9 @@ func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*StructLogger) CaptureTxStart(_ uint64)        {}
-func (*StructLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (*StructLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+}
+func (*StructLogger) CaptureTxEnd(remainingGas uint64, err error) {}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
@@ -286,6 +287,11 @@ type mdLogger struct {
 	out io.Writer
 	cfg *Config
 	env *vm.EVM
+
+	from   common.Address
+	create bool
+	input  []byte
+	value  *big.Int
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -298,16 +304,16 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 	t.env = env
-	if !create {
+	if !t.create {
 		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
+			t.from.String(), to.String(),
+			t.input, gas, t.value)
 	} else {
 		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
+			t.from.String(), to.String(),
+			t.input, gas, t.value)
 	}
 
 	fmt.Fprintf(t.out, `
@@ -351,5 +357,11 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*mdLogger) CaptureTxStart(_ uint64)        {}
-func (*mdLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (t *mdLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+	t.from = from
+	t.create = create
+	t.input = input
+	t.value = value
+}
+
+func (*mdLogger) CaptureTxEnd(remainingGas uint64, err error) {}

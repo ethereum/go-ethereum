@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -52,6 +53,11 @@ type callTracer struct {
 	callstack []callFrame
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
+
+	from   common.Address
+	create bool
+	input  []byte
+	value  *big.Int
 }
 
 // newCallTracer returns a native go tracer which tracks
@@ -63,17 +69,17 @@ func newCallTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
-		From:  addrToHex(from),
+		From:  addrToHex(t.from),
 		To:    addrToHex(to),
-		Input: bytesToHex(input),
+		Input: bytesToHex(t.input),
 		Gas:   uintToHex(gas),
-		Value: bigToHex(value),
+		Value: bigToHex(t.value),
 	}
-	if create {
+	if t.create {
 		t.callstack[0].Type = "CREATE"
 	}
 }
@@ -142,8 +148,14 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (*callTracer) CaptureTxStart(_ uint64)        {}
-func (*callTracer) CaptureTxEnd(_ uint64, _ error) {}
+func (t *callTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+	t.from = from
+	t.create = create
+	t.input = input
+	t.value = value
+}
+
+func (t *callTracer) CaptureTxEnd(remainingGas uint64, err error) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
