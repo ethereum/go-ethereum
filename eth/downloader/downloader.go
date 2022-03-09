@@ -476,12 +476,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		if err != nil {
 			return err
 		}
-		// Opposed to legacy mode, in beacon mode we trust the chain we've been
-		// told to sync to, so no need to leave a gap between the pivot and head
-		// to full sync. Still, the downloader's been architected to do a full
-		// block import after the pivot, so make it off by one to avoid having
-		// to special case everything internally.
-		pivot = d.skeleton.Header(latest.Number.Uint64() - 1)
+		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
+			pivot = d.skeleton.Header(latest.Number.Uint64() - uint64(fsMinFullBlocks))
+		}
 	}
 	// If no pivot block was returned, the head is below the min full block
 	// threshold (i.e. new chain). In that case we won't really snap sync
@@ -1346,18 +1343,31 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
+					var (
+						rejected []*types.Header
+						td       *big.Int
+					)
 					if !beaconMode && ttd != nil {
-						ptd := d.lightchain.GetTd(chunkHeaders[0].ParentHash, chunkHeaders[0].Number.Uint64()-1)
-						if ptd == nil {
+						td = d.blockchain.GetTd(chunkHeaders[0].ParentHash, chunkHeaders[0].Number.Uint64()-1)
+						if td == nil {
 							// This should never really happen, but handle gracefully for now
 							log.Error("Failed to retrieve parent header TD", "number", chunkHeaders[0].Number.Uint64()-1, "hash", chunkHeaders[0].ParentHash)
 							return fmt.Errorf("%w: parent TD missing", errInvalidChain)
 						}
-						for _, header := range chunkHeaders {
-							ptd = new(big.Int).Add(ptd, header.Difficulty)
-							if ptd.Cmp(ttd) >= 0 {
-								log.Info("Legacy sync reached merge threshold", "number", header.Number, "hash", header.Hash(), "td", ptd, "ttd", ttd)
-								return ErrMergeTransition
+						for i, header := range chunkHeaders {
+							td = new(big.Int).Add(td, header.Difficulty)
+							if td.Cmp(ttd) >= 0 {
+								// Terminal total difficulty reached, allow the last header in
+								if new(big.Int).Sub(td, header.Difficulty).Cmp(ttd) < 0 {
+									chunkHeaders, rejected = chunkHeaders[:i+1], chunkHeaders[i+1:]
+									if len(rejected) > 0 {
+										// Make a nicer user log as to the first TD truly rejected
+										td = new(big.Int).Add(td, rejected[0].Difficulty)
+									}
+								} else {
+									chunkHeaders, rejected = chunkHeaders[:i], chunkHeaders[i:]
+								}
+								break
 							}
 						}
 					}
@@ -1379,6 +1389,13 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						} else {
 							rollback = 1
 						}
+					}
+					if len(rejected) != 0 {
+						// Merge threshold reached, stop importing, but don't roll back
+						rollback = 0
+
+						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+						return ErrMergeTransition
 					}
 				}
 				// Unless we're doing light chains, schedule the headers for associated content retrieval

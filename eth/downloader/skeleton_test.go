@@ -79,17 +79,30 @@ func (hf *hookedBackfiller) resume() {
 type skeletonTestPeer struct {
 	id      string          // Unique identifier of the mock peer
 	headers []*types.Header // Headers to serve when requested
-	served  uint64          // Number of headers served by this peer
-	dropped uint64          // Flag whether the peer was dropped (stop responding)
+
+	serve func(origin uint64) []*types.Header // Hook to allow custom responses
+
+	served  uint64 // Number of headers served by this peer
+	dropped uint64 // Flag whether the peer was dropped (stop responding)
 }
 
 // newSkeletonTestPeer creates a new mock peer to test the skeleton sync with.
-// The only purpose of the constructor is to ensure we don't forget to set some
-// mandatory field vs a struct literal initialization.
 func newSkeletonTestPeer(id string, headers []*types.Header) *skeletonTestPeer {
 	return &skeletonTestPeer{
 		id:      id,
 		headers: headers,
+	}
+}
+
+// newSkeletonTestPeer creates a new mock peer to test the skeleton sync with,
+// and sets an optional serve hook that can return headers for delivery instead
+// of the predefined chain. Useful for emulating malicious behavior that would
+// otherwise require dedicated peer types.
+func newSkeletonTestPeerWithHook(id string, headers []*types.Header, serve func(origin uint64) []*types.Header) *skeletonTestPeer {
+	return &skeletonTestPeer{
+		id:      id,
+		headers: headers,
+		serve:   serve,
 	}
 }
 
@@ -126,18 +139,26 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 	if amount > requestHeaders || (amount < requestHeaders && origin > uint64(amount)) {
 		panic(fmt.Sprintf("non-chunk size header batch requested: requested %d, want %d, origin %d", amount, requestHeaders, origin))
 	}
-	// Simple reverse header retrieval. Fill from the peer's chain and return
-	headers := make([]*types.Header, 0, amount)
-	if len(p.headers) > int(origin) { // Don't serve headers if we're missing the origin
-		for i := 0; i < amount; i++ {
-			// Consider nil headers as a form of attack and withhold them. Nil
-			// cannot be decoded from RLP, so it's not possible to produce an
-			// attack by sending/receiving those over eth.
-			header := p.headers[int(origin)-i]
-			if header == nil {
-				continue
+	// Simple reverse header retrieval. Fill from the peer's chain and return.
+	// If the tester has a serve hook set, try to use that before falling back
+	// to the default behavior.
+	var headers []*types.Header
+	if p.serve != nil {
+		headers = p.serve(origin)
+	}
+	if headers == nil {
+		headers = make([]*types.Header, 0, amount)
+		if len(p.headers) > int(origin) { // Don't serve headers if we're missing the origin
+			for i := 0; i < amount; i++ {
+				// Consider nil headers as a form of attack and withhold them. Nil
+				// cannot be decoded from RLP, so it's not possible to produce an
+				// attack by sending/receiving those over eth.
+				header := p.headers[int(origin)-i]
+				if header == nil {
+					continue
+				}
+				headers = append(headers, header)
 			}
-			headers = append(headers, header)
 		}
 	}
 	atomic.AddUint64(&p.served, uint64(len(headers)))
@@ -704,6 +725,41 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
 			endserve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
 			enddrop:  1,                                      // no new drops
+		},
+		// This test reproduces a bug caught during review (kudos to @holiman)
+		// where a subchain is merged with a previously interrupted one, causing
+		// pending data in the scratch space to become "invalid" (since we jump
+		// ahead during subchain merge). In that case it is expected to ignore
+		// the queued up data instead of trying to process on top of a shifted
+		// task set.
+		//
+		// The test is a bit convoluted since it needs to trigger a concurrency
+		// issue. First we sync up an initial chain of 2x512 items. Then announce
+		// 2x512+2 as head and delay delivering the head batch to fill the scratch
+		// space first. The delivery head should merge with the previous download
+		// and the scratch space must not be consumed further.
+		{
+			head: chain[2*requestHeaders],
+			peers: []*skeletonTestPeer{
+				newSkeletonTestPeerWithHook("peer-1", chain, func(origin uint64) []*types.Header {
+					if origin == chain[2*requestHeaders+2].Number.Uint64() {
+						time.Sleep(100 * time.Millisecond)
+					}
+					return nil // Fallback to default behavior, just delayed
+				}),
+				newSkeletonTestPeerWithHook("peer-2", chain, func(origin uint64) []*types.Header {
+					if origin == chain[2*requestHeaders+2].Number.Uint64() {
+						time.Sleep(100 * time.Millisecond)
+					}
+					return nil // Fallback to default behavior, just delayed
+				}),
+			},
+			midstate: []*subchain{{Head: 2 * requestHeaders, Tail: 1}},
+			midserve: 2*requestHeaders - 1, // len - head - genesis
+
+			newHead:  chain[2*requestHeaders+2],
+			endstate: []*subchain{{Head: 2*requestHeaders + 2, Tail: 1}},
+			endserve: 4 * requestHeaders,
 		},
 	}
 	for i, tt := range tests {

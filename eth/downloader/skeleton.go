@@ -177,7 +177,7 @@ type backfiller interface {
 // concurrently with the sync cycle, since extensions arrive from an API surface,
 // not from within (vs. legacy Ethereum sync).
 //
-// Since the skeleton tracks the entire header chain until it is cosumed by the
+// Since the skeleton tracks the entire header chain until it is consumed by the
 // forward block filling, it needs 0.5KB/block storage. At current mainnet sizes
 // this is only possible with a disk backend. Since the skeleton is separate from
 // the node's header chain, storing the headers ephemerally until sync finishes
@@ -748,13 +748,13 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 			res.Done <- errors.New("invalid header batch anchor")
 			s.scheduleRevertRequest(req)
 
-		case headers[0].Number.Uint64() >= requestHeaders && len(headers) != requestHeaders:
+		case req.head >= requestHeaders && len(headers) != requestHeaders:
 			// Invalid number of non-genesis headers delivered, reject the response and reschedule
 			peer.log.Debug("Invalid non-genesis header count", "have", len(headers), "want", requestHeaders)
 			res.Done <- errors.New("not enough non-genesis headers delivered")
 			s.scheduleRevertRequest(req)
 
-		case headers[0].Number.Uint64() < requestHeaders && uint64(len(headers)) != headers[0].Number.Uint64():
+		case req.head < requestHeaders && uint64(len(headers)) != req.head:
 			// Invalid number of genesis headers delivered, reject the response and reschedule
 			peer.log.Debug("Invalid genesis header count", "have", len(headers), "want", headers[0].Number.Uint64())
 			res.Done <- errors.New("not enough genesis headers delivered")
@@ -952,6 +952,12 @@ func (s *skeleton) processResponse(res *headerResponse) bool {
 				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
 				merged = true
 			}
+		}
+		// If subchains were merged, all further available headers in the scratch
+		// space are invalid since we skipped ahead. Stop processing the scratch
+		// space to avoid dropping peers thinking they delivered invalid data.
+		if merged {
+			break
 		}
 	}
 	s.saveSyncStatus(batch)
