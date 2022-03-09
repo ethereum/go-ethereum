@@ -884,13 +884,13 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 // make push instruction function
-func makePush(size uint64, pushByteSize int) executionFunc {
+func makePush(size uint64, pushByteSize uint64) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		codeLen := len(scope.Contract.Code)
+		codeLen := uint64(len(scope.Contract.Code))
 
 		startMin := codeLen
-		if int(*pc+1) < startMin {
-			startMin = int(*pc + 1)
+		if *pc+1 < startMin {
+			startMin = *pc + 1
 		}
 
 		endMin := codeLen

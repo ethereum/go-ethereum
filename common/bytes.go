@@ -93,8 +93,8 @@ func Hex2BytesFixed(str string, flen int) []byte {
 }
 
 // RightPadBytes zero-pads slice to the right up to length l.
-func RightPadBytes(slice []byte, l int) []byte {
-	if l <= len(slice) {
+func RightPadBytes(slice []byte, l uint64) []byte {
+	if l <= uint64(len(slice)) {
 		return slice
 	}
 

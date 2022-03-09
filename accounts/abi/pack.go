@@ -30,7 +30,7 @@ import (
 // bytes slice.
 func packBytesSlice(bytes []byte, l int) []byte {
 	len := packNum(reflect.ValueOf(l))
-	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
+	return append(len, common.RightPadBytes(bytes, uint64((l+31)/32*32))...)
 }
 
 // packElement packs the given reflect value according to the abi specification in
