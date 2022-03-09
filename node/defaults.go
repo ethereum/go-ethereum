@@ -50,6 +50,7 @@ var (
 var DefaultConfig = Config{
 	DataDir:             DefaultDataDir(),
 	HTTPPort:            DefaultHTTPPort,
+	AuthHost:            DefaultAuthHost,
 	AuthPort:            DefaultAuthPort,
 	HTTPModules:         []string{"net", "web3"},
 	HTTPVirtualHosts:    []string{"localhost"},

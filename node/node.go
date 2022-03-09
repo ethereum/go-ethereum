@@ -419,6 +419,7 @@ func (n *Node) startRPC() error {
 		servers = append(servers, server)
 		return nil
 	}
+
 	initWS := func(apis []rpc.API, port int) error {
 		server := n.wsServerForPort(port, false)
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
@@ -438,7 +439,7 @@ func (n *Node) startRPC() error {
 	initAuth := func(apis []rpc.API, port int, secret []byte) error {
 		// Enable auth via HTTP
 		server := n.httpAuth
-		if err := server.setListenAddr(DefaultAuthHost, port); err != nil {
+		if err := server.setListenAddr(n.config.AuthHost, port); err != nil {
 			return err
 		}
 		if err := server.enableRPC(apis, httpConfig{
@@ -453,7 +454,7 @@ func (n *Node) startRPC() error {
 		servers = append(servers, server)
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
-		if err := server.setListenAddr(DefaultAuthHost, port); err != nil {
+		if err := server.setListenAddr(n.config.AuthHost, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(apis, wsConfig{
@@ -467,6 +468,7 @@ func (n *Node) startRPC() error {
 		servers = append(servers, server)
 		return nil
 	}
+
 	// Set up HTTP.
 	if n.config.HTTPHost != "" {
 		// Configure legacy unauthenticated HTTP.
