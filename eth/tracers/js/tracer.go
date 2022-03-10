@@ -680,7 +680,8 @@ func wrapError(context string, err error) error {
 	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
 
-func (jst *jsTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+func (jst *jsTracer) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+	jst.env = env
 	jst.gasLimit = gasLimit
 	jst.ctx["type"] = "CALL"
 	if create {
@@ -697,15 +698,14 @@ func (jst *jsTracer) CaptureTxStart(from common.Address, create bool, input []by
 func (*jsTracer) CaptureTxEnd(remainingGas uint64, _ error) {}
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (jst *jsTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
-	jst.env = env
+func (jst *jsTracer) CaptureStart(to common.Address, gas uint64) {
 	jst.ctx["to"] = to
 	jst.ctx["gas"] = gas
-	jst.ctx["gasPrice"] = env.TxContext.GasPrice
+	jst.ctx["gasPrice"] = jst.env.TxContext.GasPrice
 
 	// Initialize the context
-	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
-	jst.dbWrapper.db = env.StateDB
+	jst.ctx["block"] = jst.env.Context.BlockNumber.Uint64()
+	jst.dbWrapper.db = jst.env.StateDB
 
 	// Intrinsic costs are the only things reduced from initial gas to this point
 	jst.ctx["intrinsicGas"] = jst.gasLimit - gas

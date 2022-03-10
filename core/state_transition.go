@@ -298,7 +298,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 
 	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart(sender.Address(), contractCreation, st.data, st.initialGas, st.value, rules)
+		st.evm.Config.Tracer.CaptureTxStart(st.evm, sender.Address(), contractCreation, st.data, st.initialGas, st.value, rules)
 		defer func() {
 			st.evm.Config.Tracer.CaptureTxEnd(st.gas, err)
 		}()

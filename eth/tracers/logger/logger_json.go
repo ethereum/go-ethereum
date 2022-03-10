@@ -44,8 +44,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
-	l.env = env
+func (l *JSONLogger) CaptureStart(to common.Address, gas uint64) {
 }
 
 func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
@@ -100,6 +99,8 @@ func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*JSONLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+func (l *JSONLogger) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+	l.env = env
 }
+
 func (*JSONLogger) CaptureTxEnd(remainingGas uint64, err error) {}
