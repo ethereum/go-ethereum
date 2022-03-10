@@ -2245,10 +2245,11 @@ type CallBundleArgs struct {
 // nonce and ensuring validity
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
 	// ******** Unsigned Txn Attempt
+	log.Error("here1")
 	if len(args.UnsignedTxs) == 0 {
 		return nil, errors.New("bundle missing unsigned txs")
 	}
-
+	log.Error("here2")
 	// ******** Unsigned Txn Attempt
 	// if len(args.Txs) == 0 {
 	// 	return nil, errors.New("bundle missing txs")
@@ -2256,7 +2257,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	if args.BlockNumber == 0 {
 		return nil, errors.New("bundle missing blockNumber")
 	}
-
+	log.Error("here1")
 	// var txs types.Transactions
 
 	// for _, encodedTx := range args.Txs {
@@ -2267,7 +2268,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	// 	txs = append(txs, tx)
 	// }
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-
+	log.Error("here1")
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
