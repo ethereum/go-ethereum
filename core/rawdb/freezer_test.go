@@ -186,7 +186,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	wg.Wait()
 }
 
-// This test runs ModifyAncients and TruncateAncients concurrently with each other.
+// This test runs ModifyAncients and TruncateHead concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
@@ -196,7 +196,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		// First reset and write 100 items.
-		if err := f.TruncateAncients(0); err != nil {
+		if err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -231,7 +231,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			truncateErr = f.TruncateAncients(10)
+			truncateErr = f.TruncateHead(10)
 			wg.Done()
 		}()
 		go func() {
