@@ -2225,7 +2225,8 @@ func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 
 // CallBundleArgs represents the arguments for a call.
 type CallBundleArgs struct {
-	Txs                    []hexutil.Bytes       `json:"txs"`
+	//Txs                    []hexutil.Bytes       `json:"txs"`
+	UnsignedTxs            []TransactionArgs     `json:"txs"`
 	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
 	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 	Coinbase               *string               `json:"coinbase"`
@@ -2243,33 +2244,35 @@ type CallBundleArgs struct {
 // The sender is responsible for signing the transactions and using the correct
 // nonce and ensuring validity
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
-	if len(args.Txs) == 0 {
-		return nil, errors.New("bundle missing txs")
+	// ******** Unsigned Txn Attempt
+	if len(args.UnsignedTxs) == 0 {
+		return nil, errors.New("bundle missing unsigned txs")
 	}
+
+	// ******** Unsigned Txn Attempt
+	// if len(args.Txs) == 0 {
+	// 	return nil, errors.New("bundle missing txs")
+	// }
 	if args.BlockNumber == 0 {
 		return nil, errors.New("bundle missing blockNumber")
 	}
 
-	// ******** old tx stuff ********
-	var txs types.Transactions
+	// var txs types.Transactions
 
-	for _, encodedTx := range args.Txs {
-		tx := new(types.Transaction)
-		if err := tx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, err
-		}
-		txs = append(txs, tx)
-	}
-	// ******** old tx stuff ********
+	// for _, encodedTx := range args.Txs {
+	// 	tx := new(types.Transaction)
+	// 	if err := tx.UnmarshalBinary(encodedTx); err != nil {
+	// 		return nil, err
+	// 	}
+	// 	txs = append(txs, tx)
+	// }
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	// default timeout
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
 	}
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
-	// grab given header, add default?
 	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -2284,8 +2287,6 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	if args.Coinbase != nil {
 		coinbase = common.HexToAddress(*args.Coinbase)
 	}
-	// fields not used in EstimateGasBundle
-	// in EstimateGasBundle, these fields are pulled in from `parent`
 	difficulty := parent.Difficulty
 	if args.Difficulty != nil {
 		difficulty = args.Difficulty
@@ -2300,7 +2301,6 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumber.Int64())) {
 		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
 	}
-	// fields not used in EstimateGasBundle
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     blockNumber,
@@ -2333,47 +2333,50 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	coinbaseBalanceBefore := state.GetBalance(coinbase)
 
 	bundleHash := sha3.NewLegacyKeccak256()
-	// want to get rid of this
-	signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
+	// signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
 
-	// loop over transactions and pass them into evm
-	// return the intermediate state
-	for i, tx := range txs {
-		// we may not need this?
-		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
-		state.Prepare(tx.Hash(), i)
+	// RPC Call gas cap
+	globalGasCap := s.b.RPCGasCap()
 
-		// we need ApplyTransactionWithResult to return tracing results
-		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, tx, &header.GasUsed, vmconfig)
+	for i, tx := range args.UnsignedTxs {
+		// fb: dont need coinbase code, but then I realized, fb searchers could use us
+		// coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
+		// fb: we need to use a random hash
+		// state.Prepare(tx.Hash(), i)
+
+		// Since its a txCall we'll just prepare the
+		// state with a random hash
+		var randomHash common.Hash
+		// TODO : not sure what rand.Read does
+		rand.Read(randomHash[:])
+		// New random hash since its a call
+		// TODO : estimateGas uses a copy of the stateDb... may be hard to test
+		state.Prepare(randomHash, i)
+
+		// bn : prepare msg out here
+		// TODO : figure out more of the difference between ToMessage and AsMessage
+		// it honestly might mainly just be gas
+
+		msg, err := tx.ToMessage(globalGasCap, header.BaseFee)
 		if err != nil {
-			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())
+			return nil, err
 		}
 
-		txHash := tx.Hash().String()
-		from, err := types.Sender(signer, tx)
+		// bn : using our new unsigned func
+		receipt, result, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
 		if err != nil {
-			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())
+			// TODO : create better log here
+			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.From)
 		}
-		to := "0x"
-		if tx.To() != nil {
-			to = tx.To().String()
-		}
+		// TODO : Add gas features back
 		jsonResult := map[string]interface{}{
-			"txHash":      txHash,
 			"gasUsed":     receipt.GasUsed,
-			"fromAddress": from.String(),
-			"toAddress":   to,
+			"fromAddress": tx.from,
+			"toAddress":   tx.To,
+			// Add trace results here
 		}
-		totalGasUsed += receipt.GasUsed
-		gasPrice, err := tx.EffectiveGasTip(header.BaseFee)
-		if err != nil {
-			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.Hash())
-		}
-		gasFeesTx := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), gasPrice)
-		gasFees.Add(gasFees, gasFeesTx)
-		bundleHash.Write(tx.Hash().Bytes())
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
 			revert := result.Revert()
@@ -2385,21 +2388,16 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			hex.Encode(dst, result.Return())
 			jsonResult["value"] = "0x" + string(dst)
 		}
-		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
-		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
-		jsonResult["gasFees"] = gasFeesTx.String()
-		jsonResult["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiffTx, gasFeesTx).String()
-		jsonResult["gasPrice"] = new(big.Int).Div(coinbaseDiffTx, big.NewInt(int64(receipt.GasUsed))).String()
-		jsonResult["gasUsed"] = receipt.GasUsed
+
 		results = append(results, jsonResult)
 	}
 
 	ret := map[string]interface{}{}
 	ret["results"] = results
 	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
-	ret["coinbaseDiff"] = coinbaseDiff.String()
+	// ret["coinbaseDiff"] = coinbaseDiff.String()
 	ret["gasFees"] = gasFees.String()
-	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	// ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
 	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
 	ret["totalGasUsed"] = totalGasUsed
 	ret["stateBlockNumber"] = parent.Number.Int64()
