@@ -444,7 +444,7 @@ func (n *Node) startRPC() error {
 		}
 		if err := server.enableRPC(apis, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
-			Vhosts:             DefaultAuthVhosts,
+			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
 			jwtSecret:          secret,

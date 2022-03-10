@@ -533,6 +533,11 @@ var (
 		Usage: "Listening port for authenticated APIs",
 		Value: node.DefaultConfig.AuthPort,
 	}
+	AuthVirtualHostsFlag = cli.StringFlag{
+		Name:  "authrpc.vhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
+	}
 	JWTSecretFlag = cli.StringFlag{
 		Name:  "authrpc.jwtsecret",
 		Usage: "JWT secret (or path to a jwt secret) to use for authenticated RPC endpoints",
@@ -973,8 +978,13 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(AuthHostFlag.Name) {
 		cfg.AuthHost = ctx.GlobalString(AuthHostFlag.Name)
 	}
+
 	if ctx.GlobalIsSet(AuthPortFlag.Name) {
 		cfg.AuthPort = ctx.GlobalInt(AuthPortFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(AuthVirtualHostsFlag.Name) {
+		cfg.AuthVirtualHosts = SplitAndTrim(ctx.GlobalString(AuthVirtualHostsFlag.Name))
 	}
 
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {

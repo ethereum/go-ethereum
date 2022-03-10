@@ -145,6 +145,10 @@ type Config struct {
 	// AuthPort is the port number on which authenticated APIs are provided.
 	AuthPort int `toml:",omitempty"`
 
+	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
+	// for the authenticated api. This is by default {'localhost'}.
+	AuthVirtualHosts []string `toml:",omitempty"`
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string

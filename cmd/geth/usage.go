@@ -152,6 +152,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.JWTSecretFlag,
 			utils.AuthHostFlag,
 			utils.AuthPortFlag,
+			utils.AuthVirtualHostsFlag,
 			utils.GraphQLEnabledFlag,
 			utils.GraphQLCORSDomainFlag,
 			utils.GraphQLVirtualHostsFlag,
