@@ -2826,7 +2826,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
 		accountFills,
 	).Uint64())
-
+	// Don't report anything until we have a meaningful progress
+	if estBytes < 1.0 {
+		return
+	}
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)
 
