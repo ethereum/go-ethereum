@@ -1646,12 +1646,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		if !setHead {
-			// We did not setHead, so we don't have any stats to update
-			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
-			return it.index, nil
-		}
+		// Report the import stats before returning the various results
+		stats.processed++
+		stats.usedGas += usedGas
 
+		dirty, _ := bc.stateCache.TrieDB().Size()
+		stats.report(chain, it.index, dirty, setHead)
+
+		if !setHead {
+			return it.index, nil // Direct block insertion of a single block
+		}
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1678,11 +1682,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
-		stats.processed++
-		stats.usedGas += usedGas
-
-		dirty, _ := bc.stateCache.TrieDB().Size()
-		stats.report(chain, it.index, dirty)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -2079,28 +2078,39 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 // block. It's possible that after the reorg the relevant state of head
 // is missing. It can be fixed by inserting a new block which triggers
 // the re-execution.
-func (bc *BlockChain) SetChainHead(newBlock *types.Block) error {
+func (bc *BlockChain) SetChainHead(head *types.Block) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
 	// Run the reorg if necessary and set the given block as new head.
-	if newBlock.ParentHash() != bc.CurrentBlock().Hash() {
-		if err := bc.reorg(bc.CurrentBlock(), newBlock); err != nil {
+	start := time.Now()
+	if head.ParentHash() != bc.CurrentBlock().Hash() {
+		if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
 			return err
 		}
 	}
-	bc.writeHeadBlock(newBlock)
+	bc.writeHeadBlock(head)
 
 	// Emit events
-	logs := bc.collectLogs(newBlock.Hash(), false)
-	bc.chainFeed.Send(ChainEvent{Block: newBlock, Hash: newBlock.Hash(), Logs: logs})
+	logs := bc.collectLogs(head.Hash(), false)
+	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newBlock})
-	log.Info("Set the chain head", "number", newBlock.Number(), "hash", newBlock.Hash())
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: head})
+
+	context := []interface{}{
+		"number", head.Number(),
+		"hash", head.Hash(),
+		"root", head.Root(),
+		"elapsed", time.Since(start),
+	}
+	if timestamp := time.Unix(int64(head.Time()), 0); time.Since(timestamp) > time.Minute {
+		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+	}
+	log.Info("Chain head was updated", context...)
 	return nil
 }
 

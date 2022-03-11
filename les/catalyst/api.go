@@ -69,30 +69,30 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 //      we return an error since block creation is not supported in les mode
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+		return beacon.ForkChoiceResponse{Status: beacon.VALID}, nil
 	}
 	if err := api.checkTerminalTotalDifficulty(heads.HeadBlockHash); err != nil {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.HeadBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return beacon.ForkChoiceResponse{Status: beacon.SYNCING}, nil
 		}
-		return beacon.INVALID, err
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, err
 	}
 	// If the finalized block is set, check if it is in our blockchain
 	if heads.FinalizedBlockHash != (common.Hash{}) {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.FinalizedBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return beacon.ForkChoiceResponse{Status: beacon.SYNCING}, nil
 		}
 	}
 	// SetHead
 	if err := api.setHead(heads.HeadBlockHash); err != nil {
-		return beacon.INVALID, err
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, err
 	}
 	if payloadAttributes != nil {
-		return beacon.INVALID, errors.New("not supported")
+		return beacon.ForkChoiceResponse{Status: beacon.INVALID}, errors.New("not supported")
 	}
-	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+	return beacon.ForkChoiceResponse{Status: beacon.VALID}, nil
 }
 
 // GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
@@ -114,7 +114,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 			}
 		*/
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
-		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: common.Hash{}}, nil
+		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING, LatestValidHash: common.Hash{}}, nil
 	}
 	parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 	if parent == nil {
@@ -131,12 +131,12 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if merger := api.les.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
-	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+	return beacon.ExecutePayloadResponse{Status: beacon.VALID, LatestValidHash: block.Hash()}, nil
 }
 
 // invalid returns a response "INVALID" with the latest valid hash set to the current head.
 func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
+	return beacon.ExecutePayloadResponse{Status: beacon.INVALID, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
 }
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
