@@ -207,9 +207,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if overrideArrowGlacier != nil {
 		newcfg.ArrowGlacierBlock = overrideArrowGlacier
 	}
-	if overrideTerminalTotalDifficulty != nil {
-		newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
-	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -218,6 +215,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		log.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
+	}
+
+	if overrideTerminalTotalDifficulty != nil {
+		storedcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
