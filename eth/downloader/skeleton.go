@@ -391,7 +391,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	}
 	for {
 		// Something happened, try to assign new tasks to any idle peers
-		s.assingTasks(responses, requestFails, cancel)
+		s.assignTasks(responses, requestFails, cancel)
 
 		// Wait for something to happen
 		select {
@@ -615,8 +615,8 @@ func (s *skeleton) processNewHead(head *types.Header, force bool) bool {
 	return false
 }
 
-// assingTasks attempts to match idle peers to pending header retrievals.
-func (s *skeleton) assingTasks(success chan *headerResponse, fail chan *headerRequest, cancel chan struct{}) {
+// assignTasks attempts to match idle peers to pending header retrievals.
+func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRequest, cancel chan struct{}) {
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &peerCapacitySort{
 		peers: make([]*peerConnection, 0, len(s.idles)),
@@ -722,10 +722,21 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 	case <-timeoutTimer.C:
 		// Header retrieval timed out, update the metrics
-		peer.log.Trace("Header request timed out", "elapsed", ttl)
+		peer.log.Warn("Header request timed out, dropping peer", "elapsed", ttl)
 		headerTimeoutMeter.Mark(1)
 		s.peers.rates.Update(peer.id, eth.BlockHeadersMsg, 0, 0)
 		s.scheduleRevertRequest(req)
+
+		// At this point we either need to drop the offending peer, or we need a
+		// mechanism to allow waiting for the response and not cancel it. For now
+		// lets go with dropping since the header sizes are deterministic and the
+		// beacon sync runs exclusive (downloader is idle) so there should be no
+		// other load to make timeouts probable. If we notice that timeouts happen
+		// more often than we'd like, we can introduce a tracker for the requests
+		// gone stale and monitor them. However, in that case too, we need a way
+		// to protect against malicious peers never responding, so it would need
+		// a second, hard-timeout mechanism.
+		s.drop(peer.id)
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
@@ -851,8 +862,10 @@ func (s *skeleton) processResponse(res *headerResponse) bool {
 
 	// Ensure the response is for a valid request
 	if _, ok := s.requests[res.reqid]; !ok {
-		// Request stale, perhaps the peer timed out but came through in the end
-		res.peer.log.Warn("Unexpected header packet")
+		// Some internal accounting is broken. A request either times out or it
+		// gets fulfilled successfully. It should not be possible to deliver a
+		// response to a non-existing request.
+		res.peer.log.Error("Unexpected header packet")
 		return false
 	}
 	delete(s.requests, res.reqid)
