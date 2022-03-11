@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -128,7 +129,7 @@ func (cs *chainSyncer) loop() {
 			// If we've reached the merge transition but no beacon client is available, or
 			// it has not yet switched us over, keep warning the user that their infra is
 			// potentially flaky.
-			if err == downloader.ErrMergeTransition && time.Since(cs.warned) > 10*time.Second {
+			if errors.Is(err, downloader.ErrMergeTransition) && time.Since(cs.warned) > 10*time.Second {
 				log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
 				cs.warned = time.Now()
 			}

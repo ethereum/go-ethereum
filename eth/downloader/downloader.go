@@ -656,6 +656,9 @@ func (d *Downloader) Terminate() {
 	case <-d.quitCh:
 	default:
 		close(d.quitCh)
+
+		// Terminate the internal beacon syncer
+		d.skeleton.Terminate()
 	}
 	d.quitLock.Unlock()
 
