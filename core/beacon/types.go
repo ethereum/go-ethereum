@@ -40,15 +40,11 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
-type BlobDetailsV1 struct {
-	KZG  types.KZGCommitment `json:"kzg"`
-	Blob types.Blob          `json:"blob"`
-}
-
-// ExecutionWrapperV1 is data around the execution payload, to be retrieved separately
-type ExecutionWrapperV1 struct {
-	// Blob details by versioned hash. Values may be nil if the wrapping blob data was removed/unavailable.
-	Blobs map[common.Hash]*BlobDetailsV1 `json:"blobs"`
+// BlobsBundleV1 holds the blobs of an execution payload, to be retrieved separately
+type BlobsBundleV1 struct {
+	BlockHash common.Hash           `json:"blockHash"     gencodec:"required"`
+	KZGs      []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
+	Blobs     []types.Blob          `json:"blobs"      gencodec:"required"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
@@ -195,24 +191,9 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 
 // BlockToWrappedExecutableData constructs the executableDataV1 structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-// Additional wrapper contents are provided as well.
-func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *ExecutionWrapperV1) {
+// Additional blob contents are provided as well.
+func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *BlobsBundleV1, error) {
 	txs := encodeTransactions(block.Transactions())
-	wrapData := &ExecutionWrapperV1{Blobs: make(map[common.Hash]*BlobDetailsV1)}
-	for _, tx := range block.Transactions() {
-		if tx.Type() == types.BlobTxType {
-			versionedHashes, kzgs, blobs := tx.BlobWrapData()
-			for i, h := range versionedHashes {
-				if len(blobs) < i || len(kzgs) < i {
-					// oh no, we lost our wrapper data for the versioned hash,
-					// we set it to nil and hope the caller builds a new block.
-					wrapData.Blobs[h] = nil
-				} else {
-					wrapData.Blobs[h] = &BlobDetailsV1{Blob: blobs[i], KZG: kzgs[i]}
-				}
-			}
-		}
-	}
 	execData := &ExecutableDataV1{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
@@ -229,5 +210,17 @@ func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *Execu
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
-	return execData, wrapData
+	blobsBundle := &BlobsBundleV1{BlockHash: execData.BlockHash}
+	for i, tx := range block.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			versionedHashes, kzgs, blobs := tx.BlobWrapData()
+			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
+				return nil, nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
+					" / versioned hashes (%d)", i, execData.BlockHash, len(blobs), len(kzgs), len(versionedHashes))
+			}
+			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
+			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
+		}
+	}
+	return execData, blobsBundle, nil
 }

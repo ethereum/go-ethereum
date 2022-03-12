@@ -89,7 +89,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	// TODO test wrapData
+	// TODO test blobsBundle
 	execData, _, err := api.assembleBlock(blocks[9].Hash(), &blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
@@ -111,7 +111,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	// TODO test wrapData
+	// TODO test blobsBundle
 	execData, _, err := api.assembleBlock(blocks[8].Hash(), &blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
@@ -263,7 +263,7 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		// TODO test wrapData
+		// TODO test blobsBundle
 		execData, _, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
 		})
@@ -304,7 +304,7 @@ func TestEth2NewBlock(t *testing.T) {
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
-		// TODO test wrapData
+		// TODO test blobsBundle
 		execData, _, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 6,
 		})
