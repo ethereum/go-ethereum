@@ -222,9 +222,13 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
 	case types.BlobTxType:
+		hashes, _, blobs := tx.BlobWrapData()
+		if len(hashes) != len(blobs) {
+			return nil, fmt.Errorf("missing blobs data, expected %d blobs", len(hashes))
+		}
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
-		args.BlobVersionedHashes = tx.BlobVersionedHashes()
+		args.Blobs = blobs
 	default:
 		return nil, fmt.Errorf("unsupported tx type %d", tx.Type())
 	}
