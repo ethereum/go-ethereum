@@ -159,7 +159,7 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			wrapData.Blobs = append(wrapData.Blobs, bl)
 		}
 		data = &types.SignedBlobTx{Message: msg}
-		return types.NewTxWrapped(data, &wrapData)
+		return types.NewTx(data, types.WithTxWrapData(&wrapData))
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
