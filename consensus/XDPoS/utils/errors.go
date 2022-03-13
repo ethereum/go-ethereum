@@ -85,6 +85,9 @@ var (
 	ErrInvalidTC                    = errors.New("Invalid TC content")
 	ErrEmptyBlockInfoHash           = errors.New("BlockInfo hash is empty")
 	ErrInvalidFieldInNonEpochSwitch = errors.New("Invalid field exist in a non-epoch swtich block")
+
+	ErrPenaltyListDoesNotMatch = errors.New("Incoming block penalty list does not match")
+	ErrRoundInvalid            = errors.New("Invalid Round, it shall be bigger than QC round")
 )
 
 type ErrIncomingMessageRoundNotEqualCurrentRound struct {

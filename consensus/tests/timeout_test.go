@@ -19,7 +19,7 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	timeoutMsg := <-engineV2.BroadcastCh
-	poolSize := engineV2.GetTimeoutPoolSize(timeoutMsg.(*utils.Timeout))
+	poolSize := engineV2.GetTimeoutPoolSizeFaker(timeoutMsg.(*utils.Timeout))
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
 	assert.Equal(t, uint64(1350), timeoutMsg.(*utils.Timeout).GapNumber)
@@ -99,7 +99,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	err := engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _, _ := engineV2.GetProperties()
+	currentRound, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 	assert.Equal(t, utils.Round(1), currentRound)
 	timeoutMsg = &utils.Timeout{
 		Round:     utils.Round(1),
@@ -108,7 +108,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
 	assert.Equal(t, utils.Round(1), currentRound)
 
 	// Send a timeout with different gap number, it shall not trigger timeout pool hook
@@ -119,7 +119,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
-	currentRound, _, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
 	assert.Equal(t, utils.Round(1), currentRound)
 
 	// Create a timeout message that should trigger timeout pool hook
@@ -134,7 +134,7 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	syncInfoMsg := <-engineV2.BroadcastCh
 
-	currentRound, _, _, _, _ = engineV2.GetProperties()
+	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
 
 	assert.NotNil(t, syncInfoMsg)
 

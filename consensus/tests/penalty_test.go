@@ -36,7 +36,7 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	// set adaptor round/qc to that of 6299
 	err = utils.DecodeBytesExtraFields(header6300.Extra, &extraField)
 	assert.Nil(t, err)
-	err = adaptor.EngineV2.ProcessQC(blockchain, extraField.QuorumCert)
+	err = adaptor.EngineV2.ProcessQCFaker(blockchain, extraField.QuorumCert)
 	assert.Nil(t, err)
 	headerMining := &types.Header{
 		ParentHash: header6300.ParentHash,

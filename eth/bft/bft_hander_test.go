@@ -145,6 +145,87 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 	}
 }
 
+func TestBoardcastButNotProcessDisqualifiedVotes(t *testing.T) {
+	tester := newTester()
+	handlerCounter := uint32(0)
+	broadcastCounter := uint32(0)
+	targetVotes := 0
+
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
+		return false, nil // return false but with nil in error means the message is valid but disqualified
+	}
+
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+	tester.bfter.broadcast.Vote = func(*utils.Vote) {
+		atomic.AddUint32(&broadcastCounter, 1)
+	}
+
+	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
+	tester.bfter.Vote(&vote)
+
+	time.Sleep(50 * time.Millisecond)
+	if int(handlerCounter) != targetVotes || int(broadcastCounter) != 1 {
+		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetVotes)
+	}
+}
+
+func TestBoardcastButNotProcessDisqualifiedTimeout(t *testing.T) {
+	tester := newTester()
+	handlerCounter := uint32(0)
+	broadcastCounter := uint32(0)
+	targetTimeout := 0
+
+	tester.bfter.consensus.verifyTimeout = func(chain consensus.ChainReader, timeout *utils.Timeout) (bool, error) {
+		return false, nil // return false but with nil in error means the message is valid but disqualified
+	}
+
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
+		atomic.AddUint32(&broadcastCounter, 1)
+	}
+
+	timeout := utils.Timeout{}
+	tester.bfter.Timeout(&timeout)
+
+	time.Sleep(50 * time.Millisecond)
+	if int(handlerCounter) != targetTimeout || int(broadcastCounter) != 1 {
+		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetTimeout)
+	}
+}
+
+func TestBoardcastButNotProcessDisqualifiedSyncInfo(t *testing.T) {
+	tester := newTester()
+	handlerCounter := uint32(0)
+	broadcastCounter := uint32(0)
+	targetSyncInfo := 0
+
+	tester.bfter.consensus.verifySyncInfo = func(chain consensus.ChainReader, syncInfo *utils.SyncInfo) (bool, error) {
+		return false, nil // return false but with nil in error means the message is valid but disqualified
+	}
+
+	tester.bfter.consensus.syncInfoHandler = func(chain consensus.ChainReader, syncInfo *utils.SyncInfo) error {
+		atomic.AddUint32(&handlerCounter, 1)
+		return nil
+	}
+	tester.bfter.broadcast.SyncInfo = func(*utils.SyncInfo) {
+		atomic.AddUint32(&broadcastCounter, 1)
+	}
+
+	syncInfo := utils.SyncInfo{}
+	tester.bfter.SyncInfo(&syncInfo)
+
+	time.Sleep(50 * time.Millisecond)
+	if int(handlerCounter) != targetSyncInfo || int(broadcastCounter) != 1 {
+		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetSyncInfo)
+	}
+}
+
 // TODO: SyncInfo and Timeout Test, should be same as Vote.
 // Once all test on vote covered, then duplicate to others
 
@@ -198,9 +279,7 @@ func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 		}
 	}
 
-	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
-		return
-	}
+	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {}
 
 	timeoutMsg := &utils.Timeout{}
 

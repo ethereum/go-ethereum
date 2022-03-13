@@ -47,7 +47,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 	assert.Nil(t, err)
 	// round=1, so masternode[1] has YourTurn = True
 	assert.True(t, b)
-	assert.Equal(t, adaptor.EngineV2.GetCurrentRound(), utils.Round(1))
+	assert.Equal(t, adaptor.EngineV2.GetCurrentRoundFaker(), utils.Round(1))
 
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, block900.Header())
 	assert.Nil(t, err)

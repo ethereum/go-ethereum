@@ -33,7 +33,7 @@ func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	round, _, highestQuorumCert, _, highestCommitBlock := engineV2.GetProperties()
+	round, _, highestQuorumCert, _, _, highestCommitBlock := engineV2.GetPropertiesFaker()
 	// QC is parent block's qc, which is pointing at round 4, hence 4 + 1 = 5
 	assert.Equal(t, utils.Round(5), round)
 	assert.Equal(t, extraField.QuorumCert, highestQuorumCert)
@@ -66,7 +66,36 @@ func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	round, _, highestQuorumCert, _, _ := engineV2.GetProperties()
+	round, _, highestQuorumCert, _, _, _ := engineV2.GetPropertiesFaker()
 	assert.Equal(t, utils.Round(7), round)
 	assert.Equal(t, extraField.QuorumCert, highestQuorumCert)
+}
+
+func TestSkipVerifySyncInfoIfBothQcTcNotQualified(t *testing.T) {
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Make the Highest QC in syncInfo point to an old block to simulate it's no longer qualified
+	parentBlock := blockchain.GetBlockByNumber(903)
+	var extraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(parentBlock.Extra(), &extraField)
+	if err != nil {
+		t.Fatal("Fail to decode extra data", err)
+	}
+
+	highestTC := &utils.TimeoutCert{
+		Round:      utils.Round(5),
+		Signatures: []utils.Signature{},
+	}
+
+	syncInfoMsg := &utils.SyncInfo{
+		HighestQuorumCert:  extraField.QuorumCert,
+		HighestTimeoutCert: highestTC,
+	}
+
+	engineV2.SetPropertiesFaker(syncInfoMsg.HighestQuorumCert, syncInfoMsg.HighestTimeoutCert)
+
+	verified, err := engineV2.VerifySyncInfoMessage(blockchain, syncInfoMsg)
+	assert.False(t, verified)
+	assert.Nil(t, err)
 }

@@ -29,13 +29,13 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	}
 
 	voteMsg := <-engineV2.BroadcastCh
-	poolSize := engineV2.GetVotePoolSize(voteMsg.(*utils.Vote))
+	poolSize := engineV2.GetVotePoolSizeFaker(voteMsg.(*utils.Vote))
 
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, voteMsg)
 	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
-	round, _, highestQC, _, _ := engineV2.GetProperties()
+	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
 	assert.Equal(t, utils.Round(1), round)
 	// Should not update the highestQC
@@ -53,7 +53,7 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	// Trigger send vote again but for a new round
 	voteMsg = <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	round, _, highestQC, _, _ = engineV2.GetProperties()
+	round, _, highestQC, _, _, _ = engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
 	assert.Equal(t, utils.Round(2), round)
 	assert.Equal(t, utils.Round(1), highestQC.ProposedBlockInfo.Round)
@@ -70,7 +70,7 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	// Trigger send vote again but for a new round
 	voteMsg = <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	round, _, highestQC, _, highestCommitBlock := engineV2.GetProperties()
+	round, _, highestQC, _, _, highestCommitBlock := engineV2.GetPropertiesFaker()
 	// Shoud NOT trigger setNewRound as the new block parent QC is round 1 but the currentRound is already 2
 	assert.Equal(t, utils.Round(3), round)
 	assert.Equal(t, utils.Round(2), highestQC.ProposedBlockInfo.Round)
@@ -88,7 +88,7 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	// Trigger send vote again but for a new round
 	voteMsg = <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	round, _, highestQC, _, highestCommitBlock = engineV2.GetProperties()
+	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 
 	assert.Equal(t, utils.Round(4), round)
 	assert.Equal(t, utils.Round(3), highestQC.ProposedBlockInfo.Round)
@@ -117,7 +117,7 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
-	round, _, highestQC, _, highestCommitBlock := engineV2.GetProperties()
+	round, _, highestQC, _, _, highestCommitBlock := engineV2.GetPropertiesFaker()
 
 	grandGrandParentBlock := blockchain.GetBlockByNumber(902)
 	// Shoud trigger setNewRound
@@ -139,7 +139,7 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	// Trigger send vote again but for a new round
 	voteMsg = <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	round, _, highestQC, _, highestCommitBlock = engineV2.GetProperties()
+	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 	grandGrandParentBlock = blockchain.GetBlockByNumber(903)
 
 	assert.Equal(t, utils.Round(6), round)
@@ -160,7 +160,7 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	// Trigger send vote again but for a new round
 	voteMsg = <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	round, _, highestQC, _, highestCommitBlock = engineV2.GetProperties()
+	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 
 	assert.Equal(t, utils.Round(8), round)
 	assert.Equal(t, utils.Round(7), highestQC.ProposedBlockInfo.Round)
@@ -193,7 +193,7 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
-	round, _, highestQC, _, _ := engineV2.GetProperties()
+	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
 	assert.Equal(t, utils.Round(6), round)
 	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
@@ -219,7 +219,7 @@ func TestShouldNotSetNewRound(t *testing.T) {
 		t.Fatal("Fail propose proposedBlock handler", err)
 	}
 
-	round, _, highestQC, _, _ := engineV2.GetProperties()
+	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud not trigger setNewRound
 	assert.Equal(t, utils.Round(6), round)
 	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
@@ -241,7 +241,7 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
 
-	round, _, _, highestVotedRound, _ := engineV2.GetProperties()
+	round, _, _, _, highestVotedRound, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
 	assert.Equal(t, utils.Round(6), round)
 	assert.Equal(t, utils.Round(6), highestVotedRound)
@@ -257,7 +257,7 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 		t.Fatal("Should not trigger vote")
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
-		round, _, _, highestVotedRound, _ = engineV2.GetProperties()
+		round, _, _, _, highestVotedRound, _ = engineV2.GetPropertiesFaker()
 		assert.Equal(t, utils.Round(6), round)
 		assert.Equal(t, utils.Round(6), highestVotedRound)
 	}
@@ -286,7 +286,7 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 		t.Fatal("Should not trigger vote")
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
-		round, _, _, _, _ := engineV2.GetProperties()
+		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 		assert.Equal(t, utils.Round(8), round)
 	}
 }
@@ -328,7 +328,7 @@ func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
 		t.Fatal("Should not trigger vote")
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
-		round, _, _, _, _ := engineV2.GetProperties()
+		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 		assert.Equal(t, utils.Round(7), round)
 	}
 }
@@ -345,7 +345,7 @@ func TestShouldSendVoteMsg(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		round, _, _, _, _ := engineV2.GetProperties()
+		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 		assert.Equal(t, utils.Round(i-900), round)
 		vote := <-engineV2.BroadcastCh
 		assert.Equal(t, round, vote.(*utils.Vote).ProposedBlockInfo.Round)

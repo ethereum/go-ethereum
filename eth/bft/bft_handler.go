@@ -1,8 +1,6 @@
 package bft
 
 import (
-	"fmt"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
@@ -40,7 +38,7 @@ type ConsensusFns struct {
 	verifyTimeout  func(consensus.ChainReader, *utils.Timeout) (bool, error)
 	timeoutHandler func(consensus.ChainReader, *utils.Timeout) error
 
-	verifySyncInfo  func(consensus.ChainReader, *utils.SyncInfo) error
+	verifySyncInfo  func(consensus.ChainReader, *utils.SyncInfo) (bool, error)
 	syncInfoHandler func(consensus.ChainReader, *utils.SyncInfo) error
 }
 
@@ -88,25 +86,25 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 
 	verified, err := b.consensus.verifyVote(b.blockChainReader, vote)
 
-	if err != nil || !verified {
-		log.Error("Verify BFT Vote", "error", err, "verified", verified)
-		if !verified {
-			return fmt.Errorf("Fail to verify vote")
-		}
+	if err != nil {
+		log.Error("Verify BFT Vote", "error", err)
 		return err
 	}
 
 	b.broadcastCh <- vote
 
-	err = b.consensus.voteHandler(b.blockChainReader, vote)
-	if err != nil {
-		if _, ok := err.(*utils.ErrIncomingMessageRoundTooFarFromCurrentRound); ok {
-			log.Warn("vote round not equal", "error", err, "vote", vote.Hash())
+	if verified {
+		err = b.consensus.voteHandler(b.blockChainReader, vote)
+		if err != nil {
+			if _, ok := err.(*utils.ErrIncomingMessageRoundTooFarFromCurrentRound); ok {
+				log.Warn("vote round not equal", "error", err, "vote", vote.Hash())
+				return err
+			}
+			log.Error("handle BFT Vote", "error", err)
 			return err
 		}
-		log.Error("handle BFT Vote", "error", err)
-		return err
 	}
+
 	return nil
 }
 func (b *Bfter) Timeout(timeout *utils.Timeout) error {
@@ -117,24 +115,23 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 	}
 	verified, err := b.consensus.verifyTimeout(b.blockChainReader, timeout)
 	if err != nil {
-		log.Error("Verify BFT Timeout", "error", err)
+		log.Error("Verify BFT Timeout", "timeoutRound", timeout.Round, "timeoutGapNum", timeout.GapNumber, "error", err)
 		return err
 	}
-	if !verified {
-		log.Warn("Timeout message failed to verify", "timeoutRound", timeout.Round, "timeoutGapNum", timeout.GapNumber)
-		return fmt.Errorf("Fail to verify the received timeout message")
-	}
-	b.broadcastCh <- timeout
 
-	err = b.consensus.timeoutHandler(b.blockChainReader, timeout)
-	if err != nil {
-		if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
-			log.Warn("timeout round not equal", "error", err)
+	b.broadcastCh <- timeout
+	if verified {
+		err = b.consensus.timeoutHandler(b.blockChainReader, timeout)
+		if err != nil {
+			if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
+				log.Warn("timeout round not equal", "error", err)
+				return err
+			}
+			log.Error("handle BFT Timeout", "error", err)
 			return err
 		}
-		log.Error("handle BFT Timeout", "error", err)
-		return err
 	}
+
 	return nil
 }
 func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
@@ -143,18 +140,20 @@ func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
 		log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
 		return nil
 	}
-	err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
+	verified, err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
 	if err != nil {
 		log.Error("Verify BFT SyncInfo", "error", err)
 		return err
 	}
 
 	b.broadcastCh <- syncInfo
-
-	err = b.consensus.syncInfoHandler(b.blockChainReader, syncInfo)
-	if err != nil {
-		log.Error("handle BFT SyncInfo", "error", err)
-		return err
+	// Process only if verified and qualified
+	if verified {
+		err = b.consensus.syncInfoHandler(b.blockChainReader, syncInfo)
+		if err != nil {
+			log.Error("handle BFT SyncInfo", "error", err)
+			return err
+		}
 	}
 	return nil
 }

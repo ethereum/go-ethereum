@@ -24,7 +24,7 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	err := adaptor.EngineV2.Initial(blockchain, header)
 	assert.Nil(t, err)
 
-	round, _, highQC, _, _ := adaptor.EngineV2.GetProperties()
+	round, _, highQC, _, _, _ := adaptor.EngineV2.GetPropertiesFaker()
 	blockInfo := &utils.BlockInfo{
 		Hash:   header.Hash(),
 		Round:  utils.Round(0),
@@ -98,7 +98,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	err = adaptor.EngineV2.Initial(blockchain, block.Header())
 	assert.Nil(t, err)
 
-	round, _, highQC, _, _ := adaptor.EngineV2.GetProperties()
+	round, _, highQC, _, _, _ := adaptor.EngineV2.GetPropertiesFaker()
 	expectedQuorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        []utils.Signature{},
