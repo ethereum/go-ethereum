@@ -8,14 +8,15 @@ FROM golang:1.17-alpine as builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
-ADD . /go-ethereum
-RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
+COPY . /go-ethereum
+WORKDIR /go-ethereum
+
+RUN  go run build/ci.go install ./cmd/geth
 
 # Pull Geth into a second stage deploy alpine container
-FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+FROM gcr.io/distroless/static
+USER nonroot:nonroot
+COPY --from=builder --chown=nonroot:nonroot /go-ethereum/build/bin/geth /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
