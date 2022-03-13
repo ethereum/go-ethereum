@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
@@ -58,17 +59,7 @@ func (p KZGCommitment) String() string {
 }
 
 func (p *KZGCommitment) UnmarshalText(text []byte) error {
-	if p == nil {
-		return errors.New("cannot decode into nil KZGCommitment")
-	}
-	if len(text) >= 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X') {
-		text = text[2:]
-	}
-	if len(text) != 96 {
-		return fmt.Errorf("unexpected length string '%s'", string(text))
-	}
-	_, err := hex.Decode(p[:], text)
-	return err
+	return hexutil.UnmarshalFixedText("KZGCommitment", text, p[:])
 }
 
 func (p *KZGCommitment) Point() (*kbls.PointG1, error) {
@@ -83,43 +74,41 @@ func (kzg KZGCommitment) ComputeVersionedHash() common.Hash {
 
 type BLSFieldElement [32]byte
 
-func ReadFieldElements(dr *codec.DecodingReader, elems *[]BLSFieldElement, length uint64) error {
-	if uint64(len(*elems)) != length {
-		// re-use space if available (for recycling old state objects)
-		if uint64(cap(*elems)) >= length {
-			*elems = (*elems)[:length]
-		} else {
-			*elems = make([]BLSFieldElement, length, length)
-		}
-	}
-	dst := *elems
-	for i := uint64(0); i < length; i++ {
-		// TODO: do we want to check if each field element is within range?
-		if _, err := dr.Read(dst[i][:]); err != nil {
-			return err
-		}
-	}
-	return nil
+func (p BLSFieldElement) MarshalText() ([]byte, error) {
+	return []byte("0x" + hex.EncodeToString(p[:])), nil
 }
 
-func WriteFieldElements(ew *codec.EncodingWriter, elems []BLSFieldElement) error {
-	for i := range elems {
-		if err := ew.Write(elems[i][:]); err != nil {
-			return err
-		}
-	}
-	return nil
+func (p BLSFieldElement) String() string {
+	return "0x" + hex.EncodeToString(p[:])
+}
+
+func (p *BLSFieldElement) UnmarshalText(text []byte) error {
+	return hexutil.UnmarshalFixedText("BLSFieldElement", text, p[:])
 }
 
 // Blob data
-type Blob []BLSFieldElement
+type Blob [params.FieldElementsPerBlob]BLSFieldElement
 
 func (blob *Blob) Deserialize(dr *codec.DecodingReader) error {
-	return ReadFieldElements(dr, (*[]BLSFieldElement)(blob), params.FieldElementsPerBlob)
+	if blob == nil {
+		return errors.New("cannot decode ssz into nil Blob")
+	}
+	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
+		// TODO: do we want to check if each field element is within range?
+		if _, err := dr.Read(blob[i][:]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (blob Blob) Serialize(w *codec.EncodingWriter) error {
-	return WriteFieldElements(w, blob)
+	for i := range blob {
+		if err := w.Write(blob[i][:]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (blob Blob) ByteLength() (out uint64) {
@@ -136,12 +125,6 @@ func (blob Blob) HashTreeRoot(hFn tree.HashFn) tree.Root {
 	}, params.FieldElementsPerBlob)
 }
 
-func (blob Blob) copy() Blob {
-	cpy := make(Blob, len(blob))
-	copy(cpy, blob)
-	return cpy
-}
-
 func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
 	frs := make([]bls.Fr, len(blob))
 	for i, elem := range blob {
@@ -154,6 +137,46 @@ func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
 	var out KZGCommitment
 	copy(out[:], bls.ToCompressedG1(commitmentG1))
 	return out, true
+}
+
+func (blob Blob) MarshalText() ([]byte, error) {
+	out := make([]byte, 2+params.FieldElementsPerBlob*32*2)
+	copy(out[:2], "0x")
+	j := 2
+	for _, elem := range blob {
+		hex.Encode(out[j:j+64], elem[:])
+		j += 64
+	}
+	return out, nil
+}
+
+func (blob Blob) String() string {
+	v, err := blob.MarshalText()
+	if err != nil {
+		return "<invalid-blob>"
+	}
+	return string(v)
+}
+
+func (blob *Blob) UnmarshalText(text []byte) error {
+	if blob == nil {
+		return errors.New("cannot decode text into nil Blob")
+	}
+	l := 2 + params.FieldElementsPerBlob*32*2
+	if len(text) != l {
+		return fmt.Errorf("expected %d characters but got %d", l, len(text))
+	}
+	if !(text[0] == '0' && text[1] == 'x') {
+		return fmt.Errorf("expected '0x' prefix in Blob string")
+	}
+	j := 0
+	for i := 2; i < l; i += 64 {
+		if _, err := hex.Decode(blob[j][:], text[i:i+64]); err != nil {
+			return fmt.Errorf("blob item %d is not formatted correctly: %v", j, err)
+		}
+		j += 1
+	}
+	return nil
 }
 
 type BlobKzgs []KZGCommitment
@@ -228,9 +251,7 @@ func (li Blobs) HashTreeRoot(hFn tree.HashFn) tree.Root {
 
 func (blobs Blobs) copy() Blobs {
 	cpy := make(Blobs, len(blobs))
-	for i, bl := range blobs {
-		cpy[i] = bl.copy()
-	}
+	copy(cpy, blobs) // each blob element is an array and gets deep-copied
 	return cpy
 }
 
