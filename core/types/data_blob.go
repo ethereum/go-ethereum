@@ -234,6 +234,17 @@ func (blobs Blobs) copy() Blobs {
 	return cpy
 }
 
+func (blobs Blobs) ComputeCommitments() (commitments []KZGCommitment, ok bool) {
+	commitments = make([]KZGCommitment, len(blobs))
+	for i, blob := range blobs {
+		commitments[i], ok = blob.ComputeCommitment()
+		if !ok {
+			return nil, false
+		}
+	}
+	return commitments, true
+}
+
 type BlobTxWrapper struct {
 	Tx       SignedBlobTx
 	BlobKzgs BlobKzgs
