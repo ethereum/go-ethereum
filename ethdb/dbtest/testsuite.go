@@ -375,7 +375,7 @@ func TestKeyValueStoreSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 		for k := range insert {
 			got, err := snapshot.Get([]byte(k))
-			if err == nil || len(got) != 0 {
+			if err != ethdb.ErrSnapshotNotFound || len(got) != 0 {
 				t.Fatal("Unexpected value")
 			}
 		}

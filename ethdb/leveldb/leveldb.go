@@ -552,13 +552,24 @@ type snapshot struct {
 // Has retrieves if a key is present in the snapshot backing by a key-value
 // data store.
 func (snap *snapshot) Has(key []byte) (bool, error) {
-	return snap.db.Has(key, nil)
+	has, err := snap.db.Has(key, nil)
+	if err == leveldb.ErrSnapshotReleased {
+		return false, ethdb.ErrSnapshotReleased
+	}
+	return has, err
 }
 
 // Get retrieves the given key if it's present in the snapshot backing by
 // key-value data store.
 func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	return snap.db.Get(key, nil)
+	val, err := snap.db.Get(key, nil)
+	if err == leveldb.ErrSnapshotReleased {
+		return nil, ethdb.ErrSnapshotReleased
+	}
+	if err == leveldb.ErrNotFound {
+		return nil, ethdb.ErrSnapshotNotFound
+	}
+	return val, err
 }
 
 // Release releases associated resources. Release should always succeed and can
