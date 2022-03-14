@@ -2090,10 +2090,8 @@ func (bc *BlockChain) SetChainHead(head *types.Block) error {
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
 	if head.ParentHash() != bc.CurrentBlock().Hash() {
-		if head.Hash() != bc.CurrentBlock().Hash() {
-			if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
-				return err
-			}
+		if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
+			return err
 		}
 	}
 	bc.writeHeadBlock(head)

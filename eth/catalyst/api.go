@@ -147,13 +147,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// If the head block is already in our canonical chain, the beacon client is
 	// probably resyncing. Ignore the update.
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == update.HeadBlockHash {
-		// TODO (MariusVanDerWijden) should this be possible?
-		// If we allow these types of reorgs, we will do lots and lots of reorgs during sync
-		log.Warn("Reorg to previous block")
-		if err := api.eth.BlockChain().SetChainHead(block); err != nil {
-			return beacon.STATUS_INVALID, err
-		}
-		//log.Warn("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
+		log.Warn("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
 	} else if err := api.eth.BlockChain().SetChainHead(block); err != nil {
 		return beacon.STATUS_INVALID, err
 	}
@@ -197,18 +191,20 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
-			return beacon.STATUS_INVALID, err // Valid as setHead was accepted
+			return api.validForkChoiceResponse(nil), err // valid setHead, invalid payload
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
 		api.localBlocks.put(id, data)
 
 		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
-		return api.validFCU(&id), nil
+		return api.validForkChoiceResponse(&id), nil
 	}
-	return api.validFCU(nil), nil
+	return api.validForkChoiceResponse(nil), nil
 }
 
-func (api *ConsensusAPI) validFCU(id *beacon.PayloadID) beacon.ForkChoiceResponse {
+// validForkChoiceResponse returns the ForkChoiceResponse{VALID}
+// with the latest valid hash and an optional payloadID.
+func (api *ConsensusAPI) validForkChoiceResponse(id *beacon.PayloadID) beacon.ForkChoiceResponse {
 	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
 	return beacon.ForkChoiceResponse{
 		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},
@@ -216,17 +212,19 @@ func (api *ConsensusAPI) validFCU(id *beacon.PayloadID) beacon.ForkChoiceRespons
 	}
 }
 
+// ExchangeTransitionConfigurationV1 checks the given configuration against
+// the configuration of the node.
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.TransitionConfigurationV1) (*beacon.TransitionConfigurationV1, error) {
 	if config.TerminalTotalDifficulty == nil {
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
-		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", ttd, config.TerminalTotalDifficulty)
+		log.Warn("Invalid TTD configured", "geth", config.TerminalTotalDifficulty, "consensus client", ttd)
+		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", config.TerminalTotalDifficulty, ttd)
 	}
 	terminalHeader := api.eth.BlockChain().CurrentTerminalHeader()
 	if terminalHeader != nil {
-
 		if config.TerminalBlockNumber != 0 && uint64(config.TerminalBlockNumber) != terminalHeader.Number.Uint64() {
 			return nil, fmt.Errorf("invalid terminal block number, got %v want %v", config.TerminalBlockNumber, terminalHeader.Number)
 		}
@@ -238,9 +236,6 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 		// but according to the spec we should return the hash + number set by the user.
 		// Since we have no way of setting hash + number yet, just return TTD.
 		return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
-	}
-	if config.TerminalBlockNumber != 0 {
-		return nil, fmt.Errorf("invalid terminal block number: %v", config.TerminalBlockNumber)
 	}
 
 	if config.TerminalBlockHash != (common.Hash{}) {
@@ -315,6 +310,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
+		log.Warn("NewPayloadV1: inserting block failed", "error", err)
 		return api.invalid(err), nil
 	}
 	// We've accepted a valid payload from the beacon client. Mark the local
