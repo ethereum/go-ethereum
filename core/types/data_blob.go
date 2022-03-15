@@ -102,7 +102,7 @@ func (blob *Blob) Deserialize(dr *codec.DecodingReader) error {
 	return nil
 }
 
-func (blob Blob) Serialize(w *codec.EncodingWriter) error {
+func (blob *Blob) Serialize(w *codec.EncodingWriter) error {
 	for i := range blob {
 		if err := w.Write(blob[i][:]); err != nil {
 			return err
@@ -111,7 +111,7 @@ func (blob Blob) Serialize(w *codec.EncodingWriter) error {
 	return nil
 }
 
-func (blob Blob) ByteLength() (out uint64) {
+func (blob *Blob) ByteLength() (out uint64) {
 	return params.FieldElementsPerBlob * 32
 }
 
@@ -119,13 +119,13 @@ func (blob *Blob) FixedLength() uint64 {
 	return params.FieldElementsPerBlob * 32
 }
 
-func (blob Blob) HashTreeRoot(hFn tree.HashFn) tree.Root {
+func (blob *Blob) HashTreeRoot(hFn tree.HashFn) tree.Root {
 	return hFn.ComplexVectorHTR(func(i uint64) tree.HTR {
 		return (*tree.Root)(&blob[i])
 	}, params.FieldElementsPerBlob)
 }
 
-func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
+func (blob *Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
 	frs := make([]bls.Fr, len(blob))
 	for i, elem := range blob {
 		if !bls.FrFrom32(&frs[i], elem) {
@@ -139,7 +139,7 @@ func (blob Blob) ComputeCommitment() (commitment KZGCommitment, ok bool) {
 	return out, true
 }
 
-func (blob Blob) MarshalText() ([]byte, error) {
+func (blob *Blob) MarshalText() ([]byte, error) {
 	out := make([]byte, 2+params.FieldElementsPerBlob*32*2)
 	copy(out[:2], "0x")
 	j := 2
@@ -150,7 +150,7 @@ func (blob Blob) MarshalText() ([]byte, error) {
 	return out, nil
 }
 
-func (blob Blob) String() string {
+func (blob *Blob) String() string {
 	v, err := blob.MarshalText()
 	if err != nil {
 		return "<invalid-blob>"
@@ -179,19 +179,31 @@ func (blob *Blob) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// Parse blob into Fr elements array
+func (blob *Blob) Parse() (out []bls.Fr, err error) {
+	out = make([]bls.Fr, params.FieldElementsPerBlob)
+	for i, chunk := range blob {
+		ok := bls.FrFrom32(&out[i], chunk)
+		if !ok {
+			return nil, errors.New("internal error commitments")
+		}
+	}
+	return out, nil
+}
+
 type BlobKzgs []KZGCommitment
 
 // Extract the crypto material underlying these commitments
-func (li BlobKzgs) Commitments() ([]*bls.G1Point, error) {
-	var points []*bls.G1Point
-	for _, c := range li {
+func (li BlobKzgs) Parse() ([]*bls.G1Point, error) {
+	out := make([]*bls.G1Point, len(li))
+	for i, c := range li {
 		p, err := c.Point()
 		if err != nil {
-			return nil, errors.New("internal error commitments")
+			return nil, fmt.Errorf("failed to parse commitment %d: %v", i, err)
 		}
-		points = append(points, p)
+		out[i] = p
 	}
-	return points, nil
+	return out, nil
 }
 
 func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
@@ -231,25 +243,16 @@ func (li BlobKzgs) copy() BlobKzgs {
 type Blobs []Blob
 
 // Extract the crypto material underlying these blobs
-func (blobs Blobs) Blobs() ([][]bls.Fr, error) {
-	var result [][]bls.Fr
-
-	// Iterate over every blob
-	for _, b := range blobs {
-		var blob []bls.Fr
-		// Iterate over each chunk of the blob and parse it into an Fr
-		for _, chunk := range b {
-			var chunkFr bls.Fr
-			ok := bls.FrFrom32(&chunkFr, chunk)
-			if ok != true {
-				return nil, errors.New("internal error commitments")
-			}
-			blob = append(blob, chunkFr)
+func (blobs Blobs) Parse() ([][]bls.Fr, error) {
+	out := make([][]bls.Fr, len(blobs))
+	for i, b := range blobs {
+		blob, err := b.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse blob %d: %v", i, err)
 		}
-		// Add each individiual blob to the result
-		result = append(result, blob)
+		out[i] = blob
 	}
-	return result, nil
+	return out, nil
 }
 
 func (a *Blobs) Deserialize(dr *codec.DecodingReader) error {
@@ -358,11 +361,11 @@ func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
 
 	// Time to verify that the KZG commitments match the included blobs:
 	// first extract crypto material out of our types and pass them to the crypto layer
-	commitments, err := b.BlobKzgs.Commitments()
+	commitments, err := b.BlobKzgs.Parse()
 	if err != nil {
 		return fmt.Errorf("internal commitments error")
 	}
-	blobs, err := b.Blobs.Blobs()
+	blobs, err := b.Blobs.Parse()
 	if err != nil {
 		return fmt.Errorf("internal blobs error")
 	}
