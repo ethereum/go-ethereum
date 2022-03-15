@@ -164,7 +164,7 @@ func TestKzg(t *testing.T) {
 
 	// Verify kzg proof
 	if kzg.VerifyKzgProof(commitment, &xFr, &value, proof) != true {
-		panic("failed proof verification")
+		t.Fatal("failed proof verification")
 	}
 }
 
