@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type JSONLogger struct {
@@ -43,9 +44,11 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	l.env = env
 }
+
+func (l *JSONLogger) CaptureCreateTx(addr common.Address) {}
 
 func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
@@ -80,7 +83,7 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 }
 
 // CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (l *JSONLogger) CaptureEnd(output []byte, gasUsed, restGas uint64, t time.Duration, err error) {
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`

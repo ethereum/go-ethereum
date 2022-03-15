@@ -134,9 +134,12 @@ func (l *StructLogger) Reset() {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	l.env = env
 }
+
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (l *StructLogger) CaptureCreateTx(addr common.Address) {}
 
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
@@ -207,7 +210,7 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed, restGas uint64, t time.Duration, err error) {
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
@@ -280,9 +283,10 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 }
 
 type mdLogger struct {
-	out io.Writer
-	cfg *Config
-	env *vm.EVM
+	out    io.Writer
+	cfg    *Config
+	env    *vm.EVM
+	header string
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -295,22 +299,26 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	t.env = env
-	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
-	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
-	}
-
-	fmt.Fprintf(t.out, `
+	gas := gasLimit - intrinsicGas
+	getHeader := func(from string, to string, input []byte, gas uint64, value *big.Int) string {
+		return fmt.Sprintf("From: `%v`\n%s\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n"+`
 |  Pc   |      Op     | Cost |   Stack   |   RStack  |  Refund |
 |-------|-------------|------|-----------|-----------|---------|
-`)
+		`, from, to, input, gas, value)
+	}
+	if create {
+		// To address will be filled in CaptureCreateTx
+		t.header = getHeader(from.String(), "Create at: `%v`", input, gas, value)
+	} else {
+		fmt.Fprint(t.out, getHeader(from.String(), fmt.Sprintf("To: `%v`", to.String()), input, gas, value))
+	}
+}
+
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (t *mdLogger) CaptureCreateTx(addr common.Address) {
+	fmt.Fprintf(t.out, t.header, addr.String())
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
@@ -338,7 +346,7 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) {
+func (t *mdLogger) CaptureEnd(output []byte, gasUsed, restGas uint64, tm time.Duration, err error) {
 	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
