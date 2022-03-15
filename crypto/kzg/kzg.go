@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/protolambda/go-kzg/bls"
 )
@@ -37,13 +35,6 @@ func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1
 	bls.SubG1(&commitmentMinusY, commitment, &yG1)
 
 	return bls.PairingsVerify(&commitmentMinusY, &bls.GenG2, proof, &sMinuxX)
-}
-
-// Return versioned hash that corresponds to KZG commitment
-func KzgToVersionedHash(commitment *bls.G1Point) [32]byte {
-	h := crypto.Keccak256Hash(bls.ToCompressedG1(commitment))
-	h[0] = byte(params.BlobCommitmentVersionKZG)
-	return h
 }
 
 // Verify that the list of `commitments` maps to the list of `blobs`

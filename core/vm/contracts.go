@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -1071,9 +1072,9 @@ func (c *blobVerification) Run(input []byte) ([]byte, error) {
 		return nil, errBlobVerificationInputLength
 	}
 
-	var expected_versioned_hash [32]byte
-	copy(expected_versioned_hash[:], input[:32])
-	if expected_versioned_hash[0] != byte(params.BlobCommitmentVersionKZG) {
+	var expectedVersionedHash [32]byte
+	copy(expectedVersionedHash[:], input[:32])
+	if expectedVersionedHash[0] != params.BlobCommitmentVersionKZG {
 		return nil, errInvalidVersionedHash
 	}
 
@@ -1091,9 +1092,11 @@ func (c *blobVerification) Run(input []byte) ([]byte, error) {
 
 	// Get versioned hash out of input points
 	commitment := kzg.BlobToKzg(inputPoints)
-	versioned_hash := kzg.KzgToVersionedHash(commitment)
+	var compressedCommitment types.KZGCommitment
+	copy(compressedCommitment[:], bls.ToCompressedG1(commitment))
 
-	if versioned_hash != expected_versioned_hash {
+	versionedHash := compressedCommitment.ComputeVersionedHash()
+	if versionedHash != expectedVersionedHash {
 		return nil, errBadBlobCommitment
 	}
 
@@ -1127,7 +1130,7 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 	var versionedHash common.Hash
 	copy(versionedHash[:], input[:32])
 	// XXX Should we version check the hash?
-	if versionedHash[0] != byte(params.BlobCommitmentVersionKZG) {
+	if versionedHash[0] != params.BlobCommitmentVersionKZG {
 		return nil, errInvalidVersionedHash
 	}
 
@@ -1146,21 +1149,25 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 		return nil, errPointEvaluationInvalidY
 	}
 
-	dataKzg, err := bls.FromCompressedG1(input[96:144])
+	var commitment types.KZGCommitment
+	copy(commitment[:], input[96:144])
+	if commitment.ComputeVersionedHash() != versionedHash {
+		return nil, errPointEvaluationMismatchVersionedHash
+	}
+
+	parsedCommitment, err := commitment.Point()
 	if err != nil {
 		return nil, errPointEvaluationInvalidKzg
 	}
 
-	if kzg.KzgToVersionedHash(dataKzg) != versionedHash {
-		return nil, errPointEvaluationMismatchVersionedHash
-	}
-
-	proof, err := bls.FromCompressedG1(input[144:192])
+	var proof types.KZGCommitment
+	copy(proof[:], input[144:192])
+	parsedProof, err := proof.Point()
 	if err != nil {
 		return nil, errPointEvaluationInvalidProof
 	}
 
-	if kzg.VerifyKzgProof(dataKzg, &x, &y, proof) != true {
+	if kzg.VerifyKzgProof(parsedCommitment, &x, &y, parsedProof) != true {
 		return nil, errPointEvaluationBadProof
 	}
 

@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -250,12 +250,22 @@ func TestBlobVerificationTestVector(t *testing.T) {
 		bls.FrFrom32(&inputPoints[i], inputPoint)
 	}
 
-	commitment := kzg.BlobToKzg(inputPoints)
-	versionedHash := kzg.KzgToVersionedHash(commitment)
+	var commitment types.KZGCommitment
+	copy(commitment[:], bls.ToCompressedG1(kzg.BlobToKzg(inputPoints)))
+	versionedHash := commitment.ComputeVersionedHash()
 
-	testVector := append(versionedHash[:], data[:]...)
-	fmt.Printf("%s\n", hex.EncodeToString(testVector))
-	fmt.Printf("%d\n", len(testVector))
+	calldata := append(versionedHash[:], data[:]...)
+	t.Logf("test-vector: %x", calldata)
+
+	precompile := vm.PrecompiledContractsDanksharding[common.BytesToAddress([]byte{0x13})]
+	if _, err := precompile.Run(calldata); err != nil {
+		t.Fatalf("expected blob verification to succeed")
+	}
+	// change a byte of the versioned hash
+	calldata[3] ^= 42
+	if _, err := precompile.Run(calldata); err == nil {
+		t.Fatalf("expected blob verification to fail")
+	}
 }
 
 // Helper: Create test vector for the PointEvaluation precompile
@@ -292,19 +302,30 @@ func TestPointEvaluationTestVector(t *testing.T) {
 		panic("failed proof verification")
 	}
 
-	versionedHash := kzg.KzgToVersionedHash(commitment)
+	var commitmentBytes types.KZGCommitment
+	copy(commitmentBytes[:], bls.ToCompressedG1(commitment))
 
-	commitmentBytes := bls.ToCompressedG1(commitment)
+	versionedHash := commitmentBytes.ComputeVersionedHash()
 
 	proofBytes := bls.ToCompressedG1(proof)
 
 	xBytes := bls.FrTo32(&xFr)
 	yBytes := bls.FrTo32(&y)
 
-	testVector := append(versionedHash[:], xBytes[:]...)
-	testVector = append(testVector, yBytes[:]...)
-	testVector = append(testVector, commitmentBytes...)
-	testVector = append(testVector, proofBytes...)
-	fmt.Printf("%s\n", hex.EncodeToString(testVector))
-	fmt.Printf("%d\n", len(testVector))
+	calldata := append(versionedHash[:], xBytes[:]...)
+	calldata = append(calldata, yBytes[:]...)
+	calldata = append(calldata, commitmentBytes[:]...)
+	calldata = append(calldata, proofBytes...)
+
+	t.Logf("test-vector: %x", calldata)
+
+	precompile := vm.PrecompiledContractsDanksharding[common.BytesToAddress([]byte{0x14})]
+	if _, err := precompile.Run(calldata); err != nil {
+		t.Fatalf("expected point verification to succeed")
+	}
+	// change a byte of the proof
+	calldata[144+7] ^= 42
+	if _, err := precompile.Run(calldata); err == nil {
+		t.Fatalf("expected point verification to fail")
+	}
 }
