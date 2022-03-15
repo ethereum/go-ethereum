@@ -190,12 +190,9 @@ func TestVerifyBlobs(t *testing.T) {
 	var blob1 types.Blob
 	var blob2 types.Blob
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		var tmp [32]byte
 		// Be conservative and only pack 31 bytes per Fr element
-		copy(tmp[:32], []byte(jsonBlobs.KzgBlob1[i*31:(i+1)*31]))
-		blob1 = append(blob1, tmp)
-		copy(tmp[:32], []byte(jsonBlobs.KzgBlob2[i*31:(i+1)*31]))
-		blob2 = append(blob2, tmp)
+		copy(blob1[i][:], jsonBlobs.KzgBlob1[i*31:(i+1)*31])
+		copy(blob2[i][:], jsonBlobs.KzgBlob2[i*31:(i+1)*31])
 	}
 
 	// Compute KZG commitments for both of the blobs above
@@ -206,38 +203,38 @@ func TestVerifyBlobs(t *testing.T) {
 	}
 
 	// Create the dummy object with all that data we prepared
-	blob_data := types.BlobTxWrapData{
+	blobData := types.BlobTxWrapData{
 		BlobKzgs: []types.KZGCommitment{kzg1, kzg2},
 		Blobs:    []types.Blob{blob1, blob2},
 	}
 
 	// Extract cryptographic material out of the blobs/commitments
-	commitments, err := blob_data.BlobKzgs.Commitments()
+	commitments, err := blobData.BlobKzgs.Parse()
 	if err != nil {
-		panic("internal commitments")
+		t.Fatalf("failed to parse commitments: %v", err)
 	}
-	blobs, err := blob_data.Blobs.Blobs()
+	blobs, err := blobData.Blobs.Parse()
 	if err != nil {
-		panic("internal blobs")
+		t.Fatalf("failed to parse blobs: %v", err)
 	}
 
 	// Verify the blobs against the commitments!!
 	err = kzg.VerifyBlobs(commitments, blobs)
 	if err != nil {
-		panic("bad verifyBlobs")
+		t.Fatalf("bad verifyBlobs: %v", err)
 	}
 
 	// Now let's do a bad case:
 	// mutate a single chunk of a single blob and VerifyBlobs() must fail
-	blob1[42][1] = 0x42
-	blobs, err = blob_data.Blobs.Blobs()
+	blobData.Blobs[0][42][1] = 0x42
+	blobs, err = blobData.Blobs.Parse()
 	if err != nil {
-		panic("internal blobs")
+		t.Fatalf("internal blobs: %v", err)
 	}
 
 	err = kzg.VerifyBlobs(commitments, blobs)
 	if err == nil {
-		panic("bad VerifyBlobs actually succeeded")
+		t.Fatal("bad VerifyBlobs actually succeeded, expected error")
 	}
 }
 
