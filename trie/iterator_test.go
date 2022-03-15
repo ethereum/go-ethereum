@@ -36,7 +36,6 @@ func TestEmptyIterator(t *testing.T) {
 	seen := make(map[string]struct{})
 	for iter.Next(true) {
 		seen[string(iter.Path())] = struct{}{}
-		fmt.Println("iter.path", iter.Path(), "val", iter.NodeBlob())
 	}
 	if len(seen) != 0 {
 		t.Fatal("Unexpected trie node iterated")
