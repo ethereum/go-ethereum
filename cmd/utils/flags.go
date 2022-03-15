@@ -237,8 +237,8 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	PeerRequiredBlocksFlag = cli.StringFlag{
-		Name:  "peer.requiredblocks",
+	EthPeerRequiredBlocksFlag = cli.StringFlag{
+		Name:  "eth.requiredblocks",
 		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 	}
 	LegacyWhitelistFlag = cli.StringFlag{
@@ -1409,7 +1409,8 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 }
 
 func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
-	peerRequiredBlocks := ctx.GlobalString(PeerRequiredBlocksFlag.Name)
+	peerRequiredBlocks := ctx.GlobalString(EthPeerRequiredBlocksFlag.Name)
+
 	if peerRequiredBlocks == "" {
 		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
 			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
@@ -1418,6 +1419,7 @@ func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 			return
 		}
 	}
+
 	cfg.PeerRequiredBlocks = make(map[uint64]common.Hash)
 	for _, entry := range strings.Split(peerRequiredBlocks, ",") {
 		parts := strings.Split(entry, "=")

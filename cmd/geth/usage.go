@@ -53,7 +53,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
 			utils.LightKDFFlag,
-			utils.PeerRequiredBlocksFlag,
+			utils.EthPeerRequiredBlocksFlag,
 		},
 	},
 	{
