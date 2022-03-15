@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -63,23 +64,26 @@ func newCallTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
 		Input: bytesToHex(input),
-		Gas:   uintToHex(gas),
+		Gas:   uintToHex(gasLimit - intrinsicGas),
 		Value: bigToHex(value),
-	}
-	if create {
-		t.callstack[0].Type = "CREATE"
 	}
 }
 
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (t *callTracer) CaptureCreateTx(addr common.Address) {
+	t.callstack[0].Type = "CREATE"
+	t.callstack[0].To = addrToHex(addr)
+}
+
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *callTracer) CaptureEnd(output []byte, gasUsed, restGas uint64, _ time.Duration, err error) {
 	t.callstack[0].GasUsed = uintToHex(gasUsed)
 	if err != nil {
 		t.callstack[0].Error = err.Error()

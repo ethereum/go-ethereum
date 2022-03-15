@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -40,11 +41,14 @@ func newNoopTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 }
 
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (t *noopTracer) CaptureCreateTx(addr common.Address) {}
+
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *noopTracer) CaptureEnd(output []byte, gasUsed, restGas uint64, _ time.Duration, err error) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.

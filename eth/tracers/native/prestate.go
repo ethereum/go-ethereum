@@ -24,10 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -58,28 +58,21 @@ func newPrestateTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	t.env = env
 	t.create = create
 	t.to = to
 
-	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
-	if err != nil {
-		return
+	t.lookupAccount(from)
+	if !create {
+		t.lookupAccount(to)
+		// The recipient balance includes the value transferred.
+		toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
+		toBal = new(big.Int).Sub(toBal, value)
+		t.prestate[to].Balance = hexutil.EncodeBig(toBal)
 	}
 
-	t.lookupAccount(from)
-	t.lookupAccount(to)
-
-	// The recipient balance includes the value transferred.
-	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
-	toBal = new(big.Int).Sub(toBal, value)
-	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
-
-	// The sender balance is after reducing: value, gasLimit, intrinsicGas.
+	// The sender balance is after reducing: gasLimit, intrinsicGas.
 	// We need to re-add them to get the pre-tx balance.
 	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
 	gasPrice := env.TxContext.GasPrice
@@ -87,16 +80,20 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 		gasPrice,
 		new(big.Int).Add(
 			new(big.Int).SetUint64(intrinsicGas),
-			new(big.Int).SetUint64(gas),
+			new(big.Int).SetUint64(gasLimit),
 		),
 	)
-	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+	fromBal.Add(fromBal, consumedGas)
 	t.prestate[from].Balance = hexutil.EncodeBig(fromBal)
-	t.prestate[from].Nonce--
+}
+
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (t *prestateTracer) CaptureCreateTx(addr common.Address) {
+	t.to = addr
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *prestateTracer) CaptureEnd(output []byte, gasUsed, restGas uint64, _ time.Duration, err error) {
 	if t.create {
 		// Exclude created contract.
 		delete(t.prestate, t.to)

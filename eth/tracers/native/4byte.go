@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -79,11 +80,10 @@ func (t *fourByteTracer) store(id []byte, size int) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	t.env = env
 
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Save the outer calldata also
@@ -91,6 +91,9 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 		t.store(input[0:4], len(input)-4)
 	}
 }
+
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (t *fourByteTracer) CaptureCreateTx(addr common.Address) {}
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *fourByteTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
@@ -128,7 +131,7 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed, restGas uint64, _ time.Duration, err error) {
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any
