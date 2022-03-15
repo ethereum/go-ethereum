@@ -117,7 +117,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			// Shutdown gpu miner
 			if eng, ok := api.eth.Engine().(*beaconEngine.Beacon); ok {
 				if inner, ok := eng.InnerEngine().(*ethash.Ethash); ok {
-					inner.Close()
+					inner.StopRemoteSealer()
 				}
 			}
 		}
@@ -322,7 +322,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		// Shutdown gpu miner
 		if eng, ok := api.eth.Engine().(*beaconEngine.Beacon); ok {
 			if inner, ok := eng.InnerEngine().(*ethash.Ethash); ok {
-				inner.Close()
+				inner.StopRemoteSealer()
 			}
 		}
 	}
