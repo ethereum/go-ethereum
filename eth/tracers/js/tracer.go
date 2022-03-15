@@ -30,12 +30,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	tracers2 "github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 
@@ -680,7 +680,7 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gasLimit, intrinsicGas uint64, value *big.Int, rules params.Rules) {
 	jst.env = env
 	jst.ctx["type"] = "CALL"
 	if create {
@@ -689,25 +689,22 @@ func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 	jst.ctx["from"] = from
 	jst.ctx["to"] = to
 	jst.ctx["input"] = input
-	jst.ctx["gas"] = gas
+	jst.ctx["gas"] = gasLimit - intrinsicGas
 	jst.ctx["gasPrice"] = env.TxContext.GasPrice
 	jst.ctx["value"] = value
+	jst.ctx["intrinsicGas"] = intrinsicGas
 
 	// Initialize the context
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
+	// TODO: test statedb returns same values for tx sender as before
 	jst.dbWrapper.db = env.StateDB
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
 	jst.activePrecompiles = vm.ActivePrecompiles(rules)
+}
 
-	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
-	if err != nil {
-		return
-	}
-	jst.ctx["intrinsicGas"] = intrinsicGas
+// CaptureCreateTx is emitted for create transactions, after the contract is created.
+func (jst *jsTracer) CaptureCreateTx(addr common.Address) {
+	jst.ctx["to"] = addr
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
@@ -761,7 +758,7 @@ func (jst *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, sco
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (jst *jsTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (jst *jsTracer) CaptureEnd(output []byte, gasUsed, restGas uint64, t time.Duration, err error) {
 	jst.ctx["output"] = output
 	jst.ctx["time"] = t.String()
 	jst.ctx["gasUsed"] = gasUsed
