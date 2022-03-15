@@ -425,7 +425,7 @@ func findChild(n *fullNode, index int, path []byte, ancestor common.Hash) (node,
 func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Hash) (*nodeIteratorState, []byte, bool) {
 	switch node := parent.node.(type) {
 	case *fullNode:
-		//Full node, move to the first non-nil child.
+		// Full node, move to the first non-nil child.
 		if child, state, path, index := findChild(node, parent.index+1, it.path, ancestor); child != nil {
 			parent.index = index - 1
 			return state, path, true
@@ -503,8 +503,9 @@ func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []
 }
 
 func (it *nodeIterator) pop() {
-	parent := it.stack[len(it.stack)-1]
-	it.path = it.path[:parent.pathlen]
+	last := it.stack[len(it.stack)-1]
+	it.path = it.path[:last.pathlen]
+	it.stack[len(it.stack)-1] = nil
 	it.stack = it.stack[:len(it.stack)-1]
 }
 
