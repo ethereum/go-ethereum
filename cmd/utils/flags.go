@@ -523,10 +523,10 @@ var (
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Authenticated RPC HTTP settings
-	AuthHostFlag = cli.StringFlag{
-		Name:  "authrpc.host",
+	AuthListenFlag = cli.StringFlag{
+		Name:  "authrpc.addr",
 		Usage: "Listening address for authenticated APIs",
-		Value: node.DefaultConfig.AuthHost,
+		Value: node.DefaultConfig.AuthAddr,
 	}
 	AuthPortFlag = cli.IntFlag{
 		Name:  "authrpc.port",
@@ -975,8 +975,8 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(AuthHostFlag.Name) {
-		cfg.AuthHost = ctx.GlobalString(AuthHostFlag.Name)
+	if ctx.GlobalIsSet(AuthListenFlag.Name) {
+		cfg.AuthAddr = ctx.GlobalString(AuthListenFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(AuthPortFlag.Name) {
