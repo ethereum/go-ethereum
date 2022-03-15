@@ -29,6 +29,20 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
+func TestEmptyIterator(t *testing.T) {
+	trie := newEmpty()
+	iter := trie.NodeIterator(nil)
+
+	seen := make(map[string]struct{})
+	for iter.Next(true) {
+		seen[string(iter.Path())] = struct{}{}
+		fmt.Println("iter.path", iter.Path(), "val", iter.NodeBlob())
+	}
+	if len(seen) != 0 {
+		t.Fatal("Unexpected trie node iterated")
+	}
+}
+
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
 	vals := []struct{ k, v string }{
