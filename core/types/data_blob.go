@@ -16,7 +16,6 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
-const BLOB_COMMITMENT_VERSION_KZG byte = 0x01
 const MAX_TX_WRAP_KZG_COMMITMENTS = 1 << 24
 const LIMIT_BLOBS_PER_TX = 1 << 24
 
@@ -68,7 +67,7 @@ func (p *KZGCommitment) Point() (*bls.G1Point, error) {
 
 func (kzg KZGCommitment) ComputeVersionedHash() common.Hash {
 	h := crypto.Keccak256Hash(kzg[:])
-	h[0] = BLOB_COMMITMENT_VERSION_KZG
+	h[0] = params.BlobCommitmentVersionKZG
 	return h
 }
 
