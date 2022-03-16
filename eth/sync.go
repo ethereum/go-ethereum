@@ -189,7 +189,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		// We seem to be in sync according to the legacy rules. In the merge
 		// world, it can also mean we're stuck on the merge block, waiting for
 		// a beacon client. In the latter case, notify the user.
-		if cs.handler.chain.Config().TerminalTotalDifficulty != nil && time.Since(cs.warned) > 10*time.Second {
+		if ttd := cs.handler.chain.Config().TerminalTotalDifficulty; ttd != nil && ourTD.Cmp(ttd) >= 0 && time.Since(cs.warned) > 10*time.Second {
 			log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
 			cs.warned = time.Now()
 		}

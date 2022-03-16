@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
@@ -49,11 +50,12 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
-		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
+		Config:     config,
+		Alloc:      core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData:  []byte("test genesis"),
+		Timestamp:  9000,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Difficulty: big.NewInt(0),
 	}
 	testNonce := uint64(0)
 	generate := func(i int, g *core.BlockGen) {
@@ -130,8 +132,10 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err == nil {
-		t.Errorf("fork choice updated before total terminal difficulty should fail")
+	if resp, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+		t.Errorf("fork choice updated should not error: %v", err)
+	} else if resp.PayloadStatus.Status != beacon.INVALIDTERMINALBLOCK {
+		t.Errorf("fork choice updated before total terminal difficulty should be INVALID")
 	}
 }
 
@@ -277,7 +281,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
-		newResp, err := api.ExecutePayloadV1(*execData)
+		newResp, err := api.NewPayloadV1(*execData)
 		if err != nil || newResp.Status != "VALID" {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
@@ -317,7 +321,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
-		newResp, err := api.ExecutePayloadV1(*execData)
+		newResp, err := api.NewPayloadV1(*execData)
 		if err != nil || newResp.Status != "VALID" {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
@@ -414,66 +418,108 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 }
 
 func TestFullAPI(t *testing.T) {
-	// TODO (MariusVanDerWijden) TestFullAPI is currently broken, because it tries to reorg
-	// before the totalTerminalDifficulty threshold, fixed in upcoming merge-kiln-v2 pr
-	/*
-		genesis, preMergeBlocks := generatePreMergeChain(10)
-		n, ethservice := startEthService(t, genesis, preMergeBlocks)
-		ethservice.Merger().ReachTTD()
-		defer n.Close()
-		var (
-			api    = NewConsensusAPI(ethservice)
-			parent = ethservice.BlockChain().CurrentBlock()
-			// This EVM code generates a log when the contract is created.
-			logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
-		)
-		for i := 0; i < 10; i++ {
-			statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
-			nonce := statedb.GetNonce(testAddr)
-			tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-			ethservice.TxPool().AddLocal(tx)
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+	var (
+		api    = NewConsensusAPI(ethservice)
+		parent = ethservice.BlockChain().CurrentBlock()
+		// This EVM code generates a log when the contract is created.
+		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	for i := 0; i < 10; i++ {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		nonce := statedb.GetNonce(testAddr)
+		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		ethservice.TxPool().AddLocal(tx)
 
-			params := beacon.PayloadAttributesV1{
-				Timestamp:             parent.Time() + 1,
-				Random:                crypto.Keccak256Hash([]byte{byte(i)}),
-				SuggestedFeeRecipient: parent.Coinbase(),
-			}
-			fcState := beacon.ForkchoiceStateV1{
-				HeadBlockHash:      parent.Hash(),
-				SafeBlockHash:      common.Hash{},
-				FinalizedBlockHash: common.Hash{},
-			}
-			resp, err := api.ForkchoiceUpdatedV1(fcState, &params)
-			if err != nil {
-				t.Fatalf("error preparing payload, err=%v", err)
-			}
-			if resp.Status != beacon.VALID {
-				t.Fatalf("error preparing payload, invalid status: %v", resp.Status)
-			}
-			payloadID := computePayloadId(parent.Hash(), &params)
-			payload, err := api.GetPayloadV1(payloadID)
-			if err != nil {
-				t.Fatalf("can't get payload: %v", err)
-			}
-			execResp, err := api.ExecutePayloadV1(*payload)
-			if err != nil {
-				t.Fatalf("can't execute payload: %v", err)
-			}
-			if execResp.Status != beacon.VALID {
-				t.Fatalf("invalid status: %v", execResp.Status)
-			}
-			fcState = beacon.ForkchoiceStateV1{
-				HeadBlockHash:      payload.BlockHash,
-				SafeBlockHash:      payload.ParentHash,
-				FinalizedBlockHash: payload.ParentHash,
-			}
-			if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-				t.Fatalf("Failed to insert block: %v", err)
-			}
-			if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
-				t.Fatalf("Chain head should be updated")
-			}
-			parent = ethservice.BlockChain().CurrentBlock()
+		params := beacon.PayloadAttributesV1{
+			Timestamp:             parent.Time() + 1,
+			Random:                crypto.Keccak256Hash([]byte{byte(i)}),
+			SuggestedFeeRecipient: parent.Coinbase(),
 		}
-	*/
+
+		fcState := beacon.ForkchoiceStateV1{
+			HeadBlockHash:      parent.Hash(),
+			SafeBlockHash:      common.Hash{},
+			FinalizedBlockHash: common.Hash{},
+		}
+		resp, err := api.ForkchoiceUpdatedV1(fcState, &params)
+		if err != nil {
+			t.Fatalf("error preparing payload, err=%v", err)
+		}
+		if resp.PayloadStatus.Status != beacon.VALID {
+			t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
+		}
+		payload, err := api.GetPayloadV1(*resp.PayloadID)
+		if err != nil {
+			t.Fatalf("can't get payload: %v", err)
+		}
+		execResp, err := api.NewPayloadV1(*payload)
+		if err != nil {
+			t.Fatalf("can't execute payload: %v", err)
+		}
+		if execResp.Status != beacon.VALID {
+			t.Fatalf("invalid status: %v", execResp.Status)
+		}
+		fcState = beacon.ForkchoiceStateV1{
+			HeadBlockHash:      payload.BlockHash,
+			SafeBlockHash:      payload.ParentHash,
+			FinalizedBlockHash: payload.ParentHash,
+		}
+		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
+			t.Fatalf("Chain head should be updated")
+		}
+		parent = ethservice.BlockChain().CurrentBlock()
+	}
+}
+
+func TestExchangeTransitionConfig(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+	var (
+		api = NewConsensusAPI(ethservice)
+	)
+	// invalid ttd
+	config := beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
+		TerminalBlockHash:       common.Hash{},
+		TerminalBlockNumber:     0,
+	}
+	if _, err := api.ExchangeTransitionConfigurationV1(config); err == nil {
+		t.Fatal("expected error on invalid config, invalid ttd")
+	}
+	// invalid terminal block hash
+	config = beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
+		TerminalBlockHash:       common.Hash{1},
+		TerminalBlockNumber:     0,
+	}
+	if _, err := api.ExchangeTransitionConfigurationV1(config); err == nil {
+		t.Fatal("expected error on invalid config, invalid hash")
+	}
+	// valid config
+	config = beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
+		TerminalBlockHash:       common.Hash{},
+		TerminalBlockNumber:     0,
+	}
+	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
+		t.Fatalf("expected no error on valid config, got %v", err)
+	}
+	// valid config
+	config = beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
+		TerminalBlockHash:       preMergeBlocks[5].Hash(),
+		TerminalBlockNumber:     6,
+	}
+	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
+		t.Fatalf("expected no error on valid config, got %v", err)
+	}
 }
