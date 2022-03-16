@@ -73,6 +73,7 @@ func (m *Merger) ReachTTD() {
 	}
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Left PoW stage")
+	log.Info("WE JUST MERGED LFGGGGGGGGGGGGG")
 }
 
 // FinalizePoS is called whenever the first FinalisedBlock message received
