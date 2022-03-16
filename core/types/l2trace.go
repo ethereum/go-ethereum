@@ -47,7 +47,7 @@ type ExtraData struct {
 	// CREATE: sender nonce
 	Nonce *uint64 `json:"nonce,omitempty"`
 	// CALL | CALLCODE | DELEGATECALL | STATICCALL: [tx.to address’s code_hash, stack.nth_last(1) address’s code_hash]
-	CodeHashList []common.Hash `json:"codeHashList,omitempty"`
+	CodeList [][]byte `json:"codeList,omitempty"`
 	// SSTORE | SLOAD: [storageProof]
 	// SELFDESTRUCT: [contract address’s accountProof, stack.nth_last(0) address’s accountProof]
 	// SELFBALANCE: [contract address’s accountProof]
@@ -60,20 +60,20 @@ type ExtraData struct {
 // NewExtraData create, init and return ExtraData
 func NewExtraData() *ExtraData {
 	return &ExtraData{
-		CodeHashList: make([]common.Hash, 0),
-		ProofList:    make([][]string, 0),
+		CodeList:  make([][]byte, 0),
+		ProofList: make([][]string, 0),
 	}
 }
 
 // SealExtraData doesn't show empty fields.
 func (e *ExtraData) SealExtraData() *ExtraData {
-	if len(e.CodeHashList) == 0 {
-		e.CodeHashList = nil
+	if len(e.CodeList) == 0 {
+		e.CodeList = nil
 	}
 	if len(e.ProofList) == 0 {
 		e.ProofList = nil
 	}
-	if e.From == nil && e.Nonce == nil && e.CodeHashList == nil && e.ProofList == nil {
+	if e.From == nil && e.Nonce == nil && e.CodeList == nil && e.ProofList == nil {
 		return nil
 	}
 	return e

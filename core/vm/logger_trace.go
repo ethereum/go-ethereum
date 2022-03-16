@@ -13,10 +13,10 @@ type traceFunc func(l *StructLogger, scope *ScopeContext, extraData *types.Extra
 var (
 	// OpcodeExecs the map to load opcodes' trace funcs.
 	OpcodeExecs = map[OpCode][]traceFunc{
-		CALL:         {traceToAddressCodeHash, traceLastNAddressCodeHash(1), traceCallerProof, traceLastNAddressProof(1)},
-		CALLCODE:     {traceToAddressCodeHash, traceLastNAddressCodeHash(1), traceCallerProof, traceLastNAddressProof(1)},
-		DELEGATECALL: {traceToAddressCodeHash, traceLastNAddressCodeHash(1)},
-		STATICCALL:   {traceToAddressCodeHash, traceLastNAddressCodeHash(1)},
+		CALL:         {traceToAddressCode, traceLastNAddressCode(1), traceCallerProof, traceLastNAddressProof(1)},
+		CALLCODE:     {traceToAddressCode, traceLastNAddressCode(1), traceCallerProof, traceLastNAddressProof(1)},
+		DELEGATECALL: {traceToAddressCode, traceLastNAddressCode(1)},
+		STATICCALL:   {traceToAddressCode, traceLastNAddressCode(1)},
 		CREATE:       {traceSenderAddress, traceCreatedContractProof, traceNonce},
 		CREATE2:      {traceSenderAddress, traceCreatedContractProof},
 		SSTORE:       {traceStorageProof},
@@ -28,26 +28,26 @@ var (
 	}
 )
 
-// traceToAddressCodeHash gets tx.to address’s code_hash
-func traceToAddressCodeHash(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
+// traceToAddressCode gets tx.to address’s code
+func traceToAddressCode(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
 	if l.env.To == nil {
 		return nil
 	}
-	codeHash := l.env.StateDB.GetCodeHash(*l.env.To)
-	extraData.CodeHashList = append(extraData.CodeHashList, codeHash)
+	code := l.env.StateDB.GetCode(*l.env.To)
+	extraData.CodeList = append(extraData.CodeList, code)
 	return nil
 }
 
-// traceLastNAddressCodeHash
-func traceLastNAddressCodeHash(n int) traceFunc {
+// traceLastNAddressCode
+func traceLastNAddressCode(n int) traceFunc {
 	return func(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
 		stack := scope.Stack
 		if stack.len() <= n {
 			return nil
 		}
 		address := common.Address(stack.data[stack.len()-1-n].Bytes20())
-		codeHash := l.env.StateDB.GetCodeHash(address)
-		extraData.CodeHashList = append(extraData.CodeHashList, codeHash)
+		code := l.env.StateDB.GetCode(address)
+		extraData.CodeList = append(extraData.CodeList, code)
 		return nil
 	}
 }
