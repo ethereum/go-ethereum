@@ -259,6 +259,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
+		log.Warn("Invalid params", "params", params, "error", err)
 		return beacon.PayloadStatusV1{Status: beacon.INVALIDBLOCKHASH}, nil
 	}
 	// If we already have the block locally, ignore the entire execution and just
