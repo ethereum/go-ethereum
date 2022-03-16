@@ -69,7 +69,8 @@ func newCallTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(to common.Address, gas uint64) {
+func (t *callTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
 		From:  addrToHex(t.from),
@@ -147,8 +148,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	t.env = env
+func (t *callTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 	t.from = from
 	t.create = create
 	t.input = input

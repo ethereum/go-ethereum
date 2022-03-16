@@ -41,7 +41,7 @@ func newNoopTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *noopTracer) CaptureStart(to common.Address, gas uint64) {
+func (t *noopTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -65,7 +65,7 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (*noopTracer) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+func (*noopTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 }
 
 func (*noopTracer) CaptureTxEnd(remainingGas uint64, err error) {}

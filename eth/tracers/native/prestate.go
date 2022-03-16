@@ -62,7 +62,8 @@ func newPrestateTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(to common.Address, gas uint64) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+	t.env = env
 	t.to = to
 
 	// The recipient balance includes the value transferred.
@@ -122,8 +123,7 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (t *prestateTracer) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	t.env = env
+func (t *prestateTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 	t.from = from
 	t.create = create
 	t.input = input

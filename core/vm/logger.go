@@ -31,10 +31,10 @@ import (
 // if you need to retain them beyond the current call.
 type EVMLogger interface {
 	// Transaction-scoped
-	CaptureTxStart(env *EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules)
+	CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules)
 	CaptureTxEnd(remainingGas uint64, err error)
 	// Main call frame
-	CaptureStart(to common.Address, gas uint64)
+	CaptureStart(env *EVM, to common.Address, gas uint64)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 	// Nested call frames
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)

@@ -80,7 +80,8 @@ func (t *fourByteTracer) store(id []byte, size int) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(to common.Address, gas uint64) {
+func (t *fourByteTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+	t.env = env
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -122,8 +123,7 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
 
-func (t *fourByteTracer) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	t.env = env
+func (t *fourByteTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 	// Update list of precompiles based on current block
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 

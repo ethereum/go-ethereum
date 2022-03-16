@@ -134,7 +134,8 @@ func (l *StructLogger) Reset() {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (l *StructLogger) CaptureStart(to common.Address, gas uint64) {
+func (l *StructLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+	l.env = env
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -222,10 +223,8 @@ func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (l *StructLogger) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	l.env = env
+func (*StructLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 }
-
 func (*StructLogger) CaptureTxEnd(remainingGas uint64, err error) {}
 
 // StructLogs returns the captured log entries.
@@ -305,7 +304,8 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) CaptureStart(to common.Address, gas uint64) {
+func (t *mdLogger) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+	t.env = env
 	if !t.create {
 		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
 			t.from.String(), to.String(),
@@ -357,8 +357,7 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (t *mdLogger) CaptureTxStart(env *vm.EVM, from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	t.env = env
+func (t *mdLogger) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
 	t.from = from
 	t.create = create
 	t.input = input
