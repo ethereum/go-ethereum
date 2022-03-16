@@ -175,7 +175,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) e
 // sync and on the correct chain, checking the top N links should already get us
 // a match. In the rare scenario when we ended up on a long reorganisation (i.e.
 // none of the head links match), we do a binary search to find the ancestor.
-func (d *Downloader) findBeaconAncestor() uint64 {
+func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	// Figure out the current local head position
 	var chainHead *types.Header
 
@@ -189,17 +189,36 @@ func (d *Downloader) findBeaconAncestor() uint64 {
 	}
 	number := chainHead.Number.Uint64()
 
-	// If the head is present in the skeleton chain, return that
-	if chainHead.Hash() == d.skeleton.Header(number).Hash() {
-		return number
-	}
-	// Head header not present, binary search to find the ancestor
-	start, end := uint64(0), number
-
-	beaconHead, err := d.skeleton.Head()
+	// Retrieve the skeleton bounds and ensure they are linked to the local chain
+	beaconHead, beaconTail, err := d.skeleton.Bounds()
 	if err != nil {
-		panic(fmt.Sprintf("failed to read skeleton head: %v", err)) // can't reach this method without a head
+		// This is a programming error. The chain backfiller was called with an
+		// invalid beacon sync state. Ideally we would panic here, but erroring
+		// gives us at least a remote chance to recover. It's still a big fault!
+		log.Error("Failed to retrieve beacon bounds", "err", err)
+		return 0, err
 	}
+	var linked bool
+	switch d.getMode() {
+	case FullSync:
+		linked = d.blockchain.HasBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+	case SnapSync:
+		linked = d.blockchain.HasFastBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+	default:
+		linked = d.blockchain.HasHeader(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+	}
+	if !linked {
+		// This is a programming error. The chain backfiller was called with a
+		// tail that's not linked to the local chain. Whilst this should never
+		// happen, there might be some weirdnesses if beacon sync backfilling
+		// races with the user (or beacon client) calling setHead. Whilst panic
+		// would be the ideal thing to do, it is safer long term to attempt a
+		// recovery and fix any noticed issue after the fact.
+		log.Error("Beacon sync linkup unavailable", "number", beaconTail.Number.Uint64()-1, "hash", beaconTail.ParentHash)
+		return 0, fmt.Errorf("beacon linkup unavailable locally: %d [%x]", beaconTail.Number.Uint64()-1, beaconTail.ParentHash)
+	}
+	// Binary search to find the ancestor
+	start, end := beaconTail.Number.Uint64()-1, number
 	if number := beaconHead.Number.Uint64(); end > number {
 		// This shouldn't really happen in a healty network, but if the consensus
 		// clients feeds us a shorter chain as the canonical, we should not attempt
@@ -229,13 +248,13 @@ func (d *Downloader) findBeaconAncestor() uint64 {
 		}
 		start = check
 	}
-	return start
+	return start, nil
 }
 
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
-	head, err := d.skeleton.Head()
+	head, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -281,7 +300,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		case <-d.cancelCh:
 			return errCanceled
 		}
-		head, err = d.skeleton.Head()
+		head, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
