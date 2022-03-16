@@ -742,13 +742,13 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			head: chain[2*requestHeaders],
 			peers: []*skeletonTestPeer{
 				newSkeletonTestPeerWithHook("peer-1", chain, func(origin uint64) []*types.Header {
-					if origin == chain[2*requestHeaders+2].Number.Uint64() {
+					if origin == chain[2*requestHeaders+1].Number.Uint64() {
 						time.Sleep(100 * time.Millisecond)
 					}
 					return nil // Fallback to default behavior, just delayed
 				}),
 				newSkeletonTestPeerWithHook("peer-2", chain, func(origin uint64) []*types.Header {
-					if origin == chain[2*requestHeaders+2].Number.Uint64() {
+					if origin == chain[2*requestHeaders+1].Number.Uint64() {
 						time.Sleep(100 * time.Millisecond)
 					}
 					return nil // Fallback to default behavior, just delayed
