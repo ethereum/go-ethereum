@@ -46,7 +46,7 @@ type ExtraData struct {
 	From *common.Address `json:"from,omitempty"`
 	// CREATE: sender nonce
 	Nonce *uint64 `json:"nonce,omitempty"`
-	// CALL | CALLCODE | DELEGATECALL | STATICCALL: [tx.to address’s code_hash, stack.nth_last(1) address’s code_hash]
+	// CALL | CALLCODE | DELEGATECALL | STATICCALL: [tx.to address’s code, stack.nth_last(1) address’s code]
 	CodeList [][]byte `json:"codeList,omitempty"`
 	// SSTORE | SLOAD: [storageProof]
 	// SELFDESTRUCT: [contract address’s accountProof, stack.nth_last(0) address’s accountProof]
