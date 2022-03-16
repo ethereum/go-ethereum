@@ -252,11 +252,20 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
-	// Sanity check, to not `panic` in state_transition
-	if prestate.Env.Random != nil && !chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
-		return NewError(ErrorConfig, errors.New("can only apply RANDOM on top of London chainrules"))
-	}
-	if env := prestate.Env; env.Difficulty == nil {
+
+	if env := prestate.Env; chainConfig.IsMerged(big.NewInt(int64(env.Number))) {
+		// post-merge:
+		// - random must be supplied
+		// - difficulty must be zero
+		switch {
+		case env.Random == nil:
+			return NewError(ErrorConfig, errors.New("post-merge requires currentRandom to be defined in env"))
+		case env.Difficulty != nil && env.Difficulty.BitLen() != 0:
+			return NewError(ErrorConfig, errors.New("post-merge difficulty must be zero (or omitted) in env"))
+		}
+		prestate.Env.Difficulty = nil
+	} else if env.Difficulty == nil {
+		// pre-merge:
 		// If difficulty was not provided by caller, we need to calculate it.
 		switch {
 		case env.ParentDifficulty == nil:
