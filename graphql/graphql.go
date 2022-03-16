@@ -1249,7 +1249,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := filters.NewRangeFilter(filters.Backend(r.backend), begin, end, addresses, topics)
+	filter := filters.NewRangeFilter(filters.Backend(r.backend), begin, end, addresses, topics, false)
 	return runFilter(ctx, r.backend, filter)
 }
 
