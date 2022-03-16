@@ -486,7 +486,6 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	var (
 		api = NewConsensusAPI(ethservice)
 	)
-	ethservice.BlockChain().SetTerminalBlock(preMergeBlocks[len(preMergeBlocks)-1].Header())
 	// invalid ttd
 	config := beacon.TransitionConfigurationV1{
 		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
@@ -495,15 +494,6 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	}
 	if _, err := api.ExchangeTransitionConfigurationV1(config); err == nil {
 		t.Fatal("expected error on invalid config, invalid ttd")
-	}
-	// invalid terminal block bumber
-	config = beacon.TransitionConfigurationV1{
-		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
-		TerminalBlockHash:       common.Hash{},
-		TerminalBlockNumber:     1,
-	}
-	if _, err := api.ExchangeTransitionConfigurationV1(config); err == nil {
-		t.Fatal("expected error on invalid config, invalid blocknumber")
 	}
 	// invalid terminal block hash
 	config = beacon.TransitionConfigurationV1{
@@ -519,15 +509,6 @@ func TestExchangeTransitionConfig(t *testing.T) {
 		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
 		TerminalBlockHash:       common.Hash{},
 		TerminalBlockNumber:     0,
-	}
-	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
-		t.Fatalf("expected no error on valid config, got %v", err)
-	}
-	// valid config
-	config = beacon.TransitionConfigurationV1{
-		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
-		TerminalBlockHash:       preMergeBlocks[len(preMergeBlocks)-1].Hash(),
-		TerminalBlockNumber:     hexutil.Uint64(preMergeBlocks[len(preMergeBlocks)-1].NumberU64()),
 	}
 	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
 		t.Fatalf("expected no error on valid config, got %v", err)

@@ -215,20 +215,6 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 		log.Warn("Invalid TTD configured", "geth", config.TerminalTotalDifficulty, "consensus client", ttd)
 		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", config.TerminalTotalDifficulty, ttd)
 	}
-	terminalHeader := api.eth.BlockChain().CurrentTerminalHeader()
-	if terminalHeader != nil {
-		if config.TerminalBlockNumber != 0 && uint64(config.TerminalBlockNumber) != terminalHeader.Number.Uint64() {
-			return nil, fmt.Errorf("invalid terminal block number, got %v want %v", config.TerminalBlockNumber, terminalHeader.Number)
-		}
-
-		if config.TerminalBlockHash != (common.Hash{}) && config.TerminalBlockHash != terminalHeader.Hash() {
-			return nil, fmt.Errorf("invalid terminal block hash, got %v want %v", config.TerminalBlockHash, terminalHeader.Hash())
-		}
-		// TODO (MariusVanDerWijden): Here we used to return the correct terminal hash + number
-		// but according to the spec we should return the hash + number set by the user.
-		// Since we have no way of setting hash + number yet, just return TTD.
-		return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
-	}
 
 	if config.TerminalBlockHash != (common.Hash{}) {
 		return nil, fmt.Errorf("invalid terminal block hash, no terminal header set")
