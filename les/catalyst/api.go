@@ -93,7 +93,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 	if payloadAttributes != nil {
 		return beacon.STATUS_INVALID, errors.New("not supported")
 	}
-	return api.validFCU(), nil
+	return api.validForkChoiceResponse(), nil
 }
 
 // GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
@@ -136,7 +136,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
 }
 
-func (api *ConsensusAPI) validFCU() beacon.ForkChoiceResponse {
+func (api *ConsensusAPI) validForkChoiceResponse() beacon.ForkChoiceResponse {
 	currentHash := api.les.BlockChain().CurrentHeader().Hash()
 	return beacon.ForkChoiceResponse{
 		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},

@@ -513,4 +513,13 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
 		t.Fatalf("expected no error on valid config, got %v", err)
 	}
+	// valid config
+	config = beacon.TransitionConfigurationV1{
+		TerminalTotalDifficulty: (*hexutil.Big)(genesis.Config.TerminalTotalDifficulty),
+		TerminalBlockHash:       preMergeBlocks[5].Hash(),
+		TerminalBlockNumber:     6,
+	}
+	if _, err := api.ExchangeTransitionConfigurationV1(config); err != nil {
+		t.Fatalf("expected no error on valid config, got %v", err)
+	}
 }

@@ -136,12 +136,16 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALIDTERMINALBLOCK}, PayloadID: nil}, nil
 		}
 	}
-	// If the head block is already in our canonical chain, the beacon client is
-	// probably resyncing. Ignore the update.
-	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == update.HeadBlockHash {
-		log.Warn("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
-	} else if err := api.eth.BlockChain().SetChainHead(block); err != nil {
-		return beacon.STATUS_INVALID, err
+
+	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
+		// Block is not canonical, set head.
+		if err := api.eth.BlockChain().SetChainHead(block); err != nil {
+			return beacon.STATUS_INVALID, err
+		}
+	} else {
+		// If the head block is already in our canonical chain, the beacon client is
+		// probably resyncing. Ignore the update.
+		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
 	}
 	api.eth.SetSynced()
 
@@ -212,12 +216,19 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
-		log.Warn("Invalid TTD configured", "geth", config.TerminalTotalDifficulty, "consensus client", ttd)
-		return nil, fmt.Errorf("invalid ttd: EL %v CL %v", config.TerminalTotalDifficulty, ttd)
+		log.Warn("Invalid TTD configured", "geth", config.TerminalTotalDifficulty, "beacon", ttd)
+		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", config.TerminalTotalDifficulty, ttd)
 	}
 
 	if config.TerminalBlockHash != (common.Hash{}) {
-		return nil, fmt.Errorf("invalid terminal block hash, no terminal header set")
+		if hash := api.eth.BlockChain().GetCanonicalHash(uint64(config.TerminalBlockNumber)); hash == config.TerminalBlockHash {
+			return &beacon.TransitionConfigurationV1{
+				TerminalTotalDifficulty: (*hexutil.Big)(ttd),
+				TerminalBlockHash:       config.TerminalBlockHash,
+				TerminalBlockNumber:     config.TerminalBlockNumber,
+			}, nil
+		}
+		return nil, fmt.Errorf("invalid terminal block hash")
 	}
 	return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
@@ -237,7 +248,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
-		log.Warn("Invalid params", "params", params, "error", err)
+		log.Debug("Invalid NewPayload params", "params", params, "error", err)
 		return beacon.PayloadStatusV1{Status: beacon.INVALIDBLOCKHASH}, nil
 	}
 	// If we already have the block locally, ignore the entire execution and just
