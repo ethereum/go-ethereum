@@ -66,10 +66,10 @@ type StructLog struct {
 	Op            vm.OpCode                   `json:"op"`
 	Gas           uint64                      `json:"gas"`
 	GasCost       uint64                      `json:"gasCost"`
-	Memory        []byte                      `json:"memory"`
+	Memory        []byte                      `json:"memory,omitempty"`
 	MemorySize    int                         `json:"memSize"`
 	Stack         []uint256.Int               `json:"stack"`
-	ReturnData    []byte                      `json:"returnData"`
+	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
@@ -80,10 +80,10 @@ type StructLog struct {
 type structLogMarshaling struct {
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
-	Memory      hexutil.Bytes `json:",omitempty"`
-	ReturnData  hexutil.Bytes `json:",omitempty"`
-	OpName      string        `json:"opName"`          // adds call to OpName() in MarshalJSON
-	ErrorString string        `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
+	Memory      hexutil.Bytes
+	ReturnData  hexutil.Bytes
+	OpName      string `json:"opName"`          // adds call to OpName() in MarshalJSON
+	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
 }
 
 // OpName formats the operand name in a human-readable format.

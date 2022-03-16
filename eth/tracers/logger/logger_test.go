@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"testing"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -79,11 +80,17 @@ func TestStoreCapture(t *testing.T) {
 func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	tests := []struct {
 		name string
-		log  *structLogMarshaling
+		log  *StructLog
 		want string
 	}{
-		{"empty err and no fields", &structLogMarshaling{ErrorString: ""}, `{"Gas":"0x0","GasCost":"0x0","opName":""}`},
-		{"with err", &structLogMarshaling{ErrorString: "this failed"}, `{"Gas":"0x0","GasCost":"0x0","opName":"","error":"this failed"}`},
+		{"empty err and no fields", &StructLog{},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+		{"with err", &StructLog{Err: fmt.Errorf("this failed")},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`},
+		{"with mem", &StructLog{Memory: make([]byte, 2), MemorySize: 2},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+		{"with 0-size mem", &StructLog{Memory: make([]byte, 0)},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
 	}
 
 	for _, tt := range tests {
@@ -93,7 +100,7 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 				t.Fatal(err)
 			}
 			if have, want := string(blob), tt.want; have != want {
-				t.Fatalf("mismatched results\n\thave: %q\n\twant: %q", have, want)
+				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
 			}
 		})
 	}
