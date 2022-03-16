@@ -130,6 +130,13 @@ func commands() map[string]cli.CommandFactory {
 				UI: ui,
 			}, nil
 		},
+		"attach": func() (cli.Command, error) {
+			return &AttachCommand{
+				UI:    ui,
+				Meta:  meta,
+				Meta2: meta2,
+			}, nil
+		},
 	}
 }
 
