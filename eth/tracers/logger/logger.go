@@ -78,12 +78,12 @@ type StructLog struct {
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Gas         math.HexOrDecimal64 `json:",omitempty"`
-	GasCost     math.HexOrDecimal64 `json:",omitempty"`
-	Memory      hexutil.Bytes       `json:",omitempty"`
-	ReturnData  hexutil.Bytes       `json:",omitempty"`
-	OpName      string              `json:"opName,omitempty"` // adds call to OpName() in MarshalJSON
-	ErrorString string              `json:"error,omitempty"`  // adds call to ErrorString() in MarshalJSON
+	Gas         math.HexOrDecimal64
+	GasCost     math.HexOrDecimal64
+	Memory      hexutil.Bytes `json:",omitempty"`
+	ReturnData  hexutil.Bytes `json:",omitempty"`
+	OpName      string        `json:"opName"`          // adds call to OpName() in MarshalJSON
+	ErrorString string        `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
 }
 
 // OpName formats the operand name in a human-readable format.

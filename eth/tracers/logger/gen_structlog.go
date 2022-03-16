@@ -29,7 +29,7 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
-		OpName        string                      `json:"opName,omitempty"`
+		OpName        string                      `json:"opName"`
 		ErrorString   string                      `json:"error,omitempty"`
 	}
 	var enc StructLog

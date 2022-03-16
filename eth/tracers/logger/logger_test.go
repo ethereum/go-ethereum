@@ -82,9 +82,8 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 		log  *structLogMarshaling
 		want string
 	}{
-		{"empty err and no fields", &structLogMarshaling{ErrorString: ""}, `{}`},
-		{"with Gas cost only", &structLogMarshaling{GasCost: 10}, `{"GasCost":"0xa"}`},
-		{"with err", &structLogMarshaling{ErrorString: "this failed"}, `{"error":"this failed"}`},
+		{"empty err and no fields", &structLogMarshaling{ErrorString: ""}, `{"Gas":"0x0","GasCost":"0x0","opName":""}`},
+		{"with err", &structLogMarshaling{ErrorString: "this failed"}, `{"Gas":"0x0","GasCost":"0x0","opName":"","error":"this failed"}`},
 	}
 
 	for _, tt := range tests {
@@ -93,8 +92,8 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if g, w := string(blob), tt.want; g != w {
-				t.Fatalf("Mismatched results\n\tGot:  %q\n\tWant: %q", g, w)
+			if have, want := string(blob), tt.want; have != want {
+				t.Fatalf("mismatched results\n\thave: %q\n\twant: %q", have, want)
 			}
 		})
 	}
