@@ -26,8 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	beaconEngine "github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -114,12 +112,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		if merger := api.eth.Merger(); !merger.TDDReached() {
 			merger.ReachTTD()
 			api.eth.Downloader().Cancel()
-			// Shutdown gpu miner
-			if eng, ok := api.eth.Engine().(*beaconEngine.Beacon); ok {
-				if inner, ok := eng.InnerEngine().(*ethash.Ethash); ok {
-					inner.StopRemoteSealer()
-				}
-			}
 		}
 		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
@@ -320,12 +312,6 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	if merger := api.eth.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 		api.eth.Downloader().Cancel()
-		// Shutdown gpu miner
-		if eng, ok := api.eth.Engine().(*beaconEngine.Beacon); ok {
-			if inner, ok := eng.InnerEngine().(*ethash.Ethash); ok {
-				inner.StopRemoteSealer()
-			}
-		}
 	}
 	hash := block.Hash()
 	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
