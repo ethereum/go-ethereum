@@ -288,21 +288,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
+	var err error
+	if st.evm.Config.Debug {
+		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
+		defer func() {
+			st.evm.Config.Tracer.CaptureTxEnd(st.gas, err)
+		}()
+	}
+
 	var (
-		err              error
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From())
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil)
 		contractCreation = msg.To() == nil
 		gas              uint64
 	)
-
-	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart(sender.Address(), contractCreation, st.data, st.initialGas, st.value, rules)
-		defer func() {
-			st.evm.Config.Tracer.CaptureTxEnd(st.gas, err)
-		}()
-	}
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err = IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, rules.IsHomestead, rules.IsIstanbul)

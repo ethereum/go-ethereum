@@ -35,7 +35,6 @@ import (
 	tracers2 "github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 
@@ -680,32 +679,32 @@ func wrapError(context string, err error) error {
 	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
 
-func (jst *jsTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
+func (jst *jsTracer) CaptureTxStart(gasLimit uint64) {
 	jst.gasLimit = gasLimit
-	jst.ctx["type"] = "CALL"
-	if create {
-		jst.ctx["type"] = "CREATE"
-	}
-	jst.ctx["from"] = from
-	jst.ctx["input"] = input
-	jst.ctx["value"] = value
-
-	// Update list of precompiles based on current block
-	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 func (*jsTracer) CaptureTxEnd(remainingGas uint64, _ error) {}
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (jst *jsTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+func (jst *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	jst.env = env
+	jst.ctx["type"] = "CALL"
+	if create {
+		jst.ctx["type"] = "CREATE"
+	}
+	jst.ctx["from"] = from
 	jst.ctx["to"] = to
+	jst.ctx["input"] = input
 	jst.ctx["gas"] = gas
 	jst.ctx["gasPrice"] = env.TxContext.GasPrice
+	jst.ctx["value"] = value
 
 	// Initialize the context
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 	jst.dbWrapper.db = env.StateDB
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
+	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Intrinsic costs are the only things reduced from initial gas to this point
 	jst.ctx["intrinsicGas"] = jst.gasLimit - gas

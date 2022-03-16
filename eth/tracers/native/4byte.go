@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -80,8 +79,17 @@ func (t *fourByteTracer) store(id []byte, size int) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
+	t.activePrecompiles = vm.ActivePrecompiles(rules)
+
+	// Save the outer calldata also
+	if len(input) >= 4 {
+		t.store(input[0:4], len(input)-4)
+	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -123,17 +131,8 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
 
-func (t *fourByteTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	// Update list of precompiles based on current block
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
-
-	// Save the outer calldata also
-	if len(input) >= 4 {
-		t.store(input[0:4], len(input)-4)
-	}
-}
-
-func (*fourByteTracer) CaptureTxEnd(remainingGas uint64, err error) {}
+func (*fourByteTracer) CaptureTxStart(_ uint64)        {}
+func (*fourByteTracer) CaptureTxEnd(_ uint64, _ error) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

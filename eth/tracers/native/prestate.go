@@ -24,10 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -45,11 +45,7 @@ type account struct {
 type prestateTracer struct {
 	env       *vm.EVM
 	prestate  prestate
-	from      common.Address
 	create    bool
-	input     []byte
-	gasLimit  uint64
-	value     *big.Int
 	to        common.Address
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -62,22 +58,30 @@ func newPrestateTracer() tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+	t.create = create
 	t.to = to
 
-	t.lookupAccount(t.from)
+	// Compute intrinsic gas
+	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
+	if err != nil {
+		return
+	}
+
+	t.lookupAccount(from)
 	t.lookupAccount(to)
 
 	// The recipient balance includes the value transferred.
 	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
-	toBal = new(big.Int).Sub(toBal, t.value)
+	toBal = new(big.Int).Sub(toBal, value)
 	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
 
 	// The sender balance is after reducing: value, gasLimit, intrinsicGas.
 	// We need to re-add them to get the pre-tx balance.
-	intrinsicGas := t.gasLimit - gas
-	fromBal := hexutil.MustDecodeBig(t.prestate[t.from].Balance)
+	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
 	gasPrice := env.TxContext.GasPrice
 	consumedGas := new(big.Int).Mul(
 		gasPrice,
@@ -86,9 +90,9 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, to common.Address, gas uint64
 			new(big.Int).SetUint64(gas),
 		),
 	)
-	fromBal.Add(fromBal, new(big.Int).Add(t.value, consumedGas))
-	t.prestate[t.from].Balance = hexutil.EncodeBig(fromBal)
-	t.prestate[t.from].Nonce--
+	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+	t.prestate[from].Balance = hexutil.EncodeBig(fromBal)
+	t.prestate[from].Nonce--
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -141,15 +145,8 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (t *prestateTracer) CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules) {
-	t.from = from
-	t.create = create
-	t.input = input
-	t.gasLimit = gasLimit
-	t.value = value
-}
-
-func (*prestateTracer) CaptureTxEnd(remainingGas uint64, err error) {}
+func (*prestateTracer) CaptureTxStart(_ uint64)        {}
+func (*prestateTracer) CaptureTxEnd(_ uint64, _ error) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // EVMLogger is used to collect execution traces from an EVM transaction
@@ -30,16 +29,12 @@ import (
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type EVMLogger interface {
-	// Transaction-scoped
-	CaptureTxStart(from common.Address, create bool, input []byte, gasLimit uint64, value *big.Int, rules params.Rules)
-	CaptureTxEnd(remainingGas uint64, err error)
-	// Main call frame
-	CaptureStart(env *EVM, to common.Address, gas uint64)
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
-	// Nested call frames
+	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
+	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	CaptureExit(output []byte, gasUsed uint64, err error)
-	// Opcode-scoped
-	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
+	CaptureTxStart(gasLimit uint64)
+	CaptureTxEnd(remainingGas uint64, err error)
 }
