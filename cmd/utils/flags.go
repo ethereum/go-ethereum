@@ -131,6 +131,10 @@ var (
 		Name:  "usb",
 		Usage: "Enable monitoring and management of USB hardware wallets",
 	}
+	RangeLimitFlag = cli.BoolFlag{
+		Name:  "rangelimit",
+		Usage: "Enable 5000 blocks limit for range query",
+	}
 	SmartCardDaemonPathFlag = cli.StringFlag{
 		Name:  "pcscdpath",
 		Usage: "Path to the smartcard daemon (pcscd) socket file",
@@ -1284,6 +1288,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(USBFlag.Name) {
 		cfg.USB = ctx.GlobalBool(USBFlag.Name)
 	}
+	if ctx.GlobalIsSet(RangeLimitFlag.Name) {
+		cfg.RangeLimit = ctx.GlobalBool(RangeLimitFlag.Name)
+	}
 	if ctx.GlobalIsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.GlobalBool(InsecureUnlockAllowedFlag.Name)
 	}
@@ -1586,6 +1593,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(GCModeFlag.Name) {
 		cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
+	}
+	if ctx.GlobalIsSet(RangeLimitFlag.Name) {
+		cfg.RangeLimit = ctx.GlobalBool(RangeLimitFlag.Name)
 	}
 	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)

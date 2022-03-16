@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+const maxFilterBlockRange = 5000
 
 type Backend interface {
 	ChainDb() ethdb.Database
@@ -59,11 +62,13 @@ type Filter struct {
 	begin, end int64       // Range interval if filtering multiple blocks
 
 	matcher *bloombits.Matcher
+
+	rangeLimit bool
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit bool) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -90,6 +95,7 @@ func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Addres
 	filter.matcher = bloombits.NewMatcher(size, filters)
 	filter.begin = begin
 	filter.end = end
+	filter.rangeLimit = rangeLimit
 
 	return filter
 }
@@ -142,6 +148,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if f.end == -1 {
 		end = head
 	}
+
+	if f.rangeLimit && (f.end-f.begin) > maxFilterBlockRange {
+		return nil, errors.New(fmt.Sprintf("exceed maximum block range: %d", maxFilterBlockRange))
+	}
+
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
 		logs []*types.Log
