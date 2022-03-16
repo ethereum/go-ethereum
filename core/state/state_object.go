@@ -275,19 +275,23 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.setError(err)
 		}
 		value.SetBytes(content)
+	}
 
-		// Capture the initial value of the location in the verkle proof witness
-		if s.db.GetTrie().IsVerkle() {
-			if err != nil {
-				s.setError(err)
-				return common.Hash{}
-			}
-			addr := s.Address()
-			loc := new(uint256.Int).SetBytes(key[:])
-			index := trieUtils.GetTreeKeyStorageSlot(addr[:], loc)
-			s.db.Witness().SetLeafValue(index, content)
+	// Capture the initial value of the location in the verkle proof witness
+	if s.db.GetTrie().IsVerkle() {
+		if err != nil {
+			return common.Hash{}
+		}
+		addr := s.Address()
+		loc := new(uint256.Int).SetBytes(key[:])
+		index := trieUtils.GetTreeKeyStorageSlot(addr[:], loc)
+		if len(enc) > 0 {
+			s.db.Witness().SetLeafValue(index, value.Bytes())
+		} else {
+			s.db.Witness().SetLeafValue(index, nil)
 		}
 	}
+
 	s.originStorage[key] = value
 	return value
 }

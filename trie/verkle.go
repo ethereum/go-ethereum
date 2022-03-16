@@ -308,29 +308,66 @@ func deserializeVerkleProof(serialized []byte) (*verkle.Proof, []*verkle.Point, 
 // Copy the values here so as to avoid an import cycle
 const (
 	PUSH1  = 0x60
-	PUSH32 = 0x71
+	PUSH32 = 0x7f
 )
 
-func ChunkifyCode(addr common.Address, code []byte) ([][32]byte, error) {
-	lastOffset := byte(0)
-	chunkCount := len(code) / 31
+func ChunkifyCode(code []byte) ([][32]byte, error) {
+	var (
+		chunkOffset = 0 // offset in the chunk
+		chunkCount  = len(code) / 31
+		codeOffset  = 0 // offset in the code
+	)
 	if len(code)%31 != 0 {
 		chunkCount++
 	}
 	chunks := make([][32]byte, chunkCount)
 	for i := range chunks {
+
+		// number of bytes to copy, 31 unless
+		// the end of the code has been reached.
 		end := 31 * (i + 1)
 		if len(code) < end {
 			end = len(code)
 		}
+
+		// Copy the code itself
 		copy(chunks[i][1:], code[31*i:end])
-		for j := lastOffset; int(j) < len(code[31*i:end]); j++ {
-			if code[j] >= byte(PUSH1) && code[j] <= byte(PUSH32) {
-				j += code[j] - byte(PUSH1) + 1
-				lastOffset = (j + 1) % 31
+
+		// chunk offset = taken from the
+		// last chunk.
+		if chunkOffset > 31 {
+			// skip offset calculation if push
+			// data covers the whole chunk
+			chunks[i][0] = 31
+			chunkOffset = 1
+			continue
+		}
+		chunks[i][0] = byte(chunkOffset)
+		chunkOffset = 0
+
+		// Check each instruction and update the offset
+		// it should be 0 unless a PUSHn overflows.
+		for ; codeOffset < end; codeOffset++ {
+			if code[codeOffset] >= PUSH1 && code[codeOffset] <= PUSH32 {
+				codeOffset += int(code[codeOffset]) - PUSH1 + 1
+				if codeOffset+1 >= 31*(i+1) {
+					codeOffset++
+					chunkOffset = codeOffset - 31*(i+1)
+					break
+				}
 			}
 		}
-		chunks[i][0] = lastOffset
+	}
+
+	// if PUSHDATA went past the code end, add 0-filled chunks with
+	// the correct offset.
+	if chunkOffset > 0 {
+
+		if chunkOffset > 31 {
+			chunks = append(chunks, [32]byte{31}, [32]byte{1})
+		} else {
+			chunks = append(chunks, [32]byte{byte(chunkOffset)})
+		}
 	}
 
 	return chunks, nil
