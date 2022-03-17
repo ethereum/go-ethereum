@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/ztyp/codec"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -90,14 +91,19 @@ func WithTxWrapData(wrapData TxWrapData) TxOption {
 	}
 }
 
+// JoinBlobBatchVerify adds the kzgs and blobs to a batch for verification.
+// The commitments and blobs must have equal length and should be valid points and field elements.
+//
+// An early error may be returned if the input is verified immediately.
+type JoinBlobBatchVerify func(kzgs []*bls.G1Point, blobs [][]bls.Fr) error
+
 type TxWrapData interface {
 	copy() TxWrapData
 	kzgs() BlobKzgs
 	blobs() Blobs
 	encodeTyped(w io.Writer, txdata TxData) error
 	sizeWrapData() common.StorageSize
-	// check if the wrap data is valid for the given tx data
-	checkWrapping(inner TxData) error
+	verifyBlobsBatched(inner TxData, joinBatch JoinBlobBatchVerify) error
 }
 
 // TxData is the underlying data of a transaction.
@@ -505,9 +511,12 @@ func (tx *Transaction) IsIncomplete() bool {
 	return tx.Type() == BlobTxType && tx.wrapData == nil
 }
 
-func (tx *Transaction) CheckWrapData() error {
+// VerifyBlobsBatched runs basic pre-verification and then joins the batch if pre-verification is valid.
+// The batch should be verified for the blobs to really be valid.
+// A transaction without blobs does not join the batch verification.
+func (tx *Transaction) VerifyBlobsBatched(joinBatch JoinBlobBatchVerify) error {
 	if tx.wrapData != nil {
-		return tx.wrapData.checkWrapping(tx.inner)
+		return tx.wrapData.verifyBlobsBatched(tx.inner, joinBatch)
 	}
 	return nil
 }

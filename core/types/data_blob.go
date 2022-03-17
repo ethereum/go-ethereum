@@ -338,7 +338,7 @@ func (b *BlobTxWrapData) sizeWrapData() common.StorageSize {
 	return common.StorageSize(4 + 4 + b.BlobKzgs.ByteLength() + b.Blobs.ByteLength())
 }
 
-func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
+func (b *BlobTxWrapData) verifyBlobsBatched(inner TxData, joinBatch JoinBlobBatchVerify) error {
 	blobTx, ok := inner.(*SignedBlobTx)
 	if !ok {
 		return fmt.Errorf("expected signed blob tx, got %T", inner)
@@ -362,13 +362,13 @@ func (b *BlobTxWrapData) checkWrapping(inner TxData) error {
 	// first extract crypto material out of our types and pass them to the crypto layer
 	commitments, err := b.BlobKzgs.Parse()
 	if err != nil {
-		return fmt.Errorf("internal commitments error")
+		return fmt.Errorf("commitments parse error: %v", err)
 	}
 	blobs, err := b.Blobs.Parse()
 	if err != nil {
-		return fmt.Errorf("internal blobs error")
+		return fmt.Errorf("blobs parse error: %v", err)
 	}
-	return kzg.VerifyBlobs(commitments, blobs)
+	return joinBatch(commitments, blobs)
 }
 
 func (b *BlobTxWrapData) copy() TxWrapData {

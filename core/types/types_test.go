@@ -17,14 +17,13 @@
 package types
 
 import (
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/protolambda/ztyp/view"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/protolambda/ztyp/view"
 )
 
 type devnull struct{ len int }
@@ -138,7 +137,7 @@ func benchRLP(b *testing.B, encode bool) {
 					},
 				}, WithTxWrapData(&BlobTxWrapData{
 					BlobKzgs: BlobKzgs{KZGCommitment{0xbb}},
-					Blobs:    Blobs{make(Blob, params.FieldElementsPerBlob)},
+					Blobs:    Blobs{Blob{}},
 				})),
 		},
 	} {
