@@ -662,6 +662,9 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		}
 		return nil
 	}
+	if table.itemOffset > 0 || table.itemHidden > 0 {
+		return fmt.Errorf("migration not supported for tail-deleted freezers")
+	}
 	ancientsPath := filepath.Dir(table.index.Name())
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
