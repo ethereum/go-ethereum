@@ -697,6 +697,7 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err := batch.commit(); err != nil {
 		return err
 	}
+	log.Info("Replacing old table files with migrated ones", "elapsed", common.PrettyDuration(time.Since(start)))
 	// Release and delete old table files. Note this won't
 	// delete the index file.
 	table.releaseFilesAfter(0, true)
