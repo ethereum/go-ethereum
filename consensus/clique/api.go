@@ -124,21 +124,27 @@ func (api *API) Discard(address common.Address) {
 }
 
 type status struct {
-	InturnPercent float64                `json:"inturnPercent"`
-	SigningStatus map[common.Address]int `json:"sealerActivity"`
-	NumBlocks     uint64                 `json:"numBlocks"`
+	EligibleSealers   []common.Address       `json:"eligible"`
+	IneligibleSealers []common.Address       `json:"ineligible"`
+	InturnPercent     float64                `json:"inturnPercent"`
+	SigningStatus     map[common.Address]int `json:"sealerActivity"`
+	NumBlocks         uint64                 `json:"numBlocks"`
 }
 
 // Status returns the status of the last N blocks,
+// - the list of signers eligible for signing (now),
+// - the list of signers not eligible for signing (now),
 // - the number of active signers,
 // - the number of signers,
 // - the percentage of in-turn blocks
 func (api *API) Status() (*status, error) {
 	var (
-		numBlocks = uint64(64)
-		header    = api.chain.CurrentHeader()
-		diff      = uint64(0)
-		optimals  = 0
+		eligible   = make([]common.Address, 0)
+		ineligible = make([]common.Address, 0)
+		numBlocks  = uint64(64)
+		header     = api.chain.CurrentHeader()
+		diff       = uint64(0)
+		optimals   = 0
 	)
 	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
@@ -157,6 +163,25 @@ func (api *API) Status() (*status, error) {
 	for _, s := range signers {
 		signStatus[s] = 0
 	}
+
+	{ // Figure out which are eligible for signing
+		notEligible := make(map[common.Address]struct{})
+		limit := uint64(len(snap.Signers)/2 + 1)
+		number := header.Number.Uint64()
+		for seen, recent := range snap.Recents {
+			if number < limit || seen > number-limit {
+				notEligible[recent] = struct{}{}
+			}
+		}
+		for _, s := range signers {
+			if _, ok := notEligible[s]; !ok {
+				eligible = append(eligible, s)
+			} else {
+				ineligible = append(ineligible, s)
+			}
+		}
+	}
+
 	for n := start; n < end; n++ {
 		h := api.chain.GetHeaderByNumber(n)
 		if h == nil {
@@ -173,9 +198,11 @@ func (api *API) Status() (*status, error) {
 		signStatus[sealer]++
 	}
 	return &status{
-		InturnPercent: float64(100*optimals) / float64(numBlocks),
-		SigningStatus: signStatus,
-		NumBlocks:     numBlocks,
+		EligibleSealers:   eligible,
+		IneligibleSealers: ineligible,
+		InturnPercent:     float64(100*optimals) / float64(numBlocks),
+		SigningStatus:     signStatus,
+		NumBlocks:         numBlocks,
 	}, nil
 }
 
