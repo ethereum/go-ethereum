@@ -322,7 +322,6 @@ func ChunkifyCode(code []byte) ([][32]byte, error) {
 	}
 	chunks := make([][32]byte, chunkCount)
 	for i := range chunks {
-
 		// number of bytes to copy, 31 unless
 		// the end of the code has been reached.
 		end := 31 * (i + 1)
@@ -356,17 +355,6 @@ func ChunkifyCode(code []byte) ([][32]byte, error) {
 					break
 				}
 			}
-		}
-	}
-
-	// if PUSHDATA went past the code end, add 0-filled chunks with
-	// the correct offset.
-	if chunkOffset > 0 {
-
-		if chunkOffset > 31 {
-			chunks = append(chunks, [32]byte{31}, [32]byte{1})
-		} else {
-			chunks = append(chunks, [32]byte{byte(chunkOffset)})
 		}
 	}
 

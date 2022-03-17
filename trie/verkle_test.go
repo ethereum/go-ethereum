@@ -193,14 +193,11 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 2 {
+	if len(chunks) != 1 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
 	if chunks[0][0] != 0 {
 		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
-	}
-	if chunks[1][0] != 3 {
-		t.Fatalf("invalid offset in second chunk %d != 3, chunk=%x", chunks[1][0], chunks[1])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
@@ -212,17 +209,11 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 3 {
+	if len(chunks) != 1 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
 	if chunks[0][0] != 0 {
 		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
-	}
-	if chunks[1][0] != 31 {
-		t.Fatalf("invalid offset in second chunk %d != 31, chunk=%x", chunks[1][0], chunks[1])
-	}
-	if chunks[2][0] != 1 {
-		t.Fatalf("invalid offset in third chunk %d != 1, chunk=%x", chunks[2][0], chunks[1])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
