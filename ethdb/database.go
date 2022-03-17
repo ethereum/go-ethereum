@@ -23,9 +23,8 @@ import (
 )
 
 var (
-	// ErrKVNotFound is returned if a key is requested that is not found in
-	// the KeyValueStore.
-	ErrKVNotFound = errors.New("not found")
+	// ErrNotFound is returned if a key is requested that is not found.
+	ErrNotFound = errors.New("not found")
 )
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
@@ -34,7 +33,7 @@ type KeyValueReader interface {
 	Has(key []byte) (bool, error)
 
 	// Get retrieves the given key if it's present in the key-value data store.
-	// Returns ErrKVNotFound if the key is not found.
+	// Returns ErrNotFound if the key is not found.
 	Get(key []byte) ([]byte, error)
 }
 

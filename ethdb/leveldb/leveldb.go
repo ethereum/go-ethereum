@@ -189,7 +189,7 @@ func (db *Database) Has(key []byte) (bool, error) {
 func (db *Database) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
 	if err == leveldb.ErrNotFound {
-		return nil, ethdb.ErrKVNotFound
+		return nil, ethdb.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -567,7 +567,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 		return nil, ethdb.ErrSnapshotReleased
 	}
 	if err == leveldb.ErrNotFound {
-		return nil, ethdb.ErrSnapshotNotFound
+		return nil, ethdb.ErrNotFound
 	}
 	return val, err
 }

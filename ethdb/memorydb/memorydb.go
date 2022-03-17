@@ -90,7 +90,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, ethdb.ErrKVNotFound
+	return nil, ethdb.ErrNotFound
 }
 
 // Put inserts the given value into the key-value store.
@@ -368,7 +368,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, ethdb.ErrSnapshotNotFound
+	return nil, ethdb.ErrNotFound
 }
 
 // Release releases associated resources. Release should always succeed and can
