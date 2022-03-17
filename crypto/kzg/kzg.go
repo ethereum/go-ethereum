@@ -3,6 +3,8 @@ package kzg
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/protolambda/go-kzg/bls"
@@ -35,6 +37,63 @@ func VerifyKzgProof(commitment *bls.G1Point, x *bls.Fr, y *bls.Fr, proof *bls.G1
 	bls.SubG1(&commitmentMinusY, commitment, &yG1)
 
 	return bls.PairingsVerify(&commitmentMinusY, &bls.GenG2, proof, &sMinuxX)
+}
+
+type BlobsBatch struct {
+	sync.Mutex
+	init                bool
+	aggregateCommitment bls.G1Point
+	aggregateBlob       [params.FieldElementsPerBlob]bls.Fr
+}
+
+func (batch *BlobsBatch) Join(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
+	batch.Lock()
+	defer batch.Unlock()
+	if len(commitments) != len(blobs) {
+		return fmt.Errorf("expected commitments len %d to equal blobs len %d", len(commitments), len(blobs))
+	}
+	if !batch.init && len(commitments) > 0 {
+		batch.init = true
+		bls.CopyG1(&batch.aggregateCommitment, commitments[0])
+		copy(batch.aggregateBlob[:], blobs[0])
+		commitments = commitments[1:]
+		blobs = blobs[1:]
+	}
+	for i, commit := range commitments {
+		batch.join(commit, blobs[i])
+	}
+	return nil
+}
+
+func (batch *BlobsBatch) join(commitment *bls.G1Point, blob []bls.Fr) {
+	// we multiply the input we are joining with a random scalar, so we can add it to the aggregate safely
+	randomScalar := bls.RandomFr()
+
+	// TODO: instead of computing the lin-comb of the commitments on the go, we could buffer
+	// the random scalar and commitment, and run a LinCombG1 over all of them during Verify()
+	var tmpG1 bls.G1Point
+	bls.MulG1(&tmpG1, commitment, randomScalar)
+	bls.AddG1(&batch.aggregateCommitment, &batch.aggregateCommitment, &tmpG1)
+
+	var tmpFr bls.Fr
+	for i := 0; i < params.FieldElementsPerBlob; i++ {
+		bls.MulModFr(&tmpFr, &blob[i], randomScalar)
+		bls.AddModFr(&batch.aggregateBlob[i], &batch.aggregateBlob[i], &tmpFr)
+	}
+}
+
+func (batch *BlobsBatch) Verify() error {
+	batch.Lock()
+	defer batch.Unlock()
+	if !batch.init {
+		return nil // empty batch
+	}
+	// Compute both MSMs and check equality
+	lResult := bls.LinCombG1(kzgSetupLagrange, batch.aggregateBlob[:])
+	if !bls.EqualG1(lResult, &batch.aggregateCommitment) {
+		return errors.New("BlobsBatch failed to Verify")
+	}
+	return nil
 }
 
 // Verify that the list of `commitments` maps to the list of `blobs`
