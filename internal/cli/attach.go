@@ -80,7 +80,7 @@ func (c *AttachCommand) remoteConsole(args []string) error {
 	defer console.Stop(false)
 
 	if len(args) > 1 {
-		if script := args[1]; script == "exec" {
+		if script := args[1]; script == "--exec" {
 			console.Evaluate(args[2])
 			return nil
 		}
