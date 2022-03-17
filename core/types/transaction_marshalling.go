@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/protolambda/ztyp/view"
 	"math/big"
 
@@ -351,7 +352,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			Blobs:    dec.Blobs,
 		}
 		// Verify that versioned hashes match kzgs, and kzgs match blobs.
-		if err := t.wrapData.checkWrapping(&itx); err != nil {
+		if err := t.wrapData.verifyBlobsBatched(&itx, kzg.VerifyBlobs); err != nil {
 			return fmt.Errorf("blob wrapping data is invalid: %v", err)
 		}
 	default:
