@@ -164,7 +164,13 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 	// Warn users to migrate if they have a legacy freezer format.
 	if eth != nil {
-		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb())
+		firstIdx := uint64(0)
+		// Hack to speed up check for mainnet because we know
+		// the first non-empty block.
+		if ctx.GlobalIsSet(utils.MainnetFlag.Name) {
+			firstIdx = 46147
+		}
+		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
 		if err != nil {
 			utils.Fatalf("Failed to check db for legacy receipts: %v", err)
 		}

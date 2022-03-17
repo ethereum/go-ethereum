@@ -787,7 +787,7 @@ func freezerMigrate(ctx *cli.Context) error {
 		return nil
 	}
 
-	isFirstLegacy, firstIdx, err := dbHasLegacyReceipts(db)
+	isFirstLegacy, firstIdx, err := dbHasLegacyReceipts(db, 0)
 	if err != nil {
 		return err
 	}
@@ -812,7 +812,7 @@ func freezerMigrate(ctx *cli.Context) error {
 // dbHasLegacyReceipts checks freezer entries for legacy receipts. It stops at the first
 // non-empty receipt and checks its format. The index of this first non-empty element is
 // the second return parameter.
-func dbHasLegacyReceipts(db ethdb.Database) (bool, uint64, error) {
+func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, error) {
 	// Check first block for legacy receipt format
 	numAncients, err := db.Ancients()
 	if err != nil {
@@ -821,24 +821,29 @@ func dbHasLegacyReceipts(db ethdb.Database) (bool, uint64, error) {
 	if numAncients < 1 {
 		return false, 0, nil
 	}
+	if firstIdx >= numAncients {
+		return false, firstIdx, nil
+	}
 	var (
 		legacy       bool
-		firstIdx     uint64
 		blob         []byte
 		emptyRLPList = []byte{192}
 	)
-	// Find first block with non-empty receipt
-	for i := uint64(0); i < numAncients; i++ {
-		blob, err = db.Ancient("receipts", i)
-		if err != nil {
-			return false, 0, err
-		}
-		if len(blob) == 0 {
-			continue
-		}
-		if !bytes.Equal(blob, emptyRLPList) {
-			firstIdx = i
-			break
+	// Find first block with non-empty receipt, only if
+	// the index is not already provided.
+	if firstIdx == 0 {
+		for i := uint64(0); i < numAncients; i++ {
+			blob, err = db.Ancient("receipts", i)
+			if err != nil {
+				return false, 0, err
+			}
+			if len(blob) == 0 {
+				continue
+			}
+			if !bytes.Equal(blob, emptyRLPList) {
+				firstIdx = i
+				break
+			}
 		}
 	}
 	// Is first non-empty receipt legacy?
