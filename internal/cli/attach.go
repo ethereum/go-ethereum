@@ -41,10 +41,15 @@ func (c *AttachCommand) Run(args []string) int {
 	return 0
 }
 
-// remoteConsole will connect to a remote geth instance, attaching a JavaScript
+// remoteConsole will connect to a remote bor instance, attaching a JavaScript
 // console to it.
 func (c *AttachCommand) remoteConsole(args []string) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
+
+	if len(args) < 1 {
+		args = append(args, "")
+	}
+
 	endpoint := args[0]
 	path := node.DefaultDataDir()
 
@@ -56,7 +61,7 @@ func (c *AttachCommand) remoteConsole(args []string) error {
 			homeDir, _ := os.UserHomeDir()
 			path = filepath.Join(homeDir, "/.bor/data")
 		}
-		endpoint = fmt.Sprintf("%s/geth.ipc", path)
+		endpoint = fmt.Sprintf("%s/bor.ipc", path)
 	}
 	client, err := dialRPC(endpoint)
 	if err != nil {
