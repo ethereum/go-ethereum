@@ -49,7 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tyler-smith/go-bip39"
-	"golang.org/x/crypto/sha3"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -2225,8 +2224,7 @@ func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 
 // CallBundleArgs represents the arguments for a call.
 type CallBundleArgs struct {
-	//Txs                    []hexutil.Bytes       `json:"txs"`
-	UnsignedTxs            []TransactionArgs     `json:"txs"`
+	Txs                    []TransactionArgs     `json:"txs"`
 	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
 	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 	Coinbase               *string               `json:"coinbase"`
@@ -2245,30 +2243,18 @@ type CallBundleArgs struct {
 // nonce and ensuring validity
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
 	// ******** Unsigned Txn Attempt
-	log.Error("here1")
-	if len(args.UnsignedTxs) == 0 {
+	log.Info("here1")
+	if len(args.Txs) == 0 {
 		return nil, errors.New("bundle missing unsigned txs")
 	}
 	log.Error("here2")
-	// ******** Unsigned Txn Attempt
-	// if len(args.Txs) == 0 {
-	// 	return nil, errors.New("bundle missing txs")
-	// }
 	if args.BlockNumber == 0 {
 		return nil, errors.New("bundle missing blockNumber")
 	}
-	log.Error("here1")
 	// var txs types.Transactions
 
-	// for _, encodedTx := range args.Txs {
-	// 	tx := new(types.Transaction)
-	// 	if err := tx.UnmarshalBinary(encodedTx); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	txs = append(txs, tx)
-	// }
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	log.Error("here1")
+	log.Error("here3")
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
@@ -2311,6 +2297,9 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		Coinbase:   coinbase,
 		BaseFee:    baseFee,
 	}
+	if header != nil {
+		log.Error("here4")
+	}
 
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
@@ -2333,7 +2322,8 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	results := []map[string]interface{}{}
 	coinbaseBalanceBefore := state.GetBalance(coinbase)
 
-	bundleHash := sha3.NewLegacyKeccak256()
+	// is there utility to having a bundle hash?
+	// bundleHash := sha3.NewLegacyKeccak256()
 	// signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
@@ -2341,7 +2331,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	// RPC Call gas cap
 	globalGasCap := s.b.RPCGasCap()
 
-	for i, tx := range args.UnsignedTxs {
+	for i, tx := range args.Txs {
 		// fb: dont need coinbase code, but then I realized, fb searchers could use us
 		// coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
 		// fb: we need to use a random hash
@@ -2396,14 +2386,16 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	ret := map[string]interface{}{}
 	ret["results"] = results
 	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
-	// ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["coinbaseDiff"] = coinbaseDiff.String()
 	ret["gasFees"] = gasFees.String()
-	// ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
 	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
 	ret["totalGasUsed"] = totalGasUsed
 	ret["stateBlockNumber"] = parent.Number.Int64()
 
-	ret["bundleHash"] = "0x" + common.Bytes2Hex(bundleHash.Sum(nil))
+	// ret["bundleHash"] = "0x" + common.Bytes2Hex(bundleHash.Sum(nil))
+
+	ret["args"] = header
 	return ret, nil
 }
 
