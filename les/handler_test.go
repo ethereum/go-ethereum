@@ -400,7 +400,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	bc := server.handler.blockchain
 
 	var proofreqs []ProofReq
-	proofsV2 := light.NewNodeSet()
+	proofsV2 := trie.NewNodeSet()
 
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
@@ -455,7 +455,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 
 		var expected []rlp.RawValue
 		if wantOK {
-			proofsV2 := light.NewNodeSet()
+			proofsV2 := trie.NewNodeSet()
 			t, _ := trie.New(header.Root, trie.NewDatabase(server.db))
 			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()

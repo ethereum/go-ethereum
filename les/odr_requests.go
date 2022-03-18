@@ -222,7 +222,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgProofsV2 {
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.(light.NodeList)
+	proofs := msg.Obj.(trie.NodeList)
 	// Verify the proof and store if checks out
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
@@ -308,7 +308,7 @@ type HelperTrieReq struct {
 }
 
 type HelperTrieResps struct { // describes all responses, not just a single one
-	Proofs  light.NodeList
+	Proofs  trie.NodeList
 	AuxData [][]byte
 }
 

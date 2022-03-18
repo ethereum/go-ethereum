@@ -83,7 +83,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		}
 	case *TrieRequest:
 		t, _ := trie.New(req.Id.Root, trie.NewDatabase(odr.sdb))
-		nodes := NewNodeSet()
+		nodes := trie.NewNodeSet()
 		t.Prove(req.Key, 0, nodes)
 		req.Proof = nodes
 	case *CodeRequest:

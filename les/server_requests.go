@@ -378,7 +378,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			err       error
 		)
 		bc := backend.BlockChain()
-		nodes := light.NewNodeSet()
+		nodes := trie.NewNodeSet()
 
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
@@ -462,7 +462,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			auxData  [][]byte
 		)
 		bc := backend.BlockChain()
-		nodes := light.NewNodeSet()
+		nodes := trie.NewNodeSet()
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
 				return nil
