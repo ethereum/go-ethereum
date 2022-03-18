@@ -95,7 +95,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		if err != nil {
 			panic(err)
 		}
-		nodes := NewNodeSet()
+		nodes := trie.NewNodeSet()
 		t.Prove(req.Key, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
