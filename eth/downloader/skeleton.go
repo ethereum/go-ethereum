@@ -438,7 +438,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// New head was integrated into the skeleton chain. If the backfiller
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
-			if s.scratchHead == 0 {
+			if linked {
 				s.filler.resume()
 			}
 
