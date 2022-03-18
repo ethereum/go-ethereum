@@ -9,14 +9,14 @@ import (
 )
 
 type BlockTrace struct {
-	Number      *big.Int            `json:"number"`
-	Hash        common.Hash         `json:"hash"`
-	GasLimit    uint64              `json:"gasLimit"`
-	Difficulty  *big.Int            `json:"difficulty"`
-	BaseFee     *big.Int            `json:"baseFee"`
-	Coinbase    common.Address      `json:"coinbase"`
-	Time        uint64              `json:"time"`
-	Transaction []*TransactionTrace `json:"transaction"`
+	Number       *big.Int            `json:"number"`
+	Hash         common.Hash         `json:"hash"`
+	GasLimit     uint64              `json:"gasLimit"`
+	Difficulty   *big.Int            `json:"difficulty"`
+	BaseFee      *big.Int            `json:"baseFee"`
+	Coinbase     common.Address      `json:"coinbase"`
+	Time         uint64              `json:"time"`
+	Transactions []*TransactionTrace `json:"transactions"`
 }
 
 type TransactionTrace struct {
@@ -42,14 +42,14 @@ func NewTraceBlock(config *params.ChainConfig, block *Block) *BlockTrace {
 		txs[i] = newTraceTransaction(tx, block.NumberU64(), config)
 	}
 	return &BlockTrace{
-		Number:      block.Number(),
-		Hash:        block.Hash(),
-		GasLimit:    block.GasLimit(),
-		Difficulty:  block.Difficulty(),
-		BaseFee:     block.BaseFee(),
-		Coinbase:    block.Coinbase(),
-		Time:        block.Time(),
-		Transaction: txs,
+		Number:       block.Number(),
+		Hash:         block.Hash(),
+		GasLimit:     block.GasLimit(),
+		Difficulty:   block.Difficulty(),
+		BaseFee:      block.BaseFee(),
+		Coinbase:     block.Coinbase(),
+		Time:         block.Time(),
+		Transactions: txs,
 	}
 }
 
