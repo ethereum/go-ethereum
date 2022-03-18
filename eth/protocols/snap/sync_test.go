@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -273,7 +272,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 	// Unless we send the entire trie, we need to supply proofs
 	// Actually, we need to supply proofs either way! This seems to be an implementation
 	// quirk in go-ethereum
-	proof := light.NewNodeSet()
+	proof := trie.NewNodeSet()
 	if err := t.accountTrie.Prove(origin[:], proof); err != nil {
 		t.logger.Error("Could not prove inexistence of origin", "origin", origin, "error", err)
 	}
@@ -353,7 +352,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 		if originHash != (common.Hash{}) || (abort && len(keys) > 0) {
 			// If we're aborting, we need to prove the first and last item
 			// This terminates the response (and thus the loop)
-			proof := light.NewNodeSet()
+			proof := trie.NewNodeSet()
 			stTrie := t.storageTries[account]
 
 			// Here's a potential gotcha: when constructing the proof, we cannot
@@ -411,7 +410,7 @@ func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, acco
 		if exit {
 			// If we're aborting, we need to prove the first and last item
 			// This terminates the response (and thus the loop)
-			proof := light.NewNodeSet()
+			proof := trie.NewNodeSet()
 			stTrie := t.storageTries[account]
 
 			// Here's a potential gotcha: when constructing the proof, we cannot
@@ -599,8 +598,9 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 			vals = append(vals, entry.v)
 		}
 		// The proofs
-		proof := light.NewNodeSet()
+		proof := trie.NewNodeSet()
 		if err := t.accountTrie.Prove(origin[:], proof); err != nil {
+			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 		}
 		// The bloat: add proof of every single element
