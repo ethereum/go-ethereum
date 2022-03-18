@@ -2364,7 +2364,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		// TODO : Add gas features back
 		jsonResult := map[string]interface{}{
 			"gasUsed":     receipt.GasUsed,
-			"fromAddress": tx.from,
+			"fromAddress": tx.from(),
 			"toAddress":   tx.To,
 			// Add trace results here
 		}
