@@ -17,10 +17,10 @@ var (
 		CALLCODE:     {traceToAddressCode, traceLastNAddressCode(1), traceCallerProof, traceLastNAddressProof(1)},
 		DELEGATECALL: {traceToAddressCode, traceLastNAddressCode(1)},
 		STATICCALL:   {traceToAddressCode, traceLastNAddressCode(1)},
-		CREATE:       {traceSenderAddress, traceCreatedContractProof, traceNonce},
-		CREATE2:      {traceSenderAddress, traceCreatedContractProof},
-		SSTORE:       {traceStorageProof},
-		SLOAD:        {traceStorageProof},
+		CREATE:       {traceCreatedContractProof}, // sender's wrapped_proof is already recorded in BlockChain.writeBlockResult
+		CREATE2:      {traceCreatedContractProof}, // sender's wrapped_proof is already recorded in BlockChain.writeBlockResult
+		SLOAD:        {},                          // only record state_before, instead of state_after
+		SSTORE:       {traceStorageProof},         // record state_after besides state_before
 		SELFDESTRUCT: {traceContractProof, traceLastNAddressProof(0)},
 		SELFBALANCE:  {traceContractProof},
 		BALANCE:      {traceLastNAddressProof(0)},
@@ -52,30 +52,15 @@ func traceLastNAddressCode(n int) traceFunc {
 	}
 }
 
-// traceSenderAddress gets sender address
-func traceSenderAddress(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
-	extraData.From = &l.env.Origin
-	return nil
-}
-
-// traceNonce gets sender nonce
-func traceNonce(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
-	nonce := l.env.StateDB.GetNonce(l.env.Origin)
-	extraData.Nonce = &nonce
-	return nil
-}
-
 // traceStorageProof get contract's storage proof at storage_address
 func traceStorageProof(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
 	if scope.Stack.len() == 0 {
 		return nil
 	}
-	address := common.Hash(scope.Stack.peek().Bytes32())
-	contract := scope.Contract
-	// Get storage proof.
-	storageProof, err := l.env.StateDB.GetStorageProof(contract.Address(), address)
+	key := common.Hash(scope.Stack.peek().Bytes32())
+	proof, err := getWrappedProofForStorage(l, scope.Contract.Address(), key)
 	if err == nil {
-		extraData.ProofList = append(extraData.ProofList, encodeProof(storageProof))
+		extraData.ProofList = append(extraData.ProofList, proof)
 	}
 	return err
 }
@@ -83,9 +68,9 @@ func traceStorageProof(l *StructLogger, scope *ScopeContext, extraData *types.Ex
 // traceContractProof gets the contract's account proof
 func traceContractProof(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
 	// Get account proof.
-	proof, err := l.env.StateDB.GetProof(scope.Contract.Address())
+	proof, err := getWrappedProofForAddr(l, scope.Contract.Address())
 	if err == nil {
-		extraData.ProofList = append(extraData.ProofList, encodeProof(proof))
+		extraData.ProofList = append(extraData.ProofList, proof)
 	}
 	return err
 }
@@ -101,9 +86,9 @@ func traceCreatedContractProof(l *StructLogger, scope *ScopeContext, extraData *
 		return errors.New("can't get created contract address from stack")
 	}
 	address := common.BytesToAddress(stackvalue.Bytes())
-	proof, err := l.env.StateDB.GetProof(address)
+	proof, err := getWrappedProofForAddr(l, address)
 	if err == nil {
-		extraData.ProofList = append(extraData.ProofList, encodeProof(proof))
+		extraData.ProofList = append(extraData.ProofList, proof)
 	}
 	return err
 }
@@ -117,9 +102,9 @@ func traceLastNAddressProof(n int) traceFunc {
 		}
 
 		address := common.Address(stack.data[stack.len()-1-n].Bytes20())
-		proof, err := l.env.StateDB.GetProof(address)
+		proof, err := getWrappedProofForAddr(l, address)
 		if err == nil {
-			extraData.ProofList = append(extraData.ProofList, encodeProof(proof))
+			extraData.ProofList = append(extraData.ProofList, proof)
 		}
 		return err
 	}
@@ -128,11 +113,50 @@ func traceLastNAddressProof(n int) traceFunc {
 // traceCallerProof gets caller address's proof.
 func traceCallerProof(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
 	address := scope.Contract.CallerAddress
-	proof, err := l.env.StateDB.GetProof(address)
+	proof, err := getWrappedProofForAddr(l, address)
 	if err == nil {
-		extraData.ProofList = append(extraData.ProofList, encodeProof(proof))
+		extraData.ProofList = append(extraData.ProofList, proof)
 	}
 	return err
+}
+
+// StorageProofWrapper will be empty
+func getWrappedProofForAddr(l *StructLogger, address common.Address) (*types.AccountProofWrapper, error) {
+	proof, err := l.env.StateDB.GetProof(address)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AccountProofWrapper{
+		Address: address,
+		Nonce:   l.env.StateDB.GetNonce(address),
+		Balance: l.env.StateDB.GetBalance(address),
+		Proof:   encodeProof(proof),
+	}, nil
+}
+
+func getWrappedProofForStorage(l *StructLogger, address common.Address, key common.Hash) (*types.AccountProofWrapper, error) {
+	proof, err := l.env.StateDB.GetProof(address)
+	if err != nil {
+		return nil, err
+	}
+
+	storageProof, err := l.env.StateDB.GetStorageProof(address, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AccountProofWrapper{
+		Address: address,
+		Nonce:   l.env.StateDB.GetNonce(address),
+		Balance: l.env.StateDB.GetBalance(address),
+		Proof:   encodeProof(proof),
+		Storage: &types.StorageProofWrapper{
+			Key:   key.String(),
+			Value: l.env.StateDB.GetState(address, key).String(),
+			Proof: encodeProof(storageProof),
+		},
+	}, nil
 }
 
 func encodeProof(proof [][]byte) (res []string) {

@@ -1348,18 +1348,25 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block)
 	for i, tx := range block.Transactions() {
 		evmTrace := blockResult.ExecutionResults[i]
-		// Get the sender's address.
+
+		// Get sender's address.
 		from, _ := types.Sender(types.MakeSigner(bc.chainConfig, block.Number()), tx)
-		// Get account's proof.
+		evmTrace.Sender = &types.AccountProofWrapper{
+			Address: from,
+			Nonce:   state.GetNonce(from),
+			Balance: state.GetBalance(from),
+		}
+		// Get sender's account proof.
 		proof, err := state.GetProof(from)
 		if err != nil {
 			log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", from.String(), "err", err)
 		} else {
-			evmTrace.Proof = make([]string, len(proof))
+			evmTrace.Sender.Proof = make([]string, len(proof))
 			for i := range proof {
-				evmTrace.Proof[i] = hexutil.Encode(proof[i])
+				evmTrace.Sender.Proof[i] = hexutil.Encode(proof[i])
 			}
 		}
+
 		// Contract is called
 		if len(tx.Data()) != 0 && tx.To() != nil {
 			evmTrace.ByteCode = hexutil.Encode(state.GetCode(*tx.To()))
