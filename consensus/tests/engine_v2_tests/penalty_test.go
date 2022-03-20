@@ -1,8 +1,7 @@
-package tests
+package engine_v2_tests
 
 import (
 	"math/big"
-	"reflect"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -16,7 +15,7 @@ import (
 
 func TestHookPenaltyV2Mining(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, 0)
+	blockchain, _, _, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)
@@ -26,13 +25,19 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
 	assert.Nil(t, err)
 	masternodes := adaptor.GetMasternodesFromCheckpointHeader(header901)
-	assert.Equal(t, 4, len(masternodes))
+	assert.Equal(t, 5, len(masternodes))
 	header6300 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch * 7)
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, big.NewInt(int64(config.XDPoS.Epoch*7)), header6300.ParentHash, masternodes)
 	assert.Nil(t, err)
-	// miner (coinbase) is not in penalty. all others are in penalty
-	assert.Equal(t, 3, len(penalty))
-	assert.True(t, reflect.DeepEqual([]common.Address{header901.Coinbase}, common.RemoveItemFromArray(masternodes, penalty)))
+	// only 1 signer address not in the masternode list
+	assert.Equal(t, 1, len(penalty))
+	contains := false
+	for _, mn := range common.RemoveItemFromArray(masternodes, penalty) {
+		if mn == header901.Coinbase {
+			contains = true
+		}
+	}
+	assert.True(t, contains)
 	// set adaptor round/qc to that of 6299
 	err = utils.DecodeBytesExtraFields(header6300.Extra, &extraField)
 	assert.Nil(t, err)
@@ -43,12 +48,13 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 		Number:     header6300.Number,
 		GasLimit:   params.TargetGasLimit,
 		Time:       header6300.Time,
+		Coinbase:   signer,
 	}
 	err = adaptor.Prepare(blockchain, headerMining)
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(headerMining.Penalties)/common.AddressLength)
+	assert.Equal(t, 1, len(headerMining.Penalties)/common.AddressLength)
 	// 20 candidates (set by PrepareXDCTestBlockChainForV2Engine) - 3 penalty = 17
-	assert.Equal(t, 17, len(headerMining.Validators)/common.AddressLength)
+	assert.Equal(t, 19, len(headerMining.Validators)/common.AddressLength)
 }
 
 func TestHookPenaltyV2Comeback(t *testing.T) {
@@ -63,12 +69,12 @@ func TestHookPenaltyV2Comeback(t *testing.T) {
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
 	assert.Nil(t, err)
 	masternodes := adaptor.GetMasternodesFromCheckpointHeader(header901)
-	assert.Equal(t, 4, len(masternodes))
+	assert.Equal(t, 5, len(masternodes))
 	header6300 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch * 7)
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, big.NewInt(int64(config.XDPoS.Epoch*7)), header6300.ParentHash, masternodes)
 	assert.Nil(t, err)
 	// miner (coinbase) is in comeback. so all addresses are in penalty
-	assert.Equal(t, 4, len(penalty))
+	assert.Equal(t, 2, len(penalty))
 	header6285 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch*7 - common.MergeSignRange)
 	// forcely insert signing tx into cache, to cancel comeback. since no comeback, penalty is 3
 	tx, err := signingTxWithSignerFn(header6285, 0, signer, signFn)
@@ -76,7 +82,7 @@ func TestHookPenaltyV2Comeback(t *testing.T) {
 	adaptor.CacheSigningTxs(header6285.Hash(), []*types.Transaction{tx})
 	penalty, err = adaptor.EngineV2.HookPenalty(blockchain, big.NewInt(int64(config.XDPoS.Epoch*7)), header6300.ParentHash, masternodes)
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(penalty))
+	assert.Equal(t, 1, len(penalty))
 }
 
 func TestHookPenaltyV2Jump(t *testing.T) {
@@ -92,11 +98,11 @@ func TestHookPenaltyV2Jump(t *testing.T) {
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
 	assert.Nil(t, err)
 	masternodes := adaptor.GetMasternodesFromCheckpointHeader(header901)
-	assert.Equal(t, 4, len(masternodes))
+	assert.Equal(t, 5, len(masternodes))
 	header6285 := blockchain.GetHeaderByNumber(uint64(end))
 	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(config.XDPoS.Epoch*7), false)
 	// round 6285-6300 miss blocks, penalty should work as usual
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, header6285.Number, header6285.ParentHash, masternodes)
 	assert.Nil(t, err)
-	assert.Equal(t, 4, len(penalty))
+	assert.Equal(t, 2, len(penalty))
 }

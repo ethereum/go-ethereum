@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"fmt"

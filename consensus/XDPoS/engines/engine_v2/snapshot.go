@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // Snapshot is the state of the smart contract validator list
@@ -67,4 +69,34 @@ func (s *SnapshotV2) IsMasterNodes(address common.Address) bool {
 		}
 	}
 	return false
+}
+
+// snapshot retrieves the authorization snapshot at a given point in time.
+func (x *XDPoS_v2) getSnapshot(chain consensus.ChainReader, number uint64, isGapNumber bool) (*SnapshotV2, error) {
+	var gapBlockNum uint64
+	if isGapNumber {
+		gapBlockNum = number
+	} else {
+		gapBlockNum = number - number%x.config.Epoch - x.config.Gap
+	}
+
+	gapBlockHash := chain.GetHeaderByNumber(gapBlockNum).Hash()
+	log.Debug("get snapshot from gap block", "number", gapBlockNum, "hash", gapBlockHash.Hex())
+
+	// If an in-memory SnapshotV2 was found, use that
+	if s, ok := x.snapshots.Get(gapBlockHash); ok {
+		snap := s.(*SnapshotV2)
+		log.Trace("Loaded snapshot from memory", "number", gapBlockNum, "hash", gapBlockHash)
+		return snap, nil
+	}
+	// If an on-disk checkpoint snapshot can be found, use that
+	snap, err := loadSnapshot(x.db, gapBlockHash)
+	if err != nil {
+		log.Error("Cannot find snapshot from last gap block", "err", err, "number", gapBlockNum, "hash", gapBlockHash)
+		return nil, err
+	}
+
+	log.Trace("Loaded snapshot from disk", "number", gapBlockNum, "hash", gapBlockHash)
+	x.snapshots.Add(snap.Hash, snap)
+	return snap, nil
 }

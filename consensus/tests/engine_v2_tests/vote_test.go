@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"fmt"
@@ -354,7 +354,8 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	assert.Equal(t, utils.Round(6), currentRound)
 
 	// Now, inject the block into the chain
-	blockchain.InsertBlock(block)
+	err = blockchain.InsertBlock(block)
+	assert.Nil(t, err)
 
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,

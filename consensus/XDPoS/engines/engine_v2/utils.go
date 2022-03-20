@@ -1,6 +1,9 @@
 package engine_v2
 
 import (
+	"fmt"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -83,4 +86,58 @@ func UniqueSignatures(signatureSlice []utils.Signature) ([]utils.Signature, []ut
 		}
 	}
 	return list, duplicates
+}
+
+func (x *XDPoS_v2) signSignature(signingHash common.Hash) (utils.Signature, error) {
+	// Don't hold the signFn for the whole signing operation
+	x.signLock.RLock()
+	signer, signFn := x.signer, x.signFn
+	x.signLock.RUnlock()
+
+	signedHash, err := signFn(accounts.Account{Address: signer}, signingHash.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("Error while signing hash")
+	}
+	return signedHash, nil
+}
+
+func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature utils.Signature, masternodes []common.Address) (bool, common.Address, error) {
+	var signerAddress common.Address
+	if len(masternodes) == 0 {
+		return false, signerAddress, fmt.Errorf("Empty masternode list detected when verifying message signatures")
+	}
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)
+	if err != nil {
+		return false, signerAddress, fmt.Errorf("Error while verifying message: %v", err)
+	}
+
+	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])
+	for _, mn := range masternodes {
+		if mn == signerAddress {
+			return true, signerAddress, nil
+		}
+	}
+
+	return false, signerAddress, fmt.Errorf("Masternodes list does not contain signer address, Signer address: %v", signerAddress.Hex())
+}
+
+func (x *XDPoS_v2) getExtraFields(header *types.Header) (*utils.QuorumCert, utils.Round, []common.Address, error) {
+
+	var masternodes []common.Address
+
+	// last v1 block
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		masternodes = decodeMasternodesFromHeaderExtra(header)
+		return nil, utils.Round(0), masternodes, nil
+	}
+
+	// v2 block
+	masternodes = x.GetMasternodesFromEpochSwitchHeader(header)
+	var decodedExtraField utils.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
+	if err != nil {
+		return nil, utils.Round(0), masternodes, err
+	}
+	return decodedExtraField.QuorumCert, decodedExtraField.Round, masternodes, nil
 }

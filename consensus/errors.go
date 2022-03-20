@@ -40,4 +40,6 @@ var (
 	ErrNoValidatorSignature = errors.New("no validator in header")
 
 	ErrNotReadyToPropose = errors.New("not ready to propose, QC is not ready")
+
+	ErrCoinbaseMismatch = errors.New("Block Coinbase address does not match its wallte address")
 )

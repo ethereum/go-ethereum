@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -16,7 +17,7 @@ import (
 
 func TestYourTurnInitialV2(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, parentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, 0)
+	blockchain, _, parentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, 0)
 	minePeriod := config.XDPoS.V2.MinePeriod
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
@@ -32,11 +33,12 @@ func TestYourTurnInitialV2(t *testing.T) {
 		Coinbase:   common.HexToAddress(blockCoinbaseA),
 		Extra:      common.Hex2Bytes("d7830100018358444388676f312e31352e38856c696e757800000000000000000278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758ccef312ee5eea8d7bad5374c6a652150515d744508b61c1a4deb4e4e7bf057e4e3824c11fd2569bcb77a52905cda63b5a58507910bed335e4c9d87ae0ecdfafd400"),
 	}
-	block900, err := createBlockFromHeader(blockchain, header, nil)
+	block900, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blockchain.InsertBlock(block900)
+	err = blockchain.InsertBlock(block900)
+	assert.Nil(t, err)
 	time.Sleep(time.Duration(minePeriod) * time.Second)
 
 	// YourTurn is called before mine first v2 block
@@ -60,7 +62,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 
 func TestUpdateMasterNodes(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, backend, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	x := adaptor.EngineV2
 	snap, err := x.GetSnapshot(blockchain, currentBlock.Header())
@@ -84,12 +86,10 @@ func TestUpdateMasterNodes(t *testing.T) {
 		ParentHash: currentBlock.Hash(),
 		Coinbase:   common.HexToAddress(blockCoinbaseA),
 	}
-	// insert header validator
-	err = generateSignature(backend, adaptor, header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parentBlock, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx})
+
+	header.Extra = generateV2Extra(450, currentBlock, signer, signFn)
+
+	parentBlock, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx}, signer, signFn, config)
 	assert.Nil(t, err)
 	err = blockchain.InsertBlock(parentBlock)
 	assert.Nil(t, err)
@@ -100,22 +100,21 @@ func TestUpdateMasterNodes(t *testing.T) {
 	for i := 1351; i <= 1800; i++ {
 		blockCoinbase := fmt.Sprintf("0xaaa000000000000000000000000000000000%4d", i)
 		//Get from block validator error message
-		merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
 		header = &types.Header{
 			Root:       common.HexToHash(merkleRoot),
 			Number:     big.NewInt(int64(i)),
 			ParentHash: parentBlock.Hash(),
 			Coinbase:   common.HexToAddress(blockCoinbase),
 		}
-		err = generateSignature(backend, adaptor, header)
+
+		header.Extra = generateV2Extra(int64(i), currentBlock, signer, signFn)
+
+		block, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, config)
 		if err != nil {
 			t.Fatal(err)
 		}
-		block, err := createBlockFromHeader(blockchain, header, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		blockchain.InsertBlock(block)
+		err = blockchain.InsertBlock(block)
+		assert.Nil(t, err)
 		parentBlock = block
 	}
 
@@ -128,20 +127,32 @@ func TestUpdateMasterNodes(t *testing.T) {
 
 func TestPrepare(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
+	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
-	adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
-
+	_, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
+	assert.Nil(t, err)
 	tstamp := time.Now().Unix()
-	header901 := &types.Header{
+
+	header901WithoutCoinbase := &types.Header{
 		ParentHash: currentBlock.Hash(),
 		Number:     big.NewInt(int64(901)),
 		GasLimit:   params.TargetGasLimit,
 		Time:       big.NewInt(tstamp),
 	}
 
-	err := adaptor.Prepare(blockchain, header901)
+	err = adaptor.Prepare(blockchain, header901WithoutCoinbase)
+	assert.Equal(t, consensus.ErrCoinbaseMismatch, err)
+
+	header901 := &types.Header{
+		ParentHash: currentBlock.Hash(),
+		Number:     big.NewInt(int64(901)),
+		GasLimit:   params.TargetGasLimit,
+		Time:       big.NewInt(tstamp),
+		Coinbase:   signer,
+	}
+
+	err = adaptor.Prepare(blockchain, header901)
 	assert.Nil(t, err)
 
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, currentBlock.Header())

@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"fmt"
@@ -45,7 +45,8 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	blockNum := 902
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block902 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 2, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block902)
+	err = blockchain.InsertBlock(block902)
+	assert.Nil(t, err)
 	err = engineV2.ProposedBlockHandler(blockchain, block902.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
@@ -62,7 +63,8 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	blockNum = 903
 	blockCoinBase = fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block903 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block902, blockNum, 3, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block903)
+	err = blockchain.InsertBlock(block903)
+	assert.Nil(t, err)
 	err = engineV2.ProposedBlockHandler(blockchain, block903.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
@@ -80,7 +82,8 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	blockNum = 904
 	blockCoinBase = fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block904 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block903, blockNum, 4, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block904)
+	err = blockchain.InsertBlock(block904)
+	assert.Nil(t, err)
 	err = engineV2.ProposedBlockHandler(blockchain, block904.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
@@ -131,7 +134,8 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	blockNum := 906
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block906 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 7, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block906)
+	err = blockchain.InsertBlock(block906)
+	assert.Nil(t, err)
 	err = engineV2.ProposedBlockHandler(blockchain, block906.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
@@ -152,7 +156,8 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	blockNum = 907
 	blockCoinBase = fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block907 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block906, blockNum, 8, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block907)
+	err = blockchain.InsertBlock(block907)
+	assert.Nil(t, err)
 	err = engineV2.ProposedBlockHandler(blockchain, block907.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)

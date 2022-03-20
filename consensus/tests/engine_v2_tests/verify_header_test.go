@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"encoding/json"
@@ -34,7 +34,8 @@ func TestShouldVerifyBlock(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	// Happy path
-	err = adaptor.VerifyHeader(blockchain, blockchain.GetBlockByNumber(901).Header(), true)
+	happyPathHeader := blockchain.GetBlockByNumber(901).Header()
+	err = adaptor.VerifyHeader(blockchain, happyPathHeader, true)
 	assert.Nil(t, err)
 
 	// Unhappy path
@@ -142,6 +143,22 @@ func TestShouldVerifyBlock(t *testing.T) {
 	err = adaptor.VerifyHeader(blockchain, invalidPenaltiesExistBlock, true)
 	assert.Equal(t, utils.ErrPenaltyListDoesNotMatch, err)
 
+	// Not valid validator
+	coinbaseValidatorMismatchBlock := blockchain.GetBlockByNumber(902).Header()
+	notQualifiedSigner, notQualifiedSignFn, err := getSignerAndSignFn(voterKey)
+	assert.Nil(t, err)
+	sealHeader(blockchain, coinbaseValidatorMismatchBlock, notQualifiedSigner, notQualifiedSignFn)
+	err = adaptor.VerifyHeader(blockchain, coinbaseValidatorMismatchBlock, true)
+	assert.Equal(t, utils.ErrCoinbaseAndValidatorMismatch, err)
+
+	// Make the validators not legit by adding something to the penalty
+	validatorsNotLegit := blockchain.GetBlockByNumber(901).Header()
+	penalties := []common.Address{acc1Addr}
+	for _, v := range penalties {
+		validatorsNotLegit.Penalties = append(validatorsNotLegit.Penalties, v[:]...)
+	}
+	err = adaptor.VerifyHeader(blockchain, validatorsNotLegit, true)
+	assert.Equal(t, utils.ErrValidatorsNotLegit, err)
 }
 
 func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {

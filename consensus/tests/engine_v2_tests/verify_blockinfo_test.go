@@ -1,4 +1,4 @@
-package tests
+package engine_v2_tests
 
 import (
 	"fmt"
@@ -27,7 +27,8 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 	blockNum := 902
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
 	block902 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 2, blockCoinBase, signer, signFn, nil)
-	blockchain.InsertBlock(block902)
+	err = blockchain.InsertBlock(block902)
+	assert.Nil(t, err)
 
 	blockInfo = &utils.BlockInfo{
 		Hash:   block902.Hash(),
