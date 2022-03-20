@@ -12,7 +12,7 @@ directory locations are platform specific:
 
 * Mac: `~/Library/Ethereum`
 * Linux: `~/.ethereum`
-* Windows: `%APPDATA%\Ethereum`
+* Windows: `%LOCALAPPDATA%\Ethereum`
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories
 should be transportable between nodes, platforms, implementations (C++, Go, Python).
