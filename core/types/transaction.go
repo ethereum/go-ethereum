@@ -230,7 +230,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	tx.setDecoded(inner, len(b))
+	tx.setDecoded(inner, 0)
 	tx.wrapData = wrapData
 	return nil
 }
