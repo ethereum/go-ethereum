@@ -472,7 +472,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 	} else {
 		// In beacon mode, user the skeleton chain to retrieve the headers from
-		latest, err = d.skeleton.Head()
+		latest, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
@@ -498,7 +498,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 	} else {
 		// In beacon mode, use the skeleton chain for the ancestor lookup
-		origin = d.findBeaconAncestor()
+		origin, err = d.findBeaconAncestor()
+		if err != nil {
+			return err
+		}
 	}
 	d.syncStatsLock.Lock()
 	if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
