@@ -133,6 +133,7 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	return s.CompileFiles(sourcefiles...)
 }
 
+// CompileSource builds and returns all the contracts contained within a source string.
 func (s *Solidity) CompileSource(source string) (map[string]*Contract, error) {
 	args := append(s.makeArgs(), "--")
 	cmd := exec.Command(s.Path, append(args, "-")...)
@@ -140,6 +141,7 @@ func (s *Solidity) CompileSource(source string) (map[string]*Contract, error) {
 	return s.run(cmd, source)
 }
 
+// CompileFiles compiles all given Solidity source files.
 func (s *Solidity) CompileFiles(sourcefiles ...string) (map[string]*Contract, error) {
 	source, err := slurpFiles(sourcefiles)
 	if err != nil {
