@@ -40,11 +40,22 @@ var (
 	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 )
 
+// GetTreeKey performs both the work of the spec's get_tree_key function, and that
+// of pedersen_hash: it builds the polynomial in pedersen_hash without having to
+// create a mostly zero-filled buffer and "type cast" it to a 128-long 16-byte
+// array. Since at most the first 5 coefficients of the polynomial will be non-zero,
+// these 5 coefficients are created directly.
 func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
-	var poly [256]fr.Element
-	verkle.FromLEBytes(&poly[0], []byte{2, 64}) // little endian, 64 bytes
+	var poly [5]fr.Element
+
+	// (2 + 256 * length) little endian, length = 64 bytes
+	verkle.FromLEBytes(&poly[0], []byte{2, 64})
+
+	// 32-byte address, interpreted as two little endian
+	// 16-byte numbers.
 	verkle.FromLEBytes(&poly[1], address[:16])
 	verkle.FromLEBytes(&poly[2], address[16:])
+
 	// little-endian, 32-byte aligned treeIndex
 	var index [32]byte
 	for i, b := range treeIndex.Bytes() {
@@ -52,9 +63,6 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	}
 	verkle.FromLEBytes(&poly[3], index[:16])
 	verkle.FromLEBytes(&poly[4], index[16:])
-	for i := 5; i < len(poly); i++ {
-		verkle.CopyFr(&poly[i], &verkle.FrZero)
-	}
 
 	cfg, _ := verkle.GetConfig()
 	ret := cfg.CommitToPoly(poly[:], 0)
