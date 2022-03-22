@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -332,18 +331,28 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReader) error {
+	err := db.ReadAncients(func(reader ethdb.AncientReader) error {
 		// First try to look up the data in ancient database. Extra hash
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(freezerHeaderTable, number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
-			return nil
+		if len(data) > 0 {
+			var header *types.Header
+			err := rlp.DecodeBytes(data, &header)
+			if err != nil {
+				return err
+			}
+			if header != nil && header.Hash() == hash {
+				return nil
+			}
 		}
 		// If not, try reading from leveldb
 		data, _ = db.Get(headerKey(number, hash))
 		return nil
 	})
+	if err != nil {
+		return nil
+	}
 	return data
 }
 
