@@ -137,6 +137,11 @@ func commands() map[string]cli.CommandFactory {
 				Meta2: meta2,
 			}, nil
 		},
+		"console": func() (cli.Command, error) {
+			return &server.ConsoleCommand{
+				UI: ui,
+			}, nil
+		},
 	}
 }
 

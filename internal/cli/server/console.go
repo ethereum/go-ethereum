@@ -1,4 +1,4 @@
-package cli
+package server
 
 import (
 	"fmt"
@@ -6,99 +6,94 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/internal/cli/flagset"
-	"github.com/ethereum/go-ethereum/rpc"
-
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mitchellh/cli"
 )
 
-// AttachCommand is the command to Connect to remote Bor IPC console
-type AttachCommand struct {
+// ConsoleCommand is the command to Connect to remote Bor IPC console
+type ConsoleCommand struct {
+	// cli configuration
+	cliConfig *Config
+
+	// final configuration
+	config *Config
+
+	configFile    []string
 	UI            cli.Ui
-	Meta          *Meta
-	Meta2         *Meta2
 	ExecCMD       string
 	Endpoint      string
 	PreloadJSFlag string
 	JSpathFlag    string
+	srv           *Server
 }
 
 // Help implements the cli.Command interface
-func (c *AttachCommand) Help() string {
-	return `Usage: bor attach <IPC FILE>
+func (c *ConsoleCommand) Help() string {
+	return `Usage: bor console
 
-  Connect to remote Bor IPC console.`
+  Connect to local Bor IPC console.`
 }
 
 // Synopsis implements the cli.Command interface
-func (c *AttachCommand) Synopsis() string {
-	return "Connect to Bor via IPC"
-}
-
-func (c *AttachCommand) Flags() *flagset.Flagset {
-
-	f := flagset.NewFlagSet("attach")
-
-	f.StringFlag(&flagset.StringFlag{
-		Name:  "exec",
-		Usage: "Command to run in remote console",
-		Value: &c.ExecCMD,
-	})
-
-	f.StringFlag(&flagset.StringFlag{
-		Name:  "preload",
-		Usage: "Comma separated list of JavaScript files to preload into the console",
-		Value: &c.PreloadJSFlag,
-	})
-
-	f.StringFlag(&flagset.StringFlag{
-		Name:  "jspath",
-		Usage: "JavaScript root path for `loadScript`",
-		Value: &c.JSpathFlag,
-	})
-
-	return f
+func (c *ConsoleCommand) Synopsis() string {
+	return "Connect to Bor console"
 }
 
 // Run implements the cli.Command interface
-func (c *AttachCommand) Run(args []string) int {
-
+func (c *ConsoleCommand) Run(args []string) int {
 	flags := c.Flags()
+	if err := flags.Parse(args); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
-	//check if first arg is flag or IPC location
-	if len(args) == 0 {
-		args = append(args, "")
-	}
-	if args[0] != "" && string(args[0][0:2]) == "--" {
-		if err := flags.Parse(args); err != nil {
+	// read config file
+	config := DefaultConfig()
+	for _, configFile := range c.configFile {
+		cfg, err := readConfigFile(configFile)
+		if err != nil {
 			c.UI.Error(err.Error())
 			return 1
 		}
-	} else {
-		c.Endpoint = args[0]
-		if err := flags.Parse(args[1:]); err != nil {
+		if err := config.Merge(cfg); err != nil {
 			c.UI.Error(err.Error())
 			return 1
 		}
 	}
-	c.remoteConsole()
+	if err := config.Merge(c.cliConfig); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+	c.config = config
+
+	srv, err := NewServer(config)
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+	c.srv = srv
+
+	c.localConsole()
 
 	return 0
 }
 
-// remoteConsole will connect to a remote bor instance, attaching a JavaScript
-// console to it.
-func (c *AttachCommand) remoteConsole() error {
-	// Attach to a remotely running geth instance and start the JavaScript console
+// localConsole starts a new geth node, attaching a JavaScript console to it at the
+// same time.
+func (c *ConsoleCommand) localConsole() error {
+	// Create and start the node based on the CLI flags
+	stack := c.srv.node
+	stack.Start()
+	defer stack.Close()
 
 	path := node.DefaultDataDir()
 
 	if c.Endpoint == "" {
-		if c.Meta.dataDir != "" {
-			path = c.Meta.dataDir
+		if c.config.DataDir != "" {
+			path = c.config.DataDir
 		}
 		if path != "" {
 			homeDir, _ := os.UserHomeDir()
@@ -106,9 +101,11 @@ func (c *AttachCommand) remoteConsole() error {
 		}
 		c.Endpoint = fmt.Sprintf("%s/bor.ipc", path)
 	}
-	client, err := dialRPC(c.Endpoint)
+
+	// Attach to the newly started node and start the JavaScript console
+	client, err := stack.Attach()
 	if err != nil {
-		utils.Fatalf("Unable to attach to remote bor: %v", err)
+		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
 	}
 	config := console.Config{
 		DataDir: path,
@@ -123,11 +120,11 @@ func (c *AttachCommand) remoteConsole() error {
 	}
 	defer console.Stop(false)
 
-	if c.ExecCMD != "" {
-		console.Evaluate(c.ExecCMD)
+	// If only a short execution was requested, evaluate and return
+	if script := c.ExecCMD; script != "" {
+		console.Evaluate(script)
 		return nil
 	}
-
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
@@ -151,7 +148,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript
 // scripts to preload before starting.
-func (c *AttachCommand) MakeConsolePreloads() []string {
+func (c *ConsoleCommand) MakeConsolePreloads() []string {
 	// Skip preloading if there's nothing to preload
 	if c.PreloadJSFlag == "" {
 		return nil
