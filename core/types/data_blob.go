@@ -292,15 +292,18 @@ func (blobs Blobs) copy() Blobs {
 	return cpy
 }
 
-func (blobs Blobs) ComputeCommitments() (commitments []KZGCommitment, ok bool) {
+// Return KZG commitments and versioned hashes that correspond to these blobs
+func (blobs Blobs) ComputeCommitments() (commitments []KZGCommitment, versionedHashes []common.Hash, ok bool) {
 	commitments = make([]KZGCommitment, len(blobs))
+	versionedHashes = make([]common.Hash, len(blobs))
 	for i, blob := range blobs {
 		commitments[i], ok = blob.ComputeCommitment()
 		if !ok {
-			return nil, false
+			return nil, nil, false
 		}
+		versionedHashes[i] = commitments[i].ComputeVersionedHash()
 	}
-	return commitments, true
+	return commitments, versionedHashes, true
 }
 
 type BlobTxWrapper struct {

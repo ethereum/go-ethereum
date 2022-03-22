@@ -267,12 +267,14 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		msg.Value.SetFromBig((*big.Int)(args.Value))
 		msg.Data = args.data()
 		msg.AccessList = types.AccessListView(al)
-		kzgs, ok := types.Blobs(args.Blobs).ComputeCommitments()
-		if ok { // if blobs are invalid we will omit the wrap-data
+		commitments, versionedHashes, ok := types.Blobs(args.Blobs).ComputeCommitments()
+		// XXX if blobs are invalid we will omit the wrap-data (and an error will pop-up later)
+		if ok {
 			opts = append(opts, types.WithTxWrapData(&types.BlobTxWrapData{
-				BlobKzgs: kzgs,
+				BlobKzgs: commitments,
 				Blobs:    args.Blobs,
 			}))
+			msg.BlobVersionedHashes = versionedHashes
 		}
 		data = &types.SignedBlobTx{Message: msg}
 	case args.MaxFeePerGas != nil:
