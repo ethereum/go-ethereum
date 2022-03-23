@@ -645,7 +645,7 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 			batchSize = uint64(1024)
 			maxBytes  = uint64(1024 * 1024)
 		)
-		for i := uint64(offset); i < items; {
+		for i := offset; i < items; {
 			if i+batchSize > items {
 				batchSize = items - i
 			}
