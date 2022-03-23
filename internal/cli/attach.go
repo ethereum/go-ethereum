@@ -114,7 +114,7 @@ func (c *AttachCommand) remoteConsole() error {
 		DataDir: path,
 		DocRoot: c.JSpathFlag,
 		Client:  client,
-		Preload: c.MakeConsolePreloads(),
+		Preload: c.makeConsolePreloads(),
 	}
 
 	console, err := console.New(config)
@@ -151,7 +151,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript
 // scripts to preload before starting.
-func (c *AttachCommand) MakeConsolePreloads() []string {
+func (c *AttachCommand) makeConsolePreloads() []string {
 	// Skip preloading if there's nothing to preload
 	if c.PreloadJSFlag == "" {
 		return nil
