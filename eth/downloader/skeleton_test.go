@@ -785,25 +785,37 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		skeleton := newSkeleton(db, peerset, drop, newHookedBackfiller())
 		skeleton.Sync(tt.head, true)
 
+		var progress skeletonProgress
 		// Wait a bit (bleah) for the initial sync loop to go to idle. This might
 		// be either a finish or a never-start hence why there's no event to hook.
-		time.Sleep(250 * time.Millisecond)
+		check := func() error {
+			if len(progress.Subchains) != len(tt.midstate) {
+				return fmt.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
 
-		// Check the post-init mid state if it matches the required results
-		var progress skeletonProgress
-		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
-
-		if len(progress.Subchains) != len(tt.midstate) {
-			t.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
-			continue
+			}
+			for j := 0; j < len(progress.Subchains); j++ {
+				if progress.Subchains[j].Head != tt.midstate[j].Head {
+					return fmt.Errorf("test %d, mid state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.midstate[j].Head)
+				}
+				if progress.Subchains[j].Tail != tt.midstate[j].Tail {
+					return fmt.Errorf("test %d, mid state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.midstate[j].Tail)
+				}
+			}
+			return nil
 		}
-		for j := 0; j < len(progress.Subchains); j++ {
-			if progress.Subchains[j].Head != tt.midstate[j].Head {
-				t.Errorf("test %d, mid state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.midstate[j].Head)
+
+		waitStart := time.Now()
+		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < time.Second; waitTime = waitTime * 2 {
+			time.Sleep(waitTime)
+			// Check the post-init end state if it matches the required results
+			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+			if err := check(); err == nil {
+				break
 			}
-			if progress.Subchains[j].Tail != tt.midstate[j].Tail {
-				t.Errorf("test %d, mid state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.midstate[j].Tail)
-			}
+		}
+		if err := check(); err != nil {
+			t.Error(err)
+			continue
 		}
 		var served uint64
 		for _, peer := range tt.peers {
@@ -830,22 +842,32 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Wait a bit (bleah) for the second sync loop to go to idle. This might
 		// be either a finish or a never-start hence why there's no event to hook.
-		time.Sleep(250 * time.Millisecond)
-
-		// Check the post-init mid state if it matches the required results
-		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
-
-		if len(progress.Subchains) != len(tt.endstate) {
-			t.Errorf("test %d, end state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.endstate))
-			continue
+		check = func() error {
+			if len(progress.Subchains) != len(tt.endstate) {
+				return fmt.Errorf("test %d, end state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.endstate))
+			}
+			for j := 0; j < len(progress.Subchains); j++ {
+				if progress.Subchains[j].Head != tt.endstate[j].Head {
+					return fmt.Errorf("test %d, end state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.endstate[j].Head)
+				}
+				if progress.Subchains[j].Tail != tt.endstate[j].Tail {
+					return fmt.Errorf("test %d, end state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.endstate[j].Tail)
+				}
+			}
+			return nil
 		}
-		for j := 0; j < len(progress.Subchains); j++ {
-			if progress.Subchains[j].Head != tt.endstate[j].Head {
-				t.Errorf("test %d, end state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.endstate[j].Head)
+		waitStart = time.Now()
+		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < time.Second; waitTime = waitTime * 2 {
+			time.Sleep(waitTime)
+			// Check the post-init end state if it matches the required results
+			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+			if err := check(); err == nil {
+				break
 			}
-			if progress.Subchains[j].Tail != tt.endstate[j].Tail {
-				t.Errorf("test %d, end state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.endstate[j].Tail)
-			}
+		}
+		if err := check(); err != nil {
+			t.Error(err)
+			continue
 		}
 		// Check that the peers served no more headers than we actually needed
 		served = 0
