@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -72,6 +73,7 @@ Remove blockchain and state databases`,
 			dbImportCmd,
 			dbExportCmd,
 			dbMetadataCmd,
+			dbMigrateFreezerCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -250,6 +252,23 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.GoerliFlag,
 		},
 		Description: "Shows metadata about the chain status.",
+	}
+	dbMigrateFreezerCmd = cli.Command{
+		Action:    utils.MigrateFlags(freezerMigrate),
+		Name:      "freezer-migrate",
+		Usage:     "Migrate legacy parts of the freezer. (WARNING: may take a long time)",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.SepoliaFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: `The freezer-migrate command checks your database for receipts in a legacy format and updates those.
+WARNING: please back-up the receipt files in your ancients before running this command.`,
 	}
 )
 
@@ -749,4 +768,89 @@ func showMetaData(ctx *cli.Context) error {
 	table.AppendBulk(data)
 	table.Render()
 	return nil
+}
+
+func freezerMigrate(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	// Check first block for legacy receipt format
+	numAncients, err := db.Ancients()
+	if err != nil {
+		return err
+	}
+	if numAncients < 1 {
+		log.Info("No receipts in freezer to migrate")
+		return nil
+	}
+
+	isFirstLegacy, firstIdx, err := dbHasLegacyReceipts(db, 0)
+	if err != nil {
+		return err
+	}
+	if !isFirstLegacy {
+		log.Info("No legacy receipts to migrate")
+		return nil
+	}
+
+	log.Info("Starting migration", "ancients", numAncients, "firstLegacy", firstIdx)
+	start := time.Now()
+	if err := db.MigrateTable("receipts", types.ConvertLegacyStoredReceipts); err != nil {
+		return err
+	}
+	if err := db.Close(); err != nil {
+		return err
+	}
+	log.Info("Migration finished", "duration", time.Since(start))
+
+	return nil
+}
+
+// dbHasLegacyReceipts checks freezer entries for legacy receipts. It stops at the first
+// non-empty receipt and checks its format. The index of this first non-empty element is
+// the second return parameter.
+func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, error) {
+	// Check first block for legacy receipt format
+	numAncients, err := db.Ancients()
+	if err != nil {
+		return false, 0, err
+	}
+	if numAncients < 1 {
+		return false, 0, nil
+	}
+	if firstIdx >= numAncients {
+		return false, firstIdx, nil
+	}
+	var (
+		legacy       bool
+		blob         []byte
+		emptyRLPList = []byte{192}
+	)
+	// Find first block with non-empty receipt, only if
+	// the index is not already provided.
+	if firstIdx == 0 {
+		for i := uint64(0); i < numAncients; i++ {
+			blob, err = db.Ancient("receipts", i)
+			if err != nil {
+				return false, 0, err
+			}
+			if len(blob) == 0 {
+				continue
+			}
+			if !bytes.Equal(blob, emptyRLPList) {
+				firstIdx = i
+				break
+			}
+		}
+	}
+	// Is first non-empty receipt legacy?
+	first, err := db.Ancient("receipts", firstIdx)
+	if err != nil {
+		return false, 0, err
+	}
+	legacy, err = types.IsLegacyStoredReceipts(first)
+	return legacy, firstIdx, err
 }
