@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
@@ -74,7 +75,7 @@ func TestFreezerBasics(t *testing.T) {
 	}
 	// Check that we cannot read too far
 	_, err = f.Retrieve(uint64(255))
-	if err != errOutOfBounds {
+	if err != ethdb.ErrAncientOutOfBounds {
 		t.Fatal(err)
 	}
 }
@@ -603,10 +604,10 @@ func TestFreezerOffset(t *testing.T) {
 		require.NoError(t, batch.commit())
 
 		checkRetrieveError(t, f, map[uint64]error{
-			0: errOutOfBounds,
-			1: errOutOfBounds,
-			2: errOutOfBounds,
-			3: errOutOfBounds,
+			0: ethdb.ErrAncientOutOfBounds,
+			1: ethdb.ErrAncientOutOfBounds,
+			2: ethdb.ErrAncientOutOfBounds,
+			3: ethdb.ErrAncientOutOfBounds,
 		})
 		checkRetrieve(t, f, map[uint64][]byte{
 			4: getChunk(20, 0xbb),
@@ -651,11 +652,11 @@ func TestFreezerOffset(t *testing.T) {
 		t.Log(f.dumpIndexString(0, 100))
 
 		checkRetrieveError(t, f, map[uint64]error{
-			0:      errOutOfBounds,
-			1:      errOutOfBounds,
-			2:      errOutOfBounds,
-			3:      errOutOfBounds,
-			999999: errOutOfBounds,
+			0:      ethdb.ErrAncientOutOfBounds,
+			1:      ethdb.ErrAncientOutOfBounds,
+			2:      ethdb.ErrAncientOutOfBounds,
+			3:      ethdb.ErrAncientOutOfBounds,
+			999999: ethdb.ErrAncientOutOfBounds,
 		})
 		checkRetrieve(t, f, map[uint64][]byte{
 			1000000: getChunk(20, 0xbb),
@@ -703,7 +704,7 @@ func TestTruncateTail(t *testing.T) {
 	f.truncateTail(1)
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds,
+		0: ethdb.ErrAncientOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
 		1: getChunk(20, 0xEE),
@@ -721,7 +722,7 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds,
+		0: ethdb.ErrAncientOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
 		1: getChunk(20, 0xEE),
@@ -735,8 +736,8 @@ func TestTruncateTail(t *testing.T) {
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
 	f.truncateTail(2)
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds,
-		1: errOutOfBounds,
+		0: ethdb.ErrAncientOutOfBounds,
+		1: ethdb.ErrAncientOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
 		2: getChunk(20, 0xdd),
@@ -755,8 +756,8 @@ func TestTruncateTail(t *testing.T) {
 	defer f.Close()
 
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds,
-		1: errOutOfBounds,
+		0: ethdb.ErrAncientOutOfBounds,
+		1: ethdb.ErrAncientOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
 		2: getChunk(20, 0xdd),
@@ -769,13 +770,13 @@ func TestTruncateTail(t *testing.T) {
 	// truncate all, the entire freezer should be deleted
 	f.truncateTail(7)
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds,
-		1: errOutOfBounds,
-		2: errOutOfBounds,
-		3: errOutOfBounds,
-		4: errOutOfBounds,
-		5: errOutOfBounds,
-		6: errOutOfBounds,
+		0: ethdb.ErrAncientOutOfBounds,
+		1: ethdb.ErrAncientOutOfBounds,
+		2: ethdb.ErrAncientOutOfBounds,
+		3: ethdb.ErrAncientOutOfBounds,
+		4: ethdb.ErrAncientOutOfBounds,
+		5: ethdb.ErrAncientOutOfBounds,
+		6: ethdb.ErrAncientOutOfBounds,
 	})
 }
 
@@ -806,13 +807,13 @@ func TestTruncateHead(t *testing.T) {
 	// NewHead is required to be 3, the entire table should be truncated
 	f.truncateHead(4)
 	checkRetrieveError(t, f, map[uint64]error{
-		0: errOutOfBounds, // Deleted by tail
-		1: errOutOfBounds, // Deleted by tail
-		2: errOutOfBounds, // Deleted by tail
-		3: errOutOfBounds, // Deleted by tail
-		4: errOutOfBounds, // Deleted by Head
-		5: errOutOfBounds, // Deleted by Head
-		6: errOutOfBounds, // Deleted by Head
+		0: ethdb.ErrAncientOutOfBounds, // Deleted by tail
+		1: ethdb.ErrAncientOutOfBounds, // Deleted by tail
+		2: ethdb.ErrAncientOutOfBounds, // Deleted by tail
+		3: ethdb.ErrAncientOutOfBounds, // Deleted by tail
+		4: ethdb.ErrAncientOutOfBounds, // Deleted by Head
+		5: ethdb.ErrAncientOutOfBounds, // Deleted by Head
+		6: ethdb.ErrAncientOutOfBounds, // Deleted by Head
 	})
 
 	// Append new items

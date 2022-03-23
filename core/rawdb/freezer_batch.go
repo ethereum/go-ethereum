@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 )
@@ -116,7 +117,7 @@ func (batch *freezerTableBatch) reset() {
 // existing data.
 func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 	if item != batch.curItem {
-		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
+		return fmt.Errorf("%w: have %d want %d", ethdb.ErrAncientOutOrderInsertion, item, batch.curItem)
 	}
 
 	// Encode the item.
@@ -136,7 +137,7 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 // existing data.
 func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	if item != batch.curItem {
-		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
+		return fmt.Errorf("%w: have %d want %d", ethdb.ErrAncientOutOrderInsertion, item, batch.curItem)
 	}
 
 	encItem := blob
