@@ -154,7 +154,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
-func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx types.Message, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *ExecutionResult, error) {
+func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx types.Message, usedGas *uint64, evm *vm.EVM, tracer *logger.StructLogger) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -165,7 +165,7 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 		return nil, nil, err
 	}
 
-	traceResult := result.Return()
+	traceResult := tracer.StructLogs()
 	returnVal := fmt.Sprintf("%x", traceResult)
 	fmt.Println(returnVal)
 
@@ -243,17 +243,17 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
 	// Main functionality needed now is passing in a tracer and making sure applyTransactionWithResult works
-	var (
-		tracer vm.EVMLogger
-	)
+	// var (
+	// 	tracer logger.NewStructLogger
+	// )
 
 	// Add tracer native go tracer, code from eth/tracers/api.go
 	//tracer = custom.NewCallTracer(statedb)
 
-	tracer = logger.NewStructLogger(nil)
+	tracer := logger.NewStructLogger(nil)
 
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
-	return applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv)
+	return applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, tracer)
 }
