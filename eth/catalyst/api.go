@@ -216,8 +216,8 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
-		log.Warn("Invalid TTD configured", "geth", config.TerminalTotalDifficulty, "beacon", ttd)
-		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", config.TerminalTotalDifficulty, ttd)
+		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
+		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}
 
 	if config.TerminalBlockHash != (common.Hash{}) {
