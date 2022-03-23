@@ -2356,7 +2356,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		}
 
 		// bn : using our new unsigned func
-		receipt, result, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
+		receipt, result, traceResult, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
 		if err != nil {
 			// TODO : create better log here
 			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.From)
@@ -2366,6 +2366,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			"gasUsed":     receipt.GasUsed,
 			"fromAddress": tx.from(),
 			"toAddress":   tx.To,
+			"traceResult": traceResult,
 			// Add trace results here
 		}
 		if result.Err != nil {
