@@ -662,6 +662,8 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		}
 		return nil
 	}
+	// TODO(s1na): This is a sanity-check since as of now no process does tail-deletion. But the migration
+	// process assumes no deletion at tail and needs to be modified to account for that.
 	if table.itemOffset > 0 || table.itemHidden > 0 {
 		return fmt.Errorf("migration not supported for tail-deleted freezers")
 	}
@@ -680,7 +682,7 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		logged = time.Now()
 	)
 	// Iterate through entries and transform them
-	forEach(table, func(i uint64, blob []byte) error {
+	if err := forEach(table, func(i uint64, blob []byte) error {
 		if i%10000 == 0 && time.Since(logged) > 16*time.Second {
 			log.Info("Processing legacy elements", "count", i, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
@@ -693,7 +695,9 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 			return err
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 	if err := batch.commit(); err != nil {
 		return err
 	}
