@@ -639,13 +639,13 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// forEach iterates every entry in the table serially and in order, calling `fn`
 	// with the item as argument. If `fn` returns an error the iteration stops
 	// and that error will be returned.
-	forEach := func(t *freezerTable, fn func(uint64, []byte) error) error {
+	forEach := func(t *freezerTable, offset uint64, fn func(uint64, []byte) error) error {
 		var (
 			items     = atomic.LoadUint64(&t.items)
 			batchSize = uint64(1024)
 			maxBytes  = uint64(1024 * 1024)
 		)
-		for i := uint64(0); i < items; {
+		for i := uint64(offset); i < items; {
 			if i+batchSize > items {
 				batchSize = items - i
 			}
@@ -680,9 +680,13 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		out    []byte
 		start  = time.Now()
 		logged = time.Now()
+		offset = newTable.items
 	)
+	if offset > 0 {
+		log.Info("found previous migration attempt", "migrated", offset)
+	}
 	// Iterate through entries and transform them
-	if err := forEach(table, func(i uint64, blob []byte) error {
+	if err := forEach(table, offset, func(i uint64, blob []byte) error {
 		if i%10000 == 0 && time.Since(logged) > 16*time.Second {
 			log.Info("Processing legacy elements", "count", i, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
