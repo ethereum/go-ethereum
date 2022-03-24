@@ -25,9 +25,9 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/naoina/toml"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/naoina/toml"
 	"github.com/scroll-tech/go-ethereum/accounts/external"
 	"github.com/scroll-tech/go-ethereum/accounts/keystore"
 	"github.com/scroll-tech/go-ethereum/accounts/scwallet"

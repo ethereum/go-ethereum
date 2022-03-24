@@ -31,6 +31,8 @@ import (
 	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
@@ -38,7 +40,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb/leveldb"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 func init() {

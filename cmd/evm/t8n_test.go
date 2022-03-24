@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
+
 	"github.com/scroll-tech/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/scroll-tech/go-ethereum/internal/cmdtest"
 )

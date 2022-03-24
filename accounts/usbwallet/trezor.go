@@ -28,6 +28,7 @@ import (
 	"math/big"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/accounts/usbwallet/trezor"
 	"github.com/scroll-tech/go-ethereum/common"

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/ethdb/leveldb"

@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/golang/snappy"
+
 	"github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/rlp"
 )

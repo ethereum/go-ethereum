@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rjeczalik/notify"
+
 	"github.com/scroll-tech/go-ethereum/log"
 )
 

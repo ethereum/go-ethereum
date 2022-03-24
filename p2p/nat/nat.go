@@ -26,6 +26,7 @@ import (
 	"time"
 
 	natpmp "github.com/jackpal/go-nat-pmp"
+
 	"github.com/scroll-tech/go-ethereum/log"
 )
 

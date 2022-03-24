@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-colorable"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/prometheus/tsdb/fileutil"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"

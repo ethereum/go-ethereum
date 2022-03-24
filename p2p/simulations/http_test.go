@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-colorable"
+
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/node"

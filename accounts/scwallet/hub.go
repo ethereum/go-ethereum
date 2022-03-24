@@ -42,6 +42,7 @@ import (
 	"time"
 
 	pcsc "github.com/gballet/go-libpcsclite"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/event"

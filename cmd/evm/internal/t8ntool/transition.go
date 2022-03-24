@@ -27,6 +27,8 @@ import (
 	"path"
 	"strings"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -38,7 +40,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/tests"
-	"gopkg.in/urfave/cli.v1"
 )
 
 const (

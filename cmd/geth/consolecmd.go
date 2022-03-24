@@ -22,11 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/console"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/rpc"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

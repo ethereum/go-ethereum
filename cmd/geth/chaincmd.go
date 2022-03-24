@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
@@ -38,7 +40,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

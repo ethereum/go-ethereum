@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/tsdb/fileutil"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/ethdb"

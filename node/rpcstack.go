@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 
 	"github.com/rs/cors"
+
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )

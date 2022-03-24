@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/node"

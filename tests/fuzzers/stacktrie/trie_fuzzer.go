@@ -25,10 +25,11 @@ import (
 	"io"
 	"sort"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 type fuzzer struct {

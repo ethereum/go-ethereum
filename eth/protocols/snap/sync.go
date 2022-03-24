@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
@@ -41,7 +43,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p/msgrate"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 var (

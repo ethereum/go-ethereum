@@ -25,12 +25,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/accounts/keystore"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/console/prompt"
 	"github.com/scroll-tech/go-ethereum/p2p/dnsdisc"
 	"github.com/scroll-tech/go-ethereum/p2p/enode"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/holiman/uint256"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/math"
 )

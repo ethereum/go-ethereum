@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/scroll-tech/go-ethereum/log"
 )
 

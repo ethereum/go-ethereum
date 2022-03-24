@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/graphql-go"
+
 	"github.com/scroll-tech/go-ethereum/internal/ethapi"
 	"github.com/scroll-tech/go-ethereum/node"
 )

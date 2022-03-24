@@ -12,7 +12,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Lint
       run: |
-        rm -rf $HOME/.cache/golangci-lint 
+        rm -rf $HOME/.cache/golangci-lint
         make lint
     - name: Test
       run: |
@@ -20,3 +20,24 @@ jobs:
         make test
     - name: Upload coverage report
       run: bash <(curl -s https://codecov.io/bash)
+  goimports-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17.x
+    - name: Install goimports
+      run: go get golang.org/x/tools/cmd/goimports
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+    - run: goimports -local github.com/scroll-tech/go-ethereum/ -w .
+    - run: go mod tidy
+    # If there are any diffs from goimports or go mod tidy, fail.
+    - name: Verify no changes from goimports and go mod tidy
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          exit 1
+        fi

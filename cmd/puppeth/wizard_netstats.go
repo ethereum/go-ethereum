@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/olekukonko/tablewriter"
+
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/log"
 )

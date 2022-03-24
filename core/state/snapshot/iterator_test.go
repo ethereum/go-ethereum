@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 )

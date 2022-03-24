@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -38,7 +40,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/vm/runtime"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var runCommand = cli.Command{

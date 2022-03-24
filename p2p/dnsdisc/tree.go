@@ -26,11 +26,12 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/p2p/enode"
 	"github.com/scroll-tech/go-ethereum/p2p/enr"
 	"github.com/scroll-tech/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // Tree is a merkle tree of node records.

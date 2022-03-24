@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"strings"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/tests"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

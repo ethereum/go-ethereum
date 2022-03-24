@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-bexpr"
+
 	"github.com/scroll-tech/go-ethereum/log"
 )
 

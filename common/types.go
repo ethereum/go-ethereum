@@ -28,8 +28,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/scroll-tech/go-ethereum/common/hexutil"
 )
 
 // Lengths of hashes and addresses in bytes.

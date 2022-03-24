@@ -31,6 +31,7 @@ import (
 	"github.com/dop251/goja"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
+
 	"github.com/scroll-tech/go-ethereum/console/prompt"
 	"github.com/scroll-tech/go-ethereum/internal/jsre"
 	"github.com/scroll-tech/go-ethereum/internal/jsre/deps"

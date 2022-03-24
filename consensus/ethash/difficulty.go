@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/holiman/uint256"
+
 	"github.com/scroll-tech/go-ethereum/core/types"
 )
 

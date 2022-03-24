@@ -19,8 +19,9 @@ package utils
 import (
 	"fmt"
 
-	"github.com/scroll-tech/go-ethereum/eth/ethconfig"
 	"gopkg.in/urfave/cli.v1"
+
+	"github.com/scroll-tech/go-ethereum/eth/ethconfig"
 )
 
 var ShowDeprecated = cli.Command{

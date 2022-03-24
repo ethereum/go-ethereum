@@ -23,6 +23,8 @@ import (
 	"os"
 	"time"
 
+	cli "gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
@@ -34,7 +36,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
