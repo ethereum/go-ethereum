@@ -120,9 +120,11 @@ func TestSetupGenesis(t *testing.T) {
 				bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{}, nil, nil)
 				defer bc.Stop()
 
-				blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), db, 4, nil)
+				gendb := rawdb.NewMemoryDatabase()
+				oldcustomg.MustCommit(gendb)
+				blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), gendb, 4, nil)
 				bc.InsertChain(blocks)
-				bc.CurrentBlock()
+
 				// This should return a compatibility error.
 				return SetupGenesisBlock(db, &customg)
 			},

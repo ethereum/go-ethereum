@@ -18,6 +18,7 @@ package light
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math"
 	"math/big"
 	"testing"
@@ -88,16 +89,18 @@ func TestTxPool(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(sdb)
+		statedb = state.NewDatabase(sdb)
 	)
 	gspec.MustCommit(ldb)
+
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, poolTestBlocks, txPoolTestChainGen)
+	gchain, _ := core.GenerateChainWithInMemoryDB(params.TestChainConfig, genesis, ethash.NewFaker(), statedb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 	relay := &testTxRelay{
 		send:    make(chan int, 1),
 		discard: make(chan int, 1),

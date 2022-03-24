@@ -17,10 +17,11 @@
 package state
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -28,7 +29,7 @@ import (
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
 	db, root, _ := makeTestState()
-	db.TrieDB().Commit(root, false, nil)
+	db.TrieDB().Cap(root, 0)
 
 	state, err := New(root, db, nil)
 	if err != nil {
@@ -41,29 +42,47 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			hashes[it.Hash] = struct{}{}
 		}
 	}
+	// Check in-disk nodes
+	var (
+		seenNodes = make(map[common.Hash]struct{})
+		seenCodes = make(map[common.Hash]struct{})
+	)
+	it := db.TrieDB().DiskDB().(ethdb.Database).NewIterator(nil, nil)
+	for it.Next() {
+		ok, _ := rawdb.IsTrieNodeKey(it.Key())
+		if !ok {
+			continue
+		}
+		hash := crypto.Keccak256Hash(it.Value())
+		if _, ok := hashes[hash]; !ok {
+			t.Errorf("state entry not reported %x", it.Key())
+		}
+		seenNodes[hash] = struct{}{}
+	}
+	it.Release()
+
+	// Check in-disk codes
+	it = db.TrieDB().DiskDB().(ethdb.Database).NewIterator(nil, nil)
+	for it.Next() {
+		ok, hash := rawdb.IsCodeKey(it.Key())
+		if !ok {
+			continue
+		}
+		if _, ok := hashes[common.BytesToHash(hash)]; !ok {
+			t.Errorf("state entry not reported %x", it.Key())
+		}
+		seenCodes[common.BytesToHash(hash)] = struct{}{}
+	}
+	it.Release()
+
 	// Cross check the iterated hashes and the database/nodepool content
 	for hash := range hashes {
-		if _, err = db.TrieDB().Node(hash); err != nil {
-			_, err = db.ContractCode(common.Hash{}, hash)
+		_, ok := seenNodes[hash]
+		if !ok {
+			_, ok = seenCodes[hash]
 		}
-		if err != nil {
+		if !ok {
 			t.Errorf("failed to retrieve reported node %x", hash)
 		}
 	}
-	for _, hash := range db.TrieDB().Nodes() {
-		if _, ok := hashes[hash]; !ok {
-			t.Errorf("state entry not reported %x", hash)
-		}
-	}
-	it := db.TrieDB().DiskDB().(ethdb.Database).NewIterator(nil, nil)
-	for it.Next() {
-		key := it.Key()
-		if bytes.HasPrefix(key, []byte("secure-key-")) {
-			continue
-		}
-		if _, ok := hashes[common.BytesToHash(key)]; !ok {
-			t.Errorf("state entry not reported %x", key)
-		}
-	}
-	it.Release()
 }

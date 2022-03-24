@@ -25,9 +25,8 @@ import (
 
 // Tests if the trie diffs are tracked correctly.
 func TestTrieTracer(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
+	db := NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	trie, _ := New(common.Hash{}, db)
-	trie.tracer = newTracer()
 
 	// Insert a batch of entries, all the nodes should be marked as inserted
 	vals := []struct{ k, v string }{
@@ -57,7 +56,8 @@ func TestTrieTracer(t *testing.T) {
 		t.Fatalf("Unexpected inserted node tracked want %d got %d", len(seen), len(inserted))
 	}
 	for _, k := range inserted {
-		_, ok := seen[string(k)]
+		_, path := DecodeStorageKey(k)
+		_, ok := seen[string(path)]
 		if !ok {
 			t.Fatalf("Unexpected inserted node")
 		}
@@ -85,7 +85,8 @@ func TestTrieTracer(t *testing.T) {
 		t.Fatalf("Unexpected deleted node tracked want %d got %d", len(seen), len(deleted))
 	}
 	for _, k := range deleted {
-		_, ok := seen[string(k)]
+		_, path := DecodeStorageKey(k)
+		_, ok := seen[string(path)]
 		if !ok {
 			t.Fatalf("Unexpected inserted node")
 		}
@@ -93,9 +94,8 @@ func TestTrieTracer(t *testing.T) {
 }
 
 func TestTrieTracerNoop(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
+	db := NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	trie, _ := New(common.Hash{}, db)
-	trie.tracer = newTracer()
 
 	// Insert a batch of entries, all the nodes should be marked as inserted
 	vals := []struct{ k, v string }{

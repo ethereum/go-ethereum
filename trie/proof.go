@@ -35,9 +35,12 @@ import (
 // with the node that proves the absence of the key.
 func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	// Collect all nodes on the path to key.
+	var (
+		prefix []byte
+		nodes  []node
+		tn     = t.root
+	)
 	key = keybytesToHex(key)
-	var nodes []node
-	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case *shortNode:
@@ -46,16 +49,18 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 				tn = nil
 			} else {
 				tn = n.Val
+				prefix = append(prefix, n.Key...)
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
 		case *fullNode:
 			tn = n.Children[key[0]]
+			prefix = append(prefix, key[0])
 			key = key[1:]
 			nodes = append(nodes, n)
 		case hashNode:
 			var err error
-			tn, err = t.resolveHash(n, nil)
+			tn, err = t.resolveHash(n, prefix)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
@@ -551,7 +556,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := newWithRootNode(root)
+	tr := &Trie{root: root}
 	if empty {
 		tr.root = nil
 	}

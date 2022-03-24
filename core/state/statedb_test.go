@@ -53,11 +53,7 @@ func TestUpdateLeaks(t *testing.T) {
 			state.SetCode(addr, []byte{i, i, i, i, i})
 		}
 	}
-
-	root := state.IntermediateRoot(false)
-	if err := state.Database().TrieDB().Commit(root, false, nil); err != nil {
-		t.Errorf("can not commit trie %v to persistent database", root.Hex())
-	}
+	state.IntermediateRoot(false)
 
 	// Ensure that no data was leaked into the database
 	it := db.NewIterator(nil, nil)
@@ -106,7 +102,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if err = transState.Database().TrieDB().Commit(transRoot, false, nil); err != nil {
+	if err = transState.Database().TrieDB().Cap(transRoot, 0); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
@@ -114,7 +110,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
-	if err = finalState.Database().TrieDB().Commit(finalRoot, false, nil); err != nil {
+	if err = finalState.Database().TrieDB().Cap(finalRoot, 0); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", finalRoot.Hex())
 	}
 
@@ -715,7 +711,7 @@ func TestMissingTrieNodes(t *testing.T) {
 		root, _ = state.Commit(false)
 		t.Logf("root: %x", root)
 		// force-flush
-		state.Database().TrieDB().Cap(0)
+		state.Database().TrieDB().Cap(root, 0)
 	}
 	// Create a new state on the old root
 	state, _ = New(root, db, nil)

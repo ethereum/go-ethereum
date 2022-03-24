@@ -285,7 +285,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		req.Bytes = softResponseLimit
 	}
 	// Retrieve the requested state and bail out if non existent
-	tr, err := trie.New(req.Root, chain.StateCache().TrieDB())
+	tr, err := trie.New(req.Root, chain.TrieDB())
 	if err != nil {
 		return nil, nil
 	}
@@ -413,7 +413,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || abort {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.New(req.Root, chain.StateCache().TrieDB())
+			accTrie, err := trie.New(req.Root, chain.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -421,7 +421,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
 				return nil, nil
 			}
-			stTrie, err := trie.New(acc.Root, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewWithOwner(req.Root, account, acc.Root, chain.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -485,8 +485,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		req.Bytes = softResponseLimit
 	}
 	// Make sure we have the state associated with the request
-	triedb := chain.StateCache().TrieDB()
-
+	triedb := chain.TrieDB()
 	accTrie, err := trie.NewSecure(req.Root, triedb)
 	if err != nil {
 		// We don't have the requested state available, bail out
@@ -529,7 +528,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if err != nil || account == nil {
 				break
 			}
-			stTrie, err := trie.NewSecure(common.BytesToHash(account.Root), triedb)
+			stTrie, err := trie.NewSecureWithOwner(req.Root, common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
 			loads++ // always account database reads, even for failures
 			if err != nil {
 				break

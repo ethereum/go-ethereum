@@ -159,7 +159,7 @@ type snapshot interface {
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
 	diskdb ethdb.KeyValueStore      // Persistent database to store the snapshot
-	triedb *trie.Database           // In-memory cache to access the trie through
+	triedb trie.StateReader         // Database reader for accessing trie nodes
 	cache  int                      // Megabytes permitted to use for read caches
 	layers map[common.Hash]snapshot // Collection of all known layers
 	lock   sync.RWMutex
@@ -183,7 +183,7 @@ type Tree struct {
 //   This case happens when the snapshot is 'ahead' of the state trie.
 // - otherwise, the entire snapshot is considered invalid and will be recreated on
 //   a background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
+func New(diskdb ethdb.KeyValueStore, triedb trie.StateReader, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,

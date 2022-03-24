@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -72,6 +73,7 @@ func TestHeaderInsertion(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		statedb = state.NewDatabase(db)
 	)
 
 	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
@@ -79,9 +81,9 @@ func TestHeaderInsertion(t *testing.T) {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
+	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), statedb, 10)
 	// chain B: G->A1->B1...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
+	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), statedb, 10)
 	log.Root().SetHandler(log.StdoutHandler)
 
 	forker := NewForkChoice(hc, nil)

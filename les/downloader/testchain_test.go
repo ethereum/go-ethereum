@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -34,23 +36,42 @@ import (
 var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
-	testDB      = rawdb.NewMemoryDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000))
+	testGenDB   = rawdb.NewMemoryDatabase()
+	testGenesis = core.GenesisBlockForTesting(testGenDB, testAddress, big.NewInt(1000000000000000))
 )
 
-// The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
+var (
+	// The common prefix of all test chains and the corresponding
+	// database for creating forks on the top.
+	testChainBase *testChain
+	testChainDB   ethdb.Database
+)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
 func init() {
+	// Reduce some of the parameters to make the tester faster
+	fullMaxForkAncestry = 10000
+	lightMaxForkAncestry = 10000
+	blockCacheMaxItems = 1024
+	fsHeaderSafetyNet = 256
+	fsHeaderContCheck = 500 * time.Millisecond
+
+	testChainBase, testChainDB = newTestChain(blockCacheMaxItems+200, testGenesis)
+
 	var forkLen = int(fullMaxForkAncestry + 50)
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
-	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
-	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
+	go func() {
+		testChainForkLightA = testChainBase.makeFork(forkLen, false, 1, copyDB(testChainDB))
+		wg.Done()
+	}()
+	go func() {
+		testChainForkLightB = testChainBase.makeFork(forkLen, false, 2, copyDB(testChainDB))
+		wg.Done()
+	}()
+	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3, copyDB(testChainDB)); wg.Done() }()
 	wg.Wait()
 }
 
@@ -64,21 +85,23 @@ type testChain struct {
 }
 
 // newTestChain creates a blockchain of the given length.
-func newTestChain(length int, genesis *types.Block) *testChain {
+func newTestChain(length int, genesis *types.Block) (*testChain, ethdb.Database) {
 	tc := new(testChain).copy(length)
 	tc.genesis = genesis
 	tc.chain = append(tc.chain, genesis.Hash())
 	tc.headerm[tc.genesis.Hash()] = tc.genesis.Header()
 	tc.tdm[tc.genesis.Hash()] = tc.genesis.Difficulty()
 	tc.blockm[tc.genesis.Hash()] = tc.genesis
-	tc.generate(length-1, 0, genesis, false)
-	return tc
+
+	gendb := copyDB(testGenDB)
+	tc.generate(length-1, 0, genesis, gendb, false)
+	return tc, gendb
 }
 
 // makeFork creates a fork on top of the test chain.
-func (tc *testChain) makeFork(length int, heavy bool, seed byte) *testChain {
+func (tc *testChain) makeFork(length int, heavy bool, seed byte, gendb ethdb.Database) *testChain {
 	fork := tc.copy(tc.len() + length)
-	fork.generate(length, seed, tc.headBlock(), heavy)
+	fork.generate(length, seed, tc.headBlock(), gendb, heavy)
 	return fork
 }
 
@@ -114,11 +137,11 @@ func (tc *testChain) copy(newlen int) *testChain {
 // the returned hash chain is ordered head->parent. In addition, every 22th block
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
-func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
+func (tc *testChain) generate(n int, seed byte, parent *types.Block, gendb ethdb.Database, heavy bool) {
 	// start := time.Now()
 	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), gendb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -227,4 +250,14 @@ func (tc *testChain) hashToNumber(target common.Hash) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func copyDB(src ethdb.Database) ethdb.Database {
+	dest := rawdb.NewMemoryDatabase()
+	iter := src.NewIterator(nil, nil)
+	for iter.Next() {
+		dest.Put(iter.Key(), iter.Value())
+	}
+	iter.Release()
+	return dest
 }

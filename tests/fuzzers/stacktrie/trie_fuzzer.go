@@ -26,9 +26,9 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 type fuzzer struct {
@@ -142,11 +142,9 @@ func (f *fuzzer) fuzz() int {
 
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
-		spongeA     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbA         = trie.NewDatabase(spongeA)
+		dbA         = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		trieA, _    = trie.New(common.Hash{}, dbA)
-		spongeB     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		trieB       = trie.NewStackTrie(spongeB)
+		trieB       = trie.NewStackTrie(rawdb.NewMemoryDatabase())
 		vals        kvs
 		useful      bool
 		maxElements = 10000
@@ -175,12 +173,14 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, _, err := trieA.Commit(nil)
+	result, err := trieA.Commit(nil)
 	if err != nil {
 		panic(err)
 	}
+	rootA := result.Root
+
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false, nil)
+	dbA.Cap(rootA, 0)
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)
@@ -196,11 +196,6 @@ func (f *fuzzer) fuzz() int {
 	}
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
-	}
-	sumA := spongeA.sponge.Sum(nil)
-	sumB := spongeB.sponge.Sum(nil)
-	if !bytes.Equal(sumA, sumB) {
-		panic(fmt.Sprintf("sequence differ: (trie) %x != %x (stacktrie)", sumA, sumB))
 	}
 	return 1
 }

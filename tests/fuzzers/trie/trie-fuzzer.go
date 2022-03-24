@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -141,12 +141,13 @@ func Fuzz(input []byte) int {
 }
 
 func runRandTest(rt randTest) error {
-
-	triedb := trie.NewDatabase(memorydb.New())
-
-	tr, _ := trie.New(common.Hash{}, triedb)
-	values := make(map[string]string) // tracks content of the trie
-
+	var (
+		origin common.Hash
+		triedb = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+		tr, _  = trie.New(origin, triedb)
+		values = make(map[string]string) // tracks content of the trie
+		prev   *trie.CommitResult
+	)
 	for i, step := range rt {
 		switch step.op {
 		case opUpdate:
@@ -162,15 +163,38 @@ func runRandTest(rt randTest) error {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, _, rt[i].err = tr.Commit(nil)
-		case opHash:
-			tr.Hash()
-		case opReset:
-			hash, _, err := tr.Commit(nil)
+			result, err := tr.Commit(nil)
 			if err != nil {
 				return err
 			}
-			newtr, err := trie.New(hash, triedb)
+			if prev == nil {
+				prev = result
+			} else {
+				result.Merge(prev)
+				prev = result
+			}
+		case opHash:
+			tr.Hash()
+		case opReset:
+			result, err := tr.Commit(nil)
+			if err != nil {
+				return err
+			}
+			if prev != nil {
+				result.Merge(prev)
+			}
+			if result.Root != origin {
+				err = triedb.Update(result.Root, origin, result.Nodes())
+				if err != nil {
+					return err
+				}
+				err = triedb.Cap(result.Root, 128)
+				if err != nil {
+					return err
+				}
+			}
+			origin, prev = result.Root, nil
+			newtr, err := trie.New(origin, triedb)
 			if err != nil {
 				return err
 			}

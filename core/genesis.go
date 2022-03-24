@@ -99,9 +99,14 @@ func (ga *GenesisAlloc) flush(db ethdb.Database) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	err = statedb.Database().TrieDB().Commit(root, true, nil)
-	if err != nil {
-		return common.Hash{}, err
+	// Flush the in-memory state changes into disk only when state is
+	// actually changed. Otherwise, an error will be returned for
+	// nothing-to-commit on diskLayer.
+	if len(*ga) > 0 {
+		err = statedb.Database().TrieDB().Cap(root, 0)
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
 	return root, nil
 }
@@ -252,10 +257,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
-	// We have the genesis block in database(perhaps in ancient database)
-	// but the corresponding state is missing.
-	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	// The genesis block is present(perhaps in ancient database) while the
+	// state database is empty. It can happen that the node is initialized
+	// with an external ancient store. Commit genesis state in this case.
+	if trie.NewDatabase(db, &trie.Config{ReadOnly: true}).IsEmpty() {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
