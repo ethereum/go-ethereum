@@ -37,6 +37,7 @@ import (
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
 	trie             Trie
+	db               *preimageStore
 	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
@@ -53,15 +54,19 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
+func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeReader) (*SecureTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
-	trie, err := New(owner, root, db)
+	trie, err := New(stateRoot, owner, root, db)
 	if err != nil {
 		return nil, err
 	}
-	return &SecureTrie{trie: *trie}, nil
+	var preimages *preimageStore
+	if db, ok := db.(*Database); ok {
+		preimages = db.preimage
+	}
+	return &SecureTrie{trie: *trie, db: preimages}, nil
 }
 
 // Get returns the value for key stored in the trie.
@@ -153,27 +158,26 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	return t.trie.db.preimage(common.BytesToHash(shaKey))
+	if t.db == nil {
+		return nil
+	}
+	return t.db.preimage(common.BytesToHash(shaKey))
 }
 
-// Commit writes all nodes and the secure hash pre-images to the trie's database.
-// Nodes are stored with their sha3 hash as the key.
-//
-// Committing flushes nodes from memory. Subsequent Get calls will load nodes
-// from the database.
-func (t *SecureTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
+// Commit collects all dirty nodes as return and writes the secure hash pre-images
+// to the preimage store if pre-images recording is enabled.
+func (t *SecureTrie) Commit(onleaf LeafCallback) (common.Hash, *NodeSet, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		if t.trie.db.preimages != nil { // Ugly direct check but avoids the below write lock
-			t.trie.db.lock.Lock()
+		if t.db != nil {
+			preimages := make(map[common.Hash][]byte)
 			for hk, key := range t.secKeyCache {
-				t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
+				preimages[common.BytesToHash([]byte(hk))] = key
 			}
-			t.trie.db.lock.Unlock()
+			t.db.insertPreimage(preimages)
 		}
 		t.secKeyCache = make(map[string][]byte)
 	}
-	// Commit the trie to its intermediate node database
 	return t.trie.Commit(onleaf)
 }
 
@@ -187,6 +191,7 @@ func (t *SecureTrie) Hash() common.Hash {
 func (t *SecureTrie) Copy() *SecureTrie {
 	return &SecureTrie{
 		trie:        *t.trie.Copy(),
+		db:          t.db,
 		secKeyCache: t.secKeyCache,
 	}
 }

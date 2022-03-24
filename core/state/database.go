@@ -43,7 +43,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -54,8 +54,8 @@ type Database interface {
 	// ContractCodeSize retrieves a particular contracts code's size.
 	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
 
-	// TrieDB retrieves the low level trie database used for data storage.
-	TrieDB() *trie.Database
+	// NodeDB returns the underlying database for managing trie nodes.
+	NodeDB() trie.NodeDatabase
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -88,9 +88,10 @@ type Trie interface {
 	// can be used even if the trie doesn't have one.
 	Hash() common.Hash
 
-	// Commit writes all nodes to the trie's memory database, tracking the internal
-	// and external (for account tries) references.
-	Commit(onleaf trie.LeafCallback) (common.Hash, int, error)
+	// Commit collects all nodes as return which are marked dirty since the last commit
+	// and replaces all dirty nodes with their hash. New root hash will be calculated
+	// and returned.
+	Commit(onleaf trie.LeafCallback) (common.Hash, *trie.NodeSet, error)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key.
@@ -119,21 +120,42 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            trie.NewDatabaseWithConfig(db, config),
+		db:            trie.NewDatabase(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}
 }
 
+// NewDatabaseWithNodeDB creates a state database with a live node database.
+func NewDatabaseWithNodeDB(db *trie.Database) Database {
+	csc, _ := lru.New(codeSizeCacheSize)
+	return &cachingDB{
+		db:            db,
+		codeSizeCache: csc,
+		codeCache:     fastcache.New(codeCacheSize),
+	}
+}
+
+// NewDatabaseWithSnapshot creates a state database from the live snapshot.
+// It has data isolation and is safe to apply the mutation on the top.
+func NewDatabaseWithSnapshot(snap trie.NodeDatabase) (Database, error) {
+	csc, _ := lru.New(codeSizeCacheSize)
+	return &cachingDB{
+		db:            snap,
+		codeSizeCache: csc,
+		codeCache:     fastcache.New(codeCacheSize),
+	}, nil
+}
+
 type cachingDB struct {
-	db            *trie.Database
+	db            trie.NodeDatabase
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(common.Hash{}, root, db.db)
+	tr, err := trie.NewSecure(root, common.Hash{}, root, db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +163,8 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(addrHash, root, db.db)
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
+	tr, err := trie.NewSecure(stateRoot, addrHash, root, db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +220,7 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 	return len(code), err
 }
 
-// TrieDB retrieves any intermediate trie-node caching layer.
-func (db *cachingDB) TrieDB() *trie.Database {
+// NodeDB returns the underlying database for storing nodes.
+func (db *cachingDB) NodeDB() trie.NodeDatabase {
 	return db.db
 }

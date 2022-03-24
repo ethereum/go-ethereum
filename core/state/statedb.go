@@ -117,9 +117,11 @@ type StateDB struct {
 	StorageHashes        time.Duration
 	StorageUpdates       time.Duration
 	StorageCommits       time.Duration
+	StorageDeletes       time.Duration
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+	TrieDBCommits        time.Duration
 
 	AccountUpdated int
 	StorageUpdated int
@@ -907,8 +909,15 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	s.IntermediateRoot(deleteEmptyObjects)
 
 	// Commit objects to the trie, measuring the elapsed time
-	var storageCommitted int
-	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
+	var (
+		storageUpdated int
+		storageDeleted int
+
+		deletedKeys [][]byte
+		deletedPrev [][]byte
+		nodeSets    []*trie.NodeSet
+	)
+	codeWriter := s.db.NodeDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
@@ -917,11 +926,20 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			committed, err := obj.CommitTrie(s.db)
+			nodes, err := obj.CommitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
 			}
-			storageCommitted += committed
+			if nodes != nil {
+				storageUpdated += nodes.Len()
+				nodeSets = append(nodeSets, nodes)
+			}
+		} else {
+			// Account is deleted, nuke out the storage data as well.
+			keys, vals := obj.DeleteTrie(s.db)
+			deletedKeys = append(deletedKeys, keys...)
+			deletedPrev = append(deletedPrev, vals...)
+			storageDeleted += len(keys)
 		}
 	}
 	if len(s.stateObjectsDirty) > 0 {
@@ -937,38 +955,33 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	// The onleaf func is called _serially_, so we can reuse the same account
-	// for unmarshalling every time.
-	var account types.StateAccount
-	root, accountCommitted, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash, _ []byte) error {
-		if err := rlp.DecodeBytes(leaf, &account); err != nil {
-			return nil
-		}
-		if account.Root != emptyRoot {
-			s.db.TrieDB().Reference(account.Root, parent)
-		}
-		return nil
-	})
+	root, nodes, err := s.trie.Commit(nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
+
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
 
-		accountUpdatedMeter.Mark(int64(s.AccountUpdated))
-		storageUpdatedMeter.Mark(int64(s.StorageUpdated))
-		accountDeletedMeter.Mark(int64(s.AccountDeleted))
-		storageDeletedMeter.Mark(int64(s.StorageDeleted))
-		accountCommittedMeter.Mark(int64(accountCommitted))
-		storageCommittedMeter.Mark(int64(storageCommitted))
+		rawAccountUpdatedMeter.Mark(int64(s.AccountUpdated))
+		rawStorageUpdatedMeter.Mark(int64(s.StorageUpdated))
+		rawAccountDeletedMeter.Mark(int64(s.AccountDeleted))
+		rawStorageDeletedMeter.Mark(int64(s.StorageDeleted))
+		trieAccountUpdatedMeter.Mark(int64(nodes.Len()))
+		trieStorageUpdatedMeter.Mark(int64(storageUpdated))
+		trieStorageDeletedMeter.Mark(int64(storageDeleted))
 		s.AccountUpdated, s.AccountDeleted = 0, 0
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}
+	// Group all the committed storage trie nodes together
+	for _, set := range nodeSets {
+		nodes.Merge(set)
+	}
+	nodes.MergeDeletion(deletedKeys, deletedPrev)
+
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
-		}
+		start := time.Now()
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
@@ -982,10 +995,30 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 			}
 		}
+		if metrics.EnabledExpensive {
+			s.SnapshotCommits += time.Since(start)
+		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
-	s.originalRoot = root
-	return root, err
+	// Push the state diffs into the in-memory layer if the root hash is changed.
+	if root == (common.Hash{}) {
+		root = emptyRoot
+	}
+	origin := s.originalRoot
+	if origin == (common.Hash{}) {
+		origin = emptyRoot
+	}
+	if root != origin {
+		start := time.Now()
+		if err := s.db.NodeDB().Commit(root, origin, nodes); err != nil {
+			return common.Hash{}, err
+		}
+		s.originalRoot = root
+		if metrics.EnabledExpensive {
+			s.TrieDBCommits += time.Since(start)
+		}
+	}
+	return root, nil
 }
 
 // PrepareAccessList handles the preparatory steps for executing a state transition with

@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -62,14 +63,14 @@ type SyncPath [][]byte
 // version that can be sent over the network.
 func NewSyncPath(path []byte) SyncPath {
 	// If the hash is from the account trie, append a single item, if it
-	// is from the a storage trie, append a tuple. Note, the length 64 is
+	// is from a storage trie, append a tuple. Note, the length 64 is
 	// clashing between account leaf and storage root. It's fine though
 	// because having a trie node at 64 depth means a hash collision was
 	// found and we're long dead.
-	if len(path) < 64 {
+	if len(path) < 2*common.HashLength {
 		return SyncPath{hexToCompact(path)}
 	}
-	return SyncPath{hexToKeybytes(path[:64]), hexToCompact(path[64:])}
+	return SyncPath{hexToKeybytes(path[:2*common.HashLength]), hexToCompact(path[2*common.HashLength:])}
 }
 
 // nodeRequest represents a scheduled or already in-flight trie node retrieval request.
@@ -164,11 +165,19 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if root == emptyRoot {
 		return
 	}
-	key := encodeKey(path, root)
+	var owner common.Hash
+	if len(path) == 2*common.HashLength {
+		owner = common.BytesToHash(hexToKeybytes(path))
+	}
+	var (
+		storage = EncodeStorageKey(owner, nil)
+		key     = EncodeKeyWithHash(storage, root)
+	)
 	if s.membatch.hasNode(key) {
 		return
 	}
-	if rawdb.HasTrieNode(s.database, root) {
+	blob, nodeHash := rawdb.ReadTrieNode(s.database, storage)
+	if len(blob) != 0 && nodeHash == root {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -179,7 +188,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.nodeReqs[encodeKey(parentPath, parent)]
+		ancestor := s.nodeReqs[EncodeKeyWithHash(EncodeStorageKey(common.Hash{}, parentPath), parent)]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
@@ -215,7 +224,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.nodeReqs[encodeKey(parentPath, parent)] // the parent of codereq can ONLY be nodereq
+		ancestor := s.nodeReqs[EncodeKeyWithHash(EncodeStorageKey(common.Hash{}, parentPath), parent)] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
@@ -258,7 +267,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []SyncPath, []common.H
 				log.Warn("Missing node request", "key", key)
 				continue // System very wrong, shouldn't happen
 			}
-			_, hash := decodeKey([]byte(key))
+			_, hash := DecodeKeyWithHash([]byte(key))
 			nodeKeys = append(nodeKeys, key)
 			nodeHashes = append(nodeHashes, hash)
 			nodePaths = append(nodePaths, NewSyncPath(req.path))
@@ -302,7 +311,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 		return ErrAlreadyProcessed
 	}
 	// Decode the node data content and update the request
-	_, hash := decodeKey([]byte(req.key))
+	_, hash := DecodeKeyWithHash([]byte(req.key))
 	node, err := decodeNode(hash.Bytes(), result.Data)
 	if err != nil {
 		return err
@@ -330,8 +339,8 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
-		_, hash := decodeKey([]byte(key))
-		rawdb.WriteTrieNode(dbw, hash, value)
+		storageKey, _ := DecodeKeyWithHash([]byte(key))
+		rawdb.WriteTrieNode(dbw, storageKey, value)
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
@@ -431,7 +440,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					paths = append(paths, hexToKeybytes(child.path[:2*common.HashLength]))
 					paths = append(paths, hexToKeybytes(child.path[2*common.HashLength:]))
 				}
-				_, hash := decodeKey([]byte(req.key))
+				_, hash := DecodeKeyWithHash([]byte(req.key))
 				if err := req.callback(paths, child.path, node, hash, req.path); err != nil {
 					return nil, err
 				}
@@ -440,8 +449,19 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		// If the child references another node, resolve or schedule
 		if node, ok := (child.node).(hashNode); ok {
 			var (
+				inner []byte
+				owner common.Hash
+			)
+			if len(child.path) >= 2*common.HashLength {
+				owner = common.BytesToHash(hexToKeybytes(child.path[:2*common.HashLength]))
+				inner = child.path[2*common.HashLength:]
+			} else {
+				inner = child.path
+			}
+			var (
 				chash    = common.BytesToHash(node)
-				childKey = encodeKey(child.path, chash)
+				storage  = EncodeStorageKey(owner, inner)
+				childKey = EncodeKeyWithHash(storage, chash)
 			)
 			// Try to resolve the node from the local database
 			if s.membatch.hasNode(childKey) {
@@ -449,7 +469,8 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			}
 			// If database says duplicate, then at least the trie node is present
 			// and we hold the assumption that it's NOT legacy contract code.
-			if rawdb.HasTrieNode(s.database, chash) {
+			blob, hash := rawdb.ReadTrieNode(s.database, storage)
+			if len(blob) != 0 && hash == chash {
 				continue
 			}
 			// Locally unknown node, schedule for retrieval
@@ -504,33 +525,4 @@ func (s *Sync) commitCodeRequest(req *codeRequest) error {
 		}
 	}
 	return nil
-}
-
-// encodeKey generates a unique key for the trie node with the given
-// path and hash. The path also contains the path in parent trie if
-// it's a two-layered trie node.
-func encodeKey(path []byte, hash common.Hash) string {
-	if hash == (common.Hash{}) {
-		panic("empty node hash") // we don't accept empty hash node.
-	}
-	// Extract the owner info if it's a two-layered node.
-	var owner common.Hash
-	if len(path) >= 2*common.HashLength {
-		owner = common.BytesToHash(hexToKeybytes(path[:2*common.HashLength]))
-		path = path[2*common.HashLength:]
-	}
-	var ret []byte
-	if owner != (common.Hash{}) {
-		ret = append(ret, owner.Bytes()...)
-	}
-	return string(append(append(ret, hexToCompact(path)...), hash.Bytes()...))
-}
-
-// decodeKey splits the given key to two parts: the first for combination
-// of owner and node path, and second for node hash.
-func decodeKey(key []byte) ([]byte, common.Hash) {
-	if len(key) < common.HashLength {
-		panic("invalid node key")
-	}
-	return key[:len(key)-common.HashLength], common.BytesToHash(key[len(key)-common.HashLength:])
 }

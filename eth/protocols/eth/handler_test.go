@@ -379,6 +379,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 func TestGetNodeData66(t *testing.T) { testGetNodeData(t, ETH66) }
 
 func testGetNodeData(t *testing.T, protocol uint) {
+	t.Skip("GetNodeData is not supported anymore")
 	t.Parallel()
 
 	// Define three accounts to simulate transactions with
@@ -461,7 +462,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	// Reconstruct state tree from the received data.
 	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
+		rawdb.WriteTrieNode(reconstructDB, hashes[i].Bytes(), data[i]) // TODO (it's wrong, should use key instead)
 	}
 
 	// Sanity check whether all state matches.

@@ -19,10 +19,12 @@ package state
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
-	accountUpdatedMeter   = metrics.NewRegisteredMeter("state/update/account", nil)
-	storageUpdatedMeter   = metrics.NewRegisteredMeter("state/update/storage", nil)
-	accountDeletedMeter   = metrics.NewRegisteredMeter("state/delete/account", nil)
-	storageDeletedMeter   = metrics.NewRegisteredMeter("state/delete/storage", nil)
-	accountCommittedMeter = metrics.NewRegisteredMeter("state/commit/account", nil)
-	storageCommittedMeter = metrics.NewRegisteredMeter("state/commit/storage", nil)
+	rawAccountUpdatedMeter  = metrics.NewRegisteredMeter("state/raw/update/account", nil)
+	rawStorageUpdatedMeter  = metrics.NewRegisteredMeter("state/raw/update/storage", nil)
+	rawAccountDeletedMeter  = metrics.NewRegisteredMeter("state/raw/delete/account", nil)
+	rawStorageDeletedMeter  = metrics.NewRegisteredMeter("state/raw/delete/storage", nil)
+	trieAccountUpdatedMeter = metrics.NewRegisteredMeter("state/trie/update/account", nil)
+	trieStorageUpdatedMeter = metrics.NewRegisteredMeter("state/trie/update/storage", nil)
+	trieAccountDeletedMeter = metrics.NewRegisteredMeter("state/trie/delete/account", nil)
+	trieStorageDeletedMeter = metrics.NewRegisteredMeter("state/trie/delete/storage", nil)
 )

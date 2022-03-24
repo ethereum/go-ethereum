@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -55,23 +54,27 @@ var (
 // for extracting the raw states(leaf nodes) with corresponding paths.
 type LeafCallback func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
 
-// Trie is a Merkle Patricia Trie.
-// The zero value is an empty trie with no database.
-// Use New to create a trie that sits on top of a database.
+// Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
+// top of a database. Whenever trie performs a commit operation, the generated
+// dirty nodes will be cached in the internal store. It's users' responsibility
+// to manage the memory usage and re-create trie if necessary in order to avoid
+// out-of-memory issue.
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db    *Database
 	root  node
 	owner common.Hash
 
 	// Keep track of the number leaves which have been inserted since the last
 	// hashing operation. This number will not directly map to the number of
-	// actually unhashed nodes
+	// actually unhashed nodes.
 	unhashed int
 
-	// tracer is the state diff tracer can be used to track newly added/deleted
-	// trie node. It will be reset after each commit operation.
+	// nodes is the handler to access trie node and cache generated dirty nodes.
+	nodes *nodeStore
+
+	// tracer is the tool to track the trie changes.
+	// It will be reset after each commit operation.
 	tracer *tracer
 }
 
@@ -83,10 +86,10 @@ func (t *Trie) newFlag() nodeFlag {
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
 	return &Trie{
-		db:       t.db,
 		root:     t.root,
 		owner:    t.owner,
 		unhashed: t.unhashed,
+		nodes:    t.nodes.copy(),
 		tracer:   t.tracer.copy(),
 	}
 }
@@ -98,35 +101,15 @@ func (t *Trie) Copy() *Trie {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
-	return newTrie(owner, root, db)
-}
-
-// NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
-func NewEmpty(db *Database) *Trie {
-	tr, _ := newTrie(common.Hash{}, common.Hash{}, db)
-	return tr
-}
-
-// newWithRootNode initializes the trie with the given root node.
-// It's only used by range prover.
-func newWithRootNode(root node) *Trie {
-	return &Trie{
-		root: root,
-		//tracer: newTracer(),
-		db: NewDatabase(rawdb.NewMemoryDatabase()),
-	}
-}
-
-// newTrie is the internal function used to construct the trie with given parameters.
-func newTrie(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
-	if db == nil {
-		panic("trie.New called without a database")
+func New(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeReader) (*Trie, error) {
+	store, err := newNodeStore(stateRoot, db)
+	if err != nil {
+		return nil, err
 	}
 	trie := &Trie{
-		db:    db,
-		owner: owner,
-		//tracer: newTracer(),
+		owner:  owner,
+		nodes:  store,
+		tracer: newTracer(),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -136,6 +119,12 @@ func newTrie(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 		trie.root = rootnode
 	}
 	return trie, nil
+}
+
+// NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
+func NewEmpty(db *Database) *Trie {
+	tr, _ := New(common.Hash{}, common.Hash{}, common.Hash{}, db)
+	return tr
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
@@ -236,8 +225,11 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.db.Node(common.BytesToHash(hash))
-		return blob, origNode, 1, err
+		blob, err := t.nodes.readBlob(t.owner, common.BytesToHash(hash), path)
+		if err == nil {
+			return blob, origNode, 1, nil
+		}
+		return nil, nil, 0, nil
 	}
 	// Path still needs to be traversed, descend into children
 	switch n := (origNode).(type) {
@@ -362,7 +354,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New branch node is created as a child of the original short node.
 		// Track the newly inserted node in the tracer. The node identifier
 		// passed is the path from the root node.
-		t.tracer.onInsert(append(prefix, key[:matchlen]...))
+		t.tracer.onInsert(EncodeStorageKey(t.owner, append(prefix, key[:matchlen]...)))
 
 		// Replace it with a short node leading up to the branch.
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
@@ -381,7 +373,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New short node is created and track it in the tracer. The node identifier
 		// passed is the path from the root node. Note the valueNode won't be tracked
 		// since it's always embedded in its parent.
-		t.tracer.onInsert(prefix)
+		t.tracer.onInsert(EncodeStorageKey(t.owner, prefix))
 
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
@@ -438,7 +430,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// The matched short node is deleted entirely and track
 			// it in the deletion set. The same the valueNode doesn't
 			// need to be tracked at all since it's always embedded.
-			t.tracer.onDelete(prefix)
+			t.tracer.onDelete(EncodeStorageKey(t.owner, prefix))
 
 			return true, nil, nil // remove n entirely for whole matches
 		}
@@ -454,7 +446,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		case *shortNode:
 			// The child shortNode is merged into its parent, track
 			// is deleted as well.
-			t.tracer.onDelete(append(prefix, n.Key...))
+			t.tracer.onDelete(EncodeStorageKey(t.owner, append(prefix, n.Key...)))
 
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
@@ -512,7 +504,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// shortNode{..., shortNode{...}}.  Since the entry
 				// might not be loaded yet, resolve it just for this
 				// check.
-				cnode, err := t.resolve(n.Children[pos], prefix)
+				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
 				if err != nil {
 					return false, nil, err
 				}
@@ -520,7 +512,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
-					t.tracer.onDelete(append(prefix, byte(pos)))
+					t.tracer.onDelete(EncodeStorageKey(t.owner, append(prefix, byte(pos))))
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
@@ -572,21 +564,19 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
+// resolveHash loads node from the underlying store with the given
+// node hash and path prefix. The rlp-encoded value of loaded node
+// will also be tracked.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
-	hash := common.BytesToHash(n)
-	if node := t.db.node(hash); node != nil {
-		return node, nil
+	node, err := t.nodes.read(t.owner, common.BytesToHash(n), prefix)
+	if err != nil {
+		return nil, err
 	}
-	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
-}
-
-func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
-	hash := common.BytesToHash(n)
-	blob, _ := t.db.Node(hash)
-	if len(blob) != 0 {
-		return blob, nil
-	}
-	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
+	// Track the rlp-encoded value whenever load nodes from underlying
+	// reader. They can be regarded as previous value which is vital
+	// for constructing state reverse diff.
+	t.tracer.onRead(EncodeStorageKey(t.owner, prefix), node.rlp())
+	return node.obj(), nil
 }
 
 // Hash returns the root hash of the trie. It does not write to the
@@ -597,43 +587,69 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
-// Commit writes all nodes to the trie's memory database, tracking the internal
-// and external (for account tries) references.
-func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
-	if t.db == nil {
-		panic("commit called on trie with nil database")
+// finalize submits the state changes to the internal node store and encapsulates
+// the state diff as a return object.
+func (t *Trie) finalize(nodes map[string]*cachedNode, internal [][]byte) *NodeSet {
+	// Don't panic for lazy users.
+	if nodes == nil {
+		nodes = make(map[string]*cachedNode)
 	}
-	defer t.tracer.reset()
+	defer t.tracer.reset() // always reset the tracer at the end
 
+	// Iterate the deleted/embedded node list and mark them as deleted
+	// in the final node set if the previous value is not nil.
+	for _, key := range append(t.tracer.deleteList(), internal...) {
+		if t.tracer.getPrev(key) == nil {
+			continue
+		}
+		nodes[string(key)] = &cachedNode{
+			node: nil,
+			hash: common.Hash{},
+			size: 0,
+		}
+	}
+	// Retrieve the pre-value of dirty nodes
+	var origin = make(map[string][]byte)
+	for key := range nodes {
+		origin[key] = t.tracer.getPrev([]byte(key))
+	}
+	// Commit the node changes to the nodeStore
+	t.nodes.commit(nodes)
+	return newNodeSet(nodes, origin)
+}
+
+// Commit collects all dirty nodes as return and replaces them with the
+// corresponding node hash. New root hash will be calculated and returned.
+func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, *NodeSet, error) {
 	if t.root == nil {
-		return emptyRoot, 0, nil
+		return emptyRoot, t.finalize(nil, nil), nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
-	h := newCommitter()
+
+	h := newCommitter(t.owner)
 	defer returnCommitterToPool(h)
 
 	// Do a quick check if we really need to commit, before we spin
-	// up goroutines. This can happen e.g. if we load a trie for reading storage
-	// values, but don't write to it.
+	// up goroutines. This can happen e.g. if we load a trie for
+	// reading storage values, but don't write to it.
 	if hashedNode, dirty := t.root.cache(); !dirty {
 		// Replace the root node with the origin hash in order to
 		// ensure all resolved nodes are dropped after the commit.
 		t.root = hashedNode
-		return rootHash, 0, nil
+		return rootHash, t.finalize(nil, nil), nil
 	}
 	var wg sync.WaitGroup
 	if onleaf != nil {
-		h.onleaf = onleaf
-		h.leafCh = make(chan *leaf, leafChanSize)
+		h.onleaf, h.leafCh = onleaf, make(chan *leaf, leafChanSize)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			h.commitLoop(t.db)
+			h.commitLoop()
 		}()
 	}
-	newRoot, committed, err := h.Commit(t.root, t.db)
+	newRoot, err := h.Commit(t.root)
 	if onleaf != nil {
 		// The leafch is created in newCommitter if there was an onleaf callback
 		// provided. The commitLoop only _reads_ from it, and the commit
@@ -643,10 +659,10 @@ func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 		wg.Wait()
 	}
 	if err != nil {
-		return common.Hash{}, 0, err
+		return common.Hash{}, nil, err
 	}
 	t.root = newRoot
-	return rootHash, committed, nil
+	return rootHash, t.finalize(h.nodes, h.embedded), nil
 }
 
 // hashRoot calculates the root hash of the given trie
@@ -668,9 +684,10 @@ func (t *Trie) Reset() {
 	t.owner = common.Hash{}
 	t.unhashed = 0
 	t.tracer.reset()
+	t.nodes = nil
 }
 
-// Owner returns the associated trie owner.
-func (t *Trie) Owner() common.Hash {
-	return t.owner
+// Size returns the total memory usage used by caching nodes internally.
+func (t *Trie) Size() common.StorageSize {
+	return t.nodes.size()
 }

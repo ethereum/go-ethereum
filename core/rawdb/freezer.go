@@ -65,9 +65,8 @@ type Freezer struct {
 	// WARNING: The `frozen` and `tail` fields are accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen uint64 // Number of blocks already frozen
-	tail   uint64 // Number of the first stored item in the freezer
-
+	frozen  uint64 // Number of blocks already frozen
+	tail    uint64 // Number of the first stored item in the freezer
 	datadir string // Path of root directory of ancient store
 
 	// This lock synchronizes writers and the truncate operation, as well as

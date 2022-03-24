@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -117,7 +117,7 @@ func (t *tracer) deleteList() [][]byte {
 
 // getPrev returns the cached original value of the specified node.
 func (t *tracer) getPrev(key []byte) []byte {
-	// Don't panic on uninitialized tracer, it's possible in testing.
+	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return nil
 	}

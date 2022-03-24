@@ -83,7 +83,9 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 // flush adds allocated genesis accounts into a fresh new statedb and
 // commit the state changes into the given database handler.
 func (ga *GenesisAlloc) flush(db ethdb.Database) (common.Hash, error) {
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	// Use a hash-based state scheme to store genesis states
+	// in order to keep them on disk permanently.
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, &trie.Config{Legacy: true}), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -96,10 +98,6 @@ func (ga *GenesisAlloc) flush(db ethdb.Database) (common.Hash, error) {
 		}
 	}
 	root, err := statedb.Commit(false)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	err = statedb.Database().TrieDB().Commit(root, true, nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -252,10 +250,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
-	// We have the genesis block in database(perhaps in ancient database)
-	// but the corresponding state is missing.
+	// The genesis block is present(perhaps in ancient database) while the
+	// state database is empty. It can happen that the node is initialized
+	// with an external ancient store. Commit genesis state in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, &trie.Config{Legacy: true}), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}

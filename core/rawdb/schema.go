@@ -69,6 +69,9 @@ var (
 	// skeletonSyncStatusKey tracks the skeleton sync status across restarts.
 	skeletonSyncStatusKey = []byte("SkeletonSyncStatus")
 
+	// triesJournalKey tracks the in-memory diff trie node layers across restarts.
+	triesJournalKey = []byte("TriesJournal")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
@@ -93,12 +96,17 @@ var (
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
-	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
-	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
-	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
-	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
-	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
+	txLookupPrefix         = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
+	bloomBitsPrefix        = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	SnapshotAccountPrefix  = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
+	SnapshotStoragePrefix  = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
+	CodePrefix             = []byte("c") // CodePrefix + code hash -> account code
+	skeletonHeaderPrefix   = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
+	TrieNodePrefix         = []byte("w") // TrieNodePrefix + node path -> trie node
+	TrieNodeSnapshotPrefix = []byte("W") // TrieNodeSnapshotPrefix + node path -> trie node
+
+	ReverseDiffLookupPrefix = []byte("RL")    // ReverseDiffLookupPrefix + state root -> reverse diff id
+	ReverseDiffHeadKey      = []byte("RHead") // ReverseDiffHeadKey tracks the latest reverse-diff id
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
@@ -109,6 +117,10 @@ var (
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	// maxTrieNodeStorageKeyLen is the upper limit of trie node storage key length.
+	// Check trie.MaxStorageKeyLen for more details.
+	maxTrieNodeStorageKeyLen = 65
 )
 
 const (
@@ -128,7 +140,7 @@ const (
 	freezerDifficultyTable = "diffs"
 )
 
-// FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
+// FreezerNoSnappy configures whether compression is disabled for the ancient-chain-tables.
 // Hashes and difficulties don't compress well.
 var FreezerNoSnappy = map[string]bool{
 	freezerHeaderTable:     false,
@@ -242,6 +254,46 @@ func IsCodeKey(key []byte) (bool, []byte) {
 	return false, nil
 }
 
+// trieNodeKey = TrieNodePrefix + encoded node key
+func trieNodeKey(key []byte) []byte {
+	return append(TrieNodePrefix, key...)
+}
+
+// trieNodeSnapshotKey = TrieNodeSnapshotPrefix + prefix + encoded node key
+func trieNodeSnapshotKey(key []byte, prefix []byte) []byte {
+	return append(append(TrieNodeSnapshotPrefix, prefix...), key...)
+}
+
+// IsTrieNodeKey reports whether the given byte slice is the key of trie node.
+// if so return the raw encoded trie key as well.
+func IsTrieNodeKey(key []byte) (bool, []byte) {
+	if bytes.HasPrefix(key, TrieNodePrefix) {
+		storageKey := key[len(TrieNodePrefix):]
+		// Check trie.MaxStorageKeyLen for the key length upper limit calculation.
+		if len(storageKey) > 0 && len(storageKey) < maxTrieNodeStorageKeyLen {
+			return true, storageKey
+		}
+		return false, nil
+	}
+	return false, nil
+}
+
+// reverseDiffLookupKey = ReverseDiffLookupPrefix + root (32 bytes)
+func reverseDiffLookupKey(root common.Hash) []byte {
+	return append(ReverseDiffLookupPrefix, root.Bytes()...)
+}
+
+// IsReverseDiffLookup reports whether the given byte slice is the key of reverse diff lookup.
+func IsReverseDiffLookup(key []byte) (bool, []byte) {
+	if bytes.HasPrefix(key, ReverseDiffLookupPrefix) {
+		rkey := key[len(ReverseDiffLookupPrefix):]
+		if len(rkey) == common.HashLength {
+			return true, rkey
+		}
+	}
+	return false, nil
+}
+
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
@@ -250,4 +302,27 @@ func configKey(hash common.Hash) []byte {
 // genesisKey = genesisPrefix + hash
 func genesisKey(hash common.Hash) []byte {
 	return append(genesisPrefix, hash.Bytes()...)
+}
+
+// FreezerTableInfo retrieves the basic information about the specified freezer table.
+func FreezerTableInfo(kind string) (bool, bool, string) {
+	if noCompression, ok := FreezerNoSnappy[kind]; ok {
+		return true, noCompression, ""
+	}
+	if noCompression, ok := reverseDiffFreezerNoSnappy[kind]; ok {
+		return true, noCompression, "rdiffs"
+	}
+	return false, false, "" // non-existent
+}
+
+// FreezerTables returns all supported tables in the freezer.
+func FreezerTables() []string {
+	var ret []string
+	for table := range FreezerNoSnappy {
+		ret = append(ret, table)
+	}
+	for table := range reverseDiffFreezerNoSnappy {
+		ret = append(ret, table)
+	}
+	return ret
 }

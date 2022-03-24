@@ -54,7 +54,7 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(addrHash, root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenStorageTrie(state, addrHash, root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
 }
 
@@ -63,8 +63,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	case *odrTrie:
 		cpy := &odrTrie{db: t.db, id: t.id}
 		if t.trie != nil {
-			cpytrie := *t.trie
-			cpy.trie = &cpytrie
+			cpy.trie = t.trie.Copy()
 		}
 		return cpy
 	default:
@@ -92,8 +91,8 @@ func (db *odrDatabase) ContractCodeSize(addrHash, codeHash common.Hash) (int, er
 	return len(code), err
 }
 
-func (db *odrDatabase) TrieDB() *trie.Database {
-	return nil
+func (db *odrDatabase) NodeDB() trie.NodeDatabase {
+	panic("not implemented")
 }
 
 type odrTrie struct {
@@ -137,9 +136,9 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, int, error) {
+func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, *trie.NodeSet, error) {
 	if t.trie == nil {
-		return t.id.Root, 0, nil
+		return t.id.Root, nil, nil
 	}
 	return t.trie.Commit(onleaf)
 }
@@ -173,7 +172,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			if len(t.id.AccKey) > 0 {
 				owner = common.BytesToHash(t.id.AccKey)
 			}
-			t.trie, err = trie.New(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(t.id.StateRoot, owner, t.id.Root, trie.NewDatabase(t.db.backend.Database(), &trie.Config{Legacy: true}))
 		}
 		if err == nil {
 			err = fn()
@@ -203,7 +202,7 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 			if len(t.id.AccKey) > 0 {
 				owner = common.BytesToHash(t.id.AccKey)
 			}
-			t, err := trie.New(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(t.id.StateRoot, owner, t.id.Root, trie.NewDatabase(t.db.backend.Database(), &trie.Config{Legacy: true}))
 			if err == nil {
 				it.t.trie = t
 			}
@@ -245,6 +244,14 @@ func (it *nodeIterator) do(fn func() error) {
 			return
 		}
 	}
+}
+
+func (it *nodeIterator) StorageKey() []byte {
+	panic("not implemented")
+}
+
+func (it *nodeIterator) NodeBlob() []byte {
+	panic("not implemented")
 }
 
 func (it *nodeIterator) Error() error {

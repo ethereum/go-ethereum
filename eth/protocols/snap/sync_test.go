@@ -159,6 +159,13 @@ func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 	return peer
 }
 
+func (t *testPeer) setStorageTries(tries map[common.Hash]*trie.Trie) {
+	t.storageTries = make(map[common.Hash]*trie.Trie)
+	for root, trie := range tries {
+		t.storageTries[root] = trie.Copy()
+	}
+}
+
 func (t *testPeer) ID() string      { return t.id }
 func (t *testPeer) Log() log.Logger { return t.logger }
 
@@ -564,7 +571,7 @@ func TestSyncBloatedProof(t *testing.T) {
 	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 	source := newTestPeer("source", t, term)
-	source.accountTrie = sourceAccountTrie
+	source.accountTrie = sourceAccountTrie.Copy()
 	source.accountValues = elems
 
 	source.accountRequestHandler = func(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) error {
@@ -643,7 +650,7 @@ func TestSync(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		return source
 	}
@@ -672,7 +679,7 @@ func TestSyncTinyTriePanic(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		return source
 	}
@@ -702,7 +709,7 @@ func TestMultiSync(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		return source
 	}
@@ -732,9 +739,9 @@ func TestSyncWithStorage(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 		return source
 	}
@@ -764,9 +771,9 @@ func TestMultiSyncManyUseless(t *testing.T) {
 
 	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 
 		if !noAccount {
@@ -810,9 +817,9 @@ func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 
 	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 
 		if !noAccount {
@@ -861,9 +868,9 @@ func TestMultiSyncManyUnresponsive(t *testing.T) {
 
 	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 
 		if !noAccount {
@@ -927,7 +934,7 @@ func TestSyncBoundaryAccountTrie(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		return source
 	}
@@ -961,7 +968,7 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 
 	mkSource := func(name string, slow bool) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 
 		if slow {
@@ -1002,7 +1009,7 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		source.codeRequestHandler = codeFn
 		return source
@@ -1039,7 +1046,7 @@ func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 
 	mkSource := func(name string, accFn accountHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		source.accountRequestHandler = accFn
 		return source
@@ -1078,7 +1085,7 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		source.codeRequestHandler = codeFn
 		return source
@@ -1128,9 +1135,9 @@ func TestSyncBoundaryStorageTrie(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 		return source
 	}
@@ -1164,9 +1171,9 @@ func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 
 	mkSource := func(name string, slow bool) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 
 		if slow {
@@ -1205,9 +1212,9 @@ func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
 
 	mkSource := func(name string, handler storageHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 		source.storageRequestHandler = handler
 		return source
@@ -1243,9 +1250,9 @@ func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
 
 	mkSource := func(name string, handler storageHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 		source.storageRequestHandler = handler
 		return source
@@ -1283,9 +1290,9 @@ func TestSyncWithStorageMisbehavingProve(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
-		source.storageTries = storageTries
+		source.setStorageTries(storageTries)
 		source.storageValues = storageElems
 		source.storageRequestHandler = proofHappyStorageRequestHandler
 		return source
@@ -1348,7 +1355,7 @@ func getCodeByHash(hash common.Hash) []byte {
 
 // makeAccountTrieNoStorage spits out a trie, along with the leafs
 func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
-	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	db := trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	accTrie := trie.NewEmpty(db)
 	var entries entrySlice
 	for i := uint64(1); i <= uint64(n); i++ {
@@ -1376,7 +1383,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 		entries    entrySlice
 		boundaries []common.Hash
 
-		db   = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db   = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		trie = trie.NewEmpty(db)
 	)
 	// Initialize boundaries
@@ -1428,7 +1435,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 // has a unique storage set.
 func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
-		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		accTrie        = trie.NewEmpty(db)
 		entries        entrySlice
 		storageTries   = make(map[common.Hash]*trie.Trie)
@@ -1467,7 +1474,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
 func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
-		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 		accTrie        = trie.NewEmpty(db)
 		entries        entrySlice
 		storageTries   = make(map[common.Hash]*trie.Trie)
@@ -1515,7 +1522,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 // not-yet-committed trie and the sorted entries. The seeds can be used to ensure
 // that tries are unique.
 func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Database) (*trie.Trie, entrySlice) {
-	trie, _ := trie.New(owner, common.Hash{}, db)
+	trie, _ := trie.New(common.Hash{}, owner, common.Hash{}, db)
 	var entries entrySlice
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
@@ -1541,7 +1548,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (*trie
 	var (
 		entries    entrySlice
 		boundaries []common.Hash
-		trie, _    = trie.New(owner, common.Hash{}, db)
+		trie, _    = trie.New(common.Hash{}, owner, common.Hash{}, db)
 	)
 	// Initialize boundaries
 	var next common.Hash
@@ -1587,8 +1594,8 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (*trie
 
 func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
-	triedb := trie.NewDatabase(db)
-	accTrie, err := trie.New(common.Hash{}, root, triedb)
+	triedb := trie.NewDatabase(rawdb.NewDatabase(db), nil)
+	accTrie, err := trie.New(root, common.Hash{}, root, triedb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1606,7 +1613,7 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 		}
 		accounts++
 		if acc.Root != emptyRoot {
-			storeTrie, err := trie.NewSecure(common.BytesToHash(accIt.Key), acc.Root, triedb)
+			storeTrie, err := trie.NewSecure(root, common.BytesToHash(accIt.Key), acc.Root, triedb)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1646,7 +1653,7 @@ func TestSyncAccountPerformance(t *testing.T) {
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, term)
-		source.accountTrie = sourceAccountTrie
+		source.accountTrie = sourceAccountTrie.Copy()
 		source.accountValues = elems
 		return source
 	}
