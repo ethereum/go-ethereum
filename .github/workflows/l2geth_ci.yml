@@ -31,8 +31,6 @@ jobs:
       run: go get golang.org/x/tools/cmd/goimports
     - name: Checkout code
       uses: actions/checkout@v2
-      with:
-        ref: ${{ github.event.pull_request.head.ref }}
     - run: goimports -local github.com/scroll-tech/go-ethereum/ -w .
     - run: go mod tidy
     # If there are any diffs from goimports or go mod tidy, fail.
