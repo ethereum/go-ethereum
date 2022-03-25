@@ -87,7 +87,7 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
 	}
 	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
-		return []interface{}{result}, rest[3:], nil
+		return append(result, "[]"), rest[3:], nil
 	}
 	return result, rest[1:], nil
 }
@@ -115,12 +115,12 @@ func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to assemble components: %v", err)
 			}
-			if len(subArgs) == 1 && subArgs[0].Type == "tuple" {
-				subArgs[0].Type, subArgs[0].InternalType = "tuple[]", "tuple[]"
-				arguments = append(arguments, subArgs[0])
-			} else {
-				arguments = append(arguments, ArgumentMarshaling{name, "tuple", "tuple", subArgs, false})
+			tupleType := "tuple"
+			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
+				subArgs = subArgs[:len(subArgs)-1]
+				tupleType = "tuple[]"
 			}
+			arguments = append(arguments, ArgumentMarshaling{name, tupleType, tupleType, subArgs, false})
 		} else {
 			return nil, fmt.Errorf("failed to assemble args: unexpected type %T", arg)
 		}
