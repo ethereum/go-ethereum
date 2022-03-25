@@ -83,40 +83,6 @@ func TestSequentialVotes(t *testing.T) {
 	}
 }
 
-// Tests that vote already being retrieved will not be duplicated.
-func TestDuplicateVotes(t *testing.T) {
-	tester := newTester()
-	verifyCounter := uint32(0)
-	handlerCounter := uint32(0)
-	broadcastCounter := uint32(0)
-	targetVotes := 1
-
-	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
-		atomic.AddUint32(&verifyCounter, 1)
-		return true, nil
-	}
-
-	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
-		atomic.AddUint32(&handlerCounter, 1)
-		return nil
-	}
-
-	tester.bfter.broadcast.Vote = func(*utils.Vote) {
-		atomic.AddUint32(&broadcastCounter, 1)
-	}
-
-	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
-
-	// send twice
-	tester.bfter.Vote(&vote)
-	tester.bfter.Vote(&vote)
-
-	time.Sleep(50 * time.Millisecond)
-	if int(verifyCounter) != targetVotes || int(handlerCounter) != targetVotes || int(broadcastCounter) != targetVotes {
-		t.Fatalf("count mismatch: have %v on verify, %v on handler,  %v on broadcast, want %v", verifyCounter, handlerCounter, broadcastCounter, targetVotes)
-	}
-}
-
 // Test that avoid boardcast if there is bad vote
 func TestNotBoardcastInvalidVote(t *testing.T) {
 	tester := newTester()

@@ -58,11 +58,13 @@ func (t *CountdownTimer) startTimer(i interface{}) {
 			return
 		case <-timer.C:
 			log.Debug("Countdown time reached!")
-			err := t.OnTimeoutFn(time.Now(), i)
-			if err != nil {
-				log.Error("OnTimeoutFn error", err)
-			}
-			log.Debug("Reset timer after timeout reached and OnTimeoutFn processed")
+			go func() {
+				err := t.OnTimeoutFn(time.Now(), i)
+				if err != nil {
+					log.Error("OnTimeoutFn error", "error", err)
+				}
+				log.Debug("OnTimeoutFn processed")
+			}()
 			timer.Reset(t.timeoutDuration)
 		case <-t.resetc:
 			log.Debug("Reset countdown timer")

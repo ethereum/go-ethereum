@@ -140,3 +140,18 @@ func TestCountdownShouldBeAbleToStop(t *testing.T) {
 	countdown.StopTimer()
 	assert.False(t, countdown.isInitilised())
 }
+
+func TestCountdownShouldAvoidDeadlock(t *testing.T) {
+	var fakeI interface{}
+	called := make(chan int)
+	countdown := NewCountDown(5000 * time.Millisecond)
+	OnTimeoutFn := func(time.Time, interface{}) error {
+		countdown.Reset(fakeI)
+		called <- 1
+		return nil
+	}
+
+	countdown.OnTimeoutFn = OnTimeoutFn
+	countdown.Reset(fakeI)
+	<-called
+}

@@ -108,6 +108,11 @@ type ProtocolManager struct {
 	knownTxs       *lru.Cache
 	knowOrderTxs   *lru.Cache
 	knowLendingTxs *lru.Cache
+
+	// V2 messages
+	knownVotes     *lru.Cache
+	knownSyncInfos *lru.Cache
+	knownTimeouts  *lru.Cache
 }
 
 // NewProtocolManagerEx add order pool to protocol
@@ -127,6 +132,11 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	knownTxs, _ := lru.New(maxKnownTxs)
 	knowOrderTxs, _ := lru.New(maxKnownOrderTxs)
 	knowLendingTxs, _ := lru.New(maxKnownLendingTxs)
+
+	knownVotes, _ := lru.New(maxKnownVote)
+	knownSyncInfos, _ := lru.New(maxKnownSyncInfo)
+	knownTimeouts, _ := lru.New(maxKnownTimeout)
+
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:      networkID,
@@ -142,6 +152,9 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		knownTxs:       knownTxs,
 		knowOrderTxs:   knowOrderTxs,
 		knowLendingTxs: knowLendingTxs,
+		knownVotes:     knownVotes,
+		knownSyncInfos: knownSyncInfos,
+		knownTimeouts:  knownTimeouts,
 		orderpool:      nil,
 		lendingpool:    nil,
 		orderTxSub:     nil,
@@ -834,7 +847,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// because peer has 2 address sender and receive, so use p.id to find the right address
 		p = pm.peers.Peer(p.id)
 		p.MarkVote(vote.Hash())
-		pm.bft.Vote(&vote)
+
+		exist, _ := pm.knownVotes.ContainsOrAdd(vote.Hash(), true)
+		if !exist {
+			go pm.bft.Vote(&vote)
+		} else {
+			log.Debug("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
+		}
+
 	case msg.Code == TimeoutMsg:
 		var timeout utils.Timeout
 		if err := msg.Decode(&timeout); err != nil {
@@ -845,7 +865,15 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// because peer has 2 address sender and receive, so use p.id to find the right address
 		p = pm.peers.Peer(p.id)
 		p.MarkTimeout(timeout.Hash())
-		pm.bft.Timeout(&timeout)
+
+		exist, _ := pm.knownTimeouts.ContainsOrAdd(timeout.Hash(), true)
+
+		if !exist {
+			go pm.bft.Timeout(&timeout)
+		} else {
+			log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
+		}
+
 	case msg.Code == SyncInfoMsg:
 		var syncInfo utils.SyncInfo
 		if err := msg.Decode(&syncInfo); err != nil {
@@ -855,7 +883,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// because peer has 2 address sender and receive, so use p.id to find the right address
 		p = pm.peers.Peer(p.id)
 		p.MarkSyncInfo(syncInfo.Hash())
-		pm.bft.SyncInfo(&syncInfo)
+
+		exist, _ := pm.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true)
+		if !exist {
+			go pm.bft.SyncInfo(&syncInfo)
+		} else {
+			log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
+		}
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -917,9 +951,11 @@ func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
 			err := peer.SendVote(vote)
 			if err != nil {
 				log.Error("[BroadcastVote] Fail to broadcast vote message", "NumberOfPeers", len(peers), "peerId", peer.id, "vote", vote, "Error", err)
+				log.Error("[BroadcastVote] Remove Peer", "id", peer.id, "version", peer.version)
+				pm.removePeer(peer.id)
 			}
 		}
-		log.Info("Propagated Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
+		log.Trace("Propagated Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
 	}
 }
 
@@ -933,6 +969,8 @@ func (pm *ProtocolManager) BroadcastTimeout(timeout *utils.Timeout) {
 			err := peer.SendTimeout(timeout)
 			if err != nil {
 				log.Error("[BroadcastTimeout] Fail to broadcast timeout message", "NumberOfPeers", len(peers), "peerId", peer.id, "timeout", timeout, "Error", err)
+				log.Error("[BroadcastTimeout] Remove Peer", "id", peer.id, "version", peer.version)
+				pm.removePeer(peer.id)
 			}
 		}
 		log.Trace("Propagated Timeout", "hash", hash, "recipients", len(peers))
@@ -949,6 +987,8 @@ func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *utils.SyncInfo) {
 			err := peer.SendSyncInfo(syncInfo)
 			if err != nil {
 				log.Error("[BroadcastSyncInfo] Fail to broadcast syncInfo message", "NumberOfPeers", len(peers), "peerId", peer.id, "syncInfo", syncInfo, "Error", err)
+				log.Error("[BroadcastSyncInfo] Remove Peer", "id", peer.id, "version", peer.version)
+				pm.removePeer(peer.id)
 			}
 		}
 		log.Trace("Propagated SyncInfo", "hash", hash, "recipients", len(peers))

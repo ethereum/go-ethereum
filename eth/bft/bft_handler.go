@@ -6,11 +6,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	lru "github.com/hashicorp/golang-lru"
-)
-
-const (
-	messageLimit = 1024
 )
 
 //Define Boradcast Group functions
@@ -24,11 +19,6 @@ type Bfter struct {
 	quit             chan struct{}
 	consensus        ConsensusFns
 	broadcast        BroadcastFns
-
-	// Message Cache
-	knownVotes     *lru.Cache
-	knownSyncInfos *lru.Cache
-	knownTimeouts  *lru.Cache
 }
 
 type ConsensusFns struct {
@@ -49,16 +39,11 @@ type BroadcastFns struct {
 }
 
 func New(broadcasts BroadcastFns, blockChainReader *core.BlockChain) *Bfter {
-	knownVotes, _ := lru.New(messageLimit)
-	knownSyncInfos, _ := lru.New(messageLimit)
-	knownTimeouts, _ := lru.New(messageLimit)
+
 	return &Bfter{
 		quit:             make(chan struct{}),
 		broadcastCh:      make(chan interface{}),
 		broadcast:        broadcasts,
-		knownVotes:       knownVotes,
-		knownSyncInfos:   knownSyncInfos,
-		knownTimeouts:    knownTimeouts,
 		blockChainReader: blockChainReader,
 	}
 }
@@ -79,10 +64,6 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 
 func (b *Bfter) Vote(vote *utils.Vote) error {
 	log.Trace("Receive Vote", "hash", vote.Hash().Hex(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
-	if exist, _ := b.knownVotes.ContainsOrAdd(vote.Hash(), true); exist {
-		log.Debug("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
-		return nil
-	}
 
 	verified, err := b.consensus.verifyVote(b.blockChainReader, vote)
 
@@ -108,11 +89,8 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 	return nil
 }
 func (b *Bfter) Timeout(timeout *utils.Timeout) error {
-	log.Trace("Receive Timeout", "timeout", timeout)
-	if exist, _ := b.knownTimeouts.ContainsOrAdd(timeout.Hash(), true); exist {
-		log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
-		return nil
-	}
+	log.Debug("Receive Timeout", "timeout", timeout)
+
 	verified, err := b.consensus.verifyTimeout(b.blockChainReader, timeout)
 	if err != nil {
 		log.Error("Verify BFT Timeout", "timeoutRound", timeout.Round, "timeoutGapNum", timeout.GapNumber, "error", err)
@@ -135,11 +113,8 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 	return nil
 }
 func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
-	log.Trace("Receive SyncInfo", "syncInfo", syncInfo)
-	if exist, _ := b.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true); exist {
-		log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
-		return nil
-	}
+	log.Debug("Receive SyncInfo", "syncInfo", syncInfo)
+
 	verified, err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
 	if err != nil {
 		log.Error("Verify BFT SyncInfo", "error", err)
