@@ -394,7 +394,7 @@ func TestProcessStateless(t *testing.T) {
 	txCost1 := params.WitnessBranchWriteCost*2 + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*3 + params.WitnessChunkReadCost*10 + params.TxGas
 	txCost2 := params.WitnessBranchWriteCost + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*2 + params.WitnessChunkReadCost*10 + params.TxGas
 	intrinsic, _ := IntrinsicGas(code, nil, true, true, true)
-	contractCreationCost := intrinsic + (2*params.WitnessChunkReadCost+params.WitnessChunkWriteCost)*10 + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + uint64(3639) // standard cost of executing the contract
+	contractCreationCost := intrinsic + 17339
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
