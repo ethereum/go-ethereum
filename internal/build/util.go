@@ -115,7 +115,7 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 // the form sftp://[user@]host[:port].
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
-	sftp.Stdout = nil
+	sftp.Stdout = os.Stdout
 	sftp.Stderr = os.Stderr
 	if identityFile != "" {
 		sftp.Args = append(sftp.Args, "-i", identityFile)
