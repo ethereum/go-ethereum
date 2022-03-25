@@ -125,15 +125,38 @@ func TestUpdateMasterNodes(t *testing.T) {
 	assert.Equal(t, int(snap.Number), 1350)
 }
 
-func TestPrepare(t *testing.T) {
+func TestPrepareFail(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
-	_, err := adaptor.YourTurn(blockchain, currentBlock.Header(), common.HexToAddress("xdc0278C350152e15fa6FFC712a5A73D704Ce73E2E1"))
-	assert.Nil(t, err)
 	tstamp := time.Now().Unix()
 
+	notReadyToProposeHeader := &types.Header{
+		ParentHash: currentBlock.Hash(),
+		Number:     big.NewInt(int64(901)),
+		GasLimit:   params.TargetGasLimit,
+		Time:       big.NewInt(tstamp),
+		Coinbase:   signer,
+	}
+
+	err := adaptor.Prepare(blockchain, notReadyToProposeHeader)
+	assert.Equal(t, consensus.ErrNotReadyToPropose, err)
+
+	notReadyToMine := &types.Header{
+		ParentHash: currentBlock.Hash(),
+		Number:     big.NewInt(int64(901)),
+		GasLimit:   params.TargetGasLimit,
+		Time:       big.NewInt(tstamp),
+		Coinbase:   signer,
+	}
+	// trigger initial which will set the highestQC
+	_, err = adaptor.YourTurn(blockchain, currentBlock.Header(), signer)
+	assert.Nil(t, err)
+	err = adaptor.Prepare(blockchain, notReadyToMine)
+	assert.Equal(t, consensus.ErrNotReadyToMine, err)
+
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(4), false)
 	header901WithoutCoinbase := &types.Header{
 		ParentHash: currentBlock.Hash(),
 		Number:     big.NewInt(int64(901)),
@@ -143,6 +166,17 @@ func TestPrepare(t *testing.T) {
 
 	err = adaptor.Prepare(blockchain, header901WithoutCoinbase)
 	assert.Equal(t, consensus.ErrCoinbaseMismatch, err)
+}
+
+func TestPrepareHappyPath(t *testing.T) {
+	config := params.TestXDPoSMockChainConfig
+	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	// trigger initial
+	_, err := adaptor.YourTurn(blockchain, currentBlock.Header(), signer)
+	assert.Nil(t, err)
+
+	tstamp := time.Now().Unix()
 
 	header901 := &types.Header{
 		ParentHash: currentBlock.Hash(),
@@ -152,6 +186,7 @@ func TestPrepare(t *testing.T) {
 		Coinbase:   signer,
 	}
 
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(4), false)
 	err = adaptor.Prepare(blockchain, header901)
 	assert.Nil(t, err)
 
@@ -169,6 +204,6 @@ func TestPrepare(t *testing.T) {
 	var decodedExtraField utils.ExtraFields_v2
 	err = utils.DecodeBytesExtraFields(header901.Extra, &decodedExtraField)
 	assert.Nil(t, err)
-	assert.Equal(t, utils.Round(1), decodedExtraField.Round)
+	assert.Equal(t, utils.Round(4), decodedExtraField.Round)
 	assert.Equal(t, utils.Round(0), decodedExtraField.QuorumCert.ProposedBlockInfo.Round)
 }

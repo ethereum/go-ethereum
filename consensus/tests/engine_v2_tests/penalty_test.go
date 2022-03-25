@@ -50,6 +50,9 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 		Time:       header6300.Time,
 		Coinbase:   signer,
 	}
+	// Force to make the node to be at its round to mine, otherwise won't pass the yourturn masternodes check
+	// We have 5 nodes in total and the node signer is always at the 4th(last) in the list. Hence int(config.XDPoS.Epoch)*7+4-900, the +4 means is to force to next 4 round and -900 is the relative round number to block number int(config.XDPoS.Epoch)*7
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(int(config.XDPoS.Epoch)*7+4-900), false)
 	err = adaptor.Prepare(blockchain, headerMining)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(headerMining.Penalties)/common.AddressLength)

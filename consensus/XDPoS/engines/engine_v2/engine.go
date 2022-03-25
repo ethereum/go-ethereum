@@ -2,7 +2,6 @@ package engine_v2
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -200,6 +199,35 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	return nil
 }
 
+// Check if it's my turm to mine a block. Note: The second return value `preIndex` is useless in V2 engine
+func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
+	x.lock.RLock()
+	defer x.lock.RUnlock()
+
+	if !x.isInitilised {
+		err := x.Initial(chain, parent)
+		if err != nil {
+			log.Error("[YourTurn] Error while initialising last v2 variables", "ParentBlockHash", parent.Hash(), "Error", err)
+			return false, err
+		}
+		x.isInitilised = true
+	}
+
+	waitedTime := time.Now().Unix() - parent.Time.Int64()
+	if waitedTime < int64(x.config.V2.MinePeriod) {
+		log.Trace("[YourTurn] wait after mine period", "minePeriod", x.config.V2.MinePeriod, "waitedTime", waitedTime)
+		return false, nil
+	}
+
+	round := x.currentRound
+	isMyTurn, err := x.checkYourturnWithinFinalisedMasternodes(chain, round, parent, signer)
+	if err != nil {
+		log.Error("[Yourturn] Error while checking if i am qualified to mine", "round", round, "error", err)
+	}
+
+	return isMyTurn, nil
+}
+
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) error {
@@ -210,7 +238,6 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	x.lock.RUnlock()
 
 	if header.ParentHash != highestQC.ProposedBlockInfo.Hash {
-		fmt.Println("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
 		log.Warn("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
 		return consensus.ErrNotReadyToPropose
 	}
@@ -230,13 +257,26 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 
 	number := header.Number.Uint64()
 	parent := chain.GetHeader(header.ParentHash, number-1)
+
 	log.Info("Preparing new block!", "Number", number, "Parent Hash", parent.Hash())
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
 
+	x.signLock.RLock()
+	signer := x.signer
+	x.signLock.RUnlock()
+
+	isMyTurn, err := x.checkYourturnWithinFinalisedMasternodes(chain, currentRound, parent, signer)
+	if err != nil {
+		log.Error("[Prepare] Error while checking if it's still my turn to mine", "round", currentRound, "ParentHash", parent.Hash().Hex(), "ParentNumber", parent.Number.Uint64(), "error", err)
+		return err
+	}
+	if !isMyTurn {
+		return consensus.ErrNotReadyToMine
+	}
 	// Set the correct difficulty
-	header.Difficulty = x.calcDifficulty(chain, parent, x.signer)
+	header.Difficulty = x.calcDifficulty(chain, parent, signer)
 	log.Debug("CalcDifficulty ", "number", header.Number, "difficulty", header.Difficulty)
 
 	isEpochSwitchBlock, _, err := x.IsEpochSwitch(header)
@@ -267,10 +307,6 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
-
-	x.signLock.RLock()
-	signer := x.signer
-	x.signLock.RUnlock()
 
 	if header.Coinbase != signer {
 		log.Error("[Prepare] The mined blocker header coinbase address mismatch with waller address", "headerCoinbase", header.Coinbase.Hex(), "WalletAddress", signer.Hex())
@@ -370,77 +406,6 @@ func (x *XDPoS_v2) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 func (x *XDPoS_v2) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
 	// TODO: The difference of round number between parent round and current round
 	return big.NewInt(1)
-}
-
-// Check if it's my turm to mine a block. Note: The second return value `preIndex` is useless in V2 engine
-func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
-	x.lock.RLock()
-	defer x.lock.RUnlock()
-
-	if !x.isInitilised {
-		err := x.Initial(chain, parent)
-		if err != nil {
-			log.Error("[YourTurn] Error while initialising last v2 variables", "ParentBlockHash", parent.Hash(), "Error", err)
-			return false, err
-		}
-		x.isInitilised = true
-	}
-
-	waitedTime := time.Now().Unix() - parent.Time.Int64()
-	if waitedTime < int64(x.config.V2.MinePeriod) {
-		log.Trace("[YourTurn] wait after mine period", "minePeriod", x.config.V2.MinePeriod, "waitedTime", waitedTime)
-		return false, nil
-	}
-
-	round := x.currentRound
-	isEpochSwitch, _, err := x.isEpochSwitchAtRound(round, parent)
-	if err != nil {
-		log.Error("[YourTurn] check epoch switch at round failed", "Error", err)
-		return false, err
-	}
-	var masterNodes []common.Address
-	if isEpochSwitch {
-		if x.config.V2.SwitchBlock.Cmp(parent.Number) == 0 {
-			// the initial master nodes of v1->v2 switch contains penalties node
-			_, _, masterNodes, err = x.getExtraFields(parent)
-			if err != nil {
-				log.Error("[YourTurn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
-				return false, err
-			}
-		} else {
-			masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
-			if err != nil {
-				log.Error("[YourTurn] Cannot calcMasternodes at gap num ", "err", err, "parent number", parent.Number)
-				return false, err
-			}
-		}
-	} else {
-		// this block and parent belong to the same epoch
-		masterNodes = x.GetMasternodes(chain, parent)
-	}
-
-	if len(masterNodes) == 0 {
-		log.Error("[YourTurn] Fail to find any master nodes from current block round epoch", "Hash", parent.Hash(), "CurrentRound", round, "Number", parent.Number)
-		return false, errors.New("masternodes not found")
-	}
-
-	curIndex := utils.Position(masterNodes, signer)
-	if curIndex == -1 {
-		log.Debug("[YourTurn] Not authorised signer", "MN", masterNodes, "Hash", parent.Hash(), "signer", signer)
-		return false, nil
-	}
-
-	for i, s := range masterNodes {
-		log.Debug("[YourTurn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
-	}
-
-	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
-	if masterNodes[leaderIndex] != signer {
-		log.Debug("[YourTurn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {
