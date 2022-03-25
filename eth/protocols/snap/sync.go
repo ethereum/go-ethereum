@@ -68,7 +68,7 @@ const (
 	// and waste round trip times. If it's too high, we're capping responses and
 	// waste bandwidth.
 	//
-	// Depoyed bytecodes are currently capped at 24KB, so the minimum request
+	// Deployed bytecodes are currently capped at 24KB, so the minimum request
 	// size should be maxRequestSize / 24K. Assuming that most contracts do not
 	// come close to that, requesting 4x should be a good approximation.
 	maxCodeRequestCount = maxRequestSize / (24 * 1024) * 4

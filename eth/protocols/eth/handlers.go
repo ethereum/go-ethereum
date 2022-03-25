@@ -84,7 +84,7 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 			break
 		}
 		if rlpData, err := rlp.EncodeToBytes(origin); err != nil {
-			log.Crit("Unable to decode our own headers", "err", err)
+			log.Crit("Unable to encode our own headers", "err", err)
 		} else {
 			headers = append(headers, rlp.RawValue(rlpData))
 			bytes += common.StorageSize(len(rlpData))
