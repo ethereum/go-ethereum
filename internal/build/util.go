@@ -138,6 +138,7 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	for _, f := range files {
 		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
 	}
+	fmt.Fprintln(in, "exit")
 	// Avoid travis timout after 10m of inactivity by printing something
 	// every 8 minutes.
 	done := make(chan bool)
