@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -392,50 +393,30 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 	}
 	var (
 		statelessGasCharged uint64
-		startOffset         uint64
 		endOffset           uint64
 	)
-	// startLeafOffset, endLeafOffset is the evm code offset of the first byte in the first leaf touched
-	// and the evm code offset of the last byte in the last leaf touched
-	startOffset = offset - (offset % 31)
-	if contract != nil && startOffset+size > uint64(len(code)) {
+	if contract != nil && offset+size > uint64(len(code)) {
 		endOffset = uint64(len(code))
 	} else {
-		endOffset = startOffset + size
+		endOffset = offset + size
+	}
+	chunks, err := trie.ChunkifyCode(code)
+	if err != nil {
+		panic(err)
 	}
 
-	for i := offset / 31; i < endOffset/31; i++ {
-		index := trieUtils.GetTreeKeyCodeChunk(address, uint256.NewInt(uint64(i)+startOffset/31))
+	// endOffset - 1 since if the end offset is aligned on a chunk boundary,
+	// the last chunk should not be included.
+	for i := offset / 31; i <= (endOffset-1)/31; i++ {
+		index := trieUtils.GetTreeKeyCodeChunk(address, uint256.NewInt(i))
 
 		// TODO safe-add here to catch overflow
 		statelessGasCharged += accesses.TouchAddressOnReadAndComputeGas(index)
-		var value []byte
 		if code != nil && len(code) > 0 {
-			// the offset into the leaf that the first PUSH occurs
-			var firstPushOffset uint64 = 0
-			// Look for the first code byte (i.e. no pushdata)
-			for ; firstPushOffset < 31 && firstPushOffset+uint64(i)*31 < uint64(len(code)) && !contract.IsCode(uint64(i)*31+firstPushOffset); firstPushOffset++ {
-			}
-			curEnd := (uint64(i) + 1) * 31
-			if curEnd > endOffset {
-				curEnd = endOffset
-			}
-			var valueSize uint64
-			if curEnd >= (uint64(i) * 31) {
-				valueSize = curEnd - (uint64(i) * 31)
-			}
-			value = make([]byte, 32, 32)
-			value[0] = byte(firstPushOffset)
-
-			copy(value[1:valueSize+1], code[i*31:curEnd])
-			if valueSize < 31 {
-				padding := make([]byte, 31-valueSize, 31-valueSize)
-				copy(value[valueSize+1:], padding)
-			}
 			if deployment {
 				accesses.SetLeafValue(index[:], nil)
 			} else {
-				accesses.SetLeafValue(index[:], value)
+				accesses.SetLeafValue(index[:], chunks[i][:])
 			}
 		}
 	}
