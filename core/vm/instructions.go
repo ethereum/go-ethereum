@@ -392,10 +392,8 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 	}
 	var (
 		statelessGasCharged uint64
-		endLeafOffset       uint64
 		startOffset         uint64
 		endOffset           uint64
-		numLeaves           uint64
 	)
 	// startLeafOffset, endLeafOffset is the evm code offset of the first byte in the first leaf touched
 	// and the evm code offset of the last byte in the last leaf touched
@@ -405,10 +403,8 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 	} else {
 		endOffset = startOffset + size
 	}
-	endLeafOffset = endOffset + (endOffset % 31)
-	numLeaves = (endLeafOffset - startOffset + 30) / 31
 
-	for i := 0; i < int(numLeaves); i++ {
+	for i := offset / 31; i < endOffset/31; i++ {
 		index := trieUtils.GetTreeKeyCodeChunk(address, uint256.NewInt(uint64(i)+startOffset/31))
 
 		// TODO safe-add here to catch overflow
@@ -424,7 +420,10 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code
 			if curEnd > endOffset {
 				curEnd = endOffset
 			}
-			valueSize := curEnd - (uint64(i) * 31)
+			var valueSize uint64
+			if curEnd >= (uint64(i) * 31) {
+				valueSize = curEnd - (uint64(i) * 31)
+			}
 			value = make([]byte, 32, 32)
 			value[0] = byte(firstPushOffset)
 
