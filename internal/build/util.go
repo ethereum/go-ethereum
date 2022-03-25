@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -137,7 +138,23 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	for _, f := range files {
 		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
 	}
+	// Avoid travis timout after 10m of inactivity by printing something
+	// every 8 minutes.
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-time.After(8 * time.Minute):
+				fmt.Println("keepalive log")
+				continue
+			case <-done:
+				return
+			}
+
+		}
+	}()
 	stdin.Close()
+	defer close(done)
 	return sftp.Wait()
 }
 
