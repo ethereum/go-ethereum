@@ -96,6 +96,7 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	extra := utils.ExtraFields_v2{
 		Round:      1,
@@ -116,6 +117,7 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	quorumCert = &utils.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	extra = utils.ExtraFields_v2{
 		Round:      2,
@@ -136,6 +138,7 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	quorumCert = &utils.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	extra = utils.ExtraFields_v2{
 		Round:      utils.Round(blockchain.Config().XDPoS.Epoch) + 1,
@@ -156,6 +159,7 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	quorumCert = &utils.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	extra = utils.ExtraFields_v2{
 		Round:      utils.Round(blockchain.Config().XDPoS.Epoch) + 2,

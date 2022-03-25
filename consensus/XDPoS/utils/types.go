@@ -76,6 +76,7 @@ type BlockInfo struct {
 type Vote struct {
 	ProposedBlockInfo *BlockInfo
 	Signature         Signature
+	GapNumber         uint64
 }
 
 // Timeout message in XDPoS 2.0
@@ -95,6 +96,7 @@ type SyncInfo struct {
 type QuorumCert struct {
 	ProposedBlockInfo *BlockInfo
 	Signatures        []Signature
+	GapNumber         uint64
 }
 
 // Timeout Certificate struct in XDPoS 2.0
@@ -146,7 +148,12 @@ func (m *SyncInfo) Hash() common.Hash {
 	return rlpHash(m)
 }
 
-func VoteSigHash(m *BlockInfo) common.Hash {
+type VoteForSign struct {
+	ProposedBlockInfo *BlockInfo
+	GapNumber         uint64
+}
+
+func VoteSigHash(m *VoteForSign) common.Hash {
 	return rlpHash(m)
 }
 

@@ -633,20 +633,26 @@ func generateV2Extra(roundNumber int64, currentBlock *types.Block, signer common
 		Round:  round,
 		Number: currentBlock.Number(),
 	}
+	gapNumber := currentBlock.Number().Uint64() - currentBlock.Number().Uint64()%params.TestXDPoSMockChainConfig.XDPoS.Epoch - params.TestXDPoSMockChainConfig.XDPoS.Gap
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: proposedBlockInfo,
+		GapNumber:         gapNumber,
+	}
 
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(proposedBlockInfo).Bytes())
+	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
 	if err != nil {
 		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 	}
 	// Sign from acc 1, 2, 3
-	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
-	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
-	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
+	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(voteForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(voteForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(voteForSign).Bytes())
 	var signatures []utils.Signature
 	signatures = append(signatures, acc1SignedHash, acc2SignedHash, acc3SignedHash, signedHash)
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
+		GapNumber:         gapNumber,
 	}
 
 	extra := utils.ExtraFields_v2{

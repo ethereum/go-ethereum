@@ -108,20 +108,25 @@ func TestShouldVerifyBlock(t *testing.T) {
 		Round:  utils.Round(2),
 		Number: blockchain.GetBlockByNumber(902).Number(),
 	}
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: proposedBlockInfo,
+		GapNumber:         450,
+	}
 	// Genrate QC
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(proposedBlockInfo).Bytes())
+	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
 	if err != nil {
 		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 	}
 	// Sign from acc 1, 2, 3
-	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
-	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
-	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(proposedBlockInfo).Bytes())
+	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(voteForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(voteForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(voteForSign).Bytes())
 	var signatures []utils.Signature
 	signatures = append(signatures, signedHash, acc1SignedHash, acc2SignedHash, acc3SignedHash)
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
+		GapNumber:         450,
 	}
 
 	extra := utils.ExtraFields_v2{
@@ -183,7 +188,11 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 		Round:  utils.Round(1),
 		Number: parentBlock.Number(),
 	}
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(proposedBlockInfo).Bytes())
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: proposedBlockInfo,
+		GapNumber:         450,
+	}
+	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
 	assert.Nil(t, err)
 	var signatures []utils.Signature
 	// Duplicate the signatures
@@ -191,6 +200,7 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
+		GapNumber:         450,
 	}
 
 	extra := utils.ExtraFields_v2{

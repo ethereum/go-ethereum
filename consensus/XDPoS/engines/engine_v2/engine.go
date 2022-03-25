@@ -98,6 +98,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 				Number: big.NewInt(0),
 			},
 			Signatures: []utils.Signature{},
+			GapNumber:  0,
 		},
 		highestVotedRound:  utils.Round(0),
 		highestCommitBlock: nil,
@@ -142,6 +143,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 		quorumCert = &utils.QuorumCert{
 			ProposedBlockInfo: blockInfo,
 			Signatures:        nil,
+			GapNumber: header.Number.Uint64()-x.config.Gap,
 		}
 
 		// can not call processQC because round is equal to default
@@ -554,7 +556,7 @@ func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *utils.
 func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
 	/*
 		  1. Check vote round with current round for fast fail(disqualifed)
-		  2. Get masterNode list from snapshot
+		  2. Get masterNode list from snapshot by using vote.GapNumber
 		  3. Check signature:
 					- Use ecRecover to get the public key
 					- Use the above public key to find out the xdc address
@@ -566,11 +568,14 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *utils.Vo
 		return false, nil
 	}
 
-	snapshot, err := x.getSnapshot(chain, vote.ProposedBlockInfo.Number.Uint64(), false)
+	snapshot, err := x.getSnapshot(chain, vote.GapNumber, true)
 	if err != nil {
 		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "BlockNum", vote.ProposedBlockInfo.Number, "Hash", vote.ProposedBlockInfo.Hash, "Error", err.Error())
 	}
-	verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(vote.ProposedBlockInfo), vote.Signature, snapshot.NextEpochMasterNodes)
+	verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(&utils.VoteForSign{
+		ProposedBlockInfo: vote.ProposedBlockInfo,
+		GapNumber:         vote.GapNumber,
+	}), vote.Signature, snapshot.NextEpochMasterNodes)
 	if err != nil {
 		for i, mn := range snapshot.NextEpochMasterNodes {
 			log.Warn("[VerifyVoteMessage] Master node list item", "index", i, "Master node", mn.Hex())
@@ -735,7 +740,8 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 					- Use ecRecover to get the public key
 					- Use the above public key to find out the xdc address
 					- Use the above xdc address to check against the master node list from step 1(For the received QC epoch)
-		4. Verify blockInfo
+		4. Verify gapNumber = epochSwitchNumber - epochSwitchNumber%Epoch - Gap
+		5. Verify blockInfo
 	*/
 	epochInfo, err := x.getEpochSwitchInfo(blockChainReader, nil, quorumCert.ProposedBlockInfo.Hash)
 	if err != nil {
@@ -771,7 +777,10 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	for _, signature := range signatures {
 		go func(sig utils.Signature) {
 			defer wg.Done()
-			verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(quorumCert.ProposedBlockInfo), sig, epochInfo.Masternodes)
+			verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(&utils.VoteForSign{
+				ProposedBlockInfo: quorumCert.ProposedBlockInfo,
+				GapNumber:         quorumCert.GapNumber,
+			}), sig, epochInfo.Masternodes)
 			if err != nil {
 				log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
 				haveError = fmt.Errorf("Error while verfying QC message signatures")
@@ -788,7 +797,12 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	if haveError != nil {
 		return haveError
 	}
-
+	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
+	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
+	if gapNumber != quorumCert.GapNumber {
+		log.Error("[verifyQC] gap number mismatch", "BlockInfoHash", quorumCert.ProposedBlockInfo.Hash, "Gap", quorumCert.GapNumber, "GapShouldBe", gapNumber)
+		return fmt.Errorf("gap number mismatch %v", quorumCert)
+	}
 	return x.VerifyBlockInfo(blockChainReader, quorumCert.ProposedBlockInfo)
 }
 

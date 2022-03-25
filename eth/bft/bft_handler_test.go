@@ -21,6 +21,7 @@ func makeVotes(n int) []utils.Vote {
 		votes = append(votes, utils.Vote{
 			ProposedBlockInfo: &utils.BlockInfo{},
 			Signature:         []byte{byte(i)},
+			GapNumber:         0,
 		})
 	}
 	return votes

@@ -3,6 +3,7 @@ package engine_v2_tests
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
@@ -24,7 +25,11 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 		Round:  utils.Round(1),
 		Number: big.NewInt(901),
 	}
-	voteSigningHash := utils.VoteSigHash(blockInfo)
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(blockchain, utils.Round(1), false)
@@ -34,6 +39,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -49,6 +55,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -64,6 +71,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -86,7 +94,11 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 		Round:  utils.Round(5),
 		Number: big.NewInt(905),
 	}
-	voteSigningHash := utils.VoteSigHash(blockInfo)
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
@@ -96,6 +108,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -109,6 +122,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -127,6 +141,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         randomlySignedHash,
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -141,6 +156,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -172,6 +188,7 @@ func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testi
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
+		GapNumber:         450,
 	}
 
 	// voteRound > currentRound
@@ -204,12 +221,17 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		Round:  utils.Round(5),
 		Number: big.NewInt(905),
 	}
-	voteSigningHash := utils.VoteSigHash(blockInfo)
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
 	// Create two vote message which will not reach vote pool threshold
 	signedHash := SignHashByPK(acc1Key, voteSigningHash.Bytes())
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
@@ -223,6 +245,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc2Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -233,6 +256,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -318,7 +342,11 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 		Round:  utils.Round(6),
 		Number: big.NewInt(906),
 	}
-	voteSigningHash := utils.VoteSigHash(blockInfo)
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
 
 	// Set round to 6
 	engineV2.SetNewRoundFaker(blockchain, utils.Round(6), false)
@@ -326,6 +354,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc1Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
@@ -334,6 +363,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc2Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -342,6 +372,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -360,6 +391,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(voterKey, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -389,12 +421,17 @@ func TestProcessVoteMsgFailIfVerifyBlockInfoFail(t *testing.T) {
 		Round:  utils.Round(5),
 		Number: big.NewInt(905),
 	}
-	voteSigningHash := utils.VoteSigHash(blockInfo)
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
 	// Create two vote message which will not reach vote pool threshold
 	signedHash := SignHashByPK(acc1Key, voteSigningHash.Bytes())
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         450,
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
@@ -408,6 +445,7 @@ func TestProcessVoteMsgFailIfVerifyBlockInfoFail(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc2Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
@@ -418,6 +456,7 @@ func TestProcessVoteMsgFailIfVerifyBlockInfoFail(t *testing.T) {
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
@@ -434,11 +473,16 @@ func TestVerifyVoteMsg(t *testing.T) {
 		Round:  utils.Round(14),
 		Number: big.NewInt(915),
 	}
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
 
 	// Valid message but disqualified as the round does not match
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         []byte{1},
+		GapNumber:         450,
 	}
 	engineV2.SetNewRoundFaker(blockchain, utils.Round(15), false)
 	verified, err := engineV2.VerifyVoteMessage(blockchain, voteMsg)
@@ -452,13 +496,64 @@ func TestVerifyVoteMsg(t *testing.T) {
 	assert.Equal(t, "Error while verifying message: invalid signature length", err.Error())
 
 	// Valid vote message from a master node
-	signHash, _ := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(blockInfo).Bytes())
+	signHash, _ := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
 	voteMsg = &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signHash,
+		GapNumber:         450,
 	}
 
 	verified, err = engineV2.VerifyVoteMessage(blockchain, voteMsg)
 	assert.True(t, verified)
 	assert.Nil(t, err)
+}
+
+func TestVoteMessageHandlerWrongGapNumber(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	blockInfo := &utils.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  utils.Round(5),
+		Number: big.NewInt(905),
+	}
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
+
+	// Set round to 5
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	// Create two vote messages which will not reach vote pool threshold
+	signedHash, _ := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	voteMsg := &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	engineV2.VoteHandler(blockchain, voteMsg)
+	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	engineV2.VoteHandler(blockchain, voteMsg)
+
+	// Create a vote message that has wrong gap number
+	voteForSign = &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         451,
+	}
+	voteSigningHash = utils.VoteSigHash(voteForSign)
+	signedHash = SignHashByPK(acc3Key, voteSigningHash.Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         451,
+	}
+
+	err := engineV2.VoteHandler(blockchain, voteMsg)
+	assert.True(t, strings.Contains(err.Error(), "gap number mismatch"))
 }

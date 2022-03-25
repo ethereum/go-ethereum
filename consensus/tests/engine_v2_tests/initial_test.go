@@ -33,6 +33,7 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	expectedQuorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil,
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, utils.Round(1), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
@@ -73,6 +74,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil, // after decode it got default value []utils.Signature{}
+		GapNumber: 450,
 	}
 	extra := utils.ExtraFields_v2{
 		Round:      11,
@@ -103,6 +105,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	expectedQuorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        []utils.Signature{},
+		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, utils.Round(11), round)
 	assert.Equal(t, expectedQuorumCert, highQC)

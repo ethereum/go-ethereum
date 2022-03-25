@@ -10,10 +10,10 @@ import (
 
 func toyExtraFields() *ExtraFields_v2 {
 	round := Round(307)
-	blockInfo := &BlockInfo{Hash: common.BigToHash(big.NewInt(2047)), Round: round - 1, Number: big.NewInt(1)}
+	blockInfo := &BlockInfo{Hash: common.BigToHash(big.NewInt(2047)), Round: round - 1, Number: big.NewInt(900)}
 	signature := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	signatures := []Signature{signature}
-	quorumCert := &QuorumCert{ProposedBlockInfo: blockInfo, Signatures: signatures}
+	quorumCert := &QuorumCert{ProposedBlockInfo: blockInfo, Signatures: signatures, GapNumber: 450}
 	e := &ExtraFields_v2{Round: round, QuorumCert: quorumCert}
 	return e
 }
@@ -35,16 +35,19 @@ func TestExtraFieldsEncodeDecode(t *testing.T) {
 
 func TestHashAndSigHash(t *testing.T) {
 	round := Round(307)
-	blockInfo1 := &BlockInfo{Hash: common.BigToHash(big.NewInt(2047)), Round: round - 1, Number: big.NewInt(1)}
-	blockInfo2 := &BlockInfo{Hash: common.BigToHash(big.NewInt(4095)), Round: round - 1, Number: big.NewInt(1)}
+	gapNumer := uint64(450)
+	blockInfo1 := &BlockInfo{Hash: common.BigToHash(big.NewInt(2047)), Round: round - 1, Number: big.NewInt(900)}
+	blockInfo2 := &BlockInfo{Hash: common.BigToHash(big.NewInt(4095)), Round: round - 1, Number: big.NewInt(900)}
+	voteForSign1 := &VoteForSign{ProposedBlockInfo: blockInfo1, GapNumber: gapNumer}
+	voteForSign2 := &VoteForSign{ProposedBlockInfo: blockInfo2, GapNumber: gapNumer}
 	signature1 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	signature2 := []byte{1, 2, 3, 4, 5, 6, 7, 7}
 	signatures1 := []Signature{signature1}
 	signatures2 := []Signature{signature2}
-	quorumCert1 := &QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures1}
-	quorumCert2 := &QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures2}
-	vote1 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature1}
-	vote2 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature2}
+	quorumCert1 := &QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures1, GapNumber: 450}
+	quorumCert2 := &QuorumCert{ProposedBlockInfo: blockInfo1, Signatures: signatures2, GapNumber: 450}
+	vote1 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature1, GapNumber: gapNumer}
+	vote2 := Vote{ProposedBlockInfo: blockInfo1, Signature: signature2, GapNumber: gapNumer}
 	if vote1.Hash() == vote2.Hash() {
 		t.Fatalf("Hash of two votes shouldn't equal")
 	}
@@ -58,7 +61,7 @@ func TestHashAndSigHash(t *testing.T) {
 	if syncInfo1.Hash() == syncInfo2.Hash() {
 		t.Fatalf("Hash of two sync info shouldn't equal")
 	}
-	if VoteSigHash(blockInfo1) == VoteSigHash(blockInfo2) {
+	if VoteSigHash(voteForSign1) == VoteSigHash(voteForSign2) {
 		t.Fatalf("SigHash of two block info shouldn't equal")
 	}
 	round2 := Round(999)

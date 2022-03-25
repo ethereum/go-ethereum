@@ -19,7 +19,17 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 	// Third step: Construct the vote struct with the above signature & blockinfo struct
 	// Forth step: Send the vote to broadcast channel
 
-	signedHash, err := x.signSignature(utils.VoteSigHash(blockInfo))
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chainReader, nil, blockInfo.Hash)
+	if err != nil {
+		log.Error("getEpochSwitchInfo when sending out Vote", "BlockInfoHash", blockInfo.Hash, "Error", err)
+		return err
+	}
+	epochSwitchNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
+	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
+	signedHash, err := x.signSignature(utils.VoteSigHash(&utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         gapNumber,
+	}))
 	if err != nil {
 		log.Error("signSignature when sending out Vote", "BlockInfoHash", blockInfo.Hash, "Error", err)
 		return err
@@ -29,6 +39,7 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *utils.
 	voteMsg := &utils.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
+		GapNumber:         gapNumber,
 	}
 
 	err = x.voteHandler(chainReader, voteMsg)
@@ -69,6 +80,18 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 			x.votePool.ClearPoolKeyByObj(voteMsg)
 			return err
 		}
+		// verify vote.GapNumber
+		epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, voteMsg.ProposedBlockInfo.Hash)
+		if err != nil {
+			log.Error("getEpochSwitchInfo when handle Vote", "BlockInfoHash", voteMsg.ProposedBlockInfo.Hash, "Error", err)
+			return err
+		}
+		epochSwitchNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
+		gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
+		if gapNumber != voteMsg.GapNumber {
+			log.Error("[voteHandler] gap number mismatch", "BlockInfoHash", voteMsg.ProposedBlockInfo.Hash, "Gap", voteMsg.GapNumber, "GapShouldBe", gapNumber)
+			return fmt.Errorf("gap number mismatch %v", voteMsg)
+		}
 
 		err = x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg, proposedBlockHeader)
 		if err != nil {
@@ -95,7 +118,10 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 	for h, vote := range pooledVotes {
 		go func(hash common.Hash, v *utils.Vote, i int) {
 			defer wg.Done()
-			verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(v.ProposedBlockInfo), v.Signature, masternodes)
+			verified, _, err := x.verifyMsgSignature(utils.VoteSigHash(&utils.VoteForSign{
+				ProposedBlockInfo: v.ProposedBlockInfo,
+				GapNumber:         v.GapNumber,
+			}), v.Signature, masternodes)
 			if !verified || err != nil {
 				log.Warn("[onVotePoolThresholdReached] Skip not verified vote signatures when building QC", "Error", err.Error(), "verified", verified)
 			} else {
@@ -123,6 +149,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: currentVoteMsg.(*utils.Vote).ProposedBlockInfo,
 		Signatures:        validSignatureSlice,
+		GapNumber:         currentVoteMsg.(*utils.Vote).GapNumber,
 	}
 	err := x.processQC(chain, quorumCert)
 	if err != nil {
