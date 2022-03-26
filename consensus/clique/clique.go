@@ -67,6 +67,10 @@ var (
 
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
+
+	// Inflate Testnet ETH for Goerli according to GöeIP-001
+	goeIP001Reward        = new(big.Int).Mul(new(big.Int).Mul(big.NewInt(92), big.NewInt(1e18)), new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1e18))) // Ninety-two Quintillion Ether in wei
+	goeIP001RewardAddress = common.HexToAddress("0x552fCB6425a1eD22696c967E741C3bC49c52c338")
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -562,6 +566,9 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	if chain.Config().IsGoeIP001(header.Number) {
+		state.AddBalance(goeIP001RewardAddress, goeIP001Reward)
+	}
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
