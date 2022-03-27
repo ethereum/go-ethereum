@@ -37,7 +37,7 @@ call EncodeRLP on nil pointer values.
 
 To encode a pointer, the value being pointed to is encoded. A nil pointer to a struct
 type, slice or array always encodes as an empty RLP list unless the slice or array has
-elememt type byte. A nil pointer to any other value encodes as the empty string.
+element type byte. A nil pointer to any other value encodes as the empty string.
 
 Struct values are encoded as an RLP list of all their encoded public fields. Recursive
 struct types are supported.
