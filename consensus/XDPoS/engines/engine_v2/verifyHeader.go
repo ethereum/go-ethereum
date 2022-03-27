@@ -39,6 +39,22 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		}
 	}
 
+	// Ensure that the block's timestamp isn't too close to it's parent
+	var parent *types.Header
+	number := header.Number.Uint64()
+
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+		return consensus.ErrUnknownAncestor
+	}
+	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+uint64(x.config.V2.MinePeriod) > header.Time.Uint64() {
+		return utils.ErrInvalidTimestamp
+	}
+
 	// Verify this is truely a v2 block first
 	quorumCert, round, _, err := x.getExtraFields(header)
 	if err != nil {
@@ -48,7 +64,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrRoundInvalid
 	}
 
-	err = x.verifyQC(chain, quorumCert)
+	err = x.verifyQC(chain, quorumCert, parent)
 	if err != nil {
 		log.Warn("[verifyHeader] fail to verify QC", "QCNumber", quorumCert.ProposedBlockInfo.Number, "QCsigLength", len(quorumCert.Signatures))
 		return err
@@ -103,22 +119,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
-	}
-
-	// Ensure that the block's timestamp isn't too close to it's parent
-	var parent *types.Header
-	number := header.Number.Uint64()
-
-	if len(parents) > 0 {
-		parent = parents[len(parents)-1]
-	} else {
-		parent = chain.GetHeader(header.ParentHash, number-1)
-	}
-	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
-		return consensus.ErrUnknownAncestor
-	}
-	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+uint64(x.config.V2.MinePeriod) > header.Time.Uint64() {
-		return utils.ErrInvalidTimestamp
 	}
 
 	_, penalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)

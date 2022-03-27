@@ -218,3 +218,37 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	assert.Equal(t, utils.ErrInvalidQC, err)
 
 }
+
+func TestShouldVerifyHeaders(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+	// Enable verify
+	config.XDPoS.V2.SkipV2Validation = false
+	// Skip the mining time validation by set mine time to 0
+	config.XDPoS.V2.MinePeriod = 0
+	// Block 901 is the first v2 block with round of 1
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, 0)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+
+	// var results <-chan error
+	// var abort <-chan struct{}
+
+	// Happy path
+	var happyPathHeaders []*types.Header
+	happyPathHeaders = append(happyPathHeaders, blockchain.GetBlockByNumber(899).Header(), blockchain.GetBlockByNumber(900).Header(), blockchain.GetBlockByNumber(901).Header(), blockchain.GetBlockByNumber(902).Header())
+	// Randomly set full verify
+	var fullVerifies []bool
+	fullVerifies = append(fullVerifies, false, true, true, false)
+	_, results := adaptor.VerifyHeaders(blockchain, happyPathHeaders, fullVerifies)
+	select {
+	case result := <-results:
+		assert.Nil(t, result)
+	case <-time.After(time.Duration(2) * time.Second): // It should be very fast to verify headers
+		t.Fatalf("Taking too long to verify headers")
+	}
+}

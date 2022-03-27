@@ -143,7 +143,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 		quorumCert = &utils.QuorumCert{
 			ProposedBlockInfo: blockInfo,
 			Signatures:        nil,
-			GapNumber: header.Number.Uint64()-x.config.Gap,
+			GapNumber:         header.Number.Uint64() - x.config.Gap,
 		}
 
 		// can not call processQC because round is equal to default
@@ -201,7 +201,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	return nil
 }
 
-// Check if it's my turm to mine a block. Note: The second return value `preIndex` is useless in V2 engine
+// Check if it's my turn to mine a block. Note: The second return value `preIndex` is useless in V2 engine
 func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
 	x.lock.RLock()
 	defer x.lock.RUnlock()
@@ -222,7 +222,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	}
 
 	round := x.currentRound
-	isMyTurn, err := x.checkYourturnWithinFinalisedMasternodes(chain, round, parent, signer)
+	isMyTurn, err := x.yourturn(chain, round, parent, signer)
 	if err != nil {
 		log.Error("[Yourturn] Error while checking if i am qualified to mine", "round", round, "error", err)
 	}
@@ -269,7 +269,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	signer := x.signer
 	x.signLock.RUnlock()
 
-	isMyTurn, err := x.checkYourturnWithinFinalisedMasternodes(chain, currentRound, parent, signer)
+	isMyTurn, err := x.yourturn(chain, currentRound, parent, signer)
 	if err != nil {
 		log.Error("[Prepare] Error while checking if it's still my turn to mine", "round", currentRound, "ParentHash", parent.Hash().Hex(), "ParentNumber", parent.Number.Uint64(), "error", err)
 		return err
@@ -404,12 +404,6 @@ func (x *XDPoS_v2) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 	return x.calcDifficulty(chain, parent, x.signer)
 }
 
-// TODO: what should be new difficulty
-func (x *XDPoS_v2) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
-	// TODO: The difference of round number between parent round and current round
-	return big.NewInt(1)
-}
-
 func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *types.Header, address common.Address) bool {
 	x.lock.RLock()
 	defer x.lock.RUnlock()
@@ -523,7 +517,7 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(chain consensus.ChainReader, syncInfo *
 		return false, nil
 	}
 
-	err := x.verifyQC(chain, syncInfo.HighestQuorumCert)
+	err := x.verifyQC(chain, syncInfo.HighestQuorumCert, nil)
 	if err != nil {
 		log.Warn("SyncInfo message verification failed due to QC", "error", err)
 		return false, err
@@ -653,7 +647,7 @@ func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader
 		return err
 	}
 
-	err = x.verifyQC(chain, quorumCert)
+	err = x.verifyQC(chain, quorumCert, nil)
 	if err != nil {
 		log.Error("[ProposedBlockHandler] Fail to verify QC", "Extra round", round, "QC proposed BlockInfo Hash", quorumCert.ProposedBlockInfo.Hash)
 		return err
@@ -732,7 +726,7 @@ func (x *XDPoS_v2) VerifyBlockInfo(blockChainReader consensus.ChainReader, block
 	return nil
 }
 
-func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
+func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *utils.QuorumCert, parentHeader *types.Header) error {
 	/*
 		1. Check if num of QC signatures is >= x.config.v2.CertThreshold
 		2. Get epoch master node list by hash
@@ -743,7 +737,7 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		4. Verify gapNumber = epochSwitchNumber - epochSwitchNumber%Epoch - Gap
 		5. Verify blockInfo
 	*/
-	epochInfo, err := x.getEpochSwitchInfo(blockChainReader, nil, quorumCert.ProposedBlockInfo.Hash)
+	epochInfo, err := x.getEpochSwitchInfo(blockChainReader, parentHeader, quorumCert.ProposedBlockInfo.Hash)
 	if err != nil {
 		log.Error("[verifyQC] Error when getting epoch switch Info to verify QC", "Error", err)
 		return fmt.Errorf("Fail to verify QC due to failure in getting epoch switch info")
@@ -762,12 +756,6 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		//First V2 Block QC, QC Signatures is initial nil
 		log.Warn("[verifyHeader] Invalid QC Signature is nil or empty", "QC", quorumCert, "QCNumber", quorumCert.ProposedBlockInfo.Number, "Signatures len", len(signatures))
 		return utils.ErrInvalidQC
-	}
-
-	epochInfo, err = x.getEpochSwitchInfo(blockChainReader, nil, quorumCert.ProposedBlockInfo.Hash)
-	if err != nil {
-		log.Error("[verifyQC] Error when getting epoch switch Info to verify QC", "Error", err)
-		return fmt.Errorf("Fail to verify QC due to failure in getting epoch switch info")
 	}
 
 	var wg sync.WaitGroup
