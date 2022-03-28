@@ -74,11 +74,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
-	oldDebug, oldTracer := cfg.Debug, cfg.Tracer
-	defer func() { cfg.Debug, cfg.Tracer = oldDebug, oldTracer }()
-	tracer := custom.NewCallTracer(statedb)
-	cfg.Debug = true
-	cfg.Tracer = tracer
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -93,11 +88,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-		if result, err := tracer.GetResult(); err == nil {
-			CacheTrace(tx.Hash(), blockHash, result)
-		} else {
-			log.Warn("Failed to get result from racer", "block", blockHash, "num", blockNumber, "tx", tx.Hash())
-		}
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
