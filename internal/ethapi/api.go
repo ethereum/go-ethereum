@@ -18,6 +18,8 @@ package ethapi
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -2082,4 +2084,174 @@ func toHexSlice(b [][]byte) []string {
 		r[i] = hexutil.Encode(b[i])
 	}
 	return r
+}
+
+// ---------------------------------------------------------------- FlashBots inspired code ----------------------------------------------------------------
+
+// PrivateTxBundleAPI offers an API for accepting bundled transactions
+type PrivateTxBundleAPI struct {
+	b Backend
+}
+
+// NewPrivateTxBundleAPI creates a new Tx Bundle API instance.
+func NewPrivateTxBundleAPI(b Backend) *PrivateTxBundleAPI {
+	return &PrivateTxBundleAPI{b}
+}
+
+// BundleAPI offers an API for accepting bundled transactions
+type BundleAPI struct {
+	b     Backend
+	chain *core.BlockChain
+}
+
+// NewBundleAPI creates a new Tx Bundle API instance.
+func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
+	return &BundleAPI{b, chain}
+}
+
+// CallBundleArgs represents the arguments for a call.
+type CallBundleArgs struct {
+	Txs                    []TransactionArgs     `json:"txs"`
+	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
+	Coinbase               *string               `json:"coinbase"`
+	Timestamp              *uint64               `json:"timestamp"`
+	Timeout                *int64                `json:"timeout"`
+	GasLimit               *uint64               `json:"gasLimit"`
+	Difficulty             *big.Int              `json:"difficulty"`
+	BaseFee                *big.Int              `json:"baseFee"`
+}
+
+// CallBundle will simulate a bundle of transactions at the top of a given block
+// number with the state of another (or the same) block. This can be used to
+// simulate future blocks with the current state, or it can be used to simulate
+// a past block.
+// The sender is responsible for signing the transactions and using the correct
+// nonce and ensuring validity
+func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
+	if len(args.Txs) == 0 {
+		return nil, errors.New("bundle missing unsigned txs")
+	}
+	if args.BlockNumber == 0 {
+		return nil, errors.New("bundle missing blockNumber")
+	}
+
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	blockNumber := big.NewInt(int64(args.BlockNumber))
+
+	timestamp := parent.Time + 1
+	if args.Timestamp != nil {
+		timestamp = *args.Timestamp
+	}
+	coinbase := parent.Coinbase
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
+	}
+	difficulty := parent.Difficulty
+	if args.Difficulty != nil {
+		difficulty = args.Difficulty
+	}
+	gasLimit := parent.GasLimit
+	if args.GasLimit != nil {
+		gasLimit = *args.GasLimit
+	}
+	var baseFee *big.Int
+	if args.BaseFee != nil {
+		baseFee = args.BaseFee
+	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumber.Int64())) {
+		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
+	}
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     blockNumber,
+		GasLimit:   gasLimit,
+		Time:       timestamp,
+		Difficulty: difficulty,
+		Coinbase:   coinbase,
+		BaseFee:    baseFee,
+	}
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	vmconfig := vm.Config{}
+
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
+
+	// RPC Call gas cap
+	globalGasCap := s.b.RPCGasCap()
+
+	for i, tx := range args.Txs {
+		// Since its a txCall we'll just prepare the
+		// state with a random hash
+		var randomHash common.Hash
+		rand.Read(randomHash[:])
+		// New random hash since its a call
+		state.Prepare(randomHash, i)
+
+		msg, err := tx.ToMessage(globalGasCap, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+
+		receipt, result, traceResult, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.From)
+		}
+
+		jsonResult := map[string]interface{}{
+			"gasUsed":     receipt.GasUsed,
+			"fromAddress": tx.from(),
+			"toAddress":   tx.To,
+			"traceResult": traceResult,
+		}
+		totalGasUsed += receipt.GasUsed
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	ret["gasFees"] = gasFees.String()
+	ret["gasUsed"] = totalGasUsed
+	ret["blockNumber"] = parent.Number.Int64()
+
+	ret["args"] = header
+	return ret, nil
 }
