@@ -2086,7 +2086,7 @@ func toHexSlice(b [][]byte) []string {
 	return r
 }
 
-// ---------------------------------------------------------------- FlashBots ----------------------------------------------------------------
+// ---------------------------------------------------------------- FlashBots inspired code ----------------------------------------------------------------
 
 // PrivateTxBundleAPI offers an API for accepting bundled transactions
 type PrivateTxBundleAPI struct {
@@ -2180,10 +2180,6 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		Coinbase:   coinbase,
 		BaseFee:    baseFee,
 	}
-	if header != nil {
-		log.Error("here4")
-	}
-
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
