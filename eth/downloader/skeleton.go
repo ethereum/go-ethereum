@@ -253,9 +253,17 @@ func (s *skeleton) startup() {
 				event.errc <- errors.New("forced head needed for startup")
 				continue
 			}
-			event.errc <- nil // forced head accepted for startup
 			head := event.header
+
 			s.started = time.Now()
+			// initialize the sync, trimming and previous leftovers until
+			// we're consistent with the newly requested chain head.
+			// We need to write the skeleton sync status before we
+			// release the errc listener.
+			if head != nil {
+				s.initSync(head)
+			}
+			event.errc <- nil // forced head accepted for startup
 
 			for {
 				// If the sync cycle terminated or was terminated, propagate up when
@@ -319,7 +327,6 @@ func (s *skeleton) Terminate() error {
 func (s *skeleton) Sync(head *types.Header, force bool) error {
 	log.Trace("New skeleton head announced", "number", head.Number, "hash", head.Hash(), "force", force)
 	errc := make(chan error)
-
 	select {
 	case s.headEvents <- &headUpdate{header: head, force: force, errc: errc}:
 		return <-errc
@@ -336,10 +343,10 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// old state without initing from disk.
 	if head == nil {
 		head = rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[0].Head)
-	} else {
+		//} else {
 		// Otherwise, initialize the sync, trimming and previous leftovers until
 		// we're consistent with the newly requested chain head
-		s.initSync(head)
+		//s.initSync(head)
 	}
 	// Create the scratch space to fill with concurrently downloaded headers
 	s.scratchSpace = make([]*types.Header, scratchHeaders)

@@ -107,6 +107,25 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 	return err
 }
 
+// syncBeacon starts synchronizing with a remote peer, blocking until it completes.
+func (dl *downloadTester) syncBeacon(id string, td *big.Int, mode SyncMode) error {
+	head := dl.peers[id].chain.CurrentBlock()
+	if td == nil {
+		// If no particular TD was requested, load from the peer's blockchain
+		td = dl.peers[id].chain.GetTd(head.Hash(), head.NumberU64())
+	}
+	// Synchronise with the chosen peer and ensure proper cleanup afterwards
+	err := dl.downloader.synchronise(id, head.Hash(), td, nil, mode, true, nil)
+	select {
+	case <-dl.downloader.cancelCh:
+		// Ok, downloader fully cancelled after sync cycle
+	default:
+		// Downloader is still accepting packets, can block a peer up
+		panic("downloader active post sync cycle") // panic will be caught by tester
+	}
+	return err
+}
+
 // newPeer registers a new block download source into the downloader.
 func (dl *downloadTester) newPeer(id string, version uint, blocks []*types.Block) *downloadTesterPeer {
 	dl.lock.Lock()
@@ -119,7 +138,6 @@ func (dl *downloadTester) newPeer(id string, version uint, blocks []*types.Block
 		withholdHeaders: make(map[common.Hash]struct{}),
 	}
 	dl.peers[id] = peer
-
 	if err := dl.downloader.RegisterPeer(id, version, peer); err != nil {
 		panic(err)
 	}
@@ -1367,4 +1385,23 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 	} else {
 		assertOwnChain(t, tester, len(chain.blocks))
 	}
+}
+
+func TestBeaconSynchronisation66Snap(t *testing.T) { testBeaconSync(t, eth.ETH66, SnapSync) }
+
+func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
+	tester := newTester()
+	defer tester.terminate()
+
+	// Create a small enough block chain to download
+	chain := testChainBase.shorten(blockCacheMaxItems - 15)
+	tester.newPeer("peer", protocol, chain.blocks[1:])
+	head := chain.blocks[len(chain.blocks)-1].Header()
+	tester.downloader.BeaconSync(mode, head)
+	// Synchronise with the peer and make sure all relevant data was retrieved
+	if err := tester.syncBeacon("peer", nil, mode); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	assertOwnChain(t, tester, len(chain.blocks))
+	//t.Fail("test")
 }

@@ -509,7 +509,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}
 	d.syncStatsChainHeight = height
 	d.syncStatsLock.Unlock()
-
 	// Ensure our origin point is below any snap sync pivot point
 	if mode == SnapSync {
 		if height <= uint64(fsMinFullBlocks) {
@@ -517,6 +516,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		} else {
 			pivotNumber := pivot.Number.Uint64()
 			if pivotNumber <= origin {
+				if pivotNumber == 0 {
+					panic("Going to set origin to -1")
+				}
 				origin = pivotNumber - 1
 			}
 			// Write out the pivot into the database so a rollback beyond it will
