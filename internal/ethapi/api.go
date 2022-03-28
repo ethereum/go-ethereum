@@ -2369,6 +2369,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			"traceResult": traceResult,
 			// Add trace results here
 		}
+		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
 			revert := result.Revert()
@@ -2386,15 +2387,9 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 
 	ret := map[string]interface{}{}
 	ret["results"] = results
-	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
-	ret["coinbaseDiff"] = coinbaseDiff.String()
 	ret["gasFees"] = gasFees.String()
-	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
-	//ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
-	ret["totalGasUsed"] = totalGasUsed
-	ret["stateBlockNumber"] = parent.Number.Int64()
-
-	// ret["bundleHash"] = "0x" + common.Bytes2Hex(bundleHash.Sum(nil))
+	ret["gasUsed"] = totalGasUsed
+	ret["blockNumber"] = parent.Number.Int64()
 
 	ret["args"] = header
 	return ret, nil
