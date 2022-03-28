@@ -2098,119 +2098,6 @@ func NewPrivateTxBundleAPI(b Backend) *PrivateTxBundleAPI {
 	return &PrivateTxBundleAPI{b}
 }
 
-// SendBundleArgs represents the arguments for a SendBundle call.
-type SendBundleArgs struct {
-	Txs               []hexutil.Bytes `json:"txs"`
-	BlockNumber       rpc.BlockNumber `json:"blockNumber"`
-	MinTimestamp      *uint64         `json:"minTimestamp"`
-	MaxTimestamp      *uint64         `json:"maxTimestamp"`
-	RevertingTxHashes []common.Hash   `json:"revertingTxHashes"`
-}
-
-// SendMegabundleArgs represents the arguments for a SendMegabundle call.
-type SendMegabundleArgs struct {
-	Txs               []hexutil.Bytes `json:"txs"`
-	BlockNumber       uint64          `json:"blockNumber"`
-	MinTimestamp      *uint64         `json:"minTimestamp"`
-	MaxTimestamp      *uint64         `json:"maxTimestamp"`
-	RevertingTxHashes []common.Hash   `json:"revertingTxHashes"`
-	RelaySignature    hexutil.Bytes   `json:"relaySignature"`
-}
-
-// UnsignedMegabundle is used for serialization and subsequent digital signing.
-type UnsignedMegabundle struct {
-	Txs               []hexutil.Bytes
-	BlockNumber       uint64
-	MinTimestamp      uint64
-	MaxTimestamp      uint64
-	RevertingTxHashes []common.Hash
-}
-
-// // SendBundle will add the signed transaction to the transaction pool.
-// // The sender is responsible for signing the transaction and using the correct nonce and ensuring validity
-// func (s *PrivateTxBundleAPI) SendBundle(ctx context.Context, args SendBundleArgs) error {
-// 	var txs types.Transactions
-// 	if len(args.Txs) == 0 {
-// 		return errors.New("bundle missing txs")
-// 	}
-// 	if args.BlockNumber == 0 {
-// 		return errors.New("bundle missing blockNumber")
-// 	}
-
-// 	for _, encodedTx := range args.Txs {
-// 		tx := new(types.Transaction)
-// 		if err := tx.UnmarshalBinary(encodedTx); err != nil {
-// 			return err
-// 		}
-// 		txs = append(txs, tx)
-// 	}
-
-// 	var minTimestamp, maxTimestamp uint64
-// 	if args.MinTimestamp != nil {
-// 		minTimestamp = *args.MinTimestamp
-// 	}
-// 	if args.MaxTimestamp != nil {
-// 		maxTimestamp = *args.MaxTimestamp
-// 	}
-
-// 	return s.b.SendBundle(ctx, txs, args.BlockNumber, minTimestamp, maxTimestamp, args.RevertingTxHashes)
-// }
-
-// // Recovers the Ethereum address of the trusted relay that signed the megabundle.
-// func RecoverRelayAddress(args SendMegabundleArgs) (common.Address, error) {
-// 	megabundle := UnsignedMegabundle{Txs: args.Txs, BlockNumber: args.BlockNumber, RevertingTxHashes: args.RevertingTxHashes}
-// 	if args.MinTimestamp != nil {
-// 		megabundle.MinTimestamp = *args.MinTimestamp
-// 	} else {
-// 		megabundle.MinTimestamp = 0
-// 	}
-// 	if args.MaxTimestamp != nil {
-// 		megabundle.MaxTimestamp = *args.MaxTimestamp
-// 	} else {
-// 		megabundle.MaxTimestamp = 0
-// 	}
-// 	rlpEncoding, _ := rlp.EncodeToBytes(megabundle)
-// 	signature := args.RelaySignature
-// 	signature[64] -= 27 // account for Ethereum V
-// 	recoveredPubkey, err := crypto.SigToPub(accounts.TextHash(rlpEncoding), args.RelaySignature)
-// 	if err != nil {
-// 		return common.Address{}, err
-// 	}
-// 	return crypto.PubkeyToAddress(*recoveredPubkey), nil
-// }
-
-// // SendMegabundle will add the signed megabundle to one of the workers for evaluation.
-// func (s *PrivateTxBundleAPI) SendMegabundle(ctx context.Context, args SendMegabundleArgs) error {
-// 	log.Info("Received a Megabundle request", "signature", args.RelaySignature)
-// 	var txs types.Transactions
-// 	if len(args.Txs) == 0 {
-// 		return errors.New("megabundle missing txs")
-// 	}
-// 	if args.BlockNumber == 0 {
-// 		return errors.New("megabundle missing blockNumber")
-// 	}
-// 	for _, encodedTx := range args.Txs {
-// 		tx := new(types.Transaction)
-// 		if err := tx.UnmarshalBinary(encodedTx); err != nil {
-// 			return err
-// 		}
-// 		txs = append(txs, tx)
-// 	}
-// 	var minTimestamp, maxTimestamp uint64
-// 	if args.MinTimestamp != nil {
-// 		minTimestamp = *args.MinTimestamp
-// 	}
-// 	if args.MaxTimestamp != nil {
-// 		maxTimestamp = *args.MaxTimestamp
-// 	}
-// 	relayAddr, err := RecoverRelayAddress(args)
-// 	log.Info("Megabundle", "relayAddr", relayAddr, "err", err)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return s.b.SendMegabundle(ctx, txs, rpc.BlockNumber(args.BlockNumber), minTimestamp, maxTimestamp, args.RevertingTxHashes, relayAddr)
-// }
-
 // BundleAPI offers an API for accepting bundled transactions
 type BundleAPI struct {
 	b     Backend
@@ -2242,19 +2129,15 @@ type CallBundleArgs struct {
 // The sender is responsible for signing the transactions and using the correct
 // nonce and ensuring validity
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
-	// ******** Unsigned Txn Attempt
-	log.Info("here1")
 	if len(args.Txs) == 0 {
 		return nil, errors.New("bundle missing unsigned txs")
 	}
-	log.Error("here2")
 	if args.BlockNumber == 0 {
 		return nil, errors.New("bundle missing blockNumber")
 	}
-	// var txs types.Transactions
 
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	log.Error("here3")
+
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
@@ -2320,11 +2203,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 
 	results := []map[string]interface{}{}
-	coinbaseBalanceBefore := state.GetBalance(coinbase)
 
-	// is there utility to having a bundle hash?
-	// bundleHash := sha3.NewLegacyKeccak256()
-	// signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
 
@@ -2332,42 +2211,28 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	globalGasCap := s.b.RPCGasCap()
 
 	for i, tx := range args.Txs {
-		// fb: dont need coinbase code, but then I realized, fb searchers could use us
-		// coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
-		// fb: we need to use a random hash
-		// state.Prepare(tx.Hash(), i)
-
 		// Since its a txCall we'll just prepare the
 		// state with a random hash
 		var randomHash common.Hash
-		// TODO : not sure what rand.Read does
 		rand.Read(randomHash[:])
 		// New random hash since its a call
-		// TODO : estimateGas uses a copy of the stateDb... may be hard to test
 		state.Prepare(randomHash, i)
-
-		// bn : prepare msg out here
-		// TODO : figure out more of the difference between ToMessage and AsMessage
-		// it honestly might mainly just be gas
 
 		msg, err := tx.ToMessage(globalGasCap, header.BaseFee)
 		if err != nil {
 			return nil, err
 		}
 
-		// bn : using our new unsigned func
 		receipt, result, traceResult, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
 		if err != nil {
-			// TODO : create better log here
 			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.From)
 		}
-		// TODO : Add gas features back
+
 		jsonResult := map[string]interface{}{
 			"gasUsed":     receipt.GasUsed,
 			"fromAddress": tx.from(),
 			"toAddress":   tx.To,
 			"traceResult": traceResult,
-			// Add trace results here
 		}
 		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {
@@ -2392,129 +2257,5 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	ret["blockNumber"] = parent.Number.Int64()
 
 	ret["args"] = header
-	return ret, nil
-}
-
-// EstimateGasBundleArgs represents the arguments for a call
-type EstimateGasBundleArgs struct {
-	Txs                    []TransactionArgs     `json:"txs"`
-	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
-	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
-	Coinbase               *string               `json:"coinbase"`
-	Timestamp              *uint64               `json:"timestamp"`
-	Timeout                *int64                `json:"timeout"`
-}
-
-func (s *BundleAPI) EstimateGasBundle(ctx context.Context, args EstimateGasBundleArgs) (map[string]interface{}, error) {
-	if len(args.Txs) == 0 {
-		return nil, errors.New("bundle missing txs")
-	}
-	if args.BlockNumber == 0 {
-		return nil, errors.New("bundle missing blockNumber")
-	}
-
-	timeoutMS := int64(5000)
-	if args.Timeout != nil {
-		timeoutMS = *args.Timeout
-	}
-	timeout := time.Millisecond * time.Duration(timeoutMS)
-
-	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-	blockNumber := big.NewInt(int64(args.BlockNumber))
-	timestamp := parent.Time + 1
-	if args.Timestamp != nil {
-		timestamp = *args.Timestamp
-	}
-	coinbase := parent.Coinbase
-	if args.Coinbase != nil {
-		coinbase = common.HexToAddress(*args.Coinbase)
-	}
-
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     blockNumber,
-		GasLimit:   parent.GasLimit,
-		Time:       timestamp,
-		Difficulty: parent.Difficulty,
-		Coinbase:   coinbase,
-		BaseFee:    parent.BaseFee,
-	}
-
-	// Setup context so it may be cancelled when the call
-	// has completed or, in case of unmetered gas, setup
-	// a context with a timeout
-	var cancel context.CancelFunc
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-	} else {
-		ctx, cancel = context.WithCancel(ctx)
-	}
-
-	// Make sure the context is cancelled when the call has completed
-	// This makes sure resources are cleaned up
-	defer cancel()
-
-	// RPC Call gas cap
-	globalGasCap := s.b.RPCGasCap()
-
-	// Results
-	results := []map[string]interface{}{}
-
-	// Copy the original db so we don't modify it
-	statedb := state.Copy()
-
-	// Gas pool
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
-
-	// Block context
-	blockContext := core.NewEVMBlockContext(header, s.chain, &coinbase)
-
-	// Feed each of the transactions into the VM ctx
-	// And try and estimate the gas used
-	for i, txArgs := range args.Txs {
-		// Since its a txCall we'll just prepare the
-		// state with a random hash
-		var randomHash common.Hash
-		rand.Read(randomHash[:])
-
-		// New random hash since its a call
-		statedb.Prepare(randomHash, i)
-
-		// Convert tx args to msg to apply state transition
-		msg, err := txArgs.ToMessage(globalGasCap, header.BaseFee)
-		if err != nil {
-			return nil, err
-		}
-
-		// Prepare the hashes
-		txContext := core.NewEVMTxContext(msg)
-
-		// Get EVM Environment
-		vmenv := vm.NewEVM(blockContext, txContext, statedb, s.b.ChainConfig(), vm.Config{NoBaseFee: true})
-
-		// Apply state transition
-		result, err := core.ApplyMessage(vmenv, msg, gp)
-		if err != nil {
-			return nil, err
-		}
-
-		// Modifications are committed to the state
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(blockNumber))
-
-		// Append result
-		jsonResult := map[string]interface{}{
-			"gasUsed": result.UsedGas,
-		}
-		results = append(results, jsonResult)
-	}
-
-	// Return results
-	ret := map[string]interface{}{}
-	ret["results"] = results
-
 	return ret, nil
 }

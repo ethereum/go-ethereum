@@ -27,9 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/custom"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -211,35 +209,8 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
-// ApplyTransactionWithResult attempts to apply a transaction to the given state database
-// and returns an intermediate state root to be used in conjunction with other transactions
-// func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
-// 	// can we accept the other message type here?
-// 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-// 	var (
-// 		tracer vm.EVMLogger
-// 	)
-// 	// Add tracer native go tracer, code from eth/tracers/api.go
-// 	tracer = custom.NewCallTracer(statedb)
-
-// 	// Create a new context to be used in the EVM environment
-// 	blockContext := NewEVMBlockContext(header, bc, author)
-// 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
-// 	return applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, tx, usedGas, vmenv)
-// }
-
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, []StructLogRes, error) {
-	// Main functionality needed now is passing in a tracer and making sure applyTransactionWithResult works
-	// var (
-	// 	tracer logger.NewStructLogger
-	// )
-
-	// Add tracer native go tracer, code from eth/tracers/api.go
-	//tracer = custom.NewCallTracer(statedb)
-
+	// Create struct logger to get JSON stack traces
 	tracer := logger.NewStructLogger(nil)
 
 	// Create a new context to be used in the EVM environment
