@@ -19,8 +19,8 @@ var (
 		STATICCALL:   {traceToAddressCode, traceLastNAddressCode(1)},
 		CREATE:       {traceCreatedContractProof}, // sender's wrapped_proof is already recorded in BlockChain.writeBlockResult
 		CREATE2:      {traceCreatedContractProof}, // sender's wrapped_proof is already recorded in BlockChain.writeBlockResult
-		SLOAD:        {},                          // only record state_before in `CaptureState`, instead of state_after here
-		SSTORE:       {traceStorageProof},         // record state_after besides state_before(in `CaptureState`)
+		SLOAD:        {},                          // record storage_proof in `captureState` instead of here, to handle `l.cfg.DisableStorage` flag
+		SSTORE:       {},                          // record storage_proof in `captureState` instead of here, to handle `l.cfg.DisableStorage` flag
 		SELFDESTRUCT: {traceContractProof, traceLastNAddressProof(0)},
 		SELFBALANCE:  {traceContractProof},
 		BALANCE:      {traceLastNAddressProof(0)},

@@ -180,44 +180,34 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 			stck[i] = item
 		}
 	}
-	// Copy a snapshot of the current storage to a new container
 	var (
-		storage   Storage
-		extraData *types.ExtraData
+		recordStorageDetail bool = false
+		storage             Storage
+		storageKey          common.Hash
+		storageValue        common.Hash
 	)
-	if !l.cfg.DisableStorage && (op == SLOAD || op == SSTORE) {
-		// initialise new changed values storage container for this contract
-		// if not present.
-		if l.storage[contract.Address()] == nil {
-			l.storage[contract.Address()] = make(Storage)
-		}
-		// capture SLOAD opcodes and record the read entry in the local storage
+	if !l.cfg.DisableStorage {
 		if op == SLOAD && stack.len() >= 1 {
-			var (
-				address = common.Hash(stack.data[stack.len()-1].Bytes32())
-				value   = l.env.StateDB.GetState(contract.Address(), address)
-			)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
-
-			extraData = types.NewExtraData()
-			if err := traceStorageProof(l, scope, extraData); err != nil {
-				log.Warn("Failed to get proof", "contract address", contract.Address().String(), "key", address.String(), "err", err)
-			}
-
+			recordStorageDetail = true
+			storageKey = common.Hash(stack.data[stack.len()-1].Bytes32())
+			storageValue = l.env.StateDB.GetState(contract.Address(), storageKey)
 		} else if op == SSTORE && stack.len() >= 2 {
-			// capture SSTORE opcodes and record the written entry in the local storage.
-			var (
-				value   = common.Hash(stack.data[stack.len()-2].Bytes32())
-				address = common.Hash(stack.data[stack.len()-1].Bytes32())
-			)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			recordStorageDetail = true
+			storageKey = common.Hash(stack.data[stack.len()-1].Bytes32())
+			storageValue = common.Hash(stack.data[stack.len()-2].Bytes32())
+		}
+	}
+	extraData := types.NewExtraData()
+	if recordStorageDetail {
+		contractAddress := contract.Address()
+		if l.storage[contractAddress] == nil {
+			l.storage[contractAddress] = make(Storage)
+		}
+		l.storage[contractAddress][storageKey] = storageValue
+		storage = l.storage[contractAddress].Copy()
 
-			extraData = types.NewExtraData()
-			if err := traceStorageProof(l, scope, extraData); err != nil {
-				log.Warn("Failed to get proof", "contract address", contract.Address().String(), "key", address.String(), "err", err)
-			}
+		if err := traceStorageProof(l, scope, extraData); err != nil {
+			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 		}
 	}
 	var rdata []byte
@@ -225,33 +215,52 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		rdata = make([]byte, len(rData))
 		copy(rdata, rData)
 	}
-
-	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), extraData, err}
-	l.logs = append(l.logs, log)
-}
-
-// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
-func (l *StructLogger) CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
-	// check if already accumulated the specified number of logs
-	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
-		return
-	}
-
 	execFuncList, ok := OpcodeExecs[op]
 	if !ok {
 		return
 	}
-	extraData := types.NewExtraData()
 	// execute trace func list.
 	for _, exec := range execFuncList {
 		if err = exec(l, scope, extraData); err != nil {
 			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 		}
 	}
+	// create a new snapshot of the EVM.
+	structLog := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), extraData, err}
+	l.logs = append(l.logs, structLog)
+}
 
-	log := StructLog{pc, op, gas, cost, nil, scope.Memory.Len(), nil, nil, nil, depth, l.env.StateDB.GetRefund(), extraData, err}
-	l.logs = append(l.logs, log)
+func (l *StructLogger) CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+	if !l.cfg.DisableStorage && op == SSTORE {
+		logLen := len(l.logs)
+		if logLen <= 0 {
+			log.Error("Failed to trace after_state for sstore", "err", "empty length log")
+			return
+		}
+
+		lastLog := l.logs[logLen-1]
+		if lastLog.Op != SSTORE {
+			log.Error("Failed to trace after_state for sstore", "err", "op mismatch")
+			return
+		}
+		if lastLog.ExtraData == nil || len(lastLog.ExtraData.ProofList) == 0 {
+			log.Error("Failed to trace after_state for sstore", "err", "empty before_state ExtraData")
+			return
+		}
+
+		contractAddress := scope.Contract.Address()
+		if len(lastLog.Stack) <= 0 {
+			log.Error("Failed to trace after_state for sstore", "err", "empty stack for last log")
+			return
+		}
+		storageKey := common.Hash(lastLog.Stack[len(lastLog.Stack)-1].Bytes32())
+		proof, err := getWrappedProofForStorage(l, contractAddress, storageKey)
+		if err != nil {
+			log.Error("Failed to trace after_state storage_proof for sstore", "err", err)
+		}
+
+		l.logs[logLen-1].ExtraData.ProofList = append(lastLog.ExtraData.ProofList, proof)
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault
