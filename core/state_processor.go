@@ -154,8 +154,6 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	}
 
 	traceResult := FormatLogs(tracer.StructLogs())
-	returnVal := fmt.Sprintf("%x", traceResult)
-	fmt.Println(returnVal)
 
 	if err != nil {
 		return nil, nil, nil, err
