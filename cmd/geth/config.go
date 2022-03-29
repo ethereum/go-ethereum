@@ -174,9 +174,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
 		if err != nil {
-			utils.Fatalf("Failed to check db for legacy receipts: %v", err)
-		}
-		if isLegacy {
+			log.Error("Failed to check db for legacy receipts", "err", err)
+		} else if isLegacy {
 			log.Warn("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
 		}
 	}
