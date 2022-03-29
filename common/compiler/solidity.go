@@ -31,6 +31,7 @@ import (
 type Solidity struct {
 	Path, Version, FullVersion string
 	Major, Minor, Patch        int
+	ExtraAllowedPath           []string
 }
 
 // --combined-output format
@@ -58,11 +59,19 @@ type solcOutputV8 struct {
 	Version string
 }
 
+func (s *Solidity) allowedPaths() string {
+	paths := []string{".", "./", "../"} // default to support relative paths
+	if len(s.ExtraAllowedPath) > 0 {
+		paths = append(paths, s.ExtraAllowedPath...)
+	}
+	return strings.Join(paths, ", ")
+}
+
 func (s *Solidity) makeArgs() []string {
 	p := []string{
 		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
-		"--optimize",                  // code optimizer switched on
-		"--allow-paths", "., ./, ../", // default to support relative paths
+		"--optimize", // code optimizer switched on
+		"--allow-paths", s.allowedPaths(),
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
 		p[1] += ",metadata,hashes"
@@ -108,10 +117,7 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := append(s.makeArgs(), "--")
-	cmd := exec.Command(s.Path, append(args, "-")...)
-	cmd.Stdin = strings.NewReader(source)
-	return s.run(cmd, source)
+	return s.CompileSource(source)
 }
 
 // CompileSolidity compiles all given Solidity source files.
@@ -119,11 +125,25 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	if len(sourcefiles) == 0 {
 		return nil, errors.New("solc: no source files")
 	}
-	source, err := slurpFiles(sourcefiles)
+	s, err := SolidityVersion(solc)
 	if err != nil {
 		return nil, err
 	}
-	s, err := SolidityVersion(solc)
+
+	return s.CompileFiles(sourcefiles...)
+}
+
+// CompileSource builds and returns all the contracts contained within a source string.
+func (s *Solidity) CompileSource(source string) (map[string]*Contract, error) {
+	args := append(s.makeArgs(), "--")
+	cmd := exec.Command(s.Path, append(args, "-")...)
+	cmd.Stdin = strings.NewReader(source)
+	return s.run(cmd, source)
+}
+
+// CompileFiles compiles all given Solidity source files.
+func (s *Solidity) CompileFiles(sourcefiles ...string) (map[string]*Contract, error) {
+	source, err := slurpFiles(sourcefiles)
 	if err != nil {
 		return nil, err
 	}
