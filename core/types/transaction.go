@@ -432,6 +432,24 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
+// TxDifferenceHash returns a new set which is the difference between a and b.
+func TxDifferenceHash(a, b []common.Hash) []common.Hash {
+	keep := make([]common.Hash, 0, len(a))
+
+	remove := make(map[common.Hash]struct{})
+	for _, tx := range b {
+		remove[tx] = struct{}{}
+	}
+
+	for _, tx := range a {
+		if _, ok := remove[tx]; !ok {
+			keep = append(keep, tx)
+		}
+	}
+
+	return keep
+}
+
 // TxByNonce implements the sort interface to allow sorting a list of transactions
 // by their nonces. This is usually only useful for sorting transactions from a
 // single account, otherwise a nonce comparison doesn't make much sense.
