@@ -299,6 +299,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		return api.invalid(errors.New("invalid timestamp")), nil
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+		api.remoteBlocks.put(block.Hash(), block.Header())
 		log.Warn("State not available, ignoring new payload")
 		return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
 	}
