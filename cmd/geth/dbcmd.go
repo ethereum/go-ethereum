@@ -747,6 +747,9 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headBlock.Root", fmt.Sprintf("%v", b.Root())})
 		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (0x%x)", b.Number(), b.Number())})
 	}
+	if b := rawdb.ReadSkeletonSyncStatus(db); b != nil {
+		data = append(data, []string{"SkeletonSyncStatus", string(b)})
+	}
 	if h := rawdb.ReadHeadHeader(db); h != nil {
 		data = append(data, []string{"headHeader.Hash", fmt.Sprintf("%v", h.Hash())})
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
