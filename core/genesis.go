@@ -282,6 +282,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if overrideArrowGlacier != nil {
 		newcfg.ArrowGlacierBlock = overrideArrowGlacier
 	}
+	if overrideTerminalTotalDifficulty != nil {
+		newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
+	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -291,15 +294,19 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
-
-	if overrideTerminalTotalDifficulty != nil {
-		storedcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
-	}
-	// Special case: don't change the existing config of a non-mainnet chain if no new
-	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
-	// if we just continued here.
+	// Special case: if a private network is being used (no genesis and also no
+	// mainnet hash in the database), we must not apply the `configOrDefault`
+	// chain config as that would be AllProtocolChanges (applying any new fork
+	// on top of an existing private network genesis block). In that case, only
+	// apply the overrides.
 	if genesis == nil && stored != params.MainnetGenesisHash {
-		return storedcfg, stored, nil
+		newcfg = storedcfg
+		if overrideArrowGlacier != nil {
+			newcfg.ArrowGlacierBlock = overrideArrowGlacier
+		}
+		if overrideTerminalTotalDifficulty != nil {
+			newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
+		}
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
