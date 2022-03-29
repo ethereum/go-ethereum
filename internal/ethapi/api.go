@@ -1144,7 +1144,7 @@ type StructLogRes struct {
 	Stack         *[]string          `json:"stack,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
-	RefundCounter uint64             `json:"refund"`
+	RefundCounter uint64             `json:"refund,omitempty"`
 }
 
 // FormatLogs formats EVM returned structured logs for json output
