@@ -2106,6 +2106,14 @@ func (bc *BlockChain) SetChainHead(head *types.Block) error {
 	}
 	bc.writeHeadBlock(head)
 
+	// Re-execute the reorged chain in case the head state is missing.
+	// It should be done before firing events.
+	if !bc.HasState(head.Root()) {
+		if err := bc.recoverAncestors(head); err != nil {
+			return err
+		}
+		log.Debug("Recovered head state", "number", head.Number(), "hash", head.Hash())
+	}
 	// Emit events
 	logs := bc.collectLogs(head.Hash(), false)
 	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
