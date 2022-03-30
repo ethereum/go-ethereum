@@ -263,11 +263,6 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: &c.cliConfig.JsonRPC.VHost,
 	})
-	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:  "jsonrpc.modules",
-		Usage: "API's offered over the HTTP-RPC interface",
-		Value: &c.cliConfig.JsonRPC.Modules,
-	})
 
 	// http options
 	f.BoolFlag(&flagset.BoolFlag{
@@ -290,6 +285,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: &c.cliConfig.JsonRPC.Http.Prefix,
 	})
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name:  "http.modules",
+		Usage: "API's offered over the HTTP-RPC interface",
+		Value: &c.cliConfig.JsonRPC.Http.Modules,
+	})
+
 	// ws options
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "ws",
@@ -311,6 +312,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: &c.cliConfig.JsonRPC.Ws.Prefix,
 	})
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name:  "ws.modules",
+		Usage: "API's offered over the WS-RPC interface",
+		Value: &c.cliConfig.JsonRPC.Ws.Modules,
+	})
+
 	// graphql options
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "graphql",

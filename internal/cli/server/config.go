@@ -214,9 +214,6 @@ type JsonRPCConfig struct {
 	// IPCPath is the path of the ipc endpoint
 	IPCPath string `hcl:"ipc-path,optional"`
 
-	// Modules is the list of enabled api modules
-	Modules []string `hcl:"modules,optional"`
-
 	// VHost is the list of valid virtual hosts
 	VHost []string `hcl:"vhost,optional"`
 
@@ -256,6 +253,9 @@ type APIConfig struct {
 
 	// Host is the address to bind the api
 	Host string `hcl:"host,optional"`
+
+	// Modules is the list of enabled api modules
+	Modules []string `hcl:"modules,optional"`
 }
 
 type GpoConfig struct {
@@ -438,7 +438,6 @@ func DefaultConfig() *Config {
 		JsonRPC: &JsonRPCConfig{
 			IPCDisable: false,
 			IPCPath:    "",
-			Modules:    []string{"web3", "net"},
 			Cors:       []string{"*"},
 			VHost:      []string{"*"},
 			GasCap:     ethconfig.Defaults.RPCGasCap,
@@ -448,12 +447,14 @@ func DefaultConfig() *Config {
 				Port:    8545,
 				Prefix:  "",
 				Host:    "localhost",
+				Modules: []string{"web3", "net"},
 			},
 			Ws: &APIConfig{
 				Enabled: false,
 				Port:    8546,
 				Prefix:  "",
 				Host:    "localhost",
+				Modules: []string{"web3", "net"},
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
@@ -849,11 +850,11 @@ func (c *Config) buildNode() (*node.Config, error) {
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
 		},
-		HTTPModules:         c.JsonRPC.Modules,
+		HTTPModules:         c.JsonRPC.Http.Modules,
 		HTTPCors:            c.JsonRPC.Cors,
 		HTTPVirtualHosts:    c.JsonRPC.VHost,
 		HTTPPathPrefix:      c.JsonRPC.Http.Prefix,
-		WSModules:           c.JsonRPC.Modules,
+		WSModules:           c.JsonRPC.Ws.Modules,
 		WSOrigins:           c.JsonRPC.Cors,
 		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
 		GraphQLCors:         c.JsonRPC.Cors,
