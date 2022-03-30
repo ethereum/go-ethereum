@@ -62,15 +62,19 @@ func testCtx() *vmContext {
 func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
 	var (
 		env             = vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+		gasLimit uint64 = 31000
 		startGas uint64 = 10000
 		value           = big.NewInt(0)
 		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
+	tracer.CaptureTxStart(gasLimit)
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
 	tracer.CaptureEnd(ret, startGas-contract.Gas, 1, err)
+	// Rest gas assumes no refund
+	tracer.CaptureTxEnd(startGas - contract.Gas)
 	if err != nil {
 		return nil, err
 	}
