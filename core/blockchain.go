@@ -1346,7 +1346,23 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // Fill blockResult content
 func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block, blockResult *types.BlockResult) {
-	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block)
+	coinbase := types.AccountProofWrapper{
+		Address: block.Coinbase(),
+		Nonce:   state.GetNonce(block.Coinbase()),
+		Balance: state.GetBalance(block.Coinbase()),
+	}
+	// Get coinbase address's account proof.
+	proof, err := state.GetProof(block.Coinbase())
+	if err != nil {
+		log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", block.Coinbase().String(), "err", err)
+	} else {
+		coinbase.Proof = make([]string, len(proof))
+		for i := range proof {
+			coinbase.Proof[i] = hexutil.Encode(proof[i])
+		}
+	}
+
+	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, coinbase)
 	for i, tx := range block.Transactions() {
 		evmTrace := blockResult.ExecutionResults[i]
 
