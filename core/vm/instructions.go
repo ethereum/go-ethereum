@@ -934,7 +934,11 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 			copy(value[1:], scope.Contract.Code[chunk*31:endMin])
 			index := trieUtils.GetTreeKeyCodeChunk(scope.Contract.Address().Bytes(), uint256.NewInt(chunk))
 			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(index)
-			interpreter.evm.Accesses.SetLeafValue(index, value[:])
+			if scope.Contract.IsDeployment {
+				interpreter.evm.Accesses.SetLeafValue(index, nil)
+			} else {
+				interpreter.evm.Accesses.SetLeafValue(index, value[:])
+			}
 			scope.Contract.UseGas(statelessGas)
 		}
 	} else {

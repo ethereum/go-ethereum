@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/gballet/go-verkle"
 )
 
@@ -155,13 +154,13 @@ func TestChunkifyCodeTestnet(t *testing.T) {
 
 func TestChunkifyCodeSimple(t *testing.T) {
 	code := []byte{
-		0, byte(vm.PUSH4), 1, 2, 3, 4, byte(vm.PUSH3), 58, 68, 12, byte(vm.PUSH21), 1, 2, 3, 4, 5, 6,
+		0, PUSH4, 1, 2, 3, 4, PUSH3, 58, 68, 12, PUSH21, 1, 2, 3, 4, 5, 6,
 		7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 		// Second 31 bytes
-		0, byte(vm.PUSH21), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-		byte(vm.PUSH7), 1, 2, 3, 4, 5, 6, 7,
+		0, PUSH21, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+		PUSH7, 1, 2, 3, 4, 5, 6, 7,
 		// Third 31 bytes
-		byte(vm.PUSH30), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+		PUSH30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
 		23, 24, 25, 26, 27, 28, 29, 30,
 	}
 	t.Logf("code=%x", code)
@@ -218,7 +217,7 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
 	code = []byte{
-		byte(vm.PUSH4), PUSH32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		PUSH4, PUSH32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	}
 	chunks, err = ChunkifyCode(code)
@@ -237,7 +236,7 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
 	code = []byte{
-		byte(vm.PUSH4), PUSH32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		PUSH4, PUSH32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	}
 	chunks, err = ChunkifyCode(code)
