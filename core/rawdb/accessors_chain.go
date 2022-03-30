@@ -329,6 +329,9 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 	return rlpHeaders
 }
 
+// HashByHeader is a compile-time constant, which can be used to toggle the behaviour of ReadHeaderRLP. If `false`,
+// it is assumed that the header hash == `crypto.Keccak256(header_rlp)`. This may not be true in all ethereum-forks.
+// Such forks need to set this constant to `true`, to force the hash-check to utilize the `header.Hash` method.
 const HashByHeader = false
 
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
@@ -342,8 +345,7 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		if len(data) > 0 {
 			if HashByHeader {
 				var header *types.Header
-				err := rlp.DecodeBytes(data, &header)
-				if err != nil {
+				if err := rlp.DecodeBytes(data, &header); err != nil {
 					return err
 				}
 				if header != nil && header.Hash() == hash {
