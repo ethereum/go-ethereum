@@ -76,7 +76,7 @@ type typedQueue interface {
 // concurrentFetch iteratively downloads scheduled block parts, taking available
 // peers, reserving a chunk of fetch requests for each and waiting for delivery
 // or timeouts.
-func (d *Downloader) concurrentFetch(queue typedQueue) error {
+func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	// Create a delivery channel to accept responses from all peers
 	responses := make(chan *eth.Response)
 
@@ -127,7 +127,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	finished := false
 	for {
 		// Short circuit if we lost all our peers
-		if d.peers.Len() == 0 {
+		if d.peers.Len() == 0 && !beaconMode {
 			return errNoPeers
 		}
 		// If there's nothing more to fetch, wait or terminate
@@ -209,7 +209,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !progressed && !throttled && len(pending) == 0 && len(idles) == d.peers.Len() && queued > 0 {
+			if !progressed && !throttled && len(pending) == 0 && len(idles) == d.peers.Len() && queued > 0 && !beaconMode {
 				return errPeersUnavailable
 			}
 		}

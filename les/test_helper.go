@@ -356,7 +356,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
+	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
 }
@@ -389,7 +389,7 @@ func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Ha
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
+	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
 }

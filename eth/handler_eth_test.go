@@ -570,7 +570,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else {
-				responseRlp, _ := rlp.EncodeToBytes(types.Header{Number: response.Number})
+				responseRlp, _ := rlp.EncodeToBytes(&types.Header{Number: response.Number})
 				if err := remote.ReplyBlockHeadersRLP(request.RequestId, []rlp.RawValue{responseRlp}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}

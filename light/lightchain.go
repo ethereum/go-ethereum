@@ -419,6 +419,9 @@ func (lc *LightChain) SetChainHead(header *types.Header) error {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	if len(chain) == 0 {
+		return 0, nil
+	}
 	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
 		checkFreq = 0
 	}
