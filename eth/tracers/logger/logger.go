@@ -223,8 +223,9 @@ func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*StructLogger) CaptureTxStart(_ uint64)        {}
-func (*StructLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (*StructLogger) CaptureTxStart(gasLimit uint64) {}
+
+func (*StructLogger) CaptureTxEnd(restGas uint64) {}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
@@ -351,5 +352,6 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*mdLogger) CaptureTxStart(_ uint64)        {}
-func (*mdLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
+
+func (*mdLogger) CaptureTxEnd(restGas uint64) {}
