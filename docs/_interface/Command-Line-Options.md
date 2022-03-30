@@ -8,13 +8,13 @@ $ geth --help
 NAME:
    geth - the go-ethereum command line interface
 
-   Copyright 2013-2021 The go-ethereum Authors
+   Copyright 2013-2022 The go-ethereum Authors
 
 USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.15-stable-8be800ff
+   1.10.17-stable-25c9b49f
 
 COMMANDS:
    account                            Manage accounts
@@ -55,6 +55,7 @@ ETHEREUM OPTIONS:
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --ropsten                           Ropsten network: pre-configured proof-of-work test network
   --sepolia                           Sepolia network: pre-configured proof-of-work test network
+  --kiln                              Kiln network: pre-configured proof-of-work to proof-of-stake test network
   --syncmode value                    Blockchain sync mode ("snap", "full" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
@@ -62,7 +63,7 @@ ETHEREUM OPTIONS:
   --ethstats value                    Reporting URL of a ethstats service (nodename:secret@host:port)
   --identity value                    Custom node name
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
-  --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
+  --eth.requiredblocks value          Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
 LIGHT CLIENT OPTIONS:
   --light.serve value                 Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100) (default: 0)
@@ -113,6 +114,7 @@ PERFORMANCE TUNING OPTIONS:
   --cache.snapshot value              Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode) (default: 10)
   --cache.noprefetch                  Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
   --cache.preimages                   Enable recording the SHA3/keccak preimages of trie keys
+  --fdlimit value                     Raise the open file descriptor resource limit (default = system fd limit) (default: 0)
 
 ACCOUNT OPTIONS:
   --unlock value                      Comma separated list of accounts to unlock
@@ -136,6 +138,10 @@ API AND CONSOLE OPTIONS:
   --ws.api value                      API's offered over the WS-RPC interface
   --ws.rpcprefix value                HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
   --ws.origins value                  Origins from which to accept websockets requests
+  --authrpc.jwtsecret value           Path to a JWT secret to use for authenticated RPC endpoints
+  --authrpc.addr value                Listening address for authenticated APIs (default: "localhost")
+  --authrpc.port value                Listening port for authenticated APIs (default: 8551)
+  --authrpc.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
   --graphql                           Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
   --graphql.corsdomain value          Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --graphql.vhosts value              Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
@@ -212,19 +218,19 @@ METRICS AND STATS OPTIONS:
   --metrics.influxdb.token value         Token to authorize access to the database (v2 only) (default: "test")
   --metrics.influxdb.bucket value        InfluxDB bucket name to push reported metrics to (v2 only) (default: "geth")
   --metrics.influxdb.organization value  InfluxDB organization name (v2 only) (default: "geth")
-  
+
 ALIASED (deprecated) OPTIONS:
   --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
+  --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --peer.requiredblocks)
 
 MISC OPTIONS:
   --snapshot                                Enables snapshot-database mode (default = enable)
   --bloomfilter.size value                  Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                                show help
-  --catalyst                                Catalyst mode (eth2 integration testing)
   --override.arrowglacier value             Manually specify Arrow Glacier fork-block, overriding the bundled setting (default: 0)
   --override.terminaltotaldifficulty value  Manually specify TerminalTotalDifficulty, overriding the bundled setting (default: 0)
 
 
 COPYRIGHT:
-   Copyright 2013-2021 The go-ethereum Authors
+   Copyright 2013-2022 The go-ethereum Authors
 ```
