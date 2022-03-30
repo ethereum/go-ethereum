@@ -778,9 +778,6 @@ func (bc *BlockChain) Stop() {
 		return
 	}
 
-	// Unsubscribe all subscriptions registered from blockchain.
-	bc.scope.Close()
-
 	// Signal shutdown to all goroutines.
 	close(bc.quit)
 	bc.StopInsert()
@@ -840,6 +837,10 @@ func (bc *BlockChain) Stop() {
 		triedb := bc.stateCache.TrieDB()
 		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
 	}
+
+	// Unsubscribe all subscriptions registered from blockchain.
+	bc.scope.Close()
+
 	log.Info("Blockchain stopped")
 }
 
