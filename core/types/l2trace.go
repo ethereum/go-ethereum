@@ -56,11 +56,12 @@ type ExtraData struct {
 }
 
 type AccountProofWrapper struct {
-	Address common.Address       `json:"address,omitempty"`
-	Nonce   uint64               `json:"nonce,omitempty"`
-	Balance *big.Int             `json:"balance,omitempty"`
-	Proof   []string             `json:"proof,omitempty"`
-	Storage *StorageProofWrapper `json:"storage,omitempty"` // StorageProofWrapper can be empty if irrelated to storage operation
+	Address  common.Address       `json:"address,omitempty"`
+	Nonce    uint64               `json:"nonce,omitempty"`
+	Balance  *big.Int             `json:"balance,omitempty"`
+	CodeHash common.Hash          `json:"code_hash,omitempty"`
+	Proof    []string             `json:"proof,omitempty"`
+	Storage  *StorageProofWrapper `json:"storage,omitempty"` // StorageProofWrapper can be empty if irrelated to storage operation
 }
 
 // while key & value can also be retrieved from StructLogRes.Storage,
