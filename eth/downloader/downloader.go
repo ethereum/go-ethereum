@@ -158,6 +158,9 @@ type LightChain interface {
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
+	// GetHeaderByNumber retrieves a block header from the local chain by number.
+	GetHeaderByNumber(number uint64) *types.Header
+
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
 
@@ -477,15 +480,22 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			return err
 		}
 		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
-			pivot = d.skeleton.Header(latest.Number.Uint64() - uint64(fsMinFullBlocks))
+			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
+			pivot = d.skeleton.Header(number)
+			if pivot == nil {
+				// Retrieve the pivot point from the local chain if it's
+				// not in the range of skeleton.
+				pivot = d.lightchain.GetHeaderByNumber(number)
+			}
 		}
 	}
 	// If no pivot block was returned, the head is below the min full block
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
+	var noSnap bool
 	if mode == SnapSync && pivot == nil {
-		pivot = d.blockchain.CurrentBlock().Header()
+		pivot, noSnap = d.blockchain.CurrentBlock().Header(), true
 	}
 	height := latest.Number.Uint64()
 
@@ -516,7 +526,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			origin = 0
 		} else {
 			pivotNumber := pivot.Number.Uint64()
-			if pivotNumber <= origin {
+
+			// Only cap the sync origin number by pivot point when
+			// state sync is required.
+			if pivotNumber <= origin && !noSnap {
 				origin = pivotNumber - 1
 			}
 			// Write out the pivot into the database so a rollback beyond it will
