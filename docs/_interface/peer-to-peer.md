@@ -127,7 +127,7 @@ with any non-negative number):
 	geth -—networkid="12345" console
 
 It is also possible to run geth with a custom genesis block from a JSON file by supplying
-the `--genesis` flag. The genesis JSON file should have the following format:
+the `geth init /path/to/file` command. The genesis JSON file should have the following format:
 
 ```js
 {
