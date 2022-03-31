@@ -71,18 +71,11 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	toBal = new(big.Int).Sub(toBal, value)
 	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
 
-	// The sender balance is after reducing: value, gasLimit, intrinsicGas.
+	// The sender balance is after reducing: value and gasLimit.
 	// We need to re-add them to get the pre-tx balance.
 	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
-	intrinsicGas := t.gasLimit - gas
 	gasPrice := env.TxContext.GasPrice
-	consumedGas := new(big.Int).Mul(
-		gasPrice,
-		new(big.Int).Add(
-			new(big.Int).SetUint64(intrinsicGas),
-			new(big.Int).SetUint64(gas),
-		),
-	)
+	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
 	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
 	t.prestate[from].Balance = hexutil.EncodeBig(fromBal)
 	t.prestate[from].Nonce--
