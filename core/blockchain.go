@@ -1363,7 +1363,7 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 		}
 	}
 
-	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, coinbase)
+	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, &coinbase)
 	for i, tx := range block.Transactions() {
 		evmTrace := blockResult.ExecutionResults[i]
 
