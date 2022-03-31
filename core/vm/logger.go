@@ -181,7 +181,7 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		}
 	}
 	var (
-		recordStorageDetail bool = false
+		recordStorageDetail bool
 		storage             Storage
 		storageKey          common.Hash
 		storageValue        common.Hash
@@ -189,12 +189,12 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	if !l.cfg.DisableStorage {
 		if op == SLOAD && stack.len() >= 1 {
 			recordStorageDetail = true
-			storageKey = common.Hash(stack.data[stack.len()-1].Bytes32())
+			storageKey = stack.data[stack.len()-1].Bytes32()
 			storageValue = l.env.StateDB.GetState(contract.Address(), storageKey)
 		} else if op == SSTORE && stack.len() >= 2 {
 			recordStorageDetail = true
-			storageKey = common.Hash(stack.data[stack.len()-1].Bytes32())
-			storageValue = common.Hash(stack.data[stack.len()-2].Bytes32())
+			storageKey = stack.data[stack.len()-1].Bytes32()
+			storageValue = stack.data[stack.len()-2].Bytes32()
 		}
 	}
 	extraData := types.NewExtraData()

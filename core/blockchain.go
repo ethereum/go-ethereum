@@ -1188,17 +1188,17 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, blockResult *types.BlockResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, evmTraces []*types.ExecutionResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, blockResult, state, emitHeadEvent)
+	return bc.writeBlockWithState(block, receipts, logs, evmTraces, state, emitHeadEvent)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, blockResult *types.BlockResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, evmTraces []*types.ExecutionResult, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if bc.insertStopped() {
 		return NonStatTy, errInsertionInterrupted
 	}
@@ -1320,8 +1320,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.futureBlocks.Remove(block.Hash())
 
 	// Fill blockResult content
-	if blockResult != nil {
-		bc.writeBlockResult(state, block, blockResult)
+	var blockResult *types.BlockResult
+	if evmTraces != nil {
+		blockResult = bc.writeBlockResult(state, block, evmTraces)
 		bc.blockResultCache.Add(block.Hash(), blockResult)
 	}
 
@@ -1345,7 +1346,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 }
 
 // Fill blockResult content
-func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block, blockResult *types.BlockResult) {
+func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block, evmTraces []*types.ExecutionResult) *types.BlockResult {
+	blockResult := &types.BlockResult{
+		ExecutionResults: evmTraces,
+	}
 	coinbase := types.AccountProofWrapper{
 		Address:  block.Coinbase(),
 		Nonce:    state.GetNonce(block.Coinbase()),
@@ -1396,6 +1400,7 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 			evmTrace.ByteCode = hexutil.Encode(tx.Data())
 		}
 	}
+	return blockResult
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
