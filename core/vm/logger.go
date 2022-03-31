@@ -216,15 +216,15 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		copy(rdata, rData)
 	}
 	execFuncList, ok := OpcodeExecs[op]
-	if !ok {
-		return
-	}
-	// execute trace func list.
-	for _, exec := range execFuncList {
-		if err = exec(l, scope, extraData); err != nil {
-			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
+	if ok {
+		// execute trace func list.
+		for _, exec := range execFuncList {
+			if err = exec(l, scope, extraData); err != nil {
+				log.Error("Failed to trace data", "opcode", op.String(), "err", err)
+			}
 		}
 	}
+
 	// create a new snapshot of the EVM.
 	structLog := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), extraData, err}
 	l.logs = append(l.logs, structLog)
