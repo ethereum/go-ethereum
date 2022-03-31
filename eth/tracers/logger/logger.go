@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -116,7 +115,7 @@ type StructLogger struct {
 	output   []byte
 	err      error
 	gasLimit uint64
-	result   *core.ExecutionResult
+	usedGas  uint64
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -230,10 +229,6 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
-	l.result = &core.ExecutionResult{
-		Err:        err,
-		ReturnData: output,
-	}
 }
 
 func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
@@ -247,14 +242,16 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	if l.reason != nil {
 		return nil, l.reason
 	}
-	// If the result contains a revert reason, return it.
-	returnVal := fmt.Sprintf("%x", l.result.Return())
-	if len(l.result.Revert()) > 0 {
-		returnVal = fmt.Sprintf("%x", l.result.Revert())
+	failed := l.err != nil
+	returnData := common.CopyBytes(l.output)
+	// Return data when successful and revert reason when reverted, otherwise empty.
+	returnVal := fmt.Sprintf("%x", returnData)
+	if failed && l.err != vm.ErrExecutionReverted {
+		returnVal = ""
 	}
 	return json.Marshal(&ExecutionResult{
-		Gas:         l.result.UsedGas,
-		Failed:      l.result.Failed(),
+		Gas:         l.usedGas,
+		Failed:      failed,
 		ReturnValue: returnVal,
 		StructLogs:  formatLogs(l.StructLogs()),
 	})
@@ -271,7 +268,7 @@ func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
 }
 
 func (l *StructLogger) CaptureTxEnd(restGas uint64) {
-	l.result.UsedGas = l.gasLimit - restGas
+	l.usedGas = l.gasLimit - restGas
 }
 
 // StructLogs returns the captured log entries.
