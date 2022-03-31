@@ -111,13 +111,12 @@ type StructLogger struct {
 	cfg Config
 	env *vm.EVM
 
-	storage      map[common.Address]Storage
-	logs         []StructLog
-	output       []byte
-	err          error
-	intrinsicGas uint64
-	result       *core.ExecutionResult
-	london       bool
+	storage  map[common.Address]Storage
+	logs     []StructLog
+	output   []byte
+	err      error
+	gasLimit uint64
+	result   *core.ExecutionResult
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -145,15 +144,6 @@ func (l *StructLogger) Reset() {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	l.env = env
-	// Compute intrinsic gas
-	homestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	istanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	l.london = env.ChainConfig().IsLondon(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, create, homestead, istanbul)
-	if err != nil {
-		return
-	}
-	l.intrinsicGas = intrinsicGas
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -240,18 +230,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
-	// UsedGas = (intrinsicGas + evmGasUsed) - refund
-	totalGasUsed := gasUsed + l.intrinsicGas
-	quotient := params.RefundQuotient
-	if l.london {
-		quotient = params.RefundQuotientEIP3529
-	}
-	refund := totalGasUsed / quotient
-	if l.env.StateDB.GetRefund() < refund {
-		refund = l.env.StateDB.GetRefund()
-	}
 	l.result = &core.ExecutionResult{
-		UsedGas:    totalGasUsed - refund,
 		Err:        err,
 		ReturnData: output,
 	}
@@ -287,9 +266,13 @@ func (l *StructLogger) Stop(err error) {
 	atomic.StoreUint32(&l.interrupt, 1)
 }
 
-func (*StructLogger) CaptureTxStart(gasLimit uint64) {}
+func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
+	l.gasLimit = gasLimit
+}
 
-func (*StructLogger) CaptureTxEnd(restGas uint64) {}
+func (l *StructLogger) CaptureTxEnd(restGas uint64) {
+	l.result.UsedGas = l.gasLimit - restGas
+}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
