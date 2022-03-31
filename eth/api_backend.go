@@ -186,7 +186,7 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	db := b.eth.ChainDb()
 	number := rawdb.ReadHeaderNumber(db, hash)
 	if number == nil {
-		return nil, fmt.Errorf("failed to get block number for  hash %#x", hash)
+		return nil, fmt.Errorf("failed to get block number for hash %#x", hash)
 	}
 	logs := rawdb.ReadLogs(db, hash, *number, b.eth.blockchain.Config())
 	if logs == nil {
