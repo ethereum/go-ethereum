@@ -1967,12 +1967,13 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if err != nil {
 		Fatalf("%v", err)
 	}
+
 	var engine consensus.Engine
+	ethashConf := ethconfig.Defaults.Ethash
 	if ctx.GlobalBool(FakePoWFlag.Name) {
-		engine = ethash.NewFaker()
-	} else {
-		engine = ethconfig.CreateConsensusEngine(stack, config, &ethconfig.Defaults.Ethash, nil, false, chainDb)
+		ethashConf.PowMode = ethash.ModeFake
 	}
+	engine = ethconfig.CreateConsensusEngine(stack, config, &ethashConf, nil, false, chainDb)
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
