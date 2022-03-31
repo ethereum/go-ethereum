@@ -374,7 +374,7 @@ func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccou
 	return acc, nil
 }
 
-// getHelperTrie returns the post-processed trie root for the given trie ID and section index
+// GetHelperTrie returns the post-processed trie root for the given trie ID and section index
 func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	var (
 		root   common.Hash
