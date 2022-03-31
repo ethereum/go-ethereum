@@ -155,14 +155,14 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 		l.env.Cancel()
 		return
 	}
-
-	memory := scope.Memory
-	stack := scope.Stack
-	contract := scope.Contract
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return
 	}
+
+	memory := scope.Memory
+	stack := scope.Stack
+	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if l.cfg.EnableMemory {
