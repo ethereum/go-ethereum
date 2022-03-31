@@ -60,7 +60,7 @@ type AccountProofWrapper struct {
 	Address  common.Address       `json:"address,omitempty"`
 	Nonce    uint64               `json:"nonce,omitempty"`
 	Balance  *big.Int             `json:"balance,omitempty"`
-	CodeHash common.Hash          `json:"code_hash,omitempty"`
+	CodeHash common.Hash          `json:"codeHash,omitempty"`
 	Proof    []string             `json:"proof,omitempty"`
 	Storage  *StorageProofWrapper `json:"storage,omitempty"` // StorageProofWrapper can be empty if irrelated to storage operation
 }
