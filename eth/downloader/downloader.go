@@ -493,9 +493,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
-	var noSnap bool
+	var syncState = true // means whether state sync is required in this cycle
 	if mode == SnapSync && pivot == nil {
-		pivot, noSnap = d.blockchain.CurrentBlock().Header(), true
+		pivot, syncState = d.blockchain.CurrentBlock().Header(), false
 	}
 	height := latest.Number.Uint64()
 
@@ -527,9 +527,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		} else {
 			pivotNumber := pivot.Number.Uint64()
 
-			// Only cap the sync origin number by pivot point when
-			// state sync is required.
-			if pivotNumber <= origin && !noSnap {
+			// Cap the sync origin by pivot header when state sync is required.
+			if pivotNumber <= origin && syncState {
 				origin = pivotNumber - 1
 			}
 			// Write out the pivot into the database so a rollback beyond it will
