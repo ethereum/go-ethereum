@@ -56,27 +56,7 @@ type downloadTester struct {
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
-	freezer, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
-	if err != nil {
-		panic(err)
-	}
-	core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
-
-	chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
-	if err != nil {
-		panic(err)
-	}
-	tester := &downloadTester{
-		freezer: freezer,
-		chain:   chain,
-		peers:   make(map[string]*downloadTesterPeer),
-	}
-	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, nil)
-	return tester
+	return newTesterWithNotification(nil)
 }
 
 // newTester creates a new downloader test mocker.
