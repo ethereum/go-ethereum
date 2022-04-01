@@ -255,6 +255,86 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 }
 
+// This test case checks what happens when two keys whose absence is being proven start with the
+// same byte (0x0b in this case). Only one 'extension status' should be declared.
+func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
+	presentKeys := [][]byte{
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580800"),
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580801"),
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580802"),
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580803"),
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580804"),
+		common.Hex2Bytes("9f2a59ea98d7cb610eff49447571e1610188937ce9266c6b4ded1b6ee37ecd00"),
+		common.Hex2Bytes("9f2a59ea98d7cb610eff49447571e1610188937ce9266c6b4ded1b6ee37ecd01"),
+		common.Hex2Bytes("9f2a59ea98d7cb610eff49447571e1610188937ce9266c6b4ded1b6ee37ecd02"),
+		common.Hex2Bytes("9f2a59ea98d7cb610eff49447571e1610188937ce9266c6b4ded1b6ee37ecd03"),
+	}
+
+	absentKeys := [][]byte{
+		common.Hex2Bytes("089783b59ef47adbdf85546c92d9b93ffd2f4803093ee93727bb42a1537dfb00"),
+		common.Hex2Bytes("089783b59ef47adbdf85546c92d9b93ffd2f4803093ee93727bb42a1537dfb01"),
+		common.Hex2Bytes("089783b59ef47adbdf85546c92d9b93ffd2f4803093ee93727bb42a1537dfb02"),
+		common.Hex2Bytes("089783b59ef47adbdf85546c92d9b93ffd2f4803093ee93727bb42a1537dfb03"),
+		common.Hex2Bytes("089783b59ef47adbdf85546c92d9b93ffd2f4803093ee93727bb42a1537dfb04"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f00"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f01"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f02"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f03"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f04"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f80"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f81"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f82"),
+		common.Hex2Bytes("0b373ba3992dde5cfee854e1a786559ba0b6a13d376550c1ed58c00dc9706f83"),
+		common.Hex2Bytes("0bb7fda24b2ea0de0f791b27f8a040fcc79f8e1e2dfe50443bc632543ba5e700"),
+		common.Hex2Bytes("0bb7fda24b2ea0de0f791b27f8a040fcc79f8e1e2dfe50443bc632543ba5e702"),
+		common.Hex2Bytes("0bb7fda24b2ea0de0f791b27f8a040fcc79f8e1e2dfe50443bc632543ba5e703"),
+		common.Hex2Bytes("3aeba70b6afb762af4a507c8ec10747479d797c6ec11c14f92b5699634bd18d4"),
+	}
+
+	values := [][]byte{
+		common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("53bfa56cfcaddf191e0200000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("0700000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"),
+		common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("389a890a6ce3e618843300000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("0200000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"),
+	}
+
+	root := verkle.New()
+	kv := make(map[string][]byte)
+
+	for i, key := range presentKeys {
+		root.Insert(key, values[i], nil)
+		kv[string(key)] = values[i]
+	}
+
+	proof, Cs, zis, yis := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
+	cfg, _ := verkle.GetConfig()
+	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
+		t.Fatal("could not verify proof")
+	}
+
+	t.Log("commitments returned by proof:")
+	for i, c := range Cs {
+		t.Logf("%d %x", i, c.Bytes())
+	}
+
+	p, _, err := verkle.SerializeProof(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("serialized: %x", p)
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
+
+	t.Logf("%d", len(proof.ExtStatus))
+	if len(proof.ExtStatus) != 5 {
+		t.Fatalf("invalid number of declared stems: %d != 5", len(proof.ExtStatus))
+	}
+}
+
 // Cover the case in which a stem is both used for a proof of absence, and for a proof of presence.
 func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	presentKeys := [][]byte{
