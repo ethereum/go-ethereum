@@ -9,11 +9,11 @@ import (
 )
 
 type BlockTrace struct {
-	Number       *big.Int             `json:"number"`
+	Number       string               `json:"number"` // big.Int string
 	Hash         common.Hash          `json:"hash"`
 	GasLimit     uint64               `json:"gasLimit"`
-	Difficulty   *big.Int             `json:"difficulty"`
-	BaseFee      *big.Int             `json:"baseFee"`
+	Difficulty   string               `json:"difficulty"` // big.Int string
+	BaseFee      string               `json:"baseFee"`    // big.Int string
 	Coinbase     *AccountProofWrapper `json:"coinbase"`
 	Time         uint64               `json:"time"`
 	Transactions []*TransactionTrace  `json:"transactions"`
@@ -23,16 +23,16 @@ type TransactionTrace struct {
 	Type     uint8           `json:"type"`
 	Nonce    uint64          `json:"nonce"`
 	Gas      uint64          `json:"gas"`
-	GasPrice *big.Int        `json:"gasPrice"`
+	GasPrice string          `json:"gasPrice"` // big.Int string
 	From     common.Address  `json:"from"`
 	To       *common.Address `json:"to"`
-	ChainId  *big.Int        `json:"chainId"`
-	Value    *big.Int        `json:"value"`
+	ChainId  string          `json:"chainId"` // big.Int string
+	Value    string          `json:"value"`   // big.Int string
 	Data     string          `json:"data"`
 	IsCreate bool            `json:"isCreate"`
-	V        *big.Int        `json:"v"`
-	R        *big.Int        `json:"r"`
-	S        *big.Int        `json:"s"`
+	V        string          `json:"v"` // big.Int string
+	R        string          `json:"r"` // big.Int string
+	S        string          `json:"s"` // big.Int string
 }
 
 // NewTraceBlock supports necessary fields for roller.
@@ -42,11 +42,11 @@ func NewTraceBlock(config *params.ChainConfig, block *Block, coinbase *AccountPr
 		txs[i] = newTraceTransaction(tx, block.NumberU64(), config)
 	}
 	return &BlockTrace{
-		Number:       block.Number(),
+		Number:       block.Number().String(),
 		Hash:         block.Hash(),
 		GasLimit:     block.GasLimit(),
-		Difficulty:   block.Difficulty(),
-		BaseFee:      block.BaseFee(),
+		Difficulty:   block.Difficulty().String(),
+		BaseFee:      block.BaseFee().String(),
 		Coinbase:     coinbase,
 		Time:         block.Time(),
 		Transactions: txs,
@@ -62,17 +62,17 @@ func newTraceTransaction(tx *Transaction, blockNumber uint64, config *params.Cha
 	result := &TransactionTrace{
 		Type:     tx.Type(),
 		Nonce:    tx.Nonce(),
-		ChainId:  tx.ChainId(),
+		ChainId:  tx.ChainId().String(),
 		From:     from,
 		Gas:      tx.Gas(),
-		GasPrice: tx.GasPrice(),
+		GasPrice: tx.GasPrice().String(),
 		To:       tx.To(),
-		Value:    tx.Value(),
+		Value:    tx.Value().String(),
 		Data:     hexutil.Encode(tx.Data()),
 		IsCreate: tx.To() == nil,
-		V:        v,
-		R:        r,
-		S:        s,
+		V:        v.String(),
+		R:        r.String(),
+		S:        s.String(),
 	}
 	return result
 }

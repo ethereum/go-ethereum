@@ -790,7 +790,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	sender := &types.AccountProofWrapper{
 		Address:  from,
 		Nonce:    w.current.state.GetNonce(from),
-		Balance:  w.current.state.GetBalance(from),
+		Balance:  w.current.state.GetBalance(from).String(),
 		CodeHash: w.current.state.GetCodeHash(from),
 	}
 
