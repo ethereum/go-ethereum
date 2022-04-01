@@ -1,7 +1,8 @@
 package engine_v2_tests
 
 import (
-	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,6 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
 	assert.Equal(t, uint64(1350), timeoutMsg.(*utils.Timeout).GapNumber)
-	fmt.Println(timeoutMsg.(*utils.Timeout).GapNumber)
 	assert.Equal(t, utils.Round(1), timeoutMsg.(*utils.Timeout).Round)
 }
 
@@ -228,4 +228,67 @@ func TestShouldVerifyTimeoutMessage(t *testing.T) {
 	verified, err := engineV2.VerifyTimeoutMessage(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	assert.True(t, verified)
+}
+
+func TestTimeoutPoolKeeyGoodHygiene(t *testing.T) {
+	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Set round to 5
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	// Inject the first timeout with round 5
+
+	signedHash, _ := signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
+		Round:     utils.Round(5),
+		GapNumber: 450,
+	}).Bytes())
+	timeoutMsg := &utils.Timeout{
+		Round:     utils.Round(5),
+		GapNumber: 450,
+		Signature: signedHash,
+	}
+	engineV2.TimeoutHandler(blockchain, timeoutMsg)
+
+	// Inject a second timeout with round 16
+	signedHash, _ = signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
+		Round:     utils.Round(16),
+		GapNumber: 450,
+	}).Bytes())
+	timeoutMsg = &utils.Timeout{
+		Round:     utils.Round(16),
+		GapNumber: 450,
+		Signature: signedHash,
+	}
+	// Set round to 16
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(16), false)
+	engineV2.TimeoutHandler(blockchain, timeoutMsg)
+
+	// Inject a third timeout with round 17
+	signedHash, _ = signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
+		Round:     utils.Round(17),
+		GapNumber: 450,
+	}).Bytes())
+	timeoutMsg = &utils.Timeout{
+		Round:     utils.Round(17),
+		GapNumber: 450,
+		Signature: signedHash,
+	}
+	// Set round to 16
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(17), false)
+	engineV2.TimeoutHandler(blockchain, timeoutMsg)
+
+	// Let's keep good Hygiene
+	engineV2.HygieneTimeoutPoolFaker()
+	// Let's wait for 5 second for the goroutine
+	<-time.After(5 * time.Second)
+	keyList := engineV2.GetTimeoutPoolKeyListFaker()
+
+	assert.Equal(t, 2, len(keyList))
+	for _, k := range keyList {
+		keyedRound, err := strconv.ParseInt(strings.Split(k, ":")[0], 10, 64)
+		assert.Nil(t, err)
+		if keyedRound < 25-10 {
+			assert.Fail(t, "Did not clean up the timeout pool")
+		}
+	}
 }

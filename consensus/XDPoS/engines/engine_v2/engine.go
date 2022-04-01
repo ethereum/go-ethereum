@@ -59,16 +59,16 @@ type XDPoS_v2 struct {
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
-	// Setup Timer
+	// Setup timeoutTimer
 	duration := time.Duration(config.V2.TimeoutPeriod) * time.Second
-	timer := countdown.NewCountDown(duration)
-	timeoutPool := utils.NewPool(config.V2.CertThreshold)
+	timeoutTimer := countdown.NewCountDown(duration)
 
 	snapshots, _ := lru.NewARC(utils.InmemorySnapshots)
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	epochSwitches, _ := lru.NewARC(int(utils.InmemoryEpochs))
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 
+	timeoutPool := utils.NewPool(config.V2.CertThreshold)
 	votePool := utils.NewPool(config.V2.CertThreshold)
 	engine := &XDPoS_v2{
 		config:       config,
@@ -80,7 +80,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 		verifiedHeaders: verifiedHeaders,
 		snapshots:       snapshots,
 		epochSwitches:   epochSwitches,
-		timeoutWorker:   timer,
+		timeoutWorker:   timeoutTimer,
 		BroadcastCh:     make(chan interface{}),
 		waitPeriodCh:    waitPeriodCh,
 
@@ -104,8 +104,9 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 		highestCommitBlock: nil,
 	}
 	// Add callback to the timer
-	timer.OnTimeoutFn = engine.OnCountdownTimeout
+	timeoutTimer.OnTimeoutFn = engine.OnCountdownTimeout
 
+	engine.periodicJob()
 	return engine
 }
 
@@ -1041,4 +1042,15 @@ func (x *XDPoS_v2) allowedToSend(chain consensus.ChainReader, blockHeader *types
 		return fmt.Errorf("Not in the master node list, not suppose to %v", sendType)
 	}
 	return nil
+}
+
+// Periodlly execution(Attached to engine initialisation during "new"). Used for pool cleaning etc
+func (x *XDPoS_v2) periodicJob() {
+	go func() {
+		for {
+			<-time.After(utils.PeriodicJobPeriod * time.Second)
+			x.hygieneVotePool()
+			x.hygieneTimeoutPool()
+		}
+	}()
 }

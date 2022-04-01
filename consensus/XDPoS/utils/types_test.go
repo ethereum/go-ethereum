@@ -3,9 +3,11 @@ package utils
 import (
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/stretchr/testify/assert"
 )
 
 func toyExtraFields() *ExtraFields_v2 {
@@ -74,4 +76,22 @@ func TestHashAndSigHash(t *testing.T) {
 	}) {
 		t.Fatalf("SigHash of two round shouldn't equal")
 	}
+}
+
+func TestPoolKeyFormat(t *testing.T) {
+	voteMsg := &Vote{
+		ProposedBlockInfo: &BlockInfo{
+			Hash:   common.Hash{1},
+			Round:  5,
+			Number: big.NewInt(4),
+		},
+		Signature: []byte{},
+		GapNumber: 450,
+	}
+
+	voteKey := strings.Split(voteMsg.PoolKey(), ":")
+	assert.Equal(t, "5", voteKey[0])
+	assert.Equal(t, "450", voteKey[1])
+	assert.Equal(t, "4", voteKey[2])
+	assert.Equal(t, common.Hash{1}.String(), voteKey[3])
 }

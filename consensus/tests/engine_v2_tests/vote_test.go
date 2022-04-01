@@ -3,8 +3,10 @@ package engine_v2_tests
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
@@ -555,5 +557,94 @@ func TestVoteMessageHandlerWrongGapNumber(t *testing.T) {
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
-	assert.True(t, strings.Contains(err.Error(), "gap number mismatch"))
+	// Shall not even trigger the vote threashold as vote pool key also contains the gapNumber
+	assert.Nil(t, err)
+}
+
+func TestVotePoolKeepGoodHygiene(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	blockInfo := &utils.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  utils.Round(5),
+		Number: big.NewInt(905),
+	}
+	voteForSign := &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := utils.VoteSigHash(voteForSign)
+
+	// Set round to 5
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	// Create two vote messages which will not reach vote pool threshold
+	signedHash, _ := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	voteMsg := &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	engineV2.VoteHandler(blockchain, voteMsg)
+
+	// Inject a second vote with round 16
+	blockInfo = &utils.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  utils.Round(16),
+		Number: big.NewInt(906),
+	}
+	voteForSign = &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash = utils.VoteSigHash(voteForSign)
+
+	// Set round to 16
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(16), false)
+	// Create two vote messages which will not reach vote pool threshold
+	signedHash, _ = signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	engineV2.VoteHandler(blockchain, voteMsg)
+
+	// Inject a second vote with round 25, which is less than 10 rounds difference to the last vote round
+	blockInfo = &utils.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  utils.Round(25),
+		Number: big.NewInt(907),
+	}
+	voteForSign = &utils.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash = utils.VoteSigHash(voteForSign)
+
+	// Set round to 25
+	engineV2.SetNewRoundFaker(blockchain, utils.Round(25), false)
+	// Create two vote messages which will not reach vote pool threshold
+	signedHash, _ = signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	voteMsg = &utils.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	engineV2.VoteHandler(blockchain, voteMsg)
+
+	// Let's keep good Hygiene
+	engineV2.HygieneVotePoolFaker()
+	// Let's wait for 5 second for the goroutine
+	<-time.After(5 * time.Second)
+	keyList := engineV2.GetVotePoolKeyListFaker()
+
+	assert.Equal(t, 2, len(keyList))
+	for _, k := range keyList {
+		keyedRound, err := strconv.ParseInt(strings.Split(k, ":")[0], 10, 64)
+		assert.Nil(t, err)
+		if keyedRound < 25-10 {
+			assert.Fail(t, "Did not clean up the vote pool")
+		}
+	}
 }

@@ -3,6 +3,8 @@ package engine_v2
 import (
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -77,22 +79,8 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 
 		err := x.VerifyBlockInfo(chain, voteMsg.ProposedBlockInfo)
 		if err != nil {
-			x.votePool.ClearPoolKeyByObj(voteMsg)
 			return err
 		}
-		// verify vote.GapNumber
-		epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, voteMsg.ProposedBlockInfo.Hash)
-		if err != nil {
-			log.Error("getEpochSwitchInfo when handle Vote", "BlockInfoHash", voteMsg.ProposedBlockInfo.Hash, "Error", err)
-			return err
-		}
-		epochSwitchNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
-		gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
-		if gapNumber != voteMsg.GapNumber {
-			log.Error("[voteHandler] gap number mismatch", "BlockInfoHash", voteMsg.ProposedBlockInfo.Hash, "Gap", voteMsg.GapNumber, "GapShouldBe", gapNumber)
-			return fmt.Errorf("gap number mismatch %v", voteMsg)
-		}
-
 		err = x.onVotePoolThresholdReached(chain, pooledVotes, voteMsg, proposedBlockHeader)
 		if err != nil {
 			return err
@@ -157,8 +145,6 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		return err
 	}
 	log.Info("Successfully processed the vote and produced QC!", "QcRound", quorumCert.ProposedBlockInfo.Round, "QcNumOfSig", len(quorumCert.Signatures), "QcHash", quorumCert.ProposedBlockInfo.Hash, "QcNumber", quorumCert.ProposedBlockInfo.Number.Uint64())
-	// clean up vote at the same poolKey. and pookKey is proposed block hash
-	x.votePool.ClearPoolKeyByObj(currentVoteMsg)
 	return nil
 }
 
@@ -215,4 +201,25 @@ func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReade
 		return true, nil
 	}
 	return false, nil
+}
+
+func (x *XDPoS_v2) hygieneVotePool() {
+	x.lock.RLock()
+	round := x.currentRound
+	x.lock.RUnlock()
+	votePoolKeys := x.votePool.PoolObjKeysList()
+
+	// Extract round number
+	for _, k := range votePoolKeys {
+		keyedRound, err := strconv.ParseInt(strings.Split(k, ":")[0], 10, 64)
+		if err != nil {
+			log.Error("[hygieneVotePool] Error while trying to get keyedRound inside pool", "Error", err)
+			continue
+		}
+		// Clean up any votes round that is 10 rounds older
+		if keyedRound < int64(round)-utils.PoolHygieneRound {
+			log.Debug("[hygieneVotePool] Cleaned vote poll at round", "Round", keyedRound, "currentRound", round, "Key", k)
+			x.votePool.ClearByPoolKey(k)
+		}
+	}
 }

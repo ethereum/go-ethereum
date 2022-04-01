@@ -57,3 +57,19 @@ func (x *XDPoS_v2) SetPropertiesFaker(highestQC *utils.QuorumCert, highestTC *ut
 	x.highestQuorumCert = highestQC
 	x.highestTimeoutCert = highestTC
 }
+
+func (x *XDPoS_v2) HygieneVotePoolFaker() {
+	x.hygieneVotePool()
+}
+
+func (x *XDPoS_v2) GetVotePoolKeyListFaker() []string {
+	return x.votePool.PoolObjKeysList()
+}
+
+func (x *XDPoS_v2) HygieneTimeoutPoolFaker() {
+	x.hygieneTimeoutPool()
+}
+
+func (x *XDPoS_v2) GetTimeoutPoolKeyListFaker() []string {
+	return x.timeoutPool.PoolObjKeysList()
+}

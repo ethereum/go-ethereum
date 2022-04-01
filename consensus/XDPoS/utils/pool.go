@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"sync"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
@@ -11,6 +13,7 @@ type PoolObj interface {
 type Pool struct {
 	objList   map[string]map[common.Hash]PoolObj
 	threshold int
+	lock      sync.RWMutex // Protects the pool fields
 }
 
 func NewPool(threshold int) *Pool {
@@ -22,6 +25,8 @@ func NewPool(threshold int) *Pool {
 
 // return true if it has reached threshold
 func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	poolKey := obj.PoolKey()
 	objListKeyed, ok := p.objList[poolKey]
 	if !ok {
@@ -45,16 +50,44 @@ func (p *Pool) Size(obj PoolObj) int {
 	return len(objListKeyed)
 }
 
+func (p *Pool) PoolObjKeysList() []string {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	var keyList []string
+	for key := range p.objList {
+		keyList = append(keyList, key)
+	}
+	return keyList
+}
+
 // Given the pool object, clear all object under the same pool key
 func (p *Pool) ClearPoolKeyByObj(obj PoolObj) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	poolKey := obj.PoolKey()
 	delete(p.objList, poolKey)
 }
 
+// Given the pool key, clean its content
+func (p *Pool) ClearByPoolKey(poolKey string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	delete(p.objList, poolKey)
+}
+
 func (p *Pool) Clear() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	p.objList = make(map[string]map[common.Hash]PoolObj)
 }
 
 func (p *Pool) SetThreshold(t int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	p.threshold = t
 }

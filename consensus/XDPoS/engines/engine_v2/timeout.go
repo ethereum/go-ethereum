@@ -2,6 +2,8 @@ package engine_v2
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -226,4 +228,25 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 	}
 
 	return nil
+}
+
+func (x *XDPoS_v2) hygieneTimeoutPool() {
+	x.lock.RLock()
+	currentRound := x.currentRound
+	x.lock.RUnlock()
+	timeoutPoolKeys := x.timeoutPool.PoolObjKeysList()
+
+	// Extract round number
+	for _, k := range timeoutPoolKeys {
+		keyedRound, err := strconv.ParseInt(strings.Split(k, ":")[0], 10, 64)
+		if err != nil {
+			log.Error("[hygieneTimeoutPool] Error while trying to get keyedRound inside pool", "Error", err)
+			continue
+		}
+		// Clean up any timeouts round that is 10 rounds older
+		if keyedRound < int64(currentRound)-utils.PoolHygieneRound {
+			log.Debug("[hygieneTimeoutPool] Cleaned timeout pool at round", "Round", keyedRound, "CurrentRound", currentRound, "Key", k)
+			x.timeoutPool.ClearByPoolKey(k)
+		}
+	}
 }

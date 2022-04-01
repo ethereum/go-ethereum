@@ -24,3 +24,8 @@ const (
 	BlockSignersCacheLimit = 9000
 	M2ByteLength           = 4
 )
+
+const (
+	PeriodicJobPeriod = 60
+	PoolHygieneRound  = 10
+)
