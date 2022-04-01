@@ -254,3 +254,50 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 }
+
+// Cover the case in which a stem is both used for a proof of absence, and for a proof of presence.
+func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
+	presentKeys := [][]byte{
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73f58ffa580800"),
+	}
+
+	absentKeys := [][]byte{
+		common.Hex2Bytes("6766d007d8fd90ea45b2ac9027ff04fa57e49527f11010a12a73008ffa580800"),
+		// the key differs from the key present...                            ^^ here
+	}
+
+	values := [][]byte{
+		common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000"),
+	}
+
+	root := verkle.New()
+	kv := make(map[string][]byte)
+
+	for i, key := range presentKeys {
+		root.Insert(key, values[i], nil)
+		kv[string(key)] = values[i]
+	}
+
+	proof, Cs, zis, yis := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
+	cfg, _ := verkle.GetConfig()
+	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
+		t.Fatal("could not verify proof")
+	}
+
+	t.Log("commitments returned by proof:")
+	for i, c := range Cs {
+		t.Logf("%d %x", i, c.Bytes())
+	}
+
+	p, _, err := verkle.SerializeProof(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("serialized: %x", p)
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
+
+	t.Logf("%d", len(proof.ExtStatus))
+	if len(proof.PoaStems) != 0 {
+		t.Fatal("a proof-of-absence stem was declared, when there was no need")
+	}
+}
