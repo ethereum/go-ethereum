@@ -298,6 +298,10 @@ func (b *LesApiBackend) RPCEVMTimeout() time.Duration {
 	return b.eth.config.RPCEVMTimeout
 }
 
+func (b *LesApiBackend) RPCGlobalEvmEstimateGasTimeoutFactor() uint64 {
+	return b.eth.config.RPCGlobalEvmEstimateGasTimeoutFactor
+}
+
 func (b *LesApiBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
 }

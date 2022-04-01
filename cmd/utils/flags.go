@@ -525,6 +525,11 @@ var (
 		Usage: "Sets a timeout used for eth_call (0=infinite)",
 		Value: ethconfig.Defaults.RPCEVMTimeout,
 	}
+	RPCGlobalEvmEstimateGasTimeoutFactorFlag = cli.Uint64Flag{
+		Name:  "rpc.evm.estimategas.timeoutfactor",
+		Usage: "Sets a factor used for eth_estimateGas to set the timeout as a function of `factor` times `RPCGlobalEVMTimeoutFlag` (0=infinite)",
+		Value: ethconfig.Defaults.RPCGlobalEvmEstimateGasTimeoutFactor,
+	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
@@ -1662,6 +1667,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(RPCGlobalEVMTimeoutFlag.Name) {
 		cfg.RPCEVMTimeout = ctx.GlobalDuration(RPCGlobalEVMTimeoutFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCGlobalEvmEstimateGasTimeoutFactorFlag.Name) {
+		cfg.RPCGlobalEvmEstimateGasTimeoutFactor = ctx.Uint64(RPCGlobalEvmEstimateGasTimeoutFactorFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
