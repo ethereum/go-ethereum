@@ -78,6 +78,7 @@ var (
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
+	errNoPivotHeader           = errors.New("pivot header is not found")
 	ErrMergeTransition         = errors.New("legacy sync reached the merge")
 )
 
@@ -481,11 +482,18 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
 			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
-			pivot = d.skeleton.Header(number)
-			if pivot == nil {
-				// Retrieve the pivot point from the local chain if it's
-				// not in the range of skeleton.
+
+			// Retrieve the pivot header from the skeleton chain segment but
+			// fallback to local chain if it's not found in skeleton space.
+			if pivot = d.skeleton.Header(number); pivot == nil {
 				pivot = d.lightchain.GetHeaderByNumber(number)
+			}
+			// Print an error log and return directly in case the pivot header
+			// is still not found. It means the skeleton chain is not linked
+			// correctly with local chain.
+			if pivot == nil {
+				log.Error("Pivot header is not found", "number", number)
+				return errNoPivotHeader
 			}
 		}
 	}
@@ -493,9 +501,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
-	var syncState = true // means whether state sync is required in this cycle
 	if mode == SnapSync && pivot == nil {
-		pivot, syncState = d.blockchain.CurrentBlock().Header(), false
+		pivot = d.blockchain.CurrentBlock().Header()
 	}
 	height := latest.Number.Uint64()
 
@@ -526,9 +533,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			origin = 0
 		} else {
 			pivotNumber := pivot.Number.Uint64()
-
-			// Cap the sync origin by pivot header when state sync is required.
-			if pivotNumber <= origin && syncState {
+			if pivotNumber <= origin {
 				origin = pivotNumber - 1
 			}
 			// Write out the pivot into the database so a rollback beyond it will
