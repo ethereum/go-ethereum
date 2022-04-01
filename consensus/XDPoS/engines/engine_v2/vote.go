@@ -77,7 +77,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *utils.Vote)
 			return nil
 		}
 
-		err := x.VerifyBlockInfo(chain, voteMsg.ProposedBlockInfo)
+		err := x.VerifyBlockInfo(chain, voteMsg.ProposedBlockInfo, nil)
 		if err != nil {
 			return err
 		}

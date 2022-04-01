@@ -20,7 +20,7 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 		Round:  utils.Round(1),
 		Number: currentBlock.Number(),
 	}
-	err := engineV2.VerifyBlockInfo(blockchain, blockInfo)
+	err := engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.Nil(t, err)
 
 	// Insert another Block, but it won't trigger commit
@@ -35,7 +35,7 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 		Round:  utils.Round(2),
 		Number: block902.Number(),
 	}
-	err = engineV2.VerifyBlockInfo(blockchain, blockInfo)
+	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.Nil(t, err)
 
 	blockInfo = &utils.BlockInfo{
@@ -43,7 +43,7 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 		Round:  utils.Round(2),
 		Number: currentBlock.Number(),
 	}
-	err = engineV2.VerifyBlockInfo(blockchain, blockInfo)
+	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.NotNil(t, err)
 
 	blockInfo = &utils.BlockInfo{
@@ -51,7 +51,7 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 		Round:  utils.Round(3),
 		Number: block902.Number(),
 	}
-	err = engineV2.VerifyBlockInfo(blockchain, blockInfo)
+	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.NotNil(t, err)
 
 	blockInfo = &utils.BlockInfo{
@@ -59,6 +59,6 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 		Round:  utils.Round(2),
 		Number: currentBlock.Number(),
 	}
-	err = engineV2.VerifyBlockInfo(blockchain, blockInfo)
+	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.NotNil(t, err)
 }

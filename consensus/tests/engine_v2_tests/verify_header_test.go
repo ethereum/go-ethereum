@@ -235,9 +235,6 @@ func TestShouldVerifyHeaders(t *testing.T) {
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
-	// var results <-chan error
-	// var abort <-chan struct{}
-
 	// Happy path
 	var happyPathHeaders []*types.Header
 	happyPathHeaders = append(happyPathHeaders, blockchain.GetBlockByNumber(899).Header(), blockchain.GetBlockByNumber(900).Header(), blockchain.GetBlockByNumber(901).Header(), blockchain.GetBlockByNumber(902).Header())
@@ -245,10 +242,72 @@ func TestShouldVerifyHeaders(t *testing.T) {
 	var fullVerifies []bool
 	fullVerifies = append(fullVerifies, false, true, true, false)
 	_, results := adaptor.VerifyHeaders(blockchain, happyPathHeaders, fullVerifies)
-	select {
-	case result := <-results:
-		assert.Nil(t, result)
-	case <-time.After(time.Duration(2) * time.Second): // It should be very fast to verify headers
-		t.Fatalf("Taking too long to verify headers")
+	var verified []bool
+	for {
+		select {
+		case result := <-results:
+			if result != nil {
+				panic("Error received while verifying headers")
+			}
+			verified = append(verified, true)
+		case <-time.After(time.Duration(5) * time.Second): // It should be very fast to verify headers
+			if len(verified) == len(happyPathHeaders) {
+				return
+			} else {
+				panic("Suppose to have verified 3 block headers")
+			}
+		}
+	}
+}
+
+func TestShouldVerifyHeadersEvenIfParentsNotYetWrittenIntoDB(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+	// Enable verify
+	config.XDPoS.V2.SkipV2Validation = false
+	// Skip the mining time validation by set mine time to 0
+	config.XDPoS.V2.MinePeriod = 0
+	// Block 901 is the first v2 block with round of 1
+	blockchain, _, block910, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, 0)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+
+	var headersTobeVerified []*types.Header
+
+	// Create block 911 but don't write into DB
+	blockNumber := 911
+	roundNumber := int64(blockNumber) - config.XDPoS.V2.SwitchBlock.Int64()
+	block911 := CreateBlock(blockchain, &config, block910, blockNumber, roundNumber, signer.Hex(), signer, signFn, nil)
+
+	// Create block 912 and not write into DB as well
+	blockNumber = 912
+	roundNumber = int64(blockNumber) - config.XDPoS.V2.SwitchBlock.Int64()
+	block912 := CreateBlock(blockchain, &config, block911, blockNumber, roundNumber, signer.Hex(), signer, signFn, nil)
+
+	headersTobeVerified = append(headersTobeVerified, block910.Header(), block911.Header(), block912.Header())
+	// Randomly set full verify
+	var fullVerifies []bool
+	fullVerifies = append(fullVerifies, true, true, true)
+	_, results := adaptor.VerifyHeaders(blockchain, headersTobeVerified, fullVerifies)
+
+	var verified []bool
+	for {
+		select {
+		case result := <-results:
+			if result != nil {
+				panic("Error received while verifying headers")
+			}
+			verified = append(verified, true)
+		case <-time.After(time.Duration(5) * time.Second): // It should be very fast to verify headers
+			if len(verified) == len(headersTobeVerified) {
+				return
+			} else {
+				panic("Suppose to have verified 3 block headers")
+			}
+		}
 	}
 }
