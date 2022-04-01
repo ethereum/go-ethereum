@@ -1370,16 +1370,9 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, &coinbase)
 	for i, tx := range block.Transactions() {
 		evmTrace := blockResult.ExecutionResults[i]
+		from := evmTrace.Sender.Address
 
-		// Get sender's address.
-		from, _ := types.Sender(types.MakeSigner(bc.chainConfig, block.Number()), tx)
-		evmTrace.Sender = &types.AccountProofWrapper{
-			Address:  from,
-			Nonce:    state.GetNonce(from),
-			Balance:  state.GetBalance(from),
-			CodeHash: state.GetCodeHash(from),
-		}
-		// Get sender's account proof.
+		// Get proof
 		proof, err := state.GetProof(from)
 		if err != nil {
 			log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", from.String(), "err", err)

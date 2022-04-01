@@ -57,9 +57,9 @@ type ExtraData struct {
 }
 
 type AccountProofWrapper struct {
-	Address  common.Address       `json:"address,omitempty"`
-	Nonce    uint64               `json:"nonce,omitempty"`
-	Balance  *big.Int             `json:"balance,omitempty"`
+	Address  common.Address       `json:"address"`
+	Nonce    uint64               `json:"nonce"`
+	Balance  *big.Int             `json:"balance"`
 	CodeHash common.Hash          `json:"codeHash,omitempty"`
 	Proof    []string             `json:"proof,omitempty"`
 	Storage  *StorageProofWrapper `json:"storage,omitempty"` // StorageProofWrapper can be empty if irrelated to storage operation

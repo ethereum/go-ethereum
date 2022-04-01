@@ -785,16 +785,26 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	// reset tracer.
 	tracer := w.chain.GetVMConfig().Tracer.(*vm.StructLogger)
 	tracer.Reset()
+	// Get sender's address.
+	from, _ := types.Sender(w.current.signer, tx)
+	sender := &types.AccountProofWrapper{
+		Address:  from,
+		Nonce:    w.current.state.GetNonce(from),
+		Balance:  w.current.state.GetBalance(from),
+		CodeHash: w.current.state.GetCodeHash(from),
+	}
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}
+
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
 	w.current.executionResults = append(w.current.executionResults, &types.ExecutionResult{
 		Gas:         receipt.GasUsed,
+		Sender:      sender,
 		Failed:      receipt.Status != types.ReceiptStatusSuccessful,
 		ReturnValue: fmt.Sprintf("%x", receipt.ReturnValue),
 		StructLogs:  vm.FormatLogs(tracer.StructLogs()),
