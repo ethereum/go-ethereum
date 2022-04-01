@@ -41,12 +41,20 @@ func NewTraceBlock(config *params.ChainConfig, block *Block, coinbase *AccountPr
 	for i, tx := range block.Transactions() {
 		txs[i] = newTraceTransaction(tx, block.NumberU64(), config)
 	}
+
+	baseFee := block.BaseFee()
+	// due to the special logic of `baseFee`, if `baseFee` is a nil
+	// we would like to use new(big.Int) to replace it so that `baseFee.String()` would return "0"
+	if baseFee == nil {
+		baseFee = new(big.Int)
+	}
+
 	return &BlockTrace{
 		Number:       block.Number().String(),
 		Hash:         block.Hash(),
 		GasLimit:     block.GasLimit(),
 		Difficulty:   block.Difficulty().String(),
-		BaseFee:      block.BaseFee().String(),
+		BaseFee:      baseFee.String(),
 		Coinbase:     coinbase,
 		Time:         block.Time(),
 		Transactions: txs,
