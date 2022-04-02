@@ -437,8 +437,7 @@ func FormatLogs(logs []StructLog) []types.StructLogRes {
 		if len(trace.Memory) != 0 {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				bytes := new(big.Int).SetBytes(trace.Memory[i : i+32]).Bytes()
-				memory = append(memory, hexutil.Encode(bytes))
+				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
 			}
 			formatted[index].Memory = &memory
 		}
