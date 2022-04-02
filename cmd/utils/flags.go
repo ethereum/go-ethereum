@@ -526,7 +526,7 @@ var (
 		Value: ethconfig.Defaults.RPCEVMTimeout,
 	}
 	RPCGlobalEvmEstimateGasTimeoutFactorFlag = cli.Uint64Flag{
-		Name:  "rpc.evm.estimategas.timeoutfactor",
+		Name:  "rpc.evmestimategastimeoutfactor",
 		Usage: "Sets a factor used for eth_estimateGas to set the timeout as a function of `factor` times `RPCGlobalEVMTimeoutFlag` (0=infinite)",
 		Value: ethconfig.Defaults.RPCGlobalEvmEstimateGasTimeoutFactor,
 	}
