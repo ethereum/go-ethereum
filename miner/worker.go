@@ -28,6 +28,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -790,7 +791,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	sender := &types.AccountProofWrapper{
 		Address:  from,
 		Nonce:    w.current.state.GetNonce(from),
-		Balance:  w.current.state.GetBalance(from).String(),
+		Balance:  (*hexutil.Big)(w.current.state.GetBalance(from)),
 		CodeHash: w.current.state.GetCodeHash(from),
 	}
 

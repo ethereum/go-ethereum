@@ -1353,7 +1353,7 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 	coinbase := types.AccountProofWrapper{
 		Address:  block.Coinbase(),
 		Nonce:    state.GetNonce(block.Coinbase()),
-		Balance:  state.GetBalance(block.Coinbase()).String(),
+		Balance:  (*hexutil.Big)(state.GetBalance(block.Coinbase())),
 		CodeHash: state.GetCodeHash(block.Coinbase()),
 	}
 	// Get coinbase address's account proof.

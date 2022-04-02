@@ -130,7 +130,7 @@ func getWrappedProofForAddr(l *StructLogger, address common.Address) (*types.Acc
 	return &types.AccountProofWrapper{
 		Address:  address,
 		Nonce:    l.env.StateDB.GetNonce(address),
-		Balance:  l.env.StateDB.GetBalance(address).String(),
+		Balance:  (*hexutil.Big)(l.env.StateDB.GetBalance(address)),
 		CodeHash: l.env.StateDB.GetCodeHash(address),
 		Proof:    encodeProof(proof),
 	}, nil
@@ -150,7 +150,7 @@ func getWrappedProofForStorage(l *StructLogger, address common.Address, key comm
 	return &types.AccountProofWrapper{
 		Address:  address,
 		Nonce:    l.env.StateDB.GetNonce(address),
-		Balance:  l.env.StateDB.GetBalance(address).String(),
+		Balance:  (*hexutil.Big)(l.env.StateDB.GetBalance(address)),
 		CodeHash: l.env.StateDB.GetCodeHash(address),
 		Proof:    encodeProof(proof),
 		Storage: &types.StorageProofWrapper{

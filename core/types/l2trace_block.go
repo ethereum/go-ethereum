@@ -9,11 +9,11 @@ import (
 )
 
 type BlockTrace struct {
-	Number       string               `json:"number"` // big.Int string
+	Number       *hexutil.Big         `json:"number"`
 	Hash         common.Hash          `json:"hash"`
 	GasLimit     uint64               `json:"gasLimit"`
-	Difficulty   string               `json:"difficulty"` // big.Int string
-	BaseFee      string               `json:"baseFee"`    // big.Int string
+	Difficulty   *hexutil.Big         `json:"difficulty"`
+	BaseFee      *hexutil.Big         `json:"baseFee"`
 	Coinbase     *AccountProofWrapper `json:"coinbase"`
 	Time         uint64               `json:"time"`
 	Transactions []*TransactionTrace  `json:"transactions"`
@@ -23,16 +23,16 @@ type TransactionTrace struct {
 	Type     uint8           `json:"type"`
 	Nonce    uint64          `json:"nonce"`
 	Gas      uint64          `json:"gas"`
-	GasPrice string          `json:"gasPrice"` // big.Int string
+	GasPrice *hexutil.Big    `json:"gasPrice"`
 	From     common.Address  `json:"from"`
 	To       *common.Address `json:"to"`
-	ChainId  string          `json:"chainId"` // big.Int string
-	Value    string          `json:"value"`   // big.Int string
+	ChainId  *hexutil.Big    `json:"chainId"`
+	Value    *hexutil.Big    `json:"value"`
 	Data     string          `json:"data"`
 	IsCreate bool            `json:"isCreate"`
-	V        string          `json:"v"` // big.Int string
-	R        string          `json:"r"` // big.Int string
-	S        string          `json:"s"` // big.Int string
+	V        *hexutil.Big    `json:"v"`
+	R        *hexutil.Big    `json:"r"`
+	S        *hexutil.Big    `json:"s"`
 }
 
 // NewTraceBlock supports necessary fields for roller.
@@ -42,19 +42,12 @@ func NewTraceBlock(config *params.ChainConfig, block *Block, coinbase *AccountPr
 		txs[i] = newTraceTransaction(tx, block.NumberU64(), config)
 	}
 
-	baseFee := block.BaseFee()
-	// due to the special logic of `baseFee`, if `baseFee` is a nil
-	// we would like to use new(big.Int) to replace it so that `baseFee.String()` would return "0"
-	if baseFee == nil {
-		baseFee = new(big.Int)
-	}
-
 	return &BlockTrace{
-		Number:       block.Number().String(),
+		Number:       (*hexutil.Big)(block.Number()),
 		Hash:         block.Hash(),
 		GasLimit:     block.GasLimit(),
-		Difficulty:   block.Difficulty().String(),
-		BaseFee:      baseFee.String(),
+		Difficulty:   (*hexutil.Big)(block.Difficulty()),
+		BaseFee:      (*hexutil.Big)(block.BaseFee()),
 		Coinbase:     coinbase,
 		Time:         block.Time(),
 		Transactions: txs,
@@ -70,17 +63,17 @@ func newTraceTransaction(tx *Transaction, blockNumber uint64, config *params.Cha
 	result := &TransactionTrace{
 		Type:     tx.Type(),
 		Nonce:    tx.Nonce(),
-		ChainId:  tx.ChainId().String(),
+		ChainId:  (*hexutil.Big)(tx.ChainId()),
 		From:     from,
 		Gas:      tx.Gas(),
-		GasPrice: tx.GasPrice().String(),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
 		To:       tx.To(),
-		Value:    tx.Value().String(),
+		Value:    (*hexutil.Big)(tx.Value()),
 		Data:     hexutil.Encode(tx.Data()),
 		IsCreate: tx.To() == nil,
-		V:        v.String(),
-		R:        r.String(),
-		S:        s.String(),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
 	}
 	return result
 }
