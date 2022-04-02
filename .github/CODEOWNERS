@@ -14,7 +14,7 @@ graphql/                        @gballet
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442
 mobile/                         @karalabe @ligi
-node/                           @fjl @renaynay
+
 p2p/                            @fjl @zsfelfoldi
 rpc/                            @fjl @holiman
 p2p/simulations                 @fjl
