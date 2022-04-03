@@ -109,9 +109,24 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		if !isLegit {
 			return utils.ErrValidatorsNotLegit
 		}
+
+		_, penalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
+		if err != nil {
+			log.Error("[verifyHeader] Fail to calculate master nodes list with penalty", "Number", header.Number, "Hash", header.Hash())
+			return err
+		}
+
+		if !utils.CompareSignersLists(common.ExtractAddressFromBytes(header.Penalties), penalties) {
+			return utils.ErrPenaltyListDoesNotMatch
+		}
+
 	} else {
 		if len(header.Validators) != 0 {
-			log.Warn("[verifyHeader] Validators shall not have values in non-epochSwitch block", "Hash", header.Hash(), "Number", header.Number, "ValidatorsLength", len(header.Validators))
+			log.Warn("[verifyHeader] Validators shall not have values in non-epochSwitch block", "Hash", header.Hash(), "Number", header.Number, "header.Validators", header.Validators)
+			return utils.ErrInvalidFieldInNonEpochSwitch
+		}
+		if len(header.Penalties) != 0 {
+			log.Warn("[verifyHeader] Penalties shall not have values in non-epochSwitch block", "Hash", header.Hash(), "Number", header.Number, "header.Penalties", header.Penalties)
 			return utils.ErrInvalidFieldInNonEpochSwitch
 		}
 	}
@@ -119,16 +134,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
-	}
-
-	_, penalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
-	if err != nil {
-		log.Error("[verifyHeader] Fail to calculate master nodes list with penalty", "Number", header.Number, "Hash", header.Hash())
-		return err
-	}
-
-	if !utils.CompareSignersLists(common.ExtractAddressFromBytes(header.Penalties), penalties) {
-		return utils.ErrPenaltyListDoesNotMatch
 	}
 
 	// Check its validator
@@ -165,7 +170,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 func (x *XDPoS_v2) isValidatorsLegit(chain consensus.ChainReader, header *types.Header) (bool, error) {
 	snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
 	if err != nil {
-		log.Error("[checkMasternodesOnEpochSwitch] Error while trying to get snapshot", "BlockNumber", header.Number.Int64(), "Hash", header.Hash().Hex(), "error", err)
+		log.Error("[isValidatorsLegit] Error while trying to get snapshot", "BlockNumber", header.Number.Int64(), "Hash", header.Hash().Hex(), "error", err)
 		return false, err
 	}
 	// snap.NextEpochMasterNodes

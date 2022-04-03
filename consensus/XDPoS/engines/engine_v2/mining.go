@@ -25,19 +25,10 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round utils.Round, pare
 	}
 	var masterNodes []common.Address
 	if isEpochSwitch {
-		if x.config.V2.SwitchBlock.Cmp(parent.Number) == 0 {
-			// the initial master nodes of v1->v2 switch contains penalties node
-			_, _, masterNodes, err = x.getExtraFields(parent)
-			if err != nil {
-				log.Error("[yourturn] Cannot find snapshot at gap num of last V1", "err", err, "number", x.config.V2.SwitchBlock.Uint64())
-				return false, err
-			}
-		} else {
-			masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
-			if err != nil {
-				log.Error("[yourturn] Cannot calcMasternodes at gap num ", "err", err, "parent number", parent.Number)
-				return false, err
-			}
+		masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
+		if err != nil {
+			log.Error("[yourturn] Cannot calcMasternodes at gap num ", "err", err, "parent number", parent.Number)
+			return false, err
 		}
 	} else {
 		// this block and parent belong to the same epoch
