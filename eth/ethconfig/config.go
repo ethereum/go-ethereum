@@ -91,7 +91,7 @@ var Defaults = Config{
 	TxPool:                               core.DefaultTxPoolConfig,
 	RPCGasCap:                            50000000,
 	RPCEVMTimeout:                        5 * time.Second,
-	RPCGlobalEvmEstimateGasTimeoutFactor: 0, // default is unbounded, for backwards compatability.
+	RPCGlobalEvmEstimateGasTimeoutFactor: 0, // default is unbounded, for backwards compatibility.
 	GPO:                                  FullNodeGPO,
 	RPCTxFeeCap:                          1, // 1 ether
 }
