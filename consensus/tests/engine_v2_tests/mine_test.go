@@ -60,6 +60,21 @@ func TestYourTurnInitialV2(t *testing.T) {
 	}
 }
 
+func TestShouldMineOncePerRound(t *testing.T) {
+	config := params.TestXDPoSMockChainConfig
+	blockchain, _, block910, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, config, 0)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	minePeriod := config.XDPoS.V2.MinePeriod
+
+	// Make sure we seal the parentBlock 910
+	_, err := adaptor.Seal(blockchain, block910, nil)
+	assert.Nil(t, err)
+	time.Sleep(time.Duration(minePeriod) * time.Second)
+	b, err := adaptor.YourTurn(blockchain, block910.Header(), signer)
+	assert.False(t, b)
+	assert.Equal(t, utils.ErrAlreadyMined, err)
+}
+
 func TestUpdateMasterNodes(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config, 0)

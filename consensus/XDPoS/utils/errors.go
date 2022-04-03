@@ -93,6 +93,8 @@ var (
 
 	ErrPenaltyListDoesNotMatch = errors.New("Incoming block penalty list does not match")
 	ErrRoundInvalid            = errors.New("Invalid Round, it shall be bigger than QC round")
+
+	ErrAlreadyMined = errors.New("Already mined")
 )
 
 type ErrIncomingMessageRoundNotEqualCurrentRound struct {

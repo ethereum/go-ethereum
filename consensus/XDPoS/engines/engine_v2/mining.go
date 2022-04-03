@@ -13,6 +13,11 @@ import (
 
 // Using parent and current round to find the finalised master node list(with penalties applied from last epoch)
 func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round utils.Round, parent *types.Header, signer common.Address) (bool, error) {
+	if round <= x.highestSelfMinedRound {
+		log.Warn("[yourturn] Already mined on this round", "Round", round, "highestSelfMinedRound", x.highestSelfMinedRound, "ParentHash", parent.Hash().Hex(), "ParentNumber", parent.Number)
+		return false, utils.ErrAlreadyMined
+	}
+
 	isEpochSwitch, _, err := x.isEpochSwitchAtRound(round, parent)
 	if err != nil {
 		log.Error("[yourturn] check epoch switch at round failed", "Error", err)
@@ -46,17 +51,17 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round utils.Round, pare
 
 	curIndex := utils.Position(masterNodes, signer)
 	if curIndex == -1 {
-		log.Debug("[yourturn] Not authorised signer", "MN", masterNodes, "Hash", parent.Hash(), "signer", signer)
+		log.Warn("[yourturn] Not authorised signer", "MN", masterNodes, "Hash", parent.Hash(), "signer", signer)
 		return false, nil
 	}
 
 	for i, s := range masterNodes {
-		log.Debug("[yourturn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
+		log.Warn("[yourturn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
 	}
 
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 	if masterNodes[leaderIndex] != signer {
-		log.Debug("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
+		log.Warn("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
 		return false, nil
 	}
 
