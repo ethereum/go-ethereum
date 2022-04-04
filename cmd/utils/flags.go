@@ -131,9 +131,10 @@ var (
 		Name:  "usb",
 		Usage: "Enable monitoring and management of USB hardware wallets",
 	}
-	RangeLimitFlag = cli.BoolFlag{
-		Name:  "rangelimit",
+	RangeLimitFlag = cli.Uint64Flag{
+		Name:  "rpc.rangelimit",
 		Usage: "Enable 5000 blocks limit for range query",
+		Value: 0,
 	}
 	SmartCardDaemonPathFlag = cli.StringFlag{
 		Name:  "pcscdpath",
@@ -1595,7 +1596,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
 	}
 	if ctx.GlobalIsSet(RangeLimitFlag.Name) {
-		cfg.RangeLimit = ctx.GlobalBool(RangeLimitFlag.Name)
+		cfg.RangeLimit = ctx.GlobalUint64(RangeLimitFlag.Name)
 	}
 	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)

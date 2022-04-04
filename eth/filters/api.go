@@ -54,11 +54,11 @@ type PublicFilterAPI struct {
 	filtersMu  sync.Mutex
 	filters    map[rpc.ID]*filter
 	timeout    time.Duration
-	rangeLimit bool
+	rangeLimit uint64
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, rangeLimit bool) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, rangeLimit uint64) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend: backend,
 		events:  NewEventSystem(backend, lightMode),
