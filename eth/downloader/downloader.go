@@ -78,6 +78,7 @@ var (
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
+	errNoPivotHeader           = errors.New("pivot header is not found")
 	ErrMergeTransition         = errors.New("legacy sync reached the merge")
 )
 
@@ -157,6 +158,9 @@ type LightChain interface {
 
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
+
+	// GetHeaderByNumber retrieves a block header from the local chain by number.
+	GetHeaderByNumber(number uint64) *types.Header
 
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
@@ -477,7 +481,20 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			return err
 		}
 		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
-			pivot = d.skeleton.Header(latest.Number.Uint64() - uint64(fsMinFullBlocks))
+			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
+
+			// Retrieve the pivot header from the skeleton chain segment but
+			// fallback to local chain if it's not found in skeleton space.
+			if pivot = d.skeleton.Header(number); pivot == nil {
+				pivot = d.lightchain.GetHeaderByNumber(number)
+			}
+			// Print an error log and return directly in case the pivot header
+			// is still not found. It means the skeleton chain is not linked
+			// correctly with local chain.
+			if pivot == nil {
+				log.Error("Pivot header is not found", "number", number)
+				return errNoPivotHeader
+			}
 		}
 	}
 	// If no pivot block was returned, the head is below the min full block

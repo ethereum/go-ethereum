@@ -265,7 +265,11 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			hashes  = make([]common.Hash, 0, maxHeadersProcess)
 		)
 		for i := 0; i < maxHeadersProcess && from <= head.Number.Uint64(); i++ {
-			headers = append(headers, d.skeleton.Header(from))
+			header := d.skeleton.Header(from)
+			if header == nil {
+				header = d.lightchain.GetHeaderByNumber(from)
+			}
+			headers = append(headers, header)
 			hashes = append(hashes, headers[i].Hash())
 			from++
 		}

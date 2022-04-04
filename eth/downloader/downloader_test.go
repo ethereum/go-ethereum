@@ -56,6 +56,11 @@ type downloadTester struct {
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
+	return newTesterWithNotification(nil)
+}
+
+// newTester creates a new downloader test mocker.
+func newTesterWithNotification(success func()) *downloadTester {
 	freezer, err := ioutil.TempDir("", "")
 	if err != nil {
 		panic(err)
@@ -75,7 +80,7 @@ func newTester() *downloadTester {
 		chain:   chain,
 		peers:   make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, nil)
+	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, success)
 	return tester
 }
 
@@ -1366,5 +1371,53 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 		assertOwnChain(t, tester, 1)
 	} else {
 		assertOwnChain(t, tester, len(chain.blocks))
+	}
+}
+
+// Tests that peers below a pre-configured checkpoint block are prevented from
+// being fast-synced from, avoiding potential cheap eclipse attacks.
+func TestBeaconSync66Full(t *testing.T) { testBeaconSync(t, eth.ETH66, FullSync) }
+func TestBeaconSync66Snap(t *testing.T) { testBeaconSync(t, eth.ETH66, SnapSync) }
+
+func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	var cases = []struct {
+		name  string // The name of testing scenario
+		local int    // The length of local chain(canonical chain assumed), 0 means genesis is the head
+	}{
+		{name: "Beacon sync since genesis", local: 0},
+		{name: "Beacon sync with short local chain", local: 1},
+		{name: "Beacon sync with long local chain", local: blockCacheMaxItems - 15 - fsMinFullBlocks/2},
+		{name: "Beacon sync with full local chain", local: blockCacheMaxItems - 15 - 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			success := make(chan struct{})
+			tester := newTesterWithNotification(func() {
+				close(success)
+			})
+			defer tester.terminate()
+
+			chain := testChainBase.shorten(blockCacheMaxItems - 15)
+			tester.newPeer("peer", protocol, chain.blocks[1:])
+
+			// Build the local chain segment if it's required
+			if c.local > 0 {
+				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
+			}
+			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header()); err != nil {
+				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
+			}
+			select {
+			case <-success:
+				// Ok, downloader fully cancelled after sync cycle
+				if bs := int(tester.chain.CurrentBlock().NumberU64()) + 1; bs != len(chain.blocks) {
+					t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(chain.blocks))
+				}
+			case <-time.NewTimer(time.Second * 3).C:
+				t.Fatalf("Failed to sync chain in three seconds")
+			}
+		})
 	}
 }
