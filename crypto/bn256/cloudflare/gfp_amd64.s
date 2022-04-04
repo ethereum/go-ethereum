@@ -49,7 +49,7 @@ TEXT ·gfpNeg(SB),0,$0-16
 	SBBQ 24(DI), R11
 
 	MOVQ $0, AX
-	gfpCarry(R8,R9,R10,R11,AX, R12,R13,R14,R15,BX)
+	gfpCarry(R8,R9,R10,R11,AX, R12,R13,R14,CX,BX)
 
 	MOVQ c+0(FP), DI
 	storeBlock(R8,R9,R10,R11, 0(DI))
@@ -68,7 +68,7 @@ TEXT ·gfpAdd(SB),0,$0-24
 	ADCQ 24(SI), R11
 	ADCQ $0, R12
 
-	gfpCarry(R8,R9,R10,R11,R12, R13,R14,R15,AX,BX)
+	gfpCarry(R8,R9,R10,R11,R12, R13,R14,CX,AX,BX)
 
 	MOVQ c+0(FP), DI
 	storeBlock(R8,R9,R10,R11, 0(DI))
@@ -83,7 +83,7 @@ TEXT ·gfpSub(SB),0,$0-24
 	MOVQ ·p2+0(SB), R12
 	MOVQ ·p2+8(SB), R13
 	MOVQ ·p2+16(SB), R14
-	MOVQ ·p2+24(SB), R15
+	MOVQ ·p2+24(SB), CX
 	MOVQ $0, AX
 
 	SUBQ  0(SI), R8
@@ -94,12 +94,12 @@ TEXT ·gfpSub(SB),0,$0-24
 	CMOVQCC AX, R12
 	CMOVQCC AX, R13
 	CMOVQCC AX, R14
-	CMOVQCC AX, R15
+	CMOVQCC AX, CX
 
 	ADDQ R12, R8
 	ADCQ R13, R9
 	ADCQ R14, R10
-	ADCQ R15, R11
+	ADCQ CX, R11
 
 	MOVQ c+0(FP), DI
 	storeBlock(R8,R9,R10,R11, 0(DI))
@@ -115,7 +115,7 @@ TEXT ·gfpMul(SB),0,$160-24
 
 	mulBMI2(0(DI),8(DI),16(DI),24(DI), 0(SI))
 	storeBlock( R8, R9,R10,R11,  0(SP))
-	storeBlock(R12,R13,R14,R15, 32(SP))
+	storeBlock(R12,R13,R14,CX, 32(SP))
 	gfpReduceBMI2()
 	JMP end
 
@@ -125,5 +125,5 @@ nobmi2Mul:
 
 end:
 	MOVQ c+0(FP), DI
-	storeBlock(R12,R13,R14,R15, 0(DI))
+	storeBlock(R12,R13,R14,CX, 0(DI))
 	RET

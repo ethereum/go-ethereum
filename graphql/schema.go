@@ -69,7 +69,7 @@ const schema string = `
         transaction: Transaction!
     }
 
-    #EIP-2718 
+    #EIP-2718
     type AccessTuple{
         address: Address!
         storageKeys : [Bytes32!]!
@@ -94,10 +94,12 @@ const schema string = `
         value: BigInt!
         # GasPrice is the price offered to miners for gas, in wei per unit.
         gasPrice: BigInt!
-        # MaxFeePerGas is the maximum fee per gas offered to include a transaction, in wei. 
-		maxFeePerGas: BigInt
-        # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei. 
-		maxPriorityFeePerGas: BigInt
+        # MaxFeePerGas is the maximum fee per gas offered to include a transaction, in wei.
+        maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei.
+        maxPriorityFeePerGas: BigInt
+        # EffectiveTip is the actual amount of reward going to miner after considering the max fee cap.
+        effectiveTip: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
         gas: Long!
         # InputData is the data supplied to the target of the transaction.
@@ -187,8 +189,10 @@ const schema string = `
         gasLimit: Long!
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
-        # BaseFeePerGas is the fee perunit of gas burned by the protocol in this block.
-		baseFeePerGas: BigInt
+        # BaseFeePerGas is the fee per unit of gas burned by the protocol in this block.
+        baseFeePerGas: BigInt
+        # NextBaseFeePerGas is the fee per unit of gas which needs to be burned in the next block.
+        nextBaseFeePerGas: BigInt
         # Timestamp is the unix timestamp at which this block was mined.
         timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
@@ -244,10 +248,10 @@ const schema string = `
         gas: Long
         # GasPrice is the price, in wei, offered for each unit of gas.
         gasPrice: BigInt
-        # MaxFeePerGas is the maximum fee per gas offered, in wei. 
-		maxFeePerGas: BigInt
-        # MaxPriorityFeePerGas is the maximum miner tip per gas offered, in wei. 
-		maxPriorityFeePerGas: BigInt
+        # MaxFeePerGas is the maximum fee per gas offered, in wei.
+        maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered, in wei.
+        maxPriorityFeePerGas: BigInt
         # Value is the value, in wei, sent along with the call.
         value: BigInt
         # Data is the data sent to the callee.

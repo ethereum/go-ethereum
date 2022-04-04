@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -100,6 +101,14 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 }
 
 func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
+	// Ask transaction pool for the nonce which includes pending transactions
+	if blockNr, ok := a.blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		nonce, err := a.backend.GetPoolNonce(ctx, a.address)
+		if err != nil {
+			return 0, err
+		}
+		return hexutil.Uint64(nonce), nil
+	}
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
@@ -245,6 +254,10 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if err != nil || tx == nil {
 		return nil, err
 	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
+	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
 		return nil, err
@@ -283,6 +296,30 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 	default:
 		return nil, nil
 	}
+}
+
+func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
+	}
+	header, err := t.block.resolveHeader(ctx)
+	if err != nil || header == nil {
+		return nil, err
+	}
+	if header.BaseFee == nil {
+		return (*hexutil.Big)(tx.GasPrice()), nil
+	}
+
+	tip, err := tx.EffectiveGasTip(header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(tip), nil
 }
 
 func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
@@ -596,6 +633,22 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 		return nil, nil
 	}
 	return (*hexutil.Big)(header.BaseFee), nil
+}
+
+func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	chaincfg := b.backend.ChainConfig()
+	if header.BaseFee == nil {
+		// Make sure next block doesn't enable EIP-1559
+		if !chaincfg.IsLondon(new(big.Int).Add(header.Number, common.Big1)) {
+			return nil, nil
+		}
+	}
+	nextBaseFee := misc.CalcBaseFee(chaincfg, header)
+	return (*hexutil.Big)(nextBaseFee), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {

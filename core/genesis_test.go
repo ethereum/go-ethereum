@@ -213,3 +213,63 @@ func TestGenesis_Commit(t *testing.T) {
 		t.Errorf("inequal difficulty; stored: %v, genesisBlock: %v", stored, genesisBlock.Difficulty())
 	}
 }
+
+func TestReadWriteGenesisAlloc(t *testing.T) {
+	var (
+		db    = rawdb.NewMemoryDatabase()
+		alloc = &GenesisAlloc{
+			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
+		}
+		hash = common.HexToHash("0xdeadbeef")
+	)
+	alloc.write(db, hash)
+
+	var reload GenesisAlloc
+	err := reload.UnmarshalJSON(rawdb.ReadGenesisState(db, hash))
+	if err != nil {
+		t.Fatalf("Failed to load genesis state %v", err)
+	}
+	if len(reload) != len(*alloc) {
+		t.Fatal("Unexpected genesis allocation")
+	}
+	for addr, account := range reload {
+		want, ok := (*alloc)[addr]
+		if !ok {
+			t.Fatal("Account is not found")
+		}
+		if !reflect.DeepEqual(want, account) {
+			t.Fatal("Unexpected account")
+		}
+	}
+}
+
+func TestGenesis_Commit(t *testing.T) {
+	genesis := &Genesis{
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  params.TestChainConfig,
+		// difficulty is nil
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	genesisBlock, err := genesis.Commit(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if genesis.Difficulty != nil {
+		t.Fatalf("assumption wrong")
+	}
+
+	// This value should have been set as default in the ToBlock method.
+	if genesisBlock.Difficulty().Cmp(params.GenesisDifficulty) != 0 {
+		t.Errorf("assumption wrong: want: %d, got: %v", params.GenesisDifficulty, genesisBlock.Difficulty())
+	}
+
+	// Expect the stored total difficulty to be the difficulty of the genesis block.
+	stored := rawdb.ReadTd(db, genesisBlock.Hash(), genesisBlock.NumberU64())
+
+	if stored.Cmp(genesisBlock.Difficulty()) != 0 {
+		t.Errorf("inequal difficulty; stored: %v, genesisBlock: %v", stored, genesisBlock.Difficulty())
+	}
+}

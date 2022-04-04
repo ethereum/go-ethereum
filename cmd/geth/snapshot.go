@@ -324,8 +324,7 @@ func traverseState(ctx *cli.Context) error {
 			}
 		}
 		if !bytes.Equal(acc.CodeHash, emptyCode) {
-			code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-			if len(code) == 0 {
+			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
 				return errors.New("missing code")
 			}
@@ -396,11 +395,10 @@ func traverseRawState(ctx *cli.Context) error {
 		nodes += 1
 		node := accIter.Hash()
 
+		// Check the present for non-empty hash node(embedded node doesn't
+		// have their own hash).
 		if node != (common.Hash{}) {
-			// Check the present for non-empty hash node(embedded node doesn't
-			// have their own hash).
-			blob := rawdb.ReadTrieNode(chaindb, node)
-			if len(blob) == 0 {
+			if !rawdb.HasTrieNode(chaindb, node) {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
 			}
@@ -428,8 +426,7 @@ func traverseRawState(ctx *cli.Context) error {
 					// Check the present for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
-						blob := rawdb.ReadTrieNode(chaindb, node)
-						if len(blob) == 0 {
+						if !rawdb.HasTrieNode(chaindb, node) {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
 						}
@@ -445,8 +442,7 @@ func traverseRawState(ctx *cli.Context) error {
 				}
 			}
 			if !bytes.Equal(acc.CodeHash, emptyCode) {
-				code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-				if len(code) == 0 {
+				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
 					return errors.New("missing code")
 				}

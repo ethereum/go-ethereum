@@ -364,6 +364,7 @@ func testSequentialAnnouncements(t *testing.T, light bool) {
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester(light)
+	defer tester.fetcher.Stop()
 	headerFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
@@ -743,7 +744,7 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	badBodyFetcher := tester.makeBodyFetcher("bad", blocks, 0)
 
 	imported := make(chan interface{})
-	announced := make(chan interface{})
+	announced := make(chan interface{}, 2)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -806,6 +807,7 @@ func TestEmptyBlockShortCircuit(t *testing.T) {
 	hashes, blocks := makeChain(32, 0, genesis)
 
 	tester := newTester(false)
+	defer tester.fetcher.Stop()
 	headerFetcher := tester.makeHeaderFetcher("valid", blocks, -gatherSlack)
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
