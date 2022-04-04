@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"math/rand"
-	"os"
 	"reflect"
 	"testing"
 
@@ -435,11 +434,7 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestAncientStorage(t *testing.T) {
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.RemoveAll(frdir)
+	frdir := t.TempDir()
 
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
@@ -577,15 +572,12 @@ func TestHashesInRange(t *testing.T) {
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		b.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.RemoveAll(frdir)
+	frdir := b.TempDir()
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
 		b.Fatalf("failed to create database with ancient backend")
 	}
+	defer db.Close()
 
 	// Create the data to insert. The blocks must have consecutive numbers, so we create
 	// all of them ahead of time. However, there is no need to create receipts
@@ -886,11 +878,7 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 
 func TestHeadersRLPStorage(t *testing.T) {
 	// Have N headers in the freezer
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.Remove(frdir)
+	frdir := t.TempDir()
 
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {

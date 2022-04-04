@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -545,7 +544,7 @@ const benchElemCount = 20000
 func benchGet(b *testing.B, commit bool) {
 	trie, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
 	if commit {
-		_, tmpdb := tempDB()
+		tmpdb := tempDB(b)
 		trie, _ = New(common.Hash{}, tmpdb)
 	}
 	k := make([]byte, 32)
@@ -1115,16 +1114,13 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	b.StopTimer()
 }
 
-func tempDB() (string, *Database) {
-	dir, err := ioutil.TempDir("", "trie-bench")
-	if err != nil {
-		panic(fmt.Sprintf("can't create temporary directory: %v", err))
-	}
+func tempDB(tb testing.TB) *Database {
+	dir := tb.TempDir()
 	diskdb, err := leveldb.New(dir, 256, 0, "", false)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}
-	return dir, NewDatabase(diskdb)
+	return NewDatabase(diskdb)
 }
 
 func getString(trie *Trie, k string) []byte {

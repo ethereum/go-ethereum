@@ -33,7 +33,7 @@ import (
 // are copied into a temporary keystore directory.
 
 func tmpDatadirWithKeystore(t *testing.T) string {
-	datadir := tmpdir(t)
+	datadir := t.TempDir()
 	keystore := filepath.Join(datadir, "keystore")
 	source := filepath.Join("..", "..", "accounts", "keystore", "testdata", "keystore")
 	if err := cp.CopyAll(keystore, source); err != nil {
@@ -111,7 +111,7 @@ func TestAccountImport(t *testing.T) {
 }
 
 func importAccountWithExpect(t *testing.T, key string, expected string) {
-	dir := tmpdir(t)
+	dir := t.TempDir()
 	keyfile := filepath.Join(dir, "key.prv")
 	if err := ioutil.WriteFile(keyfile, []byte(key), 0600); err != nil {
 		t.Error(err)
