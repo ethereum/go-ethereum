@@ -75,7 +75,6 @@ func runGeth(t *testing.T, args ...string) *testgeth {
 	if tt.Datadir == "" {
 		// The temporary datadir will be removed automatically if something fails below.
 		tt.Datadir = t.TempDir()
-		tt.Cleanup = func() {}
 		args = append([]string{"--datadir", tt.Datadir}, args...)
 	}
 
