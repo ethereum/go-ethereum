@@ -700,11 +700,7 @@ func (s *StateDB) Copy() *StateDB {
 	for hash, preimage := range s.preimages {
 		state.preimages[hash] = preimage
 	}
-	// Do we need to copy the access list? In practice: No. At the start of a
-	// transaction, the access list is empty. In practice, we only ever copy state
-	// _between_ transactions/blocks, never in the middle of a transaction.
-	// However, it doesn't cost us much to copy an empty list, so we do it anyway
-	// to not blow up if we ever decide copy it in the middle of a transaction
+	// Copying the accessList is necessary since some API calls rely on snapshotState from the worker.
 	state.accessList = s.accessList.Copy()
 
 	// If there's a prefetcher running, make an inactive copy of it that can
