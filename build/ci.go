@@ -571,7 +571,7 @@ func doDocker(cmdline []string) {
 							mismatch = true
 							break
 						}
-						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
+						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"org.opencontainers.image.build-number\"}}", img).CombinedOutput()
 						if err != nil {
 							log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
 						}
