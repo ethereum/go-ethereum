@@ -19,7 +19,6 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -63,12 +62,12 @@ type Filter struct {
 
 	matcher *bloombits.Matcher
 
-	rangeLimit bool
+	rangeLimit uint64
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit bool) *Filter {
+func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit uint64) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -149,10 +148,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		end = head
 	}
 
-	if f.rangeLimit && (f.end-f.begin) > maxFilterBlockRange {
-		return nil, errors.New(fmt.Sprintf("exceed maximum block range: %d", maxFilterBlockRange))
-	}
-
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
 		logs []*types.Log
@@ -171,6 +166,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	rest, err := f.unindexedLogs(ctx, end)
 	logs = append(logs, rest...)
+	if f.rangeLimit != 0 {
+		return logs[:f.rangeLimit], err
+	}
 	return logs, err
 }
 
