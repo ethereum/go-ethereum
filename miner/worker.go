@@ -1050,7 +1050,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment) {
+// Returns whether block should be discarded.
+func (w *worker) fillTransactions(interrupt *int32, env *environment) bool {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
@@ -1064,15 +1065,17 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
 		if w.commitTransactions(env, txs, interrupt) {
-			return
+			return true
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
 		if w.commitTransactions(env, txs, interrupt) {
-			return
+			return true
 		}
 	}
+
+	return false
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -1083,7 +1086,10 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	w.fillTransactions(nil, work)
+	if w.fillTransactions(nil, work) {
+		return nil, errors.New("could not populate block")
+	}
+
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
@@ -1113,8 +1119,13 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		w.commit(work.copy(), nil, false, start)
 	}
+
 	// Fill pending transactions from the txpool
-	w.fillTransactions(interrupt, work)
+	if w.fillTransactions(interrupt, work) {
+		work.discard()
+		return
+	}
+
 	w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
