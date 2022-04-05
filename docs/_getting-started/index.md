@@ -34,7 +34,7 @@ argument that determines what sort of node it is in the network. These are:
   generates the state of the blockchain incrementally by executing every block.
 - **Snap:** (Default): Downloads all blocks and a recent version of the state.
 - **Light:** The node only downloads a few recent block headers, and downloads
-  other data on-demand.
+  other data on-demand. See this [page](../interface/les) for more info.
 
 For this guide, we will use `light` sync.
 
