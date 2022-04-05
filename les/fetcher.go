@@ -446,8 +446,6 @@ func (f *lightFetcher) mainloop() {
 				// is not found. It can happen the original head is before the
 				// checkpoint while the synced headers are after it. In this
 				// case there is no ancestor between them.
-				// TODO(rjl493456442) it's quite expensive for searching the
-				// ancestor in this case, try to avoid it in the first place.
 				if ancestor == nil {
 					ancestor = f.chain.Genesis().Header()
 				}
