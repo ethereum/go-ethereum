@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -262,6 +263,10 @@ func verifyState(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Verified the state", "root", root)
+	if err := checkDangling(chaindb, snaptree.Snapshot(root)); err != nil {
+		log.Error("Dangling snap storage check failed", "root", root, "err", err)
+		return err
+	}
 	return nil
 }
 
@@ -294,10 +299,14 @@ func checkDanglingStorage(ctx *cli.Context) error {
 			return err
 		}
 	}
+	return checkDangling(chaindb, snaptree.Snapshot(root))
+}
+
+func checkDangling(chaindb ethdb.Database, snap snapshot.Snapshot) error {
+	log.Info("Checking dangling snapshot storage")
 	var (
 		lastReport = time.Now()
 		start      = time.Now()
-		snapshot   = snaptree.Snapshot(root)
 		lastKey    []byte
 		it         = rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.SnapshotStoragePrefix, nil), 1+2*common.HashLength)
 	)
@@ -314,17 +323,17 @@ func checkDanglingStorage(ctx *cli.Context) error {
 			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
-		data, err := snapshot.AccountRLP(common.BytesToHash(accKey))
+		data, err := snap.AccountRLP(common.BytesToHash(accKey))
 		if err != nil {
 			log.Error("Error loading snap storage data", "account", fmt.Sprintf("%#x", accKey), "err", err)
-			continue
+			return err
 		}
 		if len(data) == 0 {
 			log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
-			continue
+			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
 		}
 	}
-	log.Info("Verified the snapshot storage", "root", root, "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+	log.Info("Verified the snapshot storage", "root", snap.Root(), "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
 	return nil
 }
 
