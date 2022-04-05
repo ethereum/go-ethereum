@@ -341,7 +341,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if callb != h.unsubscribeCb {
 		rpcRequestGauge.Inc(1)
 		if answer.Error != nil {
-			failedReqeustGauge.Inc(1)
+			failedRequestGauge.Inc(1)
 		} else {
 			successfulRequestGauge.Inc(1)
 		}
