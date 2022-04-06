@@ -58,18 +58,18 @@ func (frdb *freezerdb) Close() error {
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
 func (frdb *freezerdb) Freeze(threshold uint64) error {
-	if frdb.AncientStore.(*freezer).readonly {
+	if frdb.AncientStore.(*chainFreezer).readonly {
 		return errReadOnly
 	}
 	// Set the freezer threshold to a temporary value
 	defer func(old uint64) {
-		atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, old)
-	}(atomic.LoadUint64(&frdb.AncientStore.(*freezer).threshold))
-	atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, threshold)
+		atomic.StoreUint64(&frdb.AncientStore.(*chainFreezer).threshold, old)
+	}(atomic.LoadUint64(&frdb.AncientStore.(*chainFreezer).threshold))
+	atomic.StoreUint64(&frdb.AncientStore.(*chainFreezer).threshold, threshold)
 
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.AncientStore.(*freezer).trigger <- trigger
+	frdb.AncientStore.(*chainFreezer).trigger <- trigger
 	<-trigger
 	return nil
 }
@@ -162,7 +162,7 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // storage.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
 	// Create the idle freezer instance
-	frdb, err := newFreezer(freezer, namespace, readonly, freezerTableSize, FreezerNoSnappy)
+	frdb, err := newChainFreezer(freezer, namespace, readonly, freezerTableSize, FreezerNoSnappy)
 	if err != nil {
 		return nil, err
 	}
