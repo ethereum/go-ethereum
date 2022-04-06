@@ -146,7 +146,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
-func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx types.Message, usedGas *uint64, evm *vm.EVM, tracer *logger.StructLogger) (*types.Receipt, *ExecutionResult, []StructLogRes, error) {
+func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx types.Message, usedGas *uint64, evm *vm.EVM, tracer TracerResult) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -157,11 +157,11 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 		return nil, nil, nil, err
 	}
 
-	traceResult := FormatLogs(tracer.StructLogs())
+	traceResult, err := tracer.GetResult()
 
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -209,7 +209,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
-func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, []StructLogRes, error) {
+func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create struct logger to get JSON stack traces
 	// tracer := logger.NewStructLogger(nil)
 	tracer := NewCallTracer(statedb)
