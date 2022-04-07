@@ -470,7 +470,6 @@ func (dl *diffLayer) flatten() snapshot {
 		for storageHash, data := range storage {
 			comboData[storageHash] = data
 		}
-		parent.storageData[accountHash] = comboData
 	}
 	// Return the combo parent
 	return &diffLayer{
