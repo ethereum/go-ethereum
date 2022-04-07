@@ -62,16 +62,14 @@ func (al accessList) equal(other accessList) bool {
 	if len(al) != len(other) {
 		return false
 	}
+	// Given that len(al) == len(other), we only need to check that
+	// all the items from al are in other.
 	for addr := range al {
 		if _, ok := other[addr]; !ok {
 			return false
 		}
 	}
-	for addr := range other {
-		if _, ok := al[addr]; !ok {
-			return false
-		}
-	}
+
 	// Accounts match, cross reference the storage slots too
 	for addr, slots := range al {
 		otherslots := other[addr]
@@ -79,13 +77,10 @@ func (al accessList) equal(other accessList) bool {
 		if len(slots) != len(otherslots) {
 			return false
 		}
+		// Given that len(slots) == len(otherslots), we only need to check that
+		// all the items from slots are in otherslots.
 		for hash := range slots {
 			if _, ok := otherslots[hash]; !ok {
-				return false
-			}
-		}
-		for hash := range otherslots {
-			if _, ok := slots[hash]; !ok {
 				return false
 			}
 		}
