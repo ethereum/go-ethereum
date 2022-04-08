@@ -620,12 +620,17 @@ func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Has
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
-		// Abort the procedure if the entire contract storage is generated
-		if exhausted {
-			break
-		}
 		if origin = increaseKey(last); origin == nil {
 			break // special case, the last is 0xffffffff...fff
+		}
+		// Abort the procedure if the entire contract storage is generated
+		if exhausted {
+			// Last step, cleanup the storages after the last generated
+			// account. All the left storages should be treated as dangling.
+			if err := newDanglingRange(dl.diskdb, origin, nil, false).cleanup(nil); err != nil {
+				return err
+			}
+			break
 		}
 	}
 	return nil
