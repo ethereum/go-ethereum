@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -152,6 +153,7 @@ func TestTrustedAnnouncementsLes2(t *testing.T) { testTrustedAnnouncement(t, 2) 
 func TestTrustedAnnouncementsLes3(t *testing.T) { testTrustedAnnouncement(t, 3) }
 
 func testTrustedAnnouncement(t *testing.T, protocol int) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	var (
 		servers   []*testServer
 		teardowns []func()
@@ -159,16 +161,28 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		ids       []string
 		cpeers    []*clientPeer
 		speers    []*serverPeer
+
+		config       = light.TestServerIndexerConfig
+		waitIndexers = func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+			for {
+				cs, _, _ := cIndexer.Sections()
+				bts, _, _ := btIndexer.Sections()
+				if cs >= 2 && bts >= 2 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
 	)
-	for i := 0; i < 10; i++ {
-		s, n, teardown := newTestServerPeer(t, 10, protocol)
+	for i := 0; i < 4; i++ {
+		s, n, teardown := newTestServerPeer(t, int(2*config.ChtSize+config.ChtConfirms), protocol, waitIndexers)
 
 		servers = append(servers, s)
 		nodes = append(nodes, n)
 		teardowns = append(teardowns, teardown)
 
 		// A half of them are trusted servers.
-		if i < 5 {
+		if i < 2 {
 			ids = append(ids, n.String())
 		}
 	}
@@ -185,6 +199,18 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 			teardowns[i]()
 		}
 	}()
+
+	// Register the assembled checkpoint as hardcoded one.
+	head := servers[0].chtIndexer.SectionHead(0)
+	cp := &params.TrustedCheckpoint{
+		SectionIndex: 0,
+		SectionHead:  head,
+		CHTRoot:      light.GetChtRoot(servers[0].db, 0, head),
+		BloomRoot:    light.GetBloomTrieRoot(servers[0].db, 0, head),
+	}
+	c.handler.checkpoint = cp
+	c.handler.backend.blockchain.AddTrustedCheckpoint(cp)
+
 	// Connect all server instances.
 	for i := 0; i < len(servers); i++ {
 		sp, cp, err := connect(servers[i].handler, nodes[i].ID(), c.handler, protocol, true)
@@ -218,9 +244,9 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		}
 		verifyChainHeight(t, c.handler.fetcher, expected)
 	}
-	check([]uint64{1}, 1, func() { <-newHead })   // Sequential announcements
-	check([]uint64{4}, 4, func() { <-newHead })   // ULC-style light syncing, rollback untrusted headers
-	check([]uint64{10}, 10, func() { <-newHead }) // Sync the whole chain.
+	check([]uint64{1}, 1, func() { <-newHead })                                                                       // Sequential announcements
+	check([]uint64{config.ChtSize + config.ChtConfirms}, config.ChtSize+config.ChtConfirms, func() { <-newHead })     // ULC-style light syncing, rollback untrusted headers
+	check([]uint64{2*config.ChtSize + config.ChtConfirms}, 2*config.ChtSize+config.ChtConfirms, func() { <-newHead }) // Sync the whole chain.
 }
 
 func TestInvalidAnnouncesLES2(t *testing.T) { testInvalidAnnounces(t, lpv2) }
