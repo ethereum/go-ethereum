@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -50,8 +49,7 @@ func TestFreezerModify(t *testing.T) {
 	}
 
 	tables := map[string]bool{"raw": true, "rlp": false}
-	f, dir := newFreezerForTesting(t, tables)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, tables)
 	defer f.Close()
 
 	// Commit test data.
@@ -97,7 +95,6 @@ func TestFreezerModifyRollback(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
 
 	theError := errors.New("oops")
 	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -128,8 +125,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var (
@@ -189,8 +185,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 
 // This test runs ModifyAncients and TruncateHead concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var item = make([]byte, 256)
@@ -256,11 +251,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 func TestFreezerReadonlyValidate(t *testing.T) {
 	tables := map[string]bool{"a": true, "b": true}
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
 	f, err := newFreezer(dir, "", false, 2049, tables)
@@ -295,10 +286,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
 	f, err := newFreezer(dir, "", false, 2049, tables)
@@ -350,16 +338,8 @@ func TestRenameWindows(t *testing.T) {
 	)
 
 	// Create 2 temp dirs
-	dir1, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir1)
-	dir2, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir2)
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
 
 	// Create file in dir1 and fill with data
 	f, err := os.Create(path.Join(dir1, fname))
