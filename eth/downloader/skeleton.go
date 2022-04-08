@@ -19,6 +19,7 @@ package downloader
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sort"
 	"time"
@@ -112,6 +113,12 @@ type headUpdate struct {
 	errc   chan error    // Channel to signal acceptance of the new head
 }
 
+// fillUpdate is a notification that the beacon sync should delete used up headers.
+type fillUpdate struct {
+	header *types.Header // Last header filled by the backfiller
+	errc   chan error    // Channel to signal any issues with the deletions
+}
+
 // headerRequest tracks a pending header request to ensure responses are to
 // actual requests and to validate any security constraints.
 //
@@ -148,11 +155,15 @@ type backfiller interface {
 	// based on the skeleton chain as it might be invalid. The backfiller should
 	// gracefully handle multiple consecutive suspends without a resume, even
 	// on initial sartup.
-	suspend()
+	//
+	// The method should return the last block header that has been successfully
+	// backfilled, or nil if the backfiller was not resumed.
+	suspend() *types.Header
 
 	// resume requests the backfiller to start running fill or snap sync based on
 	// the skeleton chain as it has successfully been linked. Appending new heads
 	// to the end of the chain will not result in suspend/resume cycles.
+	// leaking too much sync logic out to the filler.
 	resume()
 }
 
@@ -358,8 +369,17 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	if linked {
 		s.filler.resume()
 	}
-	defer s.filler.suspend()
-
+	defer func() {
+		if filled := s.filler.suspend(); filled != nil {
+			// If something was filled, try to delete stale sync helpers. If
+			// unsuccessfull, warn the user, but not much else we can do (it's
+			// a programming error, just let users report an issue and don't
+			// choke in the meantime).
+			if err := s.cleanStales(filled); err != nil {
+				log.Error("Failed to clean stale beacon headers", "err", err)
+			}
+		}
+	}()
 	// Create a set of unique channels for this sync cycle. We need these to be
 	// ephemeral so a data race doesn't accidentally deliver something stale on
 	// a persistent channel across syncs (yup, this happened)
@@ -582,6 +602,14 @@ func (s *skeleton) processNewHead(head *types.Header, force bool) bool {
 
 	lastchain := s.progress.Subchains[0]
 	if lastchain.Tail >= number {
+		// If the chain is down to a single beacon header, and it is re-announced
+		// once more, ignore it instead of tearing down sync for a noop.
+		if lastchain.Head == lastchain.Tail {
+			if current := rawdb.ReadSkeletonHeader(s.db, number); current.Hash() == head.Hash() {
+				return false
+			}
+		}
+		// Not a noop / double head announce, abort with a reorg
 		if force {
 			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "newHead", number)
 		}
@@ -947,6 +975,10 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			// no leftover subchains, but just in case there's some junk due to
 			// strange conditions or bugs, clean up all internal state.
 			if len(s.progress.Subchains) > 1 {
+				// TODO(karalabe): This can happend: sync, import few blocks, sync again
+				// In the above case importing the blocks via the engine API will not
+				// push the subchains forward and will lead to a gap, which this clause
+				// fixes. TODO(karalabe): Add stale header deletion too here?
 				log.Error("Cleaning up leftovers after beacon link")
 				s.progress.Subchains = s.progress.Subchains[:1]
 			}
@@ -1021,6 +1053,54 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 		}
 	}
 	return linked, merged
+}
+
+// cleanStales removes previously synced beacon headers that have become stale
+// due to the downloader backfilling past the tracked tail.
+func (s *skeleton) cleanStales(filled *types.Header) error {
+	number := filled.Number.Uint64()
+	log.Trace("Cleaning stale beacon headers", "filled", number, "hash", filled.Hash())
+
+	// If the filled header is below the linked subchain, something's
+	// corrupted internally. Report and error and refuse to do anything.
+	if number < s.progress.Subchains[0].Tail {
+		return fmt.Errorf("filled header below beacon header tail: %d < %d", number, s.progress.Subchains[0].Tail)
+	}
+	// Subchain seems trimmable, push the tail forward up to the last
+	// filled header and delete everything before it - if available. In
+	// case we filled past the head, recreate the subchain with a new
+	// head to keep it consistent with the data on disk.
+	var (
+		start = s.progress.Subchains[0].Tail // start deleting from the first known header
+		end   = number                       // delete until the requested threshold
+	)
+	s.progress.Subchains[0].Tail = number
+	s.progress.Subchains[0].Next = filled.ParentHash
+
+	if s.progress.Subchains[0].Head < number {
+		// If more headers were filled than available, push the entire
+		// subchain forward to keep tracking the node's block imports
+		end = s.progress.Subchains[0].Head + 1 // delete the entire original range, including the head
+		s.progress.Subchains[0].Head = number  // assign a new head (tail is already assigned to this)
+	}
+	// Execute the trimming and the potential rewiring of the progress
+	batch := s.db.NewBatch()
+
+	if end != number {
+		// The entire original skeleton chain was deleted and a new one
+		// defined. Make sure the new single-header chain gets pushed to
+		// disk to keep internal state consistent.
+		rawdb.WriteSkeletonHeader(batch, filled)
+	}
+	s.saveSyncStatus(batch)
+	for n := start; n < end; n++ {
+		// TODO(karalabe): This can end up deleting 15M headers on mainnet, do partial writes
+		rawdb.DeleteSkeletonHeader(batch, n)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write beacon trim data", "err", err)
+	}
+	return nil
 }
 
 // Bounds retrieves the current head and tail tracked by the skeleton syncer.
