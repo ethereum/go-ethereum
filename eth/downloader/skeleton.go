@@ -113,12 +113,6 @@ type headUpdate struct {
 	errc   chan error    // Channel to signal acceptance of the new head
 }
 
-// fillUpdate is a notification that the beacon sync should delete used up headers.
-type fillUpdate struct {
-	header *types.Header // Last header filled by the backfiller
-	errc   chan error    // Channel to signal any issues with the deletions
-}
-
 // headerRequest tracks a pending header request to ensure responses are to
 // actual requests and to validate any security constraints.
 //
