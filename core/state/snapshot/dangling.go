@@ -18,11 +18,14 @@ package snapshot
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // danglingRange describes the range for detecting dangling storages.
@@ -37,26 +40,37 @@ type danglingRange struct {
 
 // newDanglingRange initializes a dangling storage scanner and detects all the
 // dangling accounts out.
-func newDanglingRange(db ethdb.KeyValueStore, start, limit []byte) *danglingRange {
+func newDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) *danglingRange {
 	r := &danglingRange{
 		db:    db,
 		start: start,
 		limit: limit,
 	}
-	r.result, r.duration = r.detect()
+	r.result, r.duration = r.detect(report)
 	snapDanglingStoragesCounter.Inc(int64(len(r.result)))
 	snapDanglingStoragesTimer.Update(r.duration)
+
+	if len(r.result) > 0 {
+		log.Warn("Detected dangling storages", "number", len(r.result), "start", hexutil.Encode(start), "limit", hexutil.Encode(limit), "elapsed", common.PrettyDuration(r.duration))
+	} else {
+		logger := log.Debug
+		if report {
+			logger = log.Info
+		}
+		logger("Verified snapshot storages", "start", hexutil.Encode(start), "limit", hexutil.Encode(limit), "elapsed", common.PrettyDuration(r.duration))
+	}
 	return r
 }
 
 // detect iterates the storage snapshot in the specified key range and
 // returns a list of account hash of the dangling storages. Note both
 // start and limit are included for iteration.
-func (r *danglingRange) detect() ([]common.Hash, time.Duration) {
+func (r *danglingRange) detect(report bool) ([]common.Hash, time.Duration) {
 	var (
-		checked []byte
-		result  []common.Hash
-		start   = time.Now()
+		checked    []byte
+		result     []common.Hash
+		start      = time.Now()
+		lastReport = time.Now()
 	)
 	iter := rawdb.NewKeyLengthIterator(r.db.NewIterator(rawdb.SnapshotStoragePrefix, r.start), len(rawdb.SnapshotStoragePrefix)+2*common.HashLength)
 	defer iter.Release()
@@ -79,6 +93,11 @@ func (r *danglingRange) detect() ([]common.Hash, time.Duration) {
 			continue
 		}
 		result = append(result, accountHash)
+
+		if time.Since(lastReport) > time.Second*8 && report {
+			log.Info("Detecting dangling storage", "at", fmt.Sprintf("%#x", accountHash), "elapsed", common.PrettyDuration(time.Since(start)))
+			lastReport = time.Now()
+		}
 	}
 	return result, time.Since(start)
 }
@@ -94,8 +113,8 @@ func (r *danglingRange) cleanup(limit []byte) error {
 			break
 		}
 		prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
-		keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
-		if err = wipeKeyRange(r.db, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
+		keylen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
+		if err = wipeKeyRange(r.db, "storage", prefix, nil, nil, keylen, snapWipedStorageMeter, false); err != nil {
 			break
 		}
 		wiped += 1
