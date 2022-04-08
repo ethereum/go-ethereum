@@ -74,6 +74,8 @@ var (
 	snapMissallStorageMeter       = metrics.NewRegisteredMeter("state/snapshot/generation/storage/missall", nil)
 	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
 	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
+	snapDanglingStoragesCounter   = metrics.NewRegisteredCounter("state/snapshot/generation/storage/dangling/counter", nil)
+	snapDanglingStoragesTimer     = metrics.NewRegisteredTimer("state/snapshot/generation/storage/dangling/timer", nil)
 
 	// snapAccountProveCounter measures time spent on the account proving
 	snapAccountProveCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/prove", nil)
@@ -371,12 +373,16 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 
 // onStateCallback is a function that is called by generateRange, when processing a range of
 // accounts or storage slots. For each element, the callback is invoked.
-// If 'delete' is true, then this element (and potential slots) needs to be deleted from the snapshot.
-// If 'write' is true, then this element needs to be updated with the 'val'.
-// If 'write' is false, then this element is already correct, and needs no update. However,
-// for accounts, the storage trie of the account needs to be checked.
+//
+// - If 'delete' is true, then this element (and potential slots) needs to be deleted from the snapshot.
+// - If 'write' is true, then this element needs to be updated with the 'val'.
+// - If 'write' is false, then this element is already correct, and needs no update.
 // The 'val' is the canonical encoding of the value (not the slim format for accounts)
-type onStateCallback func(key []byte, val []byte, write bool, delete bool) error
+//
+// However, for accounts, the storage trie of the account needs to be checked. Also,
+// dangling storages(storage exists but the corresponding account is missing) need to
+// be cleaned up. The range between the prevKey
+type onStateCallback func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error
 
 // generateRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through range-proof and skip
@@ -404,7 +410,11 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
-		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, false, false) }); err != nil {
+		var r *danglingRange
+		if kind != "storage" {
+			r = newDanglingRange(dl.diskdb, origin, result.last())
+		}
+		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, r, false, false) }); err != nil {
 			return false, nil, err
 		}
 		// Only abort the iteration when both database and trie are exhausted
@@ -466,6 +476,11 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		internal time.Duration
 	)
 	nodeIt.AddResolver(snapNodeCache)
+
+	var r *danglingRange
+	if kind != "storage" {
+		r = newDanglingRange(dl.diskdb, origin, result.last())
+	}
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
 			trieMore = true
@@ -478,7 +493,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
 				istart := time.Now()
-				if err := onState(kvkeys[0], nil, false, true); err != nil {
+				if err := onState(kvkeys[0], nil, r, false, true); err != nil {
 					return false, nil, err
 				}
 				kvkeys = kvkeys[1:]
@@ -500,7 +515,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			break
 		}
 		istart := time.Now()
-		if err := onState(iter.Key, iter.Value, write, false); err != nil {
+		if err := onState(iter.Key, iter.Value, r, write, false); err != nil {
 			return false, nil, err
 		}
 		internal += time.Since(istart)
@@ -511,7 +526,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	// Delete all stale snapshot states remaining
 	istart := time.Now()
 	for _, key := range kvkeys {
-		if err := onState(key, nil, false, true); err != nil {
+		if err := onState(key, nil, r, false, true); err != nil {
 			return false, nil, err
 		}
 		deleted += 1
@@ -573,7 +588,7 @@ func (dl *diskLayer) checkAndFlush(current []byte, batch ethdb.Batch, stats *gen
 // generateStorages generates the missing storage slots of the specific contract.
 // It's supposed to restart the generation from the given origin position.
 func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Hash, storeMarker []byte, batch ethdb.Batch, stats *generatorStats, logged *time.Time) error {
-	onStorage := func(key []byte, val []byte, write bool, delete bool) error {
+	onStorage := func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error {
 		defer func(start time.Time) {
 			snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 		}(time.Now())
@@ -620,11 +635,15 @@ func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Has
 // storage slots in the main trie. It's supposed to restart the generation
 // from the given origin position.
 func generateAccounts(dl *diskLayer, accMarker []byte, batch ethdb.Batch, stats *generatorStats, logged *time.Time) error {
-	onAccount := func(key []byte, val []byte, write bool, delete bool) error {
+	onAccount := func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error {
 		var (
 			start       = time.Now()
 			accountHash = common.BytesToHash(key)
 		)
+		// Clean up the dangling storages which have no corresponding accounts present.
+		if err := r.cleanup(key); err != nil {
+			return err
+		}
 		if delete {
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
 			snapWipedAccountMeter.Mark(1)
