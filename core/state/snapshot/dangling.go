@@ -47,6 +47,8 @@ func newDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) 
 		limit: limit,
 	}
 	r.result, r.duration = r.detect(report)
+
+	// Update metrics
 	snapDanglingStoragesCounter.Inc(int64(len(r.result)))
 	snapDanglingStoragesTimer.Update(r.duration)
 
@@ -109,7 +111,7 @@ func (r *danglingRange) cleanup(limit []byte) error {
 		wiped int
 	)
 	for _, accountHash := range r.result {
-		if bytes.Compare(accountHash.Bytes(), limit) >= 0 {
+		if limit != nil && bytes.Compare(accountHash.Bytes(), limit) >= 0 {
 			break
 		}
 		prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
