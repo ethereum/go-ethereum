@@ -381,7 +381,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 //
 // However, for accounts, the storage trie of the account needs to be checked. Also,
 // dangling storages(storage exists but the corresponding account is missing) need to
-// be cleaned up. The range between the prevKey
+// be cleaned up.
 type onStateCallback func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error
 
 // generateRange generates the state segment with particular prefix. Generation can
