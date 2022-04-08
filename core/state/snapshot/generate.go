@@ -542,6 +542,15 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 
+	// Clean up the left dangling storages at the end in case the entire
+	// snapshot is regenerated. Note if the last is nil, it means there
+	// is no snapshot data at disk at all, the entire snapshot is expected
+	// to be re-generated already.
+	if last == nil && r != nil {
+		if err := r.cleanup(nil); err != nil {
+			return false, nil, err
+		}
+	}
 	// If there are either more trie items, or there are more snap items
 	// (in the next segment), then we need to keep working
 	return !trieMore && !result.diskMore, last, nil
@@ -620,17 +629,12 @@ func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Has
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
-		if origin = increaseKey(last); origin == nil {
-			break // special case, the last is 0xffffffff...fff
-		}
 		// Abort the procedure if the entire contract storage is generated
 		if exhausted {
-			// Last step, cleanup the storages after the last generated
-			// account. All the left storages should be treated as dangling.
-			if err := newDanglingRange(dl.diskdb, origin, nil, false).cleanup(nil); err != nil {
-				return err
-			}
 			break
+		}
+		if origin = increaseKey(last); origin == nil {
+			break // special case, the last is 0xffffffff...fff
 		}
 	}
 	return nil
@@ -743,12 +747,17 @@ func generateAccounts(dl *diskLayer, accMarker []byte, batch ethdb.Batch, stats 
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
-		// Abort the procedure if the entire snapshot is generated
-		if exhausted {
-			break
-		}
 		if origin = increaseKey(last); origin == nil {
 			break // special case, the last is 0xffffffff...fff
+		}
+		// Abort the procedure if the entire snapshot is generated
+		if exhausted {
+			// Last step, cleanup the storages after the last account.
+			// All the left storages should be treated as dangling.
+			if err := newDanglingRange(dl.diskdb, origin, nil, false).cleanup(nil); err != nil {
+				return err
+			}
+			break
 		}
 		accountRange = accountCheckRange
 	}
