@@ -412,7 +412,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// corresponding storage check will be performed in the callback
 		var r *danglingRange
 		if kind != "storage" {
-			r = newDanglingRange(dl.diskdb, origin, result.last())
+			r = newDanglingRange(dl.diskdb, origin, result.last(), false)
 		}
 		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, r, false, false) }); err != nil {
 			return false, nil, err
@@ -479,7 +479,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	var r *danglingRange
 	if kind != "storage" {
-		r = newDanglingRange(dl.diskdb, origin, result.last())
+		r = newDanglingRange(dl.diskdb, origin, result.last(), false)
 	}
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
