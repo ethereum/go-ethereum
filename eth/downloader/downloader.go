@@ -411,6 +411,14 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	}
 	// Create cancel channel for aborting mid-flight and mark the master peer
 	d.cancelLock.Lock()
+	if d.cancelCh != nil {
+		select {
+		case <-d.cancelCh:
+			// Channel was already closed
+		default:
+			close(d.cancelCh)
+		}
+	}
 	d.cancelCh = make(chan struct{})
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
