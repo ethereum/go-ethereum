@@ -80,18 +80,13 @@ func TestShouldVerifyBlock(t *testing.T) {
 	err = adaptor.VerifyHeader(blockchain, invalidValidatorsSignerBlock, true)
 	assert.Equal(t, utils.ErrInvalidCheckpointSigners, err)
 
-	invalidPenaltiesExistBlock := blockchain.GetBlockByNumber(901).Header()
-	invalidPenaltiesExistBlock.Penalties = common.Hex2BytesFixed("123131231", 20)
-	err = adaptor.VerifyHeader(blockchain, invalidPenaltiesExistBlock, true)
-	assert.Equal(t, utils.ErrPenaltyListDoesNotMatch, err)
-
 	// non-epoch switch
 	invalidValidatorsExistBlock := blockchain.GetBlockByNumber(902).Header()
 	invalidValidatorsExistBlock.Validators = []byte{123}
 	err = adaptor.VerifyHeader(blockchain, invalidValidatorsExistBlock, true)
 	assert.Equal(t, utils.ErrInvalidFieldInNonEpochSwitch, err)
 
-	invalidPenaltiesExistBlock = blockchain.GetBlockByNumber(902).Header()
+	invalidPenaltiesExistBlock := blockchain.GetBlockByNumber(902).Header()
 	invalidPenaltiesExistBlock.Penalties = common.Hex2BytesFixed("123131231", 20)
 	err = adaptor.VerifyHeader(blockchain, invalidPenaltiesExistBlock, true)
 	assert.Equal(t, utils.ErrInvalidFieldInNonEpochSwitch, err)
@@ -163,10 +158,8 @@ func TestShouldVerifyBlock(t *testing.T) {
 
 	// Make the validators not legit by adding something to the penalty
 	validatorsNotLegit := blockchain.GetBlockByNumber(901).Header()
-	penalties := []common.Address{acc1Addr}
-	for _, v := range penalties {
-		validatorsNotLegit.Penalties = append(validatorsNotLegit.Penalties, v[:]...)
-	}
+
+	validatorsNotLegit.Validators = append(validatorsNotLegit.Validators, acc1Addr[:]...)
 	err = adaptor.VerifyHeader(blockchain, validatorsNotLegit, true)
 	assert.Equal(t, utils.ErrValidatorsNotLegit, err)
 }

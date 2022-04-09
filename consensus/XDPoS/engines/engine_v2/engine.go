@@ -57,6 +57,8 @@ type XDPoS_v2 struct {
 
 	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error)
+
+	forensics *Forensics
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
@@ -110,6 +112,8 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 	timeoutTimer.OnTimeoutFn = engine.OnCountdownTimeout
 
 	engine.periodicJob()
+
+	engine.AttachForensics()
 	return engine
 }
 

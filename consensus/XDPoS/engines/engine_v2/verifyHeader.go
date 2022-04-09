@@ -101,7 +101,14 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		if len(header.Validators)%common.AddressLength != 0 {
 			return utils.ErrInvalidCheckpointSigners
 		}
-		isLegit, err := x.isValidatorsLegit(chain, header)
+
+		_, localPenalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
+		if err != nil {
+			log.Error("[verifyHeader] Fail to calculate master nodes list with penalty", "Number", header.Number, "Hash", header.Hash())
+			return err
+		}
+
+		isLegit, err := x.isValidatorsLegit(chain, header, localPenalties)
 		if err != nil {
 			log.Error("[verifyHeader] Error while trying to check if the validators are legit", "Hash", header.Hash(), "Number", header.Number, "ValidatorsLength", len(header.Validators))
 			return err
@@ -109,17 +116,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		if !isLegit {
 			return utils.ErrValidatorsNotLegit
 		}
-
-		_, penalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
-		if err != nil {
-			log.Error("[verifyHeader] Fail to calculate master nodes list with penalty", "Number", header.Number, "Hash", header.Hash())
-			return err
-		}
-
-		if !utils.CompareSignersLists(common.ExtractAddressFromBytes(header.Penalties), penalties) {
-			return utils.ErrPenaltyListDoesNotMatch
-		}
-
 	} else {
 		if len(header.Validators) != 0 {
 			log.Warn("[verifyHeader] Validators shall not have values in non-epochSwitch block", "Hash", header.Hash(), "Number", header.Number, "header.Validators", header.Validators)
@@ -167,16 +163,15 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 }
 
 // Verify the header validators address is legit by checking against its snapshot masternode list minutes the penalty list, we also ensure the order matches
-func (x *XDPoS_v2) isValidatorsLegit(chain consensus.ChainReader, header *types.Header) (bool, error) {
+func (x *XDPoS_v2) isValidatorsLegit(chain consensus.ChainReader, header *types.Header, penalties []common.Address) (bool, error) {
 	snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
 	if err != nil {
 		log.Error("[isValidatorsLegit] Error while trying to get snapshot", "BlockNumber", header.Number.Int64(), "Hash", header.Hash().Hex(), "error", err)
 		return false, err
 	}
 	// snap.NextEpochMasterNodes
-	penaltyList := common.ExtractAddressFromBytes(header.Penalties)
 	penaltyMap := make(map[common.Address]bool)
-	for _, item := range penaltyList {
+	for _, item := range penalties {
 		penaltyMap[item] = true
 	}
 
