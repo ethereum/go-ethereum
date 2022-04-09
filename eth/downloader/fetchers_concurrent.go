@@ -317,15 +317,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			} else {
 				d.dropPeer(peer.id)
 
-				// If this peer was the master peer, abort sync immediately
-				d.cancelLock.RLock()
-				master := peer.id == d.cancelPeer
-				d.cancelLock.RUnlock()
-
-				if master {
-					d.cancel()
-					return errTimeout
-				}
+				// If this peer was the master peer, abort sync immediate
+				d.cancel(peer.id)
+				return errTimeout
 			}
 
 		case res := <-responses:

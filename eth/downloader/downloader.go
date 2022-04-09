@@ -415,7 +415,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
-	defer d.Cancel() // No matter what, we can't leave the cancel channel open
+	defer d.Cancel(id) // No matter what, we can't leave the cancel channel open
 
 	// Atomically set the requested sync mode
 	atomic.StoreUint32(&d.mode, uint32(mode))
@@ -618,17 +618,33 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 		}
 	}
 	d.queue.Close()
-	d.Cancel()
 	return err
 }
 
 // cancel aborts all of the operations and resets the queue. However, cancel does
 // not wait for the running download goroutines to finish. This method should be
 // used when cancelling the downloads from inside the downloader.
-func (d *Downloader) cancel() {
+func (d *Downloader) cancel(ids ...string) (matched bool) {
+	var id string
+	if len(ids) > 0 {
+		id = ids[0]
+		d.cancelLock.RLock()
+		matched = id == d.cancelPeer
+		d.cancelLock.RUnlock()
+		if !matched {
+			return
+		}
+	}
+
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	defer d.cancelLock.Unlock()
+	if id != "" && d.cancelPeer != id {
+		matched = false
+		return
+	}
+
+	matched = true
 
 	if d.cancelCh != nil {
 		select {
@@ -638,12 +654,18 @@ func (d *Downloader) cancel() {
 			close(d.cancelCh)
 		}
 	}
+	return
 }
 
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
-func (d *Downloader) Cancel() {
-	d.cancel()
+func (d *Downloader) Cancel(id ...string) {
+
+	matched := d.cancel(id...)
+	// no need to wait if id doesn't match cancelPeer
+	if !matched {
+		return
+	}
 	d.cancelWg.Wait()
 }
 
