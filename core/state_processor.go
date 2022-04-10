@@ -165,6 +165,7 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
+		// statedb.GetRefund()
 		statedb.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
