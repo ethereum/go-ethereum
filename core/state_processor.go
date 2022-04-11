@@ -162,7 +162,7 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	var root []byte
 	if config.IsByzantium(header.Number) {
 		// statedb.GetRefund()
-		statedb.Finalise(true)
+
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
@@ -204,6 +204,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create call tracer to get JSON stack traces
 	tracer := NewCallTracer(statedb)
+
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})

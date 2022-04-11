@@ -125,6 +125,16 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 	}
 }
 
+func (s *Suite) SnapTests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "TestSnapStatus", Fn: s.TestSnapStatus},
+		{Name: "TestSnapAccountRange", Fn: s.TestSnapGetAccountRange},
+		{Name: "TestSnapGetByteCodes", Fn: s.TestSnapGetByteCodes},
+		{Name: "TestSnapGetTrieNodes", Fn: s.TestSnapTrieNodes},
+		{Name: "TestSnapGetStorageRanges", Fn: s.TestSnapGetStorageRanges},
+	}
+}
+
 var (
 	eth66 = true  // indicates whether suite should negotiate eth66 connection
 	eth65 = false // indicates whether suite should negotiate eth65 connection or below.

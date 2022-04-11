@@ -138,8 +138,10 @@ type Config struct {
 
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
-	// Whitelist of required block number -> hash values to accept
-	Whitelist map[uint64]common.Hash `toml:"-"`
+	// PeerRequiredBlocks is a set of block number -> hash mappings which must be in the
+	// canonical chain of all remote peers. Setting the option makes geth verify the
+	// presence of these blocks for every new peer connection.
+	PeerRequiredBlocks map[uint64]common.Hash `toml:"-"`
 
 	// Light client options
 	LightServ          int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
