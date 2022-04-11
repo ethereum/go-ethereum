@@ -581,10 +581,12 @@ func (s *Ethereum) Stop() error {
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
-	s.txPool.Stop()
-	s.miner.Close()
-	s.blockchain.Stop()
+
+	// closing consensus engine first, as miner has deps on it
 	s.engine.Close()
+	s.txPool.Stop()
+	s.blockchain.Stop()
+	s.miner.Close()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.eventMux.Stop()
