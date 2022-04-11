@@ -2085,8 +2085,6 @@ func toHexSlice(b [][]byte) []string {
 	return r
 }
 
-// ---------------------------------------------------------------- FlashBots inspired code ----------------------------------------------------------------
-
 // PrivateTxBundleAPI offers an API for accepting bundled transactions
 type PrivateTxBundleAPI struct {
 	b Backend
@@ -2108,31 +2106,23 @@ func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 	return &BundleAPI{b, chain}
 }
 
-// CallBundleArgs represents the arguments for a call.
+// CallBundleArgs represents the arguments for a bundle of calls.
 type CallBundleArgs struct {
-	Txs                    []TransactionArgs     `json:"txs"`
-	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
-	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
-	Coinbase               *string               `json:"coinbase"`
-	Timestamp              *uint64               `json:"timestamp"`
-	Timeout                *int64                `json:"timeout"`
-	GasLimit               *uint64               `json:"gasLimit"`
-	Difficulty             *big.Int              `json:"difficulty"`
-	BaseFee                *big.Int              `json:"baseFee"`
+	Txs        []TransactionArgs `json:"txs"`
+	Coinbase   *string           `json:"coinbase"`
+	Timestamp  *uint64           `json:"timestamp"`
+	Timeout    *int64            `json:"timeout"`
+	GasLimit   *uint64           `json:"gasLimit"`
+	Difficulty *big.Int          `json:"difficulty"`
+	BaseFee    *big.Int          `json:"baseFee"`
 }
 
-// CallBundle will simulate a bundle of transactions at the top of a given block
-// number with the state of another (or the same) block. This can be used to
-// simulate future blocks with the current state, or it can be used to simulate
-// a past block.
-// The sender is responsible for signing the transactions and using the correct
-// nonce and ensuring validity
+//
+// CallBundle will simulate a bundle of transactions on top of
+// the most recent block. Partially follows flashbots spec v0.5.
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
 	if len(args.Txs) == 0 {
 		return nil, errors.New("bundle missing unsigned txs")
-	}
-	if args.BlockNumber == 0 {
-		return nil, errors.New("bundle missing blockNumber")
 	}
 
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
@@ -2142,11 +2132,12 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		timeoutMilliSeconds = *args.Timeout
 	}
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
-	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	blockNumberRPC := rpc.BlockNumber(-1)
+	state, parent, err := s.b.StateAndHeaderByNumber(ctx, blockNumberRPC)
+
 	if state == nil || err != nil {
 		return nil, err
 	}
-	blockNumber := big.NewInt(int64(args.BlockNumber))
 
 	timestamp := parent.Time + 1
 	if args.Timestamp != nil {
@@ -2165,14 +2156,12 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		gasLimit = *args.GasLimit
 	}
 	var baseFee *big.Int
-	if args.BaseFee != nil {
-		baseFee = args.BaseFee
-	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumber.Int64())) {
-		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
-	}
+	// Assume bn simulaton occur after london hardfork
+
+	baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
-		Number:     blockNumber,
+		Number:     big.NewInt(parent.Number.Int64()),
 		GasLimit:   gasLimit,
 		Time:       timestamp,
 		Difficulty: difficulty,
