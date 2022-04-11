@@ -55,7 +55,7 @@ type fourByteTracer struct {
 
 // newFourByteTracer returns a native go tracer which collects
 // 4 byte-identifiers of a tx, and implements vm.EVMLogger.
-func newFourByteTracer() tracers.Tracer {
+func newFourByteTracer(ctx *tracers.Context) tracers.Tracer {
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}
