@@ -64,6 +64,7 @@ type KeyValueStore interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }
 
@@ -86,6 +87,10 @@ type AncientReader interface {
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
 
+	// Tail returns the number of first stored item in the freezer.
+	// This number can also be interpreted as the total deleted item numbers.
+	Tail() (uint64, error)
+
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
 }
@@ -106,11 +111,24 @@ type AncientWriter interface {
 	// The integer return value is the total size of the written data.
 	ModifyAncients(func(AncientWriteOp) error) (int64, error)
 
-	// TruncateAncients discards all but the first n ancient data from the ancient store.
-	TruncateAncients(n uint64) error
+	// TruncateHead discards all but the first n ancient data from the ancient store.
+	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
+	TruncateHead(n uint64) error
+
+	// TruncateTail discards the first n ancient data from the ancient store. The already
+	// deleted items are ignored. After the truncation, the earliest item can be accessed
+	// is item_n(start from 0). The deleted items may not be removed from the ancient store
+	// immediately, but only when the accumulated deleted data reach the threshold then
+	// will be removed all together.
+	TruncateTail(n uint64) error
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
+
+	// MigrateTable processes and migrates entries of a given table to a new format.
+	// The second argument is a function that takes a raw entry and returns it
+	// in the newest format.
+	MigrateTable(string, func([]byte) ([]byte, error)) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
@@ -153,5 +171,6 @@ type Database interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }

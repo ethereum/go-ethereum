@@ -1779,6 +1779,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 			SnapshotLimit:  0, // Disable snapshot by default
 		}
 	)
+	defer engine.Close()
 	if snapshots {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
@@ -1836,25 +1837,25 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	newChain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-	defer chain.Stop()
+	defer newChain.Stop()
 
 	// Iterate over all the remaining blocks and ensure there are no gaps
-	verifyNoGaps(t, chain, true, canonblocks)
-	verifyNoGaps(t, chain, false, sideblocks)
-	verifyCutoff(t, chain, true, canonblocks, tt.expCanonicalBlocks)
-	verifyCutoff(t, chain, false, sideblocks, tt.expSidechainBlocks)
+	verifyNoGaps(t, newChain, true, canonblocks)
+	verifyNoGaps(t, newChain, false, sideblocks)
+	verifyCutoff(t, newChain, true, canonblocks, tt.expCanonicalBlocks)
+	verifyCutoff(t, newChain, false, sideblocks, tt.expSidechainBlocks)
 
-	if head := chain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
+	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
+	if head := newChain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
+	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}
 	if frozen, err := db.(freezer).Ancients(); err != nil {

@@ -294,19 +294,19 @@ func (ps *peerSet) AllPeers() []*peerConnection {
 // peerCapacitySort implements sort.Interface.
 // It sorts peer connections by capacity (descending).
 type peerCapacitySort struct {
-	p  []*peerConnection
-	tp []int
+	peers []*peerConnection
+	caps  []int
 }
 
 func (ps *peerCapacitySort) Len() int {
-	return len(ps.p)
+	return len(ps.peers)
 }
 
 func (ps *peerCapacitySort) Less(i, j int) bool {
-	return ps.tp[i] > ps.tp[j]
+	return ps.caps[i] > ps.caps[j]
 }
 
 func (ps *peerCapacitySort) Swap(i, j int) {
-	ps.p[i], ps.p[j] = ps.p[j], ps.p[i]
-	ps.tp[i], ps.tp[j] = ps.tp[j], ps.tp[i]
+	ps.peers[i], ps.peers[j] = ps.peers[j], ps.peers[i]
+	ps.caps[i], ps.caps[j] = ps.caps[j], ps.caps[i]
 }

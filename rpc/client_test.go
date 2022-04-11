@@ -615,6 +615,7 @@ func TestClientReconnect(t *testing.T) {
 	// Start a server and corresponding client.
 	s1, l1 := startServer("127.0.0.1:0")
 	client, err := DialContext(ctx, "ws://"+l1.Addr().String())
+	defer client.Close()
 	if err != nil {
 		t.Fatal("can't dial", err)
 	}

@@ -115,7 +115,7 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
-	return db.NewIterator(storageSnapshotsKey(accountHash), nil)
+	return NewKeyLengthIterator(db.NewIterator(storageSnapshotsKey(accountHash), nil), len(SnapshotStoragePrefix)+2*common.HashLength)
 }
 
 // ReadSnapshotJournal retrieves the serialized in-memory diff layers saved at

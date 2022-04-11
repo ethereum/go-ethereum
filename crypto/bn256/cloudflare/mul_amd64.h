@@ -165,7 +165,7 @@
 	\
 	\ // Add the 512-bit intermediate to m*N
 	loadBlock(96+stack, R8,R9,R10,R11) \
-	loadBlock(128+stack, R12,R13,R14,R15) \
+	loadBlock(128+stack, R12,R13,R14,CX) \
 	\
 	MOVQ $0, AX \
 	ADDQ 0+stack, R8 \
@@ -175,7 +175,7 @@
 	ADCQ 32+stack, R12 \
 	ADCQ 40+stack, R13 \
 	ADCQ 48+stack, R14 \
-	ADCQ 56+stack, R15 \
+	ADCQ 56+stack, CX \
 	ADCQ $0, AX \
 	\
-	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX)
+	gfpCarry(R12,R13,R14,CX,AX, R8,R9,R10,R11,BX)

@@ -168,7 +168,7 @@ type bytecodeResponse struct {
 // to actual requests and to validate any security constraints.
 //
 // Concurrency note: storage requests and responses are handled concurrently from
-// the main runloop to allow Merkel proof verifications on the peer's thread and
+// the main runloop to allow Merkle proof verifications on the peer's thread and
 // to drop on invalid response. The request struct must contain all the data to
 // construct the response without accessing runloop internals (i.e. tasks). That
 // is only included to allow the runloop to match a response to the task being
@@ -1781,7 +1781,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
 		if !bytes.Equal(account.CodeHash, emptyCode[:]) {
-			if code := rawdb.ReadCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)); code == nil {
+			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
 				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
 				res.task.needCode[i] = true
 				res.task.pend++
@@ -1789,7 +1789,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != emptyRoot {
-			if node, err := s.db.Get(account.Root[:]); err != nil || node == nil {
+			if ok, err := s.db.Has(account.Root[:]); err != nil || !ok {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle
 				// is interrupted and resumed later. However, *do* update the
@@ -2826,7 +2826,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
 		accountFills,
 	).Uint64())
-
+	// Don't report anything until we have a meaningful progress
+	if estBytes < 1.0 {
+		return
+	}
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)
 
