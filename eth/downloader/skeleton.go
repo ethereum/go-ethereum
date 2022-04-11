@@ -605,7 +605,7 @@ func (s *skeleton) processNewHead(head *types.Header, force bool) bool {
 		}
 		// Not a noop / double head announce, abort with a reorg
 		if force {
-			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "newHead", number)
+			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "head", lastchain.Head, "newHead", number)
 		}
 		return true
 	}
@@ -965,16 +965,44 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 		// If the beacon chain was linked to the local chain, completely swap out
 		// all internal progress and abort header synchronization.
 		if linked {
-			// Note, linking into the local chain should also mean that there are
-			// no leftover subchains, but just in case there's some junk due to
-			// strange conditions or bugs, clean up all internal state.
-			if len(s.progress.Subchains) > 1 {
-				// TODO(karalabe): This can happend: sync, import few blocks, sync again
-				// In the above case importing the blocks via the engine API will not
-				// push the subchains forward and will lead to a gap, which this clause
-				// fixes. TODO(karalabe): Add stale header deletion too here?
-				log.Error("Cleaning up leftovers after beacon link")
-				s.progress.Subchains = s.progress.Subchains[:1]
+			// Linking into the local chain should also mean that there are no
+			// leftover subchains, but in the case of importing the blocks via
+			// the engine API, we will not push the subchains forward. This will
+			// lead to a gap between an old sync cycle and a future one.
+			if subchains := len(s.progress.Subchains); subchains > 1 {
+				switch {
+				// If there are only 2 subchains - the current one and an older
+				// one - and the old one consists of a single block, then it's
+				// the expected new sync cycle after some propagated blocks. Log
+				// it for debugging purposes, explicitly clean and don't escalate.
+				case subchains == 2 && s.progress.Subchains[1].Head == s.progress.Subchains[1].Tail:
+					log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
+					rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					s.progress.Subchains = s.progress.Subchains[:1]
+
+				// If we have more than one header or more than one leftover chain,
+				// the syncer's internal state is corrupted. Do try to fix it, but
+				// be very vocal about the fault.
+				default:
+					var context []interface{}
+
+					for i := range s.progress.Subchains[1:] {
+						context = append(context, fmt.Sprintf("stale_head_%d", i+1))
+						context = append(context, s.progress.Subchains[i+1].Head)
+						context = append(context, fmt.Sprintf("stale_tail_%d", i+1))
+						context = append(context, s.progress.Subchains[i+1].Tail)
+						context = append(context, fmt.Sprintf("stale_next_%d", i+1))
+						context = append(context, s.progress.Subchains[i+1].Next)
+					}
+					log.Error("Cleaning spurious beacon sync leftovers", context...)
+					s.progress.Subchains = s.progress.Subchains[:1]
+
+					// Note, here we didn't actually delete the headers at all,
+					// just the metadata. We could implement a cleanup mechanism,
+					// but further modifying corrupted state is kind of asking
+					// for it. Unless there's a good enough reason to risk it,
+					// better to live with the small database junk.
+				}
 			}
 			break
 		}
@@ -1088,7 +1116,27 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	}
 	s.saveSyncStatus(batch)
 	for n := start; n < end; n++ {
-		// TODO(karalabe): This can end up deleting 15M headers on mainnet, do partial writes
+		// If the batch grew too big, flush it and continue with a new batch.
+		// The catch is that the sync metadata needs to reflect the actually
+		// flushed state, so temporarilly change the subchain progress and
+		// revert after the flush.
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			tmpTail := s.progress.Subchains[0].Tail
+			tmpNext := s.progress.Subchains[0].Next
+
+			s.progress.Subchains[0].Tail = n
+			s.progress.Subchains[0].Next = rawdb.ReadSkeletonHeader(s.db, n).ParentHash
+			s.saveSyncStatus(batch)
+
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write beacon trim data", "err", err)
+			}
+			batch.Reset()
+
+			s.progress.Subchains[0].Tail = tmpTail
+			s.progress.Subchains[0].Next = tmpNext
+			s.saveSyncStatus(batch)
+		}
 		rawdb.DeleteSkeletonHeader(batch, n)
 	}
 	if err := batch.Write(); err != nil {
