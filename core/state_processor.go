@@ -158,10 +158,6 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	}
 
 	traceResult, err := tracer.GetResult()
-
-	// if err != nil {
-	// 	return nil, nil, nil, err
-	// }
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -182,11 +178,6 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	}
 	// receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
-
-	// If the transaction created a contract, store the creation address in the receipt.
-	// if msg.To() == nil {
-	// 	receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
-	// }
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.BlockHash = header.Hash()
@@ -211,8 +202,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
-	// Create struct logger to get JSON stack traces
-	// tracer := logger.NewStructLogger(nil)
+	// Create call tracer to get JSON stack traces
 	tracer := NewCallTracer(statedb)
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)

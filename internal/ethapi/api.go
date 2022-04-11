@@ -2086,8 +2086,6 @@ func toHexSlice(b [][]byte) []string {
 	return r
 }
 
-// ---------------------------------------------------------------- FlashBots inspired code ----------------------------------------------------------------
-
 // PrivateTxBundleAPI offers an API for accepting bundled transactions
 type PrivateTxBundleAPI struct {
 	b Backend
