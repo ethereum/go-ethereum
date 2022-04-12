@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,8 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:generate go run github.com/kevinburke/go-bindata/go-bindata -nometadata -o assets.go -pkg tracers -ignore tracers.go -ignore assets.go ./...
-//go:generate gofmt -s -w assets.go
+//go:build tools
+// +build tools
 
-// Package tracers contains the actual JavaScript tracer assets.
-package tracers
+package tools
+
+import (
+	// Tool imports for go:generate.
+	_ "github.com/fjl/gencodec"
+	_ "github.com/golang/protobuf/protoc-gen-go"
+	_ "github.com/kevinburke/go-bindata/go-bindata"
+	_ "golang.org/x/tools/cmd/stringer"
+
+	// Tool imports for mobile build.
+	_ "golang.org/x/mobile/cmd/gobind"
+	_ "golang.org/x/mobile/cmd/gomobile"
+)

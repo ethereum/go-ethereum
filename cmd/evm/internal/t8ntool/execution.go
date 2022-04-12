@@ -63,7 +63,7 @@ type ommer struct {
 	Address common.Address `json:"address"`
 }
 
-//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
+//go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
 	Coinbase         common.Address                      `json:"currentCoinbase"   gencodec:"required"`
 	Difficulty       *big.Int                            `json:"currentDifficulty"`

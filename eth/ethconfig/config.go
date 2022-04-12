@@ -116,7 +116,7 @@ func init() {
 	}
 }
 
-//go:generate gencodec -type Config -formats toml -out gen_config.go
+//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for of the ETH and LES protocols.
 type Config struct {

@@ -59,7 +59,7 @@ type Config struct {
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
-//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+//go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.

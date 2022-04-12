@@ -21,6 +21,7 @@ require (
 	github.com/dop251/goja v0.0.0-20211011172007-d99e4b8cbf48
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.7.0
+	github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/go-ole/go-ole v1.2.1 // indirect
@@ -44,6 +45,7 @@ require (
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.2.0
 	github.com/karalabe/usb v0.0.2
+	github.com/kevinburke/go-bindata v3.23.0+incompatible
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-isatty v0.0.12
@@ -61,6 +63,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
+	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210816183151-1e6c022a8912
 	golang.org/x/text v0.3.7
