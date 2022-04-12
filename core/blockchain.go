@@ -1594,12 +1594,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		var (
-			usedGas  uint64
-			receipts types.Receipts
-			logs     []*types.Log
-		)
-		receipts, logs, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

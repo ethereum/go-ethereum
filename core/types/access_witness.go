@@ -39,7 +39,6 @@ const (
 
 // AccessWitness lists the locations of the state that are being accessed
 // during the production of a block.
-// TODO(@gballet) this doesn't fully support deletions
 type AccessWitness struct {
 	// Branches flags if a given branch has been loaded
 	Branches map[VerkleStem]Mode

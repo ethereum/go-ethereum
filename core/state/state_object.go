@@ -612,23 +612,8 @@ func (s *stateObject) Balance() *big.Int {
 	return s.data.Balance
 }
 
-func (s *stateObject) BalanceLE() []byte {
-	var out [32]byte
-	for i, b := range s.data.Balance.Bytes() {
-		out[len(s.data.Balance.Bytes())-1-i] = b
-	}
-
-	return out[:]
-}
-
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
-}
-
-func (s *stateObject) NonceLE() []byte {
-	var out [32]byte
-	binary.LittleEndian.PutUint64(out[:8], s.data.Nonce)
-	return out[:]
 }
 
 // Never called, but must be present to allow stateObject to be used

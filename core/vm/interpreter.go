@@ -197,7 +197,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			contract.Gas -= touchEachChunksOnReadAndChargeGas(pc, 1, contract.Address().Bytes()[:], contract.Code, contract, in.evm.TxContext.Accesses, contract.IsDeployment)
 		}
 
-		// TODO how can we tell if we are in stateless mode here and need to get the op from the witness
 		// If we are in witness mode, then raise an error
 		op = contract.GetOp(pc)
 
