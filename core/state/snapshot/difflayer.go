@@ -260,6 +260,7 @@ func (dl *diffLayer) Root() common.Hash {
 func (dl *diffLayer) Parent() snapshot {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
+
 	return dl.parent
 }
 
