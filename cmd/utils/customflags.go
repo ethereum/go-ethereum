@@ -155,7 +155,7 @@ func (b *bigValue) String() string {
 
 func (b *bigValue) Set(s string) error {
 	intVal, ok := math.ParseBig256(s)
-	if !ok || intVal == nil {
+	if !ok {
 		return errors.New("invalid integer syntax")
 	}
 	*b = (bigValue)(*intVal)
