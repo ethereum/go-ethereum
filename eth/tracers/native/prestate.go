@@ -51,7 +51,7 @@ type prestateTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
-func newPrestateTracer() tracers.Tracer {
+func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	return &prestateTracer{prestate: prestate{}}
