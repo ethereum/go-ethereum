@@ -419,5 +419,4 @@ func checkDanglingJournalStorage(r *rlp.Stream) error {
 			}
 		}
 	}
-	return nil
 }
