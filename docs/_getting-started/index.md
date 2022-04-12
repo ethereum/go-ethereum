@@ -136,7 +136,7 @@ INFO [02-10|13:55:30.984] IPC endpoint opened                      url=geth-tuto
 
 ## Step 3:  Start Geth
 
-To start geth, open a new terminal and run the command brlow. Keeping geth running is
+To start geth, open a new terminal and run the command below. Keeping geth running is
 required for the other steps because the command below starts the HTTP server that we will
 be interacting with.
 
