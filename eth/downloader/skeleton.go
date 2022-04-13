@@ -366,7 +366,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	defer func() {
 		if filled := s.filler.suspend(); filled != nil {
 			// If something was filled, try to delete stale sync helpers. If
-			// unsuccessfull, warn the user, but not much else we can do (it's
+			// unsuccessful, warn the user, but not much else we can do (it's
 			// a programming error, just let users report an issue and don't
 			// choke in the meantime).
 			if err := s.cleanStales(filled); err != nil {
@@ -1118,7 +1118,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	for n := start; n < end; n++ {
 		// If the batch grew too big, flush it and continue with a new batch.
 		// The catch is that the sync metadata needs to reflect the actually
-		// flushed state, so temporarilly change the subchain progress and
+		// flushed state, so temporarily change the subchain progress and
 		// revert after the flush.
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			tmpTail := s.progress.Subchains[0].Tail
