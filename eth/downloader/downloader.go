@@ -159,9 +159,6 @@ type LightChain interface {
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
-	// GetHeaderByNumber retrieves a block header from the local chain by number.
-	GetHeaderByNumber(number uint64) *types.Header
-
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
 
@@ -486,7 +483,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			// Retrieve the pivot header from the skeleton chain segment but
 			// fallback to local chain if it's not found in skeleton space.
 			if pivot = d.skeleton.Header(number); pivot == nil {
-				pivot = d.lightchain.GetHeaderByNumber(number)
+				_, tail, _ := d.skeleton.Bounds() // error is already checked
+				pivot = d.getAncestorHeader(number, tail)
 			}
 			// Print an error log and return directly in case the pivot header
 			// is still not found. It means the skeleton chain is not linked
@@ -1771,4 +1769,25 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 	default:
 		return fmt.Errorf("unexpected snap packet type: %T", packet)
 	}
+}
+
+// getAncestorHeader retrieves the header with given number. Different from obtaining
+// the canonical header through the number directly, a verified tail header is used
+// here as the base point and obtain the header eventually by resolving the parent.
+func (d *Downloader) getAncestorHeader(number uint64, last *types.Header) *types.Header {
+	var current = last
+	for {
+		parent := d.lightchain.GetHeaderByHash(current.ParentHash)
+		if parent == nil {
+			break // The chain is not continuous
+		}
+		if parent.Number.Uint64() < number {
+			break // It shouldn't happen though
+		}
+		if parent.Number.Uint64() == number {
+			return parent
+		}
+		current = parent
+	}
+	return nil
 }

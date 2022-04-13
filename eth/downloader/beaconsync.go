@@ -254,7 +254,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
-	head, _, err := d.skeleton.Bounds()
+	head, tail, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -266,8 +266,17 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		)
 		for i := 0; i < maxHeadersProcess && from <= head.Number.Uint64(); i++ {
 			header := d.skeleton.Header(from)
+
+			// The header is not found in skeleton space, try to resolve the header
+			// reversely via skeleton tail. Note we can't retrieve the header by
+			// number directly, since there is no guarantee it's the header we want.
 			if header == nil {
-				header = d.lightchain.GetHeaderByNumber(from)
+				header = d.getAncestorHeader(from, tail)
+			}
+			// The header is still missing, the beacon sync is corrupted and bail out
+			// the error here.
+			if header == nil {
+				return fmt.Errorf("missing beacon header %d %x", tail.Number.Uint64()-1, tail.ParentHash)
 			}
 			headers = append(headers, header)
 			hashes = append(hashes, headers[i].Hash())
