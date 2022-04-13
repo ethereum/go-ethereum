@@ -1,8 +1,8 @@
 # This file contains sha256 checksums of optional build dependencies.
 
 efd43e0f1402e083b73a03d444b7b6576bb4c539ac46208b63a916b69aca4088  go1.18.1.src.tar.gz
-70bb4a066997535e346c8bfa3e0dfe250d61100b17ccc5676274642447834969  go1.18.darwin-amd64.tar.gz
-9cab6123af9ffade905525d79fc9ee76651e716c85f1f215872b5f2976782480  go1.18.darwin-arm64.tar.gz
+3703e9a0db1000f18c0c7b524f3d378aac71219b4715a6a4c5683eb639f41a4d  go1.18.1.darwin-amd64.tar.gz
+6d5641a06edba8cd6d425fb0adad06bad80e2afe0fa91b4aa0e5aed1bc78f58e  go1.18.1.darwin-arm64.tar.gz
 b9a9063d4265d8ccc046c9b314194d6eadc47e56d0d637db81e98e68aad45035  go1.18.1.freebsd-386.tar.gz
 2bc1c138d645e37dbbc63517dd1cf1bf33fc4cb95f442a6384df0418b5134e9f  go1.18.1.freebsd-amd64.tar.gz
 9a8df5dde9058f08ac01ecfaae42534610db398e487138788c01da26a0d41ff9  go1.18.1.linux-386.tar.gz
