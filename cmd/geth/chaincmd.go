@@ -193,7 +193,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
