@@ -276,7 +276,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			// The header is still missing, the beacon sync is corrupted and bail out
 			// the error here.
 			if header == nil {
-				return fmt.Errorf("missing beacon header %d %x", tail.Number.Uint64()-1, tail.ParentHash)
+				return fmt.Errorf("missing beacon header %d", from)
 			}
 			headers = append(headers, header)
 			hashes = append(hashes, headers[i].Hash())
