@@ -17,10 +17,12 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
 )
 
@@ -379,5 +381,16 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	t.Logf("%d", len(proof.ExtStatus))
 	if len(proof.PoaStems) != 0 {
 		t.Fatal("a proof-of-absence stem was declared, when there was no need")
+	}
+}
+
+func TestGetTreeKeys(t *testing.T) {
+	addr := common.Hex2Bytes("71562b71999873DB5b286dF957af199Ec94617f7")
+	target := common.Hex2Bytes("0e19316be898a50719b7c321005583ddab6398f4e568d8efafb0619609700f00")
+	key := utils.GetTreeKeyVersion(addr)
+	t.Logf("key=%x", key)
+	t.Logf("actualKey=%x", target)
+	if !bytes.Equal(key, target) {
+		t.Fatalf("differing output %x != %x", key, target)
 	}
 }
