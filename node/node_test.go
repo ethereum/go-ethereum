@@ -393,7 +393,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 // on the given prefix
 func TestRegisterHandler_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
-
+	defer node.Close()
 	// create and mount handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
@@ -577,13 +577,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		}
 	}
 	for _, path := range test.wantWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err != nil {
 			t.Errorf("Error: %s: WebSocket connection failed: %v", path, err)
 		}
 	}
 	for _, path := range test.wantNoWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}

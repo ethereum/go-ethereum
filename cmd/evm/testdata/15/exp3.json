@@ -21,19 +21,19 @@
     "error": "transaction type not supported"
   },
   {
-    "error": "rlp: expected List"
+    "error": "typed transaction too short"
   },
   {
-    "error": "rlp: expected List"
+    "error": "typed transaction too short"
   },
   {
-    "error": "rlp: expected List"
+    "error": "typed transaction too short"
   },
   {
-    "error": "rlp: expected List"
+    "error": "typed transaction too short"
   },
   {
-    "error": "rlp: expected List"
+    "error": "typed transaction too short"
   },
   {
     "error": "rlp: expected input list for types.AccessListTx"

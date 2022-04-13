@@ -395,7 +395,7 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 					}
 					pool.dropTxFeed.Send(DropTxsEvent{
-						Txs: list,
+						Txs:    list,
 						Reason: dropOld,
 					})
 					queuedEvictionMeter.Mark(int64(len(list)))
@@ -474,7 +474,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 		}
 		pool.priced.Removed(len(drop))
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: drop,
+			Txs:    drop,
 			Reason: dropGasPriceUpdated,
 		})
 	}
@@ -728,7 +728,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.removeTx(tx.Hash(), false)
 		}
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: drop,
+			Txs:    drop,
 			Reason: dropUnderpriced,
 		})
 	}
@@ -747,8 +747,8 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.priced.Removed(1)
 			pendingReplaceMeter.Mark(1)
 			pool.dropTxFeed.Send(DropTxsEvent{
-				Txs: []*types.Transaction{old},
-				Reason: dropReplaced,
+				Txs:         []*types.Transaction{old},
+				Reason:      dropReplaced,
 				Replacement: tx,
 			})
 		}
@@ -803,7 +803,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		pool.priced.Removed(1)
 		queuedReplaceMeter.Mark(1)
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: []*types.Transaction{old},
+			Txs:    []*types.Transaction{old},
 			Reason: dropReplaced,
 		})
 	} else {
@@ -863,7 +863,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 		pool.priced.Removed(1)
 		pendingReplaceMeter.Mark(1)
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: []*types.Transaction{old},
+			Txs:    []*types.Transaction{old},
 			Reason: dropReplaced,
 		})
 	} else {
@@ -965,7 +965,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		}
 		if err != nil {
 			pool.rejectTxFeed.Send(RejectedTxEvent{
-				Tx: txs[nilSlot],
+				Tx:     txs[nilSlot],
 				Reason: err,
 			})
 		}
@@ -1065,7 +1065,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
 			pool.dropTxFeed.Send(DropTxsEvent{
-				Txs: invalids,
+				Txs:    invalids,
 				Reason: dropUnexecutable,
 			})
 			return
@@ -1375,7 +1375,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: forwards,
+			Txs:    forwards,
 			Reason: dropLowNonce,
 		})
 		// Drop all transactions that are too costly (low balance or out of gas)
@@ -1387,7 +1387,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		log.Trace("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: drops,
+			Txs:    drops,
 			Reason: dropUnpayable,
 		})
 
@@ -1413,7 +1413,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			}
 			queuedRateLimitMeter.Mark(int64(len(caps)))
 			pool.dropTxFeed.Send(DropTxsEvent{
-				Txs: caps,
+				Txs:    caps,
 				Reason: dropAccountCap,
 			})
 		}
@@ -1481,7 +1481,7 @@ func (pool *TxPool) truncatePending() {
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
 					pool.dropTxFeed.Send(DropTxsEvent{
-						Txs: caps,
+						Txs:    caps,
 						Reason: dropAccountCap,
 					})
 					pool.priced.Removed(len(caps))
@@ -1512,7 +1512,7 @@ func (pool *TxPool) truncatePending() {
 					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
 				pool.dropTxFeed.Send(DropTxsEvent{
-					Txs: caps,
+					Txs:    caps,
 					Reason: dropAccountCap,
 				})
 				pool.priced.Removed(len(caps))
@@ -1560,7 +1560,7 @@ func (pool *TxPool) truncateQueue() {
 				pool.removeTx(tx.Hash(), true)
 			}
 			pool.dropTxFeed.Send(DropTxsEvent{
-				Txs: txs,
+				Txs:    txs,
 				Reason: dropTruncating,
 			})
 			drop -= size
@@ -1574,7 +1574,7 @@ func (pool *TxPool) truncateQueue() {
 			drop--
 			queuedRateLimitMeter.Mark(1)
 			pool.dropTxFeed.Send(DropTxsEvent{
-				Txs: []*types.Transaction{txs[i]},
+				Txs:    []*types.Transaction{txs[i]},
 				Reason: dropTruncating,
 			})
 		}
@@ -1601,7 +1601,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: olds,
+			Txs:    olds,
 			Reason: dropLowNonce,
 		})
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
@@ -1612,7 +1612,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 		}
 		pool.dropTxFeed.Send(DropTxsEvent{
-			Txs: drops,
+			Txs:    drops,
 			Reason: dropUnpayable,
 		})
 		pool.priced.Removed(len(olds) + len(drops))

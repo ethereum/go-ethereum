@@ -145,7 +145,8 @@ var encTests = []encTest{
 	{val: *big.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// negative ints are not supported
-	{val: big.NewInt(-1), error: "rlp: cannot encode negative *big.Int"},
+	{val: big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
+	{val: *big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
 
 	// byte arrays
 	{val: [0]byte{}, output: "80"},
@@ -396,6 +397,21 @@ func TestEncode(t *testing.T) {
 
 func TestEncodeToBytes(t *testing.T) {
 	runEncTests(t, EncodeToBytes)
+}
+
+func TestEncodeAppendToBytes(t *testing.T) {
+	buffer := make([]byte, 20)
+	runEncTests(t, func(val interface{}) ([]byte, error) {
+		w := NewEncoderBuffer(nil)
+		defer w.Flush()
+
+		err := Encode(w, val)
+		if err != nil {
+			return nil, err
+		}
+		output := w.AppendToBytes(buffer[:0])
+		return output, nil
+	})
 }
 
 func TestEncodeToReader(t *testing.T) {

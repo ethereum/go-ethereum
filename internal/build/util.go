@@ -17,6 +17,7 @@
 package build
 
 import (
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
@@ -31,6 +32,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -115,7 +117,6 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 // the form sftp://[user@]host[:port].
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
-	sftp.Stdout = nil
 	sftp.Stderr = os.Stderr
 	if identityFile != "" {
 		sftp.Args = append(sftp.Args, "-i", identityFile)
@@ -130,6 +131,10 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	if err != nil {
 		return fmt.Errorf("can't create stdin pipe for sftp: %v", err)
 	}
+	stdout, err := sftp.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("can't create stdout pipe for sftp: %v", err)
+	}
 	if err := sftp.Start(); err != nil {
 		return err
 	}
@@ -137,8 +142,35 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	for _, f := range files {
 		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
 	}
+	fmt.Fprintln(in, "exit")
+	// Some issue with the PPA sftp server makes it so the server does not
+	// respond properly to a 'bye', 'exit' or 'quit' from the client.
+	// To work around that, we check the output, and when we see the client
+	// exit command, we do a hard exit.
+	// See
+	// https://github.com/kolban-google/sftp-gcs/issues/23
+	// https://github.com/mscdex/ssh2/pull/1111
+	aborted := false
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			txt := scanner.Text()
+			fmt.Println(txt)
+			if txt == "sftp> exit" {
+				// Give it .5 seconds to exit (server might be fixed), then
+				// hard kill it from the outside
+				time.Sleep(500 * time.Millisecond)
+				aborted = true
+				sftp.Process.Kill()
+			}
+		}
+	}()
 	stdin.Close()
-	return sftp.Wait()
+	err = sftp.Wait()
+	if aborted {
+		return nil
+	}
+	return err
 }
 
 // FindMainPackages finds all 'main' packages in the given directory and returns their
