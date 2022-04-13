@@ -36,6 +36,7 @@ type beaconBackfiller struct {
 	syncMode   SyncMode      // Sync mode to use for backfilling the skeleton chains
 	success    func()        // Callback to run on successful sync cycle completion
 	filling    bool          // Flag whether the downloader is backfilling or not
+	filled     *types.Header // Last header filled by the last terminated sync loop
 	started    chan struct{} // Notification channel whether the downloader inited
 	lock       sync.Mutex    // Mutex protecting the sync lock
 }
@@ -48,16 +49,18 @@ func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
 	}
 }
 
-// suspend cancels any background downloader threads.
-func (b *beaconBackfiller) suspend() {
+// suspend cancels any background downloader threads and returns the last header
+// that has been successfully backfilled.
+func (b *beaconBackfiller) suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()
 	filling := b.filling
+	filled := b.filled
 	started := b.started
 	b.lock.Unlock()
 
 	if !filling {
-		return
+		return filled // Return the filled header on the previous sync completion
 	}
 	// A previous filling should be running, though it may happen that it hasn't
 	// yet started (being done on a new goroutine). Many concurrent beacon head
@@ -69,6 +72,10 @@ func (b *beaconBackfiller) suspend() {
 	// Now that we're sure the downloader successfully started up, we can cancel
 	// it safely without running the risk of data races.
 	b.downloader.Cancel()
+
+	// Sync cycle was just terminated, retrieve and return the last filled header.
+	// Can't use `filled` as that contains a stale value from before cancellation.
+	return b.downloader.blockchain.CurrentFastBlock().Header()
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
@@ -81,6 +88,7 @@ func (b *beaconBackfiller) resume() {
 		return
 	}
 	b.filling = true
+	b.filled = nil
 	b.started = make(chan struct{})
 	mode := b.syncMode
 	b.lock.Unlock()
@@ -92,6 +100,7 @@ func (b *beaconBackfiller) resume() {
 		defer func() {
 			b.lock.Lock()
 			b.filling = false
+			b.filled = b.downloader.blockchain.CurrentFastBlock().Header()
 			b.lock.Unlock()
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
