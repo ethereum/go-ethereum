@@ -269,6 +269,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			return fmt.Errorf("invalid origin (%d) of beacon sync (%d)", from, tail.Number)
 		}
 		localHeaders = d.readHeaderRange(tail, int(count))
+		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
 	for {
 		// Retrieve a batch of headers and feed it to the header processor
