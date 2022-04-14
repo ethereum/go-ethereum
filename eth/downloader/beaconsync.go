@@ -258,6 +258,18 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 	if err != nil {
 		return err
 	}
+	// A part of headers are not in the skeleton space, try to resolve
+	// them from the local chain. Note the range should be very short
+	// and it should only happen when there are less than 64 post-merge
+	// blocks in the network.
+	var localHeaders []*types.Header
+	if from < tail.Number.Uint64() {
+		count := tail.Number.Uint64() - from
+		if count > uint64(fsMinFullBlocks) {
+			return fmt.Errorf("invalid origin (%d) of beacon sync (%d)", from, tail.Number)
+		}
+		localHeaders = d.readHeaderRange(tail, int(count))
+	}
 	for {
 		// Retrieve a batch of headers and feed it to the header processor
 		var (
@@ -267,11 +279,12 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		for i := 0; i < maxHeadersProcess && from <= head.Number.Uint64(); i++ {
 			header := d.skeleton.Header(from)
 
-			// The header is not found in skeleton space, try to resolve the header
-			// reversely via skeleton tail. Note we can't retrieve the header by
-			// number directly, since there is no guarantee it's the header we want.
-			if header == nil {
-				header = d.getAncestorHeader(from, tail)
+			// The header is not found in skeleton space, try to find it in local chain.
+			if header == nil && from < tail.Number.Uint64() {
+				dist := tail.Number.Uint64() - from
+				if len(localHeaders) >= int(dist) {
+					header = localHeaders[dist-1]
+				}
 			}
 			// The header is still missing, the beacon sync is corrupted and bail out
 			// the error here.

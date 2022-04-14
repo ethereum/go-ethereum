@@ -1385,10 +1385,10 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 		name  string // The name of testing scenario
 		local int    // The length of local chain(canonical chain assumed), 0 means genesis is the head
 	}{
-		{name: "Beacon sync since genesis", local: 0},
-		{name: "Beacon sync with short local chain", local: 1},
+		//{name: "Beacon sync since genesis", local: 0},
+		//{name: "Beacon sync with short local chain", local: 1},
 		{name: "Beacon sync with long local chain", local: blockCacheMaxItems - 15 - fsMinFullBlocks/2},
-		{name: "Beacon sync with full local chain", local: blockCacheMaxItems - 15 - 1},
+		//{name: "Beacon sync with full local chain", local: blockCacheMaxItems - 15 - 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

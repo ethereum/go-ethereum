@@ -483,8 +483,14 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			// Retrieve the pivot header from the skeleton chain segment but
 			// fallback to local chain if it's not found in skeleton space.
 			if pivot = d.skeleton.Header(number); pivot == nil {
-				_, tail, _ := d.skeleton.Bounds() // error is already checked
-				pivot = d.getAncestorHeader(number, tail)
+				_, oldest, _ := d.skeleton.Bounds() // error is already checked
+				if number < oldest.Number.Uint64() {
+					count := int(oldest.Number.Uint64() - number) // it's capped by fsMinFullBlocks
+					headers := d.readHeaderRange(oldest, count)
+					if len(headers) == count {
+						pivot = headers[len(headers)-1]
+					}
+				}
 			}
 			// Print an error log and return directly in case the pivot header
 			// is still not found. It means the skeleton chain is not linked
@@ -1771,23 +1777,24 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 	}
 }
 
-// getAncestorHeader retrieves the header with given number. Different from obtaining
-// the canonical header through the number directly, a verified tail header is used
-// here as the base point and obtain the header eventually by resolving the parent.
-func (d *Downloader) getAncestorHeader(number uint64, last *types.Header) *types.Header {
-	var current = last
+// readHeaderRange returns a list of headers, using the given last header as the base,
+// and going backwards towards genesis. This method assumes that the caller already has
+// placed a reasonable cap on count.
+func (d *Downloader) readHeaderRange(last *types.Header, count int) []*types.Header {
+	var (
+		current = last
+		headers []*types.Header
+	)
 	for {
 		parent := d.lightchain.GetHeaderByHash(current.ParentHash)
 		if parent == nil {
-			break // The chain is not continuous
+			break // The chain is not continuous, or the chain is exhausted
 		}
-		if parent.Number.Uint64() < number {
-			break // It shouldn't happen though
-		}
-		if parent.Number.Uint64() == number {
-			return parent
+		headers = append(headers, parent)
+		if len(headers) >= count {
+			break
 		}
 		current = parent
 	}
-	return nil
+	return headers
 }
