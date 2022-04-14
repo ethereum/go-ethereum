@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-var _ = (*executableDataMarshaling)(nil)
+var _ = (*executableDataMarshalling)(nil)
 
 // MarshalJSON marshals as JSON.
 func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {

@@ -59,7 +59,7 @@ func signHash(data []byte) []byte {
 }
 
 // mustPrintJSON prints the JSON encoding of the given object and
-// exits the program with an error message when the marshaling fails.
+// exits the program with an error message when the marshalling fails.
 func mustPrintJSON(jsonObject interface{}) {
 	str, err := json.MarshalIndent(jsonObject, "", "  ")
 	if err != nil {

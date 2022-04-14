@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-//go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
+//go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshalling -out gen_blockparams.go
 
 // PayloadAttributesV1 structure described at https://github.com/ethereum/execution-apis/pull/74
 type PayloadAttributesV1 struct {
@@ -36,11 +36,11 @@ type PayloadAttributesV1 struct {
 }
 
 // JSON type overrides for PayloadAttributesV1.
-type payloadAttributesMarshaling struct {
+type payloadAttributesMarshalling struct {
 	Timestamp hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
+//go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshalling -out gen_ed.go
 
 // ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/src/engine/specification.md
 type ExecutableDataV1 struct {
@@ -61,7 +61,7 @@ type ExecutableDataV1 struct {
 }
 
 // JSON type overrides for executableData.
-type executableDataMarshaling struct {
+type executableDataMarshalling struct {
 	Number        hexutil.Uint64
 	GasLimit      hexutil.Uint64
 	GasUsed       hexutil.Uint64

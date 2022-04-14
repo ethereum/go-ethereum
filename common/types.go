@@ -182,7 +182,7 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-// UnprefixedHash allows marshaling a Hash without 0x prefix.
+// UnprefixedHash allows marshalling a Hash without 0x prefix.
 type UnprefixedHash Hash
 
 // UnmarshalText decodes the hash from hex. The 0x prefix is optional.
@@ -354,7 +354,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-// UnprefixedAddress allows marshaling an Address without 0x prefix.
+// UnprefixedAddress allows marshalling an Address without 0x prefix.
 type UnprefixedAddress Address
 
 // UnmarshalText decodes the address from hex. The 0x prefix is optional.

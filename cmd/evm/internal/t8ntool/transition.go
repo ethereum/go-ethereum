@@ -158,7 +158,7 @@ func Transition(ctx *cli.Context) error {
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
@@ -218,7 +218,7 @@ func Transition(ctx *cli.Context) error {
 			}
 		} else {
 			if err := decoder.Decode(&txsWithKeys); err != nil {
-				return NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
+				return NewError(ErrorJson, fmt.Errorf("failed unmarshalling txs-file: %v", err))
 			}
 		}
 	} else {
