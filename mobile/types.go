@@ -358,7 +358,7 @@ func NewReceiptFromJSON(data string) (*Receipt, error) {
 
 // EncodeJSON encodes a transaction receipt into a JSON data dump.
 func (r *Receipt) EncodeJSON() (string, error) {
-	data, err := rlp.EncodeToBytes(r.receipt)
+	data, err := json.Marshal(r.receipt)
 	return string(data), err
 }
 
