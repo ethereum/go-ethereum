@@ -58,7 +58,7 @@ var (
 	// The app that holds all commands and flags.
 	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
 	// flags that configure the node
-	nodeFlags = []cli.Flag{
+	nodeFlags = append([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
@@ -140,15 +140,9 @@ var (
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
-		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.DeveloperGasLimitFlag,
-		utils.RopstenFlag,
-		utils.SepoliaFlag,
-		utils.RinkebyFlag,
-		utils.GoerliFlag,
-		utils.KilnFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -160,7 +154,7 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
 		configFileFlag,
-	}
+	}, utils.NetworkFlags...)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
@@ -280,14 +274,17 @@ func prepare(ctx *cli.Context) {
 	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
 
-	case ctx.GlobalIsSet(utils.SepoliaFlag.Name):
-		log.Info("Starting Geth on Sepolia testnet...")
-
 	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
 		log.Info("Starting Geth on Rinkeby testnet...")
 
 	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
 		log.Info("Starting Geth on Görli testnet...")
+
+	case ctx.GlobalIsSet(utils.SepoliaFlag.Name):
+		log.Info("Starting Geth on Sepolia testnet...")
+
+	case ctx.GlobalIsSet(utils.KilnFlag.Name):
+		log.Info("Starting Geth on Kiln testnet...")
 
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
@@ -302,6 +299,7 @@ func prepare(ctx *cli.Context) {
 			!ctx.GlobalIsSet(utils.SepoliaFlag.Name) &&
 			!ctx.GlobalIsSet(utils.RinkebyFlag.Name) &&
 			!ctx.GlobalIsSet(utils.GoerliFlag.Name) &&
+			!ctx.GlobalIsSet(utils.KilnFlag.Name) &&
 			!ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
