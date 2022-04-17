@@ -247,17 +247,20 @@ js:
       var blobs = [];
       var retrieveBlobs = function(marker, finished) {
         // Generate the blob listing URL and request it from Azure
-        var url = 'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&maxresults=5000&prefix=geth-';
+        var url = 'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&maxresults=250&prefix=geth-';
         if (marker != "") {
           url += "&marker=" + marker;
         }
         $.ajax({
           url: url,
           type: 'GET',
+          dataType: 'xml',
+          timeout: 3 * 60 * 1000,
           error: function() {
             alert("Failed to load releases!");
+            // Remove the modal blocker, so the user can at least access the things which have loaded
+            $('#loader').modal('hide');
           },
-          dataType: 'xml',
           success: function(data) {
             // List of blobs retrieved, acumulate them first of all
             Array.prototype.push.apply(blobs, $(data).find('Blob'));

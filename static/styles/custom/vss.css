@@ -36,3 +36,4 @@
 .highlight .sr { color: #a31515 } /* Literal.String.Regex */
 .highlight .s1 { color: #a31515 } /* Literal.String.Single */
 .highlight .ss { color: #a31515 } /* Literal.String.Symbol */
+.language-terminal .highlight{background: #030303; color: #ffffff;}

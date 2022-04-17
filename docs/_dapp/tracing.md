@@ -190,7 +190,7 @@ Say you want to do a trace on block `B`. Now there are a couple of cases:
 
 Here's what happens in each respective case:
 
-1. Geth will regenerate the desired state by replaying blocks from the closest point ina
+1. Geth will regenerate the desired state by replaying blocks from the closest point in
    time before `B` where it has full state. This defaults to `128` blocks max, but you can
    specify more in the actual call `... "reexec":1000 .. }` to the tracer.
 2. Sorry, can't be done without replaying from genesis.   
