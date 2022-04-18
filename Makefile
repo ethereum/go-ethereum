@@ -2,11 +2,13 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test clean
+.PHONY: geth android ios evm all test clean docker
 
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+IMAGE_NAME = l2geth
+IMAGE_VERSION = latest
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -52,3 +54,6 @@ devtools:
 	env GOBIN= go install ./cmd/abigen
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+docker:
+	docker build -t scrolltech/${IMAGE_NAME}:${IMAGE_VERSION} ./
