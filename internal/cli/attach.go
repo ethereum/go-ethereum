@@ -72,7 +72,7 @@ func (c *AttachCommand) Run(args []string) int {
 	if len(args) == 0 {
 		args = append(args, "")
 	}
-	if args[0] != "" && string(args[0][0:2]) == "--" {
+	if args[0] != "" && strings.HasPrefix(args[0], "--") {
 		if err := flags.Parse(args); err != nil {
 			c.UI.Error(err.Error())
 			return 1
@@ -84,7 +84,10 @@ func (c *AttachCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	c.remoteConsole()
+	if err := c.remoteConsole(); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
 	return 0
 }
