@@ -1647,6 +1647,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
+		if _, err := bc.issuance(block, parent); err != nil {
+			log.Error("Failed to calculate Ether issuance: %v", err)
+		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
