@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tyler-smith/go-bip39"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -46,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/tyler-smith/go-bip39"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -1873,6 +1874,23 @@ func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexu
 		return nil, fmt.Errorf("block #%d not found", number)
 	}
 	return rlp.EncodeToBytes(block)
+}
+
+// GetTransactionReceiptRlp returns the RLP-encoded transaction receipt for the given transaction hash.
+func (api *PublicDebugAPI) GetTransactionReceiptRlp(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	_, blockHash, _, index, err := api.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, nil
+	}
+	receipts, err := api.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if len(receipts) <= int(index) {
+		return nil, nil
+	}
+	receipt := receipts[index]
+	return rlp.EncodeToBytes(receipt)
 }
 
 // TestSignCliqueBlock fetches the given block number, and attempts to sign it as a clique header with the
