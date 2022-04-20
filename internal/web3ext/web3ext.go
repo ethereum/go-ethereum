@@ -234,6 +234,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getRawReceipt',
+			call: 'debug_getRawReceipt',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'testSignCliqueBlock',
 			call: 'debug_testSignCliqueBlock',
 			params: 2,
