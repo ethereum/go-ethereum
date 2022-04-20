@@ -25,6 +25,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	5022: enable5022,
 	3529: enable3529,
 	3198: enable3198,
 	2929: enable2929,
@@ -107,6 +108,12 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
+}
+
+// same as 2200, but different sstore zero -> non-zero pricing
+func enable5022(jt *JumpTable) {
+	jt[SLOAD].constantGas = params.SloadGasEIP2200
+	jt[SSTORE].dynamicGas = gasSStoreEIP5022
 }
 
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
