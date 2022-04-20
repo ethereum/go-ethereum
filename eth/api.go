@@ -607,3 +607,12 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	}
 	return 0, fmt.Errorf("No state found")
 }
+
+// FlushState persists the state of a given block to disk.
+func (api *PrivateDebugAPI) FlushState(number rpc.BlockNumber) error {
+	// Genesis, latest and pending not supported
+	if number.Int64() <= 0 {
+		return fmt.Errorf("Invalid block number")
+	}
+	return api.eth.BlockChain().FlushState(uint64(number.Int64()))
+}

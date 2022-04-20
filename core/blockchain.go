@@ -2324,3 +2324,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	_, err := bc.hc.InsertHeaderChain(chain, start, bc.forker)
 	return 0, err
 }
+
+func (bc *BlockChain) FlushState(number uint64) error {
+	triedb := bc.stateCache.TrieDB()
+	block := bc.GetBlockByNumber(number)
+	log.Info("Writing cached state to disk", "block", block.Number(), "hash", block.Hash(), "root", block.Root())
+	return triedb.Commit(block.Root(), true, nil)
+}

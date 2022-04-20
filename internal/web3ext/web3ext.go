@@ -471,6 +471,12 @@ web3._extend({
 			params: 2,
 			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
+		new web3._extend.Method({
+			name: 'flushState',
+			call: 'debug_flushState',
+			params: 1,
+			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter],
+		}),
 	],
 	properties: []
 });
