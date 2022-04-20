@@ -72,9 +72,9 @@ was cancelled successful.
 
 ### newHeads
 
-Fires a notification each time a new header is appended to the chain, including chain reorganizations. Users can use the bloom filter to determine if the block contains logs that are interested to them.
+Fires a notification each time a new header is appended to the chain, including chain reorganizations. Users can use the bloom filter to determine if the block contains logs that are interested to them. Note that if geth receives multiple blocks simultaneously, e.g. catching up after being out of sync, only the last block is emitted.
 
-In case of a chain reorganization the subscription will emit all new headers for the new
+In case of a chain reorganization the subscription will emit the last header in the new
 chain. Therefore the subscription can emit multiple headers on the same height.
 
 #### Example
