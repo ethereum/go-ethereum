@@ -70,6 +70,7 @@ var (
 		utils.OverrideCancun,
 		utils.OverrideVerkle,
 		utils.EnablePersonal,
+		utils.SupplyDeltaFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,

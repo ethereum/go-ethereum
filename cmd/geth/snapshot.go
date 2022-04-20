@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/supplydelta"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -150,6 +151,18 @@ as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
+`,
+			},
+			{
+				Name:     "crawl-supply",
+				Usage:    "Calculate the Ether supply at a specific block",
+				Action:   crawlSupply,
+				Category: "MISCELLANEOUS COMMANDS",
+				Flags:    flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
+				Description: `
+geth snapshot crawl-supply
+will traverse the whole state from the given root and accumulate all the Ether
+balances to calculate the total supply.
 `,
 			},
 		},
@@ -603,5 +616,37 @@ func checkAccount(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func crawlSupply(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	headBlock := rawdb.ReadHeadBlock(chaindb)
+	if headBlock == nil {
+		log.Error("Failed to load head block")
+		return errors.New("no head block")
+	}
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    false,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapConfig, chaindb, trie.NewDatabase(chaindb), headBlock.Root())
+	if err != nil {
+		log.Error("Failed to open snapshot tree", "err", err)
+		return err
+	}
+	if _, err = supplydelta.Supply(headBlock.Header(), snaptree); err != nil {
+		log.Error("Failed to calculate current supply", "err", err)
+		return err
+	}
 	return nil
 }
