@@ -35,6 +35,7 @@ func TestSchedulerMultiClientSingleFetcher(t *testing.T)  { testScheduler(t, 10,
 func TestSchedulerMultiClientMultiFetcher(t *testing.T)   { testScheduler(t, 10, 10, 5000) }
 
 func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
+	t.Parallel()
 	f := newScheduler(0)
 
 	// Create a batch of handler goroutines that respond to bloom bit requests and
@@ -88,10 +89,10 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 				}
 				close(in)
 			}()
-
+			b := new(big.Int)
 			for j := 0; j < requests; j++ {
 				bits := <-out
-				if want := new(big.Int).SetUint64(uint64(j)).Bytes(); !bytes.Equal(bits, want) {
+				if want := b.SetUint64(uint64(j)).Bytes(); !bytes.Equal(bits, want) {
 					t.Errorf("vector %d: delivered content mismatch: have %x, want %x", j, bits, want)
 				}
 			}

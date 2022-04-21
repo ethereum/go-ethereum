@@ -43,6 +43,7 @@ const jsondata = `
 	{ "type" : "function", "name" : "uint64[2]", "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
 	{ "type" : "function", "name" : "uint64[]", "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
 	{ "type" : "function", "name" : "int8", "inputs" : [ { "name" : "inputs", "type" : "int8" } ] },
+	{ "type" : "function", "name" : "bytes32", "inputs" : [ { "name" : "inputs", "type" : "bytes32" } ] },
 	{ "type" : "function", "name" : "foo", "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
 	{ "type" : "function", "name" : "bar", "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
 	{ "type" : "function", "name" : "slice", "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
@@ -68,6 +69,7 @@ var (
 	String, _     = NewType("string", "", nil)
 	Bool, _       = NewType("bool", "", nil)
 	Bytes, _      = NewType("bytes", "", nil)
+	Bytes32, _    = NewType("bytes32", "", nil)
 	Address, _    = NewType("address", "", nil)
 	Uint64Arr, _  = NewType("uint64[]", "", nil)
 	AddressArr, _ = NewType("address[]", "", nil)
@@ -98,6 +100,7 @@ var methods = map[string]Method{
 	"uint64[]":            NewMethod("uint64[]", "uint64[]", Function, "", false, false, []Argument{{"inputs", Uint64Arr, false}}, nil),
 	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", Function, "", false, false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
 	"int8":                NewMethod("int8", "int8", Function, "", false, false, []Argument{{"inputs", Int8, false}}, nil),
+	"bytes32":             NewMethod("bytes32", "bytes32", Function, "", false, false, []Argument{{"inputs", Bytes32, false}}, nil),
 	"foo":                 NewMethod("foo", "foo", Function, "", false, false, []Argument{{"inputs", Uint32, false}}, nil),
 	"bar":                 NewMethod("bar", "bar", Function, "", false, false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
 	"slice":               NewMethod("slice", "slice", Function, "", false, false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
@@ -290,6 +293,20 @@ func TestOverloadedMethodSignature(t *testing.T) {
 	check("foo0", "foo(uint256)", true)
 	check("bar", "bar(uint256)", false)
 	check("bar0", "bar(uint256,uint256)", false)
+}
+
+func TestCustomErrors(t *testing.T) {
+	json := `[{ "inputs": [	{ "internalType": "uint256", "name": "", "type": "uint256" } ],"name": "MyError", "type": "error"} ]`
+	abi, err := JSON(strings.NewReader(json))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(name string, expect string) {
+		if abi.Errors[name].Sig != expect {
+			t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig)
+		}
+	}
+	check("MyError", "MyError(uint256)")
 }
 
 func TestMultiPack(t *testing.T) {

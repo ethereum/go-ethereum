@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:generate go-bindata -nometadata -nocompress -o 4byte.go -pkg fourbyte 4byte.json
+//go:generate go run github.com/kevinburke/go-bindata/go-bindata -nometadata -nocompress -o 4byte.go -pkg fourbyte 4byte.json
 //go:generate gofmt -s -w 4byte.go
 //go:generate sh -c "sed 's#var __4byteJson#//nolint:misspell\\\n&#' 4byte.go > 4byte.go.tmp && mv 4byte.go.tmp 4byte.go"
 

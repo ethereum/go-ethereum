@@ -61,6 +61,10 @@ func TestLexer(t *testing.T) {
 			tokens: []token{{typ: lineStart}, {typ: number, text: "0123"}, {typ: element, text: "abc"}, {typ: eof}},
 		},
 		{
+			input:  "00123abc",
+			tokens: []token{{typ: lineStart}, {typ: number, text: "00123"}, {typ: element, text: "abc"}, {typ: eof}},
+		},
+		{
 			input:  "@foo",
 			tokens: []token{{typ: lineStart}, {typ: label, text: "foo"}, {typ: eof}},
 		},

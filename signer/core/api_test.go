@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
@@ -108,11 +108,8 @@ func (ui *headlessUi) ShowInfo(message string) {
 }
 
 func tmpDirName(t *testing.T) string {
-	d, err := ioutil.TempDir("", "eth-keystore-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err = filepath.EvalSymlinks(d)
+	d := t.TempDir()
+	d, err := filepath.EvalSymlinks(d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,18 +220,18 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
-func mkTestTx(from common.MixedcaseAddress) core.SendTxArgs {
+func mkTestTx(from common.MixedcaseAddress) apitypes.SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)
 	gasPrice := (hexutil.Big)(*big.NewInt(2000000000))
 	value := (hexutil.Big)(*big.NewInt(1e18))
 	nonce := (hexutil.Uint64)(0)
 	data := hexutil.Bytes(common.Hex2Bytes("01020304050607080a"))
-	tx := core.SendTxArgs{
+	tx := apitypes.SendTxArgs{
 		From:     from,
 		To:       &to,
 		Gas:      gas,
-		GasPrice: gasPrice,
+		GasPrice: &gasPrice,
 		Value:    value,
 		Data:     &data,
 		Nonce:    nonce}
@@ -254,6 +251,9 @@ func TestSignTx(t *testing.T) {
 	list, err = api.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(list) == 0 {
+		t.Fatal("Unexpected empty list")
 	}
 	a := common.NewMixedcaseAddress(list[0])
 

@@ -33,14 +33,34 @@ func TestChainIterator(t *testing.T) {
 
 	var block *types.Block
 	var txs []*types.Transaction
-	for i := uint64(0); i <= 10; i++ {
-		if i == 0 {
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, newHasher()) // Empty genesis block
+	to := common.BytesToAddress([]byte{0x11})
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher()) // Empty genesis block
+	WriteBlock(chainDb, block)
+	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+	for i := uint64(1); i <= 10; i++ {
+		var tx *types.Transaction
+		if i%2 == 0 {
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		} else {
-			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-			txs = append(txs, tx)
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+			tx = types.NewTx(&types.AccessListTx{
+				ChainID:  big.NewInt(1337),
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		}
+		txs = append(txs, tx)
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -66,7 +86,7 @@ func TestChainIterator(t *testing.T) {
 				numbers = append(numbers, int(h.number))
 				if len(h.hashes) > 0 {
 					if got, exp := h.hashes[0], txs[h.number-1].Hash(); got != exp {
-						t.Fatalf("hash wrong, got %x exp %x", got, exp)
+						t.Fatalf("block %d: hash wrong, got %x exp %x", h.number, got, exp)
 					}
 				}
 			}
@@ -88,14 +108,37 @@ func TestIndexTransactions(t *testing.T) {
 
 	var block *types.Block
 	var txs []*types.Transaction
-	for i := uint64(0); i <= 10; i++ {
-		if i == 0 {
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, newHasher()) // Empty genesis block
+	to := common.BytesToAddress([]byte{0x11})
+
+	// Write empty genesis block
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher())
+	WriteBlock(chainDb, block)
+	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+
+	for i := uint64(1); i <= 10; i++ {
+		var tx *types.Transaction
+		if i%2 == 0 {
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		} else {
-			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-			txs = append(txs, tx)
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+			tx = types.NewTx(&types.AccessListTx{
+				ChainID:  big.NewInt(1337),
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		}
+		txs = append(txs, tx)
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -108,10 +151,10 @@ func TestIndexTransactions(t *testing.T) {
 			}
 			number := ReadTxLookupEntry(chainDb, txs[i-1].Hash())
 			if exist && number == nil {
-				t.Fatalf("Transaction indice missing")
+				t.Fatalf("Transaction index %d missing", i)
 			}
 			if !exist && number != nil {
-				t.Fatalf("Transaction indice is not deleted")
+				t.Fatalf("Transaction index %d is not deleted", i)
 			}
 		}
 		number := ReadTxIndexTail(chainDb)

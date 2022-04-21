@@ -599,6 +599,7 @@ func (ns *NodeStateMachine) updateEnode(n *enode.Node) (enode.ID, *nodeInfo) {
 	node := ns.nodes[id]
 	if node != nil && n.Seq() > node.node.Seq() {
 		node.node = n
+		node.dirty = true
 	}
 	return id, node
 }
@@ -807,7 +808,14 @@ func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask bitMask, timeout time
 	ns.removeTimeouts(node, mask)
 	t := &nodeStateTimeout{mask: mask}
 	t.timer = ns.clock.AfterFunc(timeout, func() {
-		ns.SetState(n, Flags{}, Flags{mask: t.mask, setup: ns.setup}, 0)
+		ns.lock.Lock()
+		defer ns.lock.Unlock()
+
+		if !ns.opStart() {
+			return
+		}
+		ns.setState(n, Flags{}, Flags{mask: t.mask, setup: ns.setup}, 0)
+		ns.opFinish()
 	})
 	node.timeouts = append(node.timeouts, t)
 	if mask&ns.saveFlags != 0 {
@@ -855,6 +863,23 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 		return node.fields[ns.fieldIndex(field)]
 	}
 	return nil
+}
+
+// GetState retrieves the current state of the given node. Note that when used in a
+// subscription callback the result can be out of sync with the state change represented
+// by the callback parameters so extra safety checks might be necessary.
+func (ns *NodeStateMachine) GetState(n *enode.Node) Flags {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	ns.checkStarted()
+	if ns.closed {
+		return Flags{}
+	}
+	if _, node := ns.updateEnode(n); node != nil {
+		return Flags{mask: node.state, setup: ns.setup}
+	}
+	return Flags{}
 }
 
 // SetField sets the given field of the given node and blocks until the operation is finished

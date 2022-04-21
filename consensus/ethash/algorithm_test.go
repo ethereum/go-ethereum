@@ -698,6 +698,8 @@ func TestHashimoto(t *testing.T) {
 // Tests that caches generated on disk may be done concurrently.
 func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	// Create a temp folder to generate the caches into
+	// TODO: t.TempDir fails to remove the directory on Windows
+	// \AppData\Local\Temp\1\TestConcurrentDiskCacheGeneration2382060137\001\cache-R23-1dca8a85e74aa763: Access is denied.
 	cachedir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temporary cache dir: %v", err)
@@ -726,12 +728,16 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		pend.Add(1)
-
 		go func(idx int) {
 			defer pend.Done()
-			ethash := New(Config{cachedir, 0, 1, false, "", 0, 0, false, ModeNormal, nil}, nil, false)
+
+			config := Config{
+				CacheDir:     cachedir,
+				CachesOnDisk: 1,
+			}
+			ethash := New(config, nil, false)
 			defer ethash.Close()
-			if err := ethash.VerifySeal(nil, block.Header()); err != nil {
+			if err := ethash.verifySeal(nil, block.Header(), false); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
 			}
 		}(i)
@@ -790,11 +796,7 @@ func BenchmarkHashimotoFullSmall(b *testing.B) {
 
 func benchmarkHashimotoFullMmap(b *testing.B, name string, lock bool) {
 	b.Run(name, func(b *testing.B) {
-		tmpdir, err := ioutil.TempDir("", "ethash-test")
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer os.RemoveAll(tmpdir)
+		tmpdir := b.TempDir()
 
 		d := &dataset{epoch: 0}
 		d.generate(tmpdir, 1, lock, false)

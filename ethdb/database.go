@@ -64,6 +64,7 @@ type KeyValueStore interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }
 
@@ -76,31 +77,74 @@ type AncientReader interface {
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
+	// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
+	// It will return
+	//  - at most 'count' items,
+	//  - at least 1 item (even if exceeding the maxBytes), but will otherwise
+	//   return as many items as fit into maxBytes.
+	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
+
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
+
+	// Tail returns the number of first stored item in the freezer.
+	// This number can also be interpreted as the total deleted item numbers.
+	Tail() (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
 }
 
+// AncientBatchReader is the interface for 'batched' or 'atomic' reading.
+type AncientBatchReader interface {
+	AncientReader
+
+	// ReadAncients runs the given read operation while ensuring that no writes take place
+	// on the underlying freezer.
+	ReadAncients(fn func(AncientReader) error) (err error)
+}
+
 // AncientWriter contains the methods required to write to immutable ancient data.
 type AncientWriter interface {
-	// AppendAncient injects all binary blobs belong to block at the end of the
-	// append-only immutable table files.
-	AppendAncient(number uint64, hash, header, body, receipt, td []byte) error
+	// ModifyAncients runs a write operation on the ancient store.
+	// If the function returns an error, any changes to the underlying store are reverted.
+	// The integer return value is the total size of the written data.
+	ModifyAncients(func(AncientWriteOp) error) (int64, error)
 
-	// TruncateAncients discards all but the first n ancient data from the ancient store.
-	TruncateAncients(n uint64) error
+	// TruncateHead discards all but the first n ancient data from the ancient store.
+	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
+	TruncateHead(n uint64) error
+
+	// TruncateTail discards the first n ancient data from the ancient store. The already
+	// deleted items are ignored. After the truncation, the earliest item can be accessed
+	// is item_n(start from 0). The deleted items may not be removed from the ancient store
+	// immediately, but only when the accumulated deleted data reach the threshold then
+	// will be removed all together.
+	TruncateTail(n uint64) error
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
+
+	// MigrateTable processes and migrates entries of a given table to a new format.
+	// The second argument is a function that takes a raw entry and returns it
+	// in the newest format.
+	MigrateTable(string, func([]byte) ([]byte, error)) error
+}
+
+// AncientWriteOp is given to the function argument of ModifyAncients.
+type AncientWriteOp interface {
+	// Append adds an RLP-encoded item.
+	Append(kind string, number uint64, item interface{}) error
+
+	// AppendRaw adds an item without RLP-encoding it.
+	AppendRaw(kind string, number uint64, item []byte) error
 }
 
 // Reader contains the methods required to read data from both key-value as well as
 // immutable ancient data.
 type Reader interface {
 	KeyValueReader
-	AncientReader
+	AncientBatchReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -113,7 +157,7 @@ type Writer interface {
 // AncientStore contains all the methods required to allow handling different
 // ancient data stores backing immutable chain data store.
 type AncientStore interface {
-	AncientReader
+	AncientBatchReader
 	AncientWriter
 	io.Closer
 }
@@ -127,5 +171,6 @@ type Database interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }

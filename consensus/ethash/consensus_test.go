@@ -17,12 +17,15 @@
 package ethash
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -83,4 +86,103 @@ func TestCalcDifficulty(t *testing.T) {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
 		}
 	}
+}
+
+func randSlice(min, max uint32) []byte {
+	var b = make([]byte, 4)
+	rand.Read(b)
+	a := binary.LittleEndian.Uint32(b)
+	size := min + a%(max-min)
+	out := make([]byte, size)
+	rand.Read(out)
+	return out
+}
+
+func TestDifficultyCalculators(t *testing.T) {
+	rand.Seed(2)
+	for i := 0; i < 5000; i++ {
+		// 1 to 300 seconds diff
+		var timeDelta = uint64(1 + rand.Uint32()%3000)
+		diffBig := big.NewInt(0).SetBytes(randSlice(2, 10))
+		if diffBig.Cmp(params.MinimumDifficulty) < 0 {
+			diffBig.Set(params.MinimumDifficulty)
+		}
+		//rand.Read(difficulty)
+		header := &types.Header{
+			Difficulty: diffBig,
+			Number:     new(big.Int).SetUint64(rand.Uint64() % 50_000_000),
+			Time:       rand.Uint64() - timeDelta,
+		}
+		if rand.Uint32()&1 == 0 {
+			header.UncleHash = types.EmptyUncleHash
+		}
+		bombDelay := new(big.Int).SetUint64(rand.Uint64() % 50_000_000)
+		for i, pair := range []struct {
+			bigFn  func(time uint64, parent *types.Header) *big.Int
+			u256Fn func(time uint64, parent *types.Header) *big.Int
+		}{
+			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
+			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
+			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
+		} {
+			time := header.Time + timeDelta
+			want := pair.bigFn(time, header)
+			have := pair.u256Fn(time, header)
+			if want.BitLen() > 256 {
+				continue
+			}
+			if want.Cmp(have) != 0 {
+				t.Fatalf("pair %d: want %x have %x\nparent.Number: %x\np.Time: %x\nc.Time: %x\nBombdelay: %v\n", i, want, have,
+					header.Number, header.Time, time, bombDelay)
+			}
+		}
+	}
+}
+
+func BenchmarkDifficultyCalculator(b *testing.B) {
+	x1 := makeDifficultyCalculator(big.NewInt(1000000))
+	x2 := MakeDifficultyCalculatorU256(big.NewInt(1000000))
+	h := &types.Header{
+		ParentHash: common.Hash{},
+		UncleHash:  types.EmptyUncleHash,
+		Difficulty: big.NewInt(0xffffff),
+		Number:     big.NewInt(500000),
+		Time:       1000000,
+	}
+	b.Run("big-frontier", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			calcDifficultyFrontier(1000014, h)
+		}
+	})
+	b.Run("u256-frontier", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			CalcDifficultyFrontierU256(1000014, h)
+		}
+	})
+	b.Run("big-homestead", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			calcDifficultyHomestead(1000014, h)
+		}
+	})
+	b.Run("u256-homestead", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			CalcDifficultyHomesteadU256(1000014, h)
+		}
+	})
+	b.Run("big-generic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			x1(1000014, h)
+		}
+	})
+	b.Run("u256-generic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			x2(1000014, h)
+		}
+	})
 }

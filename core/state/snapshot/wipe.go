@@ -21,69 +21,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// wipeSnapshot starts a goroutine to iterate over the entire key-value database
-// and delete all the  data associated with the snapshot (accounts, storage,
-// metadata). After all is done, the snapshot range of the database is compacted
-// to free up unused data blocks.
-func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
-	// Wipe the snapshot root marker synchronously
-	if full {
-		rawdb.DeleteSnapshotRoot(db)
-	}
-	// Wipe everything else asynchronously
-	wiper := make(chan struct{}, 1)
-	go func() {
-		if err := wipeContent(db); err != nil {
-			log.Error("Failed to wipe state snapshot", "err", err) // Database close will trigger this
-			return
-		}
-		close(wiper)
-	}()
-	return wiper
-}
-
-// wipeContent iterates over the entire key-value database and deletes all the
-// data associated with the snapshot (accounts, storage), but not the root hash
-// as the wiper is meant to run on a background thread but the root needs to be
-// removed in sync to avoid data races. After all is done, the snapshot range of
-// the database is compacted to free up unused data blocks.
-func wipeContent(db ethdb.KeyValueStore) error {
-	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, len(rawdb.SnapshotAccountPrefix)+common.HashLength); err != nil {
-		return err
-	}
-	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength); err != nil {
-		return err
-	}
-	// Compact the snapshot section of the database to get rid of unused space
-	start := time.Now()
-
-	log.Info("Compacting snapshot account area ")
-	end := common.CopyBytes(rawdb.SnapshotAccountPrefix)
-	end[len(end)-1]++
-
-	if err := db.Compact(rawdb.SnapshotAccountPrefix, end); err != nil {
-		return err
-	}
-	log.Info("Compacting snapshot storage area ")
-	end = common.CopyBytes(rawdb.SnapshotStoragePrefix)
-	end[len(end)-1]++
-
-	if err := db.Compact(rawdb.SnapshotStoragePrefix, end); err != nil {
-		return err
-	}
-	log.Info("Compacted snapshot area in database", "elapsed", common.PrettyDuration(time.Since(start)))
-
-	return nil
-}
-
 // wipeKeyRange deletes a range of keys from the database starting with prefix
-// and having a specific total key length.
-func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int) error {
+// and having a specific total key length. The start and limit is optional for
+// specifying a particular key range for deletion.
+//
+// Origin is included for wiping and limit is excluded if they are specified.
+func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []byte, limit []byte, keylen int, meter metrics.Meter, report bool) error {
 	// Batch deletions together to avoid holding an iterator for too long
 	var (
 		batch = db.NewBatch()
@@ -92,7 +40,11 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 	// Iterate over the key-range and delete all of them
 	start, logged := time.Now(), time.Now()
 
-	it := db.NewIterator(prefix, nil)
+	it := db.NewIterator(prefix, origin)
+	var stop []byte
+	if limit != nil {
+		stop = append(prefix, limit...)
+	}
 	for it.Next() {
 		// Skip any keys with the correct prefix but wrong length (trie nodes)
 		key := it.Key()
@@ -101,6 +53,9 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 		}
 		if len(key) != keylen {
 			continue
+		}
+		if stop != nil && bytes.Compare(key, stop) >= 0 {
+			break
 		}
 		// Delete the key and periodically recreate the batch and iterator
 		batch.Delete(key)
@@ -116,7 +71,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 			seekPos := key[len(prefix):]
 			it = db.NewIterator(prefix, seekPos)
 
-			if time.Since(logged) > 8*time.Second {
+			if time.Since(logged) > 8*time.Second && report {
 				log.Info("Deleting state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
 				logged = time.Now()
 			}
@@ -126,6 +81,11 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Info("Deleted state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
+	if meter != nil {
+		meter.Mark(int64(items))
+	}
+	if report {
+		log.Info("Deleted state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
 	return nil
 }

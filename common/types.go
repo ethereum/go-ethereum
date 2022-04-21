@@ -76,7 +76,7 @@ func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (h Hash) TerminalString() string {
-	return fmt.Sprintf("%x…%x", h[:3], h[29:])
+	return fmt.Sprintf("%x..%x", h[:3], h[29:])
 }
 
 // String implements the stringer interface and is used also by the logger when
@@ -86,7 +86,7 @@ func (h Hash) String() string {
 }
 
 // Format implements fmt.Formatter.
-// Hash supports the %v, %s, %v, %x, %X and %d format verbs.
+// Hash supports the %v, %s, %q, %x, %X and %d format verbs.
 func (h Hash) Format(s fmt.State, c rune) {
 	hexb := make([]byte, 2+len(h)*2)
 	copy(hexb, "0x")
@@ -270,7 +270,7 @@ func (a Address) hex() []byte {
 }
 
 // Format implements fmt.Formatter.
-// Address supports the %v, %s, %v, %x, %X and %d format verbs.
+// Address supports the %v, %s, %q, %x, %X and %d format verbs.
 func (a Address) Format(s fmt.State, c rune) {
 	switch c {
 	case 'v', 's':

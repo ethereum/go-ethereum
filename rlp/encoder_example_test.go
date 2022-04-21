@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rlp
+package rlp_test
 
 import (
 	"fmt"
 	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type MyCoolType struct {
@@ -28,16 +30,16 @@ type MyCoolType struct {
 
 // EncodeRLP writes x as RLP list [a, b] that omits the Name field.
 func (x *MyCoolType) EncodeRLP(w io.Writer) (err error) {
-	return Encode(w, []uint{x.a, x.b})
+	return rlp.Encode(w, []uint{x.a, x.b})
 }
 
 func ExampleEncoder() {
 	var t *MyCoolType // t is nil pointer to MyCoolType
-	bytes, _ := EncodeToBytes(t)
+	bytes, _ := rlp.EncodeToBytes(t)
 	fmt.Printf("%v → %X\n", t, bytes)
 
 	t = &MyCoolType{Name: "foobar", a: 5, b: 6}
-	bytes, _ = EncodeToBytes(t)
+	bytes, _ = rlp.EncodeToBytes(t)
 	fmt.Printf("%v → %X\n", t, bytes)
 
 	// Output:

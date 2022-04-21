@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"reflect"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
@@ -124,7 +126,7 @@ func TestFrameReadWrite(t *testing.T) {
 		IngressMAC: hash,
 		EgressMAC:  hash,
 	})
-	h := conn.handshake
+	h := conn.session
 
 	golden := unhex(`
 		00828ddae471818bb0bfa6b551d1cb42
@@ -166,27 +168,11 @@ func (h fakeHash) Sum(b []byte) []byte       { return append(b, h...) }
 
 type handshakeAuthTest struct {
 	input       string
-	isPlain     bool
 	wantVersion uint
 	wantRest    []rlp.RawValue
 }
 
 var eip8HandshakeAuthTests = []handshakeAuthTest{
-	// (Auth₁) RLPx v4 plain encoding
-	{
-		input: `
-			048ca79ad18e4b0659fab4853fe5bc58eb83992980f4c9cc147d2aa31532efd29a3d3dc6a3d89eaf
-			913150cfc777ce0ce4af2758bf4810235f6e6ceccfee1acc6b22c005e9e3a49d6448610a58e98744
-			ba3ac0399e82692d67c1f58849050b3024e21a52c9d3b01d871ff5f210817912773e610443a9ef14
-			2e91cdba0bd77b5fdf0769b05671fc35f83d83e4d3b0b000c6b2a1b1bba89e0fc51bf4e460df3105
-			c444f14be226458940d6061c296350937ffd5e3acaceeaaefd3c6f74be8e23e0f45163cc7ebd7622
-			0f0128410fd05250273156d548a414444ae2f7dea4dfca2d43c057adb701a715bf59f6fb66b2d1d2
-			0f2c703f851cbf5ac47396d9ca65b6260bd141ac4d53e2de585a73d1750780db4c9ee4cd4d225173
-			a4592ee77e2bd94d0be3691f3b406f9bba9b591fc63facc016bfa8
-		`,
-		isPlain:     true,
-		wantVersion: 4,
-	},
 	// (Auth₂) EIP-8 encoding
 	{
 		input: `
@@ -233,18 +219,6 @@ type handshakeAckTest struct {
 }
 
 var eip8HandshakeRespTests = []handshakeAckTest{
-	// (Ack₁) RLPx v4 plain encoding
-	{
-		input: `
-			049f8abcfa9c0dc65b982e98af921bc0ba6e4243169348a236abe9df5f93aa69d99cadddaa387662
-			b0ff2c08e9006d5a11a278b1b3331e5aaabf0a32f01281b6f4ede0e09a2d5f585b26513cb794d963
-			5a57563921c04a9090b4f14ee42be1a5461049af4ea7a7f49bf4c97a352d39c8d02ee4acc416388c
-			1c66cec761d2bc1c72da6ba143477f049c9d2dde846c252c111b904f630ac98e51609b3b1f58168d
-			dca6505b7196532e5f85b259a20c45e1979491683fee108e9660edbf38f3add489ae73e3dda2c71b
-			d1497113d5c755e942d1
-		`,
-		wantVersion: 4,
-	},
 	// (Ack₂) EIP-8 encoding
 	{
 		input: `
@@ -287,10 +261,13 @@ var eip8HandshakeRespTests = []handshakeAckTest{
 	},
 }
 
+var (
+	keyA, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	keyB, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+)
+
 func TestHandshakeForwardCompatibility(t *testing.T) {
 	var (
-		keyA, _       = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-		keyB, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		pubA          = crypto.FromECDSAPub(&keyA.PublicKey)[1:]
 		pubB          = crypto.FromECDSAPub(&keyB.PublicKey)[1:]
 		ephA, _       = crypto.HexToECDSA("869d6ecf5211f1cc60418a13b9d870b22959d0c16f02bec714c960dd2298a32d")
@@ -304,7 +281,7 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 		_             = authSignature
 	)
 	makeAuth := func(test handshakeAuthTest) *authMsgV4 {
-		msg := &authMsgV4{Version: test.wantVersion, Rest: test.wantRest, gotPlain: test.isPlain}
+		msg := &authMsgV4{Version: test.wantVersion, Rest: test.wantRest}
 		copy(msg.Signature[:], authSignature)
 		copy(msg.InitiatorPubkey[:], pubA)
 		copy(msg.Nonce[:], nonceA)
@@ -319,9 +296,10 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 	// check auth msg parsing
 	for _, test := range eip8HandshakeAuthTests {
+		var h handshakeState
 		r := bytes.NewReader(unhex(test.input))
 		msg := new(authMsgV4)
-		ciphertext, err := readHandshakeMsg(msg, encAuthMsgLen, keyB, r)
+		ciphertext, err := h.readMsg(msg, keyB, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", unhex(test.input), err)
 			continue
@@ -337,10 +315,11 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 	// check auth resp parsing
 	for _, test := range eip8HandshakeRespTests {
+		var h handshakeState
 		input := unhex(test.input)
 		r := bytes.NewReader(input)
 		msg := new(authRespV4)
-		ciphertext, err := readHandshakeMsg(msg, encAuthRespLen, keyA, r)
+		ciphertext, err := h.readMsg(msg, keyA, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", input, err)
 			continue
@@ -356,14 +335,14 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 	// check derivation for (Auth₂, Ack₂) on recipient side
 	var (
-		hs = &encHandshake{
+		hs = &handshakeState{
 			initiator:     false,
 			respNonce:     nonceB,
 			randomPrivKey: ecies.ImportECDSA(ephB),
 		}
-		authCiphertext     = unhex(eip8HandshakeAuthTests[1].input)
-		authRespCiphertext = unhex(eip8HandshakeRespTests[1].input)
-		authMsg            = makeAuth(eip8HandshakeAuthTests[1])
+		authCiphertext     = unhex(eip8HandshakeAuthTests[0].input)
+		authRespCiphertext = unhex(eip8HandshakeRespTests[0].input)
+		authMsg            = makeAuth(eip8HandshakeAuthTests[0])
 		wantAES            = unhex("80e8632c05fed6fc2a13b0f8d31a3cf645366239170ea067065aba8e28bac487")
 		wantMAC            = unhex("2ea74ec5dae199227dff1af715362700e989d889d7a493cb0639691efb8e5f98")
 		wantFooIngressHash = unhex("0c7ec6340062cc46f5e9f1e3cf86f8c8c403c5a0964f5df0ebd34a75ddc86db5")
@@ -385,6 +364,74 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	fooIngressHash := derived.IngressMAC.Sum(nil)
 	if !bytes.Equal(fooIngressHash, wantFooIngressHash) {
 		t.Errorf("ingress-mac('foo') mismatch:\ngot %x\nwant %x", fooIngressHash, wantFooIngressHash)
+	}
+}
+
+func BenchmarkHandshakeRead(b *testing.B) {
+	var input = unhex(eip8HandshakeAuthTests[0].input)
+
+	for i := 0; i < b.N; i++ {
+		var (
+			h   handshakeState
+			r   = bytes.NewReader(input)
+			msg = new(authMsgV4)
+		)
+		if _, err := h.readMsg(msg, keyB, r); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkThroughput(b *testing.B) {
+	pipe1, pipe2, err := pipes.TCPPipe()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var (
+		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
+		handshakeDone = make(chan error, 1)
+		msgdata       = make([]byte, 1024)
+		rand          = rand.New(rand.NewSource(1337))
+	)
+	rand.Read(msgdata)
+
+	// Server side.
+	go func() {
+		defer conn1.Close()
+		// Perform handshake.
+		_, err := conn1.Handshake(keyA)
+		handshakeDone <- err
+		if err != nil {
+			return
+		}
+		conn1.SetSnappy(true)
+		// Keep sending messages until connection closed.
+		for {
+			if _, err := conn1.Write(0, msgdata); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Set up client side.
+	defer conn2.Close()
+	if _, err := conn2.Handshake(keyB); err != nil {
+		b.Fatal("client handshake error:", err)
+	}
+	conn2.SetSnappy(true)
+	if err := <-handshakeDone; err != nil {
+		b.Fatal("server hanshake error:", err)
+	}
+
+	// Read N messages.
+	b.SetBytes(int64(len(msgdata)))
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _, _, err := conn2.Read()
+		if err != nil {
+			b.Fatal("read error:", err)
+		}
 	}
 }
 

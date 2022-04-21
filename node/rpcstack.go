@@ -39,12 +39,16 @@ type httpConfig struct {
 	Modules            []string
 	CorsAllowedOrigins []string
 	Vhosts             []string
+	prefix             string // path prefix on which to mount http handler
+	jwtSecret          []byte // optional JWT secret
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins []string
-	Modules []string
+	Origins   []string
+	Modules   []string
+	prefix    string // path prefix on which to mount ws handler
+	jwtSecret []byte // optional JWT secret
 }
 
 type rpcHandler struct {
@@ -62,6 +66,7 @@ type httpServer struct {
 	listener net.Listener // non-nil when server is running
 
 	// HTTP RPC handler things.
+
 	httpConfig  httpConfig
 	httpHandler atomic.Value // *rpcHandler
 
@@ -79,6 +84,7 @@ type httpServer struct {
 
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
 	return h
@@ -140,14 +146,21 @@ func (h *httpServer) start() error {
 	h.listener = listener
 	go h.server.Serve(listener)
 
+	if h.wsAllowed() {
+		url := fmt.Sprintf("ws://%v", listener.Addr())
+		if h.wsConfig.prefix != "" {
+			url += h.wsConfig.prefix
+		}
+		h.log.Info("WebSocket enabled", "url", url)
+	}
 	// if server is websocket only, return after logging
-	if h.wsAllowed() && !h.rpcAllowed() {
-		h.log.Info("WebSocket enabled", "url", fmt.Sprintf("ws://%v", listener.Addr()))
+	if !h.rpcAllowed() {
 		return nil
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
-		"endpoint", listener.Addr(),
+		"endpoint", listener.Addr(), "auth", (h.httpConfig.jwtSecret != nil),
+		"prefix", h.httpConfig.prefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
@@ -170,26 +183,60 @@ func (h *httpServer) start() error {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rpc := h.httpHandler.Load().(*rpcHandler)
-	if r.RequestURI == "/" {
-		// Serve JSON-RPC on the root path.
-		ws := h.wsHandler.Load().(*rpcHandler)
-		if ws != nil && isWebsocket(r) {
+	// check if ws request and serve if ws enabled
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil && isWebsocket(r) {
+		if checkPath(r, h.wsConfig.prefix) {
 			ws.ServeHTTP(w, r)
-			return
 		}
-		if rpc != nil {
-			rpc.ServeHTTP(w, r)
-			return
-		}
-	} else if rpc != nil {
+		return
+	}
+	// if http-rpc is enabled, try to serve request
+	rpc := h.httpHandler.Load().(*rpcHandler)
+	if rpc != nil {
+		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
 		// These are made available when RPC is enabled.
-		h.mux.ServeHTTP(w, r)
-		return
+		muxHandler, pattern := h.mux.Handler(r)
+		if pattern != "" {
+			muxHandler.ServeHTTP(w, r)
+			return
+		}
+
+		if checkPath(r, h.httpConfig.prefix) {
+			rpc.ServeHTTP(w, r)
+			return
+		}
 	}
-	w.WriteHeader(404)
+	w.WriteHeader(http.StatusNotFound)
+}
+
+// checkPath checks whether a given request URL matches a given path prefix.
+func checkPath(r *http.Request, path string) bool {
+	// if no prefix has been specified, request URL must be on root
+	if path == "" {
+		return r.URL.Path == "/"
+	}
+	// otherwise, check to make sure prefix matches
+	return len(r.URL.Path) >= len(path) && r.URL.Path[:len(path)] == path
+}
+
+// validatePrefix checks if 'path' is a valid configuration value for the RPC prefix option.
+func validatePrefix(what, path string) error {
+	if path == "" {
+		return nil
+	}
+	if path[0] != '/' {
+		return fmt.Errorf(`%s RPC path prefix %q does not contain leading "/"`, what, path)
+	}
+	if strings.ContainsAny(path, "?#") {
+		// This is just to avoid confusion. While these would match correctly (i.e. they'd
+		// match if URL-escaped into path), it's not easy to understand for users when
+		// setting that on the command line.
+		return fmt.Errorf("%s RPC path prefix %q contains URL meta-characters", what, path)
+	}
+	return nil
 }
 
 // stop shuts down the HTTP server.
@@ -206,7 +253,7 @@ func (h *httpServer) doStop() {
 
 	// Shut down the server.
 	httpHandler := h.httpHandler.Load().(*rpcHandler)
-	wsHandler := h.httpHandler.Load().(*rpcHandler)
+	wsHandler := h.wsHandler.Load().(*rpcHandler)
 	if httpHandler != nil {
 		h.httpHandler.Store((*rpcHandler)(nil))
 		httpHandler.server.Stop()
@@ -235,12 +282,12 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApisFromWhitelist(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts),
+		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
 		server:  srv,
 	})
 	return nil
@@ -264,15 +311,14 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	if h.wsAllowed() {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
-
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApisFromWhitelist(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
-		Handler: srv.WebsocketHandler(config.Origins),
+		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
 		server:  srv,
 	})
 	return nil
@@ -317,11 +363,22 @@ func isWebsocket(r *http.Request) bool {
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
-func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string) http.Handler {
+func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
+	if len(jwtSecret) != 0 {
+		handler = newJWTHandler(jwtSecret, handler)
+	}
 	return newGzipHandler(handler)
+}
+
+// NewWSHandlerStack returns a wrapped ws-related handler.
+func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
+	if len(jwtSecret) != 0 {
+		return newJWTHandler(jwtSecret, srv)
+	}
+	return srv
 }
 
 func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
@@ -470,20 +527,20 @@ func (is *ipcServer) stop() error {
 	return err
 }
 
-// RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
+// RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
+func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
+	// Generate the allow list based on the allowed modules
+	allowList := make(map[string]bool)
 	for _, module := range modules {
-		whitelist[module] = true
+		allowList[module] = true
 	}
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
-		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+		if exposeAll || allowList[api.Namespace] || (len(allowList) == 0 && api.Public) {
 			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}

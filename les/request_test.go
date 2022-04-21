@@ -38,6 +38,7 @@ type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) ligh
 
 func TestBlockAccessLes2(t *testing.T) { testAccess(t, 2, tfBlockAccess) }
 func TestBlockAccessLes3(t *testing.T) { testAccess(t, 3, tfBlockAccess) }
+func TestBlockAccessLes4(t *testing.T) { testAccess(t, 4, tfBlockAccess) }
 
 func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
@@ -45,6 +46,7 @@ func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.Od
 
 func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
 func TestReceiptsAccessLes3(t *testing.T) { testAccess(t, 3, tfReceiptsAccess) }
+func TestReceiptsAccessLes4(t *testing.T) { testAccess(t, 4, tfReceiptsAccess) }
 
 func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.ReceiptsRequest{Hash: bhash, Number: number}
@@ -52,6 +54,7 @@ func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light
 
 func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
 func TestTrieEntryAccessLes3(t *testing.T) { testAccess(t, 3, tfTrieEntryAccess) }
+func TestTrieEntryAccessLes4(t *testing.T) { testAccess(t, 4, tfTrieEntryAccess) }
 
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
@@ -62,6 +65,7 @@ func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) ligh
 
 func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
 func TestCodeAccessLes3(t *testing.T) { testAccess(t, 3, tfCodeAccess) }
+func TestCodeAccessLes4(t *testing.T) { testAccess(t, 4, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrRequest {
 	number := rawdb.ReadHeaderNumber(db, bhash)
@@ -79,7 +83,14 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 
 func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true, true)
+	netconfig := testnetConfig{
+		blocks:    4,
+		protocol:  protocol,
+		indexFn:   nil,
+		connect:   true,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.

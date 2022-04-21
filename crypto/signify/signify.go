@@ -46,7 +46,7 @@ func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []
 	if string(keydata[:2]) != "Ed" {
 		return nil, nil, nil, errInvalidKeyHeader
 	}
-	return ed25519.PrivateKey(keydata[40:]), keydata[:2], keydata[32:40], nil
+	return keydata[40:], keydata[:2], keydata[32:40], nil
 }
 
 // SignFile creates a signature of the input file.

@@ -58,7 +58,7 @@ func (db *ChecksumDB) Verify(path string) error {
 	}
 	fileHash := hex.EncodeToString(h.Sum(nil))
 	if !db.findHash(filepath.Base(path), fileHash) {
-		return fmt.Errorf("invalid file hash %s", fileHash)
+		return fmt.Errorf("invalid file hash %s for %s", fileHash, filepath.Base(path))
 	}
 	return nil
 }

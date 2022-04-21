@@ -231,6 +231,29 @@ func TestRecordTooBig(t *testing.T) {
 	require.NoError(t, signTest([]byte{5}, &r))
 }
 
+// This checks that incomplete RLP inputs are handled correctly.
+func TestDecodeIncomplete(t *testing.T) {
+	type decTest struct {
+		input []byte
+		err   error
+	}
+	tests := []decTest{
+		{[]byte{0xC0}, errIncompleteList},
+		{[]byte{0xC1, 0x1}, errIncompleteList},
+		{[]byte{0xC2, 0x1, 0x2}, nil},
+		{[]byte{0xC3, 0x1, 0x2, 0x3}, errIncompletePair},
+		{[]byte{0xC4, 0x1, 0x2, 0x3, 0x4}, nil},
+		{[]byte{0xC5, 0x1, 0x2, 0x3, 0x4, 0x5}, errIncompletePair},
+	}
+	for _, test := range tests {
+		var r Record
+		err := rlp.DecodeBytes(test.input, &r)
+		if err != test.err {
+			t.Errorf("wrong error for %X: %v", test.input, err)
+		}
+	}
+}
+
 // TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.
 func TestSignEncodeAndDecodeRandom(t *testing.T) {
 	var r Record

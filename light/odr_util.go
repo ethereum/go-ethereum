@@ -269,10 +269,15 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 	return result, nil
 }
 
-// GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
+// GetTransaction retrieves a canonical transaction by hash and also returns
+// its position in the chain. There is no guarantee in the LES protocol that
+// the mined transaction will be retrieved back for sure because of different
+// reasons(the transaction is unindexed, the malicous server doesn't reply it
+// deliberately, etc). Therefore, unretrieved transactions will receive a certain
+// number of retrys, thus giving a weak guarantee.
 func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}
-	if err := odr.Retrieve(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
+	if err := odr.RetrieveTxStatus(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
 		return nil, common.Hash{}, 0, 0, err
 	}
 	pos := r.Status[0].Lookup

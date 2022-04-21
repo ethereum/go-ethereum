@@ -45,7 +45,7 @@ func TestServerRegisterName(t *testing.T) {
 		t.Fatalf("Expected service calc to be registered")
 	}
 
-	wantCallbacks := 9
+	wantCallbacks := 10
 	if len(svc.callbacks) != wantCallbacks {
 		t.Errorf("Expected %d callbacks for service 'service', got %d", wantCallbacks, len(svc.callbacks))
 	}
@@ -134,7 +134,7 @@ func TestServerShortLivedConn(t *testing.T) {
 		if err != nil {
 			t.Fatal("can't dial:", err)
 		}
-		defer conn.Close()
+
 		conn.SetDeadline(deadline)
 		// Write the request, then half-close the connection so the server stops reading.
 		conn.Write([]byte(request))
@@ -142,6 +142,8 @@ func TestServerShortLivedConn(t *testing.T) {
 		// Now try to get the response.
 		buf := make([]byte, 2000)
 		n, err := conn.Read(buf)
+		conn.Close()
+
 		if err != nil {
 			t.Fatal("read error:", err)
 		}

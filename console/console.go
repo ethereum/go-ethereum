@@ -17,6 +17,7 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +27,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/dop251/goja"
@@ -74,6 +76,13 @@ type Console struct {
 	histPath string              // Absolute path to the console scrollback history
 	history  []string            // Scroll history maintained by the console
 	printer  io.Writer           // Output writer to serialize any display strings to
+
+	interactiveStopped chan struct{}
+	stopInteractiveCh  chan struct{}
+	signalReceived     chan struct{}
+	stopped            chan struct{}
+	wg                 sync.WaitGroup
+	stopOnce           sync.Once
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -92,12 +101,16 @@ func New(config Config) (*Console, error) {
 
 	// Initialize the console and return
 	console := &Console{
-		client:   config.Client,
-		jsre:     jsre.New(config.DocRoot, config.Printer),
-		prompt:   config.Prompt,
-		prompter: config.Prompter,
-		printer:  config.Printer,
-		histPath: filepath.Join(config.DataDir, HistoryFile),
+		client:             config.Client,
+		jsre:               jsre.New(config.DocRoot, config.Printer),
+		prompt:             config.Prompt,
+		prompter:           config.Prompter,
+		printer:            config.Printer,
+		histPath:           filepath.Join(config.DataDir, HistoryFile),
+		interactiveStopped: make(chan struct{}),
+		stopInteractiveCh:  make(chan struct{}),
+		signalReceived:     make(chan struct{}, 1),
+		stopped:            make(chan struct{}),
 	}
 	if err := os.MkdirAll(config.DataDir, 0700); err != nil {
 		return nil, err
@@ -105,6 +118,10 @@ func New(config Config) (*Console, error) {
 	if err := console.init(config.Preload); err != nil {
 		return nil, err
 	}
+
+	console.wg.Add(1)
+	go console.interruptHandler()
+
 	return console, nil
 }
 
@@ -324,7 +341,7 @@ func (c *Console) Welcome() {
 		sort.Strings(modules)
 		message += " modules: " + strings.Join(modules, " ") + "\n"
 	}
-	message += "\nTo exit, press ctrl-d"
+	message += "\nTo exit, press ctrl-d or type exit"
 	fmt.Fprintln(c.printer, message)
 }
 
@@ -337,9 +354,63 @@ func (c *Console) Evaluate(statement string) {
 		}
 	}()
 	c.jsre.Evaluate(statement, c.printer)
+
+	// Avoid exiting Interactive when jsre was interrupted by SIGINT.
+	c.clearSignalReceived()
 }
 
-// Interactive starts an interactive user session, where input is propted from
+// interruptHandler runs in its own goroutine and waits for signals.
+// When a signal is received, it interrupts the JS interpreter.
+func (c *Console) interruptHandler() {
+	defer c.wg.Done()
+
+	// During Interactive, liner inhibits the signal while it is prompting for
+	// input. However, the signal will be received while evaluating JS.
+	//
+	// On unsupported terminals, SIGINT can also happen while prompting.
+	// Unfortunately, it is not possible to abort the prompt in this case and
+	// the c.readLines goroutine leaks.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT)
+	defer signal.Stop(sig)
+
+	for {
+		select {
+		case <-sig:
+			c.setSignalReceived()
+			c.jsre.Interrupt(errors.New("interrupted"))
+		case <-c.stopInteractiveCh:
+			close(c.interactiveStopped)
+			c.jsre.Interrupt(errors.New("interrupted"))
+		case <-c.stopped:
+			return
+		}
+	}
+}
+
+func (c *Console) setSignalReceived() {
+	select {
+	case c.signalReceived <- struct{}{}:
+	default:
+	}
+}
+
+func (c *Console) clearSignalReceived() {
+	select {
+	case <-c.signalReceived:
+	default:
+	}
+}
+
+// StopInteractive causes Interactive to return as soon as possible.
+func (c *Console) StopInteractive() {
+	select {
+	case c.stopInteractiveCh <- struct{}{}:
+	case <-c.stopped:
+	}
+}
+
+// Interactive starts an interactive user session, where in.put is propted from
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
@@ -349,15 +420,11 @@ func (c *Console) Interactive() {
 		inputLine   = make(chan string, 1) // receives user input
 		inputErr    = make(chan error, 1)  // receives liner errors
 		requestLine = make(chan string)    // requests a line of input
-		interrupt   = make(chan os.Signal, 1)
 	)
 
-	// Monitor Ctrl-C. While liner does turn on the relevant terminal mode bits to avoid
-	// the signal, a signal can still be received for unsupported terminals. Unfortunately
-	// there is no way to cancel the line reader when this happens. The readLines
-	// goroutine will be leaked in this case.
-	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(interrupt)
+	defer func() {
+		c.writeHistory()
+	}()
 
 	// The line reader runs in a separate goroutine.
 	go c.readLines(inputLine, inputErr, requestLine)
@@ -368,7 +435,14 @@ func (c *Console) Interactive() {
 		requestLine <- prompt
 
 		select {
-		case <-interrupt:
+		case <-c.interactiveStopped:
+			fmt.Fprintln(c.printer, "node is down, exiting console")
+			return
+
+		case <-c.signalReceived:
+			// SIGINT received while prompting for input -> unsupported terminal.
+			// I'm not sure if the best choice would be to leave the console running here.
+			// Bash keeps running in this case. node.js does not.
 			fmt.Fprintln(c.printer, "caught interrupt, exiting")
 			return
 
@@ -476,12 +550,19 @@ func (c *Console) Execute(path string) error {
 
 // Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
+	c.stopOnce.Do(func() {
+		// Stop the interrupt handler.
+		close(c.stopped)
+		c.wg.Wait()
+	})
+
+	c.jsre.Stop(graceful)
+	return nil
+}
+
+func (c *Console) writeHistory() error {
 	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
 	}
-	if err := os.Chmod(c.histPath, 0600); err != nil { // Force 0600, even if it was different previously
-		return err
-	}
-	c.jsre.Stop(graceful)
-	return nil
+	return os.Chmod(c.histPath, 0600) // Force 0600, even if it was different previously
 }

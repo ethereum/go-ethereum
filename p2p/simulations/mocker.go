@@ -123,20 +123,12 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 		randWait := time.Duration(rand.Intn(5000)+1000) * time.Millisecond
 		rand1 := rand.Intn(nodeCount - 1)
 		rand2 := rand.Intn(nodeCount - 1)
-		if rand1 < rand2 {
+		if rand1 <= rand2 {
 			lowid = rand1
 			highid = rand2
 		} else if rand1 > rand2 {
 			highid = rand1
 			lowid = rand2
-		} else {
-			if rand1 == 0 {
-				rand2 = 9
-			} else if rand1 == 9 {
-				rand1 = 0
-			}
-			lowid = rand1
-			highid = rand2
 		}
 		var steps = highid - lowid
 		wg.Add(steps)

@@ -201,3 +201,15 @@ func TestDecodeUint64(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkEncodeBig(b *testing.B) {
+	for _, bench := range encodeBigTests {
+		b.Run(bench.want, func(b *testing.B) {
+			b.ReportAllocs()
+			bigint := bench.input.(*big.Int)
+			for i := 0; i < b.N; i++ {
+				EncodeBig(bigint)
+			}
+		})
+	}
+}
