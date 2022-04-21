@@ -57,6 +57,7 @@ type bodyRequesterFn func([]common.Hash) error
 // headerVerifierFn is a callback type to verify a block's header for fast propagation.
 type headerVerifierFn func(header *types.Header) error
 
+// proposeBlockHandlerFn is a callback type to handle a block by the consensus
 type proposeBlockHandlerFn func(header *types.Header) error
 
 // blockBroadcasterFn is a callback type for broadcasting a block to connected peers.

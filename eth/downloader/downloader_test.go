@@ -19,12 +19,13 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -97,7 +98,7 @@ func newTester() *downloadTester {
 	tester.stateDb = rawdb.NewMemoryDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
 
-	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
+	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer, tester.handleProposedBlock)
 
 	return tester
 }
@@ -455,6 +456,11 @@ func (dl *downloadTester) dropPeer(id string) {
 	delete(dl.peerChainTds, id)
 
 	dl.downloader.UnregisterPeer(id)
+}
+
+// an empty handleProposedBlock function
+func (dl *downloadTester) handleProposedBlock(header *types.Header) error {
+	return nil
 }
 
 // Config retrieves the blockchain's chain configuration.

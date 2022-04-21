@@ -36,6 +36,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
+// proposeBlockHandlerFn is a callback type to handle a block by the consensus
+type proposeBlockHandlerFn func(header *types.Header) error
+
 var (
 	MaxHashFetch    = 512 // Amount of hashes to be fetched per retrieval request
 	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
@@ -114,7 +117,8 @@ type Downloader struct {
 	blockchain BlockChain
 
 	// Callbacks
-	dropPeer peerDropFn // Drops a peer for misbehaving
+	dropPeer            peerDropFn            // Drops a peer for misbehaving
+	handleProposedBlock proposeBlockHandlerFn // Consensus v2 specific: Hanle new proposed block
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
@@ -199,31 +203,32 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, handleProposedBlock proposeBlockHandlerFn) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
 
 	dl := &Downloader{
-		mode:           mode,
-		stateDB:        stateDb,
-		mux:            mux,
-		queue:          newQueue(),
-		peers:          newPeerSet(),
-		rttEstimate:    uint64(rttMaxEstimate),
-		rttConfidence:  uint64(1000000),
-		blockchain:     chain,
-		lightchain:     lightchain,
-		dropPeer:       dropPeer,
-		headerCh:       make(chan dataPack, 1),
-		bodyCh:         make(chan dataPack, 1),
-		receiptCh:      make(chan dataPack, 1),
-		bodyWakeCh:     make(chan bool, 1),
-		receiptWakeCh:  make(chan bool, 1),
-		headerProcCh:   make(chan []*types.Header, 1),
-		quitCh:         make(chan struct{}),
-		stateCh:        make(chan dataPack),
-		stateSyncStart: make(chan *stateSync),
+		mode:                mode,
+		stateDB:             stateDb,
+		mux:                 mux,
+		queue:               newQueue(),
+		peers:               newPeerSet(),
+		rttEstimate:         uint64(rttMaxEstimate),
+		rttConfidence:       uint64(1000000),
+		blockchain:          chain,
+		lightchain:          lightchain,
+		dropPeer:            dropPeer,
+		handleProposedBlock: handleProposedBlock,
+		headerCh:            make(chan dataPack, 1),
+		bodyCh:              make(chan dataPack, 1),
+		receiptCh:           make(chan dataPack, 1),
+		bodyWakeCh:          make(chan bool, 1),
+		receiptWakeCh:       make(chan bool, 1),
+		headerProcCh:        make(chan []*types.Header, 1),
+		quitCh:              make(chan struct{}),
+		stateCh:             make(chan dataPack),
+		stateSyncStart:      make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: core.GetTrieSyncProgress(stateDb),
 		},
@@ -1393,7 +1398,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return errInvalidChain
 	}
-
+	if d.handleProposedBlock != nil {
+		header := blocks[len(blocks)-1].Header()
+		err := d.handleProposedBlock(header)
+		if err != nil {
+			log.Info("[downloader] handle proposed block has error", "err", err, "block hash", header.Hash(), "number", header.Number)
+		}
+	}
 	return nil
 }
 

@@ -206,14 +206,23 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	if len(manager.SubProtocols) == 0 {
 		return nil, errIncompatibleConfig
 	}
+
+	var handleProposedBlock func(header *types.Header) error
+	if config.XDPoS != nil {
+		handleProposedBlock = func(header *types.Header) error {
+			return engine.(*XDPoS.XDPoS).HandleProposedBlock(blockchain, header)
+		}
+	} else {
+		handleProposedBlock = func(header *types.Header) error {
+			return nil
+		}
+	}
+
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer)
+	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer, handleProposedBlock)
 
 	validator := func(header *types.Header) error {
 		return engine.VerifyHeader(blockchain, header, true)
-	}
-	handleProposedBlock := func(header *types.Header) error {
-		return engine.(*XDPoS.XDPoS).HandleProposedBlock(blockchain, header)
 	}
 
 	heighter := func() uint64 {

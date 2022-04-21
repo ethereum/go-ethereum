@@ -21,11 +21,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -205,7 +206,7 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 	}
 
 	if lightSync {
-		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer)
+		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer, manager.handleProposedBlock)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
@@ -216,6 +217,11 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 // removePeer initiates disconnection from a peer by removing it from the peer set
 func (pm *ProtocolManager) removePeer(id string) {
 	pm.peers.Unregister(id)
+}
+
+// an empty handleProposedBlock function
+func (pm *ProtocolManager) handleProposedBlock(header *types.Header) error {
+	return nil
 }
 
 func (pm *ProtocolManager) Start(maxPeers int) {
