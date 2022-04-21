@@ -63,8 +63,6 @@ var (
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
-		utils.DataDirFlag,
-		utils.AncientFlag,
 		utils.MinFreeDiskSpaceFlag,
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
@@ -154,7 +152,7 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
 		configFileFlag,
-	}, utils.NetworkFlags...)
+	}, utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags)...)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,

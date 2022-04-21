@@ -34,8 +34,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "ETHEREUM",
 		Flags: append([]cli.Flag{
 			configFileFlag,
-			utils.DataDirFlag,
-			utils.AncientFlag,
 			utils.MinFreeDiskSpaceFlag,
 			utils.KeyStoreDirFlag,
 			utils.USBFlag,
@@ -49,7 +47,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.IdentityFlag,
 			utils.LightKDFFlag,
 			utils.EthPeerRequiredBlocksFlag,
-		}, utils.NetworkFlags...),
+		}, utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags)...),
 	},
 	{
 		Name: "LIGHT CLIENT",
