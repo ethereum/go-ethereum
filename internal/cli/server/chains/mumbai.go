@@ -31,12 +31,14 @@ var mumbaiTestnet = &Chain{
 			Bor: &params.BorConfig{
 				JaipurBlock: 22770000,
 				Period: map[string]uint64{
-					"0": 2,
+					"0":        2,
+					"25275000": 5,
 				},
 				ProducerDelay: 6,
 				Sprint:        64,
 				BackupMultiplier: map[string]uint64{
-					"0": 2,
+					"0":        2,
+					"25275000": 5,
 				},
 				ValidatorContract:     "0x0000000000000000000000000000000000001000",
 				StateReceiverContract: "0x0000000000000000000000000000000000001001",
