@@ -137,9 +137,11 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
-        #Envelope transaction support
+        # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
+        # RLP-encoding of the receipts
+        receiptsRLP: Bytes!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
