@@ -107,7 +107,7 @@ type FlagGroup struct {
 	Flags []cli.Flag
 }
 
-// byCategory sorts an array of FlagGroup by Name in the order
+// ByCategory sorts an array of FlagGroup by Name in the order
 // defined in AppHelpFlagGroups.
 type ByCategory []FlagGroup
 
