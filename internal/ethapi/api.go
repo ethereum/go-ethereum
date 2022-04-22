@@ -1998,6 +1998,31 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
+// PublicDbAPI exposes low-level methods for interacting with the database.
+type PublicDbAPI struct {
+	b Backend
+}
+
+// NewPublicDbAPI creates a new instance of PublicDbAPI.
+func NewPublicDbAPI(b Backend) *PublicDbAPI {
+	return &PublicDbAPI{b: b}
+}
+
+// Get returns the raw value of a key stored in the database.
+func (api *PublicDbAPI) Get(key hexutil.Bytes) (hexutil.Bytes, error) {
+	return api.b.ChainDb().Get(key)
+}
+
+// Put stores a raw value under the key in the database.
+func (api *PublicDbAPI) Put(key hexutil.Bytes, value hexutil.Bytes) error {
+	return api.b.ChainDb().Put(key, value)
+}
+
+// Delete removes an item from the database.
+func (api *PublicDbAPI) Delete(key hexutil.Bytes) error {
+	return api.b.ChainDb().Delete(key)
+}
+
 // checkTxFee is an internal function used to check whether the fee of
 // the given transaction is _reasonable_(under the cap).
 func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
